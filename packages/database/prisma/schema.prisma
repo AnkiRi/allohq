@@ -1,0 +1,262 @@
+// AlloHQ Database Schema
+// E-commerce marketing automation platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE MODELS
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceMembers WorkspaceMember[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members WorkspaceMember[]
+  stores  Store[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String   @default("member") // admin, member, viewer
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+// ============================================================================
+// E-COMMERCE INTEGRATIONS
+// ============================================================================
+
+model Store {
+  id          String   @id @default(cuid())
+  workspaceId String
+  platform    String   // shopify, woocommerce, bigcommerce
+  shopDomain  String
+  accessToken String   // encrypted
+  isActive    Boolean  @default(true)
+  installedAt DateTime @default(now())
+  lastSyncAt  DateTime?
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  products  Product[]
+  customers Customer[]
+  orders    Order[]
+
+  @@unique([workspaceId, shopDomain])
+  @@map("stores")
+}
+
+// ============================================================================
+// E-COMMERCE DATA
+// ============================================================================
+
+model Product {
+  id             String   @id @default(cuid())
+  storeId        String
+  externalId     String   // Shopify product ID
+  title          String
+  description    String?
+  handle         String
+  vendor         String?
+  productType    String?
+  imageUrl       String?
+  price          Float
+  compareAtPrice Float?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store    Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  variants ProductVariant[]
+
+  @@unique([storeId, externalId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id         String  @id @default(cuid())
+  productId  String
+  externalId String  // Shopify variant ID
+  title      String
+  sku        String?
+  price      Float
+  inventory  Int     @default(0)
+  imageUrl   String?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, externalId])
+  @@map("product_variants")
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  storeId       String
+  externalId    String   // Shopify customer ID
+  email         String
+  phone         String?
+  firstName     String?
+  lastName      String?
+  acceptsMarketing Boolean @default(false)
+  tags          String[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store  Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orders Order[]
+  rfmScore RfmScore?
+  lifetimeValue CustomerLifetimeValue?
+
+  @@unique([storeId, externalId])
+  @@index([email])
+  @@map("customers")
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  storeId     String
+  customerId  String
+  externalId  String   // Shopify order ID
+  orderNumber String
+  totalPrice  Float
+  subtotal    Float
+  tax         Float
+  shipping    Float
+  currency    String   @default("USD")
+  status      String   // pending, paid, fulfilled, cancelled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store    Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer    @relation(fields: [customerId], references: [id])
+  items    OrderItem[]
+
+  @@unique([storeId, externalId])
+  @@index([customerId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  productId String
+  variantId String?
+  title     String
+  quantity  Int
+  price     Float
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+// ============================================================================
+// CUSTOMER INTELLIGENCE (Phase 2)
+// ============================================================================
+
+model RfmScore {
+  id          String   @id @default(cuid())
+  customerId  String   @unique
+  storeId     String
+  recency     Int      // 1-5 score
+  frequency   Int      // 1-5 score
+  monetary    Int      // 1-5 score
+  totalScore  Int      // sum of R+F+M
+  segment     String   // Champions, Loyal, At Risk, Lost, etc.
+  lastOrderAt DateTime?
+  orderCount  Int      @default(0)
+  totalSpent  Float    @default(0)
+  avgOrderValue Float  @default(0)
+  calculatedAt DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([segment])
+  @@index([totalScore])
+  @@map("rfm_scores")
+}
+
+model CustomerSegment {
+  id          String   @id @default(cuid())
+  storeId     String
+  name        String   // Champions, Loyal Customers, Potential Loyalists, etc.
+  slug        String
+  description String?
+  rfmMin      Int      @default(0)  // min total RFM score
+  rfmMax      Int      @default(15) // max total RFM score
+  color       String   @default("#000000")
+  customerCount Int    @default(0)
+  totalRevenue  Float  @default(0)
+  isSystem    Boolean  @default(false) // system-generated vs custom
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, slug])
+  @@map("customer_segments")
+}
+
+model CustomerLifetimeValue {
+  id               String   @id @default(cuid())
+  customerId       String   @unique
+  storeId          String
+  historicalLtv    Float    @default(0) // actual spend to date
+  predictedLtv     Float    @default(0) // projected future value
+  avgOrderValue    Float    @default(0)
+  purchaseFrequency Float   @default(0) // orders per month
+  customerLifespan  Float   @default(0) // months since first order
+  churnProbability  Float   @default(0) // 0-1
+  lastCalculatedAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([predictedLtv])
+  @@map("customer_lifetime_values")
+}
+
+// ============================================================================
+// Future tables (to be added in later phases)
+// ============================================================================
+
+// - campaigns
+// - templates
+// - forms
+// - popups
+// - workflows
+// - workflow_nodes
+// - messages
+// - events
+// - conversions
