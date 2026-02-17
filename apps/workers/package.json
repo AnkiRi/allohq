@@ -12,6 +12,7 @@
   "dependencies": {
     "@allohq/customer-intelligence": "workspace:*",
     "@allohq/database": "workspace:*",
+    "@allohq/ecommerce-integrations": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.0"
   },

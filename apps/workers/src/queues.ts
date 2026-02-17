@@ -5,3 +5,4 @@ export const syncQueue = new Queue(QUEUE_NAMES.SYNC, { connection: redisConnecti
 export const rfmQueue = new Queue(QUEUE_NAMES.RFM, { connection: redisConnection });
 export const ltvQueue = new Queue(QUEUE_NAMES.LTV, { connection: redisConnection });
 export const emailSendQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, { connection: redisConnection });
+export const shopifyWebhookQueue = new Queue(QUEUE_NAMES.SHOPIFY_WEBHOOK, { connection: redisConnection });
