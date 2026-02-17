@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@allohq/ui", "@allohq/database"],
+  transpilePackages: ["@allohq/ui", "@allohq/database", "@allohq/ecommerce-integrations"],
   experimental: {
     optimizePackageImports: ["@allohq/ui", "lucide-react"],
   },

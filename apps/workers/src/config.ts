@@ -13,4 +13,5 @@ export const QUEUE_NAMES = {
   RFM: "rfm",
   LTV: "ltv",
   EMAIL_SEND: "email-send",
+  SHOPIFY_WEBHOOK: "shopify-webhook",
 } as const;
