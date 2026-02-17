@@ -1,0 +1,31 @@
+{
+  "name": "@allohq/api",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint ./src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@allohq/customer-intelligence": "workspace:*",
+    "@allohq/database": "workspace:*",
+    "@clerk/backend": "^1.18.6",
+    "@trpc/server": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@allohq/eslint-config": "workspace:*",
+    "@allohq/tsconfig": "workspace:*",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.18.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@allohq/widget",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/widget.js",
+  "scripts": {
+    "dev": "esbuild src/index.ts --bundle --outfile=dist/widget.js --format=iife --global-name=AlloHQ --watch",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/widget.js --format=iife --global-name=AlloHQ --minify",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@allohq/tsconfig": "workspace:*",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.3"
+  }
+}
