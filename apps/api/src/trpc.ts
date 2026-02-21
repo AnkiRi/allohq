@@ -1,23 +1,29 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { prisma } from "@allohq/database";
-import { clerkClient } from "@clerk/backend";
+import { verifyToken } from "@clerk/backend";
 
 /**
  * Context creation for tRPC
  */
 export async function createContext(opts: { req?: any; res?: any }) {
   // Get auth token from header
-  const authHeader = opts.req?.headers?.authorization;
-  const token = authHeader?.replace("Bearer ", "");
+  const authHeader = opts.req?.headers?.authorization as string | undefined;
+  // Extract the JWT — must start with "Bearer " and have content after it
+  const token =
+    authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 7
+      ? authHeader.slice(7)
+      : null;
 
   let userId: string | null = null;
   let workspaceId: string | null = null;
 
   if (token) {
     try {
-      // Verify Clerk session token
-      const session = await clerkClient.sessions.verifySession(token, token);
-      userId = session.userId;
+      const payload = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY!,
+        authorizedParties: ["http://localhost:3000", "http://localhost:3001"],
+      });
+      userId = payload.sub;
 
       // Get user's workspace (for now, just get the first one)
       const user = await prisma.user.findUnique({
@@ -31,9 +37,8 @@ export async function createContext(opts: { req?: any; res?: any }) {
       });
 
       workspaceId = user?.workspaceMembers[0]?.workspaceId || null;
-    } catch (error) {
-      // Invalid token, continue as unauthenticated
-      console.error("Auth error:", error);
+    } catch (error: any) {
+      console.error("Auth error:", error?.message || error);
     }
   }
 

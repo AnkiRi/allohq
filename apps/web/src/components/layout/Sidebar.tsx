@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUser, useClerk } from "@clerk/nextjs";
 import {
   LayoutDashboard,
   Users,
@@ -12,6 +13,7 @@ import {
   BarChart3,
   Settings,
   Store,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 
@@ -29,6 +31,14 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+
+  const initials = user
+    ? (user.firstName?.[0] || "") + (user.lastName?.[0] || "") ||
+      user.emailAddresses[0]?.emailAddress?.[0]?.toUpperCase() ||
+      "U"
+    : "U";
 
   return (
     <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
@@ -67,13 +77,32 @@ export function Sidebar() {
       {/* User section */}
       <div className="px-3 py-4 border-t border-gray-200">
         <div className="flex items-center gap-3 px-3 py-2.5">
-          <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center text-[10px] font-bold text-white font-mono">
-            U
+          {user?.imageUrl ? (
+            <img
+              src={user.imageUrl}
+              alt=""
+              className="w-7 h-7 rounded-full"
+            />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center text-[10px] font-bold text-white font-mono">
+              {initials}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-gray-900 font-mono truncate">
+              {user?.fullName || user?.emailAddresses[0]?.emailAddress || "User"}
+            </p>
+            <p className="text-[10px] text-gray-400 font-mono truncate">
+              {user?.emailAddresses[0]?.emailAddress || ""}
+            </p>
           </div>
-          <div className="flex-1">
-            <p className="text-xs font-medium text-gray-900 font-mono">Your Name</p>
-            <p className="text-[10px] text-gray-400 font-mono">Admin</p>
-          </div>
+          <button
+            onClick={() => signOut({ redirectUrl: "/" })}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </aside>

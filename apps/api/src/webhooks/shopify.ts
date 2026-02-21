@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { Queue } from "bullmq";
-import { verifyWebhookHmac } from "@allohq/ecommerce-integrations/src/shopify/webhooks";
+import { shopify } from "@allohq/ecommerce-integrations";
+const { verifyWebhookHmac } = shopify;
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",

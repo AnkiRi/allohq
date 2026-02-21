@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { generateAuthUrl } from "@allohq/ecommerce-integrations/src/shopify/oauth";
+import { shopify } from "@allohq/ecommerce-integrations";
+const { generateAuthUrl } = shopify;
 
 export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");

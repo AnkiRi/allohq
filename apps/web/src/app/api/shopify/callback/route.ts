@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeCodeForToken } from "@allohq/ecommerce-integrations/src/shopify/oauth";
+import { shopify } from "@allohq/ecommerce-integrations";
+const { exchangeCodeForToken } = shopify;
 import { prisma } from "@allohq/database";
 import { auth } from "@clerk/nextjs/server";
 
@@ -51,7 +52,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    // Find or auto-create user and workspace
+    let user = await prisma.user.findUnique({
       where: { clerkId: userId },
       include: {
         workspaceMembers: {
@@ -61,7 +63,32 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const workspaceId = user?.workspaceMembers[0]?.workspaceId;
+    if (!user) {
+      // Auto-provision user + default workspace on first Shopify connect
+      const workspace = await prisma.workspace.create({
+        data: {
+          name: shop.replace(".myshopify.com", ""),
+          slug: shop.replace(".myshopify.com", ""),
+        },
+      });
+      user = await prisma.user.create({
+        data: {
+          clerkId: userId,
+          email: `${userId}@clerk.dev`, // placeholder, updated on next sign-in
+          workspaceMembers: {
+            create: { workspaceId: workspace.id, role: "admin" },
+          },
+        },
+        include: {
+          workspaceMembers: {
+            take: 1,
+            select: { workspaceId: true },
+          },
+        },
+      });
+    }
+
+    const workspaceId = user.workspaceMembers[0]?.workspaceId;
     if (!workspaceId) {
       return NextResponse.json(
         { error: "No workspace found for user" },
@@ -93,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Trigger initial sync via API server
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
     try {
-      await fetch(`${apiUrl}/trpc/stores.triggerSync`, {
+      await fetch(`${apiUrl}/stores.triggerSync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
