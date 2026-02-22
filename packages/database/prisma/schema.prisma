@@ -220,6 +220,7 @@ model CustomerSegment {
   color       String   @default("#000000")
   customerCount Int    @default(0)
   totalRevenue  Float  @default(0)
+  conditions  Json?    // custom segment rules: { operator, conditions[] }
   isSystem    Boolean  @default(false) // system-generated vs custom
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

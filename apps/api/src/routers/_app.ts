@@ -4,6 +4,7 @@ import { customersRouter } from "./customers";
 import { segmentsRouter } from "./segments";
 import { rfmRouter } from "./rfm";
 import { storesRouter } from "./stores";
+import { dashboardRouter } from "./dashboard";
 
 /**
  * Root tRPC router
@@ -14,6 +15,7 @@ export const appRouter = router({
   segments: segmentsRouter,
   rfm: rfmRouter,
   stores: storesRouter,
+  dashboard: dashboardRouter,
 });
 
 export type AppRouter = typeof appRouter;

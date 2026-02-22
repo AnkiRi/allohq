@@ -35,6 +35,7 @@ const themes = [
 
 export default function DesignPreviewPage() {
   const [selectedTheme, setSelectedTheme] = useState(themes[0]);
+  if (!selectedTheme) return null;
   const ThemeComponent = selectedTheme.component;
 
   return (

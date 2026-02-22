@@ -60,15 +60,15 @@ export function CyberpunkLite() {
               indigo: { border: "border-indigo-500/20", text: "text-indigo-300/80", iconText: "text-indigo-400/60", bg: "bg-indigo-500/5" },
               violet: { border: "border-violet-500/20", text: "text-violet-300/80", iconText: "text-violet-400/60", bg: "bg-violet-500/5" },
             };
-            const c = colorMap[stat.color] || colorMap.teal;
+            const c = colorMap[stat.color] ?? colorMap.teal!;
 
             return (
               <div
                 key={i}
-                className={`border ${c.border} ${c.bg} backdrop-blur-sm rounded-xl p-6 hover:bg-gray-800/40 transition-all duration-300 group`}
+                className={`border ${c!.border} ${c!.bg} backdrop-blur-sm rounded-xl p-6 hover:bg-gray-800/40 transition-all duration-300 group`}
               >
-                <stat.icon className={`w-7 h-7 ${c.iconText} mb-4 group-hover:opacity-100 transition-opacity`} />
-                <div className={`text-2xl font-semibold ${c.text} mb-1 font-mono`}>
+                <stat.icon className={`w-7 h-7 ${c!.iconText} mb-4 group-hover:opacity-100 transition-opacity`} />
+                <div className={`text-2xl font-semibold ${c!.text} mb-1 font-mono`}>
                   {stat.value}
                 </div>
                 <div className="text-gray-600 text-xs font-mono uppercase tracking-wider">
@@ -97,17 +97,17 @@ export function CyberpunkLite() {
                   indigo: { bar: "bg-indigo-500/50", text: "text-indigo-400/70" },
                   violet: { bar: "bg-violet-500/50", text: "text-violet-400/70" },
                 };
-                const bc = barColors[item.color] || barColors.teal;
+                const bc = barColors[item.color] ?? barColors.teal!;
 
                 return (
                   <div key={i}>
                     <div className="flex justify-between text-xs mb-2">
                       <span className="text-gray-500 font-mono">{item.label}</span>
-                      <span className={`${bc.text} font-mono`}>{item.value}%</span>
+                      <span className={`${bc!.text} font-mono`}>{item.value}%</span>
                     </div>
                     <div className="h-1 bg-gray-800/60 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${bc.bar} rounded-full transition-all duration-700`}
+                        className={`h-full ${bc!.bar} rounded-full transition-all duration-700`}
                         style={{ width: `${item.value}%` }}
                       />
                     </div>

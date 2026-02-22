@@ -1,37 +1,51 @@
 "use client";
 
-import { Users, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { Users, ArrowUpRight, Plus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 export default function SegmentsPage() {
-  const { data: segments, isLoading: segmentsLoading } = trpc.segments.list.useQuery();
-  const { data: distribution, isLoading: distLoading } = trpc.segments.distribution.useQuery();
+  const segmentsQuery = trpc.segments.list.useQuery();
+  const distQuery = trpc.segments.distribution.useQuery();
+  const segments = segmentsQuery.data as any[] | undefined;
+  const distribution = distQuery.data as any[] | undefined;
+  const segmentsLoading = segmentsQuery.isLoading;
+  const distLoading = distQuery.isLoading;
 
   const isLoading = segmentsLoading || distLoading;
 
   // Merge segment definitions with distribution data
-  const mergedSegments = segments?.map((seg) => {
-    const dist = distribution?.find((d) => d.segment === seg.name);
+  const mergedSegments = (segments ?? []).map((seg: any) => {
+    const dist = (distribution ?? []).find((d: any) => d.segment === seg.name);
     return {
       ...seg,
       liveCount: dist?.customerCount ?? seg.customerCount,
       liveRevenue: dist?.totalRevenue ?? seg.totalRevenue,
       avgOrder: dist?.avgOrderValue ?? 0,
     };
-  }) ?? [];
+  });
 
   const totalCustomers = mergedSegments.reduce((sum, s) => sum + s.liveCount, 0);
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
-          SEGMENTS
-        </h1>
-        <p className="text-sm text-gray-400 font-mono mt-1">
-          RFM-based customer segmentation
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
+            SEGMENTS
+          </h1>
+          <p className="text-sm text-gray-400 font-mono mt-1">
+            RFM-based customer segmentation
+          </p>
+        </div>
+        <Link
+          href="/segments/new"
+          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 transition-all"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Create Segment
+        </Link>
       </div>
 
       {/* Segment overview bar */}

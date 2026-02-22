@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Circle, Sparkles, TrendingUp, Users, ShoppingBag } from "lucide-react";
+import { ArrowUpRight, Sparkles, TrendingUp, Users, ShoppingBag } from "lucide-react";
 
 export function MinimalElegant() {
   return (
@@ -79,7 +79,7 @@ export function MinimalElegant() {
               cyan: { bg: "bg-cyan-50", text: "text-cyan-500", border: "border-cyan-100", glow: "rgba(6,182,212,0.08)" },
               rose: { bg: "bg-rose-50", text: "text-rose-500", border: "border-rose-100", glow: "rgba(244,63,94,0.08)" },
             };
-            const colors = accentMap[stat.accent] || accentMap.orange;
+            const colors = accentMap[stat.accent] ?? accentMap.orange!;
 
             return (
               <div
@@ -90,15 +90,15 @@ export function MinimalElegant() {
                   boxShadow: `0 0 0 0 transparent`,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = `0 20px 60px -15px ${colors.glow}`;
+                  e.currentTarget.style.boxShadow = `0 20px 60px -15px ${colors!.glow}`;
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.boxShadow = `0 0 0 0 transparent`;
                 }}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3`}>
-                    <stat.icon className={`w-5 h-5 ${colors.text}`} />
+                  <div className={`w-10 h-10 rounded-xl ${colors!.bg} flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3`}>
+                    <stat.icon className={`w-5 h-5 ${colors!.text}`} />
                   </div>
                   <span className="text-xs text-emerald-500 font-medium flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     {stat.change}
@@ -108,7 +108,7 @@ export function MinimalElegant() {
                 <div className="text-sm text-gray-400 font-medium mb-1">{stat.label}</div>
                 <div className="text-3xl font-light text-gray-800 tracking-tight">{stat.value}</div>
                 {/* Bottom accent line */}
-                <div className={`absolute bottom-0 left-6 right-6 h-0.5 rounded-full bg-gradient-to-r from-transparent via-current to-transparent ${colors.text} opacity-0 group-hover:opacity-20 transition-opacity duration-500`} />
+                <div className={`absolute bottom-0 left-6 right-6 h-0.5 rounded-full bg-gradient-to-r from-transparent via-current to-transparent ${colors!.text} opacity-0 group-hover:opacity-20 transition-opacity duration-500`} />
               </div>
             );
           })}

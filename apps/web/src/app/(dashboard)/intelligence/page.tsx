@@ -1,24 +1,71 @@
 "use client";
 
-import { Brain, TrendingUp, Users, DollarSign, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
+import { Brain, TrendingUp, Users, DollarSign, AlertTriangle, RefreshCw, Grid3X3 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 export default function IntelligencePage() {
+  const [analyzing, setAnalyzing] = useState(false);
+
   const { data: rfmData, isLoading: rfmLoading } = trpc.rfm.overview.useQuery();
   const { data: ltvData, isLoading: ltvLoading } = trpc.rfm.ltvOverview.useQuery();
+  const { data: stores } = trpc.stores.list.useQuery();
+
+  const utils = trpc.useUtils();
+  const calculateRfm = trpc.rfm.calculate.useMutation();
+  const calculateLtv = trpc.rfm.calculateLtv.useMutation();
+
+  const storeId = stores?.[0]?.id;
 
   const isLoading = rfmLoading || ltvLoading;
+
+  async function runAnalysis() {
+    if (!storeId || analyzing) return;
+    setAnalyzing(true);
+    try {
+      await calculateRfm.mutateAsync({ storeId });
+      await calculateLtv.mutateAsync({ storeId });
+      await utils.rfm.overview.invalidate();
+      await utils.rfm.ltvOverview.invalidate();
+      await utils.segments.list.invalidate();
+      await utils.segments.distribution.invalidate();
+    } catch (err: any) {
+      console.error("Analysis failed:", err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
-          INTELLIGENCE
-        </h1>
-        <p className="text-sm text-gray-400 font-mono mt-1">
-          Customer intelligence, RFM analysis & lifetime value
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
+            INTELLIGENCE
+          </h1>
+          <p className="text-sm text-gray-400 font-mono mt-1">
+            Customer intelligence, RFM analysis & lifetime value
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link
+            href="/intelligence/cohorts"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-xs font-mono text-gray-700 hover:border-gray-400 transition-all"
+          >
+            <Grid3X3 className="w-3.5 h-3.5" />
+            Cohort Analysis
+          </Link>
+          <button
+            onClick={runAnalysis}
+            disabled={!storeId || analyzing}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 disabled:opacity-50 transition-all"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? "animate-spin" : ""}`} />
+            {analyzing ? "Analyzing..." : "Run Analysis"}
+          </button>
+        </div>
       </div>
 
       {/* Top-level KPIs */}
@@ -167,11 +214,9 @@ export default function IntelligencePage() {
                   return (
                     <tr key={seg.name} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold text-gray-900 font-mono">
-                            {seg.name}
-                          </span>
-                        </div>
+                        <span className="text-sm font-bold text-gray-900 font-mono">
+                          {seg.name}
+                        </span>
                       </td>
                       <td className="px-6 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
@@ -213,7 +258,7 @@ export default function IntelligencePage() {
             <Brain className="w-8 h-8 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-400 font-mono">No segment data yet</p>
             <p className="text-xs text-gray-300 font-mono mt-1">
-              Run RFM analysis to generate insights
+              Click &quot;Run Analysis&quot; to generate insights
             </p>
           </div>
         )}

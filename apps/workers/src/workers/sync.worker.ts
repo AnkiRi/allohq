@@ -3,6 +3,7 @@ import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { syncAllProducts, syncAllCustomers, syncAllOrders, registerWebhooks } = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { rfmQueue } from "../queues";
 
 interface SyncJobData {
   storeId: string;
@@ -79,6 +80,10 @@ export const syncWorker = new Worker<SyncJobData>(
       where: { id: storeId },
       data: { lastSyncAt: new Date() },
     });
+
+    // 6. Trigger RFM + LTV calculation
+    await rfmQueue.add("rfm-after-sync", { storeId });
+    console.log(`RFM calculation enqueued for store ${storeId}`);
 
     await job.updateProgress(100);
     console.log(`Full sync completed for store ${storeId}`);

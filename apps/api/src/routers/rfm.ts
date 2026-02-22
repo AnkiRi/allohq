@@ -7,6 +7,65 @@ import {
   calculateCustomerLtv,
 } from "@allohq/customer-intelligence";
 
+/** Group customers into monthly cohorts based on first order date */
+async function computeCohorts(prisma: any, storeIds: string[]) {
+  // Get all customers with their orders
+  const customers = await prisma.customer.findMany({
+    where: { storeId: { in: storeIds } },
+    include: {
+      orders: {
+        select: { createdAt: true, totalPrice: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  // Group by first order month
+  const cohortMap = new Map<
+    string,
+    { month: string; customers: number; revenue: number; retainedByMonth: Map<string, number> }
+  >();
+
+  for (const c of customers) {
+    if (c.orders.length === 0) continue;
+
+    const firstOrder = c.orders[0];
+    const cohortMonth = `${firstOrder.createdAt.getFullYear()}-${String(firstOrder.createdAt.getMonth() + 1).padStart(2, "0")}`;
+
+    if (!cohortMap.has(cohortMonth)) {
+      cohortMap.set(cohortMonth, {
+        month: cohortMonth,
+        customers: 0,
+        revenue: 0,
+        retainedByMonth: new Map(),
+      });
+    }
+
+    const cohort = cohortMap.get(cohortMonth)!;
+    cohort.customers++;
+
+    // Track revenue and retention per subsequent month
+    for (const order of c.orders) {
+      const orderMonth = `${order.createdAt.getFullYear()}-${String(order.createdAt.getMonth() + 1).padStart(2, "0")}`;
+      cohort.revenue += order.totalPrice;
+      cohort.retainedByMonth.set(
+        orderMonth,
+        (cohort.retainedByMonth.get(orderMonth) ?? 0) + 1
+      );
+    }
+  }
+
+  // Convert to sorted array
+  return Array.from(cohortMap.values())
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map((c) => ({
+      month: c.month,
+      customers: c.customers,
+      revenue: c.revenue,
+      retention: Object.fromEntries(c.retainedByMonth),
+    }));
+}
+
 export const rfmRouter = router({
   /** Calculate RFM scores for all customers in a store */
   calculate: workspaceProcedure
@@ -248,5 +307,16 @@ export const rfmRouter = router({
       avgPurchaseFrequency: stats._avg.purchaseFrequency ?? 0,
       avgChurnProbability: stats._avg.churnProbability ?? 0,
     };
+  }),
+
+  /** Cohort analysis — group customers by first purchase month */
+  cohorts: workspaceProcedure.query(async ({ ctx }) => {
+    const stores = await ctx.prisma.store.findMany({
+      where: { workspaceId: ctx.workspaceId },
+      select: { id: true },
+    });
+    const storeIds = stores.map((s) => s.id);
+
+    return computeCohorts(ctx.prisma, storeIds);
   }),
 });

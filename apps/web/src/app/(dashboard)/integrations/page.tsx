@@ -30,7 +30,7 @@ export default function IntegrationsPage() {
   const [shopDomain, setShopDomain] = useState("");
   const [error, setError] = useState("");
 
-  const { data: stores, isLoading } = trpc.stores.list.useQuery();
+  const { data: stores, isLoading: _isLoading } = trpc.stores.list.useQuery();
 
   const connectedShopifyStores = stores?.filter(
     (s) => s.platform === "shopify"
