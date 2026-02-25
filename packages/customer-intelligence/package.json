@@ -7,8 +7,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@allohq/email-builder": "workspace:*",
+    "@anthropic-ai/sdk": "^0.78.0",
+    "openai": "^4.73.0"
+  },
   "devDependencies": {
     "@allohq/tsconfig": "workspace:*",
+    "@types/node": "^22.10.7",
     "typescript": "^5.7.3"
   }
 }

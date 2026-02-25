@@ -24,9 +24,10 @@ export async function createContext(opts: { req?: any; res?: any }) {
         authorizedParties: ["http://localhost:3000", "http://localhost:3001"],
       });
       userId = payload.sub;
+      console.log("[auth] Clerk userId:", userId);
 
       // Get user's workspace (for now, just get the first one)
-      const user = await prisma.user.findUnique({
+      let user = await prisma.user.findUnique({
         where: { clerkId: userId },
         include: {
           workspaceMembers: {
@@ -35,6 +36,35 @@ export async function createContext(opts: { req?: any; res?: any }) {
           },
         },
       });
+
+      // Auto-provision user + default workspace on first authenticated request
+      if (!user) {
+        const slug = `ws-${userId.slice(0, 8)}`;
+        // Use existing workspace if slug collision, otherwise create new
+        let workspace = await prisma.workspace.findUnique({ where: { slug } });
+        if (!workspace) {
+          workspace = await prisma.workspace.create({
+            data: { name: "My Workspace", slug },
+          });
+        }
+        user = await prisma.user.upsert({
+          where: { clerkId: userId },
+          update: {},
+          create: {
+            clerkId: userId,
+            email: `${userId}@clerk.dev`,
+            workspaceMembers: {
+              create: { workspaceId: workspace.id, role: "admin" },
+            },
+          },
+          include: {
+            workspaceMembers: {
+              take: 1,
+              include: { workspace: true },
+            },
+          },
+        });
+      }
 
       workspaceId = user?.workspaceMembers[0]?.workspaceId || null;
     } catch (error: any) {

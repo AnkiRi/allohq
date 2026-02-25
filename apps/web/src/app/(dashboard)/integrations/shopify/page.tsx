@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,21 +11,43 @@ import {
   ShoppingCart,
   Check,
   Clock,
+  Loader2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 export default function ShopifyDetailPage() {
   const [disconnecting, setDisconnecting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncDone, setSyncDone] = useState(false);
+  const [preSyncLastSyncAt, setPreSyncLastSyncAt] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
-  const { data: stores } = trpc.stores.list.useQuery();
+  const { data: stores } = trpc.stores.list.useQuery(undefined, {
+    refetchInterval: isSyncing ? 3000 : false,
+  });
   const store = stores?.find((s) => s.platform === "shopify");
 
   const triggerSync = trpc.stores.triggerSync.useMutation({
     onSuccess: () => {
-      utils.stores.list.invalidate();
+      setIsSyncing(true);
+      setSyncDone(false);
+      setPreSyncLastSyncAt(store?.lastSyncAt ?? null);
     },
   });
+
+  // Detect sync completion
+  useEffect(() => {
+    if (!isSyncing || !store) return;
+    const currentLastSync = store.lastSyncAt;
+    if (currentLastSync && currentLastSync !== preSyncLastSyncAt) {
+      setIsSyncing(false);
+      setSyncDone(true);
+      utils.stores.list.invalidate();
+      // Reset sync done badge after 5 seconds
+      const timer = setTimeout(() => setSyncDone(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [isSyncing, store, preSyncLastSyncAt, utils]);
 
   const disconnect = trpc.stores.disconnect.useMutation({
     onSuccess: () => {
@@ -60,6 +82,8 @@ export default function ShopifyDetailPage() {
     );
   }
 
+  const syncing = isSyncing || triggerSync.isPending;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -80,13 +104,17 @@ export default function ShopifyDetailPage() {
         <div className="flex gap-2">
           <button
             onClick={() => triggerSync.mutate({ storeId: store.id })}
-            disabled={triggerSync.isPending}
+            disabled={syncing}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-xs font-mono text-gray-700 hover:border-gray-400 disabled:opacity-50 transition-all"
           >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${triggerSync.isPending ? "animate-spin" : ""}`}
-            />
-            {triggerSync.isPending ? "Syncing..." : "Sync Now"}
+            {syncing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : syncDone ? (
+              <Check className="w-3.5 h-3.5 text-green-600" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            {syncing ? "Syncing..." : syncDone ? "Sync Complete!" : "Sync Now"}
           </button>
           <button
             onClick={() => setDisconnecting(true)}
@@ -97,6 +125,68 @@ export default function ShopifyDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Sync progress banner */}
+      {syncing && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 text-gray-900 animate-spin flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-mono font-bold text-gray-900">
+              Syncing store data...
+            </p>
+            <p className="text-xs font-mono text-gray-400 mt-0.5">
+              Importing products, customers, and orders from {store.shopDomain}
+            </p>
+          </div>
+          <div className="flex gap-4">
+            {[
+              { label: "Products", value: store._count.products },
+              { label: "Customers", value: store._count.customers },
+              { label: "Orders", value: store._count.orders },
+            ].map((item) => (
+              <div key={item.label} className="text-center">
+                <div className="text-lg font-mono font-bold text-gray-900 tabular-nums">
+                  {item.value.toLocaleString()}
+                </div>
+                <div className="text-[10px] font-mono text-gray-400 uppercase">
+                  {item.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sync complete banner */}
+      {syncDone && !syncing && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-mono font-bold text-green-700">
+              Sync complete!
+            </p>
+            <p className="text-xs font-mono text-green-600 mt-0.5">
+              All data imported successfully from {store.shopDomain}
+            </p>
+          </div>
+          <div className="flex gap-4">
+            {[
+              { label: "Products", value: store._count.products },
+              { label: "Customers", value: store._count.customers },
+              { label: "Orders", value: store._count.orders },
+            ].map((item) => (
+              <div key={item.label} className="text-center">
+                <div className="text-lg font-mono font-bold text-green-700 tabular-nums">
+                  {item.value.toLocaleString()}
+                </div>
+                <div className="text-[10px] font-mono text-green-600 uppercase">
+                  {item.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Status card */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -149,7 +239,9 @@ export default function ShopifyDetailPage() {
           <Link
             key={stat.label}
             href={stat.href}
-            className="p-5 bg-white border border-gray-200 rounded-xl hover:border-gray-900 hover:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all group"
+            className={`p-5 bg-white border rounded-xl hover:border-gray-900 hover:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all group ${
+              syncing ? "border-gray-200 animate-pulse" : "border-gray-200"
+            }`}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-gray-400 font-mono uppercase tracking-wider">
@@ -157,7 +249,7 @@ export default function ShopifyDetailPage() {
               </span>
               <stat.icon className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors" />
             </div>
-            <div className="text-3xl font-bold text-gray-900 font-mono">
+            <div className="text-3xl font-bold text-gray-900 font-mono tabular-nums">
               {stat.value.toLocaleString()}
             </div>
           </Link>

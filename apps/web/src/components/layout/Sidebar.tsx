@@ -9,6 +9,8 @@ import {
   Brain,
   Layers,
   Mail,
+  FileText,
+  Sparkles,
   Workflow,
   BarChart3,
   Settings,
@@ -22,7 +24,9 @@ const navigation = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Segments", href: "/segments", icon: Layers },
   { name: "Intelligence", href: "/intelligence", icon: Brain },
+  { name: "Templates", href: "/templates", icon: FileText },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
+  { name: "Programs", href: "/programs", icon: Sparkles },
   { name: "Workflows", href: "/workflows", icon: Workflow },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Integrations", href: "/integrations", icon: Store },
@@ -61,7 +65,7 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-mono",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-mono active:scale-[0.97]",
                 isActive
                   ? "bg-gray-900 text-white"
                   : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
@@ -97,7 +101,7 @@ export function Sidebar() {
             </p>
           </div>
           <button
-            onClick={() => signOut({ redirectUrl: "/" })}
+            onClick={() => signOut({ redirectUrl: "/sign-in" })}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
             title="Sign out"
           >

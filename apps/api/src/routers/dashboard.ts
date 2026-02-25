@@ -1,5 +1,12 @@
 import { router, workspaceProcedure } from "../trpc";
 
+// Cost per million tokens for each model (mirrors AI_MODELS in customer-intelligence)
+const MODEL_COSTS: Record<string, { input: number; output: number }> = {
+  "claude-sonnet-4-5-20250929": { input: 3, output: 15 },
+  "gpt-4o": { input: 2.5, output: 10 },
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
+};
+
 export const dashboardRouter = router({
   /** Dashboard stats overview */
   stats: workspaceProcedure.query(async ({ ctx }) => {
@@ -54,6 +61,52 @@ export const dashboardRouter = router({
           ? `${o.customer.firstName ?? ""} ${o.customer.lastName ?? ""}`.trim() || o.customer.email
           : "Unknown",
       })),
+    };
+  }),
+
+  /** Token usage aggregation for AI cost dashboard */
+  tokenUsage: workspaceProcedure.query(async ({ ctx }) => {
+    const grouped = await ctx.prisma.tokenUsage.groupBy({
+      by: ["model"],
+      where: { workspaceId: ctx.workspaceId },
+      _sum: { inputTokens: true, outputTokens: true },
+      _count: true,
+    });
+
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCalls = 0;
+    let totalCost = 0;
+
+    const byModel = grouped.map((g) => {
+      const inputTokens = g._sum.inputTokens ?? 0;
+      const outputTokens = g._sum.outputTokens ?? 0;
+      const calls = g._count;
+      const costs = MODEL_COSTS[g.model] ?? { input: 0, output: 0 };
+      const cost =
+        (inputTokens / 1_000_000) * costs.input +
+        (outputTokens / 1_000_000) * costs.output;
+
+      totalInputTokens += inputTokens;
+      totalOutputTokens += outputTokens;
+      totalCalls += calls;
+      totalCost += cost;
+
+      return {
+        model: g.model,
+        inputTokens,
+        outputTokens,
+        calls,
+        cost: Math.round(cost * 10000) / 10000,
+      };
+    });
+
+    return {
+      totalInputTokens,
+      totalOutputTokens,
+      totalCalls,
+      totalCost: Math.round(totalCost * 10000) / 10000,
+      byModel,
     };
   }),
 });

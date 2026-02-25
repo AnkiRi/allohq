@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 // Use Google DNS to bypass stale system DNS cache.
 // The system's DNS cache resolves Shopify domains to a wrong IP.
 // We override globalThis.fetch with undici's fetch that uses a custom DNS resolver.
@@ -43,12 +45,18 @@ import { syncWorker } from "./workers/sync.worker";
 import { rfmWorker } from "./workers/rfm.worker";
 import { sendWorker } from "./workers/send.worker";
 import { shopifyWebhookWorker } from "./workers/shopify-webhook.worker";
+import { brandAnalysisWorker } from "./workers/brand-analysis.worker";
+import { programGeneratorWorker } from "./workers/program-generator.worker";
+import { agentPipelineWorker } from "./workers/agent-pipeline.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
 console.log(`  - rfm worker: ${rfmWorker.name}`);
 console.log(`  - send worker: ${sendWorker.name}`);
 console.log(`  - shopify-webhook worker: ${shopifyWebhookWorker.name}`);
+console.log(`  - brand-analysis worker: ${brandAnalysisWorker.name}`);
+console.log(`  - program-generator worker: ${programGeneratorWorker.name}`);
+console.log(`  - agent-pipeline worker: ${agentPipelineWorker.name}`);
 
 // Graceful shutdown
 const shutdown = async () => {
@@ -58,9 +66,13 @@ const shutdown = async () => {
     rfmWorker.close(),
     sendWorker.close(),
     shopifyWebhookWorker.close(),
+    brandAnalysisWorker.close(),
+    programGeneratorWorker.close(),
+    agentPipelineWorker.close(),
   ]);
   process.exit(0);
 };
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+process.on("SIGHUP", shutdown);

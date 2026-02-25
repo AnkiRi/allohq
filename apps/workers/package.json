@@ -4,7 +4,8 @@
   "private": true,
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "predev": "pkill -f 'workers/src/index.ts' 2>/dev/null || true",
+    "dev": "tsx watch --clear-screen=false src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
@@ -13,7 +14,9 @@
     "@allohq/customer-intelligence": "workspace:*",
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
+    "@allohq/email-builder": "workspace:*",
     "bullmq": "^5.0.0",
+    "dotenv": "^16.4.7",
     "ioredis": "^5.4.0",
     "undici": "^7.22.0"
   },

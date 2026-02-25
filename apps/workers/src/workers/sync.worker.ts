@@ -81,7 +81,7 @@ export const syncWorker = new Worker<SyncJobData>(
       data: { lastSyncAt: new Date() },
     });
 
-    // 6. Trigger RFM + LTV calculation
+    // 6. Trigger RFM + LTV calculation (background data enrichment)
     await rfmQueue.add("rfm-after-sync", { storeId });
     console.log(`RFM calculation enqueued for store ${storeId}`);
 

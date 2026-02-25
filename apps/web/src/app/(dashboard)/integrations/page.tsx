@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Store, ShoppingBag, ArrowRight, Check, X } from "lucide-react";
+import { Store, ShoppingBag, ArrowRight, Check, X, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const platforms = [
@@ -29,8 +29,9 @@ export default function IntegrationsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
   const [error, setError] = useState("");
+  const [connecting, setConnecting] = useState(false);
 
-  const { data: stores, isLoading: _isLoading } = trpc.stores.list.useQuery();
+  const { data: stores, isLoading } = trpc.stores.list.useQuery();
 
   const connectedShopifyStores = stores?.filter(
     (s) => s.platform === "shopify"
@@ -53,6 +54,7 @@ export default function IntegrationsPage() {
       return;
     }
 
+    setConnecting(true);
     window.location.href = `/api/shopify/auth?shop=${fullDomain}`;
   }
 
@@ -69,7 +71,14 @@ export default function IntegrationsPage() {
       </div>
 
       {/* Connected stores */}
-      {connectedShopifyStores && connectedShopifyStores.length > 0 && (
+      {isLoading ? (
+        <div className="space-y-3">
+          <h2 className="text-xs font-mono text-gray-400 uppercase tracking-wider">Connected Stores</h2>
+          {[1, 2].map((i) => (
+            <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : connectedShopifyStores && connectedShopifyStores.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-xs font-mono text-gray-400 uppercase tracking-wider">
             Connected Stores
@@ -103,6 +112,14 @@ export default function IntegrationsPage() {
               </div>
             </a>
           ))}
+        </div>
+      )}
+
+      {/* Connect dialog — loading indicator on redirect */}
+      {isLoading && (
+        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Loading stores...
         </div>
       )}
 
@@ -207,9 +224,11 @@ export default function IntegrationsPage() {
               </div>
               <button
                 onClick={handleConnect}
-                className="w-full py-2.5 bg-gray-900 text-white text-sm font-mono rounded-lg hover:bg-gray-800 transition-colors"
+                disabled={connecting}
+                className="w-full py-2.5 bg-gray-900 text-white text-sm font-mono rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
               >
-                Connect Store
+                {connecting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {connecting ? "Connecting..." : "Connect Store"}
               </button>
             </div>
           </div>

@@ -75,3 +75,15 @@
 .neuro-inset {
   @apply shadow-neuro-inset rounded-xl bg-gray-100;
 }
+
+/* Global button press feedback */
+button:not(:disabled):active,
+a:active {
+  transform: scale(0.98);
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+a {
+  transition: transform 0.1s ease, opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}

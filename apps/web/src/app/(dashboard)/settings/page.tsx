@@ -1,12 +1,45 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { Settings, Store, User, Bell, CreditCard } from "lucide-react";
+import { Settings, Store, User, Bell, CreditCard, Sparkles, Cpu, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
+
+const TIER_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  premium: { bg: "bg-purple-50", text: "text-purple-700", label: "Premium" },
+  standard: { bg: "bg-blue-50", text: "text-blue-700", label: "Standard" },
+  economy: { bg: "bg-green-50", text: "text-green-700", label: "Economy" },
+};
 
 export default function SettingsPage() {
   const { user } = useUser();
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
   const { data: stores, isLoading } = trpc.stores.list.useQuery();
+  const storeId = stores?.[0]?.id ?? "";
+
+  const { data: brandStatus } = (trpc.ai.brandProfileStatus as any).useQuery(
+    { storeId },
+    { enabled: !!storeId }
+  ) as { data: { exists: boolean; creativeIntensity?: string } | undefined };
+
+  const updateIntensityMut = (trpc.ai.updateCreativeIntensity as any).useMutation({
+    onSuccess: () => toast("Creative intensity updated!", "success"),
+    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+  }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
+
+  // AI model settings
+  const { data: models } = trpc.ai.models.useQuery();
+  const { data: aiSettings } = (trpc.ai.getSettings as any).useQuery() as {
+    data: { defaultModel: string | null } | undefined;
+  };
+  const setDefaultModel = (trpc.ai.setDefaultModel as any).useMutation({
+    onSuccess: () => {
+      toast("Default model updated!", "success");
+      (utils.ai as any).getSettings.invalidate();
+    },
+    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+  }) as { mutate: (input: { model: string | null }) => void; isPending: boolean };
 
   return (
     <div className="space-y-6">
@@ -89,6 +122,114 @@ export default function SettingsPage() {
         ) : (
           <p className="text-sm text-gray-400 font-mono">
             No stores connected. Go to Integrations to connect a store.
+          </p>
+        )}
+      </div>
+
+      {/* AI Preferences */}
+      <div className="border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="flex items-center gap-3 mb-6">
+          <Sparkles className="w-4 h-4 text-gray-400" />
+          <h2 className="text-sm font-bold text-gray-900 font-mono">AI PREFERENCES</h2>
+        </div>
+        {brandStatus?.exists ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-gray-400 font-mono mb-3">CREATIVE INTENSITY</label>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { value: "text_heavy", label: "Text Heavy", desc: "Copy-focused, minimal visuals" },
+                  { value: "balanced", label: "Balanced", desc: "Mix of visuals and copy" },
+                  { value: "visual_heavy", label: "Visual Heavy", desc: "Maximum visual impact" },
+                ] as const).map((opt) => {
+                  const current = brandStatus?.creativeIntensity ?? "balanced";
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => storeId && updateIntensityMut.mutate({ storeId, creativeIntensity: opt.value })}
+                      disabled={updateIntensityMut.isPending}
+                      className={`text-left p-4 border rounded-xl transition-all ${
+                        current === opt.value
+                          ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)] bg-gray-50"
+                          : "border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      <p className="text-xs font-bold text-gray-900 font-mono">{opt.label}</p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-1">{opt.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <Sparkles className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+            <p className="text-xs text-gray-400 font-mono">
+              Run brand analysis first to unlock AI preferences
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Default AI Model */}
+      <div className="border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="flex items-center gap-3 mb-6">
+          <Cpu className="w-4 h-4 text-gray-400" />
+          <h2 className="text-sm font-bold text-gray-900 font-mono">DEFAULT AI MODEL</h2>
+        </div>
+        <p className="text-xs text-gray-400 font-mono mb-4">
+          Choose which model is used by default for all AI content generation
+        </p>
+        {models && models.length > 0 ? (
+          <div className="grid grid-cols-3 gap-3">
+            {models.map((model) => {
+              const isSelected = aiSettings?.defaultModel === model.id;
+              const tier = TIER_COLORS[(model as any).tier as string] ?? TIER_COLORS["standard"]!;
+              return (
+                <button
+                  key={model.id}
+                  onClick={() => setDefaultModel.mutate({ model: isSelected ? null : model.id })}
+                  disabled={setDefaultModel.isPending || !model.available}
+                  className={`relative text-left p-4 border rounded-xl transition-all ${
+                    isSelected
+                      ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)] bg-gray-50"
+                      : model.available
+                        ? "border-gray-200 hover:border-gray-400"
+                        : "border-gray-100 opacity-50 cursor-not-allowed"
+                  }`}
+                >
+                  {isSelected && (
+                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-xs font-bold text-gray-900 font-mono">{model.label}</p>
+                    <span className="text-[9px] font-mono text-gray-400">{model.provider}</span>
+                  </div>
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${tier.bg} ${tier.text} mb-2`}>
+                    {tier.label}
+                  </span>
+                  <p className="text-[10px] text-gray-400 font-mono mb-3">{model.description}</p>
+                  <div className="text-[10px] font-mono text-gray-400 space-y-0.5">
+                    <p>Input: ${(model as any).inputCostPerMillion}/M tokens</p>
+                    <p>Output: ${(model as any).outputCostPerMillion}/M tokens</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        )}
+        {aiSettings?.defaultModel === null && models && (
+          <p className="text-[10px] text-gray-300 font-mono mt-3">
+            No default selected — AI will use Claude Sonnet 4.5
           </p>
         )}
       </div>

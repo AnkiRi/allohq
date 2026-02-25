@@ -1,2 +1,1 @@
-// Email block definitions - to be implemented
-export {};
+export { createDefaultBlock } from "../types";

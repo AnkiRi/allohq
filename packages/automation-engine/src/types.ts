@@ -8,7 +8,7 @@ export interface Trigger {
 /** An action performed in a workflow */
 export interface Action {
   id: string;
-  type: "send_email" | "send_sms" | "wait" | "condition" | "split" | "webhook";
+  type: "send_email" | "send_sms" | "send_whatsapp" | "wait" | "condition" | "split" | "webhook";
   config: Record<string, unknown>;
 }
 

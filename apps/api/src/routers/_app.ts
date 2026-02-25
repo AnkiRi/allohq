@@ -5,6 +5,12 @@ import { segmentsRouter } from "./segments";
 import { rfmRouter } from "./rfm";
 import { storesRouter } from "./stores";
 import { dashboardRouter } from "./dashboard";
+import { templatesRouter } from "./templates";
+import { campaignsRouter } from "./campaigns";
+import { productsRouter } from "./products";
+import { aiRouter } from "./ai";
+import { programsRouter } from "./programs";
+import { workflowsRouter } from "./workflows";
 
 /**
  * Root tRPC router
@@ -16,6 +22,12 @@ export const appRouter = router({
   rfm: rfmRouter,
   stores: storesRouter,
   dashboard: dashboardRouter,
+  templates: templatesRouter,
+  campaigns: campaignsRouter,
+  products: productsRouter,
+  ai: aiRouter,
+  programs: programsRouter,
+  workflows: workflowsRouter,
 });
 
 export type AppRouter = typeof appRouter;

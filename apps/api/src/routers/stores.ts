@@ -198,18 +198,44 @@ export const storesRouter = router({
     }),
 
   /**
-   * Disconnect a store (soft delete).
+   * Disconnect a store — deletes all related data and soft-deletes the store.
    */
   disconnect: workspaceProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.store.updateMany({
-        where: {
-          id: input.storeId,
-          workspaceId: ctx.workspaceId,
-        },
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new Error("Store not found");
+
+      // Delete related data in dependency order
+      await ctx.prisma.orderItem.deleteMany({
+        where: { order: { storeId: input.storeId } },
+      });
+      await ctx.prisma.order.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.customerLifetimeValue.deleteMany({
+        where: { customer: { storeId: input.storeId } },
+      });
+      await ctx.prisma.rfmScore.deleteMany({
+        where: { customer: { storeId: input.storeId } },
+      });
+      await ctx.prisma.customer.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.productVariant.deleteMany({
+        where: { product: { storeId: input.storeId } },
+      });
+      await ctx.prisma.product.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.emailProgram.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.brandProfile.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.campaign.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.workflow.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.customerSegment.deleteMany({ where: { storeId: input.storeId } });
+
+      // Soft-delete the store
+      await ctx.prisma.store.update({
+        where: { id: input.storeId },
         data: { isActive: false },
       });
+
       return { success: true };
     }),
 });

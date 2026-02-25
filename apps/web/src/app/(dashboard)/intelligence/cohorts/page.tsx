@@ -33,7 +33,17 @@ export default function CohortAnalysisPage() {
       </div>
 
       {/* Summary cards */}
-      {cohorts && cohorts.length > 0 && (
+      {isLoading ? (
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white">
+              <div className="w-5 h-5 bg-gray-100 rounded mb-3 animate-pulse" />
+              <div className="w-24 h-3 bg-gray-100 rounded mb-2 animate-pulse" />
+              <div className="w-16 h-7 bg-gray-100 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      ) : cohorts && cohorts.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
           <div className="border border-gray-200 rounded-xl p-5 bg-white">
             <Users className="w-5 h-5 text-gray-300 mb-3" />

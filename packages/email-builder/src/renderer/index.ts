@@ -1,2 +1,1 @@
-// Email HTML renderer - to be implemented
-export {};
+export { renderToHtml } from "./render-to-html";

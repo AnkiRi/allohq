@@ -1,9 +1,15 @@
+import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { RouteProgress } from "@/components/layout/RouteProgress";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-[#FAFAFA]">
+      <Suspense fallback={null}>
+        <RouteProgress />
+      </Suspense>
+
       {/* Sidebar */}
       <Sidebar />
 

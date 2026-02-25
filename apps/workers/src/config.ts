@@ -14,4 +14,7 @@ export const QUEUE_NAMES = {
   LTV: "ltv",
   EMAIL_SEND: "email-send",
   SHOPIFY_WEBHOOK: "shopify-webhook",
+  BRAND_ANALYSIS: "brand-analysis",
+  PROGRAM_GENERATE: "program-generate",
+  AGENT_PIPELINE: "agent-pipeline",
 } as const;
