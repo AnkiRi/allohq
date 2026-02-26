@@ -1,0 +1,352 @@
+import { Worker } from "bullmq";
+import { prisma } from "@allohq/database";
+import {
+  activateProgram,
+  generateSms,
+  generateWhatsApp,
+  generateRcs,
+  generateWorkflow,
+} from "@allohq/customer-intelligence";
+import type { AIModelId } from "@allohq/customer-intelligence";
+import { redisConnection, QUEUE_NAMES } from "../config";
+
+interface AutomationGenerateJobData {
+  automationId: string;
+  storeId: string;
+  model?: string;
+}
+
+/** Maps categories to their target RFM segments */
+const SEGMENT_TARGETS: Record<string, string[]> = {
+  win_back: ["At Risk", "Lost", "Hibernating"],
+  vip_reward: ["Champions", "Loyal Customers"],
+  re_engagement: ["Hibernating", "Can't Lose Them"],
+};
+
+export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
+  QUEUE_NAMES.AUTOMATION_GENERATE,
+  async (job) => {
+    const { automationId, storeId } = job.data;
+
+    console.log(`[automation-generator] Generating content for automation ${automationId}`);
+
+    const automation = await prisma.automation.findUnique({
+      where: { id: automationId },
+    });
+
+    if (!automation) {
+      throw new Error(`Automation ${automationId} not found`);
+    }
+
+    const workspaceId = automation.workspaceId;
+
+    const brandProfile = await prisma.brandProfile.findFirst({
+      where: { storeId, workspaceId },
+    });
+
+    const products = await prisma.product.findMany({
+      where: { storeId, status: "active" },
+      take: 15,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    const storeUrl = store ? `https://${store.shopDomain}` : undefined;
+
+    // Resolve model
+    let resolvedModel = (job.data.model as AIModelId) || undefined;
+    if (!resolvedModel) {
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { defaultModel: true },
+      });
+      resolvedModel = (workspace?.defaultModel as AIModelId) || undefined;
+    }
+    const aiModel = resolvedModel;
+
+    const creativeIntensity = (brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? undefined;
+
+    const brandInput = brandProfile
+      ? {
+          brandName: brandProfile.brandName,
+          brandDescription: brandProfile.brandDescription,
+          toneAttributes: brandProfile.toneAttributes as Record<string, string>,
+          vocabulary: brandProfile.vocabulary as Record<string, string[]>,
+          visualStyle: brandProfile.visualStyle as Record<string, string>,
+          sampleCopy: brandProfile.sampleCopy as string[],
+        }
+      : undefined;
+
+    const productInput = products.map((p) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description ?? undefined,
+      imageUrl: p.imageUrl ?? undefined,
+      price: p.price,
+      handle: p.handle,
+    }));
+
+    // Look up target segment
+    const targetSegmentNames = SEGMENT_TARGETS[automation.category] ?? [];
+    let segment: { name: string; description: string } | undefined;
+    if (targetSegmentNames.length > 0) {
+      const seg = await prisma.customerSegment.findFirst({
+        where: { storeId, name: { in: targetSegmentNames } },
+      });
+      if (seg) {
+        segment = { name: seg.name, description: seg.description ?? seg.name };
+      }
+    }
+
+    await prisma.automation.update({
+      where: { id: automationId },
+      data: { status: "generating" },
+    });
+
+    // -- 1. GENERATE EMAILS --
+    const emailResults = await activateProgram({
+      programType: automation.category,
+      storeId,
+      storeUrl,
+      model: aiModel,
+      creativeIntensity,
+      brandProfile: brandInput,
+      segment,
+      products: productInput,
+    });
+
+    const templateIds: string[] = [];
+    for (const result of emailResults) {
+      const template = await prisma.emailTemplate.create({
+        data: {
+          workspaceId,
+          name: `${automation.name} — ${result.subject}`,
+          subject: result.subject,
+          previewText: result.previewText,
+          blocks: result.blocks as any,
+          category: "ai_generated",
+        },
+      });
+      templateIds.push(template.id);
+
+      await prisma.generatedContent.create({
+        data: {
+          workspaceId,
+          templateId: template.id,
+          prompt: result.promptUsed,
+          response: JSON.stringify(result),
+          model: result.model,
+          intent: automation.category,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        },
+      });
+
+      await prisma.tokenUsage.create({
+        data: {
+          workspaceId,
+          model: result.model,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          purpose: "generate_email",
+        },
+      });
+    }
+
+    // -- 2. GENERATE SMS --
+    const smsTemplateIds: string[] = [];
+    try {
+      const smsResult = await generateSms({
+        brandProfile: brandInput,
+        intent: automation.category,
+        segment,
+        programType: automation.category,
+        model: aiModel,
+      });
+
+      const smsTemplate = await prisma.smsTemplate.create({
+        data: {
+          workspaceId,
+          automationId,
+          name: smsResult.name,
+          body: smsResult.body,
+          variables: smsResult.variables as any,
+        },
+      });
+
+      smsTemplateIds.push(smsTemplate.id);
+
+      await prisma.tokenUsage.create({
+        data: {
+          workspaceId,
+          model: smsResult.model,
+          inputTokens: smsResult.inputTokens,
+          outputTokens: smsResult.outputTokens,
+          purpose: "generate_sms",
+        },
+      });
+    } catch (smsErr) {
+      console.error(`[automation-generator] SMS generation failed for ${automation.name}:`, smsErr);
+    }
+
+    // -- 3. GENERATE WHATSAPP --
+    const whatsappTemplateIds: string[] = [];
+    try {
+      const waResult = await generateWhatsApp({
+        brandProfile: brandInput,
+        intent: automation.category,
+        segment,
+        programType: automation.category,
+        model: aiModel,
+      });
+
+      const waTemplate = await prisma.whatsAppTemplate.create({
+        data: {
+          workspaceId,
+          automationId,
+          name: waResult.name,
+          body: waResult.body,
+          variables: waResult.variables as any,
+          category: "MARKETING",
+          language: "en",
+        },
+      });
+
+      whatsappTemplateIds.push(waTemplate.id);
+
+      await prisma.tokenUsage.create({
+        data: {
+          workspaceId,
+          model: waResult.model,
+          inputTokens: waResult.inputTokens,
+          outputTokens: waResult.outputTokens,
+          purpose: "generate_whatsapp",
+        },
+      });
+    } catch (waErr) {
+      console.error(`[automation-generator] WhatsApp generation failed for ${automation.name}:`, waErr);
+    }
+
+    // -- 4. GENERATE RCS --
+    const rcsTemplateIds: string[] = [];
+    try {
+      const rcsResult = await generateRcs({
+        brandProfile: brandInput,
+        intent: automation.category,
+        segment,
+        programType: automation.category,
+        model: aiModel,
+      });
+
+      const rcsTemplate = await prisma.rcsTemplate.create({
+        data: {
+          workspaceId,
+          automationId,
+          name: rcsResult.name,
+          body: rcsResult.body,
+          cardTitle: rcsResult.cardTitle,
+          cardImageUrl: rcsResult.cardImageUrl,
+          actions: rcsResult.actions as any,
+          variables: rcsResult.variables as any,
+        },
+      });
+
+      rcsTemplateIds.push(rcsTemplate.id);
+
+      await prisma.tokenUsage.create({
+        data: {
+          workspaceId,
+          model: rcsResult.model,
+          inputTokens: rcsResult.inputTokens,
+          outputTokens: rcsResult.outputTokens,
+          purpose: "generate_rcs",
+        },
+      });
+    } catch (rcsErr) {
+      console.error(`[automation-generator] RCS generation failed for ${automation.name}:`, rcsErr);
+    }
+
+    // -- 5. GENERATE WORKFLOW NODES --
+    const allTemplates = await prisma.emailTemplate.findMany({
+      where: { id: { in: templateIds } },
+      select: { id: true, name: true, subject: true },
+    });
+    const templateNameMap = new Map(allTemplates.map((t) => [t.id, t.subject || t.name]));
+
+    const waTemplates = whatsappTemplateIds.length > 0
+      ? await prisma.whatsAppTemplate.findMany({ where: { id: { in: whatsappTemplateIds } }, select: { id: true, name: true } })
+      : [];
+    const waNameMap = new Map(waTemplates.map((t) => [t.id, t.name]));
+
+    const smsTemplates = smsTemplateIds.length > 0
+      ? await prisma.smsTemplate.findMany({ where: { id: { in: smsTemplateIds } }, select: { id: true, name: true } })
+      : [];
+    const smsNameMap = new Map(smsTemplates.map((t) => [t.id, t.name]));
+
+    const rcsTemplatesForMap = rcsTemplateIds.length > 0
+      ? await prisma.rcsTemplate.findMany({ where: { id: { in: rcsTemplateIds } }, select: { id: true, name: true } })
+      : [];
+    const rcsNameMap = new Map(rcsTemplatesForMap.map((t) => [t.id, t.name]));
+
+    const workflowDef = generateWorkflow({
+      programType: automation.category,
+      templateIds,
+      whatsappTemplateIds,
+      smsTemplateIds,
+      rcsTemplateIds,
+      triggerConfig: automation.triggerConfig as Record<string, unknown>,
+    });
+
+    const enrichedNodes = workflowDef.nodes.map((node) => {
+      if (node.type === "send_email" && typeof node.config.templateId === "string") {
+        return { ...node, config: { ...node.config, templateName: templateNameMap.get(node.config.templateId) ?? "Email" } };
+      }
+      if (node.type === "send_whatsapp" && typeof node.config.whatsappTemplateId === "string") {
+        return { ...node, config: { ...node.config, templateName: waNameMap.get(node.config.whatsappTemplateId) ?? "WhatsApp" } };
+      }
+      if (node.type === "send_sms" && typeof node.config.smsTemplateId === "string") {
+        return { ...node, config: { ...node.config, templateName: smsNameMap.get(node.config.smsTemplateId) ?? "SMS" } };
+      }
+      if (node.type === "send_rcs" && typeof node.config.rcsTemplateId === "string") {
+        return { ...node, config: { ...node.config, templateName: rcsNameMap.get(node.config.rcsTemplateId) ?? "RCS" } };
+      }
+      return node;
+    });
+
+    // -- 6. UPDATE AUTOMATION WITH ALL GENERATED DATA --
+    await prisma.automation.update({
+      where: { id: automationId },
+      data: {
+        status: "ready",
+        templateIds,
+        smsTemplateIds,
+        whatsappTemplateIds,
+        rcsTemplateIds,
+        triggerType: workflowDef.triggerType,
+        triggerConfig: workflowDef.triggerConfig as any,
+        nodes: enrichedNodes as any,
+      },
+    });
+
+    console.log(
+      `[automation-generator] ${automation.name} generated ${templateIds.length} emails, ` +
+      `${smsTemplateIds.length} SMS, ${whatsappTemplateIds.length} WhatsApp, ` +
+      `${rcsTemplateIds.length} RCS + workflow nodes`
+    );
+    return { templateIds, smsTemplateIds, whatsappTemplateIds, rcsTemplateIds };
+  },
+  {
+    connection: redisConnection,
+    settings: {
+      backoffStrategy: (attemptsMade: number) => Math.min(attemptsMade * 5000, 30000),
+    },
+  }
+);
+
+automationGeneratorWorker.on("completed", (job) => {
+  console.log(`[automation-generator] Job ${job.id} completed`);
+});
+
+automationGeneratorWorker.on("failed", (job, err) => {
+  console.error(`[automation-generator] Job ${job?.id} failed:`, err.message);
+});

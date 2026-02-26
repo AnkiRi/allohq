@@ -2,6 +2,7 @@ import { complete, type AIModelId } from "../ai";
 import type { EmailBlock } from "@allohq/email-builder";
 import type { EmailIntent } from "../context/intent-mapper";
 import { brandVoiceBlock, intentInstructions, formatProductsForPrompt } from "./prompt-templates";
+import { generateImage } from "../images/generate-image";
 
 export type CreativeIntensity = "text_heavy" | "balanced" | "visual_heavy";
 
@@ -45,6 +46,7 @@ export interface GenerateEmailOutput {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  imageCosts: number;
 }
 
 function buildPrompt(input: GenerateEmailInput): string {
@@ -179,6 +181,74 @@ Return ONLY valid JSON.`);
 }
 
 /**
+ * Post-process email blocks to generate AI images for hero and image blocks
+ * when creative intensity is not text_heavy.
+ */
+async function postProcessImages(
+  blocks: EmailBlock[],
+  input: GenerateEmailInput,
+  subject: string,
+): Promise<{ blocks: EmailBlock[]; totalCost: number }> {
+  const intensity = input.creativeIntensity ?? "balanced";
+  if (intensity === "text_heavy") {
+    return { blocks, totalCost: 0 };
+  }
+
+  let totalCost = 0;
+  const brandStyle = input.brandProfile
+    ? {
+        aesthetic: (input.brandProfile.visualStyle["aesthetic"] as string) ?? "modern",
+        suggestedColors: (input.brandProfile.visualStyle["suggestedColors"] as string[]) ?? [],
+      }
+    : undefined;
+
+  const updatedBlocks = [...blocks];
+
+  for (let i = 0; i < updatedBlocks.length; i++) {
+    const block = updatedBlocks[i]!;
+
+    // Generate hero banner image
+    if (block.type === "hero" && !block.props.bgImageSrc) {
+      try {
+        const imagePrompt = `${subject}. ${input.brandProfile?.brandName ?? "Brand"} marketing hero banner.`;
+        const imgResult = await generateImage({
+          purpose: "hero_banner",
+          prompt: imagePrompt,
+          brandStyle,
+          fallbackToStock: true,
+        });
+        (block.props as Record<string, unknown>).bgImageSrc = imgResult.url;
+        totalCost += imgResult.cost;
+      } catch (err) {
+        console.warn(`[generate-email] Failed to generate hero image:`, (err as Error).message);
+      }
+    }
+
+    // Generate image block src if missing or placeholder
+    if (
+      block.type === "image" &&
+      (!block.props.src || block.props.src.includes("example.com") || block.props.src.includes("placeholder"))
+    ) {
+      try {
+        const imagePrompt = `${input.brandProfile?.brandName ?? "Brand"} product lifestyle image for marketing email.`;
+        const imgResult = await generateImage({
+          purpose: "product_lifestyle",
+          prompt: imagePrompt,
+          brandStyle,
+          fallbackToStock: true,
+        });
+        (block.props as Record<string, unknown>).src = imgResult.url;
+        totalCost += imgResult.cost;
+      } catch (err) {
+        console.warn(`[generate-email] Failed to generate image:`, (err as Error).message);
+      }
+    }
+  }
+
+  return { blocks: updatedBlocks, totalCost };
+}
+
+/**
  * Generate an email using AI based on brand profile, intent, segment, and context.
  */
 export async function generateEmail(input: GenerateEmailInput): Promise<GenerateEmailOutput> {
@@ -199,15 +269,23 @@ export async function generateEmail(input: GenerateEmailInput): Promise<Generate
     reasoning: string;
   };
 
+  // Post-process blocks to add AI-generated images
+  const { blocks, totalCost } = await postProcessImages(
+    parsed.blocks,
+    input,
+    parsed.subject,
+  );
+
   return {
     subject: parsed.subject,
     previewText: parsed.previewText,
-    blocks: parsed.blocks,
+    blocks,
     selectedProductIds: parsed.selectedProductIds ?? [],
     reasoning: parsed.reasoning ?? "",
     promptUsed: prompt,
     model: result.model,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
+    imageCosts: totalCost,
   };
 }

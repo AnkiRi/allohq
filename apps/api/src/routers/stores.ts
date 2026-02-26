@@ -224,10 +224,9 @@ export const storesRouter = router({
         where: { product: { storeId: input.storeId } },
       });
       await ctx.prisma.product.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.emailProgram.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.automation.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.brandProfile.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.campaign.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.workflow.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.customerSegment.deleteMany({ where: { storeId: input.storeId } });
 
       // Soft-delete the store

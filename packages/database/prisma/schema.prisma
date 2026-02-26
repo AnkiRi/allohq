@@ -41,9 +41,10 @@ model Workspace {
   emailTemplates EmailTemplate[]
   campaigns      Campaign[]
   brandProfiles  BrandProfile[]
-  emailPrograms  EmailProgram[]
+  automations      Automation[]
   generatedContent GeneratedContent[]
-  workflows      Workflow[]
+  messageLogs      MessageLog[]
+  generatedImages  GeneratedImage[]
   tokenUsages    TokenUsage[]
 
   @@map("workspaces")
@@ -83,8 +84,7 @@ model Store {
   orders    Order[]
   campaigns     Campaign[]
   brandProfiles BrandProfile[]
-  emailPrograms EmailProgram[]
-  workflows     Workflow[]
+  automations   Automation[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -281,24 +281,6 @@ enum CampaignStatus {
   cancelled
 }
 
-enum ProgramType {
-  welcome_series
-  abandoned_cart
-  post_purchase
-  win_back
-  browse_abandonment
-  vip_reward
-  re_engagement
-  seasonal
-}
-
-enum ProgramStatus {
-  recommended
-  generating
-  ready
-  active
-  paused
-}
 
 enum ContentRating {
   good
@@ -376,30 +358,30 @@ model BrandProfile {
   @@map("brand_profiles")
 }
 
-model EmailProgram {
-  id                 String        @id @default(cuid())
-  workspaceId        String
-  storeId            String
-  programType        ProgramType
-  name               String
-  description        String
-  status             ProgramStatus @default(recommended)
-  templateIds        String[]      // FK array to generated EmailTemplates
-  whatsappTemplateIds String[]     // FK array to WhatsAppTemplate records
-  smsTemplateIds     String[]      // FK array to SmsTemplate records
-  rcsTemplateIds     String[]      // FK array to RcsTemplate records
-  triggerConfig      Json          // what triggers this program
-  workflowId         String?       @unique
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+model Automation {
+  id                  String           @id @default(cuid())
+  workspaceId         String
+  storeId             String
+  name                String
+  description         String?
+  category            String           // welcome_series, abandoned_cart, etc.
+  status              String           @default("recommended") // recommended|generating|draft|ready|active|paused
+  triggerType         String           @default("event")       // event|schedule|segment_entry|segment_exit
+  triggerConfig       Json             @default("{}")
+  nodes               Json             @default("[]")           // WorkflowNode[] DAG
+  templateIds         String[]         @default([])
+  smsTemplateIds      String[]         @default([])
+  whatsappTemplateIds String[]         @default([])
+  rcsTemplateIds      String[]         @default([])
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  workflow  Workflow? @relation(fields: [workflowId], references: [id])
 
   @@index([workspaceId])
   @@index([storeId])
-  @@map("email_programs")
+  @@map("automations")
 }
 
 model GeneratedContent {
@@ -455,62 +437,23 @@ model TokenUsage {
   @@map("token_usages")
 }
 
-// ============================================================================
-// AUTOMATION WORKFLOWS
-// ============================================================================
-
-enum WorkflowStatus {
-  draft
-  active
-  paused
-  archived
-}
-
-enum TriggerType {
-  event
-  schedule
-  segment_entry
-  segment_exit
-}
-
-model Workflow {
-  id          String         @id @default(cuid())
-  workspaceId String
-  storeId     String?
-  name        String
-  description String?
-  status      WorkflowStatus @default(draft)
-  triggerType  TriggerType
-  triggerConfig Json         @default("{}")
-  nodes       Json           @default("[]")  // Array of WorkflowNode objects
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  store        Store?         @relation(fields: [storeId], references: [id])
-  emailProgram EmailProgram?
-
-  @@index([workspaceId])
-  @@index([storeId])
-  @@map("workflows")
-}
 
 // ============================================================================
 // SMS TEMPLATES
 // ============================================================================
 
 model SmsTemplate {
-  id          String   @id @default(cuid())
-  workspaceId String
-  programId   String?
-  name        String
-  body        String   // message body with {{variable}} placeholders
-  variables   Json     // variable definitions
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  workspaceId  String
+  automationId String?
+  name         String
+  body         String   // message body with {{variable}} placeholders
+  variables    Json     // variable definitions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([workspaceId])
-  @@index([programId])
+  @@index([automationId])
   @@map("sms_templates")
 }
 
@@ -519,19 +462,19 @@ model SmsTemplate {
 // ============================================================================
 
 model WhatsAppTemplate {
-  id          String   @id @default(cuid())
-  workspaceId String
-  programId   String?
-  name        String
-  body        String   // message body with {{1}} placeholders
-  variables   Json     // variable definitions
-  category    String   @default("MARKETING")
-  language    String   @default("en")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  workspaceId  String
+  automationId String?
+  name         String
+  body         String   // message body with {{1}} placeholders
+  variables    Json     // variable definitions
+  category     String   @default("MARKETING")
+  language     String   @default("en")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([workspaceId])
-  @@index([programId])
+  @@index([automationId])
   @@map("whatsapp_templates")
 }
 
@@ -542,7 +485,7 @@ model WhatsAppTemplate {
 model RcsTemplate {
   id           String   @id @default(cuid())
   workspaceId  String
-  programId    String?
+  automationId String?
   name         String
   body         String   // rich message body
   cardTitle    String?  // rich card title
@@ -553,7 +496,7 @@ model RcsTemplate {
   updatedAt    DateTime @updatedAt
 
   @@index([workspaceId])
-  @@index([programId])
+  @@index([automationId])
   @@map("rcs_templates")
 }
 
@@ -601,11 +544,68 @@ model AgentPipelineRun {
 }
 
 // ============================================================================
+// MESSAGE LOG (Phase 3B — Real Sending)
+// ============================================================================
+
+model MessageLog {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  storeId      String
+  channel      String    // email|sms|whatsapp|rcs
+  to           String    // email address or phone number
+  subject      String?   // email only
+  templateId   String?   // reference to the template used
+  campaignId   String?   // if sent via campaign
+  automationId String?   // if sent via automation
+  externalId   String?   // provider message ID (Resend ID, Twilio SID)
+  status       String    @default("queued") // queued|sent|delivered|opened|clicked|bounced|failed
+  error        String?
+  metadata     Json      @default("{}")
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  openedAt     DateTime?
+  clickedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([campaignId])
+  @@index([automationId])
+  @@index([externalId])
+  @@index([channel, status])
+  @@map("message_logs")
+}
+
+// ============================================================================
+// GENERATED IMAGES (Phase 3C — AI Image Generation)
+// ============================================================================
+
+model GeneratedImage {
+  id          String   @id @default(cuid())
+  workspaceId String
+  provider    String   // flux|dalle|unsplash
+  prompt      String
+  url         String
+  purpose     String   // hero_banner|product_lifestyle|background|card
+  cost        Float    @default(0)
+  width       Int?
+  height      Int?
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([prompt])
+  @@map("generated_images")
+}
+
+// ============================================================================
 // Future tables (to be added in later phases)
 // ============================================================================
 
 // - forms
 // - popups
-// - messages
 // - events
 // - conversions

@@ -328,6 +328,78 @@ export const aiRouter = router({
       });
     }),
 
+  /** Execute a natural language instruction */
+  executeInstruction: workspaceProcedure
+    .input(z.object({
+      instruction: z.string().min(5).max(1000),
+      pageContext: z.enum(["automations", "campaigns", "templates", "segments", "dashboard"]),
+      storeId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      // Fetch context for the instruction parser
+      const [segments, automations, brandProfile] = await Promise.all([
+        ctx.prisma.customerSegment.findMany({
+          where: { storeId: input.storeId },
+          select: { name: true },
+        }),
+        ctx.prisma.automation.findMany({
+          where: { storeId: input.storeId },
+          select: { name: true },
+        }),
+        ctx.prisma.brandProfile.findFirst({
+          where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+        }),
+      ]);
+
+      const { parseInstruction, executeInstruction } = await import("@allohq/customer-intelligence");
+
+      // Parse the instruction
+      const parsed = await parseInstruction(
+        input.instruction,
+        {
+          page: input.pageContext,
+          existingSegments: segments.map((s) => s.name),
+          existingAutomations: automations.map((a) => a.name),
+        },
+      );
+
+      // Execute the parsed instruction
+      const result = await executeInstruction(parsed, {
+        prisma: ctx.prisma as any,
+        storeId: input.storeId,
+        workspaceId: ctx.workspaceId,
+        brandProfile: brandProfile ? {
+          brandName: brandProfile.brandName,
+          brandDescription: brandProfile.brandDescription,
+          toneAttributes: brandProfile.toneAttributes as Record<string, string>,
+          vocabulary: brandProfile.vocabulary as Record<string, string[]>,
+          visualStyle: brandProfile.visualStyle as Record<string, string | string[]>,
+          sampleCopy: brandProfile.sampleCopy as string[],
+          creativeIntensity: brandProfile.creativeIntensity ?? undefined,
+        } : undefined,
+      });
+
+      // Record token usage if any
+      if (result.tokenUsage.input > 0) {
+        await ctx.prisma.tokenUsage.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            model: result.tokenUsage.model,
+            inputTokens: result.tokenUsage.input,
+            outputTokens: result.tokenUsage.output,
+            purpose: "execute_instruction",
+          },
+        });
+      }
+
+      return result;
+    }),
+
   /** Check brand analysis job status */
   brandAnalysisStatus: workspaceProcedure
     .input(z.object({ jobId: z.string() }))

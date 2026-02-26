@@ -35,3 +35,11 @@ export type { Festivity, FunnelStage, EmailIntent, IntentContext } from "./conte
 // Program Planner
 export { recommendPrograms, activateProgram, generateWorkflow } from "./programs";
 export type { StoreAnalysis, ProgramRecommendation, ActivateProgramInput, GenerateWorkflowInput, GenerateWorkflowOutput } from "./programs";
+
+// Image Generation
+export { generateImage } from "./images";
+export type { GenerateImageInput, GenerateImageOutput } from "./images";
+
+// Natural Language Instructions
+export { parseInstruction, executeInstruction } from "./instruction";
+export type { InstructionIntent, ParsedInstruction, ExecutionResult } from "./instruction";

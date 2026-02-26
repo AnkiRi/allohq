@@ -15,6 +15,8 @@ export const QUEUE_NAMES = {
   EMAIL_SEND: "email-send",
   SHOPIFY_WEBHOOK: "shopify-webhook",
   BRAND_ANALYSIS: "brand-analysis",
-  PROGRAM_GENERATE: "program-generate",
+  AUTOMATION_GENERATE: "automation-generate",
   AGENT_PIPELINE: "agent-pipeline",
+  AUTOMATION_TRIGGER: "automation-trigger",
+  TRIGGER_CHECK: "trigger-check",
 } as const;

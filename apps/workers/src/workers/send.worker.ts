@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
+import { sendEmail } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 interface SendJobData {
@@ -89,8 +90,9 @@ export const sendWorker = new Worker<SendJobData>(
       }
     }
 
-    // Render and "send" each email
+    // Render and send each email
     let sentCount = 0;
+    let failCount = 0;
     for (const customer of customers) {
       const variables: Record<string, string> = {
         first_name: customer.firstName ?? "there",
@@ -105,14 +107,57 @@ export const sendWorker = new Worker<SendJobData>(
         previewMode: false,
       });
 
-      // TODO: Wire to actual email provider (SendGrid, SES, etc.)
-      // For now, log the send
-      console.log(`  [SEND] To: ${customer.email} | Subject: ${campaign.template.subject} | HTML length: ${html.length}`);
-      sentCount++;
+      // Create MessageLog entry
+      const messageLog = await prisma.messageLog.create({
+        data: {
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          channel: "email",
+          to: customer.email,
+          subject: campaign.template.subject,
+          templateId: campaign.templateId,
+          campaignId,
+          status: "queued",
+          metadata: { customerId: customer.id } as any,
+        },
+      });
+
+      // Send via Resend
+      const result = await sendEmail({
+        channel: "email",
+        to: customer.email,
+        subject: campaign.template.subject,
+        html,
+        from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+      });
+
+      // Update MessageLog with result
+      if (result.status === "sent") {
+        await prisma.messageLog.update({
+          where: { id: messageLog.id },
+          data: {
+            status: "sent",
+            externalId: result.externalId,
+            sentAt: new Date(),
+          },
+        });
+        sentCount++;
+      } else {
+        await prisma.messageLog.update({
+          where: { id: messageLog.id },
+          data: {
+            status: "failed",
+            error: result.error,
+          },
+        });
+        failCount++;
+        console.error(`  [SEND] Failed for ${customer.email}: ${result.error}`);
+      }
 
       // Update progress
-      if (sentCount % 50 === 0) {
-        await job.updateProgress(Math.round((sentCount / customers.length) * 100));
+      const processed = sentCount + failCount;
+      if (processed % 50 === 0) {
+        await job.updateProgress(Math.round((processed / customers.length) * 100));
       }
     }
 
@@ -126,8 +171,8 @@ export const sendWorker = new Worker<SendJobData>(
       },
     });
 
-    console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients`);
-    return { sentCount };
+    console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients (${failCount} failed)`);
+    return { sentCount, failCount };
   },
   { connection: redisConnection }
 );

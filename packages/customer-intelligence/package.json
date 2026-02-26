@@ -10,7 +10,8 @@
   "dependencies": {
     "@allohq/email-builder": "workspace:*",
     "@anthropic-ai/sdk": "^0.78.0",
-    "openai": "^4.73.0"
+    "openai": "^4.73.0",
+    "replicate": "^1.0.1"
   },
   "devDependencies": {
     "@allohq/tsconfig": "workspace:*",

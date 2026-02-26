@@ -5,6 +5,8 @@ import "dotenv/config";
 // We override globalThis.fetch with undici's fetch that uses a custom DNS resolver.
 import { fetch as undiciFetch, Agent, setGlobalDispatcher } from "undici";
 import dns from "node:dns";
+import { Queue } from "bullmq";
+import { redisConnection, QUEUE_NAMES } from "./config";
 
 const resolver = new dns.Resolver();
 resolver.setServers(["8.8.8.8", "1.1.1.1"]);
@@ -46,8 +48,10 @@ import { rfmWorker } from "./workers/rfm.worker";
 import { sendWorker } from "./workers/send.worker";
 import { shopifyWebhookWorker } from "./workers/shopify-webhook.worker";
 import { brandAnalysisWorker } from "./workers/brand-analysis.worker";
-import { programGeneratorWorker } from "./workers/program-generator.worker";
+import { automationGeneratorWorker } from "./workers/automation-generator.worker";
 import { agentPipelineWorker } from "./workers/agent-pipeline.worker";
+import { automationRunnerWorker } from "./workers/automation-runner.worker";
+import { triggerListenerWorker } from "./workers/trigger-listener.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -55,8 +59,20 @@ console.log(`  - rfm worker: ${rfmWorker.name}`);
 console.log(`  - send worker: ${sendWorker.name}`);
 console.log(`  - shopify-webhook worker: ${shopifyWebhookWorker.name}`);
 console.log(`  - brand-analysis worker: ${brandAnalysisWorker.name}`);
-console.log(`  - program-generator worker: ${programGeneratorWorker.name}`);
+console.log(`  - automation-generator worker: ${automationGeneratorWorker.name}`);
 console.log(`  - agent-pipeline worker: ${agentPipelineWorker.name}`);
+console.log(`  - automation-runner worker: ${automationRunnerWorker.name}`);
+console.log(`  - trigger-listener worker: ${triggerListenerWorker.name}`);
+
+// Schedule periodic trigger checks (every 5 minutes)
+const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
+triggerCheckQueue.upsertJobScheduler(
+  "trigger-check-schedule",
+  { every: 5 * 60 * 1000 },
+  { name: "trigger-check", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up trigger check schedule:", err.message);
+});
 
 // Graceful shutdown
 const shutdown = async () => {
@@ -67,8 +83,10 @@ const shutdown = async () => {
     sendWorker.close(),
     shopifyWebhookWorker.close(),
     brandAnalysisWorker.close(),
-    programGeneratorWorker.close(),
+    automationGeneratorWorker.close(),
     agentPipelineWorker.close(),
+    automationRunnerWorker.close(),
+    triggerListenerWorker.close(),
   ]);
   process.exit(0);
 };

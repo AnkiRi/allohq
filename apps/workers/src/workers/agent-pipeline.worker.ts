@@ -11,8 +11,8 @@ import {
 import type { AIModelId } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
-/** Max programs the agent will generate in a single run */
-const MAX_PROGRAMS = 4;
+/** Max automations the agent will generate in a single run */
+const MAX_AUTOMATIONS = 4;
 
 interface AgentPipelineJobData {
   pipelineRunId: string;
@@ -21,7 +21,7 @@ interface AgentPipelineJobData {
   model?: string;
 }
 
-/** Maps program types to their target RFM segments */
+/** Maps categories to their target RFM segments */
 const SEGMENT_TARGETS: Record<string, string[]> = {
   win_back: ["At Risk", "Lost", "Hibernating"],
   vip_reward: ["Champions", "Loyal Customers"],
@@ -59,7 +59,7 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
   async (job) => {
     const { pipelineRunId, storeId, workspaceId, model } = job.data;
 
-    // Resolve model: job data > workspace default > undefined (AI client default)
+    // Resolve model
     let resolvedModel = (model as AIModelId) || undefined;
     if (!resolvedModel) {
       const workspace = await prisma.workspace.findUnique({
@@ -82,71 +82,57 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
       // 1. RECOMMEND
       // ---------------------------------------------------------------
       await updatePipeline(pipelineRunId, "recommend", {
-        message: "Analyzing store data and recommending programs...",
+        message: "Analyzing store data and recommending automations...",
       });
 
-      const segments = await prisma.customerSegment.findMany({
-        where: { storeId },
-      });
-      const productCount = await prisma.product.count({
-        where: { storeId },
-      });
-      const customerCount = await prisma.customer.count({
-        where: { storeId },
-      });
+      const segments = await prisma.customerSegment.findMany({ where: { storeId } });
+      const productCount = await prisma.product.count({ where: { storeId } });
+      const customerCount = await prisma.customer.count({ where: { storeId } });
 
       const recommendations = recommendPrograms({
-        segments: segments.map((s) => ({
-          name: s.name,
-          customerCount: s.customerCount,
-        })),
+        segments: segments.map((s) => ({ name: s.name, customerCount: s.customerCount })),
         productCount,
         customerCount,
       });
 
-      // Upsert programs — all recommendations, but only process top N
-      const allProgramIds: string[] = [];
+      // Upsert automations
+      const allAutomationIds: string[] = [];
       for (const rec of recommendations) {
-        const existing = await prisma.emailProgram.findFirst({
-          where: { workspaceId, storeId, programType: rec.programType },
+        const existing = await prisma.automation.findFirst({
+          where: { workspaceId, storeId, category: rec.programType },
         });
 
         if (existing) {
           if (existing.status !== "recommended") {
             continue;
           }
-          allProgramIds.push(existing.id);
+          allAutomationIds.push(existing.id);
         } else {
-          const program = await prisma.emailProgram.create({
+          const automation = await prisma.automation.create({
             data: {
               workspaceId,
               storeId,
-              programType: rec.programType,
+              category: rec.programType,
               name: rec.name,
               description: rec.description,
               status: "recommended",
-              templateIds: [],
-              whatsappTemplateIds: [],
-              smsTemplateIds: [],
-              rcsTemplateIds: [],
               triggerConfig: rec.triggerConfig as any,
             },
           });
-          allProgramIds.push(program.id);
+          allAutomationIds.push(automation.id);
         }
       }
 
-      // Only process the top MAX_PROGRAMS (highest priority first, already sorted)
-      const programIds = allProgramIds.slice(0, MAX_PROGRAMS);
-      const totalPrograms = programIds.length;
+      const automationIds = allAutomationIds.slice(0, MAX_AUTOMATIONS);
+      const totalAutomations = automationIds.length;
 
       await updatePipeline(
         pipelineRunId,
         "recommend",
         {
-          message: `Recommended ${allProgramIds.length} programs, generating content for top ${totalPrograms}`,
+          message: `Recommended ${allAutomationIds.length} automations, generating content for top ${totalAutomations}`,
         },
-        { programsCount: totalPrograms }
+        { programsCount: totalAutomations }
       );
 
       // Fetch shared data
@@ -163,14 +149,13 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
       const store = await prisma.store.findUnique({ where: { id: storeId } });
       const storeUrl = store ? `https://${store.shopDomain}` : undefined;
 
+      const creativeIntensity = (brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? undefined;
+
       const brandInput = brandProfile
         ? {
             brandName: brandProfile.brandName,
             brandDescription: brandProfile.brandDescription,
-            toneAttributes: brandProfile.toneAttributes as Record<
-              string,
-              string
-            >,
+            toneAttributes: brandProfile.toneAttributes as Record<string, string>,
             vocabulary: brandProfile.vocabulary as Record<string, string[]>,
             visualStyle: brandProfile.visualStyle as Record<string, string>,
             sampleCopy: brandProfile.sampleCopy as string[],
@@ -189,13 +174,13 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
       let done = 0;
 
       // ---------------------------------------------------------------
-      // 2. FOR EACH PROGRAM (limited to MAX_PROGRAMS)
+      // 2. FOR EACH AUTOMATION
       // ---------------------------------------------------------------
-      for (const programId of programIds) {
-        const program = await prisma.emailProgram.findUnique({
-          where: { id: programId },
+      for (const automationId of automationIds) {
+        const automation = await prisma.automation.findUnique({
+          where: { id: automationId },
         });
-        if (!program || program.status !== "recommended") {
+        if (!automation || automation.status !== "recommended") {
           done++;
           continue;
         }
@@ -203,53 +188,45 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
         try {
           // -- 2a. GENERATE EMAILS --
           await updatePipeline(pipelineRunId, "generate_email", {
-            message: `Generating emails for ${program.name} (${done + 1}/${totalPrograms})...`,
-            currentProgram: program.name,
+            message: `Generating emails for ${automation.name} (${done + 1}/${totalAutomations})...`,
+            currentProgram: automation.name,
             programsDone: done,
-            programsTotal: totalPrograms,
+            programsTotal: totalAutomations,
           });
 
-          // Look up target segment
-          const targetSegmentNames =
-            SEGMENT_TARGETS[program.programType] ?? [];
+          const targetSegmentNames = SEGMENT_TARGETS[automation.category] ?? [];
           let segment: { name: string; description: string } | undefined;
           if (targetSegmentNames.length > 0) {
             const seg = await prisma.customerSegment.findFirst({
-              where: {
-                storeId,
-                name: { in: targetSegmentNames },
-              },
+              where: { storeId, name: { in: targetSegmentNames } },
             });
             if (seg) {
-              segment = {
-                name: seg.name,
-                description: seg.description ?? seg.name,
-              };
+              segment = { name: seg.name, description: seg.description ?? seg.name };
             }
           }
 
-          await prisma.emailProgram.update({
-            where: { id: programId },
+          await prisma.automation.update({
+            where: { id: automationId },
             data: { status: "generating" },
           });
 
           const emailResults = await activateProgram({
-            programType: program.programType,
+            programType: automation.category,
             storeId,
             storeUrl,
             model: aiModel,
+            creativeIntensity,
             brandProfile: brandInput,
             segment,
             products: productInput,
           });
 
-          // Create email templates and record token usage
           const templateIds: string[] = [];
           for (const result of emailResults) {
             const template = await prisma.emailTemplate.create({
               data: {
                 workspaceId,
-                name: `${program.name} — ${result.subject}`,
+                name: `${automation.name} — ${result.subject}`,
                 subject: result.subject,
                 previewText: result.previewText,
                 blocks: result.blocks as any,
@@ -265,7 +242,7 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
                 prompt: result.promptUsed,
                 response: JSON.stringify(result),
                 model: result.model,
-                intent: program.programType,
+                intent: automation.category,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
               },
@@ -282,33 +259,28 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
             });
           }
 
-          await prisma.emailProgram.update({
-            where: { id: programId },
-            data: { templateIds },
-          });
-
-          // -- 2b. GENERATE SMS (for ALL programs) --
+          // -- 2b. GENERATE SMS --
           const smsTemplateIds: string[] = [];
           await updatePipeline(pipelineRunId, "generate_sms", {
-            message: `Generating SMS for ${program.name} (${done + 1}/${totalPrograms})...`,
-            currentProgram: program.name,
+            message: `Generating SMS for ${automation.name} (${done + 1}/${totalAutomations})...`,
+            currentProgram: automation.name,
             programsDone: done,
-            programsTotal: totalPrograms,
+            programsTotal: totalAutomations,
           });
 
           try {
             const smsResult = await generateSms({
               brandProfile: brandInput,
-              intent: program.programType,
+              intent: automation.category,
               segment,
-              programType: program.programType,
+              programType: automation.category,
               model: aiModel,
             });
 
             const smsTemplate = await prisma.smsTemplate.create({
               data: {
                 workspaceId,
-                programId: programId,
+                automationId,
                 name: smsResult.name,
                 body: smsResult.body,
                 variables: smsResult.variables as any,
@@ -326,40 +298,32 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
                 purpose: "generate_sms",
               },
             });
-
-            await prisma.emailProgram.update({
-              where: { id: programId },
-              data: { smsTemplateIds },
-            });
           } catch (smsErr) {
-            console.error(
-              `[agent-pipeline] SMS generation failed for ${program.name}:`,
-              smsErr
-            );
+            console.error(`[agent-pipeline] SMS generation failed for ${automation.name}:`, smsErr);
           }
 
-          // -- 2c. GENERATE WHATSAPP (for ALL programs) --
+          // -- 2c. GENERATE WHATSAPP --
           const whatsappTemplateIds: string[] = [];
           await updatePipeline(pipelineRunId, "generate_whatsapp", {
-            message: `Generating WhatsApp message for ${program.name} (${done + 1}/${totalPrograms})...`,
-            currentProgram: program.name,
+            message: `Generating WhatsApp message for ${automation.name} (${done + 1}/${totalAutomations})...`,
+            currentProgram: automation.name,
             programsDone: done,
-            programsTotal: totalPrograms,
+            programsTotal: totalAutomations,
           });
 
           try {
             const waResult = await generateWhatsApp({
               brandProfile: brandInput,
-              intent: program.programType,
+              intent: automation.category,
               segment,
-              programType: program.programType,
+              programType: automation.category,
               model: aiModel,
             });
 
             const waTemplate = await prisma.whatsAppTemplate.create({
               data: {
                 workspaceId,
-                programId: programId,
+                automationId,
                 name: waResult.name,
                 body: waResult.body,
                 variables: waResult.variables as any,
@@ -379,40 +343,32 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
                 purpose: "generate_whatsapp",
               },
             });
-
-            await prisma.emailProgram.update({
-              where: { id: programId },
-              data: { whatsappTemplateIds },
-            });
           } catch (waErr) {
-            console.error(
-              `[agent-pipeline] WhatsApp generation failed for ${program.name}:`,
-              waErr
-            );
+            console.error(`[agent-pipeline] WhatsApp generation failed for ${automation.name}:`, waErr);
           }
 
-          // -- 2d. GENERATE RCS (for ALL programs) --
+          // -- 2d. GENERATE RCS --
           const rcsTemplateIds: string[] = [];
           await updatePipeline(pipelineRunId, "generate_rcs", {
-            message: `Generating RCS message for ${program.name} (${done + 1}/${totalPrograms})...`,
-            currentProgram: program.name,
+            message: `Generating RCS message for ${automation.name} (${done + 1}/${totalAutomations})...`,
+            currentProgram: automation.name,
             programsDone: done,
-            programsTotal: totalPrograms,
+            programsTotal: totalAutomations,
           });
 
           try {
             const rcsResult = await generateRcs({
               brandProfile: brandInput,
-              intent: program.programType,
+              intent: automation.category,
               segment,
-              programType: program.programType,
+              programType: automation.category,
               model: aiModel,
             });
 
             const rcsTemplate = await prisma.rcsTemplate.create({
               data: {
                 workspaceId,
-                programId: programId,
+                automationId,
                 name: rcsResult.name,
                 body: rcsResult.body,
                 cardTitle: rcsResult.cardTitle,
@@ -433,149 +389,77 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
                 purpose: "generate_rcs",
               },
             });
-
-            await prisma.emailProgram.update({
-              where: { id: programId },
-              data: { rcsTemplateIds },
-            });
           } catch (rcsErr) {
-            console.error(
-              `[agent-pipeline] RCS generation failed for ${program.name}:`,
-              rcsErr
-            );
+            console.error(`[agent-pipeline] RCS generation failed for ${automation.name}:`, rcsErr);
           }
 
-          // -- 2e. CREATE WORKFLOW (multi-channel) --
+          // -- 2e. CREATE WORKFLOW NODES --
           await updatePipeline(pipelineRunId, "create_workflow", {
-            message: `Creating multi-channel workflow for ${program.name} (${done + 1}/${totalPrograms})...`,
-            currentProgram: program.name,
+            message: `Creating multi-channel workflow for ${automation.name} (${done + 1}/${totalAutomations})...`,
+            currentProgram: automation.name,
             programsDone: done,
-            programsTotal: totalPrograms,
+            programsTotal: totalAutomations,
           });
 
-          // Build name maps for node enrichment
           const allTemplates = await prisma.emailTemplate.findMany({
             where: { id: { in: templateIds } },
             select: { id: true, name: true, subject: true },
           });
-          const templateNameMap = new Map(
-            allTemplates.map((t) => [t.id, t.subject || t.name])
-          );
+          const templateNameMap = new Map(allTemplates.map((t) => [t.id, t.subject || t.name]));
 
-          const waTemplates =
-            whatsappTemplateIds.length > 0
-              ? await prisma.whatsAppTemplate.findMany({
-                  where: { id: { in: whatsappTemplateIds } },
-                  select: { id: true, name: true },
-                })
-              : [];
+          const waTemplates = whatsappTemplateIds.length > 0
+            ? await prisma.whatsAppTemplate.findMany({ where: { id: { in: whatsappTemplateIds } }, select: { id: true, name: true } })
+            : [];
           const waNameMap = new Map(waTemplates.map((t) => [t.id, t.name]));
 
-          const smsTemplates =
-            smsTemplateIds.length > 0
-              ? await prisma.smsTemplate.findMany({
-                  where: { id: { in: smsTemplateIds } },
-                  select: { id: true, name: true },
-                })
-              : [];
+          const smsTemplates = smsTemplateIds.length > 0
+            ? await prisma.smsTemplate.findMany({ where: { id: { in: smsTemplateIds } }, select: { id: true, name: true } })
+            : [];
           const smsNameMap = new Map(smsTemplates.map((t) => [t.id, t.name]));
 
-          const rcsTemplatesForMap =
-            rcsTemplateIds.length > 0
-              ? await prisma.rcsTemplate.findMany({
-                  where: { id: { in: rcsTemplateIds } },
-                  select: { id: true, name: true },
-                })
-              : [];
+          const rcsTemplatesForMap = rcsTemplateIds.length > 0
+            ? await prisma.rcsTemplate.findMany({ where: { id: { in: rcsTemplateIds } }, select: { id: true, name: true } })
+            : [];
           const rcsNameMap = new Map(rcsTemplatesForMap.map((t) => [t.id, t.name]));
 
           const workflowDef = generateWorkflow({
-            programType: program.programType,
+            programType: automation.category,
             templateIds,
             whatsappTemplateIds,
             smsTemplateIds,
             rcsTemplateIds,
-            triggerConfig: program.triggerConfig as Record<string, unknown>,
+            triggerConfig: automation.triggerConfig as Record<string, unknown>,
           });
 
-          // Enrich workflow nodes with human-readable names
           const enrichedNodes = workflowDef.nodes.map((node) => {
-            if (
-              node.type === "send_email" &&
-              node.config.templateId &&
-              typeof node.config.templateId === "string"
-            ) {
-              return {
-                ...node,
-                config: {
-                  ...node.config,
-                  templateName:
-                    templateNameMap.get(node.config.templateId) ?? "Email",
-                },
-              };
+            if (node.type === "send_email" && typeof node.config.templateId === "string") {
+              return { ...node, config: { ...node.config, templateName: templateNameMap.get(node.config.templateId) ?? "Email" } };
             }
-            if (
-              node.type === "send_whatsapp" &&
-              node.config.whatsappTemplateId &&
-              typeof node.config.whatsappTemplateId === "string"
-            ) {
-              return {
-                ...node,
-                config: {
-                  ...node.config,
-                  templateName:
-                    waNameMap.get(node.config.whatsappTemplateId) ?? "WhatsApp",
-                },
-              };
+            if (node.type === "send_whatsapp" && typeof node.config.whatsappTemplateId === "string") {
+              return { ...node, config: { ...node.config, templateName: waNameMap.get(node.config.whatsappTemplateId) ?? "WhatsApp" } };
             }
-            if (
-              node.type === "send_sms" &&
-              node.config.smsTemplateId &&
-              typeof node.config.smsTemplateId === "string"
-            ) {
-              return {
-                ...node,
-                config: {
-                  ...node.config,
-                  templateName:
-                    smsNameMap.get(node.config.smsTemplateId) ?? "SMS",
-                },
-              };
+            if (node.type === "send_sms" && typeof node.config.smsTemplateId === "string") {
+              return { ...node, config: { ...node.config, templateName: smsNameMap.get(node.config.smsTemplateId) ?? "SMS" } };
             }
-            if (
-              node.type === "send_rcs" &&
-              node.config.rcsTemplateId &&
-              typeof node.config.rcsTemplateId === "string"
-            ) {
-              return {
-                ...node,
-                config: {
-                  ...node.config,
-                  templateName:
-                    rcsNameMap.get(node.config.rcsTemplateId) ?? "RCS",
-                },
-              };
+            if (node.type === "send_rcs" && typeof node.config.rcsTemplateId === "string") {
+              return { ...node, config: { ...node.config, templateName: rcsNameMap.get(node.config.rcsTemplateId) ?? "RCS" } };
             }
             return node;
           });
 
-          const workflow = await prisma.workflow.create({
+          // -- 2f. UPDATE AUTOMATION (single record, no separate workflow) --
+          await prisma.automation.update({
+            where: { id: automationId },
             data: {
-              workspaceId,
-              storeId,
-              name: `${program.name} — Automation`,
-              description: `Auto-generated multi-channel workflow for ${program.name}`,
-              status: "draft",
+              status: "ready",
+              templateIds,
+              smsTemplateIds,
+              whatsappTemplateIds,
+              rcsTemplateIds,
               triggerType: workflowDef.triggerType,
               triggerConfig: workflowDef.triggerConfig as any,
               nodes: enrichedNodes as any,
             },
-          });
-
-          // -- 2f. MARK READY (human reviews before activating) --
-          await prisma.emailProgram.update({
-            where: { id: programId },
-            data: { status: "ready", workflowId: workflow.id },
           });
 
           done++;
@@ -583,20 +467,17 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
             pipelineRunId,
             "create_workflow",
             {
-              message: `${program.name} ready for review (${done}/${totalPrograms})`,
-              currentProgram: program.name,
+              message: `${automation.name} ready for review (${done}/${totalAutomations})`,
+              currentProgram: automation.name,
               programsDone: done,
-              programsTotal: totalPrograms,
+              programsTotal: totalAutomations,
             },
             { programsDone: done }
           );
         } catch (progErr) {
-          console.error(
-            `[agent-pipeline] Failed for program ${program.name}:`,
-            progErr
-          );
-          await prisma.emailProgram.update({
-            where: { id: programId },
+          console.error(`[agent-pipeline] Failed for automation ${automation.name}:`, progErr);
+          await prisma.automation.update({
+            where: { id: automationId },
             data: { status: "recommended" },
           });
           done++;
@@ -616,9 +497,9 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
           status: "completed",
           phase: "done",
           progress: {
-            message: `${done} program${done !== 1 ? "s" : ""} ready for review!`,
+            message: `${done} automation${done !== 1 ? "s" : ""} ready for review!`,
             programsDone: done,
-            programsTotal: totalPrograms,
+            programsTotal: totalAutomations,
           } as any,
           programsDone: done,
           completedAt: new Date(),
@@ -626,9 +507,9 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
       });
 
       console.log(
-        `[agent-pipeline] Pipeline ${pipelineRunId} completed: ${done}/${totalPrograms} programs ready`
+        `[agent-pipeline] Pipeline ${pipelineRunId} completed: ${done}/${totalAutomations} automations ready`
       );
-      return { done, total: totalPrograms };
+      return { done, total: totalAutomations };
     } catch (err) {
       console.error(`[agent-pipeline] Pipeline ${pipelineRunId} failed:`, err);
       await prisma.agentPipelineRun.update({

@@ -1,5 +1,6 @@
 import { complete, type AIModelId } from "../ai";
 import { brandVoiceBlock } from "./prompt-templates";
+import { generateImage } from "../images/generate-image";
 
 export interface GenerateRcsInput {
   brandProfile?: {
@@ -33,6 +34,7 @@ export interface GenerateRcsOutput {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  imageCost: number;
 }
 
 function buildPrompt(input: GenerateRcsInput): string {
@@ -121,16 +123,43 @@ export async function generateRcs(
     variables: string[];
   };
 
+  // Generate card image if none was provided by the LLM
+  let cardImageUrl = parsed.cardImageUrl ?? null;
+  let imageCost = 0;
+
+  if (!cardImageUrl && parsed.cardTitle) {
+    try {
+      const brandStyle = input.brandProfile
+        ? {
+            aesthetic: (input.brandProfile.visualStyle["aesthetic"] as string) ?? "modern",
+            suggestedColors: (input.brandProfile.visualStyle["suggestedColors"] as string[]) ?? [],
+          }
+        : undefined;
+
+      const imgResult = await generateImage({
+        purpose: "card",
+        prompt: `${parsed.cardTitle}. ${input.brandProfile?.brandName ?? "Brand"} marketing card image.`,
+        brandStyle,
+        fallbackToStock: true,
+      });
+      cardImageUrl = imgResult.url;
+      imageCost = imgResult.cost;
+    } catch (err) {
+      console.warn(`[generate-rcs] Failed to generate card image:`, (err as Error).message);
+    }
+  }
+
   return {
     name: parsed.name,
     body: parsed.body,
     cardTitle: parsed.cardTitle ?? "",
-    cardImageUrl: parsed.cardImageUrl ?? null,
+    cardImageUrl,
     actions: parsed.actions ?? [],
     variables: parsed.variables ?? [],
     promptUsed: prompt,
     model: result.model,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
+    imageCost,
   };
 }
