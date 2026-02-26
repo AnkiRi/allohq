@@ -12,9 +12,15 @@ export type {
   SocialBlock,
   HeaderBlock,
   FooterBlock,
+  HeroBlock,
+  IconRowBlock,
+  CountdownBlock,
+  TestimonialBlock,
   EmailTemplate,
   ProductData,
   RenderOptions,
+  RenderBrandSettings,
+  TrackingParams,
 } from "./types";
 export { createDefaultBlock } from "./types";
 export { renderToHtml } from "./renderer";

@@ -120,6 +120,22 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
         data: updateData,
       });
       console.log(`[resend-webhook] Updated message ${messageLog.id} → ${updateData.status ?? "no status change"}`);
+
+      // Update campaign aggregated stats
+      if (messageLog.campaignId) {
+        if (eventType === "email.opened") {
+          await prisma.campaign.update({
+            where: { id: messageLog.campaignId },
+            data: { openCount: { increment: 1 } },
+          }).catch(() => {});
+        }
+        if (eventType === "email.clicked") {
+          await prisma.campaign.update({
+            where: { id: messageLog.campaignId },
+            data: { clickCount: { increment: 1 } },
+          }).catch(() => {});
+        }
+      }
     }
 
     res.writeHead(200);

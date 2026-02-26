@@ -1,7 +1,7 @@
 export { ShopifyClient } from "./client";
 export { generateAuthUrl, exchangeCodeForToken } from "./oauth";
 export { registerWebhooks, verifyWebhookHmac } from "./webhooks";
-export { syncAllProducts, syncAllCustomers, syncAllOrders } from "./sync";
+export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders } from "./sync";
 export {
   SHOPIFY_API_VERSION,
   SHOPIFY_SCOPES,

@@ -112,6 +112,7 @@ export interface HeaderBlock {
     logoSrc?: string;
     logoAlt?: string;
     bgColor?: string;
+    align?: "left" | "center" | "right";
   };
 }
 
@@ -212,12 +213,36 @@ export interface ProductData {
   vendor?: string;
 }
 
+/** Brand settings for auto header/footer injection */
+export interface RenderBrandSettings {
+  logoUrl?: string;
+  logoPosition?: "left" | "center" | "right";
+  headerBgColor?: string;
+  storeName?: string;
+  address?: string;
+  socialLinks?: { platform: string; url: string }[];
+  footerText?: string;
+  showSocialLinks?: boolean;
+  showAddress?: boolean;
+}
+
+/** UTM tracking params for link injection */
+export interface TrackingParams {
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent?: string;
+  storeDomain?: string; // only inject UTM into links matching this domain
+}
+
 /** Options for rendering an email template to HTML */
 export interface RenderOptions {
   variables: Record<string, string>;
   products?: Record<string, ProductData>;
   previewMode?: boolean;
   inlineCss?: boolean;
+  brandSettings?: RenderBrandSettings;
+  tracking?: TrackingParams;
 }
 
 /** Default props factory for each block type */

@@ -19,7 +19,7 @@ export const campaignsRouter = router({
       }).optional()
     )
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.campaign.findMany({
+      const campaigns = await ctx.prisma.campaign.findMany({
         where: {
           workspaceId: ctx.workspaceId,
           ...(input?.status ? { status: input.status } : {}),
@@ -30,6 +30,34 @@ export const campaignsRouter = router({
         },
         orderBy: { updatedAt: "desc" },
       });
+
+      // Batch-fetch revenue attribution for sent campaigns
+      const sentIds = campaigns.filter((c) => c.status === "sent").map((c) => c.id);
+      const revenueMap: Record<string, { revenue: number; orders: number }> = {};
+      if (sentIds.length > 0) {
+        const attributions = await ctx.prisma.orderAttribution.groupBy({
+          by: ["campaignId"],
+          where: { campaignId: { in: sentIds } },
+          _sum: { revenue: true },
+          _count: true,
+        });
+        for (const a of attributions) {
+          if (a.campaignId) {
+            revenueMap[a.campaignId] = {
+              revenue: Math.round((a._sum.revenue ?? 0) * 100) / 100,
+              orders: a._count,
+            };
+          }
+        }
+      }
+
+      return campaigns.map((c) => ({
+        ...c,
+        openRate: c.recipientCount > 0 ? c.openCount / c.recipientCount : 0,
+        clickRate: c.recipientCount > 0 ? c.clickCount / c.recipientCount : 0,
+        attributedRevenue: revenueMap[c.id]?.revenue ?? 0,
+        attributedOrders: revenueMap[c.id]?.orders ?? 0,
+      }));
     }),
 
   getById: workspaceProcedure
@@ -175,22 +203,35 @@ export const campaignsRouter = router({
   stats: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const campaign = await ctx.prisma.campaign.findFirst({
-        where: { id: input.id, workspaceId: ctx.workspaceId },
-        select: {
-          recipientCount: true,
-          openCount: true,
-          clickCount: true,
-          status: true,
-          sentAt: true,
-        },
-      });
+      const [campaign, attribution] = await Promise.all([
+        ctx.prisma.campaign.findFirst({
+          where: { id: input.id, workspaceId: ctx.workspaceId },
+          select: {
+            recipientCount: true,
+            openCount: true,
+            clickCount: true,
+            status: true,
+            sentAt: true,
+          },
+        }),
+        ctx.prisma.orderAttribution.aggregate({
+          where: { campaignId: input.id },
+          _sum: { revenue: true },
+          _count: true,
+        }),
+      ]);
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const attributedRevenue = attribution._sum.revenue ?? 0;
+      const attributedOrders = attribution._count;
 
       return {
         ...campaign,
         openRate: campaign.recipientCount > 0 ? campaign.openCount / campaign.recipientCount : 0,
         clickRate: campaign.recipientCount > 0 ? campaign.clickCount / campaign.recipientCount : 0,
+        attributedRevenue: Math.round(attributedRevenue * 100) / 100,
+        attributedOrders,
+        conversionRate: campaign.recipientCount > 0 ? attributedOrders / campaign.recipientCount : 0,
       };
     }),
 });

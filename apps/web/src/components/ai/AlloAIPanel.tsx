@@ -15,11 +15,17 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Maximize2,
   Minimize2,
   Send,
   Loader2,
   ArrowRight,
+  Search,
+  Plus,
+  Trash2,
+  Pencil,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { trpc } from "@/lib/trpc";
@@ -348,8 +354,7 @@ function InsightCardView({ card }: { card: InsightCard }) {
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
-  const router = useRouter();
+function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?: (href: string) => void }) {
 
   if (message.isLoading) {
     return (
@@ -483,7 +488,7 @@ function MessageBubble({ message }: { message: Message }) {
             {message.actionLinks.map((link) => (
               <button
                 key={link.href}
-                onClick={() => router.push(link.href)}
+                onClick={() => onNavigate?.(link.href)}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[hsl(var(--accent-bg))] border border-border text-[hsl(var(--accent))] font-mono text-[11px] hover:border-primary/50 transition-colors"
               >
                 {link.label}
@@ -512,6 +517,7 @@ export interface AlloAIPanelHandle {
 export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_, ref) {
   const { toast } = useToast();
   const router = useRouter();
+  const utils = trpc.useUtils();
   const pathname = usePathname();
   const pageContext = derivePageContext(pathname);
 
@@ -520,6 +526,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [welcomeBuilt, setWelcomeBuilt] = useState(false);
+  const [currentChatId, setCurrentChatId] = useState<string | undefined>();
+  const [currentChatTitle, setCurrentChatTitle] = useState<string | undefined>();
+  const [showChatSwitcher, setShowChatSwitcher] = useState(false);
+  const [chatSearch, setChatSearch] = useState("");
+  const [editingHeaderTitle, setEditingHeaderTitle] = useState(false);
+  const [headerTitleDraft, setHeaderTitleDraft] = useState("");
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -533,6 +546,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     { storeId },
     { enabled: !!storeId, refetchInterval: 60_000 },
   ) as { data: PanelInsights | undefined };
+
+  // Chat history — always fetch so dropdown opens instantly
+  const { data: chatHistory, refetch: refetchHistory } = (trpc.ai as any).listChats.useQuery(
+    { storeId, limit: 30 },
+    { enabled: !!storeId, staleTime: 30_000 },
+  ) as { data: { chats: { id: string; title: string; updatedAt: string; messageCount: number; lastMessage: string }[]; nextCursor?: string } | undefined; refetch: () => void };
+
+  const deleteChatMut = (trpc.ai as any).deleteChat.useMutation({
+    onSuccess: () => refetchHistory(),
+  }) as { mutate: (input: { chatId: string }) => void };
+
+  const renameChatMut = (trpc.ai as any).renameChat.useMutation({
+    onSuccess: () => refetchHistory(),
+  }) as { mutateAsync: (input: { chatId: string; title: string }) => Promise<{ success: boolean }>; isPending: boolean };
+
+  // Inline rename state
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   // Track which storeId the welcome was built for
   const welcomeStoreRef = useRef<string>("");
@@ -564,6 +595,26 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Click-outside + Escape to dismiss chat switcher
+  const switcherRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showChatSwitcher) return;
+    const handleClick = (e: MouseEvent) => {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+        setShowChatSwitcher(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowChatSwitcher(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [showChatSwitcher]);
+
   // Expose open/focus to parent via ref
   useImperativeHandle(ref, () => ({
     open() {
@@ -577,8 +628,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
 
   // AI chat mutation — real conversational AI with full store context
   type ChatResult = {
+    chatId: string;
     reply: string;
     highlights: { label: string; value: string }[];
+    suggestedFollowUps: string[];
     action: {
       intent: string;
       success: boolean;
@@ -596,6 +649,21 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const chatMut = (trpc.ai as any).chat.useMutation({
     onSuccess: (data: ChatResult) => {
       setIsProcessing(false);
+      // Track chat id and title
+      if (!currentChatId) {
+        // New chat — derive title from the last user message
+        const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+        setCurrentChatTitle(lastUserMsg?.content.slice(0, 40) || "New chat");
+      }
+      setCurrentChatId(data.chatId);
+      refetchHistory();
+
+      // Update dynamic suggestions from AI response
+      if (data.suggestedFollowUps?.length) {
+        setDynamicSuggestions(data.suggestedFollowUps);
+      } else {
+        setDynamicSuggestions([]);
+      }
 
       // Build action links from action result
       const actionLinks: { label: string; href: string }[] = [];
@@ -664,7 +732,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       );
       toast(err.message ?? "Chat failed", "error");
     },
-  }) as { mutate: (input: { storeId: string; message: string; history: { role: "user" | "assistant"; content: string }[] }) => void };
+  }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[] }) => void };
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -692,22 +760,30 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       setMessages((prev) => [...prev, userMsg, loadingMsg]);
       setInput("");
       setIsProcessing(true);
+      setDynamicSuggestions([]);
 
       chatMut.mutate({
         storeId,
+        chatId: currentChatId,
         message: text.trim(),
         history,
       });
     },
-    [isProcessing, storeId, messages],
+    [isProcessing, storeId, messages, currentChatId],
   );
 
   const handleSubmit = useCallback(() => {
     sendMessage(input);
   }, [input, sendMessage]);
 
+  const handleNavigate = useCallback((href: string) => {
+    setPanelState("collapsed");
+    router.push(href);
+  }, [router]);
+
   const handlePillClick = (pill: Pill) => {
     if (pill.href && !pill.instruction) {
+      setPanelState("collapsed");
       router.push(pill.href);
       return;
     }
@@ -716,8 +792,44 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     }
   };
 
+  const startNewChat = useCallback(() => {
+    setCurrentChatId(undefined);
+    setCurrentChatTitle(undefined);
+    setDynamicSuggestions([]);
+    setShowChatSwitcher(false);
+    if (insights) {
+      setMessages(buildWelcomeMessages(insights));
+    } else {
+      setMessages([]);
+    }
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, [insights]);
+
+  const loadChat = useCallback(async (chatId: string) => {
+    setShowChatSwitcher(false);
+    setCurrentChatId(chatId);
+    setDynamicSuggestions([]);
+
+    try {
+      const chat = await (utils.ai as any).getChat.fetch({ chatId }) as { title?: string; messages?: { id: string; role: string; content: string; highlights: { label: string; value: string }[] | null; createdAt: string }[] };
+      if (chat?.messages) {
+        setCurrentChatTitle(chat.title || "Chat");
+        setMessages(chat.messages.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          highlights: m.highlights ?? undefined,
+          timestamp: new Date(m.createdAt),
+        })));
+      }
+    } catch {
+      toast("Failed to load chat", "error");
+    }
+  }, [utils, toast]);
+
   const dataReady = !!insights?.storeState.hasSyncedData;
   const suggestions = getSuggestions(insights, pageContext);
+  const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : null;
 
   const toggle = () => {
     setPanelState(panelState === "collapsed" ? "open" : "collapsed");
@@ -765,30 +877,244 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
           )}
         </button>
 
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
-          <div
-            className={cn(
-              "w-2 h-2 rounded-full",
-              isProcessing ? "bg-primary animate-pulse" : storeId ? "bg-[hsl(var(--success))]" : "bg-muted-foreground",
+        {/* Header with chat switcher */}
+        <div className="relative" ref={switcherRef}>
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
+            <div
+              className={cn(
+                "w-2 h-2 rounded-full flex-shrink-0",
+                isProcessing ? "bg-primary animate-pulse" : storeId ? "bg-[hsl(var(--success))]" : "bg-muted-foreground",
+              )}
+            />
+            {/* Chat switcher trigger + rename */}
+            {editingHeaderTitle && currentChatId ? (
+              <div className="flex-1 min-w-0">
+                <input
+                  value={headerTitleDraft}
+                  onChange={(e) => setHeaderTitleDraft(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && headerTitleDraft.trim()) {
+                      await renameChatMut.mutateAsync({ chatId: currentChatId, title: headerTitleDraft.trim() });
+                      setCurrentChatTitle(headerTitleDraft.trim());
+                      setEditingHeaderTitle(false);
+                    }
+                    if (e.key === "Escape") setEditingHeaderTitle(false);
+                  }}
+                  onBlur={async () => {
+                    if (headerTitleDraft.trim() && headerTitleDraft.trim() !== currentChatTitle) {
+                      await renameChatMut.mutateAsync({ chatId: currentChatId, title: headerTitleDraft.trim() });
+                      setCurrentChatTitle(headerTitleDraft.trim());
+                    }
+                    setEditingHeaderTitle(false);
+                  }}
+                  className="w-full px-2 py-1 bg-background border border-foreground/30 rounded-lg text-[13px] font-mono font-bold text-foreground focus:outline-none focus:border-foreground"
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowChatSwitcher(!showChatSwitcher)}
+                className={cn(
+                  "flex-1 text-left flex items-center gap-2 min-w-0 px-2.5 py-1.5 rounded-lg border transition-all",
+                  showChatSwitcher
+                    ? "border-foreground/20 bg-muted"
+                    : "border-border hover:border-foreground/20 hover:bg-muted/50",
+                )}
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-mono font-bold text-foreground truncate">
+                    {currentChatTitle || "Allo AI"}
+                  </div>
+                  {chatHistory?.chats && chatHistory.chats.length > 0 && (
+                    <div className="text-[10px] font-mono text-muted-foreground truncate">
+                      {chatHistory.chats.length} conversation{chatHistory.chats.length !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                </div>
+                <ChevronDown className={cn(
+                  "w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0",
+                  showChatSwitcher && "rotate-180",
+                )} />
+              </button>
             )}
-          />
-          <div>
-            <div className="text-[13px] font-mono font-bold text-foreground">Allo AI</div>
-            <div className="text-[10px] font-mono text-muted-foreground">
-              {isProcessing ? "Processing..." : "Your retention co-pilot"}
-            </div>
+            {/* Rename button */}
+            {currentChatId && currentChatTitle && !editingHeaderTitle && (
+              <button
+                onClick={() => {
+                  setShowChatSwitcher(false);
+                  setHeaderTitleDraft(currentChatTitle);
+                  setEditingHeaderTitle(true);
+                }}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+                title="Rename chat"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
+            {/* New chat button */}
+            <button
+              onClick={startNewChat}
+              className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+              title="New chat"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
+
+          {/* Chat switcher dropdown */}
+          {showChatSwitcher && (
+            <div className="absolute top-full left-0 right-0 z-50 bg-[hsl(var(--ai-panel-bg))] border-b border-border shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-h-[400px] flex flex-col">
+              {/* Search */}
+              <div className="px-3 py-2 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                  <input
+                    value={chatSearch}
+                    onChange={(e) => setChatSearch(e.target.value)}
+                    placeholder="Search chats..."
+                    className="w-full pl-7 pr-3 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* New conversation option */}
+              <button
+                onClick={() => { startNewChat(); }}
+                className={cn(
+                  "flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-muted transition-colors border-b border-border/50",
+                  !currentChatId && "bg-muted",
+                )}
+              >
+                <Plus className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-[12px] font-mono font-medium text-foreground">New conversation</span>
+              </button>
+
+              {/* Chat list */}
+              <div className="flex-1 overflow-y-auto">
+                {(() => {
+                  const chats = chatHistory?.chats ?? [];
+                  const filtered = chatSearch.trim()
+                    ? chats.filter((c) => c.title.toLowerCase().includes(chatSearch.toLowerCase()))
+                    : chats;
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-6">
+                        <MessageSquare className="w-4 h-4 text-muted-foreground/30 mx-auto mb-1.5" />
+                        <p className="text-[11px] text-muted-foreground font-mono">
+                          {chatSearch.trim() ? "No matching chats" : "No previous chats"}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((chat) => (
+                    <div
+                      key={chat.id}
+                      className={cn(
+                        "group flex items-start gap-2.5 px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors",
+                        currentChatId === chat.id && "bg-muted border-l-2 border-foreground",
+                      )}
+                      onClick={() => { if (editingChatId !== chat.id) loadChat(chat.id); }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        {editingChatId === chat.id ? (
+                          <input
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={async (e) => {
+                              if (e.key === "Enter" && editingTitle.trim()) {
+                                await renameChatMut.mutateAsync({ chatId: chat.id, title: editingTitle.trim() });
+                                if (currentChatId === chat.id) setCurrentChatTitle(editingTitle.trim());
+                                setEditingChatId(null);
+                              }
+                              if (e.key === "Escape") setEditingChatId(null);
+                            }}
+                            onBlur={async () => {
+                              if (editingTitle.trim() && editingTitle.trim() !== chat.title) {
+                                await renameChatMut.mutateAsync({ chatId: chat.id, title: editingTitle.trim() });
+                                if (currentChatId === chat.id) setCurrentChatTitle(editingTitle.trim());
+                              }
+                              setEditingChatId(null);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full px-1.5 py-0.5 -ml-1.5 bg-background border border-foreground/30 rounded text-[12px] font-mono font-medium text-foreground focus:outline-none focus:border-foreground"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="text-[12px] font-mono font-medium text-foreground truncate">
+                            {chat.title}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+                          {chat.lastMessage}
+                        </div>
+                        <div className="text-[9px] text-muted-foreground/50 font-mono mt-0.5">
+                          {timeAgo(new Date(chat.updatedAt))} · {chat.messageCount} msg
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-0.5 flex-shrink-0 mt-0.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingChatId(chat.id);
+                            setEditingTitle(chat.title);
+                          }}
+                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                          title="Rename chat"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteChatMut.mutate({ chatId: chat.id });
+                            if (currentChatId === chat.id) startNewChat();
+                          }}
+                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                          title="Delete chat"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Messages area */}
+        {/* Messages area — always visible */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble key={msg.id} message={msg} onNavigate={handleNavigate} />
           ))}
 
-          {/* Suggestion pills — show after messages when not processing */}
-          {!isProcessing && suggestions.length > 0 && (
+          {/* Dynamic suggestion pills from AI response */}
+          {!isProcessing && activeSuggestions && (
+            <div className="pl-[34px]">
+              <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                Follow up
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {activeSuggestions.map((text) => (
+                  <button
+                    key={text}
+                    onClick={() => sendMessage(text)}
+                    className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[hsl(var(--accent))] font-mono text-[11px] hover:border-primary/50 transition-colors text-left"
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Static suggestion pills — fallback when no dynamic suggestions */}
+          {!isProcessing && !activeSuggestions && suggestions.length > 0 && (
             <div className="pl-[34px]">
               <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
                 Suggested actions

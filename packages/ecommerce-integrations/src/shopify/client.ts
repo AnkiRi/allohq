@@ -54,6 +54,24 @@ export class ShopifyClient {
   }
 
   /**
+   * GET request for single-object endpoints (e.g. shop.json).
+   * Returns the unwrapped object directly.
+   */
+  async getSingle<T>(endpoint: string): Promise<T> {
+    const url = `${this.baseUrl}/${endpoint}.json`;
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Shopify API error ${response.status}: ${body}`);
+    }
+
+    const json = (await response.json()) as Record<string, T>;
+    const dataKey = Object.keys(json)[0]!;
+    return json[dataKey] as T;
+  }
+
+  /**
    * POST request (used for webhook registration, etc.)
    */
   async post<T>(endpoint: string, body: unknown): Promise<T> {

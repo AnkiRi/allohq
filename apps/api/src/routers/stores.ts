@@ -198,6 +198,81 @@ export const storesRouter = router({
     }),
 
   /**
+   * Get store metadata (name, address, socials, logo, etc.)
+   */
+  getMetadata: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: {
+          id: true,
+          storeName: true,
+          storeEmail: true,
+          storePhone: true,
+          storeLogoUrl: true,
+          storeDescription: true,
+          address: true,
+          socialLinks: true,
+          currency: true,
+          timezone: true,
+          shopDomain: true,
+        },
+      });
+      if (!store) throw new Error("Store not found");
+      return store;
+    }),
+
+  /**
+   * Update store metadata fields (manual override for Shopify-synced data or manual entry)
+   */
+  updateMetadata: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        storeName: z.string().optional(),
+        storeEmail: z.string().email().optional(),
+        storePhone: z.string().optional(),
+        storeLogoUrl: z.string().url().optional().nullable(),
+        storeDescription: z.string().optional(),
+        address: z
+          .object({
+            address1: z.string(),
+            address2: z.string().optional(),
+            city: z.string(),
+            province: z.string().optional(),
+            zip: z.string(),
+            country: z.string(),
+          })
+          .optional(),
+        socialLinks: z
+          .object({
+            instagram: z.string().optional(),
+            facebook: z.string().optional(),
+            twitter: z.string().optional(),
+            tiktok: z.string().optional(),
+            pinterest: z.string().optional(),
+            youtube: z.string().optional(),
+          })
+          .optional(),
+        currency: z.string().optional(),
+        timezone: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { storeId, ...data } = input;
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new Error("Store not found");
+
+      return ctx.prisma.store.update({
+        where: { id: storeId },
+        data,
+      });
+    }),
+
+  /**
    * Disconnect a store — deletes all related data and soft-deletes the store.
    */
   disconnect: workspaceProcedure

@@ -20,13 +20,16 @@ export type { StoreData, BrandVoiceResult } from "./brand";
 
 // AI Content Generation
 export { generateEmail } from "./content";
-export type { GenerateEmailInput, GenerateEmailOutput, CreativeIntensity } from "./content";
+export type { GenerateEmailInput, GenerateEmailOutput, CreativeIntensity, BrandSettings } from "./content";
 export { generateWhatsApp } from "./content";
 export type { GenerateWhatsAppInput, GenerateWhatsAppOutput } from "./content";
 export { generateSms } from "./content";
 export type { GenerateSmsInput, GenerateSmsOutput } from "./content";
 export { generateRcs } from "./content";
 export type { GenerateRcsInput, GenerateRcsOutput, RcsAction } from "./content";
+
+export { LAYOUT_TEMPLATES, getLayoutById } from "./content";
+export type { LayoutTemplate } from "./content";
 
 // Context Engine
 export { getUpcomingFestivities, getFunnelStage, getEmailIntent } from "./context";

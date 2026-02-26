@@ -1,4 +1,4 @@
-import type { EmailBlock, RenderOptions, ProductData } from "../types";
+import type { EmailBlock, RenderOptions, ProductData, HeaderBlock, FooterBlock } from "../types";
 
 /** Interpolate merge tags like {{first_name}} in a string */
 function interpolate(text: string, variables: Record<string, string>): string {
@@ -208,10 +208,10 @@ function renderBlock(block: EmailBlock, options: RenderOptions): string {
     }
 
     case "header": {
-      const { logoSrc, logoAlt = "", bgColor = "#FFFFFF" } = block.props;
+      const { logoSrc, logoAlt = "", bgColor = "#FFFFFF", align = "center" } = block.props;
       return `
         <tr>
-          <td style="padding: 24px; text-align: center; background-color: ${bgColor};">
+          <td style="padding: 24px; text-align: ${align}; background-color: ${bgColor};">
             ${logoSrc ? `<img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(logoAlt)}" style="max-height: 48px; display: inline-block;" />` : ""}
           </td>
         </tr>`;
@@ -299,9 +299,79 @@ function renderBlock(block: EmailBlock, options: RenderOptions): string {
   }
 }
 
+/** Inject UTM params into all <a href> URLs matching the store domain */
+function injectUtmParams(html: string, options: RenderOptions): string {
+  const { tracking } = options;
+  if (!tracking) return html;
+
+  return html.replace(/href="([^"]+)"/g, (_match, url: string) => {
+    // Skip unsubscribe, mailto, anchor-only links
+    if (url.startsWith("mailto:") || url.startsWith("#") || url.includes("unsubscribe")) {
+      return `href="${url}"`;
+    }
+    // Skip non-http links
+    if (!url.startsWith("http")) {
+      return `href="${url}"`;
+    }
+    // Skip if URL doesn't match store domain (when specified)
+    if (tracking.storeDomain && !url.includes(tracking.storeDomain)) {
+      return `href="${url}"`;
+    }
+    const separator = url.includes("?") ? "&" : "?";
+    const params = [
+      `utm_source=${encodeURIComponent(tracking.utmSource)}`,
+      `utm_medium=${encodeURIComponent(tracking.utmMedium)}`,
+      `utm_campaign=${encodeURIComponent(tracking.utmCampaign)}`,
+      ...(tracking.utmContent ? [`utm_content=${encodeURIComponent(tracking.utmContent)}`] : []),
+    ].join("&");
+    return `href="${url}${separator}${params}"`;
+  });
+}
+
 /** Render an array of email blocks to a complete HTML email string */
 export function renderToHtml(blocks: EmailBlock[], options: RenderOptions): string {
-  const blockHtml = blocks.map((block) => renderBlock(block, options)).join("\n");
+  let finalBlocks = [...blocks];
+
+  // Auto-inject header if brandSettings has a logo but blocks don't start with header
+  if (options.brandSettings?.logoUrl && finalBlocks[0]?.type !== "header") {
+    const headerBlock: HeaderBlock = {
+      id: "auto-header",
+      type: "header",
+      props: {
+        logoSrc: options.brandSettings.logoUrl,
+        logoAlt: options.brandSettings.storeName ?? "Logo",
+        bgColor: options.brandSettings.headerBgColor ?? "#FFFFFF",
+      },
+    };
+    finalBlocks.unshift(headerBlock);
+  }
+
+  // Auto-inject footer if brandSettings exist but blocks don't end with footer
+  if (options.brandSettings && finalBlocks[finalBlocks.length - 1]?.type !== "footer") {
+    const bs = options.brandSettings;
+    const footerParts: string[] = [];
+    if (bs.showAddress !== false && bs.address) footerParts.push(`${bs.storeName ?? ""} · ${bs.address}`);
+    if (bs.showSocialLinks !== false && bs.socialLinks?.length) {
+      footerParts.push(bs.socialLinks.map((l) => l.platform).join(" · "));
+    }
+    if (bs.footerText) footerParts.push(bs.footerText);
+    if (footerParts.length === 0 && bs.storeName) footerParts.push(bs.storeName);
+
+    const footerBlock: FooterBlock = {
+      id: "auto-footer",
+      type: "footer",
+      props: {
+        text: footerParts.join("\n") || "Sent with Allo",
+        unsubscribeText: "Unsubscribe",
+      },
+    };
+    finalBlocks.push(footerBlock);
+  }
+
+  let blockHtml = finalBlocks.map((block) => renderBlock(block, options)).join("\n");
+
+  // Inject UTM tracking params
+  blockHtml = injectUtmParams(blockHtml, options);
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">

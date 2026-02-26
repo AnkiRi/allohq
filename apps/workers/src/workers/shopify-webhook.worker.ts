@@ -292,6 +292,56 @@ async function upsertOrder(
       },
     });
   }
+
+  // ---- Email attribution ----
+  // Find the most recent clicked or opened email for this customer within 7-day window
+  const attributionWindow = 7; // days
+  const windowStart = new Date(Date.now() - attributionWindow * 86400000);
+
+  try {
+    // Check if attribution already exists for this order
+    const existing = await prisma.orderAttribution.findUnique({
+      where: { orderId: order.id },
+    });
+    if (existing) return;
+
+    // Priority: click > open
+    const recentMessage = await prisma.messageLog.findFirst({
+      where: {
+        customerId: customer.id,
+        channel: "email",
+        status: { in: ["clicked", "opened", "delivered"] },
+        createdAt: { gte: windowStart },
+      },
+      orderBy: [
+        // Prioritize clicks over opens
+        { clickedAt: "desc" },
+        { openedAt: "desc" },
+        { createdAt: "desc" },
+      ],
+    });
+
+    if (recentMessage) {
+      const touchType = recentMessage.clickedAt ? "click" : recentMessage.openedAt ? "open" : "direct";
+      await prisma.orderAttribution.create({
+        data: {
+          orderId: order.id,
+          customerId: customer.id,
+          storeId,
+          messageLogId: recentMessage.id,
+          campaignId: recentMessage.campaignId,
+          automationId: recentMessage.automationId,
+          channel: "email",
+          revenue: parseFloat(o.total_price),
+          touchType,
+          windowDays: attributionWindow,
+        },
+      });
+      console.log(`[attribution] Order ${order.id} attributed to ${touchType} on message ${recentMessage.id}`);
+    }
+  } catch (err) {
+    console.warn(`[attribution] Failed for order ${order.id}:`, (err as Error).message);
+  }
 }
 
 shopifyWebhookWorker.on("completed", (job) => {

@@ -13,6 +13,10 @@ import {
   PanelTop,
   PanelBottom,
   Share2,
+  Sparkles,
+  Grid3X3,
+  Timer,
+  Quote,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import type { EmailBlockType } from "@allohq/email-builder";
@@ -49,6 +53,15 @@ const GROUPS: { label: string; items: BlockDef[] }[] = [
     items: [
       { type: "product", label: "Product", icon: ShoppingBag },
       { type: "product_grid", label: "Product Grid", icon: LayoutGrid },
+    ],
+  },
+  {
+    label: "Engagement",
+    items: [
+      { type: "hero", label: "Hero", icon: Sparkles },
+      { type: "icon_row", label: "Icon Row", icon: Grid3X3 },
+      { type: "countdown", label: "Countdown", icon: Timer },
+      { type: "testimonial", label: "Testimonial", icon: Quote },
     ],
   },
   {

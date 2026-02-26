@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 
 // Cost per million tokens for each model (mirrors AI_MODELS in customer-intelligence)
@@ -6,6 +7,34 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-4o": { input: 2.5, output: 10 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
 };
+
+function periodToDateFilter(period: string | undefined): { gte?: Date; lt?: Date } | undefined {
+  if (!period || period === "all") return undefined;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (period) {
+    case "today":
+      return { gte: startOfToday };
+    case "yesterday": {
+      const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
+      return { gte: startOfYesterday, lt: startOfToday };
+    }
+    case "7d":
+      return { gte: new Date(now.getTime() - 7 * 86400000) };
+    case "30d":
+      return { gte: new Date(now.getTime() - 30 * 86400000) };
+    case "90d":
+      return { gte: new Date(now.getTime() - 90 * 86400000) };
+    case "180d":
+      return { gte: new Date(now.getTime() - 180 * 86400000) };
+    case "1y":
+      return { gte: new Date(now.getTime() - 365 * 86400000) };
+    default:
+      return undefined;
+  }
+}
 
 export const dashboardRouter = router({
   /** Dashboard stats overview */
@@ -64,49 +93,58 @@ export const dashboardRouter = router({
     };
   }),
 
-  /** Token usage aggregation for AI cost dashboard */
-  tokenUsage: workspaceProcedure.query(async ({ ctx }) => {
-    const grouped = await ctx.prisma.tokenUsage.groupBy({
-      by: ["model"],
-      where: { workspaceId: ctx.workspaceId },
-      _sum: { inputTokens: true, outputTokens: true },
-      _count: true,
-    });
+  /** Token usage aggregation for AI cost dashboard — supports date range filtering */
+  tokenUsage: workspaceProcedure
+    .input(z.object({
+      period: z.enum(["today", "yesterday", "7d", "30d", "90d", "180d", "1y", "all"]).default("all"),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const dateFilter = periodToDateFilter(input?.period);
 
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-    let totalCalls = 0;
-    let totalCost = 0;
+      const grouped = await ctx.prisma.tokenUsage.groupBy({
+        by: ["model"],
+        where: {
+          workspaceId: ctx.workspaceId,
+          ...(dateFilter ? { createdAt: dateFilter } : {}),
+        },
+        _sum: { inputTokens: true, outputTokens: true },
+        _count: true,
+      });
 
-    const byModel = grouped.map((g) => {
-      const inputTokens = g._sum.inputTokens ?? 0;
-      const outputTokens = g._sum.outputTokens ?? 0;
-      const calls = g._count;
-      const costs = MODEL_COSTS[g.model] ?? { input: 0, output: 0 };
-      const cost =
-        (inputTokens / 1_000_000) * costs.input +
-        (outputTokens / 1_000_000) * costs.output;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      let totalCalls = 0;
+      let totalCost = 0;
 
-      totalInputTokens += inputTokens;
-      totalOutputTokens += outputTokens;
-      totalCalls += calls;
-      totalCost += cost;
+      const byModel = grouped.map((g) => {
+        const inputTokens = g._sum.inputTokens ?? 0;
+        const outputTokens = g._sum.outputTokens ?? 0;
+        const calls = g._count;
+        const costs = MODEL_COSTS[g.model] ?? { input: 0, output: 0 };
+        const cost =
+          (inputTokens / 1_000_000) * costs.input +
+          (outputTokens / 1_000_000) * costs.output;
+
+        totalInputTokens += inputTokens;
+        totalOutputTokens += outputTokens;
+        totalCalls += calls;
+        totalCost += cost;
+
+        return {
+          model: g.model,
+          inputTokens,
+          outputTokens,
+          calls,
+          cost: Math.round(cost * 10000) / 10000,
+        };
+      });
 
       return {
-        model: g.model,
-        inputTokens,
-        outputTokens,
-        calls,
-        cost: Math.round(cost * 10000) / 10000,
+        totalInputTokens,
+        totalOutputTokens,
+        totalCalls,
+        totalCost: Math.round(totalCost * 10000) / 10000,
+        byModel,
       };
-    });
-
-    return {
-      totalInputTokens,
-      totalOutputTokens,
-      totalCalls,
-      totalCost: Math.round(totalCost * 10000) / 10000,
-      byModel,
-    };
-  }),
+    }),
 });

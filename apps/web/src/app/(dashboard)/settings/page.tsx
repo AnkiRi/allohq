@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Settings, Store, User, Bell, CreditCard, Sparkles, Cpu, Check } from "lucide-react";
+import { Settings, Store, User, Bell, CreditCard, Sparkles, Cpu, Check, Activity } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 
@@ -10,6 +11,129 @@ const TIER_COLORS: Record<string, { bg: string; text: string; label: string }> =
   standard: { bg: "bg-blue-50", text: "text-blue-700", label: "Standard" },
   economy: { bg: "bg-green-50", text: "text-green-700", label: "Economy" },
 };
+
+const TOKEN_PERIODS = [
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "7d", label: "7 Days" },
+  { value: "30d", label: "30 Days" },
+  { value: "90d", label: "90 Days" },
+  { value: "180d", label: "180 Days" },
+  { value: "1y", label: "1 Year" },
+  { value: "all", label: "All Time" },
+] as const;
+
+const MODEL_LABELS: Record<string, string> = {
+  "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
+  "gpt-4o": "GPT-4o",
+  "gpt-4o-mini": "GPT-4o Mini",
+};
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function TokenUsageSection() {
+  const [period, setPeriod] = useState<string>("30d");
+
+  const { data: usage, isLoading } = (trpc.dashboard as any).tokenUsage.useQuery(
+    { period },
+  ) as { data: {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCalls: number;
+    totalCost: number;
+    byModel: { model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }[];
+  } | undefined; isLoading: boolean };
+
+  return (
+    <div className="border border-border rounded-xl p-6 bg-card">
+      <div className="flex items-center gap-3 mb-6">
+        <Activity className="w-4 h-4 text-muted-foreground" />
+        <h2 className="text-[13px] font-bold text-foreground font-mono">TOKEN USAGE</h2>
+      </div>
+
+      {/* Period selector */}
+      <div className="flex flex-wrap gap-1.5 mb-5">
+        {TOKEN_PERIODS.map((p) => (
+          <button
+            key={p.value}
+            onClick={() => setPeriod(p.value)}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-mono transition-colors ${
+              period === p.value
+                ? "bg-foreground text-background"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-muted rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : usage ? (
+        <>
+          {/* Summary bar */}
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            {[
+              { label: "Total Cost", value: `$${usage.totalCost.toFixed(4)}` },
+              { label: "API Calls", value: String(usage.totalCalls) },
+              { label: "Input Tokens", value: formatTokens(usage.totalInputTokens) },
+              { label: "Output Tokens", value: formatTokens(usage.totalOutputTokens) },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-xl bg-muted/50 border border-border p-3">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {stat.label}
+                </div>
+                <div className="font-mono text-[16px] font-bold text-foreground mt-0.5">
+                  {stat.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-model breakdown */}
+          {usage.byModel.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">By Model</p>
+              {usage.byModel.map((m) => (
+                <div
+                  key={m.model}
+                  className="flex items-center justify-between p-3 border border-border rounded-lg"
+                >
+                  <div>
+                    <p className="text-[12px] font-bold text-foreground font-mono">
+                      {MODEL_LABELS[m.model] ?? m.model}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                      {m.calls} calls · {formatTokens(m.inputTokens)} in · {formatTokens(m.outputTokens)} out
+                    </p>
+                  </div>
+                  <span className="text-[13px] font-bold font-mono text-foreground">
+                    ${m.cost.toFixed(4)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-[11px] text-muted-foreground font-mono">
+                No token usage in this period
+              </p>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { user } = useUser();
@@ -236,6 +360,9 @@ export default function SettingsPage() {
           </p>
         )}
       </div>
+
+      {/* Token Usage */}
+      <TokenUsageSection />
 
       {/* Placeholder sections */}
       {[

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, RefreshCw, Palette, Type, MessageSquare, Quote, AlertTriangle, Sliders } from "lucide-react";
+import { ArrowLeft, RefreshCw, Palette, Type, MessageSquare, Quote, AlertTriangle, Sliders, Image, MapPin, Share2, Store, Save } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -108,6 +108,94 @@ export default function BrandProfilePage() {
     if (!storeId || analyzing || analyzeMut.isPending) return;
     setError(null);
     analyzeMut.mutate({ storeId, model: selectedModel });
+  }
+
+  // Brand settings queries
+  const { data: storeMetadata } = trpc.stores.getMetadata.useQuery(
+    { storeId },
+    { enabled: !!storeId }
+  ) as { data: { storeName: string | null; storeEmail: string | null; storePhone: string | null; storeLogoUrl: string | null; storeDescription: string | null; address: any; socialLinks: any; currency: string | null; timezone: string | null; shopDomain: string } | null | undefined };
+  const { data: brandSettings } = (trpc.ai as any).getBrandSettings.useQuery(
+    { storeId },
+    { enabled: !!storeId }
+  ) as { data: { logoPosition?: string; headerBgColor?: string; footerText?: string; showSocialLinks?: boolean; showAddress?: boolean } | null | undefined };
+
+  // Local state for editable fields
+  const [logoUrl, setLogoUrl] = useState("");
+  const [logoPosition, setLogoPosition] = useState<"left" | "center" | "right">("center");
+  const [headerBgColor, setHeaderBgColor] = useState("#ffffff");
+  const [footerText, setFooterText] = useState("");
+  const [showSocialLinks, setShowSocialLinks] = useState(true);
+  const [showAddress, setShowAddress] = useState(true);
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
+  const [storeDetails, setStoreDetails] = useState<{ storeName: string; storeEmail: string; storePhone: string; address: any }>({
+    storeName: "", storeEmail: "", storePhone: "", address: null,
+  });
+
+  // Sync from server data
+  useEffect(() => {
+    if (storeMetadata) {
+      setLogoUrl(storeMetadata.storeLogoUrl ?? "");
+      setSocialLinks((storeMetadata.socialLinks as Record<string, string>) ?? {});
+      setStoreDetails({
+        storeName: storeMetadata.storeName ?? "",
+        storeEmail: storeMetadata.storeEmail ?? "",
+        storePhone: storeMetadata.storePhone ?? "",
+        address: storeMetadata.address ?? null,
+      });
+    }
+  }, [storeMetadata]);
+
+  useEffect(() => {
+    if (brandSettings) {
+      setLogoPosition((brandSettings.logoPosition as "left" | "center" | "right") ?? "center");
+      setHeaderBgColor(brandSettings.headerBgColor ?? "#ffffff");
+      setFooterText(brandSettings.footerText ?? "");
+      setShowSocialLinks(brandSettings.showSocialLinks ?? true);
+      setShowAddress(brandSettings.showAddress ?? true);
+    }
+  }, [brandSettings]);
+
+  // Mutations
+  const updateMetadataMut = (trpc.stores as any).updateMetadata.useMutation({
+    onSuccess: () => {
+      toast("Store details saved!", "success");
+      (utils.stores as any).getMetadata.invalidate({ storeId });
+    },
+    onError: (err: { message?: string }) => toast(err.message || "Failed to save", "error"),
+  }) as { mutate: (input: any) => void; isPending: boolean };
+
+  const updateBrandSettingsMut = (trpc.ai as any).updateBrandSettings.useMutation({
+    onSuccess: () => {
+      toast("Brand settings saved!", "success");
+      (utils.ai as any).getBrandSettings.invalidate({ storeId });
+    },
+    onError: (err: { message?: string }) => toast(err.message || "Failed to save", "error"),
+  }) as { mutate: (input: any) => void; isPending: boolean };
+
+  function handleSaveBrandSettings() {
+    if (!storeId) return;
+    updateBrandSettingsMut.mutate({
+      storeId,
+      logoPosition,
+      headerBgColor: headerBgColor || null,
+      footerText: footerText || null,
+      showSocialLinks,
+      showAddress,
+    });
+  }
+
+  function handleSaveStoreDetails() {
+    if (!storeId) return;
+    updateMetadataMut.mutate({
+      storeId,
+      storeName: storeDetails.storeName || undefined,
+      storeEmail: storeDetails.storeEmail || undefined,
+      storePhone: storeDetails.storePhone || undefined,
+      storeLogoUrl: logoUrl || null,
+      socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
+      address: storeDetails.address || undefined,
+    });
   }
 
   const tone = profile?.toneAttributes as Record<string, string> | undefined;
@@ -361,6 +449,227 @@ export default function BrandProfilePage() {
               </div>
             </div>
           )}
+
+          {/* ================================================================ */}
+          {/* BRAND SETTINGS — Email Header / Footer / Assets                  */}
+          {/* ================================================================ */}
+
+          <div className="pt-4 border-t border-border">
+            <h2 className="text-[16px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">EMAIL_SETTINGS</h2>
+            <p className="text-[11px] text-muted-foreground font-mono mb-6">Hard parameters applied to every generated email</p>
+          </div>
+
+          {/* Logo & Header */}
+          <div className="border border-border rounded-xl p-6 bg-card">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Image className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-[13px] font-bold text-foreground font-mono">LOGO_&_HEADER</h2>
+              </div>
+              <button
+                onClick={handleSaveBrandSettings}
+                disabled={updateBrandSettingsMut.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+              >
+                <Save className="w-3 h-3" />
+                {updateBrandSettingsMut.isPending ? "Saving..." : "Save"}
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">LOGO URL</label>
+                <div className="flex gap-3 items-start">
+                  <input
+                    type="url"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    placeholder="https://cdn.shopify.com/your-logo.png"
+                    className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                  />
+                  {logoUrl && (
+                    <div className="w-16 h-16 border border-border rounded-lg overflow-hidden bg-white flex-shrink-0">
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">LOGO POSITION</label>
+                <div className="flex gap-2">
+                  {(["left", "center", "right"] as const).map((pos) => (
+                    <button
+                      key={pos}
+                      onClick={() => setLogoPosition(pos)}
+                      className={`px-4 py-2 border rounded-lg text-[11px] font-mono transition-all ${
+                        logoPosition === pos
+                          ? "border-foreground bg-muted font-bold"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">HEADER BACKGROUND</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={headerBgColor}
+                    onChange={(e) => setHeaderBgColor(e.target.value)}
+                    className="w-8 h-8 rounded border border-border cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={headerBgColor}
+                    onChange={(e) => setHeaderBgColor(e.target.value)}
+                    className="w-28 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Defaults */}
+          <div className="border border-border rounded-xl p-6 bg-card">
+            <div className="flex items-center gap-3 mb-4">
+              <MapPin className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-[13px] font-bold text-foreground font-mono">FOOTER_DEFAULTS</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">CUSTOM FOOTER TEXT</label>
+                <textarea
+                  value={footerText}
+                  onChange={(e) => setFooterText(e.target.value)}
+                  placeholder="e.g. All rights reserved. Terms & conditions apply."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
+                />
+              </div>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <button
+                    onClick={() => setShowAddress(!showAddress)}
+                    className={`w-8 h-5 rounded-full transition-all flex items-center ${
+                      showAddress ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
+                  </button>
+                  <span className="text-[11px] font-mono text-foreground">Show store address</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <button
+                    onClick={() => setShowSocialLinks(!showSocialLinks)}
+                    className={`w-8 h-5 rounded-full transition-all flex items-center ${
+                      showSocialLinks ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
+                  </button>
+                  <span className="text-[11px] font-mono text-foreground">Show social links</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Social Links */}
+          <div className="border border-border rounded-xl p-6 bg-card">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Share2 className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-[13px] font-bold text-foreground font-mono">SOCIAL_LINKS</h2>
+              </div>
+              <button
+                onClick={handleSaveStoreDetails}
+                disabled={updateMetadataMut.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+              >
+                <Save className="w-3 h-3" />
+                {updateMetadataMut.isPending ? "Saving..." : "Save"}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {["instagram", "facebook", "twitter", "tiktok", "pinterest", "youtube"].map((platform) => (
+                <div key={platform}>
+                  <label className="text-[10px] text-muted-foreground font-mono block mb-1 uppercase">{platform}</label>
+                  <input
+                    type="url"
+                    value={socialLinks[platform] ?? ""}
+                    onChange={(e) => setSocialLinks((prev) => ({ ...prev, [platform]: e.target.value }))}
+                    placeholder={`https://${platform}.com/yourstore`}
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Store Details */}
+          <div className="border border-border rounded-xl p-6 bg-card">
+            <div className="flex items-center gap-3 mb-4">
+              <Store className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-[13px] font-bold text-foreground font-mono">STORE_DETAILS</h2>
+            </div>
+            <p className="text-[10px] text-muted-foreground font-mono mb-4">Auto-populated from Shopify. Edit to override.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-muted-foreground font-mono block mb-1">STORE NAME</label>
+                <input
+                  type="text"
+                  value={storeDetails.storeName}
+                  onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeName: e.target.value }))}
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-mono block mb-1">EMAIL</label>
+                <input
+                  type="email"
+                  value={storeDetails.storeEmail}
+                  onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeEmail: e.target.value }))}
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-mono block mb-1">PHONE</label>
+                <input
+                  type="tel"
+                  value={storeDetails.storePhone}
+                  onChange={(e) => setStoreDetails((prev) => ({ ...prev, storePhone: e.target.value }))}
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-mono block mb-1">ADDRESS</label>
+                <input
+                  type="text"
+                  value={
+                    storeDetails.address
+                      ? [storeDetails.address.address1, storeDetails.address.city, storeDetails.address.province, storeDetails.address.zip, storeDetails.address.country].filter(Boolean).join(", ")
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const parts = e.target.value.split(",").map((p) => p.trim());
+                    setStoreDetails((prev) => ({
+                      ...prev,
+                      address: {
+                        address1: parts[0] ?? "",
+                        city: parts[1] ?? "",
+                        province: parts[2] ?? "",
+                        zip: parts[3] ?? "",
+                        country: parts[4] ?? "",
+                      },
+                    }));
+                  }}
+                  placeholder="123 Main St, City, State, ZIP, Country"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="text-center py-20 border border-border rounded-xl bg-card">

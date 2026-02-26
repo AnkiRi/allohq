@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
-const { syncAllProducts, syncAllCustomers, syncAllOrders, registerWebhooks } = shopify;
+const { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, registerWebhooks } = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { rfmQueue } from "../queues";
 
@@ -30,6 +30,15 @@ export const syncWorker = new Worker<SyncJobData>(
     }
 
     console.log(`Starting full sync for store ${storeId} (${shopDomain})`);
+
+    // 0. Sync shop metadata (name, address, currency, etc.)
+    await job.updateProgress(5);
+    try {
+      await syncShopMetadata(shopDomain, accessToken, storeId, prisma);
+      console.log(`Shop metadata synced for store ${storeId}`);
+    } catch (err: any) {
+      console.warn(`Shop metadata sync skipped: ${err.message}`);
+    }
 
     // 1. Sync products
     await job.updateProgress(10);

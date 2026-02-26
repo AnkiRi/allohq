@@ -90,6 +90,28 @@ export const sendWorker = new Worker<SendJobData>(
       }
     }
 
+    // Fetch brand settings for auto header/footer
+    const brandProfile = await prisma.brandProfile.findFirst({
+      where: { storeId: campaign.storeId, workspaceId: campaign.store.workspaceId },
+      select: { logoPosition: true, headerBgColor: true, footerText: true, showSocialLinks: true, showAddress: true, brandName: true },
+    });
+
+    const store = campaign.store;
+    const brandSettings = brandProfile ? {
+      logoUrl: store.storeLogoUrl ?? undefined,
+      logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+      headerBgColor: brandProfile.headerBgColor ?? undefined,
+      storeName: store.storeName ?? brandProfile.brandName,
+      address: store.address ? (() => {
+        const addr = store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string };
+        return [addr.address1, addr.city, addr.province, addr.zip, addr.country].filter(Boolean).join(", ");
+      })() : undefined,
+      socialLinks: store.socialLinks ? Object.entries(store.socialLinks as Record<string, string>).filter(([, v]) => v).map(([k, v]) => ({ platform: k, url: v })) : undefined,
+      footerText: brandProfile.footerText ?? undefined,
+      showSocialLinks: brandProfile.showSocialLinks,
+      showAddress: brandProfile.showAddress,
+    } : undefined;
+
     // Render and send each email
     let sentCount = 0;
     let failCount = 0;
@@ -101,24 +123,32 @@ export const sendWorker = new Worker<SendJobData>(
         unsubscribe_url: `#unsubscribe-${customer.id}`,
       };
 
-      const html = renderToHtml(blocks, {
-        variables,
-        products: productsMap,
-        previewMode: false,
-      });
-
-      // Create MessageLog entry
+      // Create MessageLog entry first (need its ID for UTM content)
       const messageLog = await prisma.messageLog.create({
         data: {
           workspaceId: campaign.store.workspaceId,
           storeId: campaign.storeId,
+          customerId: customer.id,
           channel: "email",
           to: customer.email,
           subject: campaign.template.subject,
           templateId: campaign.templateId,
           campaignId,
           status: "queued",
-          metadata: { customerId: customer.id } as any,
+        },
+      });
+
+      const html = renderToHtml(blocks, {
+        variables,
+        products: productsMap,
+        previewMode: false,
+        brandSettings,
+        tracking: {
+          utmSource: "allo",
+          utmMedium: "email",
+          utmCampaign: campaignId,
+          utmContent: messageLog.id,
+          storeDomain: campaign.store.shopDomain,
         },
       });
 

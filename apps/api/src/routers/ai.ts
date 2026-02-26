@@ -174,6 +174,12 @@ export const aiRouter = router({
     }));
   }),
 
+  /** Get available layout templates for email generation */
+  layoutTemplates: workspaceProcedure.query(async () => {
+    const { LAYOUT_TEMPLATES } = await import("@allohq/customer-intelligence");
+    return LAYOUT_TEMPLATES;
+  }),
+
   /** Get workspace AI settings */
   getSettings: workspaceProcedure.query(async ({ ctx }) => {
     const workspace = await ctx.prisma.workspace.findUnique({
@@ -218,14 +224,14 @@ export const aiRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Fetch store for URL
+      // Fetch store for URL + metadata
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
       const storeUrl = `https://${store.shopDomain}`;
 
-      // Fetch brand profile
+      // Fetch brand profile (with hard params)
       const brandProfile = await ctx.prisma.brandProfile.findFirst({
         where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
       });
@@ -245,6 +251,19 @@ export const aiRouter = router({
       // Import the generator dynamically (it lives in customer-intelligence)
       const { generateEmail } = await import("@allohq/customer-intelligence");
 
+      // Build brand settings for header/footer injection
+      const brandSettingsForEmail = brandProfile ? {
+        logoUrl: store.storeLogoUrl,
+        logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+        headerBgColor: brandProfile.headerBgColor,
+        footerText: brandProfile.footerText,
+        showSocialLinks: brandProfile.showSocialLinks,
+        showAddress: brandProfile.showAddress,
+        storeName: store.storeName ?? brandProfile.brandName,
+        address: store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string } | null,
+        socialLinks: store.socialLinks as Record<string, string> | null,
+      } : undefined;
+
       const result = await generateEmail({
         brandProfile: brandProfile
           ? {
@@ -256,6 +275,7 @@ export const aiRouter = router({
               sampleCopy: brandProfile.sampleCopy as string[],
             }
           : undefined,
+        brandSettings: brandSettingsForEmail,
         intent: input.intent,
         model: input.model,
         creativeIntensity: (brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? "balanced",
@@ -312,45 +332,101 @@ export const aiRouter = router({
       return { template, reasoning: result.reasoning, selectedProductIds: result.selectedProductIds, model: result.model };
     }),
 
-  /** Regenerate with different parameters */
-  regenerate: workspaceProcedure
+  /** Regenerate email with full override support (model, intensity, tone, layout, feedback) */
+  regenerateEmail: workspaceProcedure
     .input(
       z.object({
         templateId: z.string(),
-        intent: emailIntentSchema.optional(),
+        storeId: z.string(),
+        feedback: z.string().optional(),
         model: aiModelSchema,
-        tweaks: z.string().optional(),
+        creativeIntensity: z.enum(["text_heavy", "balanced", "visual_heavy"]).optional(),
+        toneOverride: z.string().optional(),
+        layoutTemplate: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.prisma.generatedContent.findFirst({
-        where: { templateId: input.templateId, workspaceId: ctx.workspaceId },
-        orderBy: { createdAt: "desc" },
-      });
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "No generated content found for this template" });
+      // Load existing template + generation context
+      const [template, existing, store, brandProfile] = await Promise.all([
+        ctx.prisma.emailTemplate.findFirst({
+          where: { id: input.templateId, workspaceId: ctx.workspaceId },
+        }),
+        ctx.prisma.generatedContent.findFirst({
+          where: { templateId: input.templateId, workspaceId: ctx.workspaceId },
+          orderBy: { createdAt: "desc" },
+        }),
+        ctx.prisma.store.findFirst({
+          where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        }),
+        ctx.prisma.brandProfile.findFirst({
+          where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+        }),
+      ]);
 
-      // Re-generate using the original prompt context + tweaks
+      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      const storeUrl = `https://${store.shopDomain}`;
+
+      // Fetch products for the store
+      const products = await ctx.prisma.product.findMany({
+        where: { storeId: input.storeId, status: "active" },
+        take: 10,
+        orderBy: { updatedAt: "desc" },
+      });
+
+      // Build feedback/tweaks from user input and current blocks
+      const tweakParts: string[] = [];
+      if (input.feedback) tweakParts.push(input.feedback);
+      if (template.blocks) {
+        tweakParts.push(`Here is the current email structure (JSON blocks): ${JSON.stringify(template.blocks).slice(0, 2000)}`);
+        tweakParts.push("Improve upon this existing email based on the feedback above. Keep what works, change what's requested.");
+      }
+
+      const brandSettingsForEmail = brandProfile ? {
+        logoUrl: store.storeLogoUrl,
+        logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+        headerBgColor: brandProfile.headerBgColor,
+        footerText: brandProfile.footerText,
+        showSocialLinks: brandProfile.showSocialLinks,
+        showAddress: brandProfile.showAddress,
+        storeName: store.storeName ?? brandProfile.brandName,
+        address: store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string } | null,
+        socialLinks: store.socialLinks as Record<string, string> | null,
+      } : undefined;
+
       const { generateEmail } = await import("@allohq/customer-intelligence");
 
       const result = await generateEmail({
-        intent: input.intent ?? (existing.intent as any),
+        brandProfile: brandProfile
+          ? {
+              brandName: brandProfile.brandName,
+              brandDescription: brandProfile.brandDescription,
+              toneAttributes: brandProfile.toneAttributes as Record<string, string>,
+              vocabulary: brandProfile.vocabulary as Record<string, string[]>,
+              visualStyle: brandProfile.visualStyle as Record<string, string | string[]>,
+              sampleCopy: brandProfile.sampleCopy as string[],
+            }
+          : undefined,
+        brandSettings: brandSettingsForEmail,
+        intent: (existing?.intent as any) ?? "promotion",
         model: input.model,
-        products: [],
-        tweaks: input.tweaks,
+        creativeIntensity: input.creativeIntensity ?? (brandProfile?.creativeIntensity as any) ?? "balanced",
+        layoutTemplate: input.layoutTemplate,
+        toneOverride: input.toneOverride,
+        tweaks: tweakParts.join("\n"),
+        products: products.map((p) => ({
+          id: p.id,
+          title: p.title,
+          description: p.description ?? undefined,
+          imageUrl: p.imageUrl ?? undefined,
+          price: p.price,
+          handle: p.handle,
+        })),
+        storeUrl,
       });
 
-      // Update template
-      await ctx.prisma.emailTemplate.update({
-        where: { id: input.templateId },
-        data: {
-          name: result.subject,
-          subject: result.subject,
-          previewText: result.previewText,
-          blocks: result.blocks as any,
-        },
-      });
-
-      // Save new audit trail
+      // Save audit trail (don't overwrite template — let frontend accept/reject)
       await ctx.prisma.generatedContent.create({
         data: {
           workspaceId: ctx.workspaceId,
@@ -358,7 +434,7 @@ export const aiRouter = router({
           prompt: result.promptUsed,
           response: JSON.stringify(result),
           model: result.model,
-          intent: input.intent ?? existing.intent,
+          intent: existing?.intent ?? "promotion",
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
         },
@@ -371,11 +447,17 @@ export const aiRouter = router({
           model: result.model,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
-          purpose: "generate_email",
+          purpose: "regenerate_email",
         },
       });
 
-      return { success: true, reasoning: result.reasoning, model: result.model };
+      return {
+        blocks: result.blocks,
+        subject: result.subject,
+        previewText: result.previewText,
+        reasoning: result.reasoning,
+        model: result.model,
+      };
     }),
 
   /** Submit feedback on generated content */
@@ -466,6 +548,7 @@ export const aiRouter = router({
     .input(z.object({
       storeId: z.string(),
       message: z.string().min(1).max(2000),
+      chatId: z.string().optional(),
       history: z.array(z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string(),
@@ -676,6 +759,10 @@ You MUST respond with valid JSON in this exact format:
   "highlights": [
     { "label": "Short Label", "value": "$1,234" }
   ],
+  "suggestedFollowUps": [
+    "Show me the top 10 spenders",
+    "Create a win-back campaign for them"
+  ],
   "action": null
 }
 
@@ -687,10 +774,16 @@ You MUST respond with valid JSON in this exact format:
 
 For simple conversational answers or acknowledgments, highlights can be an empty array [].
 
+"suggestedFollowUps" is an array of 2-4 natural follow-up questions the user might want to ask next based on YOUR response. Make them specific and actionable — not generic. They should feel like a natural next step in the conversation. Examples:
+- After showing at-risk customers: ["Create a win-back flow for them", "Show their purchase history", "Which segment lost the most revenue?"]
+- After revenue analysis: ["Compare to last quarter", "Which customers drove the most revenue?", "Create a VIP reward campaign"]
+- After creating an automation: ["Show me the email template", "What other automations should I create?", "Send a test campaign"]
+
 If the user explicitly asks to CREATE something (automation, campaign, template, segment), also include:
 {
   "reply": "Your response...",
   "highlights": [...],
+  "suggestedFollowUps": [...],
   "action": {
     "type": "create_automation" | "create_campaign" | "create_template" | "create_segment",
     "instruction": "A clear instruction for the creation system, e.g. 'Create a win-back automation for at-risk customers with a 15% discount'"
@@ -737,12 +830,14 @@ ${storeContext}`;
       // ---------------------------------------------------------------
       let reply = "";
       let highlights: { label: string; value: string }[] = [];
+      let suggestedFollowUps: string[] = [];
       let action: { type: string; instruction: string } | null = null;
 
       try {
         const parsed = JSON.parse(aiResult.content);
         reply = parsed.reply ?? aiResult.content;
         highlights = Array.isArray(parsed.highlights) ? parsed.highlights : [];
+        suggestedFollowUps = Array.isArray(parsed.suggestedFollowUps) ? parsed.suggestedFollowUps.slice(0, 4) : [];
         action = parsed.action ?? null;
       } catch {
         // If JSON parsing fails, use raw content as reply
@@ -825,9 +920,52 @@ ${storeContext}`;
         },
       });
 
+      // ---------------------------------------------------------------
+      // 7. Persist chat messages to DB
+      // ---------------------------------------------------------------
+      let chatId = input.chatId;
+
+      if (!chatId) {
+        // Create a new chat with title from first message
+        const chat = await ctx.prisma.aiChat.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            storeId: input.storeId,
+            title: input.message.slice(0, 60) + (input.message.length > 60 ? "..." : ""),
+          },
+        });
+        chatId = chat.id;
+      } else {
+        // Touch the updatedAt timestamp
+        await ctx.prisma.aiChat.update({
+          where: { id: chatId },
+          data: { updatedAt: new Date() },
+        }).catch(() => {});
+      }
+
+      // Save user message and assistant reply
+      await ctx.prisma.aiChatMessage.createMany({
+        data: [
+          {
+            chatId,
+            role: "user",
+            content: input.message,
+          },
+          {
+            chatId,
+            role: "assistant",
+            content: reply,
+            highlights: highlights.length > 0 ? highlights : undefined,
+            model: aiResult.model,
+          },
+        ],
+      });
+
       return {
+        chatId,
         reply,
         highlights,
+        suggestedFollowUps,
         action: actionResult,
         model: aiResult.model,
       };
@@ -903,6 +1041,203 @@ ${storeContext}`;
       }
 
       return result;
+    }),
+
+  // =========================================================================
+  // Brand settings (hard params for email generation)
+  // =========================================================================
+
+  /** Get brand settings for email generation */
+  getBrandSettings: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const profile = await ctx.prisma.brandProfile.findFirst({
+        where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+        select: {
+          id: true,
+          logoPosition: true,
+          headerBgColor: true,
+          footerText: true,
+          showSocialLinks: true,
+          showAddress: true,
+          creativeIntensity: true,
+        },
+      });
+      if (!profile) return null;
+      return profile;
+    }),
+
+  /** Update brand settings (logo position, header bg, footer, toggles) */
+  updateBrandSettings: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      logoPosition: z.enum(["left", "center", "right"]).optional(),
+      headerBgColor: z.string().optional().nullable(),
+      footerText: z.string().optional().nullable(),
+      showSocialLinks: z.boolean().optional(),
+      showAddress: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { storeId, ...data } = input;
+      const profile = await ctx.prisma.brandProfile.findFirst({
+        where: { storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Brand profile not found. Run brand analysis first." });
+
+      return ctx.prisma.brandProfile.update({
+        where: { id: profile.id },
+        data,
+      });
+    }),
+
+  // =========================================================================
+  // Brand assets
+  // =========================================================================
+
+  /** List brand assets for a store */
+  listBrandAssets: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      type: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.brandAsset.findMany({
+        where: {
+          workspaceId: ctx.workspaceId,
+          storeId: input.storeId,
+          ...(input.type ? { type: input.type } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
+  /** Add a brand asset (URL-based for MVP) */
+  addBrandAsset: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      type: z.enum(["logo", "logo_dark", "hero", "lifestyle", "icon", "other"]),
+      url: z.string().url(),
+      fileName: z.string(),
+      mimeType: z.string().optional(),
+      width: z.number().int().optional(),
+      height: z.number().int().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.brandAsset.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          storeId: input.storeId,
+          type: input.type,
+          url: input.url,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          width: input.width,
+          height: input.height,
+        },
+      });
+    }),
+
+  /** Delete a brand asset */
+  deleteBrandAsset: workspaceProcedure
+    .input(z.object({ assetId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.brandAsset.deleteMany({
+        where: { id: input.assetId, workspaceId: ctx.workspaceId },
+      });
+      return { success: true };
+    }),
+
+  // =========================================================================
+  // Chat history
+  // =========================================================================
+
+  /** List recent chats */
+  listChats: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      limit: z.number().min(1).max(50).default(20),
+      cursor: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const chats = await ctx.prisma.aiChat.findMany({
+        where: {
+          workspaceId: ctx.workspaceId,
+          storeId: input.storeId,
+          ...(input.cursor ? { updatedAt: { lt: new Date(input.cursor) } } : {}),
+        },
+        orderBy: { updatedAt: "desc" },
+        take: input.limit + 1,
+        include: {
+          _count: { select: { messages: true } },
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { content: true, role: true },
+          },
+        },
+      });
+
+      let nextCursor: string | undefined;
+      if (chats.length > input.limit) {
+        const last = chats.pop()!;
+        nextCursor = last.updatedAt.toISOString();
+      }
+
+      return {
+        chats: chats.map((c) => ({
+          id: c.id,
+          title: c.title,
+          updatedAt: c.updatedAt,
+          messageCount: c._count.messages,
+          lastMessage: c.messages[0]?.content?.slice(0, 80) ?? "",
+        })),
+        nextCursor,
+      };
+    }),
+
+  /** Get a single chat with all messages */
+  getChat: workspaceProcedure
+    .input(z.object({ chatId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const chat = await ctx.prisma.aiChat.findFirst({
+        where: { id: input.chatId, workspaceId: ctx.workspaceId },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              role: true,
+              content: true,
+              highlights: true,
+              model: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+      if (!chat) throw new TRPCError({ code: "NOT_FOUND", message: "Chat not found" });
+      return chat;
+    }),
+
+  /** Rename a chat */
+  renameChat: workspaceProcedure
+    .input(z.object({ chatId: z.string(), title: z.string().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.aiChat.updateMany({
+        where: { id: input.chatId, workspaceId: ctx.workspaceId },
+        data: { title: input.title },
+      });
+      return { success: true };
+    }),
+
+  /** Delete a chat and its messages */
+  deleteChat: workspaceProcedure
+    .input(z.object({ chatId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.aiChat.deleteMany({
+        where: { id: input.chatId, workspaceId: ctx.workspaceId },
+      });
+      return { success: true };
     }),
 
   /** Check brand analysis job status */

@@ -188,6 +188,73 @@ function BlockPreview({ block }: { block: EmailBlock }) {
         </div>
       );
 
+    case "hero": {
+      const heroProps = block.props as Record<string, unknown>;
+      return (
+        <div
+          className="p-6 rounded-lg text-center"
+          style={{
+            backgroundColor: (heroProps.bgColor as string) || "#000",
+            color: (heroProps.textColor as string) || "#fff",
+            backgroundImage: heroProps.bgImageSrc ? `url(${heroProps.bgImageSrc})` : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <p className="text-[16px] font-mono font-bold">{(heroProps.heading as string) || "Hero Heading"}</p>
+          {heroProps.subtext ? <p className="text-[11px] font-mono mt-1 opacity-80">{String(heroProps.subtext)}</p> : null}
+          {heroProps.buttonText ? (
+            <span className="inline-block mt-2 px-4 py-1.5 text-[10px] font-mono font-bold rounded" style={{ backgroundColor: (heroProps.textColor as string) || "#fff", color: (heroProps.bgColor as string) || "#000" }}>
+              {String(heroProps.buttonText)}
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+
+    case "icon_row": {
+      const iconProps = block.props as Record<string, unknown>;
+      const items = (iconProps.items as { icon: string; label: string }[]) || [];
+      return (
+        <div className="flex items-center justify-center gap-4 p-2">
+          {items.map((item, i) => (
+            <div key={i} className="text-center">
+              <span className="text-lg">{item.icon}</span>
+              <p className="text-[10px] font-mono text-foreground mt-0.5">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "countdown": {
+      const cdProps = block.props as Record<string, unknown>;
+      return (
+        <div
+          className="p-4 rounded-lg text-center"
+          style={{
+            backgroundColor: (cdProps.bgColor as string) || "#FF0000",
+            color: (cdProps.textColor as string) || "#fff",
+          }}
+        >
+          <p className="text-[10px] font-mono uppercase tracking-wider opacity-80">{(cdProps.label as string) || "Ends in"}</p>
+          <p className="text-[18px] font-mono font-bold mt-1">⏰ Timer</p>
+        </div>
+      );
+    }
+
+    case "testimonial": {
+      const tProps = block.props as Record<string, unknown>;
+      const stars = (tProps.rating as number) || 5;
+      return (
+        <div className="p-3 bg-muted rounded-lg border-l-4 border-secondary">
+          <p className="text-amber-500 text-sm">{"★".repeat(Math.min(stars, 5))}</p>
+          <p className="text-[11px] font-mono text-foreground italic mt-1">&quot;{(tProps.quote as string) || "Customer quote"}&quot;</p>
+          <p className="text-[10px] font-mono text-muted-foreground mt-1">— {(tProps.author as string) || "Customer"}</p>
+        </div>
+      );
+    }
+
     default:
       return (
         <div className="p-3 bg-muted rounded-lg">

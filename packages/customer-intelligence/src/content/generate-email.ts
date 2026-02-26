@@ -3,8 +3,21 @@ import type { EmailBlock } from "@allohq/email-builder";
 import type { EmailIntent } from "../context/intent-mapper";
 import { brandVoiceBlock, intentInstructions, formatProductsForPrompt } from "./prompt-templates";
 import { generateImage } from "../images/generate-image";
+import { getLayoutById } from "./layout-templates";
 
 export type CreativeIntensity = "text_heavy" | "balanced" | "visual_heavy";
+
+export interface BrandSettings {
+  logoUrl?: string | null;
+  logoPosition?: "left" | "center" | "right";
+  headerBgColor?: string | null;
+  footerText?: string | null;
+  showSocialLinks?: boolean;
+  showAddress?: boolean;
+  storeName?: string | null;
+  address?: { address1?: string; city?: string; province?: string; zip?: string; country?: string } | null;
+  socialLinks?: Record<string, string> | null;
+}
 
 export interface GenerateEmailInput {
   brandProfile?: {
@@ -15,6 +28,7 @@ export interface GenerateEmailInput {
     visualStyle: Record<string, string | string[]>;
     sampleCopy: string[];
   };
+  brandSettings?: BrandSettings;
   intent: EmailIntent;
   segment?: { name: string; description: string };
   products: {
@@ -32,6 +46,8 @@ export interface GenerateEmailInput {
     funnelStage?: string;
   };
   creativeIntensity?: CreativeIntensity;
+  layoutTemplate?: string; // layout skeleton ID from LAYOUT_TEMPLATES
+  toneOverride?: string; // "more formal" | "more casual" | "more playful" | etc
   tweaks?: string;
   model?: AIModelId;
 }
@@ -124,6 +140,58 @@ CREATIVE INTENSITY: VISUAL HEAVY
   };
   sections.push(intensityInstructions[intensity] ?? intensityInstructions["balanced"]!);
 
+  // Layout template
+  if (input.layoutTemplate) {
+    const layout = getLayoutById(input.layoutTemplate);
+    if (layout) {
+      sections.push(`
+LAYOUT TEMPLATE: ${layout.name}
+You MUST follow this exact block sequence: ${layout.blockTypes.join(" → ")}
+Description: ${layout.description}
+Generate EXACTLY these block types in this order. Fill in content appropriate for the intent.`);
+    }
+  }
+
+  // Tone override
+  if (input.toneOverride) {
+    sections.push(`\nTONE OVERRIDE: Write the email in a ${input.toneOverride} tone. This overrides the brand voice tone for this specific email.`);
+  }
+
+  // Brand settings — mandatory header/footer
+  if (input.brandSettings) {
+    const bs = input.brandSettings;
+    const headerParts: string[] = [];
+    const footerParts: string[] = [];
+
+    if (bs.logoUrl) {
+      headerParts.push(`MANDATORY: Include a "header" block as the FIRST block with props: { "logoSrc": "${bs.logoUrl}", "align": "${bs.logoPosition ?? "center"}"${bs.headerBgColor ? `, "bgColor": "${bs.headerBgColor}"` : ""} }`);
+    } else if (bs.headerBgColor) {
+      headerParts.push(`MANDATORY: Include a "header" block as the FIRST block with props: { "align": "${bs.logoPosition ?? "center"}", "bgColor": "${bs.headerBgColor}" }`);
+    }
+
+    // Build footer content
+    const footerLines: string[] = [];
+    if (bs.showAddress && bs.address) {
+      const addr = [bs.address.address1, bs.address.city, bs.address.province, bs.address.zip, bs.address.country].filter(Boolean).join(", ");
+      if (addr) footerLines.push(`${bs.storeName ?? "Store"} · ${addr}`);
+    }
+    if (bs.showSocialLinks && bs.socialLinks) {
+      const links = Object.entries(bs.socialLinks).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" | ");
+      if (links) footerLines.push(links);
+    }
+    if (bs.footerText) footerLines.push(bs.footerText);
+
+    if (footerLines.length > 0) {
+      footerParts.push(`MANDATORY: Include a "footer" block as the LAST block with props: { "text": "${footerLines.join("\\n")}", "unsubscribeText": "Unsubscribe" }`);
+    } else {
+      footerParts.push(`MANDATORY: Include a "footer" block as the LAST block with props: { "text": "${bs.storeName ?? "Store"}", "unsubscribeText": "Unsubscribe" }`);
+    }
+
+    if (headerParts.length > 0 || footerParts.length > 0) {
+      sections.push(`\nEMAIL HEADER & FOOTER (REQUIRED — always include these):\n${[...headerParts, ...footerParts].join("\n")}`);
+    }
+  }
+
   // Tweaks
   if (input.tweaks) {
     sections.push(`\nADDITIONAL INSTRUCTIONS: ${input.tweaks}`);
@@ -156,7 +224,9 @@ CRITICAL RULES:
 - For "product" blocks: set "buttonHref" to the REAL product URL from the product list above (the "URL:" field).
 - For "button" blocks: set "href" to a real store URL (${storeUrlExample} or a product URL). NEVER use "#" as href.
 - For "image" blocks with href: link to the relevant product page URL.
-- For "hero" blocks: use brand colors for bgColor. Make headings impactful and concise.
+- For "hero" blocks: use brand colors for bgColor. Make headings impactful and concise. Do NOT include "bgImageSrc" — background images are added automatically by the system.
+- For "image" blocks: ONLY use the exact "Image:" URLs from the product list above. If you don't have a real product image URL, do NOT include an "image" block. NEVER fabricate or guess image URLs.
+- For "header" blocks: Do NOT include "logoSrc" — logos are injected automatically by the system from brand settings.
 - For "icon_row" blocks: use relevant emoji icons and short labels.
 - For "testimonial" blocks: write realistic, relatable customer quotes.
 - For "countdown" blocks: only use when the email has a time-limited offer or promotion.
@@ -207,7 +277,7 @@ async function postProcessImages(
   for (let i = 0; i < updatedBlocks.length; i++) {
     const block = updatedBlocks[i]!;
 
-    // Generate hero banner image
+    // Generate hero banner image (only with AI providers, no stock fallback)
     if (block.type === "hero" && !block.props.bgImageSrc) {
       try {
         const imagePrompt = `${subject}. ${input.brandProfile?.brandName ?? "Brand"} marketing hero banner.`;
@@ -215,16 +285,17 @@ async function postProcessImages(
           purpose: "hero_banner",
           prompt: imagePrompt,
           brandStyle,
-          fallbackToStock: true,
+          fallbackToStock: false,
         });
         (block.props as Record<string, unknown>).bgImageSrc = imgResult.url;
         totalCost += imgResult.cost;
       } catch (err) {
-        console.warn(`[generate-email] Failed to generate hero image:`, (err as Error).message);
+        // No AI image providers configured or all failed — hero uses solid bgColor only
+        console.log(`[generate-email] No hero image generated (using solid bg):`, (err as Error).message);
       }
     }
 
-    // Generate image block src if missing or placeholder
+    // Generate image block src if missing or placeholder (only with AI providers)
     if (
       block.type === "image" &&
       (!block.props.src || block.props.src.includes("example.com") || block.props.src.includes("placeholder"))
@@ -235,17 +306,52 @@ async function postProcessImages(
           purpose: "product_lifestyle",
           prompt: imagePrompt,
           brandStyle,
-          fallbackToStock: true,
+          fallbackToStock: false,
         });
         (block.props as Record<string, unknown>).src = imgResult.url;
         totalCost += imgResult.cost;
       } catch (err) {
-        console.warn(`[generate-email] Failed to generate image:`, (err as Error).message);
+        // No AI image providers — leave image empty for user to fill
+        console.log(`[generate-email] No image generated (placeholder kept):`, (err as Error).message);
       }
     }
   }
 
   return { blocks: updatedBlocks, totalCost };
+}
+
+/**
+ * Strip hallucinated image URLs from AI-generated blocks.
+ * Keeps only URLs that match known product images from the input.
+ */
+function sanitizeBlocks(
+  blocks: EmailBlock[],
+  knownImageUrls: Set<string>,
+): EmailBlock[] {
+  return blocks.map((block) => {
+    const props = { ...block.props } as Record<string, unknown>;
+
+    // Strip hero bgImageSrc unless it matches a known product image
+    if (block.type === "hero" && props.bgImageSrc) {
+      if (!knownImageUrls.has(props.bgImageSrc as string)) {
+        delete props.bgImageSrc;
+      }
+    }
+
+    // Strip image src unless it matches a known product image
+    if (block.type === "image" && props.src) {
+      if (!knownImageUrls.has(props.src as string)) {
+        props.src = "";
+      }
+    }
+
+    // Strip header logoSrc — always injected from brand settings
+    if (block.type === "header" && props.logoSrc) {
+      delete props.logoSrc;
+    }
+
+    return { ...block, props } as EmailBlock;
+  });
 }
 
 /**
@@ -269,9 +375,18 @@ export async function generateEmail(input: GenerateEmailInput): Promise<Generate
     reasoning: string;
   };
 
-  // Post-process blocks to add AI-generated images
+  // Build set of known product image URLs
+  const knownImageUrls = new Set<string>();
+  for (const p of input.products) {
+    if (p.imageUrl) knownImageUrls.add(p.imageUrl);
+  }
+
+  // Strip hallucinated image URLs from AI output
+  const sanitizedBlocks = sanitizeBlocks(parsed.blocks, knownImageUrls);
+
+  // Post-process blocks to add AI-generated images (only if providers are configured)
   const { blocks, totalCost } = await postProcessImages(
-    parsed.blocks,
+    sanitizedBlocks,
     input,
     parsed.subject,
   );

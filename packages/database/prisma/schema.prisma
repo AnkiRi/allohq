@@ -46,6 +46,8 @@ model Workspace {
   messageLogs      MessageLog[]
   generatedImages  GeneratedImage[]
   tokenUsages    TokenUsage[]
+  aiChats        AiChat[]
+  brandAssets    BrandAsset[]
 
   @@map("workspaces")
 }
@@ -78,6 +80,17 @@ model Store {
   installedAt DateTime @default(now())
   lastSyncAt  DateTime?
 
+  // Shop metadata (synced from Shopify)
+  storeName        String?
+  storeEmail       String?
+  storePhone       String?
+  storeLogoUrl     String?
+  storeDescription String?
+  address          Json?    // { address1, address2, city, province, zip, country }
+  socialLinks      Json?    // { instagram?, facebook?, twitter?, tiktok?, pinterest?, youtube? }
+  currency         String?
+  timezone         String?
+
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   products  Product[]
   customers Customer[]
@@ -85,6 +98,9 @@ model Store {
   campaigns     Campaign[]
   brandProfiles BrandProfile[]
   automations   Automation[]
+  brandAssets   BrandAsset[]
+
+  aiChats       AiChat[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -174,10 +190,33 @@ model Order {
   store    Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer Customer    @relation(fields: [customerId], references: [id])
   items    OrderItem[]
+  attribution OrderAttribution?
 
   @@unique([storeId, externalId])
   @@index([customerId])
   @@map("orders")
+}
+
+model OrderAttribution {
+  id           String   @id @default(cuid())
+  orderId      String   @unique
+  customerId   String
+  storeId      String
+  messageLogId String?  // which email/sms led to this order
+  campaignId   String?
+  automationId String?
+  channel      String   // "email" | "sms"
+  revenue      Float
+  attributedAt DateTime @default(now())
+  touchType    String   // "click" | "open" | "direct"
+  windowDays   Int      // attribution window used (7, 14, 30)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([automationId])
+  @@index([storeId, attributedAt])
+  @@map("order_attributions")
 }
 
 model OrderItem {
@@ -347,6 +386,14 @@ model BrandProfile {
   visualStyle        Json     // colors, font preferences, image style
   sampleCopy         Json     // extracted examples from product descriptions
   creativeIntensity  String   @default("balanced") // "text_heavy" | "balanced" | "visual_heavy"
+
+  // Hard params for email generation
+  logoPosition     String?  @default("center") // "left" | "center" | "right"
+  headerBgColor    String?  // hex color for email header background
+  footerText       String?  // custom footer text / legal
+  showSocialLinks  Boolean  @default(true)
+  showAddress      Boolean  @default(true)
+
   analyzedAt         DateTime @default(now())
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -356,6 +403,25 @@ model BrandProfile {
 
   @@unique([workspaceId, storeId])
   @@map("brand_profiles")
+}
+
+model BrandAsset {
+  id          String   @id @default(cuid())
+  workspaceId String
+  storeId     String
+  type        String   // "logo" | "logo_dark" | "hero" | "lifestyle" | "icon" | "other"
+  url         String
+  fileName    String
+  mimeType    String?
+  width       Int?
+  height      Int?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, storeId, type])
+  @@map("brand_assets")
 }
 
 model Automation {
@@ -551,6 +617,7 @@ model MessageLog {
   id           String    @id @default(cuid())
   workspaceId  String
   storeId      String
+  customerId   String?   // link to customer for attribution
   channel      String    // email|sms|whatsapp|rcs
   to           String    // email address or phone number
   subject      String?   // email only
@@ -575,6 +642,7 @@ model MessageLog {
   @@index([automationId])
   @@index([externalId])
   @@index([channel, status])
+  @@index([customerId, status, createdAt])
   @@map("message_logs")
 }
 
@@ -599,6 +667,42 @@ model GeneratedImage {
   @@index([workspaceId])
   @@index([prompt])
   @@map("generated_images")
+}
+
+// ============================================================================
+// AI CHAT HISTORY
+// ============================================================================
+
+model AiChat {
+  id          String   @id @default(cuid())
+  workspaceId String
+  storeId     String
+  title       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages  AiChatMessage[]
+
+  @@index([workspaceId, updatedAt])
+  @@index([storeId])
+  @@map("ai_chats")
+}
+
+model AiChatMessage {
+  id         String   @id @default(cuid())
+  chatId     String
+  role       String   // "user" | "assistant"
+  content    String   @db.Text
+  highlights Json?
+  model      String?
+  createdAt  DateTime @default(now())
+
+  chat AiChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("ai_chat_messages")
 }
 
 // ============================================================================
