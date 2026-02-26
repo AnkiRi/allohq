@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { RouteProgress } from "@/components/layout/RouteProgress";
-import { AlloAIPanel } from "@/components/ai/AlloAIPanel";
+import { AlloAIPanelProvider, AlloAIPanelSlot } from "@/components/ai/AlloAIPanel";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,17 +14,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <TopBar />
-
-        {/* Content + AI Panel */}
-        <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
-          <AlloAIPanel />
+      {/* Main content — provider wraps TopBar + content so TopBar can open the AI panel */}
+      <AlloAIPanelProvider>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <TopBar />
+          <div className="flex flex-1 overflow-hidden">
+            <main className="flex-1 overflow-y-auto p-6">{children}</main>
+            <AlloAIPanelSlot />
+          </div>
         </div>
-      </div>
+      </AlloAIPanelProvider>
     </div>
   );
 }

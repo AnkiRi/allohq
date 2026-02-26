@@ -25,6 +25,7 @@ import {
   Bot,
   Circle,
   Cpu,
+  SlidersHorizontal,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
@@ -160,6 +161,93 @@ function InlineModelPicker({
               </button>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline Creative Intensity Picker (for setup checklist)
+// ---------------------------------------------------------------------------
+
+const CREATIVE_OPTIONS = [
+  { value: "text_heavy", label: "Text Heavy", desc: "Copy-focused, minimal visuals" },
+  { value: "balanced", label: "Balanced", desc: "Mix of visuals and copy" },
+  { value: "visual_heavy", label: "Visual Heavy", desc: "Maximum visual impact" },
+] as const;
+
+function InlineCreativeIntensityPicker({
+  current,
+  onSelect,
+  isPending,
+}: {
+  current: string;
+  onSelect: (value: string) => void;
+  isPending: boolean;
+}) {
+  return (
+    <div className="ml-11 mt-2 mb-1">
+      <div className="border border-border bg-card rounded-lg p-4 space-y-3">
+        <p className="text-[11px] font-mono text-muted-foreground">
+          Choose the creative balance for AI-generated content:
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {CREATIVE_OPTIONS.map((opt) => {
+            const isSelected = current === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => onSelect(opt.value)}
+                disabled={isPending}
+                className={`relative text-left p-3 border rounded-lg transition-all ${
+                  isSelected
+                    ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
+                    : "border-border hover:border-primary/50"
+                }`}
+              >
+                {isSelected && (
+                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-secondary flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-secondary-foreground" />
+                  </div>
+                )}
+                <p className="text-[11px] font-mono font-bold text-foreground">{opt.label}</p>
+                <p className="text-[9px] font-mono text-muted-foreground mt-1">{opt.desc}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Selections Summary (shown when agent running or setup complete)
+// ---------------------------------------------------------------------------
+
+function SelectionsSummary({
+  modelLabel,
+  creativeIntensity,
+}: {
+  modelLabel: string;
+  creativeIntensity: string;
+}) {
+  const creativeLabel = CREATIVE_OPTIONS.find((o) => o.value === creativeIntensity)?.label ?? "Balanced";
+
+  return (
+    <div className="border border-border rounded-xl bg-card px-6 py-4">
+      <p className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-3">
+        YOUR AI CONFIGURATION
+      </p>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
+          <Cpu className="w-3 h-3 text-muted-foreground" />
+          <span className="text-[11px] font-mono text-foreground font-semibold">{modelLabel}</span>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
+          <SlidersHorizontal className="w-3 h-3 text-muted-foreground" />
+          <span className="text-[11px] font-mono text-foreground font-semibold">{creativeLabel}</span>
         </div>
       </div>
     </div>
@@ -510,6 +598,10 @@ function SetupChecklist({
   onModelSelect,
   isModelSaving,
   modelLocked,
+  currentCreativeIntensity,
+  onCreativeSelect,
+  isCreativeSaving,
+  creativeLocked,
 }: {
   steps: SetupStep[];
   syncCounts?: { products: number; customers: number; orders: number };
@@ -527,6 +619,10 @@ function SetupChecklist({
   onModelSelect: (model: string) => void;
   isModelSaving: boolean;
   modelLocked: boolean;
+  currentCreativeIntensity: string;
+  onCreativeSelect: (value: string) => void;
+  isCreativeSaving: boolean;
+  creativeLocked: boolean;
 }) {
   const completedCount = steps.filter((s) => s.done).length;
   const allDone = completedCount === steps.length;
@@ -565,13 +661,14 @@ function SetupChecklist({
           // Model step: editable until locked (brand analysis started), but only after sync is done
           const priorStepsDone = steps.slice(0, i).every((s) => s.done);
           const isModelEditable = step.key === "model" && step.done && !modelLocked && priorStepsDone;
-          const showAsDone = step.done && !isModelEditable;
+          const isCreativeEditable = step.key === "creative" && step.done && !creativeLocked && priorStepsDone;
+          const showAsDone = step.done && !isModelEditable && !isCreativeEditable;
 
           return (
             <div key={step.key}>
               <div
                 className={`flex items-center gap-4 px-6 py-4 transition-colors ${
-                  showAsDone ? "opacity-60" : isNext || isModelEditable ? "bg-muted" : ""
+                  showAsDone ? "opacity-60" : isNext || isModelEditable || isCreativeEditable ? "bg-muted" : ""
                 }`}
               >
                 {/* Step indicator */}
@@ -580,7 +677,7 @@ function SetupChecklist({
                     <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 text-secondary-foreground" />
                     </div>
-                  ) : isModelEditable ? (
+                  ) : isModelEditable || isCreativeEditable ? (
                     <div className="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 text-white" />
                     </div>
@@ -610,7 +707,7 @@ function SetupChecklist({
                       className={`w-3.5 h-3.5 ${
                         showAsDone
                           ? "text-muted-foreground"
-                          : isModelEditable
+                          : isModelEditable || isCreativeEditable
                             ? "text-green-600"
                             : step.loading
                               ? "text-foreground"
@@ -669,7 +766,7 @@ function SetupChecklist({
                     Pending
                   </span>
                 )}
-                {isModelEditable && (
+                {(isModelEditable || isCreativeEditable) && (
                   <span className="text-[10px] font-mono text-green-600 whitespace-nowrap">
                     Editable
                   </span>
@@ -719,6 +816,15 @@ function SetupChecklist({
                 {step.key === "brand" && brandDone && !isAnalyzing && brandProfile && (
                   <div className="pb-4">
                     <BrandSummaryPanel profile={brandProfile} />
+                  </div>
+                )}
+                {step.key === "creative" && !creativeLocked && (isNext || isCreativeEditable) && (
+                  <div className="pb-4">
+                    <InlineCreativeIntensityPicker
+                      current={currentCreativeIntensity}
+                      onSelect={onCreativeSelect}
+                      isPending={isCreativeSaving}
+                    />
                   </div>
                 )}
                 {step.key === "agent" && isAgentRunning && agentRun && (
@@ -836,6 +942,13 @@ export default function DashboardPage() {
       (utils.ai as any).getSettings.invalidate();
     },
   }) as { mutate: (input: { model: string | null }) => void; isPending: boolean };
+
+  // Creative intensity mutation
+  const updateIntensity = (trpc.ai.updateCreativeIntensity as any).useMutation({
+    onSuccess: () => {
+      (utils.ai as any).brandProfileStatus.invalidate();
+    },
+  }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
 
   // Token usage for AI cost card
   const { data: tokenUsage } = (trpc.dashboard.tokenUsage as any).useQuery() as {
@@ -969,10 +1082,19 @@ export default function DashboardPage() {
     [setDefaultModel]
   );
 
+  const handleCreativeSelect = useCallback(
+    (value: string) => {
+      if (!storeId) return;
+      updateIntensity.mutate({ storeId, creativeIntensity: value });
+    },
+    [storeId, updateIntensity]
+  );
+
   // ---- Compute step states ----
   const hasSyncedData = (stats?.totalCustomers ?? 0) > 0;
   const hasDefaultModel = !!aiSettings?.defaultModel;
   const hasBrand = brandStatus?.exists ?? false;
+  const currentCreativeIntensity = (brandStatus as any)?.creativeIntensity ?? "balanced";
   const hasReadyOrActivePrograms =
     programs?.some((p) => p.status === "ready" || p.status === "active") ?? false;
 
@@ -1029,6 +1151,15 @@ export default function DashboardPage() {
       href: hasStore ? undefined : "/integrations",
       loading: isAnalyzing || analyzeBrand.isPending,
       loadingLabel: "Analyzing brand voice...",
+    },
+    {
+      key: "creative",
+      label: "Choose creative balance",
+      description:
+        "Control how visual vs text-focused your generated content will be",
+      ctaLabel: "Select Style",
+      icon: SlidersHorizontal,
+      done: hasBrand && !isAnalyzing,
     },
     {
       key: "agent",
@@ -1095,7 +1226,22 @@ export default function DashboardPage() {
         onModelSelect={handleModelSelect}
         isModelSaving={setDefaultModel.isPending}
         modelLocked={hasBrand || isAnalyzing || analyzeBrand.isPending}
+        currentCreativeIntensity={currentCreativeIntensity}
+        onCreativeSelect={handleCreativeSelect}
+        isCreativeSaving={updateIntensity.isPending}
+        creativeLocked={isAgentRunning || (agentDone && hasReadyOrActivePrograms)}
       />
+
+      {/* Selections summary — visible when agent is running or setup is complete */}
+      {(isAgentRunning || allSetupDone) && aiSettings?.defaultModel && (
+        <SelectionsSummary
+          modelLabel={
+            (aiModels as any)?.find((m: any) => m.id === aiSettings.defaultModel)?.label
+            ?? aiSettings.defaultModel
+          }
+          creativeIntensity={currentCreativeIntensity}
+        />
+      )}
 
       {/* All done banner */}
       {allSetupDone && (

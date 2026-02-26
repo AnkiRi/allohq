@@ -66,6 +66,7 @@ const FALLBACK_CHAIN: Record<AIModelId, AIModelId[]> = {
 export interface CompletionRequest {
   model?: AIModelId;
   prompt: string;
+  system?: string;
   temperature?: number;
   jsonMode?: boolean;
   maxTokens?: number;
@@ -95,6 +96,7 @@ async function callAnthropic(
   model: AIModelId,
   temperature: number,
   maxTokens: number,
+  system?: string,
 ): Promise<ProviderResult> {
   const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
@@ -102,6 +104,7 @@ async function callAnthropic(
     model,
     max_tokens: maxTokens,
     temperature,
+    ...(system ? { system } : {}),
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -122,12 +125,17 @@ async function callOpenAI(
   temperature: number,
   maxTokens: number,
   jsonMode: boolean,
+  system?: string,
 ): Promise<ProviderResult> {
   const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
 
+  const messages: { role: "system" | "user"; content: string }[] = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: prompt });
+
   const response = await client.chat.completions.create({
     model,
-    messages: [{ role: "user", content: prompt }],
+    messages,
     temperature,
     max_tokens: maxTokens,
     ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
@@ -155,6 +163,7 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
   const temperature = request.temperature ?? 0.7;
   const maxTokens = request.maxTokens ?? 4096;
   const jsonMode = request.jsonMode ?? false;
+  const system = request.system;
 
   const modelsToTry: AIModelId[] = [primaryModel, ...FALLBACK_CHAIN[primaryModel]];
 
@@ -172,13 +181,13 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
     try {
       let result: ProviderResult;
       if (modelDef.provider === "anthropic") {
-        result = await callAnthropic(request.prompt, modelId, temperature, maxTokens);
+        result = await callAnthropic(request.prompt, modelId, temperature, maxTokens, system);
         // Anthropic doesn't have native JSON mode, so extract JSON from response
         if (jsonMode) {
           result.content = extractJson(result.content);
         }
       } else {
-        result = await callOpenAI(request.prompt, modelId, temperature, maxTokens, jsonMode);
+        result = await callOpenAI(request.prompt, modelId, temperature, maxTokens, jsonMode, system);
       }
 
       return {
