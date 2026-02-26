@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { TRPCProvider } from "@/lib/trpc-provider";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "AlloHQ - E-Commerce Marketing Automation",
@@ -21,7 +18,13 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
-        <body className={inter.className}>
+        <head>
+          <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+          />
+        </head>
+        <body>
           <TRPCProvider>
             <ToastProvider>{children}</ToastProvider>
           </TRPCProvider>

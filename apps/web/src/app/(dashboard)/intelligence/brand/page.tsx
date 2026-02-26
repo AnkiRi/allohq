@@ -80,8 +80,12 @@ export default function BrandProfilePage() {
     }
   }, [profile?.analyzedAt, jobStatus, analyzing, toast]);
 
+  const utils = trpc.useUtils();
   const updateIntensityMut = (trpc.ai.updateCreativeIntensity as any).useMutation({
-    onSuccess: () => toast("Creative intensity updated!", "success"),
+    onSuccess: () => {
+      toast("Creative intensity updated!", "success");
+      (utils.ai as any).brandProfile.invalidate({ storeId });
+    },
     onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
   }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
 
@@ -117,12 +121,12 @@ export default function BrandProfilePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/intelligence" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-            <ArrowLeft className="w-4 h-4 text-gray-400" />
+          <Link href="/intelligence" className="p-2 rounded-lg hover:bg-muted transition-colors">
+            <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">BRAND_VOICE</h1>
-            <p className="text-sm text-gray-400 font-mono mt-1">
+            <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">BRAND_VOICE</h1>
+            <p className="text-[13px] text-muted-foreground font-mono mt-1">
               AI-extracted brand personality from your store data
             </p>
           </div>
@@ -133,7 +137,7 @@ export default function BrandProfilePage() {
           onClick={handleAnalyze}
           disabled={!storeId || isAnalyzing}
           title={!storeId ? "Connect a store first" : ""}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
           {!storeId ? "Connect Store First" : isAnalyzing ? "Analyzing..." : "Re-analyze"}
@@ -146,8 +150,8 @@ export default function BrandProfilePage() {
         <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
           <RefreshCw className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
           <div>
-            <p className="text-sm font-bold text-blue-900 font-mono">Analyzing brand voice...</p>
-            <p className="text-xs text-blue-600 font-mono mt-0.5">
+            <p className="text-[13px] font-bold text-blue-900 font-mono">Analyzing brand voice...</p>
+            <p className="text-[11px] text-blue-600 font-mono mt-0.5">
               AI is reading your product catalog and extracting brand personality. This typically takes 10-20 seconds.
             </p>
           </div>
@@ -159,12 +163,12 @@ export default function BrandProfilePage() {
         <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
           <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
           <div>
-            <p className="text-sm font-bold text-red-900 font-mono">Analysis failed</p>
-            <p className="text-xs text-red-600 font-mono mt-0.5">{error}</p>
+            <p className="text-[13px] font-bold text-red-900 font-mono">Analysis failed</p>
+            <p className="text-[11px] text-red-600 font-mono mt-0.5">{error}</p>
           </div>
           <button
             onClick={() => setError(null)}
-            className="ml-auto text-xs text-red-400 hover:text-red-600 font-mono"
+            className="ml-auto text-[11px] text-red-400 hover:text-red-600 font-mono"
           >
             Dismiss
           </button>
@@ -174,38 +178,38 @@ export default function BrandProfilePage() {
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />
           ))}
         </div>
       ) : profile ? (
         <div className="space-y-6">
           {/* Brand overview */}
-          <div className="border border-gray-200 rounded-xl p-6 bg-white">
-            <h2 className="text-lg font-bold text-gray-900 font-mono mb-1">{profile.brandName}</h2>
-            <p className="text-sm text-gray-500 font-mono">{profile.brandDescription}</p>
-            <p className="text-[10px] text-gray-300 font-mono mt-3">
+          <div className="border border-border rounded-xl p-6 bg-card">
+            <h2 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">{profile.brandName}</h2>
+            <p className="text-[13px] text-muted-foreground font-mono">{profile.brandDescription}</p>
+            <p className="text-[10px] text-muted-foreground/50 font-mono mt-3">
               Last analyzed: {new Date(profile.analyzedAt).toLocaleString()}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             {/* Tone attributes */}
-            <div className="border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="border border-border rounded-xl p-6 bg-card">
               <div className="flex items-center gap-3 mb-4">
-                <MessageSquare className="w-4 h-4 text-gray-400" />
-                <h2 className="text-sm font-bold text-gray-900 font-mono">TONE</h2>
+                <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-[13px] font-bold text-foreground font-mono">TONE</h2>
               </div>
               {tone && (
                 <div className="space-y-3">
                   {Object.entries(tone).map(([key, value]) => (
                     <div key={key}>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400 uppercase">{key}</span>
-                        <span className="text-gray-900 font-bold">{value}</span>
+                      <div className="flex justify-between text-[11px] font-mono mb-1">
+                        <span className="text-muted-foreground uppercase">{key}</span>
+                        <span className="text-foreground font-bold">{value}</span>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gray-900 rounded-full transition-all"
+                          className="h-full bg-secondary rounded-full transition-all"
                           style={{
                             width: `${
                               value === "formal" || value === "none" || value === "calm" || value === "professional"
@@ -226,35 +230,35 @@ export default function BrandProfilePage() {
             </div>
 
             {/* Visual style */}
-            <div className="border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="border border-border rounded-xl p-6 bg-card">
               <div className="flex items-center gap-3 mb-4">
-                <Palette className="w-4 h-4 text-gray-400" />
-                <h2 className="text-sm font-bold text-gray-900 font-mono">VISUAL_STYLE</h2>
+                <Palette className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-[13px] font-bold text-foreground font-mono">VISUAL_STYLE</h2>
               </div>
               {visual && (
                 <div className="space-y-4">
                   <div>
-                    <span className="text-xs text-gray-400 font-mono">AESTHETIC</span>
-                    <p className="text-sm font-bold text-gray-900 font-mono mt-0.5">
+                    <span className="text-[11px] text-muted-foreground font-mono">AESTHETIC</span>
+                    <p className="text-[13px] font-bold text-foreground font-mono mt-0.5">
                       {typeof visual["aesthetic"] === "string" ? visual["aesthetic"] : ""}
                     </p>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-400 font-mono">FONT STYLE</span>
-                    <p className="text-sm font-bold text-gray-900 font-mono mt-0.5">
+                    <span className="text-[11px] text-muted-foreground font-mono">FONT STYLE</span>
+                    <p className="text-[13px] font-bold text-foreground font-mono mt-0.5">
                       {typeof visual["fontStyle"] === "string" ? visual["fontStyle"] : ""}
                     </p>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-400 font-mono mb-2 block">COLORS</span>
+                    <span className="text-[11px] text-muted-foreground font-mono mb-2 block">COLORS</span>
                     <div className="flex gap-2">
                       {(Array.isArray(visual["suggestedColors"]) ? visual["suggestedColors"] : []).map((color, i) => (
                         <div key={i} className="flex items-center gap-1.5">
                           <div
-                            className="w-6 h-6 rounded-full border border-gray-200"
+                            className="w-6 h-6 rounded-full border border-border"
                             style={{ backgroundColor: color }}
                           />
-                          <span className="text-[10px] text-gray-400 font-mono">{color}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{color}</span>
                         </div>
                       ))}
                     </div>
@@ -265,12 +269,12 @@ export default function BrandProfilePage() {
           </div>
 
           {/* Creative Intensity */}
-          <div className="border border-gray-200 rounded-xl p-6 bg-white">
+          <div className="border border-border rounded-xl p-6 bg-card">
             <div className="flex items-center gap-3 mb-4">
-              <Sliders className="w-4 h-4 text-gray-400" />
-              <h2 className="text-sm font-bold text-gray-900 font-mono">CREATIVE_INTENSITY</h2>
+              <Sliders className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-[13px] font-bold text-foreground font-mono">CREATIVE_INTENSITY</h2>
             </div>
-            <p className="text-xs text-gray-400 font-mono mb-4">
+            <p className="text-[11px] text-muted-foreground font-mono mb-4">
               Controls the visual richness of AI-generated emails
             </p>
             <div className="grid grid-cols-3 gap-3">
@@ -287,12 +291,12 @@ export default function BrandProfilePage() {
                     disabled={updateIntensityMut.isPending}
                     className={`text-left p-4 border rounded-xl transition-all ${
                       currentIntensity === opt.value
-                        ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)] bg-gray-50"
-                        : "border-gray-200 hover:border-gray-400"
+                        ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
+                        : "border-border hover:border-primary/50"
                     }`}
                   >
-                    <p className="text-xs font-bold text-gray-900 font-mono">{opt.label}</p>
-                    <p className="text-[10px] text-gray-400 font-mono mt-1">{opt.desc}</p>
+                    <p className="text-[11px] font-bold text-foreground font-mono">{opt.label}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono mt-1">{opt.desc}</p>
                   </button>
                 );
               })}
@@ -300,38 +304,38 @@ export default function BrandProfilePage() {
           </div>
 
           {/* Vocabulary */}
-          <div className="border border-gray-200 rounded-xl p-6 bg-white">
+          <div className="border border-border rounded-xl p-6 bg-card">
             <div className="flex items-center gap-3 mb-4">
-              <Type className="w-4 h-4 text-gray-400" />
-              <h2 className="text-sm font-bold text-gray-900 font-mono">VOCABULARY</h2>
+              <Type className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-[13px] font-bold text-foreground font-mono">VOCABULARY</h2>
             </div>
             {vocabulary && (
               <div className="grid grid-cols-3 gap-6">
                 <div>
-                  <span className="text-xs text-gray-400 font-mono block mb-2">PREFERRED WORDS</span>
+                  <span className="text-[11px] text-muted-foreground font-mono block mb-2">PREFERRED WORDS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["preferredWords"] ?? []).map((word, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-muted text-foreground text-[11px] font-mono rounded">
                         {word}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 font-mono block mb-2">CTA PATTERNS</span>
+                  <span className="text-[11px] text-muted-foreground font-mono block mb-2">CTA PATTERNS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["ctaPatterns"] ?? []).map((cta, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-gray-900 text-white text-xs font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-secondary text-secondary-foreground text-[11px] font-mono rounded">
                         {cta}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 font-mono block mb-2">BRAND TERMS</span>
+                  <span className="text-[11px] text-muted-foreground font-mono block mb-2">BRAND TERMS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["brandTerms"] ?? []).map((term, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-700 text-xs font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-muted border border-border text-foreground text-[11px] font-mono rounded">
                         {term}
                       </span>
                     ))}
@@ -343,15 +347,15 @@ export default function BrandProfilePage() {
 
           {/* Sample copy */}
           {sampleCopy && sampleCopy.length > 0 && (
-            <div className="border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="border border-border rounded-xl p-6 bg-card">
               <div className="flex items-center gap-3 mb-4">
-                <Quote className="w-4 h-4 text-gray-400" />
-                <h2 className="text-sm font-bold text-gray-900 font-mono">SAMPLE_COPY</h2>
+                <Quote className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-[13px] font-bold text-foreground font-mono">SAMPLE_COPY</h2>
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
-                  <div key={i} className="p-3 bg-gray-50 rounded-lg border-l-2 border-gray-900">
-                    <p className="text-xs text-gray-700 font-mono leading-relaxed">{copy}</p>
+                  <div key={i} className="p-3 bg-muted rounded-lg border-l-2 border-secondary">
+                    <p className="text-[11px] text-foreground font-mono leading-relaxed">{copy}</p>
                   </div>
                 ))}
               </div>
@@ -359,10 +363,10 @@ export default function BrandProfilePage() {
           )}
         </div>
       ) : (
-        <div className="text-center py-20 border border-gray-200 rounded-xl bg-white">
-          <Palette className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-400 font-mono">No brand profile yet</p>
-          <p className="text-xs text-gray-300 font-mono mt-1">
+        <div className="text-center py-20 border border-border rounded-xl bg-card">
+          <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+          <p className="text-[13px] text-muted-foreground font-mono">No brand profile yet</p>
+          <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
             Brand analysis runs automatically after Shopify sync, or click &quot;Re-analyze&quot;
           </p>
         </div>

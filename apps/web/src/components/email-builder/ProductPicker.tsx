@@ -35,31 +35,31 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg mx-4 bg-white rounded-xl border border-gray-200 shadow-xl flex flex-col max-h-[80vh]">
+      <div className="relative w-full max-w-lg mx-4 bg-card rounded-xl border border-border shadow-xl flex flex-col max-h-[80vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-bold font-mono text-gray-900 tracking-wider uppercase">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-[10px] font-bold font-mono text-foreground tracking-[1px] uppercase">
             Select Product
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-4 py-3 border-b border-gray-200">
+        <div className="px-4 py-3 border-b border-border">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products..."
               autoFocus
-              className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 transition"
+              className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
             />
           </div>
         </div>
@@ -68,24 +68,24 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
         <div className="flex-1 overflow-y-auto">
           {isLoading && (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+              <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
             </div>
           )}
 
           {!isLoading && query.length === 0 && (
             <div className="flex items-center justify-center py-12">
-              <p className="text-sm font-mono text-gray-400">Type to search products</p>
+              <p className="text-[13px] font-mono text-muted-foreground">Type to search products</p>
             </div>
           )}
 
           {!isLoading && query.length > 0 && results?.length === 0 && (
             <div className="flex items-center justify-center py-12">
-              <p className="text-sm font-mono text-gray-400">No products found</p>
+              <p className="text-[13px] font-mono text-muted-foreground">No products found</p>
             </div>
           )}
 
           {results && results.length > 0 && (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border">
               {results.map((product) => (
                 <li key={product.id}>
                   <button
@@ -95,25 +95,25 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 text-left",
-                      "hover:bg-gray-50 transition-colors"
+                      "hover:bg-muted transition-colors"
                     )}
                   >
                     {product.imageUrl ? (
                       <img
                         src={product.imageUrl}
                         alt={product.title}
-                        className="w-10 h-10 rounded-lg object-cover border border-gray-200"
+                        className="w-10 h-10 rounded-lg object-cover border border-border"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
-                        <span className="text-[10px] font-mono text-gray-400">IMG</span>
+                      <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center">
+                        <span className="text-[10px] font-mono text-muted-foreground">IMG</span>
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-mono font-medium text-gray-900 truncate">
+                      <p className="text-[13px] font-mono font-medium text-foreground truncate">
                         {product.title}
                       </p>
-                      <p className="text-xs font-mono text-gray-500">
+                      <p className="text-[11px] font-mono text-muted-foreground">
                         ${(product.price / 100).toFixed(2)}
                       </p>
                     </div>

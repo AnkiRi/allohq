@@ -48,10 +48,10 @@ export function MergeTagMenu({ onInsert }: MergeTagMenuProps) {
       <button
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-mono transition-colors",
+          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-mono transition-colors",
           open
-            ? "border-gray-400 bg-gray-50 text-gray-900"
-            : "border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300"
+            ? "border-primary/50 bg-muted text-foreground"
+            : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border"
         )}
       >
         <Code className="w-3.5 h-3.5" />
@@ -59,7 +59,7 @@ export function MergeTagMenu({ onInsert }: MergeTagMenuProps) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+        <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-card border border-border rounded-lg shadow-lg py-1">
           {MERGE_TAGS.map(({ tag, label }) => (
             <button
               key={tag}
@@ -67,10 +67,10 @@ export function MergeTagMenu({ onInsert }: MergeTagMenuProps) {
                 onInsert(tag);
                 setOpen(false);
               }}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted transition-colors"
             >
-              <span className="text-sm font-mono text-gray-700">{label}</span>
-              <code className="text-[11px] font-mono text-gray-400">{tag}</code>
+              <span className="text-[13px] font-mono text-foreground">{label}</span>
+              <code className="text-[11px] font-mono text-muted-foreground">{tag}</code>
             </button>
           ))}
         </div>

@@ -51,23 +51,23 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative w-full max-w-4xl mx-4 bg-white rounded-xl border border-gray-200 shadow-xl flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-4xl mx-4 bg-card rounded-xl border border-border shadow-xl flex flex-col max-h-[90vh]">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-bold font-mono text-gray-900 tracking-wider uppercase">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-[10px] font-bold font-mono text-foreground tracking-[1px] uppercase">
             Preview
           </h3>
 
           <div className="flex items-center gap-2">
             {/* Desktop / Mobile toggle */}
-            <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+            <div className="flex items-center rounded-lg border border-border overflow-hidden">
               <button
                 onClick={() => setMode("desktop")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono transition-colors",
+                  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono transition-colors",
                   mode === "desktop"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-500 hover:text-gray-900"
+                    ? "bg-secondary text-secondary-foreground"
+                    : "bg-card text-muted-foreground hover:text-foreground"
                 )}
               >
                 <Monitor className="w-3.5 h-3.5" />
@@ -76,10 +76,10 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
               <button
                 onClick={() => setMode("mobile")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono transition-colors",
+                  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono transition-colors",
                   mode === "mobile"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-500 hover:text-gray-900"
+                    ? "bg-secondary text-secondary-foreground"
+                    : "bg-card text-muted-foreground hover:text-foreground"
                 )}
               >
                 <Smartphone className="w-3.5 h-3.5" />
@@ -89,7 +89,7 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -97,16 +97,16 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
         </div>
 
         {/* Preview area */}
-        <div className="flex-1 overflow-auto bg-gray-100 flex justify-center p-6">
+        <div className="flex-1 overflow-auto bg-muted flex justify-center p-6">
           {renderMutation.isPending ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
             </div>
           ) : (
             <iframe
               ref={iframeRef}
               title="Email Preview"
-              className="bg-white border border-gray-200 rounded-lg shadow-sm transition-all"
+              className="bg-card border border-border rounded-lg shadow-sm transition-all"
               style={{ width, minHeight: 400, height: "100%" }}
               sandbox="allow-same-origin"
             />

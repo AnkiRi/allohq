@@ -75,12 +75,12 @@ function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>
         currentTemplateName={config.templateName as string | undefined}
         onPick={(t) => onChange({ ...config, templateId: t.id, templateName: t.subject || t.name })}
       />
-      <label className="block text-[10px] font-mono font-semibold text-gray-500 uppercase mt-2">Subject Line</label>
+      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase mt-2">Subject Line</label>
       <input
         type="text"
         value={(config.subject as string) || ""}
         onChange={(e) => onChange({ ...config, subject: e.target.value })}
-        className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
         placeholder="e.g., Welcome to {{brand_name}}!"
       />
     </div>
@@ -129,18 +129,18 @@ function SendRcsConfig({ config, onChange }: { config: Record<string, unknown>; 
 function WaitConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="text-[10px] font-mono font-semibold text-gray-500 uppercase">Wait</label>
+      <label className="text-[10px] font-mono font-semibold text-muted-foreground uppercase">Wait</label>
       <input
         type="number"
         value={(config.duration as number) || 1}
         onChange={(e) => onChange({ ...config, duration: Number(e.target.value) })}
         min={1}
-        className="w-16 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+        className="w-16 px-2 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
       />
       <select
         value={(config.unit as string) || "hours"}
         onChange={(e) => onChange({ ...config, unit: e.target.value })}
-        className="px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+        className="px-2 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
       >
         <option value="minutes">Minutes</option>
         <option value="hours">Hours</option>
@@ -153,11 +153,11 @@ function WaitConfig({ config, onChange }: { config: Record<string, unknown>; onC
 function ConditionConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-mono font-semibold text-gray-500 uppercase">Condition</label>
+      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase">Condition</label>
       <select
         value={(config.condition as string) || "has_purchased"}
         onChange={(e) => onChange({ ...config, condition: e.target.value })}
-        className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
       >
         <option value="has_purchased">Has made a purchase</option>
         <option value="opened_email">Opened previous email</option>
@@ -172,12 +172,12 @@ function ConditionConfig({ config, onChange }: { config: Record<string, unknown>
 function WebhookConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-mono font-semibold text-gray-500 uppercase">Webhook URL</label>
+      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase">Webhook URL</label>
       <input
         type="url"
         value={(config.url as string) || ""}
         onChange={(e) => onChange({ ...config, url: e.target.value })}
-        className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
         placeholder="https://..."
       />
     </div>
@@ -302,18 +302,18 @@ export function WorkflowEditor({
   };
 
   return (
-    <div className="flex h-full gap-0 bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="flex h-full gap-0 bg-card border border-border rounded-xl overflow-hidden">
       {/* Canvas */}
-      <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-8 bg-muted">
         <div className="max-w-md mx-auto space-y-0">
           {/* Trigger Node */}
           <div className="relative">
-            <div className="border-2 border-gray-900 rounded-xl bg-white p-4">
+            <div className="border-2 border-foreground rounded-xl bg-card p-4">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center">
-                  <Zap className="w-3 h-3 text-white" />
+                <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
+                  <Zap className="w-3 h-3 text-secondary-foreground" />
                 </div>
-                <span className="text-xs font-mono font-bold text-gray-900 uppercase">Trigger</span>
+                <span className="text-[10px] font-mono font-bold text-foreground uppercase tracking-[1px]">Trigger</span>
               </div>
 
               {/* Trigger type selector */}
@@ -328,8 +328,8 @@ export function WorkflowEditor({
                     className={cn(
                       "flex items-center gap-2 p-2 rounded-lg border text-left transition-all text-[11px] font-mono",
                       triggerType === opt.type
-                        ? "border-gray-900 bg-gray-900 text-white"
-                        : "border-gray-200 text-gray-600 hover:border-gray-400"
+                        ? "border-secondary bg-secondary text-secondary-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/50"
                     )}
                   >
                     <opt.icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -343,7 +343,7 @@ export function WorkflowEditor({
                 <select
                   value={(triggerConfig.event as string) || "order_placed"}
                   onChange={(e) => setTriggerConfig({ event: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
                 >
                   {EVENT_OPTIONS.map((e) => (
                     <option key={e.value} value={e.value}>{e.label}</option>
@@ -354,7 +354,7 @@ export function WorkflowEditor({
                 <select
                   value={(triggerConfig.schedule as string) || "daily"}
                   onChange={(e) => setTriggerConfig({ schedule: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
                 >
                   <option value="hourly">Every Hour</option>
                   <option value="daily">Every Day</option>
@@ -367,7 +367,7 @@ export function WorkflowEditor({
                   type="text"
                   value={(triggerConfig.segmentName as string) || ""}
                   onChange={(e) => setTriggerConfig({ segmentName: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
                   placeholder="Segment name..."
                 />
               )}
@@ -375,18 +375,18 @@ export function WorkflowEditor({
 
             {/* Connector line + add button */}
             <div className="flex flex-col items-center py-1">
-              <div className="w-px h-4 bg-gray-300" />
+              <div className="w-px h-4 bg-muted-foreground/50" />
               <button
                 onClick={() => setShowAddMenu(showAddMenu === -1 ? null : -1)}
-                className="w-7 h-7 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                className="w-7 h-7 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
               {showAddMenu === -1 && (
                 <AddMenu onSelect={(type) => addNode(type, -1)} onClose={() => setShowAddMenu(null)} />
               )}
-              <div className="w-px h-4 bg-gray-300" />
-              <ArrowDown className="w-3 h-3 text-gray-300" />
+              <div className="w-px h-4 bg-muted-foreground/50" />
+              <ArrowDown className="w-3 h-3 text-muted-foreground/50" />
             </div>
           </div>
 
@@ -402,14 +402,14 @@ export function WorkflowEditor({
                   className={cn(
                     "border rounded-xl p-4 transition-all cursor-pointer",
                     color,
-                    isExpanded && "ring-1 ring-gray-900"
+                    isExpanded && "ring-1 ring-foreground"
                   )}
                   onClick={() => setExpandedNodeId(isExpanded ? null : node.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Icon className="w-4 h-4" />
-                      <span className="text-xs font-mono font-bold uppercase">
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-[1px]">
                         {node.type.replace(/_/g, " ")}
                       </span>
                     </div>
@@ -444,18 +444,18 @@ export function WorkflowEditor({
 
                 {/* Connector line + add button */}
                 <div className="flex flex-col items-center py-1">
-                  <div className="w-px h-4 bg-gray-300" />
+                  <div className="w-px h-4 bg-muted-foreground/50" />
                   <button
                     onClick={() => setShowAddMenu(showAddMenu === index ? null : index)}
-                    className="w-7 h-7 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                    className="w-7 h-7 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                   {showAddMenu === index && (
                     <AddMenu onSelect={(type) => addNode(type, index)} onClose={() => setShowAddMenu(null)} />
                   )}
-                  <div className="w-px h-4 bg-gray-300" />
-                  <ArrowDown className="w-3 h-3 text-gray-300" />
+                  <div className="w-px h-4 bg-muted-foreground/50" />
+                  <ArrowDown className="w-3 h-3 text-muted-foreground/50" />
                 </div>
               </div>
             );
@@ -463,25 +463,25 @@ export function WorkflowEditor({
 
           {/* End node */}
           <div className="flex flex-col items-center">
-            <div className="w-10 h-10 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center">
-              <Check className="w-4 h-4 text-gray-400" />
+            <div className="w-10 h-10 rounded-full border-2 border-muted-foreground/50 bg-card flex items-center justify-center">
+              <Check className="w-4 h-4 text-muted-foreground" />
             </div>
-            <span className="text-[10px] font-mono text-gray-400 mt-1.5">END</span>
+            <span className="text-[10px] font-mono text-muted-foreground mt-1.5">END</span>
           </div>
         </div>
       </div>
 
       {/* Right panel — Save + info */}
-      <div className="w-64 border-l border-gray-200 bg-white flex flex-col">
-        <div className="p-4 border-b border-gray-200">
+      <div className="w-64 border-l border-border bg-card flex flex-col">
+        <div className="p-4 border-b border-border">
           <button
             onClick={handleSave}
             disabled={saving}
             className={cn(
-              "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-mono transition-all",
+              "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-mono transition-all",
               saveStatus === "success"
                 ? "bg-green-600 text-white"
-                : "bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-70"
+                : "bg-secondary text-secondary-foreground hover:bg-secondary/90 disabled:opacity-70"
             )}
           >
             {saving ? (
@@ -497,47 +497,47 @@ export function WorkflowEditor({
 
         <div className="p-4 space-y-4 flex-1">
           <div>
-            <h3 className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider mb-2">Summary</h3>
-            <div className="space-y-2 text-xs font-mono text-gray-600">
+            <h3 className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">Summary</h3>
+            <div className="space-y-2 text-[11px] font-mono text-muted-foreground">
               <div className="flex justify-between">
                 <span>Trigger</span>
-                <span className="font-bold text-gray-900">{triggerType.replace(/_/g, " ")}</span>
+                <span className="font-bold text-foreground">{triggerType.replace(/_/g, " ")}</span>
               </div>
               <div className="flex justify-between">
                 <span>Steps</span>
-                <span className="font-bold text-gray-900">{nodes.length}</span>
+                <span className="font-bold text-foreground">{nodes.length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Emails</span>
-                <span className="font-bold text-gray-900">{nodes.filter((n) => n.type === "send_email").length}</span>
+                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_email").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>SMS</span>
-                <span className="font-bold text-gray-900">{nodes.filter((n) => n.type === "send_sms").length}</span>
+                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_sms").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>WhatsApp</span>
-                <span className="font-bold text-gray-900">{nodes.filter((n) => n.type === "send_whatsapp").length}</span>
+                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_whatsapp").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>RCS</span>
-                <span className="font-bold text-gray-900">{nodes.filter((n) => n.type === "send_rcs").length}</span>
+                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_rcs").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Waits</span>
-                <span className="font-bold text-gray-900">{nodes.filter((n) => n.type === "wait").length}</span>
+                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "wait").length}</span>
               </div>
             </div>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider mb-2">Quick Add</h3>
+            <h3 className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">Quick Add</h3>
             <div className="space-y-1.5">
               {ACTION_OPTIONS.map((opt) => (
                 <button
                   key={opt.type}
                   onClick={() => addNode(opt.type, nodes.length - 1)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-left text-[11px] font-mono text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-all"
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-left text-[11px] font-mono text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
                 >
                   <opt.icon className="w-3.5 h-3.5" />
                   {opt.label}
@@ -559,17 +559,17 @@ function AddMenu({ onSelect, onClose }: { onSelect: (type: WorkflowNode["type"])
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div className="relative z-20 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg p-2 space-y-0.5">
+      <div className="relative z-20 mt-1 w-56 bg-card border border-border rounded-xl shadow-lg p-2 space-y-0.5">
         {ACTION_OPTIONS.map((opt) => (
           <button
             key={opt.type}
             onClick={() => onSelect(opt.type)}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-muted transition-colors"
           >
-            <opt.icon className="w-4 h-4 text-gray-400" />
+            <opt.icon className="w-4 h-4 text-muted-foreground" />
             <div>
-              <p className="text-xs font-mono font-bold text-gray-900">{opt.label}</p>
-              <p className="text-[10px] font-mono text-gray-400">{opt.description}</p>
+              <p className="text-[11px] font-mono font-bold text-foreground">{opt.label}</p>
+              <p className="text-[10px] font-mono text-muted-foreground">{opt.description}</p>
             </div>
           </button>
         ))}

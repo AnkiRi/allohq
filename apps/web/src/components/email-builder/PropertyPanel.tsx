@@ -8,7 +8,7 @@ import type { EmailBlock } from "@allohq/email-builder";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[11px] font-mono font-semibold text-gray-500 uppercase tracking-wider mb-1">
+    <label className="block text-[11px] font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">
       {children}
     </label>
   );
@@ -31,7 +31,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 transition"
+      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
     />
   );
 }
@@ -54,7 +54,7 @@ function NumberInput({
       onChange={(e) => onChange(Number(e.target.value))}
       min={min}
       max={max}
-      className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 transition"
+      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
     />
   );
 }
@@ -73,7 +73,7 @@ function TextArea({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       rows={rows}
-      className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 resize-y focus:outline-none focus:ring-1 focus:ring-gray-400 transition"
+      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
     />
   );
 }
@@ -91,14 +91,14 @@ function ColorInput({
         type="color"
         value={value || "#000000"}
         onChange={(e) => onChange(e.target.value)}
-        className="w-8 h-8 rounded border border-gray-200 cursor-pointer p-0"
+        className="w-8 h-8 rounded border border-border cursor-pointer p-0"
       />
       <input
         type="text"
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
         placeholder="#000000"
-        className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 transition"
+        className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
       />
     </div>
   );
@@ -117,7 +117,7 @@ function SelectInput({
     <select
       value={value || options[0]?.value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 transition"
+      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -143,9 +143,9 @@ function Checkbox({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+        className="w-4 h-4 rounded border-border text-foreground focus:ring-muted-foreground"
       />
-      <span className="text-sm font-mono text-gray-700">{label}</span>
+      <span className="text-[13px] font-mono text-foreground">{label}</span>
     </label>
   );
 }
@@ -347,7 +347,7 @@ function ProductProps({
     <>
       <FieldGroup>
         <Label>Product ID</Label>
-        <p className="px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-sm font-mono text-gray-600 truncate">
+        <p className="px-3 py-1.5 rounded-lg border border-border bg-muted text-[13px] font-mono text-muted-foreground truncate">
           {block.props.productId || "No product selected"}
         </p>
       </FieldGroup>
@@ -434,8 +434,8 @@ interface PropertyPanelProps {
 export function PropertyPanel({ selectedBlock, onUpdate }: PropertyPanelProps) {
   if (!selectedBlock) {
     return (
-      <aside className="w-72 bg-white border-l border-gray-200 flex flex-col items-center justify-center">
-        <p className="text-sm font-mono text-gray-400">Select a block to edit</p>
+      <aside className="w-72 bg-card border-l border-border flex flex-col items-center justify-center">
+        <p className="text-[13px] font-mono text-muted-foreground">Select a block to edit</p>
       </aside>
     );
   }
@@ -460,7 +460,7 @@ export function PropertyPanel({ selectedBlock, onUpdate }: PropertyPanelProps) {
         return <FooterProps block={selectedBlock} onUpdate={onUpdate} />;
       default:
         return (
-          <p className="text-sm font-mono text-gray-400">
+          <p className="text-[13px] font-mono text-muted-foreground">
             No properties for this block type.
           </p>
         );
@@ -468,9 +468,9 @@ export function PropertyPanel({ selectedBlock, onUpdate }: PropertyPanelProps) {
   };
 
   return (
-    <aside className="w-72 bg-white border-l border-gray-200 flex flex-col overflow-y-auto">
-      <div className="px-4 py-4 border-b border-gray-200">
-        <h2 className="text-xs font-bold text-gray-900 font-mono tracking-wider uppercase">
+    <aside className="w-72 bg-card border-l border-border flex flex-col overflow-y-auto">
+      <div className="px-4 py-4 border-b border-border">
+        <h2 className="text-[10px] font-bold text-foreground font-mono tracking-[1px] uppercase">
           {selectedBlock.type} Properties
         </h2>
       </div>

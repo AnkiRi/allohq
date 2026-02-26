@@ -124,22 +124,22 @@ export default function NewSegmentPage() {
       <div>
         <Link
           href="/segments"
-          className="inline-flex items-center gap-1.5 text-xs text-gray-400 font-mono hover:text-gray-900 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono hover:text-foreground transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> BACK TO SEGMENTS
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
+        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
           NEW SEGMENT
         </h1>
-        <p className="text-sm text-gray-400 font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground font-mono mt-1">
           Define conditions to create a custom customer segment
         </p>
       </div>
 
       {/* Name + description */}
-      <div className="border border-gray-200 rounded-xl p-6 bg-white space-y-4">
+      <div className="border border-border rounded-xl p-6 bg-card space-y-4">
         <div>
-          <label className="block text-xs text-gray-400 font-mono uppercase tracking-wider mb-2">
+          <label className="block text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-2">
             SEGMENT NAME
           </label>
           <input
@@ -147,11 +147,11 @@ export default function NewSegmentPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. High Value Repeat Buyers"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900 focus:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all"
+            className="w-full px-4 py-2.5 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 font-mono uppercase tracking-wider mb-2">
+          <label className="block text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-2">
             DESCRIPTION
           </label>
           <input
@@ -159,36 +159,36 @@ export default function NewSegmentPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description..."
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900 focus:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all"
+            className="w-full px-4 py-2.5 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
           />
         </div>
       </div>
 
       {/* Conditions */}
-      <div className="border border-gray-200 rounded-xl p-6 bg-white">
+      <div className="border border-border rounded-xl p-6 bg-card">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-px h-6 bg-gray-900" />
-            <h2 className="text-sm font-bold text-gray-900 font-mono">CONDITIONS</h2>
+            <div className="w-px h-6 bg-secondary" />
+            <h2 className="text-[13px] font-bold text-foreground font-mono">CONDITIONS</h2>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-mono">Match</span>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            <span className="text-[11px] text-muted-foreground font-mono">Match</span>
+            <div className="flex rounded-lg border border-border overflow-hidden">
               {(["AND", "OR"] as const).map((op) => (
                 <button
                   key={op}
                   onClick={() => setOperator(op)}
-                  className={`px-3 py-1.5 text-xs font-mono transition-colors ${
+                  className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${
                     operator === op
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-500 hover:bg-gray-50"
+                      ? "bg-secondary text-secondary-foreground"
+                      : "bg-card text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {op}
                 </button>
               ))}
             </div>
-            <span className="text-xs text-gray-400 font-mono">conditions</span>
+            <span className="text-[11px] text-muted-foreground font-mono">conditions</span>
           </div>
         </div>
 
@@ -200,7 +200,7 @@ export default function NewSegmentPage() {
             return (
               <div key={index} className="flex items-center gap-3">
                 {index > 0 && (
-                  <span className="text-xs text-gray-400 font-mono w-8 text-center flex-shrink-0">
+                  <span className="text-[11px] text-muted-foreground font-mono w-8 text-center flex-shrink-0">
                     {operator}
                   </span>
                 )}
@@ -219,7 +219,7 @@ export default function NewSegmentPage() {
                       value: newType === "boolean" ? true : newType === "number" ? 0 : "",
                     });
                   }}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 bg-white focus:outline-none focus:border-gray-900 transition-all"
+                  className="px-3 py-2 border border-border rounded-lg text-[13px] font-mono text-foreground bg-card focus:outline-none focus:border-foreground transition-all"
                 >
                   {FIELD_OPTIONS.map((f) => (
                     <option key={f.value} value={f.value}>
@@ -232,7 +232,7 @@ export default function NewSegmentPage() {
                 <select
                   value={cond.op}
                   onChange={(e) => updateCondition(index, { op: e.target.value })}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 bg-white focus:outline-none focus:border-gray-900 transition-all"
+                  className="px-3 py-2 border border-border rounded-lg text-[13px] font-mono text-foreground bg-card focus:outline-none focus:border-foreground transition-all"
                 >
                   {ops.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -246,7 +246,7 @@ export default function NewSegmentPage() {
                   <select
                     value={String(cond.value)}
                     onChange={(e) => updateCondition(index, { value: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 bg-white focus:outline-none focus:border-gray-900 transition-all"
+                    className="flex-1 px-3 py-2 border border-border rounded-lg text-[13px] font-mono text-foreground bg-card focus:outline-none focus:border-foreground transition-all"
                   >
                     {RFM_SEGMENTS.map((s) => (
                       <option key={s} value={s}>
@@ -258,7 +258,7 @@ export default function NewSegmentPage() {
                   <select
                     value={String(cond.value)}
                     onChange={(e) => updateCondition(index, { value: e.target.value === "true" })}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 bg-white focus:outline-none focus:border-gray-900 transition-all"
+                    className="flex-1 px-3 py-2 border border-border rounded-lg text-[13px] font-mono text-foreground bg-card focus:outline-none focus:border-foreground transition-all"
                   >
                     <option value="true">Yes</option>
                     <option value="false">No</option>
@@ -268,7 +268,7 @@ export default function NewSegmentPage() {
                     type="number"
                     value={Number(cond.value)}
                     onChange={(e) => updateCondition(index, { value: Number(e.target.value) })}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-gray-900 transition-all"
+                    className="flex-1 px-3 py-2 border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:border-foreground transition-all"
                   />
                 ) : (
                   <input
@@ -276,7 +276,7 @@ export default function NewSegmentPage() {
                     value={String(cond.value)}
                     onChange={(e) => updateCondition(index, { value: e.target.value })}
                     placeholder="Enter value..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900 transition-all"
+                    className="flex-1 px-3 py-2 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-all"
                   />
                 )}
 
@@ -284,7 +284,7 @@ export default function NewSegmentPage() {
                 <button
                   onClick={() => removeCondition(index)}
                   disabled={conditions.length === 1}
-                  className="p-2 text-gray-400 hover:text-gray-900 disabled:opacity-30 transition-colors"
+                  className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -295,7 +295,7 @@ export default function NewSegmentPage() {
 
         <button
           onClick={addCondition}
-          className="mt-4 flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-xs font-mono text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-all w-full justify-center"
+          className="mt-4 flex items-center gap-2 px-4 py-2 border border-dashed border-muted-foreground/50 rounded-lg text-[11px] font-mono text-muted-foreground hover:border-foreground hover:text-foreground transition-all w-full justify-center"
         >
           <Plus className="w-3.5 h-3.5" />
           Add Condition
@@ -303,47 +303,47 @@ export default function NewSegmentPage() {
       </div>
 
       {/* Preview */}
-      <div className="border border-gray-200 rounded-xl p-6 bg-white">
+      <div className="border border-border rounded-xl p-6 bg-card">
         <div className="flex items-center gap-3 mb-4">
-          <Eye className="w-4 h-4 text-gray-400" />
-          <h2 className="text-sm font-bold text-gray-900 font-mono">PREVIEW</h2>
+          <Eye className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-[13px] font-bold text-foreground font-mono">PREVIEW</h2>
           {previewQuery.isLoading && (
-            <div className="w-3 h-3 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin" />
+            <div className="w-3 h-3 border-2 border-muted-foreground/50 border-t-foreground rounded-full animate-spin" />
           )}
         </div>
 
         {previewQuery.data ? (
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <Users className="w-5 h-5 text-gray-400" />
-              <span className="text-2xl font-bold font-mono text-gray-900">
+              <Users className="w-5 h-5 text-muted-foreground" />
+              <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">
                 {previewQuery.data.count}
               </span>
-              <span className="text-sm text-gray-400 font-mono">matching customers</span>
+              <span className="text-[13px] text-muted-foreground font-mono">matching customers</span>
             </div>
             {previewQuery.data.sample.length > 0 && (
-              <div className="border border-gray-100 rounded-lg overflow-hidden">
+              <div className="border border-border rounded-lg overflow-hidden">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left px-4 py-2 text-xs font-mono text-gray-400 uppercase">Customer</th>
-                      <th className="text-left px-4 py-2 text-xs font-mono text-gray-400 uppercase">Segment</th>
-                      <th className="text-right px-4 py-2 text-xs font-mono text-gray-400 uppercase">Spent</th>
+                    <tr className="border-b border-border">
+                      <th className="text-left px-4 py-2 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Customer</th>
+                      <th className="text-left px-4 py-2 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Segment</th>
+                      <th className="text-right px-4 py-2 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Spent</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-border">
                     {previewQuery.data.sample.map((c) => (
                       <tr key={c.id}>
-                        <td className="px-4 py-2 text-sm font-mono text-gray-900">
+                        <td className="px-4 py-2 text-[13px] font-mono text-foreground">
                           {c.firstName} {c.lastName}
-                          <span className="text-gray-400 ml-2">{c.email}</span>
+                          <span className="text-muted-foreground ml-2">{c.email}</span>
                         </td>
                         <td className="px-4 py-2">
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-mono rounded">
-                            {c.segment ?? "—"}
+                          <span className="px-2 py-0.5 bg-muted text-foreground text-[11px] font-mono rounded">
+                            {c.segment ?? "\u2014"}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-right text-sm font-mono font-bold text-gray-900">
+                        <td className="px-4 py-2 text-right text-[13px] font-mono font-bold text-foreground">
                           ${(c.totalSpent ?? 0).toFixed(2)}
                         </td>
                       </tr>
@@ -354,7 +354,7 @@ export default function NewSegmentPage() {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-400 font-mono">
+          <p className="text-[13px] text-muted-foreground font-mono">
             Add conditions to see matching customers
           </p>
         )}
@@ -364,14 +364,14 @@ export default function NewSegmentPage() {
       <div className="flex items-center justify-end gap-3">
         <Link
           href="/segments"
-          className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-mono text-gray-700 hover:border-gray-400 transition-all"
+          className="px-4 py-2 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-primary/50 transition-all"
         >
           Cancel
         </Link>
         <button
           onClick={handleSave}
           disabled={!name.trim() || conditions.length === 0 || createSegment.isPending}
-          className="px-6 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 disabled:opacity-50 transition-all"
+          className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
         >
           {createSegment.isPending ? "Creating..." : "Create Segment"}
         </button>

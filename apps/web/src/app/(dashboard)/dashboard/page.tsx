@@ -114,13 +114,13 @@ function InlineModelPicker({
 }) {
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-gray-200 bg-white rounded-lg p-4 space-y-3">
+      <div className="border border-border bg-card rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-mono text-gray-500">
+          <p className="text-[11px] font-mono text-muted-foreground">
             Choose which AI model to use for all content generation:
           </p>
           {selectedModel && (
-            <p className="text-[9px] font-mono text-gray-300">
+            <p className="text-[9px] font-mono text-muted-foreground/50">
               You can change this until you start brand analysis
             </p>
           )}
@@ -136,25 +136,25 @@ function InlineModelPicker({
                 disabled={isPending || !model.available}
                 className={`relative text-left p-3 border rounded-lg transition-all ${
                   isSelected
-                    ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)] bg-gray-50"
+                    ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
                     : model.available
-                      ? "border-gray-200 hover:border-gray-400"
-                      : "border-gray-100 opacity-40 cursor-not-allowed"
+                      ? "border-border hover:border-primary/50"
+                      : "border-border opacity-40 cursor-not-allowed"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-gray-900 flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-white" />
+                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-secondary flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-secondary-foreground" />
                   </div>
                 )}
                 <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-[11px] font-mono font-bold text-gray-900">{model.label}</span>
+                  <span className="text-[11px] font-mono font-bold text-foreground">{model.label}</span>
                 </div>
                 <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-mono font-bold ${tier.bg} ${tier.text} mb-1`}>
                   {tier.label}
                 </span>
-                <p className="text-[9px] font-mono text-gray-400 mb-1.5 line-clamp-2">{model.description}</p>
-                <p className="text-[9px] font-mono text-gray-300">
+                <p className="text-[9px] font-mono text-muted-foreground mb-1.5 line-clamp-2">{model.description}</p>
+                <p className="text-[9px] font-mono text-muted-foreground/50">
                   ${model.inputCostPerMillion}/M in · ${model.outputCostPerMillion}/M out
                 </p>
               </button>
@@ -202,7 +202,7 @@ function AgentProgressPanel({ run }: { run: AgentPipelineRun }) {
                 ) : isCurrent ? (
                   <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin flex-shrink-0" />
                 ) : (
-                  <Circle className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                  <Circle className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
                 )}
                 <span
                   className={`text-[11px] font-mono ${
@@ -210,7 +210,7 @@ function AgentProgressPanel({ run }: { run: AgentPipelineRun }) {
                       ? "text-green-700"
                       : isCurrent
                         ? "text-blue-800 font-bold"
-                        : "text-gray-400"
+                        : "text-muted-foreground"
                   }`}
                 >
                   {phase.label}
@@ -281,10 +281,10 @@ function AgentSuccessPanel({
             Review the content and activate when you&apos;re ready.
           </p>
           <Link
-            href="/programs"
+            href="/automations"
             className="flex items-center gap-1 px-2.5 py-1 bg-white border border-green-200 rounded-lg text-[10px] font-mono text-green-700 hover:border-green-400 transition-all whitespace-nowrap flex-shrink-0 ml-3"
           >
-            Review Programs
+            Review Automations
             <ExternalLink className="w-2.5 h-2.5" />
           </Link>
         </div>
@@ -368,7 +368,7 @@ function SyncProgressPanel({
 }) {
   return (
     <div className="ml-11 mt-2 mb-1 space-y-2">
-      <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
+      <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
         <span>Importing data from your store...</span>
       </div>
@@ -380,14 +380,14 @@ function SyncProgressPanel({
         ].map((item) => (
           <div
             key={item.label}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 animate-pulse"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted animate-pulse"
           >
-            <item.icon className="w-3.5 h-3.5 text-gray-400" />
+            <item.icon className="w-3.5 h-3.5 text-muted-foreground" />
             <div>
-              <div className="text-sm font-mono font-bold text-gray-900 tabular-nums">
+              <div className="text-sm font-mono font-bold text-foreground tabular-nums">
                 {item.value.toLocaleString()}
               </div>
-              <div className="text-[10px] font-mono text-gray-400 uppercase">
+              <div className="text-[10px] font-mono text-muted-foreground uppercase">
                 {item.label}
               </div>
             </div>
@@ -536,30 +536,30 @@ function SetupChecklist({
   if (allDone) return null;
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-      <div className="px-6 py-5 border-b border-gray-100">
+    <div className="border border-border rounded-xl bg-card overflow-hidden">
+      <div className="px-6 py-5 border-b border-border">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-sm font-bold text-gray-900 font-mono">
+            <h2 className="text-[13px] font-bold text-foreground font-mono">
               GET_STARTED
             </h2>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
               Complete these steps to unlock the full power of AlloHQ
             </p>
           </div>
-          <span className="text-xs font-mono text-gray-400">
+          <span className="text-[12px] font-mono text-muted-foreground">
             {completedCount}/{steps.length} complete
           </span>
         </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full bg-gray-900 rounded-full transition-all duration-500"
+            className="h-full bg-secondary rounded-full transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>
       </div>
 
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-border">
         {steps.map((step, i) => {
           const isNext = step === nextStep;
           // Model step: editable until locked (brand analysis started), but only after sync is done
@@ -571,32 +571,32 @@ function SetupChecklist({
             <div key={step.key}>
               <div
                 className={`flex items-center gap-4 px-6 py-4 transition-colors ${
-                  showAsDone ? "opacity-60" : isNext || isModelEditable ? "bg-gray-50" : ""
+                  showAsDone ? "opacity-60" : isNext || isModelEditable ? "bg-muted" : ""
                 }`}
               >
                 {/* Step indicator */}
                 <div className="flex-shrink-0">
                   {showAsDone ? (
-                    <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center">
-                      <Check className="w-3.5 h-3.5 text-white" />
+                    <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
+                      <Check className="w-3.5 h-3.5 text-secondary-foreground" />
                     </div>
                   ) : isModelEditable ? (
                     <div className="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 text-white" />
                     </div>
                   ) : step.loading ? (
-                    <div className="w-7 h-7 rounded-full border-2 border-gray-900 flex items-center justify-center">
-                      <Loader2 className="w-3.5 h-3.5 text-gray-900 animate-spin" />
+                    <div className="w-7 h-7 rounded-full border-2 border-secondary flex items-center justify-center">
+                      <Loader2 className="w-3.5 h-3.5 text-foreground animate-spin" />
                     </div>
                   ) : isNext ? (
-                    <div className="w-7 h-7 rounded-full border-2 border-gray-900 flex items-center justify-center">
-                      <span className="text-xs font-mono font-bold text-gray-900">
+                    <div className="w-7 h-7 rounded-full border-2 border-secondary flex items-center justify-center">
+                      <span className="text-xs font-mono font-bold text-foreground">
                         {i + 1}
                       </span>
                     </div>
                   ) : (
-                    <div className="w-7 h-7 rounded-full border-2 border-gray-200 flex items-center justify-center">
-                      <span className="text-xs font-mono text-gray-300">
+                    <div className="w-7 h-7 rounded-full border-2 border-border flex items-center justify-center">
+                      <span className="text-xs font-mono text-muted-foreground/50">
                         {i + 1}
                       </span>
                     </div>
@@ -609,21 +609,21 @@ function SetupChecklist({
                     <step.icon
                       className={`w-3.5 h-3.5 ${
                         showAsDone
-                          ? "text-gray-400"
+                          ? "text-muted-foreground"
                           : isModelEditable
                             ? "text-green-600"
                             : step.loading
-                              ? "text-gray-900"
+                              ? "text-foreground"
                               : isNext
-                                ? "text-gray-900"
-                                : "text-gray-300"
+                                ? "text-foreground"
+                                : "text-muted-foreground/50"
                       } ${step.loading && step.key === "sync" ? "animate-spin" : ""}`}
                     />
                     <h3
-                      className={`text-sm font-mono font-bold ${
+                      className={`text-[13px] font-mono font-semibold ${
                         showAsDone
-                          ? "text-gray-400 line-through"
-                          : "text-gray-900"
+                          ? "text-muted-foreground line-through"
+                          : "text-foreground"
                       }`}
                     >
                       {step.loading
@@ -631,7 +631,7 @@ function SetupChecklist({
                         : step.label}
                     </h3>
                   </div>
-                  <p className="text-xs font-mono text-gray-400 mt-0.5 ml-5.5">
+                  <p className="text-[11px] font-mono text-muted-foreground mt-0.5 ml-5.5">
                     {step.description}
                   </p>
                 </div>
@@ -640,7 +640,7 @@ function SetupChecklist({
                 {!step.done && !step.loading && isNext && step.onAction && (
                   <button
                     onClick={step.onAction}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 transition-all whitespace-nowrap"
+                    className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all whitespace-nowrap"
                   >
                     {step.ctaLabel}
                     <ArrowRight className="w-3 h-3" />
@@ -653,19 +653,19 @@ function SetupChecklist({
                   step.href && (
                     <Link
                       href={step.href}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 transition-all whitespace-nowrap"
+                      className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all whitespace-nowrap"
                     >
                       {step.ctaLabel}
                       <ArrowRight className="w-3 h-3" />
                     </Link>
                   )}
                 {step.loading && (
-                  <span className="text-[10px] font-mono text-gray-500 whitespace-nowrap animate-pulse">
+                  <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap animate-pulse">
                     Working...
                   </span>
                 )}
                 {!step.done && !step.loading && !isNext && (
-                  <span className="text-[10px] font-mono text-gray-300 whitespace-nowrap">
+                  <span className="text-[10px] font-mono text-muted-foreground/50 whitespace-nowrap">
                     Pending
                   </span>
                 )}
@@ -675,7 +675,7 @@ function SetupChecklist({
                   </span>
                 )}
                 {showAsDone && (
-                  <span className="text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                  <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
                     Done
                   </span>
                 )}
@@ -802,7 +802,7 @@ export default function DashboardPage() {
     data: { status: string; failedReason?: string } | undefined;
   };
 
-  const { data: programs } = (trpc.programs.list as any).useQuery(
+  const { data: programs } = (trpc.automations.list as any).useQuery(
     storeId ? { storeId } : undefined,
     {
       enabled: !!storeId,
@@ -811,7 +811,7 @@ export default function DashboardPage() {
   ) as { data: Program[] | undefined };
 
   // Agent pipeline status polling
-  const { data: agentRunData } = (trpc.programs.agentStatus as any).useQuery(
+  const { data: agentRunData } = (trpc.automations.agentStatus as any).useQuery(
     { pipelineRunId: agentRunId! },
     {
       enabled: !!agentRunId && isAgentRunning,
@@ -821,7 +821,7 @@ export default function DashboardPage() {
 
   // On page load, check for latest agent run (resume tracking)
   const { data: latestAgentRun } = (
-    trpc.programs.latestAgentRun as any
+    trpc.automations.latestAgentRun as any
   ).useQuery({ storeId }, { enabled: !!storeId }) as {
     data: AgentPipelineRun | undefined;
   };
@@ -871,7 +871,7 @@ export default function DashboardPage() {
     ) {
       setIsAgentRunning(false);
       setAgentDone(agentRunData.status === "completed");
-      (utils.programs as any).list.invalidate();
+      (utils.automations as any).list.invalidate();
     }
   }, [agentRunData?.status, isAgentRunning]);
 
@@ -945,7 +945,7 @@ export default function DashboardPage() {
   }, [storeId, analyzeBrand, isAnalyzing]);
 
   // ---- Agent pipeline mutation ----
-  const launchAgent = (trpc.programs.launchAgent as any).useMutation({
+  const launchAgent = (trpc.automations.launchAgent as any).useMutation({
     onSuccess: (data: { pipelineRunId: string }) => {
       setAgentRunId(data.pipelineRunId);
       setIsAgentRunning(true);
@@ -1034,7 +1034,7 @@ export default function DashboardPage() {
       key: "agent",
       label: "Launch AI Marketing Agent",
       description:
-        "Recommend programs, generate emails + SMS + WhatsApp + RCS, and create workflows",
+        "Recommend automations, generate emails + SMS + WhatsApp + RCS, and create workflows",
       ctaLabel: "Launch Agent",
       icon: Bot,
       done: hasReadyOrActivePrograms && !isAgentRunning,
@@ -1050,24 +1050,24 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border border-gray-200 rounded-xl p-8 bg-white">
-        <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight mb-1">
+      <div className="border border-border rounded-xl p-8 bg-card">
+        <h1 className="text-[22px] font-bold text-foreground font-mono tracking-[-0.5px] mb-1">
           DASHBOARD
         </h1>
-        <p className="text-sm text-gray-400 font-mono">
+        <p className="text-[13px] text-muted-foreground font-mono">
           AlloHQ — Marketing automation for e-commerce
         </p>
         <div className="mt-5 flex items-center gap-3">
           <div
             className={`w-2 h-2 rounded-full ${
               healthLoading
-                ? "bg-gray-300 animate-pulse"
+                ? "bg-muted-foreground/50 animate-pulse"
                 : health
-                  ? "bg-gray-900"
-                  : "bg-gray-300"
+                  ? "bg-secondary"
+                  : "bg-muted-foreground/50"
             }`}
           />
-          <span className="text-xs font-mono text-gray-500">
+          <span className="text-xs font-mono text-muted-foreground">
             {healthLoading
               ? "Checking API..."
               : health
@@ -1099,24 +1099,24 @@ export default function DashboardPage() {
 
       {/* All done banner */}
       {allSetupDone && (
-        <div className="border border-green-200 bg-green-50 rounded-xl p-6 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-            <Rocket className="w-5 h-5 text-green-600" />
+        <div className="border border-[hsl(var(--success)/0.2)] bg-[hsl(var(--success-bg))] rounded-xl p-6 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-[hsl(var(--success)/0.12)] flex items-center justify-center flex-shrink-0">
+            <Rocket className="w-5 h-5 text-[hsl(var(--success))]" />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-green-800 font-mono">
+            <h3 className="text-[13px] font-bold text-[hsl(var(--success))] font-mono">
               You&apos;re all set!
             </h3>
-            <p className="text-xs text-green-600 font-mono mt-0.5">
-              Your store is connected, brand is analyzed, and programs are live.
-              Head to the programs page to manage your automations.
+            <p className="text-[11px] text-[hsl(var(--success)/0.7)] font-mono mt-0.5">
+              Your store is connected, brand is analyzed, and automations are live.
+              Head to the automations page to manage your retention strategy.
             </p>
           </div>
           <Link
-            href="/programs"
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-mono hover:bg-green-700 transition-all whitespace-nowrap"
+            href="/automations"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all whitespace-nowrap"
           >
-            Go to Programs
+            Go to Automations
             <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -1153,16 +1153,16 @@ export default function DashboardPage() {
           <Link
             key={item.title}
             href={item.href}
-            className="border border-gray-200 rounded-xl p-6 bg-white hover:border-gray-900 hover:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all duration-200 group"
+            className="border border-border rounded-xl p-6 bg-card hover:border-foreground hover:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all duration-200 group"
           >
             <div className="flex items-start justify-between mb-4">
-              <item.icon className="w-6 h-6 text-gray-300 group-hover:text-gray-900 transition-colors duration-200" />
-              <ArrowUpRight className="w-4 h-4 text-gray-200 group-hover:text-gray-900 transition-colors duration-200" />
+              <item.icon className="w-6 h-6 text-muted-foreground/50 group-hover:text-foreground transition-colors duration-200" />
+              <ArrowUpRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors duration-200" />
             </div>
-            <h3 className="text-sm font-bold text-gray-900 font-mono mb-1">
+            <h3 className="text-[12px] font-bold text-foreground font-mono mb-1">
               {item.title}
             </h3>
-            <p className="text-xs text-gray-400 font-mono">
+            <p className="text-[11px] text-muted-foreground font-mono">
               {item.description}
             </p>
           </Link>
@@ -1188,15 +1188,15 @@ export default function DashboardPage() {
           ].map((stat, i) => (
             <div
               key={i}
-              className="border border-gray-200 rounded-xl p-6 bg-white"
+              className="border border-border rounded-xl p-6 bg-card"
             >
-              <div className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-2">
+              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-2">
                 {stat.label}
               </div>
               {statsLoading ? (
-                <div className="h-9 w-20 bg-gray-100 rounded animate-pulse" />
+                <div className="h-9 w-20 bg-muted rounded animate-pulse" />
               ) : (
-                <div className="text-3xl font-bold text-gray-900 font-mono">
+                <div className="text-[28px] font-bold text-foreground font-mono tabular-nums">
                   {stat.value}
                 </div>
               )}
@@ -1207,35 +1207,35 @@ export default function DashboardPage() {
 
       {/* AI Usage */}
       {tokenUsage && tokenUsage.totalCalls > 0 && (
-        <div className="border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="border border-border rounded-xl p-6 bg-card">
           <div className="flex items-center gap-3 mb-5">
-            <Cpu className="w-4 h-4 text-gray-400" />
-            <h2 className="text-sm font-bold text-gray-900 font-mono">AI_USAGE</h2>
+            <Cpu className="w-4 h-4 text-muted-foreground" />
+            <h2 className="text-[13px] font-bold text-foreground font-mono">AI_USAGE</h2>
           </div>
 
           {/* Summary stats */}
           <div className="grid grid-cols-3 gap-4 mb-5">
-            <div className="border border-gray-100 rounded-lg p-4">
-              <div className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1">
+            <div className="border border-border rounded-lg p-4">
+              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-1">
                 Total Tokens
               </div>
-              <div className="text-2xl font-bold text-gray-900 font-mono tabular-nums">
+              <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
                 {((tokenUsage.totalInputTokens + tokenUsage.totalOutputTokens) / 1000).toFixed(1)}K
               </div>
             </div>
-            <div className="border border-gray-100 rounded-lg p-4">
-              <div className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1">
+            <div className="border border-border rounded-lg p-4">
+              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-1">
                 Estimated Cost
               </div>
-              <div className="text-2xl font-bold text-gray-900 font-mono tabular-nums">
+              <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
                 ${tokenUsage.totalCost < 0.01 ? "<0.01" : tokenUsage.totalCost.toFixed(2)}
               </div>
             </div>
-            <div className="border border-gray-100 rounded-lg p-4">
-              <div className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1">
+            <div className="border border-border rounded-lg p-4">
+              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-1">
                 AI Calls
               </div>
-              <div className="text-2xl font-bold text-gray-900 font-mono tabular-nums">
+              <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
                 {tokenUsage.totalCalls}
               </div>
             </div>
@@ -1244,25 +1244,25 @@ export default function DashboardPage() {
           {/* Per-model breakdown */}
           {tokenUsage.byModel.length > 0 && (
             <div className="space-y-2">
-              <div className="text-[10px] text-gray-400 font-mono uppercase tracking-wider mb-2">
+              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[0.5px] mb-2">
                 By Model
               </div>
               {tokenUsage.byModel.map((m) => (
                 <div
                   key={m.model}
-                  className="flex items-center justify-between px-3 py-2 border border-gray-50 rounded-lg"
+                  className="flex items-center justify-between px-3 py-2 border border-border rounded-lg"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono font-bold text-gray-900">{m.model}</span>
-                    <span className="text-[10px] font-mono text-gray-400">
+                    <span className="text-xs font-mono font-bold text-foreground">{m.model}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
                       {m.calls} call{m.calls !== 1 ? "s" : ""}
                     </span>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-[10px] font-mono text-gray-400 tabular-nums">
+                    <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
                       {((m.inputTokens + m.outputTokens) / 1000).toFixed(1)}K tokens
                     </span>
-                    <span className="text-xs font-mono font-bold text-gray-700 tabular-nums">
+                    <span className="text-xs font-mono font-bold text-foreground tabular-nums">
                       ${m.cost < 0.01 ? "<0.01" : m.cost.toFixed(4)}
                     </span>
                   </div>
@@ -1274,61 +1274,61 @@ export default function DashboardPage() {
       )}
 
       {/* Recent activity */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-px h-5 bg-gray-900" />
-          <h2 className="text-sm font-bold text-gray-900 font-mono">
+      <div className="border border-border rounded-xl overflow-hidden bg-card">
+        <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+          <div className="w-px h-5 bg-secondary" />
+          <h2 className="text-[13px] font-bold text-foreground font-mono">
             RECENT_ACTIVITY
           </h2>
         </div>
         {statsLoading ? (
           <div className="p-6 space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
+              <div key={i} className="h-8 bg-muted rounded animate-pulse" />
             ))}
           </div>
         ) : stats?.recentOrders && stats.recentOrders.length > 0 ? (
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-50">
-                <th className="text-left px-6 py-3 text-xs font-mono text-gray-400 uppercase">
+              <tr className="border-b border-border">
+                <th className="text-left px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
                   Order
                 </th>
-                <th className="text-left px-6 py-3 text-xs font-mono text-gray-400 uppercase">
+                <th className="text-left px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
                   Customer
                 </th>
-                <th className="text-left px-6 py-3 text-xs font-mono text-gray-400 uppercase">
+                <th className="text-left px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
                   Status
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-mono text-gray-400 uppercase">
+                <th className="text-right px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
                   Total
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-mono text-gray-400 uppercase">
+                <th className="text-right px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
                   Date
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-border">
               {stats.recentOrders.map((order) => (
                 <tr
                   key={order.id}
-                  className="hover:bg-gray-50 transition-colors"
+                  className="hover:bg-muted transition-colors"
                 >
-                  <td className="px-6 py-3 text-sm font-mono font-bold text-gray-900">
+                  <td className="px-6 py-3 text-[13px] font-mono font-bold text-foreground">
                     #{order.orderNumber}
                   </td>
-                  <td className="px-6 py-3 text-sm font-mono text-gray-700">
+                  <td className="px-6 py-3 text-[13px] font-mono text-foreground">
                     {order.customerName}
                   </td>
                   <td className="px-6 py-3">
-                    <span className="px-2 py-0.5 rounded text-xs font-mono bg-gray-100 text-gray-700">
+                    <span className="px-2 py-0.5 rounded text-xs font-mono bg-muted text-foreground">
                       {order.status}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-right text-sm font-mono font-bold text-gray-900">
+                  <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground tabular-nums">
                     ${order.totalPrice.toFixed(2)}
                   </td>
-                  <td className="px-6 py-3 text-right text-xs font-mono text-gray-400">
+                  <td className="px-6 py-3 text-right text-[11px] font-mono text-muted-foreground">
                     {new Date(order.createdAt).toLocaleDateString()}
                   </td>
                 </tr>
@@ -1337,9 +1337,9 @@ export default function DashboardPage() {
           </table>
         ) : (
           <div className="p-10 text-center">
-            <ShoppingBag className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-400 font-mono">No orders yet</p>
-            <p className="text-xs text-gray-300 font-mono mt-1">
+            <ShoppingBag className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+            <p className="text-[13px] text-muted-foreground font-mono">No orders yet</p>
+            <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
               Connect a store and sync data to see activity
             </p>
           </div>

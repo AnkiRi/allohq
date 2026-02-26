@@ -2,10 +2,11 @@ import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { RouteProgress } from "@/components/layout/RouteProgress";
+import { AlloAIPanel } from "@/components/ai/AlloAIPanel";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen bg-[#FAFAFA]">
+    <div className="flex h-screen bg-background">
       <Suspense fallback={null}>
         <RouteProgress />
       </Suspense>
@@ -18,8 +19,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top bar */}
         <TopBar />
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        {/* Content + AI Panel */}
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <AlloAIPanel />
+        </div>
       </div>
     </div>
   );

@@ -32,17 +32,17 @@ export default function OrdersPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
+        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
           ORDERS
         </h1>
-        <p className="text-sm text-gray-400 font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground font-mono mt-1">
           Orders synced from your store
         </p>
       </div>
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           type="text"
           placeholder="Search by order number or customer..."
@@ -51,52 +51,52 @@ export default function OrdersPage() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900 focus:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all"
+          className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
         />
       </div>
 
       {/* Order table */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+      <div className="border border-border rounded-xl overflow-hidden bg-card">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left px-5 py-3 text-xs font-mono text-gray-400 uppercase tracking-wider">
+            <tr className="border-b border-border">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
                 Order
               </th>
-              <th className="text-left px-5 py-3 text-xs font-mono text-gray-400 uppercase tracking-wider">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
                 Customer
               </th>
-              <th className="text-right px-5 py-3 text-xs font-mono text-gray-400 uppercase tracking-wider">
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
                 Total
               </th>
-              <th className="text-right px-5 py-3 text-xs font-mono text-gray-400 uppercase tracking-wider">
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
                 Items
               </th>
-              <th className="text-left px-5 py-3 text-xs font-mono text-gray-400 uppercase tracking-wider">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
                 Status
               </th>
-              <th className="text-left px-5 py-3 text-xs font-mono text-gray-400 uppercase tracking-wider">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
                 Date
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-border">
             {isLoading || !store ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
                   <td colSpan={6} className="px-5 py-4">
-                    <div className="h-4 bg-gray-100 rounded animate-pulse" />
+                    <div className="h-4 bg-muted rounded animate-pulse" />
                   </td>
                 </tr>
               ))
             ) : data?.orders.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-5 py-16 text-center">
-                  <ShoppingCart className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-400 font-mono">
+                  <ShoppingCart className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+                  <p className="text-[13px] text-muted-foreground font-mono">
                     No orders found
                   </p>
-                  <p className="text-xs text-gray-300 font-mono mt-1">
+                  <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
                     Sync your store to import orders
                   </p>
                 </td>
@@ -105,39 +105,39 @@ export default function OrdersPage() {
               data?.orders.map((order) => (
                 <tr
                   key={order.id}
-                  className="hover:bg-gray-50 transition-colors"
+                  className="hover:bg-muted transition-colors"
                 >
                   <td className="px-5 py-4">
-                    <span className="text-sm font-medium text-gray-900 font-mono">
+                    <span className="text-[13px] font-medium text-foreground font-mono">
                       {order.orderNumber}
                     </span>
                   </td>
                   <td className="px-5 py-4">
                     <div>
-                      <div className="text-sm text-gray-900">
+                      <div className="text-[13px] text-foreground">
                         {order.customer.firstName} {order.customer.lastName}
                       </div>
-                      <div className="text-xs text-gray-400 font-mono">
+                      <div className="text-[11px] text-muted-foreground font-mono">
                         {order.customer.email}
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-right text-sm font-mono font-bold text-gray-900">
+                  <td className="px-5 py-4 text-right text-[13px] font-mono font-bold text-foreground">
                     ${order.totalPrice.toFixed(2)}
                   </td>
-                  <td className="px-5 py-4 text-right text-sm font-mono text-gray-500">
+                  <td className="px-5 py-4 text-right text-[13px] font-mono text-muted-foreground">
                     {order.items.length}
                   </td>
                   <td className="px-5 py-4">
                     <span
-                      className={`inline-block px-2.5 py-1 rounded-md text-xs font-mono ${
-                        STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-500"
+                      className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-mono ${
+                        STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
                       }`}
                     >
                       {order.status}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-sm font-mono text-gray-500">
+                  <td className="px-5 py-4 text-[13px] font-mono text-muted-foreground">
                     {new Date(order.createdAt).toLocaleDateString()}
                   </td>
                 </tr>
@@ -148,24 +148,24 @@ export default function OrdersPage() {
 
         {/* Pagination */}
         {data && data.pages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
-            <span className="text-xs text-gray-400 font-mono">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border">
+            <span className="text-[11px] text-muted-foreground font-mono">
               {data.total} orders · Page {data.page} of {data.pages}
             </span>
             <div className="flex gap-1">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-1.5 rounded border border-gray-200 hover:border-gray-400 disabled:opacity-30 transition-colors"
+                className="p-1.5 rounded border border-border hover:border-primary/50 disabled:opacity-30 transition-colors"
               >
-                <ChevronLeft className="w-4 h-4 text-gray-600" />
+                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
                 disabled={page === data.pages}
-                className="p-1.5 rounded border border-gray-200 hover:border-gray-400 disabled:opacity-30 transition-colors"
+                className="p-1.5 rounded border border-border hover:border-primary/50 disabled:opacity-30 transition-colors"
               >
-                <ChevronRight className="w-4 h-4 text-gray-600" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
           </div>

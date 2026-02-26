@@ -29,20 +29,20 @@ export default function NewTemplatePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <Link href="/templates" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-          <ArrowLeft className="w-4 h-4 text-gray-400" />
+        <Link href="/templates" className="p-2 rounded-lg hover:bg-muted transition-colors">
+          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
         <div className="flex-1 flex items-center gap-4">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="text-lg font-bold text-gray-900 font-mono bg-transparent border-none outline-none"
+            className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono bg-transparent border-none outline-none"
             placeholder="Template name..."
           />
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="text-sm text-gray-500 font-mono bg-transparent border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-gray-400 w-64"
+            className="text-[13px] text-muted-foreground font-mono bg-transparent border border-border rounded-lg px-3 py-1.5 outline-none focus:border-muted-foreground w-64"
             placeholder="Subject line..."
           />
         </div>

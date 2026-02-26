@@ -62,10 +62,10 @@ export default function IntegrationsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
+        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
           INTEGRATIONS
         </h1>
-        <p className="text-sm text-gray-400 font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground font-mono mt-1">
           Connect your e-commerce platforms
         </p>
       </div>
@@ -73,51 +73,51 @@ export default function IntegrationsPage() {
       {/* Connected stores */}
       {isLoading ? (
         <div className="space-y-3">
-          <h2 className="text-xs font-mono text-gray-400 uppercase tracking-wider">Connected Stores</h2>
+          <h2 className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">Connected Stores</h2>
           {[1, 2].map((i) => (
-            <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-20 bg-muted rounded-xl animate-pulse" />
           ))}
         </div>
       ) : connectedShopifyStores && connectedShopifyStores.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-xs font-mono text-gray-400 uppercase tracking-wider">
+          <h2 className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">
             Connected Stores
           </h2>
           {connectedShopifyStores.map((store) => (
             <a
               key={store.id}
               href="/integrations/shopify"
-              className="flex items-center justify-between p-5 bg-white border border-gray-200 rounded-xl hover:border-gray-900 hover:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all group"
+              className="flex items-center justify-between p-5 bg-card border border-border rounded-xl hover:border-foreground hover:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all group"
             >
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-[#96BF48] flex items-center justify-center">
                   <ShoppingBag className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-gray-900 font-mono">
+                  <div className="text-[13px] font-medium text-foreground font-mono">
                     {store.shopDomain}
                   </div>
-                  <div className="text-xs text-gray-400 font-mono mt-0.5">
+                  <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
                     {store._count.products} products · {store._count.customers}{" "}
                     customers · {store._count.orders} orders
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-xs font-mono text-green-600">
+                <span className="flex items-center gap-1.5 text-[11px] font-mono text-green-600">
                   <Check className="w-3.5 h-3.5" />
                   Connected
                 </span>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors" />
+                <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
               </div>
             </a>
           ))}
         </div>
       )}
 
-      {/* Connect dialog — loading indicator on redirect */}
+      {/* Connect dialog -- loading indicator on redirect */}
       {isLoading && (
-        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           Loading stores...
         </div>
@@ -125,49 +125,49 @@ export default function IntegrationsPage() {
 
       {/* Platform cards */}
       <div className="space-y-3">
-        <h2 className="text-xs font-mono text-gray-400 uppercase tracking-wider">
+        <h2 className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">
           Available Integrations
         </h2>
         <div className="grid grid-cols-3 gap-4">
           {platforms.map((platform) => (
             <div
               key={platform.id}
-              className="p-5 bg-white border border-gray-200 rounded-xl hover:border-gray-400 transition-all"
+              className="p-5 bg-card border border-border rounded-xl hover:border-primary/50 transition-all"
             >
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     platform.id === "shopify"
                       ? "bg-[#96BF48]"
-                      : "bg-gray-100"
+                      : "bg-muted"
                   }`}
                 >
                   <Store
                     className={`w-5 h-5 ${
                       platform.id === "shopify"
                         ? "text-white"
-                        : "text-gray-400"
+                        : "text-muted-foreground"
                     }`}
                   />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-gray-900 font-mono">
+                  <div className="text-[13px] font-medium text-foreground font-mono">
                     {platform.name}
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 font-mono mb-4">
+              <p className="text-[11px] text-muted-foreground font-mono mb-4">
                 {platform.description}
               </p>
               {platform.status === "available" ? (
                 <button
                   onClick={() => setShowDialog(true)}
-                  className="w-full py-2 px-3 bg-gray-900 text-white text-xs font-mono rounded-lg hover:bg-gray-800 transition-colors"
+                  className="w-full py-2 px-3 bg-secondary text-secondary-foreground text-[11px] font-mono rounded-lg hover:bg-secondary/90 transition-colors"
                 >
                   Connect Shopify
                 </button>
               ) : (
-                <div className="w-full py-2 px-3 bg-gray-50 text-gray-400 text-xs font-mono rounded-lg text-center">
+                <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center">
                   Coming Soon
                 </div>
               )}
@@ -179,9 +179,9 @@ export default function IntegrationsPage() {
       {/* Connect dialog */}
       {showDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+          <div className="bg-card rounded-xl p-6 w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-gray-900 font-mono">
+              <h3 className="text-[13px] font-bold text-foreground font-mono">
                 Connect Shopify Store
               </h3>
               <button
@@ -190,14 +190,14 @@ export default function IntegrationsPage() {
                   setError("");
                   setShopDomain("");
                 }}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-muted rounded"
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-mono text-gray-500 mb-1.5">
+                <label className="block text-[11px] font-mono text-muted-foreground mb-1.5">
                   Shop Domain
                 </label>
                 <div className="flex items-center">
@@ -210,14 +210,14 @@ export default function IntegrationsPage() {
                       setError("");
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-l-lg text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900 focus:shadow-[0_0_0_1px_rgba(0,0,0,1)] transition-all"
+                    className="flex-1 px-3 py-2.5 border border-border rounded-l-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
                   />
-                  <span className="px-3 py-2.5 bg-gray-50 border border-l-0 border-gray-200 rounded-r-lg text-sm font-mono text-gray-400">
+                  <span className="px-3 py-2.5 bg-muted border border-l-0 border-border rounded-r-lg text-[13px] font-mono text-muted-foreground">
                     .myshopify.com
                   </span>
                 </div>
                 {error && (
-                  <p className="text-xs text-red-500 font-mono mt-1.5">
+                  <p className="text-[11px] text-red-500 font-mono mt-1.5">
                     {error}
                   </p>
                 )}
@@ -225,7 +225,7 @@ export default function IntegrationsPage() {
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="w-full py-2.5 bg-gray-900 text-white text-sm font-mono rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-secondary text-secondary-foreground text-[13px] font-mono rounded-lg hover:bg-secondary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
               >
                 {connecting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {connecting ? "Connecting..." : "Connect Store"}

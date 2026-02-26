@@ -79,8 +79,8 @@ function DraggableBlockItem({ def }: { def: BlockDef }) {
       {...listeners}
       {...attributes}
       className={cn(
-        "flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm font-mono",
-        "text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors",
+        "flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-mono",
+        "text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
         "cursor-grab active:cursor-grabbing",
         isDragging && "opacity-40"
       )}
@@ -97,9 +97,9 @@ function DraggableBlockItem({ def }: { def: BlockDef }) {
 
 export function BlockPalette() {
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
-      <div className="px-4 py-4 border-b border-gray-200">
-        <h2 className="text-xs font-bold text-gray-900 font-mono tracking-wider uppercase">
+    <aside className="w-60 bg-card border-r border-border flex flex-col overflow-y-auto">
+      <div className="px-4 py-4 border-b border-border">
+        <h2 className="text-[10px] font-bold text-foreground font-mono tracking-[1px] uppercase">
           Blocks
         </h2>
       </div>
@@ -107,7 +107,7 @@ export function BlockPalette() {
       <div className="flex-1 px-2 py-3 space-y-4">
         {GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="px-3 mb-1 text-[10px] font-mono font-semibold text-gray-400 tracking-wider uppercase">
+            <p className="px-3 mb-1 text-[10px] font-mono font-semibold text-muted-foreground tracking-wider uppercase">
               {group.label}
             </p>
             <div className="space-y-0.5">

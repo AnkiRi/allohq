@@ -71,10 +71,10 @@ export default function NewCampaignPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/campaigns" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-          <ArrowLeft className="w-4 h-4 text-gray-400" />
+        <Link href="/campaigns" className="p-2 rounded-lg hover:bg-muted transition-colors">
+          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
-        <h1 className="text-xl font-bold text-gray-900 font-mono tracking-tight">NEW_CAMPAIGN</h1>
+        <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono">NEW_CAMPAIGN</h1>
       </div>
 
       {/* Step indicator */}
@@ -85,16 +85,16 @@ export default function NewCampaignPage() {
               onClick={() => i <= currentIdx && setStep(s.key)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
                 s.key === step
-                  ? "bg-gray-900 text-white"
+                  ? "bg-secondary text-secondary-foreground"
                   : i < currentIdx
-                    ? "bg-gray-100 text-gray-900"
-                    : "bg-white border border-gray-200 text-gray-400"
+                    ? "bg-muted text-foreground"
+                    : "bg-card border border-border text-muted-foreground"
               }`}
             >
               {i < currentIdx && <Check className="w-3 h-3" />}
               {s.label}
             </button>
-            {i < steps.length - 1 && <ArrowRight className="w-3 h-3 text-gray-300" />}
+            {i < steps.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground/50" />}
           </div>
         ))}
       </div>
@@ -104,8 +104,8 @@ export default function NewCampaignPage() {
         <div className="flex items-center gap-3 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl">
           <Palette className="w-4 h-4 text-purple-600 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-purple-900 font-mono">Set up your brand voice first</p>
-            <p className="text-xs text-purple-600 font-mono mt-0.5">
+            <p className="text-[13px] font-bold text-purple-900 font-mono">Set up your brand voice first</p>
+            <p className="text-[11px] text-purple-600 font-mono mt-0.5">
               Brand analysis is required before creating campaigns. This helps AI create on-brand content.
             </p>
           </div>
@@ -120,23 +120,23 @@ export default function NewCampaignPage() {
       )}
 
       {/* Step content */}
-      <div className="border border-gray-200 rounded-xl bg-white p-6">
+      <div className="border border-border rounded-xl bg-card p-6">
         {step === "details" && (
           <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 font-mono">Campaign Details</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">Campaign Details</h2>
             <div>
-              <label className="block text-xs text-gray-400 font-mono mb-1">Campaign Name</label>
+              <label className="block text-[11px] text-muted-foreground font-mono mb-1">Campaign Name</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-gray-400"
+                className="w-full border border-border rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-muted-foreground"
                 placeholder="e.g., Summer Sale 2026"
               />
             </div>
             <button
               onClick={() => setStep("template")}
               disabled={!name}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               Next <ArrowRight className="w-3 h-3" />
             </button>
@@ -145,10 +145,10 @@ export default function NewCampaignPage() {
 
         {step === "template" && (
           <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 font-mono">Select Template</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">Select Template</h2>
             {templatesLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
               </div>
             ) : templates && templates.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
@@ -158,17 +158,17 @@ export default function NewCampaignPage() {
                     onClick={() => setTemplateId(t.id)}
                     className={`text-left p-3 border rounded-lg transition-all ${
                       templateId === t.id
-                        ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)]"
-                        : "border-gray-200 hover:border-gray-400"
+                        ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]"
+                        : "border-border hover:border-primary/50"
                     }`}
                   >
-                    <p className="text-xs font-bold text-gray-900 font-mono truncate">{t.name}</p>
-                    <p className="text-[10px] text-gray-400 font-mono truncate mt-0.5">{t.subject}</p>
+                    <p className="text-[11px] font-bold text-foreground font-mono truncate">{t.name}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{t.subject}</p>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 font-mono">
+              <p className="text-[13px] text-muted-foreground font-mono">
                 No templates yet.{" "}
                 <Link href="/templates/new" className="underline">
                   Create one
@@ -178,7 +178,7 @@ export default function NewCampaignPage() {
             <button
               onClick={() => setStep("audience")}
               disabled={!templateId}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               Next <ArrowRight className="w-3 h-3" />
             </button>
@@ -187,42 +187,42 @@ export default function NewCampaignPage() {
 
         {step === "audience" && (
           <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 font-mono">Select Audience</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">Select Audience</h2>
             {segmentsLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
               </div>
             ) : (
             <div className="space-y-2">
               <button
                 onClick={() => setSegmentId(undefined)}
                 className={`w-full text-left p-3 border rounded-lg transition-all ${
-                  !segmentId ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)]" : "border-gray-200 hover:border-gray-400"
+                  !segmentId ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                 }`}
               >
-                <p className="text-xs font-bold text-gray-900 font-mono">All Subscribers</p>
-                <p className="text-[10px] text-gray-400 font-mono">Send to all marketing-opted-in customers</p>
+                <p className="text-[11px] font-bold text-foreground font-mono">All Subscribers</p>
+                <p className="text-[10px] text-muted-foreground font-mono">Send to all marketing-opted-in customers</p>
               </button>
               {segments?.map((seg) => (
                 <button
                   key={seg.id}
                   onClick={() => setSegmentId(seg.id)}
                   className={`w-full text-left p-3 border rounded-lg transition-all ${
-                    segmentId === seg.id ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)]" : "border-gray-200 hover:border-gray-400"
+                    segmentId === seg.id ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-gray-900 font-mono">{seg.name}</p>
-                    <span className="text-[10px] text-gray-400 font-mono">{seg.customerCount} customers</span>
+                    <p className="text-[11px] font-bold text-foreground font-mono">{seg.name}</p>
+                    <span className="text-[10px] text-muted-foreground font-mono">{seg.customerCount} customers</span>
                   </div>
-                  {seg.description && <p className="text-[10px] text-gray-400 font-mono mt-0.5">{seg.description}</p>}
+                  {seg.description && <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{seg.description}</p>}
                 </button>
               ))}
             </div>
             )}
             <button
               onClick={() => setStep("schedule")}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all"
             >
               Next <ArrowRight className="w-3 h-3" />
             </button>
@@ -231,39 +231,39 @@ export default function NewCampaignPage() {
 
         {step === "schedule" && (
           <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 font-mono">When to Send</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">When to Send</h2>
             <div className="space-y-2">
               <button
                 onClick={() => setSendNow(true)}
                 className={`w-full text-left p-3 border rounded-lg transition-all ${
-                  sendNow ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)]" : "border-gray-200 hover:border-gray-400"
+                  sendNow ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                 }`}
               >
-                <p className="text-xs font-bold text-gray-900 font-mono">Send Now</p>
-                <p className="text-[10px] text-gray-400 font-mono">Send immediately after creation</p>
+                <p className="text-[11px] font-bold text-foreground font-mono">Send Now</p>
+                <p className="text-[10px] text-muted-foreground font-mono">Send immediately after creation</p>
               </button>
               <button
                 onClick={() => setSendNow(false)}
                 className={`w-full text-left p-3 border rounded-lg transition-all ${
-                  !sendNow ? "border-gray-900 shadow-[0_0_0_1px_rgba(0,0,0,1)]" : "border-gray-200 hover:border-gray-400"
+                  !sendNow ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                 }`}
               >
-                <p className="text-xs font-bold text-gray-900 font-mono">Schedule</p>
-                <p className="text-[10px] text-gray-400 font-mono">Pick a date and time</p>
+                <p className="text-[11px] font-bold text-foreground font-mono">Schedule</p>
+                <p className="text-[10px] text-muted-foreground font-mono">Pick a date and time</p>
               </button>
               {!sendNow && (
                 <input
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(e) => setScheduledAt(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-gray-400"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-muted-foreground"
                 />
               )}
             </div>
             <button
               onClick={handleCreate}
               disabled={createMut.isPending || sendMut.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-mono hover:bg-gray-800 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               {createMut.isPending || sendMut.isPending ? "Creating..." : sendNow ? "Create & Send" : "Create & Schedule"}
             </button>

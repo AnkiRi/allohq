@@ -34,7 +34,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     case "text":
       return (
         <div
-          className="text-sm font-mono text-gray-700 leading-relaxed"
+          className="text-[13px] font-mono text-foreground leading-relaxed"
           style={{ textAlign: block.props.align || "left", fontSize: block.props.fontSize }}
           dangerouslySetInnerHTML={{ __html: block.props.html }}
         />
@@ -54,8 +54,8 @@ function BlockPreview({ block }: { block: EmailBlock }) {
           />
         </div>
       ) : (
-        <div className="h-24 bg-gray-100 rounded-lg border border-dashed border-gray-300 flex items-center justify-center">
-          <span className="text-xs font-mono text-gray-400">Image placeholder</span>
+        <div className="h-24 bg-muted rounded-lg border border-dashed border-muted-foreground/50 flex items-center justify-center">
+          <span className="text-[11px] font-mono text-muted-foreground">Image placeholder</span>
         </div>
       );
 
@@ -63,7 +63,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
       return (
         <div style={{ textAlign: block.props.align || "center" }}>
           <span
-            className="inline-block px-6 py-2 text-sm font-mono font-medium rounded"
+            className="inline-block px-6 py-2 text-[13px] font-mono font-medium rounded"
             style={{
               backgroundColor: block.props.bgColor || "#000000",
               color: block.props.textColor || "#FFFFFF",
@@ -93,7 +93,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
           className="flex items-center justify-center"
           style={{ height: block.props.height }}
         >
-          <span className="text-[10px] font-mono text-gray-300">
+          <span className="text-[10px] font-mono text-muted-foreground/50">
             {block.props.height}px
           </span>
         </div>
@@ -101,25 +101,25 @@ function BlockPreview({ block }: { block: EmailBlock }) {
 
     case "product":
       return (
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg border border-dashed border-muted-foreground/50">
           {block.props.showImage !== false && block.props.imageUrl ? (
             <img src={block.props.imageUrl} alt={block.props.title || ""} className="w-12 h-12 object-cover rounded" />
           ) : (
-            <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] font-mono text-gray-400">IMG</span>
+            <div className="w-12 h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
+              <span className="text-[10px] font-mono text-muted-foreground">IMG</span>
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-mono text-gray-700 font-bold truncate">
+            <p className="text-[11px] font-mono text-foreground font-bold truncate">
               {block.props.title || block.props.productId || "Product"}
             </p>
             {block.props.showPrice !== false && block.props.price != null && (
-              <p className="text-[10px] font-mono text-gray-500">${Number(block.props.price).toFixed(2)}</p>
+              <p className="text-[10px] font-mono text-muted-foreground">${Number(block.props.price).toFixed(2)}</p>
             )}
             {block.props.showDescription !== false && block.props.description && (
-              <p className="text-[10px] font-mono text-gray-400 truncate">{block.props.description}</p>
+              <p className="text-[10px] font-mono text-muted-foreground truncate">{block.props.description}</p>
             )}
-            <span className="inline-block mt-1 px-2 py-0.5 bg-gray-900 text-white text-[10px] font-mono rounded">
+            <span className="inline-block mt-1 px-2 py-0.5 bg-secondary text-secondary-foreground text-[10px] font-mono rounded">
               {block.props.buttonText || "Shop Now"}
             </span>
           </div>
@@ -128,8 +128,8 @@ function BlockPreview({ block }: { block: EmailBlock }) {
 
     case "product_grid":
       return (
-        <div className="p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          <p className="text-xs font-mono text-gray-500 text-center">
+        <div className="p-3 bg-muted rounded-lg border border-dashed border-muted-foreground/50">
+          <p className="text-[11px] font-mono text-muted-foreground text-center">
             Product Grid ({block.props.productIds.length} products, {block.props.columns || 2} columns)
           </p>
         </div>
@@ -141,9 +141,9 @@ function BlockPreview({ block }: { block: EmailBlock }) {
           {block.props.columns.map((col: EmailBlock[], i: number) => (
             <div
               key={i}
-              className="flex-1 min-h-[40px] bg-gray-50 rounded border border-dashed border-gray-300 flex items-center justify-center"
+              className="flex-1 min-h-[40px] bg-muted rounded border border-dashed border-muted-foreground/50 flex items-center justify-center"
             >
-              <span className="text-[10px] font-mono text-gray-400">
+              <span className="text-[10px] font-mono text-muted-foreground">
                 Col {i + 1} ({col.length} blocks)
               </span>
             </div>
@@ -160,19 +160,19 @@ function BlockPreview({ block }: { block: EmailBlock }) {
           {block.props.logoSrc ? (
             <img src={block.props.logoSrc} alt={block.props.logoAlt || "Logo"} className="h-8" />
           ) : (
-            <span className="text-xs font-mono text-gray-400">Header / Logo</span>
+            <span className="text-[11px] font-mono text-muted-foreground">Header / Logo</span>
           )}
         </div>
       );
 
     case "footer":
       return (
-        <div className="text-center p-3 bg-gray-50 rounded-lg">
-          <p className="text-[11px] font-mono text-gray-500 line-clamp-2">
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <p className="text-[11px] font-mono text-muted-foreground line-clamp-2">
             {block.props.text}
           </p>
           {block.props.unsubscribeText && (
-            <p className="text-[10px] font-mono text-gray-400 underline mt-1">
+            <p className="text-[10px] font-mono text-muted-foreground underline mt-1">
               {block.props.unsubscribeText}
             </p>
           )}
@@ -182,7 +182,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     case "social":
       return (
         <div className="flex items-center justify-center gap-2 p-2">
-          <span className="text-xs font-mono text-gray-400">
+          <span className="text-[11px] font-mono text-muted-foreground">
             Social links ({block.props.links.length})
           </span>
         </div>
@@ -190,8 +190,8 @@ function BlockPreview({ block }: { block: EmailBlock }) {
 
     default:
       return (
-        <div className="p-3 bg-gray-50 rounded-lg">
-          <p className="text-xs font-mono text-gray-400">Unknown block</p>
+        <div className="p-3 bg-muted rounded-lg">
+          <p className="text-[11px] font-mono text-muted-foreground">Unknown block</p>
         </div>
       );
   }
@@ -232,10 +232,10 @@ function SortableBlock({
       style={style}
       onClick={onSelect}
       className={cn(
-        "group relative rounded-lg border bg-white transition-all",
+        "group relative rounded-lg border bg-card transition-all",
         isSelected
-          ? "border-gray-900 ring-1 ring-gray-900"
-          : "border-gray-200 hover:border-gray-400",
+          ? "border-foreground ring-1 ring-foreground"
+          : "border-border hover:border-primary/50",
         isDragging && "opacity-40"
       )}
     >
@@ -244,7 +244,7 @@ function SortableBlock({
         <button
           {...attributes}
           {...listeners}
-          className="p-1 rounded text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+          className="p-1 rounded text-muted-foreground hover:text-muted-foreground cursor-grab active:cursor-grabbing"
         >
           <GripVertical className="w-4 h-4" />
         </button>
@@ -256,15 +256,15 @@ function SortableBlock({
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          className="p-1 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
         >
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Block type label */}
-      <div className="px-3 py-1.5 border-b border-gray-100">
-        <span className="text-[10px] font-mono font-semibold text-gray-400 uppercase tracking-wider">
+      <div className="px-3 py-1.5 border-b border-border">
+        <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">
           {block.type}
         </span>
       </div>
@@ -290,15 +290,15 @@ function CanvasDropZone({ children, isEmpty }: { children: React.ReactNode; isEm
       className={cn(
         "flex-1 min-h-[200px] rounded-xl border-2 border-dashed transition-colors p-4",
         isOver
-          ? "border-gray-400 bg-gray-50"
+          ? "border-primary/50 bg-muted"
           : isEmpty
-            ? "border-gray-200 bg-gray-50/50"
+            ? "border-border bg-muted/50"
             : "border-transparent bg-transparent"
       )}
     >
       {isEmpty ? (
         <div className="flex items-center justify-center h-full min-h-[200px]">
-          <p className="text-sm font-mono text-gray-400">
+          <p className="text-[13px] font-mono text-muted-foreground">
             Drag blocks here to start building
           </p>
         </div>
@@ -433,19 +433,19 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full bg-gray-50">
+      <div className="flex h-full bg-muted">
         {/* Left: Block Palette */}
         <BlockPalette />
 
         {/* Center: Canvas */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Toolbar */}
-          <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200">
+          <div className="flex items-center justify-between px-6 py-3 bg-card border-b border-border">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold font-mono text-gray-900 tracking-wider uppercase">
+              <h2 className="text-[10px] font-bold font-mono text-foreground tracking-[1px] uppercase">
                 Canvas
               </h2>
-              <span className="text-xs font-mono text-gray-400">
+              <span className="text-[11px] font-mono text-muted-foreground">
                 {blocks.length} block{blocks.length !== 1 ? "s" : ""}
               </span>
             </div>
@@ -453,7 +453,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPreviewOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-mono text-gray-600 hover:text-gray-900 hover:border-gray-300 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-muted-foreground hover:text-foreground hover:border-border transition-colors"
               >
                 <Eye className="w-3.5 h-3.5" />
                 Preview
@@ -462,12 +462,12 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
                 onClick={handleSave}
                 disabled={saving}
                 className={cn(
-                  "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-mono transition-all disabled:opacity-70",
+                  "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-mono transition-all disabled:opacity-70",
                   saveStatus === "success"
                     ? "bg-green-600 text-white"
                     : saveStatus === "error"
                       ? "bg-red-600 text-white"
-                      : "bg-gray-900 text-white hover:bg-gray-800"
+                      : "bg-secondary text-secondary-foreground hover:bg-secondary/90"
                 )}
               >
                 {saving ? (
@@ -524,7 +524,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
       {/* Drag overlay */}
       <DragOverlay>
         {activeDragId && activeDragId.startsWith("palette-") ? (
-          <div className="px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-lg text-sm font-mono text-gray-700">
+          <div className="px-4 py-2 bg-card border border-border rounded-lg shadow-lg text-[13px] font-mono text-foreground">
             {activeDragId.replace("palette-", "")}
           </div>
         ) : null}
