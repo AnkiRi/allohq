@@ -6,7 +6,7 @@ import { AlloAIPanelProvider, AlloAIPanelSlot } from "@/components/ai/AlloAIPane
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen canvas-noise relative overflow-hidden">
       <Suspense fallback={null}>
         <RouteProgress />
       </Suspense>

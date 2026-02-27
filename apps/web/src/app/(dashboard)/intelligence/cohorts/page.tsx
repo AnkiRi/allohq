@@ -1,81 +1,464 @@
 "use client";
 
+import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Users, DollarSign } from "lucide-react";
+import {
+  ArrowLeft,
+  Users,
+  DollarSign,
+  TrendingUp,
+  Sparkles,
+  ChevronDown,
+  Calendar,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+
+/* ------------------------------------------------------------------ */
+/*  Motion variants                                                    */
+/* ------------------------------------------------------------------ */
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+/* ------------------------------------------------------------------ */
+/*  CohortAreaChart — inline SVG area chart                            */
+/* ------------------------------------------------------------------ */
+
+function CohortAreaChart({ data }: { data: { label: string; value: number }[] }) {
+  if (!data.length) return null;
+
+  // Single data point — render a centered bar
+  if (data.length === 1) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-4">
+        <svg viewBox="0 0 600 200" className="w-full" preserveAspectRatio="xMidYMid meet">
+          <rect
+            x={260}
+            y={40}
+            width={80}
+            height={140}
+            rx={6}
+            fill="rgba(107, 122, 47, 0.15)"
+            stroke="#C4704A"
+            strokeWidth={2}
+          />
+          <text
+            x={300}
+            y={30}
+            textAnchor="middle"
+            className="fill-foreground"
+            fontSize={13}
+            fontFamily="monospace"
+          >
+            ${data[0]!.value.toLocaleString()}
+          </text>
+          <text
+            x={300}
+            y={198}
+            textAnchor="middle"
+            className="fill-muted-foreground"
+            fontSize={11}
+            fontFamily="monospace"
+          >
+            {data[0]!.label}
+          </text>
+        </svg>
+      </div>
+    );
+  }
+
+  const W = 600;
+  const H = 200;
+  const padX = 50;
+  const padTop = 20;
+  const padBottom = 30;
+  const chartW = W - padX * 2;
+  const chartH = H - padTop - padBottom;
+
+  const maxVal = Math.max(...data.map((d) => d.value), 1);
+
+  const points = data.map((d, i) => ({
+    x: padX + (i / (data.length - 1)) * chartW,
+    y: padTop + chartH - (d.value / maxVal) * chartH,
+    label: d.label,
+    value: d.value,
+  }));
+
+  const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const areaPath = `M${points[0]!.x},${padTop + chartH} L${points.map((p) => `${p.x},${p.y}`).join(" L")} L${points[points.length - 1]!.x},${padTop + chartH} Z`;
+
+  return (
+    <div className="relative">
+      <style>{`
+        @keyframes reveal {
+          from { clip-path: inset(0 100% 0 0); }
+          to   { clip-path: inset(0 0 0 0); }
+        }
+        .chart-reveal { animation: reveal 800ms ease-out forwards; }
+      `}</style>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full chart-reveal" preserveAspectRatio="xMidYMid meet">
+        {/* Area fill */}
+        <path d={areaPath} fill="rgba(107, 122, 47, 0.15)" />
+
+        {/* Stroke line */}
+        <polyline
+          points={linePoints}
+          fill="none"
+          stroke="#C4704A"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Data dots */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={3} fill="#C4704A" />
+        ))}
+
+        {/* X-axis labels */}
+        {points.map((p, i) => (
+          <text
+            key={i}
+            x={p.x}
+            y={H - 4}
+            textAnchor="middle"
+            className="fill-muted-foreground"
+            fontSize={10}
+            fontFamily="monospace"
+          >
+            {p.label.slice(2)}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Segment color mapping                                              */
+/* ------------------------------------------------------------------ */
+
+const SEGMENT_COLORS: Record<string, string> = {
+  Champions: "#6B7A2F",
+  "Loyal Customers": "#B8963E",
+  "Potential Loyalists": "#C4704A",
+  "New Customers": "#8A7D6B",
+  "At Risk": "#C44A4A",
+  Hibernating: "#999",
+  Unscored: "#ccc",
+};
+
+/* ------------------------------------------------------------------ */
+/*  CohortDetailPanel — expanded row detail                            */
+/* ------------------------------------------------------------------ */
+
+function CohortDetailPanel({ month }: { month: string }) {
+  const { data, isLoading } = trpc.rfm.cohortDetail.useQuery({ month });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-3 gap-6 p-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="glass-skeleton h-28 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6 text-[11px] text-muted-foreground font-mono">
+        No detail data available for this cohort.
+      </div>
+    );
+  }
+
+  const { topCustomers, segmentDistribution, purchaseStats } = data;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className="border-t border-border/50 bg-muted/20"
+    >
+      <div className="grid grid-cols-3 gap-6 p-6">
+        {/* Column 1 — Top Customers */}
+        <div>
+          <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-3">
+            TOP CUSTOMERS
+          </div>
+          <div className="space-y-3">
+            {topCustomers.slice(0, 3).map((tc, i) => (
+              <div key={i} className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[13px] text-foreground font-sans">{tc.name}</div>
+                  <div className="text-[11px] text-muted-foreground font-mono">
+                    ${tc.revenue.toLocaleString()} &middot; {tc.orders} orders
+                  </div>
+                </div>
+                <span
+                  className="shrink-0 px-2 py-0.5 rounded text-[9px] font-mono font-bold text-white"
+                  style={{ backgroundColor: SEGMENT_COLORS[tc.segment] ?? "#999" }}
+                >
+                  {tc.segment}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Column 2 — Segment Distribution */}
+        <div>
+          <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-3">
+            SEGMENTS
+          </div>
+          {/* Stacked horizontal bar */}
+          <div className="flex h-2 rounded-full overflow-hidden mb-3">
+            {segmentDistribution.map((seg) => (
+              <div
+                key={seg.segment}
+                style={{
+                  width: `${seg.pct}%`,
+                  backgroundColor: SEGMENT_COLORS[seg.segment] ?? "#999",
+                }}
+              />
+            ))}
+          </div>
+          {/* Legend */}
+          <div className="space-y-1.5">
+            {segmentDistribution.map((seg) => (
+              <div key={seg.segment} className="flex items-center gap-2 text-[11px]">
+                <span
+                  className="block w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: SEGMENT_COLORS[seg.segment] ?? "#999" }}
+                />
+                <span className="text-foreground font-sans">{seg.segment}</span>
+                <span className="text-muted-foreground font-mono ml-auto">
+                  {seg.count} ({seg.pct.toFixed(0)}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Column 3 — Purchase Behavior */}
+        <div>
+          <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-3">
+            PURCHASE STATS
+          </div>
+          <div className="space-y-3">
+            {[
+              { label: "Avg Orders", value: purchaseStats.avgOrders.toFixed(1) },
+              { label: "Avg Order Value", value: `$${purchaseStats.avgOrderValue.toFixed(0)}` },
+              { label: "Repeat Rate", value: `${(purchaseStats.repeatRate * 100).toFixed(0)}%` },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
+              >
+                <span className="text-[11px] text-muted-foreground font-mono">{stat.label}</span>
+                <span className="text-[13px] font-bold text-foreground font-mono">{stat.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function formatCurrency(n: number): string {
+  return "$" + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function getNextMonths(count: number): string[] {
+  const now = new Date();
+  const months: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    months.push(
+      d.toLocaleDateString("en-US", { year: "numeric", month: "long" })
+    );
+  }
+  return months;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Page Component                                                */
+/* ------------------------------------------------------------------ */
 
 export default function CohortAnalysisPage() {
   const { data: cohorts, isLoading } = trpc.rfm.cohorts.useQuery();
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
-  // Get all unique months across all cohorts for the column headers
+  // Compute all unique retention months for column headers
   const allMonths = new Set<string>();
   cohorts?.forEach((c) => {
     Object.keys(c.retention).forEach((m) => allMonths.add(m));
   });
   const sortedMonths = Array.from(allMonths).sort();
 
+  // Aggregate metrics
+  const totalCohorts = cohorts?.length ?? 0;
+  const totalCustomers = cohorts?.reduce((sum, c) => sum + c.customers, 0) ?? 0;
+  const totalRevenue = cohorts?.reduce((sum, c) => sum + c.revenue, 0) ?? 0;
+  const avgRevPerCustomer = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+  // AI insight computation
+  const bestCohort = cohorts?.length
+    ? cohorts.reduce((best, c) => (c.revenue > best.revenue ? c : best), cohorts[0]!)
+    : null;
+  const retentionMultiplier = bestCohort
+    ? Object.values(bestCohort.retention).reduce((sum, v) => sum + v, 0) /
+      Math.max(bestCohort.customers, 1)
+    : 0;
+
+  // Future cohort labels
+  const futureMonths = getNextMonths(2);
+
+  // Chart data
+  const chartData = cohorts?.map((c) => ({ label: c.month, value: c.revenue })) ?? [];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
+    <motion.div
+      className="space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* ============================================================ */}
+      {/*  HEADER                                                       */}
+      {/* ============================================================ */}
+      <motion.div variants={itemVariants} className="glass-card-static p-6">
         <Link
           href="/intelligence"
           className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono hover:text-foreground transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> BACK TO INTELLIGENCE
         </Link>
-        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] text-foreground">
           COHORT ANALYSIS
         </h1>
-        <p className="text-[13px] text-muted-foreground font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
           Customers grouped by first purchase month
         </p>
-      </div>
+      </motion.div>
 
-      {/* Summary cards */}
-      {isLoading ? (
-        <div className="grid grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="border border-border rounded-xl p-5 bg-card">
-              <div className="w-5 h-5 bg-muted rounded mb-3 animate-pulse" />
-              <div className="w-24 h-3 bg-muted rounded mb-2 animate-pulse" />
-              <div className="w-16 h-7 bg-muted rounded animate-pulse" />
-            </div>
-          ))}
-        </div>
-      ) : cohorts && cohorts.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="border border-border rounded-xl p-5 bg-card">
-            <Users className="w-5 h-5 text-muted-foreground/50 mb-3" />
+      {/* ============================================================ */}
+      {/*  METRIC CARDS                                                 */}
+      {/* ============================================================ */}
+      <motion.div variants={itemVariants} className="grid grid-cols-4 gap-4">
+        {[
+          {
+            icon: Calendar,
+            label: "TOTAL COHORTS",
+            value: isLoading ? null : totalCohorts.toString(),
+          },
+          {
+            icon: Users,
+            label: "TOTAL CUSTOMERS",
+            value: isLoading ? null : totalCustomers.toLocaleString(),
+          },
+          {
+            icon: DollarSign,
+            label: "TOTAL REVENUE",
+            value: isLoading ? null : formatCurrency(totalRevenue),
+          },
+          {
+            icon: TrendingUp,
+            label: "AVG REV / CUSTOMER",
+            value: isLoading ? null : formatCurrency(avgRevPerCustomer),
+          },
+        ].map((kpi) => (
+          <div key={kpi.label} className="glass-card p-4 group">
+            <kpi.icon className="w-4 h-4 text-muted-foreground/50 mb-2 group-hover:text-foreground transition-colors" />
             <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-1">
-              TOTAL COHORTS
+              {kpi.label}
             </div>
-            <div className="text-[28px] tabular-nums font-bold text-foreground font-mono">{cohorts.length}</div>
+            {kpi.value === null ? (
+              <div className="glass-skeleton h-5 w-16 mt-1" />
+            ) : (
+              <div className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono tabular-nums">
+                {kpi.value}
+              </div>
+            )}
           </div>
-          <div className="border border-border rounded-xl p-5 bg-card">
-            <Users className="w-5 h-5 text-muted-foreground/50 mb-3" />
-            <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-1">
-              TOTAL CUSTOMERS
-            </div>
-            <div className="text-[28px] tabular-nums font-bold text-foreground font-mono">
-              {cohorts.reduce((sum, c) => sum + c.customers, 0)}
+        ))}
+      </motion.div>
+
+      {/* ============================================================ */}
+      {/*  AI INSIGHT CARD                                              */}
+      {/* ============================================================ */}
+      {cohorts && cohorts.length > 0 && bestCohort && (
+        <motion.div
+          variants={itemVariants}
+          className="glass-card-static p-6 border-l-4 border-l-[var(--warm-gold)]"
+        >
+          <div className="flex gap-4">
+            <Sparkles className="w-5 h-5 text-[var(--warm-gold)] shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-[13px] text-foreground/90 font-sans leading-relaxed">
+                Your <span className="font-bold">{bestCohort.month}</span> cohort is performing{" "}
+                <span className="font-mono font-bold">{retentionMultiplier.toFixed(1)}x</span> above
+                baseline. {bestCohort.customers} customers generated{" "}
+                <span className="font-mono font-bold">{formatCurrency(bestCohort.revenue)}</span>.
+                Consider targeting similar profiles in acquisition campaigns.
+              </p>
+              <div className="flex items-center gap-4 mt-3">
+                <Link
+                  href="/segments"
+                  className="text-[11px] font-mono text-[#C4704A] hover:underline"
+                >
+                  View Segments &rarr;
+                </Link>
+                <Link
+                  href="/campaigns"
+                  className="text-[11px] font-mono text-[#C4704A] hover:underline"
+                >
+                  Create Campaign &rarr;
+                </Link>
+              </div>
             </div>
           </div>
-          <div className="border border-border rounded-xl p-5 bg-card">
-            <DollarSign className="w-5 h-5 text-muted-foreground/50 mb-3" />
-            <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-1">
-              TOTAL REVENUE
-            </div>
-            <div className="text-[28px] tabular-nums font-bold text-foreground font-mono">
-              ${cohorts.reduce((sum, c) => sum + c.revenue, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </div>
-          </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Cohort table */}
-      <div className="border border-border rounded-xl overflow-hidden bg-card">
-        <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+      {/* ============================================================ */}
+      {/*  COHORT REVENUE CHART                                         */}
+      {/* ============================================================ */}
+      {cohorts && cohorts.length > 0 && (
+        <motion.div variants={itemVariants} className="glass-card-static p-6">
+          <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-6">
+            COHORT_REVENUE_OVER_TIME
+          </h2>
+          <CohortAreaChart data={chartData} />
+          {bestCohort && (
+            <p className="text-[11px] text-muted-foreground font-mono mt-4 text-center">
+              {bestCohort.month} cohort: {bestCohort.customers} customers generated{" "}
+              {formatCurrency(bestCohort.revenue)}
+            </p>
+          )}
+        </motion.div>
+      )}
+
+      {/* ============================================================ */}
+      {/*  COHORT TABLE                                                 */}
+      {/* ============================================================ */}
+      <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
+        <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
           <div className="w-px h-5 bg-secondary" />
           <h2 className="text-[13px] font-bold text-foreground font-mono">COHORT_OVERVIEW</h2>
         </div>
@@ -83,7 +466,7 @@ export default function CohortAnalysisPage() {
         {isLoading ? (
           <div className="p-6 space-y-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-10 bg-muted rounded animate-pulse" />
+              <div key={i} className="glass-skeleton h-10 rounded" />
             ))}
           </div>
         ) : cohorts && cohorts.length > 0 ? (
@@ -91,7 +474,9 @@ export default function CohortAnalysisPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase sticky left-0 bg-card">
+                  {/* Expand toggle column */}
+                  <th className="w-8 px-2 py-3" />
+                  <th className="text-left px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase sticky left-0 bg-transparent">
                     Cohort
                   </th>
                   <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
@@ -108,70 +493,134 @@ export default function CohortAnalysisPage() {
                       key={month}
                       className="text-center px-3 py-3 text-[10px] font-mono text-muted-foreground uppercase"
                     >
-                      {month.slice(2)} {/* Show YY-MM */}
+                      {month.slice(2)}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {cohorts.map((cohort) => {
-                  const avgRevenue = cohort.customers > 0 ? cohort.revenue / cohort.customers : 0;
+                  const avgRevenue =
+                    cohort.customers > 0 ? cohort.revenue / cohort.customers : 0;
+                  const isExpanded = expandedMonth === cohort.month;
 
                   return (
-                    <tr key={cohort.month} className="hover:bg-muted transition-colors">
-                      <td className="px-4 py-3 text-[13px] font-mono font-bold text-foreground sticky left-0 bg-card">
-                        {cohort.month}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[13px] font-mono text-foreground">
-                        {cohort.customers}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[13px] font-mono font-bold text-foreground">
-                        ${cohort.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[13px] font-mono text-foreground">
-                        ${avgRevenue.toFixed(0)}
-                      </td>
-                      {sortedMonths.map((month) => {
-                        const activeCount = cohort.retention[month] ?? 0;
-                        const pct = cohort.customers > 0 ? (activeCount / cohort.customers) * 100 : 0;
-                        const intensity = Math.min(pct / 100, 1);
+                    <React.Fragment key={cohort.month}>
+                      <tr
+                        className="glass-row-hover transition-colors cursor-pointer border-b border-border/50"
+                        onClick={() =>
+                          setExpandedMonth(isExpanded ? null : cohort.month)
+                        }
+                      >
+                        <td className="w-8 px-2 py-3 text-center">
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-[13px] font-mono font-bold text-foreground">
+                          {cohort.month}
+                        </td>
+                        <td className="px-4 py-3 text-right text-[13px] font-mono tabular-nums text-foreground">
+                          {cohort.customers}
+                        </td>
+                        <td className="px-4 py-3 text-right text-[13px] font-mono tabular-nums font-bold text-foreground">
+                          {formatCurrency(cohort.revenue)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-[13px] font-mono tabular-nums text-foreground">
+                          {formatCurrency(avgRevenue)}
+                        </td>
+                        {sortedMonths.map((month) => {
+                          const activeCount = cohort.retention[month] ?? 0;
+                          const pct =
+                            cohort.customers > 0
+                              ? (activeCount / cohort.customers) * 100
+                              : 0;
+                          const intensity = Math.min(pct / 100, 1);
+                          const multiplier = (pct / 100).toFixed(1);
 
-                        return (
-                          <td key={month} className="px-1 py-1 text-center">
-                            {activeCount > 0 ? (
-                              <div
-                                className="mx-auto w-full min-w-[40px] py-2 rounded text-[10px] font-mono font-bold"
-                                style={{
-                                  backgroundColor: `rgba(0, 0, 0, ${0.05 + intensity * 0.85})`,
-                                  color: intensity > 0.4 ? "#fff" : "#111",
-                                }}
-                              >
-                                {pct.toFixed(0)}%
-                              </div>
-                            ) : (
-                              <div className="mx-auto w-full min-w-[40px] py-2 rounded text-[10px] font-mono text-muted-foreground/50">
-                                —
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                          // Heatmap color based on retention percentage
+                          let bgColor: string;
+                          if (pct > 100) {
+                            bgColor = `rgba(107, 122, 47, ${0.15 + intensity * 0.6})`;
+                          } else if (pct >= 50) {
+                            bgColor = `rgba(184, 150, 62, ${0.15 + intensity * 0.6})`;
+                          } else {
+                            bgColor = `rgba(196, 112, 74, ${0.15 + intensity * 0.6})`;
+                          }
+
+                          return (
+                            <td key={month} className="px-1 py-1 text-center">
+                              {activeCount > 0 ? (
+                                <div
+                                  className="mx-auto w-full min-w-[44px] py-1.5 rounded"
+                                  style={{ backgroundColor: bgColor }}
+                                  title={`This cohort spent ${multiplier}x their first-month revenue`}
+                                >
+                                  <div className="text-[10px] font-mono font-bold text-foreground">
+                                    {pct.toFixed(0)}%
+                                  </div>
+                                  <div className="text-[9px] font-mono text-muted-foreground">
+                                    {multiplier}x
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="mx-auto w-full min-w-[44px] py-2 rounded text-[10px] font-mono text-muted-foreground/50">
+                                  &mdash;
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* Expanded detail panel */}
+                      <tr>
+                        <td colSpan={5 + sortedMonths.length} className="p-0">
+                          <AnimatePresence>
+                            {isExpanded && <CohortDetailPanel month={cohort.month} />}
+                          </AnimatePresence>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
+
+                {/* -------------------------------------------------- */}
+                {/*  FUTURE COHORT ROWS                                 */}
+                {/* -------------------------------------------------- */}
+                {futureMonths.map((monthName, i) => (
+                  <tr key={`future-${i}`} className="opacity-40">
+                    <td className="w-8 px-2 py-3" />
+                    <td
+                      colSpan={4 + sortedMonths.length}
+                      className="px-4 py-3 text-[12px] font-mono text-muted-foreground italic"
+                    >
+                      {i === 0
+                        ? `\u{1F4C5} New cohort will appear when customers make first purchases in ${monthName}`
+                        : `\u{1F4C5} ${monthName} cohort \u2014 upcoming`}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         ) : (
+          /* Empty state */
           <div className="p-16 text-center">
-            <Users className="w-10 h-10 text-muted-foreground/50 mx-auto mb-4" />
-            <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">NO COHORT DATA</h3>
+            <div className="glass-card-static inline-flex p-4 rounded-full mb-4">
+              <Users className="w-10 h-10 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">
+              NO COHORT DATA
+            </h3>
             <p className="text-[11px] text-muted-foreground font-mono max-w-sm mx-auto">
               Sync orders and run RFM analysis to generate cohort data
             </p>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

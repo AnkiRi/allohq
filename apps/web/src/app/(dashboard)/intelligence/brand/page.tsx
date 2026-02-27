@@ -6,6 +6,18 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { ModelSelector, type AIModelId } from "@/components/ai/ModelSelector";
+import { motion } from "framer-motion";
+
+const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } };
+const itemVariants = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } } };
+
+function getToneBarColor(value: string): string {
+  const high = ["casual", "warm", "high", "enthusiastic", "playful"];
+  const medium = ["semi-formal", "light", "moderate", "friendly"];
+  if (high.includes(value.toLowerCase())) return "var(--olive)";
+  if (medium.includes(value.toLowerCase())) return "var(--warm-gold)";
+  return "var(--terracotta)";
+}
 
 export default function BrandProfilePage() {
   const { toast } = useToast();
@@ -206,15 +218,20 @@ export default function BrandProfilePage() {
   const isAnalyzing = analyzeMut.isPending || analyzing;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <motion.div
+      className="space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/intelligence" className="p-2 rounded-lg hover:bg-muted transition-colors">
+          <Link href="/intelligence" className="p-2 rounded-lg hover:bg-white/20 transition-colors">
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">BRAND_VOICE</h1>
-            <p className="text-[13px] text-muted-foreground font-mono mt-1">
+            <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">BRAND_VOICE</h1>
+            <p className="text-[13px] text-muted-foreground font-sans mt-1">
               AI-extracted brand personality from your store data
             </p>
           </div>
@@ -231,61 +248,61 @@ export default function BrandProfilePage() {
           {!storeId ? "Connect Store First" : isAnalyzing ? "Analyzing..." : "Re-analyze"}
         </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Analyzing banner */}
       {analyzing && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-          <RefreshCw className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
+        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-terracotta flex items-center gap-3 px-4 py-3">
+          <RefreshCw className="w-4 h-4 text-terracotta animate-spin flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-blue-900 font-mono">Analyzing brand voice...</p>
-            <p className="text-[11px] text-blue-600 font-mono mt-0.5">
+            <p className="text-[13px] font-bold text-foreground font-mono">Analyzing brand voice...</p>
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
               AI is reading your product catalog and extracting brand personality. This typically takes 10-20 seconds.
             </p>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Error banner */}
       {error && !analyzing && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
-          <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[#C44A4A] flex items-center gap-3 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-[#C44A4A] flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-red-900 font-mono">Analysis failed</p>
-            <p className="text-[11px] text-red-600 font-mono mt-0.5">{error}</p>
+            <p className="text-[13px] font-bold text-foreground font-mono">Analysis failed</p>
+            <p className="text-[11px] text-[#C44A4A] font-mono mt-0.5">{error}</p>
           </div>
           <button
             onClick={() => setError(null)}
-            className="ml-auto text-[11px] text-red-400 hover:text-red-600 font-mono"
+            className="ml-auto text-[11px] text-[#C44A4A]/60 hover:text-[#C44A4A] font-mono"
           >
             Dismiss
           </button>
-        </div>
+        </motion.div>
       )}
 
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />
+            <div key={i} className="h-32 glass-skeleton rounded-xl" />
           ))}
         </div>
       ) : profile ? (
-        <div className="space-y-6">
+        <motion.div className="space-y-6" variants={containerVariants} initial="hidden" animate="visible">
           {/* Brand overview */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <h2 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">{profile.brandName}</h2>
             <p className="text-[13px] text-muted-foreground font-mono">{profile.brandDescription}</p>
             <p className="text-[10px] text-muted-foreground/50 font-mono mt-3">
               Last analyzed: {new Date(profile.analyzedAt).toLocaleString()}
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-2 gap-6">
             {/* Tone attributes */}
-            <div className="border border-border rounded-xl p-6 bg-card">
+            <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-[13px] font-bold text-foreground font-mono">TONE</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">TONE</h2>
               </div>
               {tone && (
                 <div className="space-y-3">
@@ -295,10 +312,11 @@ export default function BrandProfilePage() {
                         <span className="text-muted-foreground uppercase">{key}</span>
                         <span className="text-foreground font-bold">{value}</span>
                       </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-secondary rounded-full transition-all"
+                          className="h-full rounded-full transition-all"
                           style={{
+                            backgroundColor: getToneBarColor(value),
                             width: `${
                               value === "formal" || value === "none" || value === "calm" || value === "professional"
                                 ? 25
@@ -315,13 +333,13 @@ export default function BrandProfilePage() {
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
 
             {/* Visual style */}
-            <div className="border border-border rounded-xl p-6 bg-card">
+            <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Palette className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-[13px] font-bold text-foreground font-mono">VISUAL_STYLE</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL_STYLE</h2>
               </div>
               {visual && (
                 <div className="space-y-4">
@@ -343,7 +361,7 @@ export default function BrandProfilePage() {
                       {(Array.isArray(visual["suggestedColors"]) ? visual["suggestedColors"] : []).map((color, i) => (
                         <div key={i} className="flex items-center gap-1.5">
                           <div
-                            className="w-6 h-6 rounded-full border border-border"
+                            className="w-7 h-7 rounded-full border border-white/20"
                             style={{ backgroundColor: color }}
                           />
                           <span className="text-[10px] text-muted-foreground font-mono">{color}</span>
@@ -353,14 +371,14 @@ export default function BrandProfilePage() {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           </div>
 
           {/* Creative Intensity */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Sliders className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">CREATIVE_INTENSITY</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">CREATIVE_INTENSITY</h2>
             </div>
             <p className="text-[11px] text-muted-foreground font-mono mb-4">
               Controls the visual richness of AI-generated emails
@@ -379,8 +397,8 @@ export default function BrandProfilePage() {
                     disabled={updateIntensityMut.isPending}
                     className={`text-left p-4 border rounded-xl transition-all ${
                       currentIntensity === opt.value
-                        ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
-                        : "border-border hover:border-primary/50"
+                        ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
+                        : "border-white/20 bg-white/20 hover:border-white/40"
                     }`}
                   >
                     <p className="text-[11px] font-bold text-foreground font-mono">{opt.label}</p>
@@ -389,13 +407,13 @@ export default function BrandProfilePage() {
                 );
               })}
             </div>
-          </div>
+          </motion.div>
 
           {/* Vocabulary */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Type className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">VOCABULARY</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VOCABULARY</h2>
             </div>
             {vocabulary && (
               <div className="grid grid-cols-3 gap-6">
@@ -403,7 +421,7 @@ export default function BrandProfilePage() {
                   <span className="text-[11px] text-muted-foreground font-mono block mb-2">PREFERRED WORDS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["preferredWords"] ?? []).map((word, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-muted text-foreground text-[11px] font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-mono rounded">
                         {word}
                       </span>
                     ))}
@@ -413,7 +431,7 @@ export default function BrandProfilePage() {
                   <span className="text-[11px] text-muted-foreground font-mono block mb-2">CTA PATTERNS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["ctaPatterns"] ?? []).map((cta, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-secondary text-secondary-foreground text-[11px] font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-mono rounded">
                         {cta}
                       </span>
                     ))}
@@ -423,7 +441,7 @@ export default function BrandProfilePage() {
                   <span className="text-[11px] text-muted-foreground font-mono block mb-2">BRAND TERMS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["brandTerms"] ?? []).map((term, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-muted border border-border text-foreground text-[11px] font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-mono rounded">
                         {term}
                       </span>
                     ))}
@@ -431,40 +449,40 @@ export default function BrandProfilePage() {
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* Sample copy */}
           {sampleCopy && sampleCopy.length > 0 && (
-            <div className="border border-border rounded-xl p-6 bg-card">
+            <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Quote className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-[13px] font-bold text-foreground font-mono">SAMPLE_COPY</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SAMPLE_COPY</h2>
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
-                  <div key={i} className="p-3 bg-muted rounded-lg border-l-2 border-secondary">
+                  <div key={i} className="p-3 bg-white/20 rounded-lg border-l-2 border-l-terracotta">
                     <p className="text-[11px] text-foreground font-mono leading-relaxed">{copy}</p>
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ================================================================ */}
           {/* BRAND SETTINGS — Email Header / Footer / Assets                  */}
           {/* ================================================================ */}
 
-          <div className="pt-4 border-t border-border">
-            <h2 className="text-[16px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">EMAIL_SETTINGS</h2>
-            <p className="text-[11px] text-muted-foreground font-mono mb-6">Hard parameters applied to every generated email</p>
-          </div>
+          <motion.div variants={itemVariants} className="pt-4 border-t border-white/10">
+            <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">EMAIL_SETTINGS</h2>
+            <p className="text-[11px] text-muted-foreground font-sans mb-6">Hard parameters applied to every generated email</p>
+          </motion.div>
 
           {/* Logo & Header */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Image className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-[13px] font-bold text-foreground font-mono">LOGO_&_HEADER</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">LOGO_&_HEADER</h2>
               </div>
               <button
                 onClick={handleSaveBrandSettings}
@@ -484,10 +502,10 @@ export default function BrandProfilePage() {
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
                     placeholder="https://cdn.shopify.com/your-logo.png"
-                    className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="flex-1 px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                   {logoUrl && (
-                    <div className="w-16 h-16 border border-border rounded-lg overflow-hidden bg-white flex-shrink-0">
+                    <div className="w-16 h-16 border border-white/20 rounded-lg overflow-hidden bg-white flex-shrink-0">
                       <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     </div>
                   )}
@@ -502,8 +520,8 @@ export default function BrandProfilePage() {
                       onClick={() => setLogoPosition(pos)}
                       className={`px-4 py-2 border rounded-lg text-[11px] font-mono transition-all ${
                         logoPosition === pos
-                          ? "border-foreground bg-muted font-bold"
-                          : "border-border hover:border-primary/50"
+                          ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30 font-bold"
+                          : "border-white/20 bg-white/20 hover:border-white/40"
                       }`}
                     >
                       {pos.charAt(0).toUpperCase() + pos.slice(1)}
@@ -518,24 +536,24 @@ export default function BrandProfilePage() {
                     type="color"
                     value={headerBgColor}
                     onChange={(e) => setHeaderBgColor(e.target.value)}
-                    className="w-8 h-8 rounded border border-border cursor-pointer"
+                    className="w-8 h-8 rounded border border-white/20 cursor-pointer"
                   />
                   <input
                     type="text"
                     value={headerBgColor}
                     onChange={(e) => setHeaderBgColor(e.target.value)}
-                    className="w-28 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="w-28 px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Footer Defaults */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <MapPin className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">FOOTER_DEFAULTS</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">FOOTER_DEFAULTS</h2>
             </div>
             <div className="space-y-4">
               <div>
@@ -545,7 +563,7 @@ export default function BrandProfilePage() {
                   onChange={(e) => setFooterText(e.target.value)}
                   placeholder="e.g. All rights reserved. Terms & conditions apply."
                   rows={2}
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
                 />
               </div>
               <div className="flex gap-6">
@@ -553,7 +571,7 @@ export default function BrandProfilePage() {
                   <button
                     onClick={() => setShowAddress(!showAddress)}
                     className={`w-8 h-5 rounded-full transition-all flex items-center ${
-                      showAddress ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
+                      showAddress ? "bg-secondary justify-end" : "bg-white/20 border border-white/20 justify-start"
                     }`}
                   >
                     <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
@@ -564,7 +582,7 @@ export default function BrandProfilePage() {
                   <button
                     onClick={() => setShowSocialLinks(!showSocialLinks)}
                     className={`w-8 h-5 rounded-full transition-all flex items-center ${
-                      showSocialLinks ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
+                      showSocialLinks ? "bg-secondary justify-end" : "bg-white/20 border border-white/20 justify-start"
                     }`}
                   >
                     <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
@@ -573,14 +591,14 @@ export default function BrandProfilePage() {
                 </label>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Social Links */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Share2 className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-[13px] font-bold text-foreground font-mono">SOCIAL_LINKS</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SOCIAL_LINKS</h2>
               </div>
               <button
                 onClick={handleSaveStoreDetails}
@@ -600,18 +618,18 @@ export default function BrandProfilePage() {
                     value={socialLinks[platform] ?? ""}
                     onChange={(e) => setSocialLinks((prev) => ({ ...prev, [platform]: e.target.value }))}
                     placeholder={`https://${platform}.com/yourstore`}
-                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Store Details */}
-          <div className="border border-border rounded-xl p-6 bg-card">
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Store className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">STORE_DETAILS</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">STORE_DETAILS</h2>
             </div>
             <p className="text-[10px] text-muted-foreground font-mono mb-4">Auto-populated from Shopify. Edit to override.</p>
             <div className="grid grid-cols-2 gap-4">
@@ -621,7 +639,7 @@ export default function BrandProfilePage() {
                   type="text"
                   value={storeDetails.storeName}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeName: e.target.value }))}
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -630,7 +648,7 @@ export default function BrandProfilePage() {
                   type="email"
                   value={storeDetails.storeEmail}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeEmail: e.target.value }))}
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -639,7 +657,7 @@ export default function BrandProfilePage() {
                   type="tel"
                   value={storeDetails.storePhone}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storePhone: e.target.value }))}
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -665,21 +683,21 @@ export default function BrandProfilePage() {
                     }));
                   }}
                   placeholder="123 Main St, City, State, ZIP, Country"
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       ) : (
-        <div className="text-center py-20 border border-border rounded-xl bg-card">
+        <motion.div variants={itemVariants} className="text-center py-20 glass-card-static">
           <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
           <p className="text-[13px] text-muted-foreground font-mono">No brand profile yet</p>
-          <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
-            Brand analysis runs automatically after Shopify sync, or click &quot;Re-analyze&quot;
+          <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
+            Brand analysis runs automatically after Shopify sync, or click &quot;Re-analyze&quot; above to get started.
           </p>
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

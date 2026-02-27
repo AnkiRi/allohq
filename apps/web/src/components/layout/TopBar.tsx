@@ -1,13 +1,64 @@
 "use client";
 
 import { useEffect } from "react";
-import { Zap, Bell } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { Bell, ChevronRight } from "lucide-react";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
+
+const routeLabels: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/customers": "Customers",
+  "/segments": "Segments",
+  "/intelligence": "Intelligence",
+  "/intelligence/brand": "Brand Voice",
+  "/intelligence/cohorts": "Cohort Analysis",
+  "/intelligence/rfm": "RFM Scoring",
+  "/templates": "Templates",
+  "/campaigns": "Campaigns",
+  "/automations": "Automations",
+  "/analytics": "Analytics",
+  "/integrations": "Integrations",
+  "/integrations/shopify": "Shopify",
+  "/settings": "Settings",
+};
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function getBreadcrumb(pathname: string): string[] {
+  // Direct match
+  if (routeLabels[pathname]) {
+    // Check if it's a nested route (has a parent)
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length > 1) {
+      const parent = "/" + segments[0];
+      if (routeLabels[parent]) {
+        return [routeLabels[parent], routeLabels[pathname]];
+      }
+    }
+    return [routeLabels[pathname]];
+  }
+
+  // Fallback: build from path segments
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+}
 
 export function TopBar() {
   const { openPanel, focusInput } = useAlloAI();
+  const pathname = usePathname();
+  const { user } = useUser();
 
-  // Cmd+K to open panel & focus input
+  const greeting = getGreeting();
+  const firstName = user?.firstName || "there";
+  const breadcrumb = getBreadcrumb(pathname);
+
+  // Cmd+K to open AI panel & focus input
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -21,31 +72,33 @@ export function TopBar() {
   }, [openPanel, focusInput]);
 
   return (
-    <header className="bg-card border-b border-border">
-      <div className="h-14 flex items-center justify-between px-6">
-        {/* Command bar trigger — opens AI panel */}
-        <button
-          onClick={() => {
-            openPanel();
-            focusInput();
-          }}
-          className="flex-1 max-w-xl flex items-center gap-3 px-3 py-2 border border-border rounded-lg hover:border-primary/50 transition-all text-left"
-        >
-          <Zap className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <span className="flex-1 text-[13px] font-mono text-muted-foreground">
-            Ask Allo AI anything...
-          </span>
-          <span className="text-[10px] text-muted-foreground/50 font-mono">⌘K</span>
-        </button>
-
-        {/* Actions */}
-        <div className="flex items-center gap-3 ml-6">
-          <button className="relative p-2 rounded-lg hover:bg-muted transition-colors">
-            <Bell className="w-4 h-4 text-muted-foreground" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-secondary rounded-full" />
-          </button>
+    <header className="flex items-center justify-between px-6 py-3">
+      <div className="flex items-center gap-3">
+        <span className="text-[13px] font-mono text-foreground">
+          {greeting}, <span className="font-semibold">{firstName}</span>
+        </span>
+        <span className="text-[11px] text-muted-foreground/40 select-none">/</span>
+        <div className="flex items-center gap-1">
+          {breadcrumb.map((label, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/40" />}
+              <span
+                className={`text-[11px] font-mono tracking-[0.5px] uppercase ${
+                  i === breadcrumb.length - 1
+                    ? "text-muted-foreground"
+                    : "text-muted-foreground/50"
+                }`}
+              >
+                {label}
+              </span>
+            </span>
+          ))}
         </div>
       </div>
+      <button className="relative p-2 rounded-lg hover:bg-white/30 transition-colors">
+        <Bell className="w-4 h-4 text-muted-foreground" />
+        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-terracotta rounded-full" />
+      </button>
     </header>
   );
 }

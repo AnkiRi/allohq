@@ -319,4 +319,81 @@ export const rfmRouter = router({
 
     return computeCohorts(ctx.prisma, storeIds);
   }),
+
+  /** Cohort detail — expanded row data for a specific cohort month */
+  cohortDetail: workspaceProcedure
+    .input(z.object({ month: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      const storeIds = stores.map((s) => s.id);
+
+      // Get customers whose first order falls in the requested month
+      const customers = await ctx.prisma.customer.findMany({
+        where: { storeId: { in: storeIds } },
+        include: {
+          orders: {
+            select: { totalPrice: true, createdAt: true },
+            orderBy: { createdAt: "asc" as const },
+          },
+          rfmScore: {
+            select: { segment: true },
+          },
+        },
+      });
+
+      // Filter to customers whose first order month matches
+      const cohortCustomers = customers.filter((c) => {
+        if (c.orders.length === 0) return false;
+        const first = c.orders[0]!;
+        const m = `${first.createdAt.getFullYear()}-${String(first.createdAt.getMonth() + 1).padStart(2, "0")}`;
+        return m === input.month;
+      });
+
+      // Top 3 customers by total revenue
+      const topCustomers = cohortCustomers
+        .map((c) => ({
+          name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Unknown",
+          revenue: c.orders.reduce((sum, o) => sum + o.totalPrice, 0),
+          orders: c.orders.length,
+          segment: c.rfmScore?.segment ?? "Unscored",
+        }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 3);
+
+      // Segment distribution
+      const segMap = new Map<string, number>();
+      for (const c of cohortCustomers) {
+        const seg = c.rfmScore?.segment ?? "Unscored";
+        segMap.set(seg, (segMap.get(seg) ?? 0) + 1);
+      }
+      const total = cohortCustomers.length;
+      const segmentDistribution = Array.from(segMap.entries())
+        .map(([segment, count]) => ({
+          segment,
+          count,
+          pct: total > 0 ? Math.round((count / total) * 100) : 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      // Purchase stats
+      const allOrders = cohortCustomers.flatMap((c) => c.orders);
+      const totalRevenue = allOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+      const avgOrders = total > 0 ? allOrders.length / total : 0;
+      const avgOrderValue = allOrders.length > 0 ? totalRevenue / allOrders.length : 0;
+      const repeatCustomers = cohortCustomers.filter((c) => c.orders.length > 1).length;
+      const repeatRate = total > 0 ? Math.round((repeatCustomers / total) * 100) : 0;
+
+      return {
+        topCustomers,
+        segmentDistribution,
+        purchaseStats: {
+          avgOrders: Math.round(avgOrders * 10) / 10,
+          avgOrderValue: Math.round(avgOrderValue),
+          repeatRate,
+        },
+      };
+    }),
 });

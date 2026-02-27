@@ -43,9 +43,9 @@ export function Sidebar() {
     : "U";
 
   return (
-    <aside className="w-60 bg-card border-r border-border flex flex-col">
+    <aside className="w-60 bg-[#EDE7DB]/80 backdrop-blur-glass border-r border-white/20 flex flex-col">
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-border">
+      <div className="px-6 py-5 border-b border-white/20">
         <h1 className="text-[18px] font-bold text-foreground font-mono tracking-[-0.5px]">
           ALLOHQ
         </h1>
@@ -65,8 +65,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-[13px] font-mono active:scale-[0.97]",
                 isActive
-                  ? "bg-secondary text-secondary-foreground font-semibold"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  ? "bg-white/40 text-foreground font-semibold border-l-[3px] border-l-terracotta"
+                  : "text-muted-foreground hover:text-foreground hover:bg-terracotta-light"
               )}
             >
               <item.icon className="w-4 h-4" />
@@ -77,7 +77,7 @@ export function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="px-3 py-4 border-t border-border">
+      <div className="px-3 py-4 border-t border-white/20">
         <div className="flex items-center gap-3 px-3 py-2.5">
           {user?.imageUrl ? (
             <img

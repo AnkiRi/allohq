@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Store, ShoppingBag, ArrowRight, Check, X, Loader2 } from "lucide-react";
+import { Store, ShoppingBag, ArrowRight, Check, X, Loader2, Mail, BarChart3, MessageSquare, Bell } from "lucide-react";
+import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 
-const platforms = [
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+const ecommercePlatforms = [
   {
     id: "shopify",
     name: "Shopify",
@@ -25,6 +36,42 @@ const platforms = [
   },
 ];
 
+const emailSmsPlatforms = [
+  {
+    id: "klaviyo",
+    name: "Klaviyo",
+    description: "Email & SMS marketing automation for e-commerce",
+    status: "coming_soon" as const,
+  },
+  {
+    id: "postscript",
+    name: "Postscript",
+    description: "SMS marketing platform built for Shopify brands",
+    status: "coming_soon" as const,
+  },
+  {
+    id: "attentive",
+    name: "Attentive",
+    description: "Personalized SMS and email marketing at scale",
+    status: "coming_soon" as const,
+  },
+];
+
+const analyticsPlatforms = [
+  {
+    id: "google-analytics",
+    name: "Google Analytics",
+    description: "Track website traffic, conversions, and customer behavior",
+    status: "coming_soon" as const,
+  },
+  {
+    id: "triple-whale",
+    name: "Triple Whale",
+    description: "Attribution and analytics dashboard for DTC brands",
+    status: "coming_soon" as const,
+  },
+];
+
 export default function IntegrationsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
@@ -34,7 +81,7 @@ export default function IntegrationsPage() {
   const { data: stores, isLoading } = trpc.stores.list.useQuery();
 
   const connectedShopifyStores = stores?.filter(
-    (s) => s.platform === "shopify"
+    (s: any) => s.platform === "shopify"
   );
 
   function handleConnect() {
@@ -59,35 +106,41 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      className="space-y-8"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <div>
-        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+      <motion.div variants={itemVariants}>
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
           INTEGRATIONS
         </h1>
-        <p className="text-[13px] text-muted-foreground font-mono mt-1">
-          Connect your e-commerce platforms
+        <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
+          Connect your e-commerce platforms and marketing tools
         </p>
-      </div>
+      </motion.div>
 
       {/* Connected stores */}
       {isLoading ? (
-        <div className="space-y-3">
-          <h2 className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">Connected Stores</h2>
+        <motion.div className="space-y-3" variants={itemVariants}>
+          <h2 className="section-header text-[10px] text-muted-foreground">Connected Stores</h2>
           {[1, 2].map((i) => (
-            <div key={i} className="h-20 bg-muted rounded-xl animate-pulse" />
+            <div key={i} className="h-20 glass-skeleton rounded-xl" />
           ))}
-        </div>
+        </motion.div>
       ) : connectedShopifyStores && connectedShopifyStores.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">
+        <motion.div className="space-y-3" variants={itemVariants}>
+          <h2 className="section-header text-[10px] text-muted-foreground">
             Connected Stores
           </h2>
-          {connectedShopifyStores.map((store) => (
-            <a
+          {connectedShopifyStores.map((store: any) => (
+            <motion.a
               key={store.id}
               href="/integrations/shopify"
-              className="flex items-center justify-between p-5 bg-card border border-border rounded-xl hover:border-foreground hover:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all group"
+              className="flex items-center justify-between p-5 glass-card rounded-xl group"
+              variants={itemVariants}
             >
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-[#96BF48] flex items-center justify-center">
@@ -110,29 +163,33 @@ export default function IntegrationsPage() {
                 </span>
                 <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
               </div>
-            </a>
+            </motion.a>
           ))}
-        </div>
+        </motion.div>
       )}
 
-      {/* Connect dialog -- loading indicator on redirect */}
+      {/* Loading indicator */}
       {isLoading && (
-        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+        <motion.div
+          className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground"
+          variants={itemVariants}
+        >
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           Loading stores...
-        </div>
+        </motion.div>
       )}
 
-      {/* Platform cards */}
-      <div className="space-y-3">
-        <h2 className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">
-          Available Integrations
+      {/* E-Commerce Platforms */}
+      <motion.div className="space-y-3" variants={itemVariants}>
+        <h2 className="section-header text-[10px] text-muted-foreground">
+          E-Commerce Platforms
         </h2>
         <div className="grid grid-cols-3 gap-4">
-          {platforms.map((platform) => (
-            <div
+          {ecommercePlatforms.map((platform) => (
+            <motion.div
               key={platform.id}
-              className="p-5 bg-card border border-border rounded-xl hover:border-primary/50 transition-all"
+              className="p-5 glass-card rounded-xl"
+              variants={itemVariants}
             >
               <div className="flex items-center gap-3 mb-3">
                 <div
@@ -171,15 +228,93 @@ export default function IntegrationsPage() {
                   Coming Soon
                 </div>
               )}
-            </div>
+            </motion.div>
           ))}
         </div>
-      </div>
+      </motion.div>
+
+      {/* Email & SMS */}
+      <motion.div className="space-y-3" variants={itemVariants}>
+        <h2 className="section-header text-[10px] text-muted-foreground">
+          Email & SMS
+        </h2>
+        <div className="grid grid-cols-3 gap-4">
+          {emailSmsPlatforms.map((platform) => (
+            <motion.div
+              key={platform.id}
+              className="p-5 glass-card-static rounded-xl opacity-60"
+              variants={itemVariants}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                  {platform.id === "postscript" || platform.id === "attentive" ? (
+                    <MessageSquare className="w-5 h-5 text-muted-foreground" />
+                  ) : (
+                    <Mail className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <div className="text-[13px] font-medium text-foreground font-mono">
+                    {platform.name}
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground font-mono mb-4">
+                {platform.description}
+              </p>
+              <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center mb-2">
+                Coming Soon
+              </div>
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+                <Bell className="w-3 h-3" />
+                Notify me when available
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Analytics */}
+      <motion.div className="space-y-3" variants={itemVariants}>
+        <h2 className="section-header text-[10px] text-muted-foreground">
+          Analytics
+        </h2>
+        <div className="grid grid-cols-3 gap-4">
+          {analyticsPlatforms.map((platform) => (
+            <motion.div
+              key={platform.id}
+              className="p-5 glass-card-static rounded-xl opacity-60"
+              variants={itemVariants}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-medium text-foreground font-mono">
+                    {platform.name}
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground font-mono mb-4">
+                {platform.description}
+              </p>
+              <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center mb-2">
+                Coming Soon
+              </div>
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+                <Bell className="w-3 h-3" />
+                Notify me when available
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
 
       {/* Connect dialog */}
       {showDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-xl p-6 w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 glass-card-static flex items-center justify-center z-50" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" }}>
+          <div className="glass-card-static rounded-xl p-6 w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[13px] font-bold text-foreground font-mono">
                 Connect Shopify Store
@@ -234,6 +369,6 @@ export default function IntegrationsPage() {
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

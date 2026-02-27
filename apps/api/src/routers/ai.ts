@@ -583,6 +583,7 @@ export const aiRouter = router({
         revenueThisMonth,
         brandProfile,
         searchedCustomers,
+        tokenUsageRecords,
       ] = await Promise.all([
         // Top 100 customers with RFM + LTV
         ctx.prisma.customer.findMany({
@@ -649,6 +650,13 @@ export const aiRouter = router({
               take: 10,
             })
           : Promise.resolve([]),
+        // Token usage stats
+        ctx.prisma.tokenUsage.groupBy({
+          by: ["model"],
+          where: { workspaceId: ctx.workspaceId },
+          _sum: { inputTokens: true, outputTokens: true },
+          _count: { id: true },
+        }),
       ]);
 
       // ---------------------------------------------------------------
@@ -689,6 +697,29 @@ export const aiRouter = router({
         `- Order #${o.orderNumber}: $${o.totalPrice} by ${o.customer.firstName ?? ""} ${o.customer.lastName ?? ""} (${o.customer.email}) on ${o.createdAt.toISOString().split("T")[0]}`
       ).join("\n");
 
+      // Token usage summary
+      const TOKEN_COSTS: Record<string, { input: number; output: number }> = {
+        "claude-sonnet-4-5-20250929": { input: 3, output: 15 },
+        "gpt-4o": { input: 2.5, output: 10 },
+        "gpt-4o-mini": { input: 0.15, output: 0.6 },
+      };
+      let totalTokenCalls = 0;
+      let totalTokenInput = 0;
+      let totalTokenOutput = 0;
+      let totalTokenCost = 0;
+      const tokenByModel = tokenUsageRecords.map((g) => {
+        const inp = g._sum.inputTokens ?? 0;
+        const out = g._sum.outputTokens ?? 0;
+        const calls = g._count.id;
+        const costs = TOKEN_COSTS[g.model] ?? { input: 0, output: 0 };
+        const cost = (inp / 1_000_000) * costs.input + (out / 1_000_000) * costs.output;
+        totalTokenCalls += calls;
+        totalTokenInput += inp;
+        totalTokenOutput += out;
+        totalTokenCost += cost;
+        return `- ${g.model}: ${calls} calls, ${inp.toLocaleString()} input tokens, ${out.toLocaleString()} output tokens, $${cost.toFixed(4)} cost`;
+      }).join("\n");
+
       const storeContext = `
 STORE: ${store.shopDomain}
 Platform: ${store.platform}
@@ -715,6 +746,14 @@ ${campaignList}
 
 RECENT ORDERS (last 30 days):
 ${recentOrderList || "No recent orders."}
+
+AI TOKEN USAGE (all time):
+- Total API calls: ${totalTokenCalls}
+- Total input tokens: ${totalTokenInput.toLocaleString()}
+- Total output tokens: ${totalTokenOutput.toLocaleString()}
+- Total AI cost: $${totalTokenCost.toFixed(4)}
+By model:
+${tokenByModel || "No token usage recorded yet."}
 `.trim();
 
       // ---------------------------------------------------------------

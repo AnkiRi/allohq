@@ -21,12 +21,15 @@ import {
   MessageSquare,
   ExternalLink,
   CheckCircle2,
-  Rocket,
   Bot,
   Circle,
   Cpu,
   SlidersHorizontal,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
 } from "lucide-react";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 
 // ---------------------------------------------------------------------------
@@ -75,6 +78,104 @@ type AgentPipelineRun = {
 };
 
 // ---------------------------------------------------------------------------
+// Motion variants
+// ---------------------------------------------------------------------------
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+// ---------------------------------------------------------------------------
+// Sparkline — inline SVG polyline
+// ---------------------------------------------------------------------------
+
+function Sparkline({
+  data,
+  color = "var(--olive)",
+  width = 80,
+  height = 20,
+}: {
+  data: number[];
+  color?: string;
+  width?: number;
+  height?: number;
+}) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - ((v - min) / range) * (height - 4) - 2;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg width={width} height={height} className="inline-block">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AnimatedNumber — framer-motion count-up
+// ---------------------------------------------------------------------------
+
+function AnimatedNumber({
+  value,
+  prefix = "",
+  suffix = "",
+  decimals = 0,
+}: {
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+}) {
+  const motionVal = useMotionValue(0);
+  const display = useTransform(motionVal, (v) => {
+    const formatted = decimals > 0 ? v.toFixed(decimals) : Math.round(v).toLocaleString();
+    return `${prefix}${formatted}${suffix}`;
+  });
+
+  useEffect(() => {
+    const controls = animate(motionVal, value, {
+      duration: 1.2,
+      ease: "easeOut",
+    });
+    return controls.stop;
+  }, [value, motionVal]);
+
+  return <motion.span>{display}</motion.span>;
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder sparkline data
+// ---------------------------------------------------------------------------
+
+const SPARK_CUSTOMERS = [12, 15, 14, 18, 22, 25, 23, 28, 30, 32, 35, 38];
+const SPARK_CAMPAIGNS = [0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 4, 5];
+const SPARK_REVENUE = [120, 340, 280, 510, 420, 680, 720, 890, 950, 1100, 1050, 1200];
+
+// ---------------------------------------------------------------------------
 // Agent Pipeline phases
 // ---------------------------------------------------------------------------
 
@@ -115,7 +216,7 @@ function InlineModelPicker({
 }) {
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-border bg-card rounded-lg p-4 space-y-3">
+      <div className="glass-card-static p-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-mono text-muted-foreground">
             Choose which AI model to use for all content generation:
@@ -137,15 +238,15 @@ function InlineModelPicker({
                 disabled={isPending || !model.available}
                 className={`relative text-left p-3 border rounded-lg transition-all ${
                   isSelected
-                    ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
+                    ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-white/40"
                     : model.available
-                      ? "border-border hover:border-primary/50"
-                      : "border-border opacity-40 cursor-not-allowed"
+                      ? "border-white/20 hover:border-terracotta/50 bg-white/20"
+                      : "border-white/10 opacity-40 cursor-not-allowed bg-white/10"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-secondary flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-secondary-foreground" />
+                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-olive flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-white" />
                   </div>
                 )}
                 <div className="flex items-center gap-1.5 mb-1">
@@ -188,7 +289,7 @@ function InlineCreativeIntensityPicker({
 }) {
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-border bg-card rounded-lg p-4 space-y-3">
+      <div className="glass-card-static p-4 space-y-3">
         <p className="text-[11px] font-mono text-muted-foreground">
           Choose the creative balance for AI-generated content:
         </p>
@@ -202,13 +303,13 @@ function InlineCreativeIntensityPicker({
                 disabled={isPending}
                 className={`relative text-left p-3 border rounded-lg transition-all ${
                   isSelected
-                    ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
-                    : "border-border hover:border-primary/50"
+                    ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-white/40"
+                    : "border-white/20 hover:border-terracotta/50 bg-white/20"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-secondary flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-secondary-foreground" />
+                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-olive flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-white" />
                   </div>
                 )}
                 <p className="text-[11px] font-mono font-bold text-foreground">{opt.label}</p>
@@ -236,16 +337,16 @@ function SelectionsSummary({
   const creativeLabel = CREATIVE_OPTIONS.find((o) => o.value === creativeIntensity)?.label ?? "Balanced";
 
   return (
-    <div className="border border-border rounded-xl bg-card px-6 py-4">
-      <p className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-3">
+    <div className="glass-card-static px-6 py-4">
+      <p className="section-header text-[10px] text-muted-foreground mb-3">
         YOUR AI CONFIGURATION
       </p>
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/30 rounded-lg border border-white/20">
           <Cpu className="w-3 h-3 text-muted-foreground" />
           <span className="text-[11px] font-mono text-foreground font-semibold">{modelLabel}</span>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/30 rounded-lg border border-white/20">
           <SlidersHorizontal className="w-3 h-3 text-muted-foreground" />
           <span className="text-[11px] font-mono text-foreground font-semibold">{creativeLabel}</span>
         </div>
@@ -272,9 +373,9 @@ function AgentProgressPanel({ run }: { run: AgentPipelineRun }) {
 
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
-        <div className="flex items-center gap-2 text-xs font-mono font-bold text-blue-800 mb-1">
-          <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+      <div className="glass-card-static border-l-4 border-l-terracotta p-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs font-mono font-bold text-foreground mb-1">
+          <Loader2 className="w-3.5 h-3.5 text-terracotta animate-spin" />
           AI Agent Running
         </div>
 
@@ -286,18 +387,18 @@ function AgentProgressPanel({ run }: { run: AgentPipelineRun }) {
             return (
               <div key={phase.key} className="flex items-center gap-2">
                 {isDone ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-olive flex-shrink-0" />
                 ) : isCurrent ? (
-                  <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin flex-shrink-0" />
+                  <Loader2 className="w-3.5 h-3.5 text-terracotta animate-spin flex-shrink-0" />
                 ) : (
-                  <Circle className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
+                  <Circle className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
                 )}
                 <span
                   className={`text-[11px] font-mono ${
                     isDone
-                      ? "text-green-700"
+                      ? "text-olive"
                       : isCurrent
-                        ? "text-blue-800 font-bold"
+                        ? "text-foreground font-bold"
                         : "text-muted-foreground"
                   }`}
                 >
@@ -310,7 +411,7 @@ function AgentProgressPanel({ run }: { run: AgentPipelineRun }) {
 
         {/* Current detail message */}
         {progress.message && (
-          <p className="text-[11px] font-mono text-blue-600 leading-relaxed">
+          <p className="text-[11px] font-sans text-muted-foreground leading-relaxed">
             {progress.message}
           </p>
         )}
@@ -318,15 +419,15 @@ function AgentProgressPanel({ run }: { run: AgentPipelineRun }) {
         {/* Progress bar */}
         {total > 0 && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] font-mono text-blue-600">
+            <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
               <span>
                 {done}/{total} programs
               </span>
               <span>{pct}%</span>
             </div>
-            <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                className="h-full progress-gradient rounded-full transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -354,8 +455,8 @@ function AgentSuccessPanel({
 
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-green-200 bg-green-50 rounded-lg p-4 space-y-3">
-        <div className="flex items-center gap-2 text-xs font-mono text-green-600 mb-1">
+      <div className="glass-card-static border-l-4 border-l-olive p-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs font-mono text-olive mb-1">
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span className="font-bold">
             {run.programsDone} program{run.programsDone !== 1 ? "s" : ""} ready
@@ -364,13 +465,13 @@ function AgentSuccessPanel({
         </div>
 
         <div className="flex items-start justify-between">
-          <p className="text-xs font-mono text-green-700">
+          <p className="text-xs font-sans text-muted-foreground">
             AI agent has generated emails, SMS, WhatsApp, RCS messages, and workflows.
             Review the content and activate when you&apos;re ready.
           </p>
           <Link
             href="/automations"
-            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-green-200 rounded-lg text-[10px] font-mono text-green-700 hover:border-green-400 transition-all whitespace-nowrap flex-shrink-0 ml-3"
+            className="flex items-center gap-1 px-2.5 py-1 bg-white/40 border border-white/30 rounded-lg text-[10px] font-mono text-olive hover:bg-white/60 transition-all whitespace-nowrap flex-shrink-0 ml-3"
           >
             Review Automations
             <ExternalLink className="w-2.5 h-2.5" />
@@ -382,13 +483,13 @@ function AgentSuccessPanel({
             {readyPrograms.slice(0, 6).map((program) => (
               <div
                 key={program.id}
-                className="flex items-center gap-2 px-2.5 py-1.5 bg-white border border-green-200 rounded-lg"
+                className="flex items-center gap-2 px-2.5 py-1.5 bg-white/30 border border-white/20 rounded-lg"
               >
-                <Sparkles className="w-3 h-3 text-green-600 flex-shrink-0" />
-                <span className="text-[11px] font-mono text-green-800 truncate flex-1">
+                <Sparkles className="w-3 h-3 text-olive flex-shrink-0" />
+                <span className="text-[11px] font-mono text-foreground truncate flex-1">
                   {program.name}
                 </span>
-                <span className="px-1.5 py-0.5 rounded border text-[9px] font-mono whitespace-nowrap bg-green-50 text-green-600 border-green-100">
+                <span className="px-1.5 py-0.5 rounded border text-[9px] font-mono whitespace-nowrap bg-olive/10 text-olive border-olive/20">
                   {program.status}
                 </span>
               </div>
@@ -415,7 +516,7 @@ function SyncSuccessPanel({
 }) {
   return (
     <div className="ml-11 mt-2 mb-1 space-y-2">
-      <div className="flex items-center gap-2 text-xs font-mono text-green-600">
+      <div className="flex items-center gap-2 text-xs font-mono text-olive">
         <CheckCircle2 className="w-3.5 h-3.5" />
         <span className="font-bold">Sync complete!</span>
       </div>
@@ -427,14 +528,14 @@ function SyncSuccessPanel({
         ].map((item) => (
           <div
             key={item.label}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-200 bg-green-50"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/30 border border-white/20"
           >
-            <item.icon className="w-3.5 h-3.5 text-green-600" />
+            <item.icon className="w-3.5 h-3.5 text-olive" />
             <div>
-              <div className="text-sm font-mono font-bold text-green-700 tabular-nums">
+              <div className="text-sm font-mono font-bold text-foreground tabular-nums">
                 {item.value.toLocaleString()}
               </div>
-              <div className="text-[10px] font-mono text-green-600 uppercase">
+              <div className="text-[10px] font-mono text-muted-foreground uppercase">
                 {item.label}
               </div>
             </div>
@@ -468,7 +569,7 @@ function SyncProgressPanel({
         ].map((item) => (
           <div
             key={item.label}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted animate-pulse"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/20 border border-white/10 animate-pulse"
           >
             <item.icon className="w-3.5 h-3.5 text-muted-foreground" />
             <div>
@@ -489,14 +590,14 @@ function SyncProgressPanel({
 function BrandAnalyzingPanel() {
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+      <div className="glass-card-static border-l-4 border-l-terracotta p-4">
         <div className="flex items-center gap-2 mb-2">
-          <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
-          <span className="text-xs font-mono font-bold text-blue-800">
+          <Loader2 className="w-3.5 h-3.5 text-terracotta animate-spin" />
+          <span className="text-xs font-mono font-bold text-foreground">
             Analyzing your brand...
           </span>
         </div>
-        <p className="text-[11px] font-mono text-blue-600 leading-relaxed">
+        <p className="text-[11px] font-sans text-muted-foreground leading-relaxed">
           AI is reading your product catalog to extract brand personality, tone of
           voice, visual style, and color palette. This usually takes 10-20 seconds.
         </p>
@@ -515,23 +616,23 @@ function BrandSummaryPanel({ profile }: { profile: BrandProfile }) {
 
   return (
     <div className="ml-11 mt-2 mb-1">
-      <div className="border border-green-200 bg-green-50 rounded-lg p-4 space-y-3">
-        <div className="flex items-center gap-2 text-xs font-mono text-green-600 mb-1">
+      <div className="glass-card-static border-l-4 border-l-olive p-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs font-mono text-olive mb-1">
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span className="font-bold">Brand analysis complete!</span>
         </div>
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-mono font-bold text-green-800">
+            <p className="text-sm font-mono font-bold text-foreground">
               {profile.brandName}
             </p>
-            <p className="text-xs font-mono text-green-700 mt-0.5 line-clamp-2">
+            <p className="text-xs font-sans text-muted-foreground mt-0.5 line-clamp-2">
               {profile.brandDescription}
             </p>
           </div>
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-green-200 rounded-lg text-[10px] font-mono text-green-700 hover:border-green-400 transition-all whitespace-nowrap flex-shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1 bg-white/40 border border-white/30 rounded-lg text-[10px] font-mono text-olive hover:bg-white/60 transition-all whitespace-nowrap flex-shrink-0"
           >
             View Details
             <ExternalLink className="w-2.5 h-2.5" />
@@ -541,14 +642,14 @@ function BrandSummaryPanel({ profile }: { profile: BrandProfile }) {
         <div className="flex items-center gap-4 flex-wrap">
           {tone && (
             <div className="flex items-center gap-1.5">
-              <MessageSquare className="w-3 h-3 text-green-600" />
+              <MessageSquare className="w-3 h-3 text-olive" />
               <div className="flex gap-1 flex-wrap">
                 {Object.entries(tone)
                   .slice(0, 3)
                   .map(([key, val]) => (
                     <span
                       key={key}
-                      className="px-1.5 py-0.5 bg-white border border-green-200 rounded text-[10px] font-mono text-green-700"
+                      className="px-1.5 py-0.5 bg-white/40 border border-white/20 rounded text-[10px] font-mono text-foreground"
                     >
                       {key}: {val}
                     </span>
@@ -558,12 +659,12 @@ function BrandSummaryPanel({ profile }: { profile: BrandProfile }) {
           )}
           {colors.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <Palette className="w-3 h-3 text-green-600" />
+              <Palette className="w-3 h-3 text-olive" />
               <div className="flex gap-1">
                 {colors.slice(0, 4).map((color: string, i: number) => (
                   <div
                     key={i}
-                    className="w-5 h-5 rounded-full border border-green-200"
+                    className="w-5 h-5 rounded-full border border-white/30"
                     style={{ backgroundColor: color }}
                     title={color}
                   />
@@ -632,14 +733,14 @@ function SetupChecklist({
   if (allDone) return null;
 
   return (
-    <div className="border border-border rounded-xl bg-card overflow-hidden">
-      <div className="px-6 py-5 border-b border-border">
+    <div className="glass-card-static overflow-hidden">
+      <div className="px-6 py-5 border-b border-white/15">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-[13px] font-bold text-foreground font-mono">
-              GET_STARTED
+            <h2 className="section-header accent-bar-left text-[13px] text-foreground">
+              GET STARTED
             </h2>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+            <p className="text-[11px] text-muted-foreground font-sans mt-0.5 pl-4">
               Complete these steps to unlock the full power of AlloHQ
             </p>
           </div>
@@ -647,18 +748,17 @@ function SetupChecklist({
             {completedCount}/{steps.length} complete
           </span>
         </div>
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
           <div
-            className="h-full bg-secondary rounded-full transition-all duration-500"
+            className="h-full progress-gradient rounded-full transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>
       </div>
 
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-white/10">
         {steps.map((step, i) => {
           const isNext = step === nextStep;
-          // Model step: editable until locked (brand analysis started), but only after sync is done
           const priorStepsDone = steps.slice(0, i).every((s) => s.done);
           const isModelEditable = step.key === "model" && step.done && !modelLocked && priorStepsDone;
           const isCreativeEditable = step.key === "creative" && step.done && !creativeLocked && priorStepsDone;
@@ -668,31 +768,40 @@ function SetupChecklist({
             <div key={step.key}>
               <div
                 className={`flex items-center gap-4 px-6 py-4 transition-colors ${
-                  showAsDone ? "opacity-60" : isNext || isModelEditable || isCreativeEditable ? "bg-muted" : ""
+                  showAsDone ? "opacity-60" : isNext || isModelEditable || isCreativeEditable ? "bg-white/10" : ""
                 }`}
               >
                 {/* Step indicator */}
                 <div className="flex-shrink-0">
                   {showAsDone ? (
-                    <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
-                      <Check className="w-3.5 h-3.5 text-secondary-foreground" />
+                    <div className="w-7 h-7 rounded-full bg-olive flex items-center justify-center">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-white">
+                        <path
+                          d="M3 7.5L5.5 10L11 4"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeDasharray="20"
+                          strokeDashoffset="0"
+                          style={{ animation: "check-draw 0.4s ease-out" }}
+                        />
+                      </svg>
                     </div>
                   ) : isModelEditable || isCreativeEditable ? (
-                    <div className="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-olive flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 text-white" />
                     </div>
                   ) : step.loading ? (
-                    <div className="w-7 h-7 rounded-full border-2 border-secondary flex items-center justify-center">
-                      <Loader2 className="w-3.5 h-3.5 text-foreground animate-spin" />
+                    <div className="w-7 h-7 rounded-full border-2 border-terracotta flex items-center justify-center animate-pulse-terracotta">
+                      <Loader2 className="w-3.5 h-3.5 text-terracotta animate-spin" />
                     </div>
                   ) : isNext ? (
-                    <div className="w-7 h-7 rounded-full border-2 border-secondary flex items-center justify-center">
-                      <span className="text-xs font-mono font-bold text-foreground">
-                        {i + 1}
-                      </span>
+                    <div className="w-7 h-7 rounded-full bg-terracotta flex items-center justify-center" style={{ animation: "pulse-dot 2s ease-in-out infinite" }}>
+                      <span className="w-2 h-2 rounded-full bg-white" />
                     </div>
                   ) : (
-                    <div className="w-7 h-7 rounded-full border-2 border-border flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full border-2 border-white/20 flex items-center justify-center">
                       <span className="text-xs font-mono text-muted-foreground/50">
                         {i + 1}
                       </span>
@@ -708,11 +817,11 @@ function SetupChecklist({
                         showAsDone
                           ? "text-muted-foreground"
                           : isModelEditable || isCreativeEditable
-                            ? "text-green-600"
+                            ? "text-olive"
                             : step.loading
-                              ? "text-foreground"
+                              ? "text-terracotta"
                               : isNext
-                                ? "text-foreground"
+                                ? "text-terracotta"
                                 : "text-muted-foreground/50"
                       } ${step.loading && step.key === "sync" ? "animate-spin" : ""}`}
                     />
@@ -728,7 +837,7 @@ function SetupChecklist({
                         : step.label}
                     </h3>
                   </div>
-                  <p className="text-[11px] font-mono text-muted-foreground mt-0.5 ml-5.5">
+                  <p className="text-[11px] font-sans text-muted-foreground mt-0.5 ml-5.5">
                     {step.description}
                   </p>
                 </div>
@@ -757,7 +866,7 @@ function SetupChecklist({
                     </Link>
                   )}
                 {step.loading && (
-                  <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap animate-pulse">
+                  <span className="text-[10px] font-mono text-terracotta whitespace-nowrap animate-pulse">
                     Working...
                   </span>
                 )}
@@ -767,7 +876,7 @@ function SetupChecklist({
                   </span>
                 )}
                 {(isModelEditable || isCreativeEditable) && (
-                  <span className="text-[10px] font-mono text-green-600 whitespace-nowrap">
+                  <span className="text-[10px] font-mono text-olive whitespace-nowrap">
                     Editable
                   </span>
                 )}
@@ -959,6 +1068,19 @@ export default function DashboardPage() {
       totalCost: number;
       byModel: { model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }[];
     } | undefined;
+  };
+
+  // Segments list (for condensed dashboard)
+  const { data: segmentsList } = trpc.segments.list.useQuery();
+
+  // Customer stats (for attention needed)
+  const { data: customerStats } = (trpc.customers.stats as any).useQuery() as {
+    data: { totalCustomers: number; acceptsMarketing: number; marketingRate: number; totalRevenue: number; avgOrderValue: number } | undefined;
+  };
+
+  // Segment distribution (for customer health)
+  const { data: segmentDist } = (trpc.segments.distribution as any).useQuery() as {
+    data: { segment: string; customerCount: number; totalRevenue: number; avgOrderValue: number }[] | undefined;
   };
 
   // Resume tracking on page load — only for in-progress pipelines.
@@ -1178,319 +1300,668 @@ export default function DashboardPage() {
 
   const allSetupDone = setupSteps.every((s) => s.done);
 
+  // Computed values for condensed dashboard layout
+  const readyCampaigns = programs?.filter((p) => p.status === "ready" || p.status === "active").length ?? 0;
+  const modelLabel = (aiModels as any)?.find((m: any) => m.id === aiSettings?.defaultModel)?.label ?? aiSettings?.defaultModel;
+  const creativeLabel = CREATIVE_OPTIONS.find((o) => o.value === currentCreativeIntensity)?.label ?? "Balanced";
+
+  // Attention items computation
+  const attentionItems: { level: "urgent" | "moderate" | "positive"; text: string; detail: string; action: string; href: string }[] = [];
+
+  if (allSetupDone && segmentDist) {
+    const hibernating = segmentDist.find((s) => s.segment === "Lost" || s.segment === "Hibernating");
+    if (hibernating && hibernating.customerCount > 0) {
+      attentionItems.push({
+        level: "urgent",
+        text: `${hibernating.customerCount} customers are ${hibernating.segment} with $${Math.round(hibernating.totalRevenue).toLocaleString()} revenue`,
+        detail: "These customers haven't purchased recently.",
+        action: "Launch Win-Back Campaign \u2192",
+        href: "/automations",
+      });
+    }
+  }
+
+  if (allSetupDone && customerStats && customerStats.marketingRate === 0) {
+    attentionItems.push({
+      level: "moderate",
+      text: "Marketing opt-in rate is 0%",
+      detail: "No customers have opted into email/SMS marketing.",
+      action: "Set Up Collection \u2192",
+      href: "/settings",
+    });
+  }
+
+  if (allSetupDone && programs) {
+    const readyNotLive = programs.filter((p) => p.status === "ready");
+    if (readyNotLive.length > 0) {
+      attentionItems.push({
+        level: "positive",
+        text: `${readyNotLive.length} automation${readyNotLive.length > 1 ? "s are" : " is"} ready but not live`,
+        detail: readyNotLive.map((p) => p.name).join(", ") + (readyNotLive.length > 1 ? " are generated." : " is generated."),
+        action: "Review & Go Live \u2192",
+        href: "/automations",
+      });
+    }
+  }
+
+  // AI activity computation
+  const aiCost = tokenUsage?.totalCost ?? 0;
+  const aiCalls = tokenUsage?.totalCalls ?? 0;
+  // Rough savings estimate: each automation ~2hrs manual ($100), brand analysis ~4hrs ($200), segmentation ~3hrs ($150)
+  const automationCount = programs?.filter((p) => p.status !== "recommended").length ?? 0;
+  const estimatedSavings = automationCount * 100 + (hasBrand ? 200 : 0) + (hasSyncedData ? 150 : 0);
+
+  // Segment colors for health bar
+  const SEGMENT_COLORS: Record<string, string> = {
+    Champions: "#6B7A2F",
+    "Loyal Customers": "#B8963E",
+    "Potential Loyalists": "#C4704A",
+    "New Customers": "#8A7D6B",
+    "At Risk": "#C44A4A",
+    Hibernating: "#999",
+    Lost: "#888",
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="border border-border rounded-xl p-8 bg-card">
-        <h1 className="text-[22px] font-bold text-foreground font-mono tracking-[-0.5px] mb-1">
-          DASHBOARD
-        </h1>
-        <p className="text-[13px] text-muted-foreground font-mono">
-          AlloHQ — Marketing automation for e-commerce
-        </p>
-        <div className="mt-5 flex items-center gap-3">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              healthLoading
-                ? "bg-muted-foreground/50 animate-pulse"
-                : health
-                  ? "bg-secondary"
-                  : "bg-muted-foreground/50"
-            }`}
-          />
-          <span className="text-xs font-mono text-muted-foreground">
-            {healthLoading
-              ? "Checking API..."
-              : health
-                ? "API connected"
-                : "API offline"}
-          </span>
-        </div>
-      </div>
-
-      {/* Setup checklist */}
-      <SetupChecklist
-        steps={setupSteps}
-        syncCounts={syncCounts}
-        isSyncing={isSyncing}
-        syncDone={syncDone}
-        isAnalyzing={isAnalyzing || analyzeBrand.isPending}
-        brandProfile={brandProfile ?? null}
-        brandDone={brandDone || (hasBrand && !isAnalyzing)}
-        agentRun={agentRunData ?? latestAgentRun ?? null}
-        isAgentRunning={isAgentRunning}
-        agentDone={agentDone && hasReadyOrActivePrograms}
-        programs={programs ?? []}
-        aiModels={aiModels as any}
-        selectedModel={aiSettings?.defaultModel ?? null}
-        onModelSelect={handleModelSelect}
-        isModelSaving={setDefaultModel.isPending}
-        modelLocked={hasBrand || isAnalyzing || analyzeBrand.isPending}
-        currentCreativeIntensity={currentCreativeIntensity}
-        onCreativeSelect={handleCreativeSelect}
-        isCreativeSaving={updateIntensity.isPending}
-        creativeLocked={isAgentRunning || (agentDone && hasReadyOrActivePrograms)}
-      />
-
-      {/* Selections summary — visible when agent is running or setup is complete */}
-      {(isAgentRunning || allSetupDone) && aiSettings?.defaultModel && (
-        <SelectionsSummary
-          modelLabel={
-            (aiModels as any)?.find((m: any) => m.id === aiSettings.defaultModel)?.label
-            ?? aiSettings.defaultModel
-          }
-          creativeIntensity={currentCreativeIntensity}
-        />
-      )}
-
-      {/* All done banner */}
-      {allSetupDone && (
-        <div className="border border-[hsl(var(--success)/0.2)] bg-[hsl(var(--success-bg))] rounded-xl p-6 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-[hsl(var(--success)/0.12)] flex items-center justify-center flex-shrink-0">
-            <Rocket className="w-5 h-5 text-[hsl(var(--success))]" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-[13px] font-bold text-[hsl(var(--success))] font-mono">
-              You&apos;re all set!
-            </h3>
-            <p className="text-[11px] text-[hsl(var(--success)/0.7)] font-mono mt-0.5">
-              Your store is connected, brand is analyzed, and automations are live.
-              Head to the automations page to manage your retention strategy.
+    <motion.div
+      className="space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* ---- State A: Setup Incomplete / State B: Setup Complete ---- */}
+      {allSetupDone ? (
+        <>
+          {/* Slim header with inline status pills */}
+          <motion.div variants={itemVariants} className="glass-card-static px-8 py-5">
+            <h1 className="section-header accent-bar-left text-[22px] text-foreground tracking-[-0.5px] mb-1">
+              DASHBOARD
+            </h1>
+            <p className="text-[13px] text-muted-foreground font-sans pl-4">
+              AlloHQ — Marketing automation for e-commerce
             </p>
-          </div>
-          <Link
-            href="/automations"
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all whitespace-nowrap"
-          >
-            Go to Automations
-            <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
-      )}
-
-      {/* Quick nav cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          {
-            title: "CUSTOMERS",
-            description: "View & manage customer profiles",
-            icon: Users,
-            href: "/customers",
-          },
-          {
-            title: "SEGMENTS",
-            description: "RFM-based segmentation",
-            icon: Layers,
-            href: "/segments",
-          },
-          {
-            title: "INTELLIGENCE",
-            description: "RFM analysis & LTV insights",
-            icon: Brain,
-            href: "/intelligence",
-          },
-          {
-            title: "CAMPAIGNS",
-            description: "Email, SMS, WhatsApp",
-            icon: Zap,
-            href: "/campaigns",
-          },
-        ].map((item) => (
-          <Link
-            key={item.title}
-            href={item.href}
-            className="border border-border rounded-xl p-6 bg-card hover:border-foreground hover:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all duration-200 group"
-          >
-            <div className="flex items-start justify-between mb-4">
-              <item.icon className="w-6 h-6 text-muted-foreground/50 group-hover:text-foreground transition-colors duration-200" />
-              <ArrowUpRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors duration-200" />
-            </div>
-            <h3 className="text-[12px] font-bold text-foreground font-mono mb-1">
-              {item.title}
-            </h3>
-            <p className="text-[11px] text-muted-foreground font-mono">
-              {item.description}
-            </p>
-          </Link>
-        ))}
-      </div>
-
-      {/* Stats */}
-      {hasSyncedData && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            {
-              label: "TOTAL CUSTOMERS",
-              value: stats?.totalCustomers?.toLocaleString() ?? "0",
-            },
-            {
-              label: "ACTIVE CAMPAIGNS",
-              value: "—",
-            },
-            {
-              label: "REVENUE THIS MONTH",
-              value: `$${(stats?.revenueThisMonth ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
-            },
-          ].map((stat, i) => (
-            <div
-              key={i}
-              className="border border-border rounded-xl p-6 bg-card"
-            >
-              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-2">
-                {stat.label}
-              </div>
-              {statsLoading ? (
-                <div className="h-9 w-20 bg-muted rounded animate-pulse" />
-              ) : (
-                <div className="text-[28px] font-bold text-foreground font-mono tabular-nums">
-                  {stat.value}
-                </div>
+            <div className="mt-3 flex items-center gap-2 pl-4 flex-wrap">
+              {/* Status pills */}
+              <Link href="/integrations" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#6B7A2F] hover:bg-black/[0.07] transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6B7A2F]" /> Connected
+              </Link>
+              {aiSettings?.defaultModel && (
+                <Link href="/settings" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#B8963E] hover:bg-black/[0.07] transition-colors">
+                  <Zap className="w-3 h-3" /> {modelLabel}
+                </Link>
+              )}
+              <Link href="/settings" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#8A7D6B] hover:bg-black/[0.07] transition-colors">
+                <SlidersHorizontal className="w-3 h-3" /> {creativeLabel}
+              </Link>
+              {hasBrand && (
+                <Link href="/intelligence/brand" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#8A7D6B] hover:bg-black/[0.07] transition-colors">
+                  <Check className="w-3 h-3" /> Brand
+                </Link>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          </motion.div>
 
-      {/* AI Usage */}
-      {tokenUsage && tokenUsage.totalCalls > 0 && (
-        <div className="border border-border rounded-xl p-6 bg-card">
-          <div className="flex items-center gap-3 mb-5">
-            <Cpu className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">AI_USAGE</h2>
-          </div>
-
-          {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-4 mb-5">
-            <div className="border border-border rounded-lg p-4">
-              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-1">
-                Total Tokens
-              </div>
-              <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
-                {((tokenUsage.totalInputTokens + tokenUsage.totalOutputTokens) / 1000).toFixed(1)}K
-              </div>
-            </div>
-            <div className="border border-border rounded-lg p-4">
-              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-1">
-                Estimated Cost
-              </div>
-              <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
-                ${tokenUsage.totalCost < 0.01 ? "<0.01" : tokenUsage.totalCost.toFixed(2)}
-              </div>
-            </div>
-            <div className="border border-border rounded-lg p-4">
-              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[1px] mb-1">
-                AI Calls
-              </div>
-              <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
-                {tokenUsage.totalCalls}
-              </div>
-            </div>
-          </div>
-
-          {/* Per-model breakdown */}
-          {tokenUsage.byModel.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-[0.5px] mb-2">
-                By Model
-              </div>
-              {tokenUsage.byModel.map((m) => (
-                <div
-                  key={m.model}
-                  className="flex items-center justify-between px-3 py-2 border border-border rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono font-bold text-foreground">{m.model}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      {m.calls} call{m.calls !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
-                      {((m.inputTokens + m.outputTokens) / 1000).toFixed(1)}K tokens
-                    </span>
-                    <span className="text-xs font-mono font-bold text-foreground tabular-nums">
-                      ${m.cost < 0.01 ? "<0.01" : m.cost.toFixed(4)}
-                    </span>
-                  </div>
+          {/* Smart nav grid */}
+          <div className="grid grid-cols-4 gap-4">
+            {/* CUSTOMERS */}
+            <motion.div variants={itemVariants}>
+              <Link href="/customers" className="block glass-card p-5 group">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="section-header text-[10px] text-muted-foreground">CUSTOMERS</div>
+                  <span className="trend-pill-up"><TrendingUp className="w-3 h-3 inline mr-1" />+12%</span>
                 </div>
+                <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
+                  <AnimatedNumber value={stats?.totalCustomers ?? 0} />
+                </div>
+                <div className="mt-2"><Sparkline data={SPARK_CUSTOMERS} color="var(--olive)" /></div>
+              </Link>
+            </motion.div>
+
+            {/* SEGMENTS */}
+            <motion.div variants={itemVariants}>
+              <Link href="/segments" className="block glass-card p-5 group">
+                <div className="section-header text-[10px] text-muted-foreground mb-2">SEGMENTS</div>
+                <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
+                  <AnimatedNumber value={(segmentsList as any)?.length ?? 0} />
+                </div>
+                <p className="text-[11px] text-muted-foreground font-sans mt-2">active segments</p>
+              </Link>
+            </motion.div>
+
+            {/* CAMPAIGNS */}
+            <motion.div variants={itemVariants}>
+              <Link href="/campaigns" className="block glass-card p-5 group">
+                <div className="section-header text-[10px] text-muted-foreground mb-2">CAMPAIGNS</div>
+                {readyCampaigns > 0 ? (
+                  <>
+                    <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
+                      <AnimatedNumber value={readyCampaigns} />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-sans mt-2">ready to send</p>
+                  </>
+                ) : (
+                  <p className="text-[13px] text-terracotta font-mono font-semibold mt-4">Launch your first &rarr;</p>
+                )}
+              </Link>
+            </motion.div>
+
+            {/* REVENUE */}
+            <motion.div variants={itemVariants}>
+              <Link href="/analytics" className="block glass-card p-5 group">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="section-header text-[10px] text-muted-foreground">REVENUE</div>
+                  <span className="trend-pill-up"><TrendingUp className="w-3 h-3 inline mr-1" />+8%</span>
+                </div>
+                <div className="text-[32px] font-bold text-[#6B7A2F] font-mono tabular-nums leading-tight">
+                  <AnimatedNumber value={stats?.revenueThisMonth ?? 0} prefix="$" />
+                </div>
+                <div className="mt-2"><Sparkline data={SPARK_REVENUE} color="var(--olive)" /></div>
+              </Link>
+            </motion.div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Header */}
+          <motion.div variants={itemVariants} className="glass-card-static p-8">
+            <h1 className="section-header accent-bar-left text-[22px] text-foreground tracking-[-0.5px] mb-1">
+              DASHBOARD
+            </h1>
+            <p className="text-[13px] text-muted-foreground font-sans pl-4">
+              AlloHQ — Marketing automation for e-commerce
+            </p>
+            <div className="mt-5 flex items-center gap-3 pl-4">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  healthLoading
+                    ? "bg-muted-foreground/50 animate-pulse"
+                    : health
+                      ? "bg-olive"
+                      : "bg-muted-foreground/50"
+                }`}
+              />
+              <span className="text-xs font-mono text-muted-foreground">
+                {healthLoading
+                  ? "Checking API..."
+                  : health
+                    ? "API connected"
+                    : "API offline"}
+              </span>
+            </div>
+          </motion.div>
+
+          {/* Setup checklist */}
+          <motion.div variants={itemVariants}>
+            <SetupChecklist
+              steps={setupSteps}
+              syncCounts={syncCounts}
+              isSyncing={isSyncing}
+              syncDone={syncDone}
+              isAnalyzing={isAnalyzing || analyzeBrand.isPending}
+              brandProfile={brandProfile ?? null}
+              brandDone={brandDone || (hasBrand && !isAnalyzing)}
+              agentRun={agentRunData ?? latestAgentRun ?? null}
+              isAgentRunning={isAgentRunning}
+              agentDone={agentDone && hasReadyOrActivePrograms}
+              programs={programs ?? []}
+              aiModels={aiModels as any}
+              selectedModel={aiSettings?.defaultModel ?? null}
+              onModelSelect={handleModelSelect}
+              isModelSaving={setDefaultModel.isPending}
+              modelLocked={hasBrand || isAnalyzing || analyzeBrand.isPending}
+              currentCreativeIntensity={currentCreativeIntensity}
+              onCreativeSelect={handleCreativeSelect}
+              isCreativeSaving={updateIntensity.isPending}
+              creativeLocked={isAgentRunning || (agentDone && hasReadyOrActivePrograms)}
+            />
+          </motion.div>
+
+          {/* Selections summary — visible when agent is running */}
+          {isAgentRunning && aiSettings?.defaultModel && (
+            <motion.div variants={itemVariants}>
+              <SelectionsSummary
+                modelLabel={
+                  (aiModels as any)?.find((m: any) => m.id === aiSettings.defaultModel)?.label
+                  ?? aiSettings.defaultModel
+                }
+                creativeIntensity={currentCreativeIntensity}
+              />
+            </motion.div>
+          )}
+
+          {/* Quick nav cards */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              {
+                title: "CUSTOMERS",
+                description: "View & manage customer profiles",
+                icon: Users,
+                href: "/customers",
+              },
+              {
+                title: "SEGMENTS",
+                description: "RFM-based segmentation",
+                icon: Layers,
+                href: "/segments",
+              },
+              {
+                title: "INTELLIGENCE",
+                description: "RFM analysis & LTV insights",
+                icon: Brain,
+                href: "/intelligence",
+              },
+              {
+                title: "CAMPAIGNS",
+                description: "Email, SMS, WhatsApp",
+                icon: Zap,
+                href: "/campaigns",
+              },
+            ].map((item) => (
+              <motion.div key={item.title} variants={itemVariants}>
+                <Link
+                  href={item.href}
+                  className="block glass-card p-6 group"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <item.icon className="w-6 h-6 text-muted-foreground/50 group-hover:text-terracotta transition-colors duration-200" />
+                    <ArrowUpRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-terracotta transition-colors duration-200" />
+                  </div>
+                  <h3 className="section-header text-[12px] text-foreground mb-1">
+                    {item.title}
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground font-sans">
+                    {item.description}
+                  </p>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Stats */}
+          {hasSyncedData && (
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                {
+                  label: "TOTAL CUSTOMERS",
+                  value: stats?.totalCustomers ?? 0,
+                  prefix: "",
+                  spark: SPARK_CUSTOMERS,
+                  trend: "+12%",
+                  trendUp: true,
+                },
+                {
+                  label: "ACTIVE CAMPAIGNS",
+                  value: 0,
+                  prefix: "",
+                  spark: SPARK_CAMPAIGNS,
+                  trend: null,
+                  trendUp: false,
+                },
+                {
+                  label: "REVENUE THIS MONTH",
+                  value: stats?.revenueThisMonth ?? 0,
+                  prefix: "$",
+                  spark: SPARK_REVENUE,
+                  trend: "+8%",
+                  trendUp: true,
+                },
+              ].map((stat, i) => (
+                <motion.div
+                  key={i}
+                  variants={itemVariants}
+                  className="glass-card p-6"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="section-header text-[10px] text-muted-foreground">
+                      {stat.label}
+                    </div>
+                    {stat.trend && (
+                      <span className={stat.trendUp ? "trend-pill-up" : "trend-pill-down"}>
+                        {stat.trendUp ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
+                        {stat.trend}
+                      </span>
+                    )}
+                  </div>
+                  {statsLoading ? (
+                    <div className="h-9 w-20 glass-skeleton" />
+                  ) : (
+                    <div className="text-[36px] font-bold text-foreground font-mono tabular-nums leading-tight">
+                      <AnimatedNumber value={stat.value} prefix={stat.prefix} />
+                    </div>
+                  )}
+                  <div className="mt-3">
+                    <Sparkline
+                      data={stat.spark}
+                      color={stat.trendUp ? "var(--olive)" : "var(--terracotta)"}
+                    />
+                  </div>
+                </motion.div>
               ))}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* Recent activity */}
-      <div className="border border-border rounded-xl overflow-hidden bg-card">
-        <div className="px-6 py-4 border-b border-border flex items-center gap-3">
-          <div className="w-px h-5 bg-secondary" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">
-            RECENT_ACTIVITY
+      {/* ---- Post-setup content blocks (only when setup complete) ---- */}
+      {allSetupDone && (
+        <>
+          {/* ATTENTION NEEDED */}
+          <motion.div variants={itemVariants} className="glass-card-static border-l-[3px] border-l-terracotta p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="section-header accent-bar-left text-[13px] text-foreground flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-terracotta" />
+                ATTENTION NEEDED
+              </h2>
+              {attentionItems.length > 0 && (
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  {attentionItems.length} item{attentionItems.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+            {attentionItems.length > 0 ? (
+              <div className="space-y-0">
+                {attentionItems.slice(0, 4).map((item, i) => (
+                  <div key={i} className={`flex gap-3 py-3 ${i < attentionItems.length - 1 ? "border-b border-black/[0.04]" : ""}`}>
+                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                      item.level === "urgent" ? "bg-[#C44A4A]" : item.level === "moderate" ? "bg-[#B8963E]" : "bg-[#6B7A2F]"
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-mono text-foreground font-medium">{item.text}</p>
+                      <p className="text-[11px] text-muted-foreground font-sans mt-0.5">{item.detail}</p>
+                      <Link href={item.href} className="text-[12px] font-mono text-terracotta hover:text-terracotta/80 transition-colors mt-1 inline-block">
+                        {item.action}
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 py-2">
+                <Check className="w-4 h-4 text-[#6B7A2F]" />
+                <p className="text-[13px] font-sans text-muted-foreground">Everything looks good. Your store is on track.</p>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Two-column: AI AGENT ACTIVITY + AUTOMATION STATUS */}
+          <div className="grid grid-cols-[3fr_2fr] gap-5">
+            {/* AI AGENT ACTIVITY */}
+            <motion.div variants={itemVariants} className="glass-card-static border-l-[3px] border-l-[#B8963E] p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="section-header accent-bar-left text-[13px] text-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#B8963E]" />
+                  AI AGENT ACTIVITY
+                </h2>
+                <span className="text-[11px] font-mono text-muted-foreground">Last 24 hours</span>
+              </div>
+
+              <div className="space-y-0">
+                {/* Dynamic activity items based on real data */}
+                {automationCount > 0 && (
+                  <div className="flex items-start justify-between py-3 border-b border-black/[0.04]">
+                    <div className="flex items-start gap-2">
+                      <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[13px] font-mono text-foreground">Generated {automationCount} automations</p>
+                        <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                          {programs?.filter((p) => p.status !== "recommended").map((p) => p.name).slice(0, 3).join(", ")}
+                          {automationCount > 3 ? `, +${automationCount - 3} more` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {hasBrand && brandProfile && (
+                  <div className="flex items-start justify-between py-3 border-b border-black/[0.04]">
+                    <div className="flex items-start gap-2">
+                      <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[13px] font-mono text-foreground">Analyzed brand voice for {(brandProfile as any)?.brandName ?? "your store"}</p>
+                        <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                          Tone: {Object.keys((brandProfile as any)?.toneAttributes ?? {}).slice(0, 3).join(" \u00b7 ")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {hasSyncedData && (
+                  <div className="flex items-start justify-between py-3 border-b border-black/[0.04]">
+                    <div className="flex items-start gap-2">
+                      <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[13px] font-mono text-foreground">Segmented {stats?.totalCustomers ?? 0} customers into {(segmentDist?.length ?? 0)} groups</p>
+                        <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                          {segmentDist?.slice(0, 3).map((s) => `${s.segment} (${s.customerCount})`).join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {hasSyncedData && (
+                  <div className="flex items-start justify-between py-3">
+                    <div className="flex items-start gap-2">
+                      <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[13px] font-mono text-foreground">Calculated RFM scores for {stats?.totalCustomers ?? 0} customers</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer summary */}
+              {tokenUsage && tokenUsage.totalCalls > 0 && (
+                <div className="mt-4 pt-4 border-t border-black/[0.06] flex items-center gap-3">
+                  <span className="text-[12px] font-mono text-muted-foreground">
+                    {aiCalls} actions &middot; ${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)} AI cost
+                  </span>
+                  {estimatedSavings > 0 && (
+                    <span className="text-[12px] font-mono text-[#6B7A2F] font-semibold">
+                      &middot; ~${estimatedSavings.toLocaleString()} in manual work saved
+                    </span>
+                  )}
+                </div>
+              )}
+            </motion.div>
+
+            {/* AUTOMATION STATUS */}
+            <motion.div variants={itemVariants} className="glass-card-static p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="section-header accent-bar-left text-[13px] text-foreground flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-muted-foreground" />
+                  AUTOMATIONS
+                </h2>
+                <Link href="/automations" className="text-[11px] font-mono text-terracotta hover:text-terracotta/80 transition-colors">
+                  View all &rarr;
+                </Link>
+              </div>
+
+              {programs && programs.length > 0 ? (
+                <div className="space-y-0">
+                  {programs.map((p, i) => (
+                    <Link
+                      key={p.id}
+                      href="/automations"
+                      className={`flex items-center justify-between py-2.5 hover:bg-white/10 -mx-2 px-2 rounded-lg transition-colors ${
+                        i < programs.length - 1 ? "border-b border-black/[0.03]" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          p.status === "active" ? "bg-[#6B7A2F]" :
+                          p.status === "ready" ? "bg-[#B8963E]" :
+                          p.status === "generating" ? "bg-[#C4704A] animate-pulse" :
+                          p.status === "draft" ? "bg-[#C4704A]" :
+                          "border border-muted-foreground"
+                        }`} />
+                        <span className="text-[12px] font-mono text-foreground truncate">{p.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] font-mono text-muted-foreground capitalize">{p.status}</span>
+                        {p.status === "ready" && (
+                          <span className="text-[10px] font-mono text-terracotta">Go Live &rarr;</span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                  {/* Footer summary */}
+                  <div className="pt-3 mt-1 border-t border-black/[0.04]">
+                    <p className="text-[11px] font-mono text-muted-foreground">
+                      {programs.filter((p) => p.status === "active").length} live
+                      {" \u00b7 "}{programs.filter((p) => p.status === "ready").length} ready
+                      {" \u00b7 "}{programs.filter((p) => p.status === "draft" || p.status === "generating").length} draft
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-6 text-center">
+                  <p className="text-[12px] text-muted-foreground font-sans">No automations yet</p>
+                  <Link href="/automations" className="text-[12px] font-mono text-terracotta mt-2 inline-block">
+                    Generate automations &rarr;
+                  </Link>
+                </div>
+              )}
+            </motion.div>
+          </div>
+
+          {/* CUSTOMER HEALTH SNAPSHOT */}
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
+            <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-4 flex items-center gap-2">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              CUSTOMER HEALTH
+            </h2>
+
+            {segmentDist && segmentDist.length > 0 ? (
+              <>
+                {/* Stacked horizontal bar */}
+                <div className="h-3 rounded-full overflow-hidden flex mb-3">
+                  {segmentDist.map((s) => {
+                    const totalCust = segmentDist.reduce((sum, seg) => sum + seg.customerCount, 0);
+                    const pct = totalCust > 0 ? (s.customerCount / totalCust) * 100 : 0;
+                    if (pct === 0) return null;
+                    return (
+                      <div
+                        key={s.segment}
+                        style={{ width: `${pct}%`, backgroundColor: SEGMENT_COLORS[s.segment] ?? "#ccc" }}
+                        title={`${s.segment}: ${s.customerCount} (${Math.round(pct)}%)`}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-x-5 gap-y-1.5 mb-4">
+                  {segmentDist.filter((s) => s.customerCount > 0).map((s) => {
+                    const totalCust = segmentDist.reduce((sum, seg) => sum + seg.customerCount, 0);
+                    const pct = totalCust > 0 ? Math.round((s.customerCount / totalCust) * 100) : 0;
+                    return (
+                      <div key={s.segment} className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: SEGMENT_COLORS[s.segment] ?? "#ccc" }} />
+                        <span className="text-[11px] font-mono text-foreground">{s.segment}</span>
+                        <span className="text-[10px] text-muted-foreground">{s.customerCount} ({pct}%)</span>
+                        <span className="text-[10px] text-muted-foreground">${Math.round(s.totalRevenue).toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Key metrics */}
+                {customerStats && (
+                  <div className="flex items-center gap-6 mb-4 text-[11px] font-mono text-muted-foreground">
+                    <span>Marketing opt-in: <strong className="text-foreground">{customerStats.marketingRate.toFixed(0)}%</strong></span>
+                    <span>Avg order value: <strong className="text-foreground">${customerStats.avgOrderValue.toFixed(0)}</strong></span>
+                  </div>
+                )}
+
+                {/* AI insight if hibernating segment is large */}
+                {(() => {
+                  const hibernating = segmentDist.find((s) => s.segment === "Lost" || s.segment === "Hibernating");
+                  const totalCust = segmentDist.reduce((sum, s) => sum + s.customerCount, 0);
+                  if (hibernating && totalCust > 0 && (hibernating.customerCount / totalCust) > 0.3) {
+                    const pct = Math.round((hibernating.customerCount / totalCust) * 100);
+                    return (
+                      <div className="flex items-start gap-2 p-3 bg-white/20 rounded-lg border border-white/15">
+                        <Sparkles className="w-3.5 h-3.5 text-[#B8963E] mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-[12px] font-sans text-foreground">
+                            {pct}% of your base is dormant. A win-back campaign could recover estimated revenue.
+                          </p>
+                          <Link href="/automations" className="text-[11px] font-mono text-terracotta mt-1 inline-block">
+                            Launch Win-Back &rarr;
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </>
+            ) : (
+              <p className="text-[12px] text-muted-foreground font-sans py-4">
+                Run RFM analysis to see customer health distribution.
+              </p>
+            )}
+          </motion.div>
+        </>
+      )}
+
+      {/* Recent activity — feed style */}
+      <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/15 flex items-center gap-3">
+          <h2 className="section-header accent-bar-left text-[13px] text-foreground">
+            RECENT ACTIVITY
           </h2>
         </div>
         {statsLoading ? (
           <div className="p-6 space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-8 bg-muted rounded animate-pulse" />
+              <div key={i} className="h-8 glass-skeleton" />
             ))}
           </div>
         ) : stats?.recentOrders && stats.recentOrders.length > 0 ? (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
-                  Order
-                </th>
-                <th className="text-left px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
-                  Customer
-                </th>
-                <th className="text-left px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
-                  Status
-                </th>
-                <th className="text-right px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
-                  Total
-                </th>
-                <th className="text-right px-6 py-3 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.5px]">
-                  Date
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {stats.recentOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="hover:bg-muted transition-colors"
-                >
-                  <td className="px-6 py-3 text-[13px] font-mono font-bold text-foreground">
-                    #{order.orderNumber}
-                  </td>
-                  <td className="px-6 py-3 text-[13px] font-mono text-foreground">
-                    {order.customerName}
-                  </td>
-                  <td className="px-6 py-3">
-                    <span className="px-2 py-0.5 rounded text-xs font-mono bg-muted text-foreground">
+          <div className="divide-y divide-white/10">
+            {stats.recentOrders.map((order) => (
+              <div
+                key={order.id}
+                className="flex items-center gap-4 px-6 py-3.5 hover:bg-white/10 transition-colors"
+              >
+                {/* Left color bar */}
+                <div className="w-1 h-8 rounded-full bg-olive flex-shrink-0" />
+
+                {/* Order info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-mono font-bold text-foreground">
+                      #{order.orderNumber}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/20 border border-white/15 text-foreground">
                       {order.status}
                     </span>
-                  </td>
-                  <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground tabular-nums">
+                  </div>
+                  <p className="text-[11px] font-sans text-muted-foreground mt-0.5">
+                    {order.customerName} · {new Date(order.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+
+                {/* Amount */}
+                <div className="text-right flex-shrink-0">
+                  <span className="text-[15px] font-mono font-bold text-foreground tabular-nums">
                     ${order.totalPrice.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-3 text-right text-[11px] font-mono text-muted-foreground">
-                    {new Date(order.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="p-10 text-center">
             <ShoppingBag className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground font-mono">No orders yet</p>
-            <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
+            <p className="text-[13px] text-muted-foreground font-sans">No orders yet</p>
+            <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
               Connect a store and sync data to see activity
             </p>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

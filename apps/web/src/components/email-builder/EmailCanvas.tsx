@@ -130,7 +130,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
       return (
         <div className="p-3 bg-muted rounded-lg border border-dashed border-muted-foreground/50">
           <p className="text-[11px] font-mono text-muted-foreground text-center">
-            Product Grid ({block.props.productIds.length} products, {block.props.columns || 2} columns)
+            Product Grid ({(block.props.productIds ?? []).length} products, {block.props.columns || 2} columns)
           </p>
         </div>
       );

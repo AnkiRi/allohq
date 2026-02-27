@@ -2,9 +2,19 @@
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Settings, Store, User, Bell, CreditCard, Sparkles, Cpu, Check, Activity } from "lucide-react";
+import { Store, User, Bell, CreditCard, Sparkles, Cpu, Check, Activity } from "lucide-react";
+import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
 
 const TIER_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   premium: { bg: "bg-purple-50", text: "text-purple-700", label: "Premium" },
@@ -35,6 +45,16 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function getCostComparison(cost: number): string {
+  if (cost === 0) return "No spend yet — your AI budget is untouched";
+  if (cost < 0.01) return "Barely a rounding error";
+  if (cost < 0.10) return "Less than a gumball";
+  if (cost < 1.00) return "Less than the cost of a coffee";
+  if (cost < 5.00) return "About the cost of a fancy latte";
+  if (cost < 20.00) return "Less than a nice lunch";
+  return "Serious AI power at work";
+}
+
 function TokenUsageSection() {
   const [period, setPeriod] = useState<string>("30d");
 
@@ -49,11 +69,23 @@ function TokenUsageSection() {
   } | undefined; isLoading: boolean };
 
   return (
-    <div className="border border-border rounded-xl p-6 bg-card">
-      <div className="flex items-center gap-3 mb-6">
+    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+      <div className="flex items-center gap-3 mb-2">
         <Activity className="w-4 h-4 text-muted-foreground" />
-        <h2 className="text-[13px] font-bold text-foreground font-mono">TOKEN USAGE</h2>
+        <h2 className="section-header accent-bar-left text-[13px]">TOKEN USAGE</h2>
       </div>
+
+      {/* Human-readable summary */}
+      {usage && (
+        <div className="mb-5">
+          <p className="text-[20px] tracking-[-0.5px] font-bold text-foreground font-mono">
+            You've spent ${usage.totalCost.toFixed(4)} on AI this period
+          </p>
+          <p className="text-[12px] text-muted-foreground font-sans mt-1">
+            {getCostComparison(usage.totalCost)}
+          </p>
+        </div>
+      )}
 
       {/* Period selector */}
       <div className="flex flex-wrap gap-1.5 mb-5">
@@ -75,7 +107,7 @@ function TokenUsageSection() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-muted rounded-xl animate-pulse" />
+            <div key={i} className="h-16 glass-skeleton rounded-xl" />
           ))}
         </div>
       ) : usage ? (
@@ -88,7 +120,7 @@ function TokenUsageSection() {
               { label: "Input Tokens", value: formatTokens(usage.totalInputTokens) },
               { label: "Output Tokens", value: formatTokens(usage.totalOutputTokens) },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-xl bg-muted/50 border border-border p-3">
+              <div key={stat.label} className="rounded-xl bg-white/30 border border-white/20 p-3">
                 <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                   {stat.label}
                 </div>
@@ -106,7 +138,7 @@ function TokenUsageSection() {
               {usage.byModel.map((m) => (
                 <div
                   key={m.model}
-                  className="flex items-center justify-between p-3 border border-border rounded-lg"
+                  className="flex items-center justify-between p-3 bg-white/20 border border-white/15 rounded-lg"
                 >
                   <div>
                     <p className="text-[12px] font-bold text-foreground font-mono">
@@ -131,7 +163,7 @@ function TokenUsageSection() {
           )}
         </>
       ) : null}
-    </div>
+    </motion.div>
   );
 }
 
@@ -169,22 +201,27 @@ export default function SettingsPage() {
   }) as { mutate: (input: { model: string | null }) => void; isPending: boolean };
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      className="space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <div>
-        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+      <motion.div variants={itemVariants}>
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
           SETTINGS
         </h1>
-        <p className="text-[13px] text-muted-foreground font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground font-sans mt-1">
           Manage your workspace and account settings
         </p>
-      </div>
+      </motion.div>
 
       {/* Profile */}
-      <div className="border border-border rounded-xl p-6 bg-card">
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <User className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">PROFILE</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">PROFILE</h2>
         </div>
         <div className="flex items-center gap-4">
           {user?.imageUrl ? (
@@ -206,18 +243,18 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Connected Stores */}
-      <div className="border border-border rounded-xl p-6 bg-card">
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Store className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">CONNECTED STORES</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">CONNECTED STORES</h2>
         </div>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => (
-              <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+              <div key={i} className="h-12 glass-skeleton rounded" />
             ))}
           </div>
         ) : stores && stores.length > 0 ? (
@@ -225,7 +262,7 @@ export default function SettingsPage() {
             {stores.map((store) => (
               <div
                 key={store.id}
-                className="flex items-center justify-between p-4 border border-border rounded-lg"
+                className="flex items-center justify-between p-4 bg-white/20 border border-white/15 rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-[#96BF48] flex items-center justify-center">
@@ -251,13 +288,13 @@ export default function SettingsPage() {
             No stores connected. Go to Integrations to connect a store.
           </p>
         )}
-      </div>
+      </motion.div>
 
       {/* AI Preferences */}
-      <div className="border border-border rounded-xl p-6 bg-card">
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Sparkles className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">AI PREFERENCES</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">AI PREFERENCES</h2>
         </div>
         {brandStatus?.exists ? (
           <div className="space-y-4">
@@ -275,10 +312,10 @@ export default function SettingsPage() {
                       key={opt.value}
                       onClick={() => storeId && updateIntensityMut.mutate({ storeId, creativeIntensity: opt.value })}
                       disabled={updateIntensityMut.isPending}
-                      className={`text-left p-4 border rounded-xl transition-all ${
+                      className={`text-left p-4 rounded-xl transition-all ${
                         current === opt.value
-                          ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
-                          : "border-border hover:border-primary/50"
+                          ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
+                          : "border border-white/20 bg-white/20 hover:border-white/40"
                       }`}
                     >
                       <p className="text-[11px] font-bold text-foreground font-mono">{opt.label}</p>
@@ -297,13 +334,13 @@ export default function SettingsPage() {
             </p>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Default AI Model */}
-      <div className="border border-border rounded-xl p-6 bg-card">
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Cpu className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">DEFAULT AI MODEL</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">DEFAULT AI MODEL</h2>
         </div>
         <p className="text-[11px] text-muted-foreground font-mono mb-4">
           Choose which model is used by default for all AI content generation
@@ -318,17 +355,17 @@ export default function SettingsPage() {
                   key={model.id}
                   onClick={() => setDefaultModel.mutate({ model: isSelected ? null : model.id })}
                   disabled={setDefaultModel.isPending || !model.available}
-                  className={`relative text-left p-4 border rounded-xl transition-all ${
+                  className={`relative text-left p-4 rounded-xl transition-all ${
                     isSelected
-                      ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))] bg-muted"
+                      ? "glass-card-static shadow-[0_0_0_2px_var(--terracotta)]"
                       : model.available
-                        ? "border-border hover:border-primary/50"
-                        : "border-border opacity-50 cursor-not-allowed"
+                        ? "glass-card-static border-white/20 hover:border-white/40"
+                        : "glass-card-static opacity-50 cursor-not-allowed"
                   }`}
                 >
                   {isSelected && (
-                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
-                      <Check className="w-3 h-3 text-secondary-foreground" />
+                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--olive)" }}>
+                      <Check className="w-3 h-3 text-white" />
                     </div>
                   )}
                   <div className="flex items-center gap-2 mb-2">
@@ -350,7 +387,7 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />
+              <div key={i} className="h-24 glass-skeleton rounded-xl" />
             ))}
           </div>
         )}
@@ -359,38 +396,39 @@ export default function SettingsPage() {
             No default selected — AI will use Claude Sonnet 4.5
           </p>
         )}
-      </div>
+      </motion.div>
 
       {/* Token Usage */}
       <TokenUsageSection />
 
-      {/* Placeholder sections */}
+      {/* Coming Soon sections */}
       {[
         {
           icon: Bell,
           title: "NOTIFICATIONS",
-          description: "Configure email and in-app notification preferences",
+          description: "Email and in-app notification preferences are coming in our next update.",
         },
         {
           icon: CreditCard,
           title: "BILLING",
-          description: "Manage your subscription and payment methods",
+          description: "Subscription management and payment methods are coming in our next update.",
         },
       ].map((section) => (
-        <div key={section.title} className="border border-border rounded-xl p-6 bg-card">
+        <motion.div key={section.title} variants={itemVariants} className="glass-card-static rounded-xl p-6 opacity-80">
           <div className="flex items-center gap-3 mb-4">
             <section.icon className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">{section.title}</h2>
+            <h2 className="section-header accent-bar-left text-[13px]">{section.title}</h2>
           </div>
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <Settings className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground font-mono">{section.description}</p>
-              <p className="text-[10px] text-muted-foreground/50 font-mono mt-1">Coming soon</p>
-            </div>
+          <div className="py-6">
+            <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
+              {section.description}
+            </p>
+            <p className="text-[11px] font-mono mt-3" style={{ color: "var(--terracotta)" }}>
+              We'll notify you when this is available
+            </p>
           </div>
-        </div>
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }
