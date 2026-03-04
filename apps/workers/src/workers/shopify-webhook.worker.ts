@@ -1,6 +1,8 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
+
+const automationTriggerQueue = new Queue(QUEUE_NAMES.AUTOMATION_TRIGGER, { connection: redisConnection });
 
 interface WebhookJobData {
   topic: string;
@@ -35,7 +37,13 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         break;
 
       // --- Customers ---
-      case "customers/create":
+      case "customers/create": {
+        const customer = await upsertCustomer(store.id, payload);
+        if (customer) {
+          await checkEventTriggers(store.id, "customer_created", customer.id);
+        }
+        break;
+      }
       case "customers/update":
         await upsertCustomer(store.id, payload);
         break;
@@ -44,7 +52,13 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         break;
 
       // --- Orders ---
-      case "orders/create":
+      case "orders/create": {
+        const order = await upsertOrder(store.id, payload);
+        if (order?.customerId) {
+          await checkEventTriggers(store.id, "order_placed", order.customerId);
+        }
+        break;
+      }
       case "orders/updated":
         await upsertOrder(store.id, payload);
         break;
@@ -157,7 +171,7 @@ async function deleteProduct(
 async function upsertCustomer(
   storeId: string,
   data: Record<string, unknown>
-) {
+): Promise<{ id: string }> {
   const c = data as {
     id: number;
     email: string;
@@ -172,7 +186,7 @@ async function upsertCustomer(
     ? c.tags.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
 
-  await prisma.customer.upsert({
+  const customer = await prisma.customer.upsert({
     where: {
       storeId_externalId: { storeId, externalId: String(c.id) },
     },
@@ -195,6 +209,8 @@ async function upsertCustomer(
       tags,
     },
   });
+
+  return { id: customer.id };
 }
 
 async function deleteCustomer(
@@ -210,7 +226,7 @@ async function deleteCustomer(
 async function upsertOrder(
   storeId: string,
   data: Record<string, unknown>
-) {
+): Promise<{ id: string; customerId: string } | null> {
   const o = data as {
     id: number;
     name: string;
@@ -231,7 +247,7 @@ async function upsertOrder(
     }>;
   };
 
-  if (!o.customer?.id) return;
+  if (!o.customer?.id) return null;
 
   const customer = await prisma.customer.findUnique({
     where: {
@@ -239,7 +255,7 @@ async function upsertOrder(
     },
   });
 
-  if (!customer) return;
+  if (!customer) return null;
 
   let status = "pending";
   if (o.financial_status === "refunded") status = "cancelled";
@@ -303,7 +319,7 @@ async function upsertOrder(
     const existing = await prisma.orderAttribution.findUnique({
       where: { orderId: order.id },
     });
-    if (existing) return;
+    if (existing) return { id: order.id, customerId: customer.id };
 
     // Priority: click > open
     const recentMessage = await prisma.messageLog.findFirst({
@@ -341,6 +357,56 @@ async function upsertOrder(
     }
   } catch (err) {
     console.warn(`[attribution] Failed for order ${order.id}:`, (err as Error).message);
+  }
+
+  return { id: order.id, customerId: customer.id };
+}
+
+/**
+ * Check for active automations with event triggers matching the given event,
+ * then queue automation-trigger jobs for each match.
+ * De-duplicates by checking if a MessageLog already exists for (automationId, customerId).
+ */
+async function checkEventTriggers(storeId: string, eventName: string, customerId: string): Promise<void> {
+  try {
+    const automations = await prisma.automation.findMany({
+      where: {
+        storeId,
+        status: "active",
+        triggerType: "event",
+      },
+    });
+
+    for (const automation of automations) {
+      const triggerConfig = automation.triggerConfig as { event?: string } | null;
+      if (triggerConfig?.event !== eventName) continue;
+
+      // De-duplicate: skip if already triggered for this (automation, customer)
+      const existingLog = await prisma.messageLog.findFirst({
+        where: { automationId: automation.id, customerId },
+      });
+      if (existingLog) {
+        console.log(`[event-trigger] Skipping duplicate: automation ${automation.id} already triggered for customer ${customerId}`);
+        continue;
+      }
+
+      await automationTriggerQueue.add(
+        "automation-trigger",
+        {
+          automationId: automation.id,
+          customerId,
+          triggeredBy: eventName,
+        },
+        {
+          // BullMQ jobId as secondary dedup guard
+          jobId: `${automation.id}-${customerId}`,
+        }
+      );
+
+      console.log(`[event-trigger] Queued automation ${automation.id} for customer ${customerId} (event: ${eventName})`);
+    }
+  } catch (err) {
+    console.error(`[event-trigger] Error checking triggers for ${eventName}:`, (err as Error).message);
   }
 }
 

@@ -7,7 +7,16 @@ import { sendRcs } from "./channels/rcs";
 
 // ── Re-export types ────────────────────────────────────────────────────────
 
-export type { Channel, Message, SendResult } from "./types";
+export type {
+  Channel,
+  Message,
+  MessagingChannel,
+  Provider,
+  ProviderSendFn,
+  SendResult,
+} from "./types";
+export { getProvider, sendViaProvider } from "./provider";
+export type { StoreMessagingConfig } from "./provider";
 
 // ── Unified send function ──────────────────────────────────────────────────
 

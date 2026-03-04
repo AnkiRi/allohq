@@ -7,6 +7,8 @@ import { createContext } from "./trpc";
 import { handleShopifyWebhook } from "./webhooks/shopify";
 import { handleResendWebhook } from "./webhooks/resend";
 import { handleTwilioWebhook } from "./webhooks/twilio";
+import { handleUnsubscribe } from "./webhooks/unsubscribe";
+import { handleGupshupWebhook } from "./webhooks/gupshup";
 
 // Load environment variables
 config();
@@ -45,6 +47,10 @@ const server = http.createServer((req, res) => {
       handleResendWebhook(req, res);
     } else if (req.url?.startsWith("/webhooks/twilio")) {
       handleTwilioWebhook(req, res);
+    } else if (req.url?.startsWith("/webhooks/gupshup")) {
+      handleGupshupWebhook(req, res);
+    } else if (req.url?.startsWith("/unsubscribe")) {
+      handleUnsubscribe(req, res);
     } else {
       trpcHandler(req, res);
     }
@@ -60,4 +66,5 @@ server.listen(PORT, () => {
   console.log(`🔗 Shopify webhooks: http://localhost:${PORT}/webhooks/shopify`);
   console.log(`📧 Resend webhooks: http://localhost:${PORT}/webhooks/resend`);
   console.log(`📱 Twilio webhooks: http://localhost:${PORT}/webhooks/twilio`);
+  console.log(`📱 Gupshup webhooks: http://localhost:${PORT}/webhooks/gupshup`);
 });

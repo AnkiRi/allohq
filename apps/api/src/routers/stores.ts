@@ -273,6 +273,74 @@ export const storesRouter = router({
     }),
 
   /**
+   * Get messaging provider config for a store.
+   */
+  getMessagingConfig: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true, messagingConfig: true },
+      });
+      if (!store) throw new Error("Store not found");
+      const config = (store.messagingConfig as Record<string, string> | null) ?? {};
+      return {
+        smsProvider: config.smsProvider ?? null,
+        whatsappProvider: config.whatsappProvider ?? null,
+        rcsProvider: config.rcsProvider ?? null,
+      };
+    }),
+
+  /**
+   * Update messaging provider config for a store.
+   */
+  updateMessagingConfig: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        smsProvider: z.enum(["twilio", "gupshup"]).nullable().optional(),
+        whatsappProvider: z.enum(["twilio", "gupshup"]).nullable().optional(),
+        rcsProvider: z.enum(["twilio", "gupshup"]).nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { storeId, ...providers } = input;
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: storeId, workspaceId: ctx.workspaceId },
+        select: { id: true, messagingConfig: true },
+      });
+      if (!store) throw new Error("Store not found");
+
+      const existing = (store.messagingConfig as Record<string, unknown> | null) ?? {};
+      const updated: Record<string, unknown> = { ...existing };
+
+      // Only update fields that were explicitly provided
+      if (providers.smsProvider !== undefined) {
+        if (providers.smsProvider === null) delete updated.smsProvider;
+        else updated.smsProvider = providers.smsProvider;
+      }
+      if (providers.whatsappProvider !== undefined) {
+        if (providers.whatsappProvider === null) delete updated.whatsappProvider;
+        else updated.whatsappProvider = providers.whatsappProvider;
+      }
+      if (providers.rcsProvider !== undefined) {
+        if (providers.rcsProvider === null) delete updated.rcsProvider;
+        else updated.rcsProvider = providers.rcsProvider;
+      }
+
+      await ctx.prisma.store.update({
+        where: { id: storeId },
+        data: { messagingConfig: updated as any },
+      });
+
+      return {
+        smsProvider: (updated.smsProvider as string) ?? null,
+        whatsappProvider: (updated.whatsappProvider as string) ?? null,
+        rcsProvider: (updated.rcsProvider as string) ?? null,
+      };
+    }),
+
+  /**
    * Disconnect a store — deletes all related data and soft-deletes the store.
    */
   disconnect: workspaceProcedure

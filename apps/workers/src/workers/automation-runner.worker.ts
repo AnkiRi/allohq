@@ -1,6 +1,11 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
+import { renderToHtml } from "@allohq/email-builder";
+import type { EmailBlock, ProductData } from "@allohq/email-builder";
+import { sendEmail, sendSms, sendWhatsApp, sendRcs } from "@allohq/messaging";
+import type { StoreMessagingConfig } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -48,6 +53,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
       return;
     }
 
+    // Respect marketing opt-out
+    if (!customer.acceptsMarketing) {
+      console.log(`[automation-runner] Customer ${customerId} opted out, skipping`);
+      return;
+    }
+
+    // Fetch store messaging config for per-store provider selection
+    const storeForConfig = await prisma.store.findUnique({
+      where: { id: automation.storeId },
+      select: { messagingConfig: true },
+    });
+    const messagingConfig = (storeForConfig?.messagingConfig as StoreMessagingConfig | null) ?? null;
+
     const nodes = (automation.nodes as unknown as WorkflowNode[]) ?? [];
 
     for (let i = currentNodeIndex; i < nodes.length; i++) {
@@ -58,21 +76,129 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           const templateId = node.config.templateId as string;
           if (!templateId) break;
 
-          // Create a message log entry and queue the send
-          await prisma.messageLog.create({
+          // Fetch the email template
+          const template = await prisma.emailTemplate.findUnique({
+            where: { id: templateId },
+          });
+          if (!template) {
+            console.warn(`[automation-runner] Email template ${templateId} not found, skipping node`);
+            break;
+          }
+
+          // Extract product IDs from blocks
+          const blocks = template.blocks as unknown as EmailBlock[];
+          const productIds: string[] = [];
+          for (const block of blocks) {
+            if (block.type === "product" && block.props.productId) {
+              productIds.push(block.props.productId);
+            }
+            if (block.type === "product_grid") {
+              productIds.push(...block.props.productIds);
+            }
+          }
+
+          // Fetch products map
+          const productsMap: Record<string, ProductData> = {};
+          if (productIds.length > 0) {
+            const products = await prisma.product.findMany({
+              where: { id: { in: productIds } },
+            });
+            for (const p of products) {
+              productsMap[p.id] = {
+                id: p.id,
+                title: p.title,
+                description: p.description ?? undefined,
+                imageUrl: p.imageUrl ?? undefined,
+                price: p.price,
+                compareAtPrice: p.compareAtPrice ?? undefined,
+                handle: p.handle,
+              };
+            }
+          }
+
+          // Fetch brand settings
+          const store = await prisma.store.findUnique({ where: { id: automation.storeId } });
+          const brandProfile = store ? await prisma.brandProfile.findFirst({
+            where: { storeId: automation.storeId, workspaceId: automation.workspaceId },
+            select: { logoPosition: true, headerBgColor: true, footerText: true, showSocialLinks: true, showAddress: true, brandName: true },
+          }) : null;
+
+          const brandSettings = store && brandProfile ? {
+            logoUrl: store.storeLogoUrl ?? undefined,
+            logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+            headerBgColor: brandProfile.headerBgColor ?? undefined,
+            storeName: store.storeName ?? brandProfile.brandName,
+            address: store.address ? (() => {
+              const addr = store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string };
+              return [addr.address1, addr.city, addr.province, addr.zip, addr.country].filter(Boolean).join(", ");
+            })() : undefined,
+            socialLinks: store.socialLinks ? Object.entries(store.socialLinks as Record<string, string>).filter(([, v]) => v).map(([k, v]) => ({ platform: k, url: v })) : undefined,
+            footerText: brandProfile.footerText ?? undefined,
+            showSocialLinks: brandProfile.showSocialLinks,
+            showAddress: brandProfile.showAddress,
+          } : undefined;
+
+          // Build variables
+          const variables: Record<string, string> = {
+            first_name: customer.firstName ?? "there",
+            last_name: customer.lastName ?? "",
+            email: customer.email,
+            unsubscribe_url: getUnsubscribeUrl(customer.id),
+          };
+
+          // Create MessageLog entry
+          const messageLog = await prisma.messageLog.create({
             data: {
               workspaceId: automation.workspaceId,
               storeId: automation.storeId,
+              customerId: customer.id,
               channel: "email",
               to: customer.email,
-              subject: (node.config.templateName as string) ?? "Email",
+              subject: template.subject,
               templateId,
               automationId,
               status: "queued",
             },
           });
 
-          console.log(`[automation-runner] Queued email to ${customer.email} (template: ${templateId})`);
+          // Render email HTML
+          const html = renderToHtml(blocks, {
+            variables,
+            products: productsMap,
+            previewMode: false,
+            brandSettings,
+            tracking: {
+              utmSource: "allo",
+              utmMedium: "email",
+              utmCampaign: automationId,
+              utmContent: messageLog.id,
+              storeDomain: store?.shopDomain,
+            },
+          });
+
+          // Send via Resend
+          const result = await sendEmail({
+            channel: "email",
+            to: customer.email,
+            subject: template.subject,
+            html,
+            from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+          });
+
+          // Update MessageLog with result
+          if (result.status === "sent") {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "sent", externalId: result.externalId, provider: result.provider ?? "resend", sentAt: new Date() },
+            });
+            console.log(`[automation-runner] Sent email to ${customer.email} (template: ${templateId})`);
+          } else {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "failed", provider: result.provider ?? "resend", error: result.error },
+            });
+            console.error(`[automation-runner] Failed to send email to ${customer.email}: ${result.error}`);
+          }
           break;
         }
 
@@ -90,10 +216,11 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           body = body.replace(/\{\{first_name\}\}/g, customer.firstName ?? "there");
           body = body.replace(/\{\{last_name\}\}/g, customer.lastName ?? "");
 
-          await prisma.messageLog.create({
+          const messageLog = await prisma.messageLog.create({
             data: {
               workspaceId: automation.workspaceId,
               storeId: automation.storeId,
+              customerId: customer.id,
               channel: "sms",
               to: customer.phone,
               templateId: smsTemplateId,
@@ -103,7 +230,21 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          console.log(`[automation-runner] Queued SMS to ${customer.phone}`);
+          const smsResult = await sendSms({ channel: "sms", to: customer.phone, body }, messagingConfig);
+
+          if (smsResult.status === "sent") {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "sent", externalId: smsResult.externalId, provider: smsResult.provider, sentAt: new Date() },
+            });
+            console.log(`[automation-runner] Sent SMS to ${customer.phone} via ${smsResult.provider}`);
+          } else {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "failed", provider: smsResult.provider, error: smsResult.error },
+            });
+            console.error(`[automation-runner] Failed to send SMS to ${customer.phone}: ${smsResult.error}`);
+          }
           break;
         }
 
@@ -119,10 +260,11 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           let body = waTemplate.body;
           body = body.replace(/\{\{1\}\}/g, customer.firstName ?? "there");
 
-          await prisma.messageLog.create({
+          const messageLog = await prisma.messageLog.create({
             data: {
               workspaceId: automation.workspaceId,
               storeId: automation.storeId,
+              customerId: customer.id,
               channel: "whatsapp",
               to: customer.phone,
               templateId: waTemplateId,
@@ -132,7 +274,21 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          console.log(`[automation-runner] Queued WhatsApp to ${customer.phone}`);
+          const waResult = await sendWhatsApp({ channel: "whatsapp", to: customer.phone, body }, messagingConfig);
+
+          if (waResult.status === "sent") {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "sent", externalId: waResult.externalId, provider: waResult.provider, sentAt: new Date() },
+            });
+            console.log(`[automation-runner] Sent WhatsApp to ${customer.phone} via ${waResult.provider}`);
+          } else {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "failed", provider: waResult.provider, error: waResult.error },
+            });
+            console.error(`[automation-runner] Failed to send WhatsApp to ${customer.phone}: ${waResult.error}`);
+          }
           break;
         }
 
@@ -148,10 +304,11 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           let body = rcsTemplate.body;
           body = body.replace(/\{\{first_name\}\}/g, customer.firstName ?? "there");
 
-          await prisma.messageLog.create({
+          const messageLog = await prisma.messageLog.create({
             data: {
               workspaceId: automation.workspaceId,
               storeId: automation.storeId,
+              customerId: customer.id,
               channel: "rcs",
               to: customer.phone,
               templateId: rcsTemplateId,
@@ -166,7 +323,28 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          console.log(`[automation-runner] Queued RCS to ${customer.phone}`);
+          const rcsResult = await sendRcs({
+            channel: "rcs",
+            to: customer.phone,
+            body,
+            cardTitle: rcsTemplate.cardTitle ?? undefined,
+            cardImageUrl: rcsTemplate.cardImageUrl ?? undefined,
+            actions: rcsTemplate.actions as { type: string; label: string; value: string }[] | undefined,
+          }, messagingConfig);
+
+          if (rcsResult.status === "sent") {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "sent", externalId: rcsResult.externalId, provider: rcsResult.provider, sentAt: new Date() },
+            });
+            console.log(`[automation-runner] Sent RCS to ${customer.phone} via ${rcsResult.provider}`);
+          } else {
+            await prisma.messageLog.update({
+              where: { id: messageLog.id },
+              data: { status: "failed", provider: rcsResult.provider, error: rcsResult.error },
+            });
+            console.error(`[automation-runner] Failed to send RCS to ${customer.phone}: ${rcsResult.error}`);
+          }
           break;
         }
 

@@ -223,7 +223,7 @@ function renderBlock(block: EmailBlock, options: RenderOptions): string {
         <tr>
           <td style="padding: 24px; text-align: center; font-size: 12px; color: #999; font-family: Arial, sans-serif; line-height: 1.5;">
             <p style="margin: 0 0 8px;">${interpolate(text, variables)}</p>
-            <a href="{{unsubscribe_url}}" style="color: #999; text-decoration: underline;">${escapeHtml(unsubscribeText)}</a>
+            <a href="${variables.unsubscribe_url ?? '#'}" style="color: #999; text-decoration: underline;">${escapeHtml(unsubscribeText)}</a>
           </td>
         </tr>`;
     }

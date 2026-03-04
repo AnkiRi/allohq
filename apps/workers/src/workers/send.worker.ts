@@ -4,6 +4,7 @@ import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
 interface SendJobData {
   campaignId: string;
@@ -120,7 +121,7 @@ export const sendWorker = new Worker<SendJobData>(
         first_name: customer.firstName ?? "there",
         last_name: customer.lastName ?? "",
         email: customer.email,
-        unsubscribe_url: `#unsubscribe-${customer.id}`,
+        unsubscribe_url: getUnsubscribeUrl(customer.id),
       };
 
       // Create MessageLog entry first (need its ID for UTM content)
@@ -168,6 +169,7 @@ export const sendWorker = new Worker<SendJobData>(
           data: {
             status: "sent",
             externalId: result.externalId,
+            provider: result.provider ?? "resend",
             sentAt: new Date(),
           },
         });
@@ -177,6 +179,7 @@ export const sendWorker = new Worker<SendJobData>(
           where: { id: messageLog.id },
           data: {
             status: "failed",
+            provider: result.provider ?? "resend",
             error: result.error,
           },
         });

@@ -90,6 +90,7 @@ model Store {
   socialLinks      Json?    // { instagram?, facebook?, twitter?, tiktok?, pinterest?, youtube? }
   currency         String?
   timezone         String?
+  messagingConfig  Json?    // per-store messaging provider config (future use)
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   products  Product[]
@@ -625,6 +626,7 @@ model MessageLog {
   campaignId   String?   // if sent via campaign
   automationId String?   // if sent via automation
   externalId   String?   // provider message ID (Resend ID, Twilio SID)
+  provider     String?   // twilio|gupshup|resend — which provider sent this message
   status       String    @default("queued") // queued|sent|delivered|opened|clicked|bounced|failed
   error        String?
   metadata     Json      @default("{}")
