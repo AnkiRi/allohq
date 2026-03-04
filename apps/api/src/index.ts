@@ -9,6 +9,8 @@ import { handleResendWebhook } from "./webhooks/resend";
 import { handleTwilioWebhook } from "./webhooks/twilio";
 import { handleUnsubscribe } from "./webhooks/unsubscribe";
 import { handleGupshupWebhook } from "./webhooks/gupshup";
+import { handleWidgetApi } from "./routes/widget-api";
+import { handleAgentStream } from "./routes/agent-stream";
 
 // Load environment variables
 config();
@@ -51,6 +53,10 @@ const server = http.createServer((req, res) => {
       handleGupshupWebhook(req, res);
     } else if (req.url?.startsWith("/unsubscribe")) {
       handleUnsubscribe(req, res);
+    } else if (req.url?.startsWith("/v1/agent/")) {
+      handleAgentStream(req, res);
+    } else if (req.url?.startsWith("/v1/")) {
+      handleWidgetApi(req, res);
     } else {
       trpcHandler(req, res);
     }
@@ -67,4 +73,5 @@ server.listen(PORT, () => {
   console.log(`📧 Resend webhooks: http://localhost:${PORT}/webhooks/resend`);
   console.log(`📱 Twilio webhooks: http://localhost:${PORT}/webhooks/twilio`);
   console.log(`📱 Gupshup webhooks: http://localhost:${PORT}/webhooks/gupshup`);
+  console.log(`🤖 Widget API: http://localhost:${PORT}/v1/conversations`);
 });

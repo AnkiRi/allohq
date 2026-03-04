@@ -15,6 +15,8 @@ import {
   Settings,
   Store,
   LogOut,
+  Zap,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 
@@ -27,6 +29,8 @@ const navigation = [
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Agent", href: "/agent", icon: Zap },
+  { name: "Conversations", href: "/conversations", icon: MessageSquare },
   { name: "Integrations", href: "/integrations", icon: Store },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

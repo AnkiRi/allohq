@@ -1,11 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
+import { Queue } from "bullmq";
 
 
 /**
- * Handle Twilio status callback webhooks for SMS/WhatsApp/RCS delivery status.
+ * Handle Twilio webhooks for both inbound SMS and delivery status.
  * Twilio sends POST with form-encoded data.
- * Events: queued, sent, delivered, undelivered, failed, read
+ *
+ * Inbound SMS: has Body, From, To fields (no MessageStatus or MessageStatus=received)
+ * Delivery status: has MessageSid, MessageStatus (queued, sent, delivered, failed, etc.)
  */
 export async function handleTwilioWebhook(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "POST") {
@@ -25,6 +28,16 @@ export async function handleTwilioWebhook(req: IncomingMessage, res: ServerRespo
     const params = new URLSearchParams(rawBody);
     const messageSid = params.get("MessageSid") ?? params.get("SmsSid");
     const messageStatus = params.get("MessageStatus") ?? params.get("SmsStatus");
+    const from = params.get("From") ?? "";
+    const body = params.get("Body") ?? "";
+
+    // Handle inbound SMS (has Body field, no status or status="received")
+    if (body && from && (!messageStatus || messageStatus === "received")) {
+      await handleInboundSms(from, body);
+      res.writeHead(200, { "Content-Type": "text/xml" });
+      res.end("<Response></Response>");
+      return;
+    }
 
     if (!messageSid || !messageStatus) {
       console.log("[twilio-webhook] Missing MessageSid or MessageStatus");
@@ -96,4 +109,64 @@ export async function handleTwilioWebhook(req: IncomingMessage, res: ServerRespo
     res.writeHead(500);
     res.end("Internal Server Error");
   }
+}
+
+/**
+ * Handle inbound SMS from a customer via Twilio.
+ * Finds the customer by phone, creates/resumes a conversation, queues for agent processing.
+ */
+async function handleInboundSms(from: string, message: string) {
+  const normalizedPhone = from.replace(/^\+/, "");
+
+  console.log(`[twilio-webhook] Inbound SMS from ${from}: "${message.substring(0, 50)}..."`);
+
+  // Find customer by phone number
+  const customer = await prisma.customer.findFirst({
+    where: { phone: { contains: normalizedPhone } },
+    include: { store: { select: { id: true } } },
+  });
+
+  if (!customer) {
+    console.log(`[twilio-webhook] No customer found for phone ${from}`);
+    return;
+  }
+
+  // Find or create conversation
+  let conversation = await prisma.conversation.findFirst({
+    where: {
+      storeId: customer.storeId,
+      customerId: customer.id,
+      channel: "sms",
+      status: { in: ["active", "waiting"] },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        storeId: customer.storeId,
+        customerId: customer.id,
+        channel: "sms",
+      },
+    });
+  }
+
+  // Queue for agent processing
+  const redisHost = process.env["REDIS_HOST"] ?? "localhost";
+  const redisPort = Number(process.env["REDIS_PORT"] ?? 6379);
+  const queue = new Queue("conversation-process", {
+    connection: { host: redisHost, port: redisPort },
+  });
+
+  await queue.add("process", {
+    storeId: customer.storeId,
+    conversationId: conversation.id,
+    customerId: customer.id,
+    channel: "sms",
+    from,
+    message,
+  });
+
+  await queue.close();
 }

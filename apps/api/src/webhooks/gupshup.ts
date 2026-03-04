@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
+import { Queue } from "bullmq";
 
 /**
  * Handle Gupshup delivery status callback webhooks.
@@ -48,6 +49,14 @@ export async function handleGupshupWebhook(req: IncomingMessage, res: ServerResp
       console.log("[gupshup-webhook] Invalid JSON body");
       res.writeHead(400);
       res.end("Bad Request");
+      return;
+    }
+
+    // Handle inbound messages (customer → agent)
+    if (body.type === "message" && body.payload) {
+      await handleInboundMessage(body);
+      res.writeHead(200);
+      res.end("OK");
       return;
     }
 
@@ -139,4 +148,72 @@ export async function handleGupshupWebhook(req: IncomingMessage, res: ServerResp
     res.writeHead(500);
     res.end("Internal Server Error");
   }
+}
+
+/**
+ * Handle inbound customer messages (WhatsApp/SMS via Gupshup).
+ * Creates or resumes a conversation and queues for agent processing.
+ */
+async function handleInboundMessage(body: Record<string, unknown>) {
+  const payload = body.payload as Record<string, unknown>;
+  const source = (payload.source as string) ?? "";  // customer's phone
+  const messageText = (payload.payload as Record<string, unknown>)?.text as string ?? "";
+  const channel = (body.app as string)?.includes("whatsapp") ? "whatsapp" : "sms";
+
+  if (!source || !messageText) {
+    console.log("[gupshup-webhook] Inbound message missing source or text");
+    return;
+  }
+
+  console.log(`[gupshup-webhook] Inbound ${channel} from ${source}: "${messageText.substring(0, 50)}..."`);
+
+  // Find customer by phone number
+  const customer = await prisma.customer.findFirst({
+    where: { phone: { contains: source.replace(/^\+/, "") } },
+    include: { store: { select: { id: true } } },
+  });
+
+  if (!customer) {
+    console.log(`[gupshup-webhook] No customer found for phone ${source}`);
+    return;
+  }
+
+  // Find or create conversation
+  let conversation = await prisma.conversation.findFirst({
+    where: {
+      storeId: customer.storeId,
+      customerId: customer.id,
+      channel,
+      status: { in: ["active", "waiting"] },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        storeId: customer.storeId,
+        customerId: customer.id,
+        channel,
+      },
+    });
+  }
+
+  // Queue for agent processing
+  const redisHost = process.env["REDIS_HOST"] ?? "localhost";
+  const redisPort = Number(process.env["REDIS_PORT"] ?? 6379);
+  const queue = new Queue("conversation-process", {
+    connection: { host: redisHost, port: redisPort },
+  });
+
+  await queue.add("process", {
+    storeId: customer.storeId,
+    conversationId: conversation.id,
+    customerId: customer.id,
+    channel,
+    from: source,
+    message: messageText,
+  });
+
+  await queue.close();
 }

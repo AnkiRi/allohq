@@ -52,6 +52,9 @@ import { automationGeneratorWorker } from "./workers/automation-generator.worker
 import { agentPipelineWorker } from "./workers/agent-pipeline.worker";
 import { automationRunnerWorker } from "./workers/automation-runner.worker";
 import { triggerListenerWorker } from "./workers/trigger-listener.worker";
+import { embeddingWorker } from "./workers/embedding.worker";
+import { agentObserveWorker } from "./workers/agent-observe.worker";
+import { conversationProcessWorker } from "./workers/conversation-process.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -63,6 +66,9 @@ console.log(`  - automation-generator worker: ${automationGeneratorWorker.name}`
 console.log(`  - agent-pipeline worker: ${agentPipelineWorker.name}`);
 console.log(`  - automation-runner worker: ${automationRunnerWorker.name}`);
 console.log(`  - trigger-listener worker: ${triggerListenerWorker.name}`);
+console.log(`  - embedding worker: ${embeddingWorker.name}`);
+console.log(`  - agent-observe worker: ${agentObserveWorker.name}`);
+console.log(`  - conversation-process worker: ${conversationProcessWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -72,6 +78,16 @@ triggerCheckQueue.upsertJobScheduler(
   { name: "trigger-check", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up trigger check schedule:", err.message);
+});
+
+// Schedule agent observation checks (every 15 minutes)
+const agentObserveQueue = new Queue(QUEUE_NAMES.AGENT_OBSERVE, { connection: redisConnection });
+agentObserveQueue.upsertJobScheduler(
+  "agent-observe-schedule",
+  { every: 15 * 60 * 1000 },
+  { name: "agent-observe", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up agent observe schedule:", err.message);
 });
 
 // Graceful shutdown
@@ -87,6 +103,9 @@ const shutdown = async () => {
     agentPipelineWorker.close(),
     automationRunnerWorker.close(),
     triggerListenerWorker.close(),
+    embeddingWorker.close(),
+    agentObserveWorker.close(),
+    conversationProcessWorker.close(),
   ]);
   process.exit(0);
 };

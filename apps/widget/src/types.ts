@@ -6,6 +6,12 @@ export interface WidgetConfig {
   apiUrl?: string;
   /** Enable debug logging */
   debug?: boolean;
+  /** Store name shown in chat header */
+  storeName?: string;
+  /** Store domain for product links */
+  storeDomain?: string;
+  /** Enable chat widget (default: true) */
+  chat?: boolean;
 }
 
 /** Events emitted by the widget */

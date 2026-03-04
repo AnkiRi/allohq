@@ -3,6 +3,12 @@ export { generateAuthUrl, exchangeCodeForToken } from "./oauth";
 export { registerWebhooks, verifyWebhookHmac } from "./webhooks";
 export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders } from "./sync";
 export {
+  createDiscount, deleteDiscount, getDiscountCode,
+  getOrder, cancelOrder, closeOrder, addOrderNote,
+  calculateRefund, createRefund, listRefunds,
+  listFulfillments, getFulfillment, getOrderTracking,
+} from "./admin";
+export {
   SHOPIFY_API_VERSION,
   SHOPIFY_SCOPES,
   SHOPIFY_WEBHOOK_TOPICS,
@@ -14,4 +20,9 @@ export type {
   ShopifyOrder,
   ShopifyLineItem,
   ShopifySyncResult,
+  ShopifyPriceRule,
+  ShopifyDiscountCode,
+  ShopifyRefund,
+  ShopifyFulfillment,
+  ShopifyOrderDetail,
 } from "./types";

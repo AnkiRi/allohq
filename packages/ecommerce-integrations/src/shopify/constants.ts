@@ -4,8 +4,14 @@ export const SHOPIFY_API_VERSION = "2024-01";
 /** OAuth scopes requested during install */
 export const SHOPIFY_SCOPES = [
   "read_products",
+  "write_products",
   "read_customers",
   "read_orders",
+  "write_orders",
+  "read_discounts",
+  "write_discounts",
+  "read_fulfillments",
+  "read_inventory",
 ] as const;
 
 /** Webhook topics to register after OAuth */

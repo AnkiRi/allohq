@@ -19,4 +19,7 @@ export const QUEUE_NAMES = {
   AGENT_PIPELINE: "agent-pipeline",
   AUTOMATION_TRIGGER: "automation-trigger",
   TRIGGER_CHECK: "trigger-check",
+  EMBEDDING: "embedding",
+  AGENT_OBSERVE: "agent-observe",
+  CONVERSATION_PROCESS: "conversation-process",
 } as const;

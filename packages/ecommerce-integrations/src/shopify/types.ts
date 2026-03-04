@@ -76,3 +76,87 @@ export interface ShopifySyncResult {
   imported: number;
   errors: string[];
 }
+
+// ─── Admin API: Price Rules & Discount Codes ────────────────────
+
+export interface ShopifyPriceRule {
+  id: number;
+  title: string;
+  target_type: "line_item" | "shipping_line";
+  target_selection: "all" | "entitled";
+  allocation_method: "across" | "each";
+  value_type: "fixed_amount" | "percentage";
+  value: string; // negative for discounts, e.g. "-10.0"
+  once_per_customer: boolean;
+  usage_limit: number | null;
+  starts_at: string;
+  ends_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShopifyDiscountCode {
+  id: number;
+  price_rule_id: number;
+  code: string;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Admin API: Refunds ─────────────────────────────────────────
+
+export interface ShopifyRefund {
+  id: number;
+  order_id: number;
+  note: string | null;
+  created_at: string;
+  refund_line_items: Array<{
+    id: number;
+    line_item_id: number;
+    quantity: number;
+    subtotal: string;
+  }>;
+  transactions: Array<{
+    id: number;
+    kind: string;
+    amount: string;
+    status: string;
+  }>;
+}
+
+// ─── Admin API: Fulfillments ────────────────────────────────────
+
+export interface ShopifyFulfillment {
+  id: number;
+  order_id: number;
+  status: string;
+  tracking_company: string | null;
+  tracking_number: string | null;
+  tracking_url: string | null;
+  tracking_numbers: string[];
+  tracking_urls: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Admin API: Order (full detail for cancel/refund) ───────────
+
+export interface ShopifyOrderDetail {
+  id: number;
+  name: string;
+  order_number: number;
+  total_price: string;
+  subtotal_price: string;
+  currency: string;
+  financial_status: string;
+  fulfillment_status: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  note: string | null;
+  line_items: ShopifyLineItem[];
+  fulfillments: ShopifyFulfillment[];
+  refunds: ShopifyRefund[];
+  created_at: string;
+  updated_at: string;
+}

@@ -757,135 +757,57 @@ ${tokenByModel || "No token usage recorded yet."}
 `.trim();
 
       // ---------------------------------------------------------------
-      // 3. Build conversation prompt
+      // 4. Call Agent (tool-calling LLM with real capabilities)
       // ---------------------------------------------------------------
-      const systemPrompt = `You are Allo AI, the intelligent assistant for AlloHQ — an e-commerce customer retention and marketing automation platform.
+      const { runMerchantAgent } = await import("@allohq/agent-core");
 
-You have FULL access to the store's data. Use it to give specific, data-driven answers. Never say you don't have access to data — you do. All store data is provided below.
-
-CAPABILITIES:
-- Answer questions about specific customers (lookup by name, email, spending behavior)
-- Analyze customer segments, revenue trends, and purchasing patterns
-- Provide actionable retention insights and recommendations
-- Create automations, campaigns, templates, and segments when asked
-- Explain RFM scoring, churn predictions, and lifetime value
-
-RULES:
-1. Be specific — use actual numbers, names, and data from the store context
-2. When asked about a customer, find them in the data and give detailed info
-3. When asked to create something (automation, campaign, template, segment), set action.type accordingly
-4. For analytical questions, do real analysis of the data provided
-5. Keep responses concise but informative — no fluff
-6. Format currency as $X,XXX.XX
-7. If you truly cannot find something in the data, say so honestly
-
-FORMATTING RULES FOR "reply":
-- Use **markdown** formatting — bold, headers, tables, bullet lists
-- For data comparisons and lists of customers/orders/segments, ALWAYS use markdown tables:
-  | Customer | Spent | Orders | Segment |
-  |----------|-------|--------|---------|
-  | Name     | $X    | N      | Champs  |
-- Use **bold** for key numbers and metrics inline
-- Use ## headers to organize sections when the answer covers multiple topics
-- Use bullet points for insights and recommendations
-- Keep paragraphs short (2-3 sentences max)
-- DO NOT use code blocks — just plain markdown
-
-RESPONSE FORMAT:
-You MUST respond with valid JSON in this exact format:
-{
-  "reply": "Your markdown-formatted response",
-  "highlights": [
-    { "label": "Short Label", "value": "$1,234" }
-  ],
-  "suggestedFollowUps": [
-    "Show me the top 10 spenders",
-    "Create a win-back campaign for them"
-  ],
-  "action": null
-}
-
-"highlights" is an array of 2-5 key metrics/stats that summarize the answer at a glance. Always include highlights when the answer involves numbers or data. Each highlight has a short label (1-3 words) and a value. Examples:
-- { "label": "Revenue", "value": "$207,048" }
-- { "label": "Customers", "value": "96" }
-- { "label": "Churn Risk", "value": "12%" }
-- { "label": "AOV", "value": "$1,804" }
-
-For simple conversational answers or acknowledgments, highlights can be an empty array [].
-
-"suggestedFollowUps" is an array of 2-4 natural follow-up questions the user might want to ask next based on YOUR response. Make them specific and actionable — not generic. They should feel like a natural next step in the conversation. Examples:
-- After showing at-risk customers: ["Create a win-back flow for them", "Show their purchase history", "Which segment lost the most revenue?"]
-- After revenue analysis: ["Compare to last quarter", "Which customers drove the most revenue?", "Create a VIP reward campaign"]
-- After creating an automation: ["Show me the email template", "What other automations should I create?", "Send a test campaign"]
-
-If the user explicitly asks to CREATE something (automation, campaign, template, segment), also include:
-{
-  "reply": "Your response...",
-  "highlights": [...],
-  "suggestedFollowUps": [...],
-  "action": {
-    "type": "create_automation" | "create_campaign" | "create_template" | "create_segment",
-    "instruction": "A clear instruction for the creation system, e.g. 'Create a win-back automation for at-risk customers with a 15% discount'"
-  }
-}
-
-Only set action when the user explicitly wants to CREATE or BUILD something. For questions, analysis, and lookups, action should be null.
-
---- STORE DATA ---
-${storeContext}`;
-
-      // Build conversation history
-      const historyBlock = input.history.length > 0
-        ? input.history.map((m) => `${m.role === "user" ? "User" : "Allo AI"}: ${m.content}`).join("\n\n")
-        : "";
-
-      const userPrompt = [
-        historyBlock ? `Previous conversation:\n${historyBlock}\n\n` : "",
-        `User: ${input.message}`,
-        "\nRespond with JSON:",
-      ].join("");
-
-      // ---------------------------------------------------------------
-      // 4. Call LLM
-      // ---------------------------------------------------------------
-      const { complete } = await import("@allohq/customer-intelligence");
-
-      const workspace = await ctx.prisma.workspace.findUnique({
-        where: { id: ctx.workspaceId },
-        select: { defaultModel: true },
-      });
-
-      const aiResult = await complete({
-        prompt: userPrompt,
-        system: systemPrompt,
-        model: (workspace?.defaultModel as any) ?? undefined,
-        temperature: 0.4,
-        maxTokens: 2048,
-        jsonMode: true,
+      const agentResult = await runMerchantAgent({
+        storeId: input.storeId,
+        message: input.message,
+        conversationHistory: input.history,
+        storeContext: storeContext,
       });
 
       // ---------------------------------------------------------------
-      // 5. Parse response
+      // 5. Format response for UI
       // ---------------------------------------------------------------
-      let reply = "";
-      let highlights: { label: string; value: string }[] = [];
-      let suggestedFollowUps: string[] = [];
-      let action: { type: string; instruction: string } | null = null;
+      let reply = agentResult.response;
 
-      try {
-        const parsed = JSON.parse(aiResult.content);
-        reply = parsed.reply ?? aiResult.content;
-        highlights = Array.isArray(parsed.highlights) ? parsed.highlights : [];
-        suggestedFollowUps = Array.isArray(parsed.suggestedFollowUps) ? parsed.suggestedFollowUps.slice(0, 4) : [];
-        action = parsed.action ?? null;
-      } catch {
-        // If JSON parsing fails, use raw content as reply
-        reply = aiResult.content;
+      // Build highlights from tool call outputs
+      const highlights: { label: string; value: string }[] = [];
+      for (const tc of agentResult.toolCalls) {
+        const out = tc.output as Record<string, unknown>;
+        if (tc.name === "get_dashboard_metrics" && out) {
+          if (out.totalRevenue) highlights.push({ label: "Revenue", value: `$${Number(out.totalRevenue).toLocaleString()}` });
+          if (out.orderCount) highlights.push({ label: "Orders", value: String(out.orderCount) });
+          if (out.totalCustomers) highlights.push({ label: "Customers", value: String(out.totalCustomers) });
+        }
+        if (tc.name === "get_churn_risk_report" && Array.isArray(out)) {
+          highlights.push({ label: "At Risk", value: `${out.length} customers` });
+        }
       }
 
-      // ---------------------------------------------------------------
-      // 6. Execute action if detected
-      // ---------------------------------------------------------------
+      // Generate follow-ups based on tool calls made
+      const suggestedFollowUps: string[] = [];
+      const toolNames = agentResult.toolCalls.map((t) => t.name);
+      if (toolNames.includes("get_dashboard_metrics")) {
+        suggestedFollowUps.push("Show me who's about to churn");
+        suggestedFollowUps.push("Compare to last month");
+      }
+      if (toolNames.includes("get_churn_risk_report")) {
+        suggestedFollowUps.push("Create a win-back campaign for them");
+        suggestedFollowUps.push("Send them personalized offers");
+      }
+      if (toolNames.includes("search_products")) {
+        suggestedFollowUps.push("Show me top sellers this month");
+      }
+      if (suggestedFollowUps.length === 0) {
+        suggestedFollowUps.push("Show me the dashboard overview");
+        suggestedFollowUps.push("Who are my top customers?");
+        suggestedFollowUps.push("Any customers at churn risk?");
+      }
+
+      // Detect if agent wants to create something (from response text)
       let actionResult: {
         intent: string;
         success: boolean;
@@ -898,53 +820,63 @@ ${storeContext}`;
         };
       } | null = null;
 
-      if (action?.type && action?.instruction) {
-        try {
-          const { parseInstruction, executeInstruction } = await import("@allohq/customer-intelligence");
+      // If agent's response mentions creating something, try to execute via instruction system
+      const createPatterns = [
+        { pattern: /(?:create|build|set up) (?:a |an )?(?:win.?back|re.?engagement) (?:automation|flow|campaign)/i, type: "create_automation" },
+        { pattern: /(?:create|build|set up) (?:a |an )?campaign/i, type: "create_campaign" },
+        { pattern: /(?:create|build|set up) (?:a |an )?segment/i, type: "create_segment" },
+      ];
 
-          const parsedInstruction = await parseInstruction(action.instruction, {
-            page: "dashboard",
-            existingSegments: segments.map((s) => s.name),
-            existingAutomations: automations.map((a) => a.name),
-          });
+      // Check if user explicitly asked to create something
+      const userAskedToCreate = createPatterns.some((p) => p.pattern.test(input.message));
+      if (userAskedToCreate) {
+        const matchedPattern = createPatterns.find((p) => p.pattern.test(input.message));
+        if (matchedPattern) {
+          try {
+            const { parseInstruction, executeInstruction } = await import("@allohq/customer-intelligence");
 
-          const execResult = await executeInstruction(parsedInstruction, {
-            prisma: ctx.prisma as any,
-            storeId: input.storeId,
-            workspaceId: ctx.workspaceId,
-            brandProfile: brandProfile ? {
-              brandName: brandProfile.brandName,
-              brandDescription: brandProfile.brandDescription ?? undefined,
-              toneAttributes: {} as Record<string, string>,
-              vocabulary: {} as Record<string, string[]>,
-              visualStyle: {} as Record<string, string | string[]>,
-              sampleCopy: [],
-            } : undefined,
-          });
-
-          actionResult = {
-            intent: execResult.intent,
-            success: execResult.success,
-            summary: execResult.summary,
-            created: execResult.created,
-          };
-
-          // Record action token usage
-          if (execResult.tokenUsage.input > 0) {
-            await ctx.prisma.tokenUsage.create({
-              data: {
-                workspaceId: ctx.workspaceId,
-                model: execResult.tokenUsage.model,
-                inputTokens: execResult.tokenUsage.input,
-                outputTokens: execResult.tokenUsage.output,
-                purpose: "chat_action",
-              },
+            const parsedInstruction = await parseInstruction(input.message, {
+              page: "dashboard",
+              existingSegments: segments.map((s) => s.name),
+              existingAutomations: automations.map((a) => a.name),
             });
+
+            const execResult = await executeInstruction(parsedInstruction, {
+              prisma: ctx.prisma as any,
+              storeId: input.storeId,
+              workspaceId: ctx.workspaceId,
+              brandProfile: brandProfile ? {
+                brandName: brandProfile.brandName,
+                brandDescription: brandProfile.brandDescription ?? undefined,
+                toneAttributes: {} as Record<string, string>,
+                vocabulary: {} as Record<string, string[]>,
+                visualStyle: {} as Record<string, string | string[]>,
+                sampleCopy: [],
+              } : undefined,
+            });
+
+            actionResult = {
+              intent: execResult.intent,
+              success: execResult.success,
+              summary: execResult.summary,
+              created: execResult.created,
+            };
+
+            if (execResult.tokenUsage.input > 0) {
+              await ctx.prisma.tokenUsage.create({
+                data: {
+                  workspaceId: ctx.workspaceId,
+                  model: execResult.tokenUsage.model,
+                  inputTokens: execResult.tokenUsage.input,
+                  outputTokens: execResult.tokenUsage.output,
+                  purpose: "chat_action",
+                },
+              });
+            }
+          } catch (err) {
+            console.error("[AI Chat] Action execution failed:", err);
+            reply += "\n\n*(Note: I tried to execute the action but encountered an error. Please try again or use the specific feature page.)*";
           }
-        } catch (err) {
-          console.error("[AI Chat] Action execution failed:", err);
-          // Don't fail the whole chat — just note the error in reply
-          reply += "\n\n(Note: I tried to execute the action but encountered an error. Please try again or use the specific feature page.)";
         }
       }
 
@@ -952,9 +884,9 @@ ${storeContext}`;
       await ctx.prisma.tokenUsage.create({
         data: {
           workspaceId: ctx.workspaceId,
-          model: aiResult.model,
-          inputTokens: aiResult.inputTokens,
-          outputTokens: aiResult.outputTokens,
+          model: "claude-sonnet-4-5-20250929",
+          inputTokens: agentResult.inputTokens,
+          outputTokens: agentResult.outputTokens,
           purpose: "chat",
         },
       });
@@ -995,7 +927,7 @@ ${storeContext}`;
             role: "assistant",
             content: reply,
             highlights: highlights.length > 0 ? highlights : undefined,
-            model: aiResult.model,
+            model: "claude-sonnet-4-5-20250929",
           },
         ],
       });
@@ -1004,9 +936,10 @@ ${storeContext}`;
         chatId,
         reply,
         highlights,
-        suggestedFollowUps,
+        suggestedFollowUps: suggestedFollowUps.slice(0, 4),
         action: actionResult,
-        model: aiResult.model,
+        model: "claude-sonnet-4-5-20250929",
+        toolCalls: agentResult.toolCalls.map((t) => t.name),
       };
     }),
 
@@ -1293,5 +1226,214 @@ ${storeContext}`;
         status: state as "waiting" | "active" | "completed" | "failed" | "delayed",
         failedReason: failedReason ?? undefined,
       };
+    }),
+
+  // =========================================================================
+  // Agent Activity & Observations
+  // =========================================================================
+
+  /** List recent agent actions (for AgentCanvas timeline) */
+  listAgentActions: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      limit: z.number().min(1).max(100).default(30),
+    }))
+    .query(async ({ ctx, input }) => {
+      const actions = await ctx.prisma.agentAction.findMany({
+        where: { storeId: input.storeId },
+        orderBy: { createdAt: "desc" },
+        take: input.limit,
+        select: {
+          id: true,
+          agentType: true,
+          actionType: true,
+          input: true,
+          output: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+      return actions;
+    }),
+
+  /** List agent observations (proactive alerts) */
+  listObservations: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      unacknowledgedOnly: z.boolean().default(false),
+    }))
+    .query(async ({ ctx, input }) => {
+      const observations = await ctx.prisma.agentObservation.findMany({
+        where: {
+          storeId: input.storeId,
+          ...(input.unacknowledgedOnly ? { acknowledged: false } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          type: true,
+          severity: true,
+          summary: true,
+          data: true,
+          acknowledged: true,
+          createdAt: true,
+        },
+      });
+      return observations;
+    }),
+
+  /** Acknowledge an observation */
+  acknowledgeObservation: workspaceProcedure
+    .input(z.object({ observationId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.agentObservation.update({
+        where: { id: input.observationId },
+        data: { acknowledged: true },
+      });
+      return { success: true };
+    }),
+
+  /** List active customer conversations (for ConversationManager) */
+  listConversations: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      status: z.enum(["active", "waiting", "resolved", "escalated"]).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conversations = await ctx.prisma.conversation.findMany({
+        where: {
+          storeId: input.storeId,
+          ...(input.status ? { status: input.status as any } : { status: { not: "resolved" as any } }),
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 50,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { content: true, role: true, createdAt: true },
+          },
+          _count: { select: { messages: true } },
+        },
+      });
+
+      return conversations.map((c) => ({
+        id: c.id,
+        channel: c.channel,
+        status: c.status,
+        assignedTo: c.assignedTo,
+        customer: c.customer,
+        lastMessage: c.messages[0],
+        messageCount: c._count.messages,
+        updatedAt: c.updatedAt,
+      }));
+    }),
+
+  /** Get full conversation with all messages */
+  getConversation: workspaceProcedure
+    .input(z.object({ conversationId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const conversation = await ctx.prisma.conversation.findFirst({
+        where: { id: input.conversationId },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          messages: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              role: true,
+              content: true,
+              contentType: true,
+              metadata: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+      if (!conversation) throw new TRPCError({ code: "NOT_FOUND" });
+      return conversation;
+    }),
+
+  /** Claim a conversation for human handling */
+  claimConversation: workspaceProcedure
+    .input(z.object({
+      conversationId: z.string(),
+      agentName: z.string().default("Merchant"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.conversation.update({
+        where: { id: input.conversationId },
+        data: { assignedTo: input.agentName, status: "active" },
+      });
+      return { success: true };
+    }),
+
+  /** Release a conversation back to the AI agent */
+  releaseConversation: workspaceProcedure
+    .input(z.object({ conversationId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.conversation.update({
+        where: { id: input.conversationId },
+        data: { assignedTo: null, status: "waiting" },
+      });
+      return { success: true };
+    }),
+
+  /** Send a reply to a customer conversation (merchant → customer) */
+  sendConversationReply: workspaceProcedure
+    .input(z.object({
+      conversationId: z.string(),
+      message: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await ctx.prisma.conversation.findFirst({
+        where: { id: input.conversationId },
+        include: {
+          customer: { select: { phone: true } },
+        },
+      });
+      if (!conversation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Save message
+      await ctx.prisma.conversationMessage.create({
+        data: {
+          conversationId: input.conversationId,
+          role: "assistant",
+          content: input.message,
+          metadata: { sentBy: "merchant" } as any,
+        },
+      });
+
+      // Send via the appropriate channel
+      if (conversation.customer?.phone && (conversation.channel === "sms" || conversation.channel === "whatsapp")) {
+        const { sendSms, sendWhatsApp } = await import("@allohq/messaging");
+        const phone = conversation.customer.phone;
+
+        if (conversation.channel === "whatsapp") {
+          await sendWhatsApp({ channel: "whatsapp", to: phone, body: input.message });
+        } else {
+          await sendSms({ channel: "sms", to: phone, body: input.message });
+        }
+      }
+
+      return { success: true };
     }),
 });

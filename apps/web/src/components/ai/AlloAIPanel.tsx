@@ -71,6 +71,7 @@ interface Message {
   insightCard?: InsightCard;
   highlights?: { label: string; value: string }[];
   actionLinks?: { label: string; href: string }[];
+  toolCalls?: string[];
   isLoading?: boolean;
 }
 
@@ -389,6 +390,20 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
         <Sparkles className="w-3 h-3 text-[hsl(var(--accent))]" />
       </div>
       <div className="flex-1 min-w-0">
+        {/* Tool calls indicator */}
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {message.toolCalls.map((tool) => (
+              <span
+                key={tool}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-600 dark:text-emerald-400"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {tool.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        )}
         {/* Highlight metric cards */}
         {message.highlights && message.highlights.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
@@ -644,6 +659,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       };
     } | null;
     model: string;
+    toolCalls?: string[];
   };
 
   const chatMut = (trpc.ai as any).chat.useMutation({
@@ -708,6 +724,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                 highlights: data.highlights?.length ? data.highlights : undefined,
                 insightCard,
                 actionLinks: actionLinks.length > 0 ? actionLinks : undefined,
+                toolCalls: data.toolCalls?.length ? data.toolCalls : undefined,
               }
             : m,
         ),
@@ -747,7 +764,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       const loadingMsg: Message = {
         id: nextId(),
         role: "assistant",
-        content: "Thinking...",
+        content: "Analyzing and running tools...",
         timestamp: new Date(),
         isLoading: true,
       };

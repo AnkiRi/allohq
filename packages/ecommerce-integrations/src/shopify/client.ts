@@ -91,6 +91,25 @@ export class ShopifyClient {
   }
 
   /**
+   * PUT request (used for updating resources)
+   */
+  async put<T>(endpoint: string, body: unknown): Promise<T> {
+    const url = `${this.baseUrl}/${endpoint}.json`;
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: this.headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Shopify API error ${response.status}: ${text}`);
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  /**
    * DELETE request
    */
   async delete(endpoint: string): Promise<void> {
