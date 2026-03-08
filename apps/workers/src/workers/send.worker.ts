@@ -3,6 +3,7 @@ import { prisma } from "@allohq/database";
 import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
+import { checkAllRules } from "@allohq/communication-governor";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
@@ -121,7 +122,36 @@ export const sendWorker = new Worker<SendJobData>(
     // Render and send each email
     let sentCount = 0;
     let failCount = 0;
+    let suppressedCount = 0;
     for (const customer of customers) {
+      // Governor check before sending
+      const governorCheck = await checkAllRules({
+        customerId: customer.id,
+        storeId: campaign.storeId,
+        channel: "email",
+        messageType: "campaign",
+        campaignId,
+      });
+      if (!governorCheck.allowed) {
+        suppressedCount++;
+        // Log suppression
+        await prisma.messageLog.create({
+          data: {
+            workspaceId: campaign.store.workspaceId,
+            storeId: campaign.storeId,
+            customerId: customer.id,
+            channel: "email",
+            to: customer.email,
+            subject: campaign.template.subject,
+            campaignId,
+            status: "failed",
+            error: `Suppressed: ${governorCheck.reason}`,
+            metadata: { suppressed: true, rule: governorCheck.rule },
+          },
+        });
+        continue;
+      }
+
       const now = new Date();
       const variables: Record<string, string> = {
         first_name: customer.firstName ?? "there",
@@ -242,8 +272,8 @@ export const sendWorker = new Worker<SendJobData>(
       },
     });
 
-    console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients (${failCount} failed)`);
-    return { sentCount, failCount };
+    console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients (${failCount} failed, ${suppressedCount} suppressed)`);
+    return { sentCount, failCount, suppressedCount };
   },
   { connection: redisConnection }
 );

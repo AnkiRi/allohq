@@ -4,6 +4,7 @@ import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
 import type { StoreMessagingConfig } from "@allohq/messaging";
+import { checkAllRules } from "@allohq/communication-governor";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
@@ -74,6 +75,18 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
       switch (node.type) {
         case "send_email": {
+          // Governor check before sending
+          const emailGovCheck = await checkAllRules({
+            customerId: customer.id,
+            storeId: automation.storeId,
+            channel: "email",
+            messageType: "automation",
+          });
+          if (!emailGovCheck.allowed) {
+            console.log(`[automation-runner] Suppressed email to ${customer.email}: ${emailGovCheck.reason}`);
+            break;
+          }
+
           const templateId = node.config.templateId as string;
           if (!templateId) break;
 
@@ -225,6 +238,17 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
         }
 
         case "send_sms": {
+          const smsGovCheck = await checkAllRules({
+            customerId: customer.id,
+            storeId: automation.storeId,
+            channel: "sms",
+            messageType: "automation",
+          });
+          if (!smsGovCheck.allowed) {
+            console.log(`[automation-runner] Suppressed SMS to ${customer.phone}: ${smsGovCheck.reason}`);
+            break;
+          }
+
           const smsTemplateId = node.config.smsTemplateId as string;
           if (!smsTemplateId || !customer.phone) break;
 
@@ -293,6 +317,17 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
         }
 
         case "send_whatsapp": {
+          const waGovCheck = await checkAllRules({
+            customerId: customer.id,
+            storeId: automation.storeId,
+            channel: "whatsapp",
+            messageType: "automation",
+          });
+          if (!waGovCheck.allowed) {
+            console.log(`[automation-runner] Suppressed WhatsApp to ${customer.phone}: ${waGovCheck.reason}`);
+            break;
+          }
+
           const waTemplateId = node.config.whatsappTemplateId as string;
           if (!waTemplateId || !customer.phone) break;
 
@@ -347,6 +382,17 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
         }
 
         case "send_rcs": {
+          const rcsGovCheck = await checkAllRules({
+            customerId: customer.id,
+            storeId: automation.storeId,
+            channel: "rcs",
+            messageType: "automation",
+          });
+          if (!rcsGovCheck.allowed) {
+            console.log(`[automation-runner] Suppressed RCS to ${customer.phone}: ${rcsGovCheck.reason}`);
+            break;
+          }
+
           const rcsTemplateId = node.config.rcsTemplateId as string;
           if (!rcsTemplateId || !customer.phone) break;
 

@@ -58,6 +58,7 @@ import { conversationProcessWorker } from "./workers/conversation-process.worker
 import { abandonedCartWorker } from "./workers/abandoned-cart.worker";
 import { segmentChangeWorker } from "./workers/segment-change.worker";
 import { customerStateUpdaterWorker } from "./workers/customer-state-updater.worker";
+import { guardrailValidatorWorker } from "./workers/guardrail-validator.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -75,6 +76,7 @@ console.log(`  - conversation-process worker: ${conversationProcessWorker.name}`
 console.log(`  - abandoned-cart worker: ${abandonedCartWorker.name}`);
 console.log(`  - segment-change worker: ${segmentChangeWorker.name}`);
 console.log(`  - customer-state-updater worker: ${customerStateUpdaterWorker.name}`);
+console.log(`  - guardrail-validator worker: ${guardrailValidatorWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -125,6 +127,7 @@ const shutdown = async () => {
     abandonedCartWorker.close(),
     segmentChangeWorker.close(),
     customerStateUpdaterWorker.close(),
+    guardrailValidatorWorker.close(),
   ]);
   process.exit(0);
 };

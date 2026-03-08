@@ -25,4 +25,5 @@ export const QUEUE_NAMES = {
   ABANDONED_CART_CHECK: "abandoned-cart-check",
   SEGMENT_CHANGE: "segment-change",
   CUSTOMER_STATE: "customer-state",
+  GUARDRAIL_CHECK: "guardrail-check",
 } as const;
