@@ -30,9 +30,15 @@ importers:
       '@allohq/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@allohq/autonomy-engine':
+        specifier: workspace:*
+        version: link:../../packages/autonomy-engine
       '@allohq/customer-intelligence':
         specifier: workspace:*
         version: link:../../packages/customer-intelligence
+      '@allohq/customer-state':
+        specifier: workspace:*
+        version: link:../../packages/customer-state
       '@allohq/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -251,6 +257,9 @@ importers:
       '@allohq/customer-intelligence':
         specifier: workspace:*
         version: link:../../packages/customer-intelligence
+      '@allohq/customer-state':
+        specifier: workspace:*
+        version: link:../../packages/customer-state
       '@allohq/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -310,9 +319,15 @@ importers:
       '@allohq/agent-brain':
         specifier: workspace:*
         version: link:../agent-brain
+      '@allohq/autonomy-engine':
+        specifier: workspace:*
+        version: link:../autonomy-engine
       '@allohq/customer-intelligence':
         specifier: workspace:*
         version: link:../customer-intelligence
+      '@allohq/customer-state':
+        specifier: workspace:*
+        version: link:../customer-state
       '@allohq/database':
         specifier: workspace:*
         version: link:../database
@@ -354,6 +369,19 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  packages/autonomy-engine:
+    dependencies:
+      '@allohq/database':
+        specifier: workspace:*
+        version: link:../database
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/customer-intelligence:
     dependencies:
       '@allohq/email-builder':
@@ -374,6 +402,19 @@ importers:
         version: link:../tsconfig
       '@types/node':
         specifier: ^22.10.7
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/customer-state:
+    dependencies:
+      '@allohq/database':
+        specifier: workspace:*
+        version: link:../database
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
         version: 22.19.11
       typescript:
         specifier: ^5.7.3

@@ -1,10 +1,12 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
+
+const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 
 interface SendJobData {
   campaignId: string;
@@ -193,6 +195,23 @@ export const sendWorker = new Worker<SendJobData>(
           },
         });
         sentCount++;
+        // Log fatigue and queue state update
+        if (customer.id) {
+          await prisma.customerFatigueLog.create({
+            data: {
+              customerId: customer.id,
+              storeId: campaign.storeId,
+              channel: "email",
+              messageType: "campaign",
+              campaignId,
+            },
+          });
+          await customerStateQueue.add("email-sent", {
+            type: "email_sent",
+            customerId: customer.id,
+            storeId: campaign.storeId,
+          });
+        }
       } else {
         await prisma.messageLog.update({
           where: { id: messageLog.id },

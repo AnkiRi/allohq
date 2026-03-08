@@ -10,6 +10,8 @@ import { campaignsRouter } from "./campaigns";
 import { productsRouter } from "./products";
 import { aiRouter } from "./ai";
 import { automationsRouter } from "./automations";
+import { autonomyRouter } from "./autonomy";
+import { guardrailsRouter } from "./guardrails";
 
 /**
  * Root tRPC router
@@ -26,6 +28,8 @@ export const appRouter = router({
   products: productsRouter,
   ai: aiRouter,
   automations: automationsRouter,
+  autonomy: autonomyRouter,
+  guardrails: guardrailsRouter,
 });
 
 export type AppRouter = typeof appRouter;

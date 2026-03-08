@@ -1,7 +1,9 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { checkEventTriggers } from "../utils/event-triggers";
+
+const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 
 interface WebhookJobData {
   topic: string;
@@ -63,6 +65,12 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
               status: { in: ["open", "abandoned"] },
             },
             data: { status: "recovered", recoveredAt: new Date() },
+          });
+          // Queue customer state update
+          await customerStateQueue.add("order-created", {
+            type: "order_created",
+            customerId: order.customerId,
+            storeId: store.id,
           });
         }
         break;

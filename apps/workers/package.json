@@ -17,6 +17,7 @@
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
     "@allohq/email-builder": "workspace:*",
+    "@allohq/customer-state": "workspace:*",
     "@allohq/messaging": "workspace:*",
     "bullmq": "^5.0.0",
     "dotenv": "^16.4.7",

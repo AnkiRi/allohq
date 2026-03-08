@@ -17,6 +17,8 @@ import {
   LogOut,
   Zap,
   MessageSquare,
+  Shield,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -34,7 +36,9 @@ const navigation = [
   { name: "Conversations", href: "/conversations", icon: MessageSquare },
   { name: "Integrations", href: "/integrations", icon: Store },
   { name: "Settings", href: "/settings", icon: Settings },
-];
+  { name: "Autonomy", href: "/settings/autonomy", icon: Shield, parent: "Settings" },
+  { name: "Guardrails", href: "/settings/guardrails", icon: ShieldCheck, parent: "Settings" },
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -80,20 +84,28 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const isActive = pathname === item.href || (item.href !== "/settings" && pathname.startsWith(item.href + "/"));
+          const isSettingsActive = item.href === "/settings" && pathname === "/settings";
+          const isChild = "parent" in item;
+          const parentActive = isChild && pathname.startsWith("/settings");
+
+          // Only show child items when parent section is active
+          if (isChild && !pathname.startsWith("/settings")) return null;
+
           return (
             <Link
               key={item.name}
               href={item.href}
               onClick={close}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-[13px] font-mono active:scale-[0.97]",
-                isActive
+                "flex items-center gap-3 rounded-lg transition-all text-[13px] font-mono active:scale-[0.97]",
+                isChild ? "px-3 py-1.5 pl-10 text-[11px]" : "px-3 py-2.5",
+                isActive || isSettingsActive
                   ? "bg-white/40 text-foreground font-semibold border-l-[3px] border-l-terracotta"
                   : "text-muted-foreground hover:text-foreground hover:bg-terracotta-light"
               )}
             >
-              <item.icon className="w-4 h-4" />
+              <item.icon className={cn("w-4 h-4", isChild && "w-3.5 h-3.5")} />
               <span>{item.name}</span>
             </Link>
           );

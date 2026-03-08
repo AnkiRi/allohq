@@ -21,6 +21,7 @@ interface WorkflowNode {
 }
 
 const automationTriggerQueue = new Queue(QUEUE_NAMES.AUTOMATION_TRIGGER, { connection: redisConnection });
+const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 
 /**
  * Automation Runner Worker
@@ -208,6 +209,11 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "sent", externalId: result.externalId, provider: result.provider ?? "resend", sentAt: new Date() },
             });
             console.log(`[automation-runner] Sent email to ${customer.email} (template: ${templateId})`);
+            // Log fatigue + queue state update
+            await prisma.customerFatigueLog.create({
+              data: { customerId: customer.id, storeId: automation.storeId, channel: "email", messageType: "automation", automationId },
+            });
+            await customerStateQueue.add("email-sent", { type: "email_sent", customerId: customer.id, storeId: automation.storeId });
           } else {
             await prisma.messageLog.update({
               where: { id: messageLog.id },
@@ -272,6 +278,10 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "sent", externalId: smsResult.externalId, provider: smsResult.provider, sentAt: new Date() },
             });
             console.log(`[automation-runner] Sent SMS to ${customer.phone} via ${smsResult.provider}`);
+            await prisma.customerFatigueLog.create({
+              data: { customerId: customer.id, storeId: automation.storeId, channel: "sms", messageType: "automation", automationId },
+            });
+            await customerStateQueue.add("sms-sent", { type: "sms_sent", customerId: customer.id, storeId: automation.storeId });
           } else {
             await prisma.messageLog.update({
               where: { id: messageLog.id },
@@ -322,6 +332,10 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "sent", externalId: waResult.externalId, provider: waResult.provider, sentAt: new Date() },
             });
             console.log(`[automation-runner] Sent WhatsApp to ${customer.phone} via ${waResult.provider}`);
+            await prisma.customerFatigueLog.create({
+              data: { customerId: customer.id, storeId: automation.storeId, channel: "whatsapp", messageType: "automation", automationId },
+            });
+            await customerStateQueue.add("whatsapp-sent", { type: "whatsapp_sent", customerId: customer.id, storeId: automation.storeId });
           } else {
             await prisma.messageLog.update({
               where: { id: messageLog.id },
@@ -384,6 +398,10 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "sent", externalId: rcsResult.externalId, provider: rcsResult.provider, sentAt: new Date() },
             });
             console.log(`[automation-runner] Sent RCS to ${customer.phone} via ${rcsResult.provider}`);
+            await prisma.customerFatigueLog.create({
+              data: { customerId: customer.id, storeId: automation.storeId, channel: "rcs", messageType: "automation", automationId },
+            });
+            await customerStateQueue.add("rcs-sent", { type: "rcs_sent", customerId: customer.id, storeId: automation.storeId });
           } else {
             await prisma.messageLog.update({
               where: { id: messageLog.id },

@@ -24,4 +24,5 @@ export const QUEUE_NAMES = {
   CONVERSATION_PROCESS: "conversation-process",
   ABANDONED_CART_CHECK: "abandoned-cart-check",
   SEGMENT_CHANGE: "segment-change",
+  CUSTOMER_STATE: "customer-state",
 } as const;

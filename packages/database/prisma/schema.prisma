@@ -93,6 +93,7 @@ model Store {
   currency         String?
   timezone         String?
   messagingConfig  Json?    // per-store messaging provider config (future use)
+  onboardingCompletedAt DateTime? // set when merchant completes onboarding wizard
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   products    Product[]
@@ -110,6 +111,13 @@ model Store {
   agentObservations  AgentObservation[]
   retentionOutcomes  RetentionOutcome[]
   abandonedCheckouts AbandonedCheckout[]
+
+  // Sprint 1: Customer State + Autonomy
+  customerStates     CustomerState[]
+  autonomyConfigs    AutonomyConfig[]
+  actionQueue        ActionQueue[]
+  guardrails         Guardrail[]
+  customerFatigueLogs CustomerFatigueLog[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -215,6 +223,7 @@ model Customer {
   retentionOutcomes  RetentionOutcome[]
   abandonedCheckouts AbandonedCheckout[]
   segmentHistory     CustomerSegmentHistory[]
+  customerState      CustomerState?
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -947,4 +956,114 @@ model RetentionOutcome {
   @@index([customerId])
   @@index([outcome])
   @@map("retention_outcomes")
+}
+
+// ============================================================================
+// CUSTOMER STATE ENGINE (Sprint 1)
+// ============================================================================
+
+model CustomerState {
+  id                    String   @id @default(cuid())
+  customerId            String   @unique
+  storeId               String
+  lifecycleStage        String   // visitor, subscriber, first_buyer, repeat, loyal, champion, at_risk, lost
+  churnRisk             Float    @default(0) // 0-1 probability
+  churnRiskUpdatedAt    DateTime @default(now())
+  intentState           String   @default("inactive") // browsing, considering, ready_to_buy, needs_help, inactive
+  channelPreference     Json     @default("{}") // { email: 0.7, whatsapp: 0.9, sms: 0.3, rcs: 0.0 }
+  optimalSendWindow     Json     @default("{}") // { timezone: "Asia/Kolkata", bestHours: [10, 14, 19] }
+  communicationFatigue  Json     @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
+  discountSensitivity   Float    @default(0.5) // 0-1
+  supportState          String   @default("clear") // clear, open_issue, recent_complaint, escalated
+  trustScore            Float    @default(0.5) // 0-1
+  vipLevel              String   @default("standard") // standard, silver, gold, platinum
+  campaignEligibility   Json     @default("[]") // list of eligible campaign types
+  lastStateUpdate       DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, lifecycleStage])
+  @@index([storeId, churnRisk])
+  @@index([storeId, vipLevel])
+  @@map("customer_states")
+}
+
+// ============================================================================
+// AUTONOMY ENGINE (Sprint 1)
+// ============================================================================
+
+model AutonomyConfig {
+  id        String   @id @default(cuid())
+  storeId   String
+  category  String   // cart_abandonment, repurchase_reminders, win_back, post_purchase, shipping_updates, cross_sell, new_campaigns, discounts, vip_comms, segment_reassignment, support_responses, brand_voice
+  tier      String   // autopilot, copilot, advisor
+  settings  Json     @default("{}") // category-specific settings (e.g., { confidenceThreshold: 85 })
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, category])
+  @@map("autonomy_configs")
+}
+
+model ActionQueue {
+  id              String    @id @default(cuid())
+  storeId         String
+  type            String    // campaign, automation, outreach, alert
+  status          String    @default("pending") // pending, approved, rejected, expired, auto_executed
+  category        String?   // maps to AutonomyConfig category
+  urgencyScore    Float     @default(50)
+  confidenceScore Float     @default(50)
+  expiresAt       DateTime?
+  reasoning       String    // "Why I recommend this"
+  estimatedRevenue Float?
+  payload         Json      // action-specific data (campaign draft, automation config, etc.)
+  createdAt       DateTime  @default(now())
+  reviewedBy      String?   // user ID who reviewed
+  reviewedAt      DateTime?
+  reviewNote      String?   // optional note from reviewer
+  assignedTo      String?   // team member for review
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, status])
+  @@index([storeId, urgencyScore])
+  @@index([status, expiresAt])
+  @@map("action_queue")
+}
+
+model Guardrail {
+  id        String   @id @default(cuid())
+  storeId   String
+  ruleType  String   // max_discount, max_sends_per_week, blocked_words, quiet_hours, spending_caps, segment_exclusions, channel_preferences, collision_avoidance, visual_guardrails
+  ruleValue Json     // rule-specific configuration
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, ruleType])
+  @@map("guardrails")
+}
+
+model CustomerFatigueLog {
+  id           String   @id @default(cuid())
+  customerId   String
+  storeId      String
+  channel      String   // email, sms, whatsapp, rcs
+  messageType  String   // campaign, automation, proactive, support
+  campaignId   String?
+  automationId String?
+  sentAt       DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, storeId, channel, sentAt])
+  @@index([storeId, sentAt])
+  @@map("customer_fatigue_logs")
 }

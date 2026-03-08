@@ -7,6 +7,7 @@ import { discountTools } from "./discount-tools";
 import { campaignTools } from "./campaign-tools";
 import { segmentTools } from "./segment-tools";
 import { automationTools } from "./automation-tools";
+import { autonomyTools } from "./autonomy-tools";
 
 /** All tools available to the customer-facing agent */
 export function getCustomerTools(): ToolDefinition[] {
@@ -29,6 +30,7 @@ export function getMerchantTools(): ToolDefinition[] {
     ...campaignTools,
     ...segmentTools,
     ...automationTools,
+    ...autonomyTools,
   ];
 }
 
