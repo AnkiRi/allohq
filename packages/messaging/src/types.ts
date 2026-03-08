@@ -25,6 +25,8 @@ export interface Message {
   body?: string; // sms/whatsapp/rcs
   from?: string;
   replyTo?: string;
+  // Email headers (e.g., List-Unsubscribe)
+  headers?: Record<string, string>;
   // RCS specific
   cardTitle?: string;
   cardImageUrl?: string;

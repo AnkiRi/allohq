@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { prisma } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
+import { checkRateLimit } from "./middleware/rate-limit";
 
 /**
  * Context creation for tRPC
@@ -108,9 +109,20 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 });
 
 /**
- * Workspace procedure - requires authentication + workspace access
+ * Workspace procedure - requires authentication + workspace access + rate limiting
  */
 export const workspaceProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  // Rate limit: 100 requests per minute per user
+  const { allowed, remaining } = checkRateLimit(ctx.userId, { maxRequests: 100, windowMs: 60_000 });
+  if (!allowed) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: `Rate limit exceeded. Try again in a moment. (${remaining} remaining)`,
+    });
+  }
+
+  return next({ ctx });
+}).use(async ({ ctx, next }) => {
   if (!ctx.workspaceId) {
     throw new TRPCError({
       code: "FORBIDDEN",

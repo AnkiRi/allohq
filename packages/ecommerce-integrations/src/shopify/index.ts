@@ -1,7 +1,7 @@
 export { ShopifyClient } from "./client";
 export { generateAuthUrl, exchangeCodeForToken } from "./oauth";
 export { registerWebhooks, verifyWebhookHmac } from "./webhooks";
-export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders } from "./sync";
+export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections } from "./sync";
 export {
   createDiscount, deleteDiscount, getDiscountCode,
   getOrder, cancelOrder, closeOrder, addOrderNote,

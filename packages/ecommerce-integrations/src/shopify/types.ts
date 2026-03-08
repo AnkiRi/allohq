@@ -77,6 +77,29 @@ export interface ShopifySyncResult {
   errors: string[];
 }
 
+// ─── Admin API: Collections ─────────────────────────────────────
+
+export interface ShopifyCollection {
+  id: number;
+  title: string;
+  handle: string;
+  body_html: string | null;
+  sort_order: string | null;
+  published_at: string | null;
+  image: { src: string } | null;
+  updated_at: string;
+}
+
+export interface ShopifyCollect {
+  id: number;
+  collection_id: number;
+  product_id: number;
+  position: number;
+  sort_value: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── Admin API: Price Rules & Discount Codes ────────────────────
 
 export interface ShopifyPriceRule {

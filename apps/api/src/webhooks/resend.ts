@@ -136,6 +136,21 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
           }).catch(() => {});
         }
       }
+
+      // Update automation aggregated stats
+      if (messageLog.automationId) {
+        const automationUpdate: Record<string, unknown> = {};
+        if (eventType === "email.sent") automationUpdate.sentCount = { increment: 1 };
+        if (eventType === "email.opened") automationUpdate.openCount = { increment: 1 };
+        if (eventType === "email.clicked") automationUpdate.clickCount = { increment: 1 };
+        if (eventType === "email.bounced" || eventType === "email.complained") automationUpdate.bounceCount = { increment: 1 };
+        if (Object.keys(automationUpdate).length > 0) {
+          await prisma.automation.update({
+            where: { id: messageLog.automationId },
+            data: automationUpdate,
+          }).catch(() => {});
+        }
+      }
     }
 
     res.writeHead(200);

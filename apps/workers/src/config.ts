@@ -22,4 +22,6 @@ export const QUEUE_NAMES = {
   EMBEDDING: "embedding",
   AGENT_OBSERVE: "agent-observe",
   CONVERSATION_PROCESS: "conversation-process",
+  ABANDONED_CART_CHECK: "abandoned-cart-check",
+  SEGMENT_CHANGE: "segment-change",
 } as const;

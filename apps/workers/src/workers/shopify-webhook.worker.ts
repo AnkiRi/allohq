@@ -1,8 +1,7 @@
-import { Worker, Queue } from "bullmq";
+import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
-
-const automationTriggerQueue = new Queue(QUEUE_NAMES.AUTOMATION_TRIGGER, { connection: redisConnection });
+import { checkEventTriggers } from "../utils/event-triggers";
 
 interface WebhookJobData {
   topic: string;
@@ -56,11 +55,39 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         const order = await upsertOrder(store.id, payload);
         if (order?.customerId) {
           await checkEventTriggers(store.id, "order_placed", order.customerId);
+          // Mark any open/abandoned checkouts as recovered
+          await prisma.abandonedCheckout.updateMany({
+            where: {
+              storeId: store.id,
+              customerId: order.customerId,
+              status: { in: ["open", "abandoned"] },
+            },
+            data: { status: "recovered", recoveredAt: new Date() },
+          });
         }
         break;
       }
       case "orders/updated":
         await upsertOrder(store.id, payload);
+        break;
+
+      // --- Checkouts (abandoned cart detection) ---
+      case "checkouts/create":
+      case "checkouts/update":
+        await upsertCheckout(store.id, payload);
+        break;
+
+      // --- Collections ---
+      case "collections/create":
+      case "collections/update":
+        await upsertCollection(store.id, payload);
+        break;
+
+      case "collections/delete":
+        await prisma.collection.deleteMany({
+          where: { storeId: store.id, externalId: String((payload as any).id) },
+        });
+        console.log(`Collection ${(payload as any).id} deleted from store ${store.id}`);
         break;
 
       // --- App ---
@@ -362,52 +389,122 @@ async function upsertOrder(
   return { id: order.id, customerId: customer.id };
 }
 
-/**
- * Check for active automations with event triggers matching the given event,
- * then queue automation-trigger jobs for each match.
- * De-duplicates by checking if a MessageLog already exists for (automationId, customerId).
- */
-async function checkEventTriggers(storeId: string, eventName: string, customerId: string): Promise<void> {
-  try {
-    const automations = await prisma.automation.findMany({
-      where: {
-        storeId,
-        status: "active",
-        triggerType: "event",
-      },
+async function upsertCheckout(
+  storeId: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const c = data as {
+    id: number;
+    token: string;
+    email: string | null;
+    phone: string | null;
+    customer: { id: number } | null;
+    total_price: string;
+    currency: string;
+    abandoned_checkout_url: string | null;
+    line_items: Array<{
+      product_id: number | null;
+      variant_id: number | null;
+      title: string;
+      quantity: number;
+      price: string;
+    }>;
+    completed_at: string | null;
+  };
+
+  // If checkout is completed, mark as recovered
+  if (c.completed_at) {
+    await prisma.abandonedCheckout.updateMany({
+      where: { storeId, externalId: String(c.token || c.id) },
+      data: { status: "recovered", recoveredAt: new Date() },
     });
-
-    for (const automation of automations) {
-      const triggerConfig = automation.triggerConfig as { event?: string } | null;
-      if (triggerConfig?.event !== eventName) continue;
-
-      // De-duplicate: skip if already triggered for this (automation, customer)
-      const existingLog = await prisma.messageLog.findFirst({
-        where: { automationId: automation.id, customerId },
-      });
-      if (existingLog) {
-        console.log(`[event-trigger] Skipping duplicate: automation ${automation.id} already triggered for customer ${customerId}`);
-        continue;
-      }
-
-      await automationTriggerQueue.add(
-        "automation-trigger",
-        {
-          automationId: automation.id,
-          customerId,
-          triggeredBy: eventName,
-        },
-        {
-          // BullMQ jobId as secondary dedup guard
-          jobId: `${automation.id}-${customerId}`,
-        }
-      );
-
-      console.log(`[event-trigger] Queued automation ${automation.id} for customer ${customerId} (event: ${eventName})`);
-    }
-  } catch (err) {
-    console.error(`[event-trigger] Error checking triggers for ${eventName}:`, (err as Error).message);
+    return;
   }
+
+  // Find customer by Shopify customer ID
+  let customerId: string | null = null;
+  if (c.customer?.id) {
+    const customer = await prisma.customer.findUnique({
+      where: { storeId_externalId: { storeId, externalId: String(c.customer.id) } },
+    });
+    customerId = customer?.id ?? null;
+  }
+
+  const lineItems = (c.line_items ?? []).map((item) => ({
+    productId: item.product_id ? String(item.product_id) : null,
+    variantId: item.variant_id ? String(item.variant_id) : null,
+    title: item.title,
+    quantity: item.quantity,
+    price: parseFloat(item.price),
+  }));
+
+  await prisma.abandonedCheckout.upsert({
+    where: {
+      storeId_externalId: { storeId, externalId: String(c.token || c.id) },
+    },
+    create: {
+      storeId,
+      customerId,
+      externalId: String(c.token || c.id),
+      email: c.email,
+      phone: c.phone,
+      lineItems: lineItems as any,
+      totalPrice: parseFloat(c.total_price),
+      currency: c.currency,
+      checkoutUrl: c.abandoned_checkout_url,
+      status: "open",
+    },
+    update: {
+      customerId,
+      email: c.email,
+      phone: c.phone,
+      lineItems: lineItems as any,
+      totalPrice: parseFloat(c.total_price),
+      checkoutUrl: c.abandoned_checkout_url,
+    },
+  });
+}
+
+async function upsertCollection(
+  storeId: string,
+  data: Record<string, unknown>
+) {
+  const c = data as {
+    id: number;
+    title: string;
+    handle: string;
+    body_html: string | null;
+    sort_order: string | null;
+    published_at: string | null;
+    image: { src: string } | null;
+  };
+
+  await prisma.collection.upsert({
+    where: {
+      storeId_externalId: { storeId, externalId: String(c.id) },
+    },
+    create: {
+      storeId,
+      externalId: String(c.id),
+      title: c.title,
+      handle: c.handle,
+      description: c.body_html ?? undefined,
+      imageUrl: c.image?.src ?? null,
+      sortOrder: c.sort_order,
+      collectionType: "custom",
+      publishedAt: c.published_at ? new Date(c.published_at) : null,
+    },
+    update: {
+      title: c.title,
+      handle: c.handle,
+      description: c.body_html ?? undefined,
+      imageUrl: c.image?.src ?? null,
+      sortOrder: c.sort_order,
+      publishedAt: c.published_at ? new Date(c.published_at) : null,
+    },
+  });
+
+  console.log(`Collection ${c.id} upserted for store ${storeId}`);
 }
 
 shopifyWebhookWorker.on("completed", (job) => {

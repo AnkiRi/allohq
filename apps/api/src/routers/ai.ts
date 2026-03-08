@@ -584,6 +584,7 @@ export const aiRouter = router({
         brandProfile,
         searchedCustomers,
         tokenUsageRecords,
+        recentObservations,
       ] = await Promise.all([
         // Top 100 customers with RFM + LTV
         ctx.prisma.customer.findMany({
@@ -656,6 +657,17 @@ export const aiRouter = router({
           where: { workspaceId: ctx.workspaceId },
           _sum: { inputTokens: true, outputTokens: true },
           _count: { id: true },
+        }),
+        // Recent unacknowledged observations for proactive surfacing
+        ctx.prisma.agentObservation.findMany({
+          where: {
+            storeId: input.storeId,
+            acknowledged: false,
+            createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
+          },
+          select: { type: true, severity: true, summary: true, suggestedAction: true },
+          orderBy: { createdAt: "desc" },
+          take: 5,
         }),
       ]);
 
@@ -754,6 +766,12 @@ AI TOKEN USAGE (all time):
 - Total AI cost: $${totalTokenCost.toFixed(4)}
 By model:
 ${tokenByModel || "No token usage recorded yet."}
+${recentObservations.length > 0 ? `
+PROACTIVE ALERTS (unacknowledged observations — mention these if relevant to the conversation):
+${recentObservations.map((o) => {
+  const action = o.suggestedAction as Record<string, unknown> | null;
+  return `- [${o.severity.toUpperCase()}] ${o.summary}${action?.message ? ` → Suggested: ${action.message}` : ""}`;
+}).join("\n")}` : ""}
 `.trim();
 
       // ---------------------------------------------------------------
@@ -1276,6 +1294,7 @@ ${tokenByModel || "No token usage recorded yet."}
           severity: true,
           summary: true,
           data: true,
+          suggestedAction: true,
           acknowledged: true,
           createdAt: true,
         },

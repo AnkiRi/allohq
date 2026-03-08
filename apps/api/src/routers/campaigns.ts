@@ -200,6 +200,62 @@ export const campaignsRouter = router({
       });
     }),
 
+  /** Campaign analytics with time-bucketed event data */
+  analytics: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        granularity: z.enum(["hour", "day"]).default("day"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const truncFn = input.granularity === "hour" ? "hour" : "day";
+
+      const timeline = await ctx.prisma.$queryRaw<
+        Array<{ date: string; sent: number; opened: number; clicked: number; bounced: number }>
+      >`
+        SELECT
+          DATE_TRUNC(${truncFn}, "createdAt")::text AS date,
+          COUNT(*) FILTER (WHERE "status" IN ('sent','delivered','opened','clicked'))::int AS sent,
+          COUNT(*) FILTER (WHERE "openedAt" IS NOT NULL)::int AS opened,
+          COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL)::int AS clicked,
+          COUNT(*) FILTER (WHERE "status" = 'bounced')::int AS bounced
+        FROM message_logs
+        WHERE "campaignId" = ${input.id}
+        GROUP BY DATE_TRUNC(${truncFn}, "createdAt")
+        ORDER BY date ASC
+      `;
+
+      const totals = await ctx.prisma.messageLog.groupBy({
+        by: ["status"],
+        where: { campaignId: input.id },
+        _count: true,
+      });
+
+      const statusCounts = Object.fromEntries(totals.map((t) => [t.status, t._count]));
+      const totalSent = (statusCounts["sent"] ?? 0) + (statusCounts["delivered"] ?? 0) +
+                        (statusCounts["opened"] ?? 0) + (statusCounts["clicked"] ?? 0);
+      const totalOpened = (statusCounts["opened"] ?? 0) + (statusCounts["clicked"] ?? 0);
+      const totalClicked = statusCounts["clicked"] ?? 0;
+      const totalBounced = statusCounts["bounced"] ?? 0;
+
+      return {
+        timeline,
+        totals: { sent: totalSent, opened: totalOpened, clicked: totalClicked, bounced: totalBounced },
+        rates: {
+          openRate: totalSent > 0 ? totalOpened / totalSent : 0,
+          clickRate: totalSent > 0 ? totalClicked / totalSent : 0,
+          bounceRate: totalSent > 0 ? totalBounced / totalSent : 0,
+        },
+      };
+    }),
+
   stats: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {

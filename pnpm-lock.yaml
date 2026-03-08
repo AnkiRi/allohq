@@ -310,6 +310,9 @@ importers:
       '@allohq/agent-brain':
         specifier: workspace:*
         version: link:../agent-brain
+      '@allohq/customer-intelligence':
+        specifier: workspace:*
+        version: link:../customer-intelligence
       '@allohq/database':
         specifier: workspace:*
         version: link:../database

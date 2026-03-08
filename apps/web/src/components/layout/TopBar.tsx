@@ -3,8 +3,9 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { Bell, ChevronRight } from "lucide-react";
+import { Bell, ChevronRight, Menu } from "lucide-react";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
+import { useMobileSidebar } from "./MobileSidebarContext";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -51,6 +52,7 @@ function getBreadcrumb(pathname: string): string[] {
 
 export function TopBar() {
   const { openPanel, focusInput } = useAlloAI();
+  const { toggle } = useMobileSidebar();
   const pathname = usePathname();
   const { user } = useUser();
 
@@ -72,9 +74,16 @@ export function TopBar() {
   }, [openPanel, focusInput]);
 
   return (
-    <header className="flex items-center justify-between px-6 py-3">
+    <header className="flex items-center justify-between px-3 sm:px-4 md:px-6 py-3">
       <div className="flex items-center gap-3">
-        <span className="text-[13px] font-mono text-foreground">
+        {/* Hamburger — visible on mobile only */}
+        <button
+          onClick={toggle}
+          className="p-1.5 rounded-lg hover:bg-white/30 transition-colors md:hidden"
+        >
+          <Menu className="w-5 h-5 text-foreground" />
+        </button>
+        <span className="text-[13px] font-mono text-foreground hidden sm:inline">
           {greeting}, <span className="font-semibold">{firstName}</span>
         </span>
         <span className="text-[11px] text-muted-foreground/40 select-none">/</span>

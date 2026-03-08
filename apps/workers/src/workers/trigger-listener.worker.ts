@@ -100,9 +100,38 @@ export const triggerListenerWorker = new Worker<TriggerCheckJobData>(
           const segmentName = triggerConfig.segmentName as string;
           if (!segmentName) continue;
 
-          // Find customers NOT in the segment who were previously in it
-          // This requires tracking previous segment membership — for now, skip
-          console.log(`[trigger-listener] segment_exit not yet implemented for "${automation.name}"`);
+          // Find customers who recently exited this segment (catch-up for missed real-time events)
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          const recentExits = await prisma.customerSegmentHistory.findMany({
+            where: {
+              storeId: automation.storeId,
+              fromSegment: segmentName,
+              changedAt: { gte: fiveMinutesAgo },
+            },
+            select: { customerId: true },
+          });
+
+          let queued = 0;
+          for (const exit of recentExits) {
+            const existing = await prisma.messageLog.findFirst({
+              where: { automationId: automation.id, customerId: exit.customerId },
+            });
+            if (existing) continue;
+
+            await automationTriggerQueue.add("automation-trigger", {
+              automationId: automation.id,
+              customerId: exit.customerId,
+              triggeredBy: `segment_exit:${segmentName}`,
+            }, {
+              jobId: `${automation.id}-${exit.customerId}-exit`,
+              attempts: 2,
+            });
+            queued++;
+          }
+
+          if (queued > 0) {
+            console.log(`[trigger-listener] Queued ${queued} segment_exit triggers for "${automation.name}"`);
+          }
           break;
         }
 

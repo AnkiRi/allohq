@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
-const { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, registerWebhooks } = shopify;
+const { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections, registerWebhooks } = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { rfmQueue } from "../queues";
 
@@ -70,7 +70,17 @@ export const syncWorker = new Worker<SyncJobData>(
       console.warn(`Orders sync skipped: ${err.message}`);
     }
 
-    // 4. Register webhooks for incremental updates
+    // 4. Sync collections
+    await job.updateProgress(85);
+    let collectionResult: SyncResult = EMPTY_RESULT;
+    try {
+      collectionResult = await syncAllCollections(shopDomain, accessToken, storeId, prisma);
+      console.log(`Collections synced: ${collectionResult.imported} imported, ${collectionResult.errors.length} errors`);
+    } catch (err: any) {
+      console.warn(`Collections sync skipped: ${err.message}`);
+    }
+
+    // 5. Register webhooks for incremental updates
     await job.updateProgress(90);
     const webhookBaseUrl = process.env["WEBHOOK_BASE_URL"];
     if (webhookBaseUrl) {
@@ -101,6 +111,7 @@ export const syncWorker = new Worker<SyncJobData>(
       products: productResult,
       customers: customerResult,
       orders: orderResult,
+      collections: collectionResult,
     };
   },
   { connection: redisConnection }

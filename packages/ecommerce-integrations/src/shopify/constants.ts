@@ -8,6 +8,7 @@ export const SHOPIFY_SCOPES = [
   "read_customers",
   "read_orders",
   "write_orders",
+  "read_checkouts",
   "read_discounts",
   "write_discounts",
   "read_fulfillments",
@@ -24,6 +25,11 @@ export const SHOPIFY_WEBHOOK_TOPICS = [
   "customers/delete",
   "orders/create",
   "orders/updated",
+  "checkouts/create",
+  "checkouts/update",
+  "collections/create",
+  "collections/update",
+  "collections/delete",
   "app/uninstalled",
 ] as const;
 

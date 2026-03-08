@@ -321,6 +321,114 @@ export const automationsRouter = router({
       return { success: true };
     }),
 
+  /** Get performance stats for a single automation */
+  stats: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const automation = await ctx.prisma.automation.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: {
+          id: true,
+          name: true,
+          sentCount: true,
+          openCount: true,
+          clickCount: true,
+          bounceCount: true,
+        },
+      });
+      if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const attributionAgg = await ctx.prisma.orderAttribution.aggregate({
+        where: { automationId: input.id },
+        _count: { id: true },
+        _sum: { revenue: true },
+      });
+
+      const openRate = automation.sentCount > 0 ? (automation.openCount / automation.sentCount) * 100 : 0;
+      const clickRate = automation.openCount > 0 ? (automation.clickCount / automation.openCount) * 100 : 0;
+
+      return {
+        ...automation,
+        conversionCount: attributionAgg._count.id,
+        revenueAttributed: attributionAgg._sum.revenue ?? 0,
+        openRate: Math.round(openRate * 100) / 100,
+        clickRate: Math.round(clickRate * 100) / 100,
+      };
+    }),
+
+  /** Get aggregate stats for all automations by store */
+  statsByStore: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const automations = await ctx.prisma.automation.findMany({
+        where: {
+          workspaceId: ctx.workspaceId,
+          storeId: input.storeId,
+          status: { in: ["active", "paused"] },
+        },
+        select: {
+          id: true, name: true, category: true, status: true,
+          sentCount: true, openCount: true, clickCount: true, bounceCount: true,
+        },
+      });
+
+      const automationIds = automations.map((a) => a.id);
+      const attributions = automationIds.length > 0
+        ? await ctx.prisma.orderAttribution.groupBy({
+            by: ["automationId"],
+            where: { automationId: { in: automationIds } },
+            _count: { id: true },
+            _sum: { revenue: true },
+          })
+        : [];
+
+      const attrMap = new Map(
+        attributions.map((a) => [a.automationId, { conversions: a._count.id, revenue: a._sum.revenue ?? 0 }])
+      );
+
+      return automations.map((a) => ({
+        ...a,
+        conversionCount: attrMap.get(a.id)?.conversions ?? 0,
+        revenueAttributed: attrMap.get(a.id)?.revenue ?? 0,
+        openRate: a.sentCount > 0 ? Math.round((a.openCount / a.sentCount) * 10000) / 100 : 0,
+        clickRate: a.openCount > 0 ? Math.round((a.clickCount / a.openCount) * 10000) / 100 : 0,
+      }));
+    }),
+
+  /** Get ROI detail for a single automation */
+  roiDetail: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const automation = await ctx.prisma.automation.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+      });
+      if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const [attribution, messageLogs] = await Promise.all([
+        ctx.prisma.orderAttribution.findMany({
+          where: { automationId: input.id },
+          orderBy: { attributedAt: "desc" },
+          take: 50,
+          select: {
+            revenue: true, channel: true, touchType: true, attributedAt: true,
+            order: { select: { orderNumber: true, totalPrice: true } },
+          },
+        }),
+        ctx.prisma.messageLog.groupBy({
+          by: ["channel", "status"],
+          where: { automationId: input.id },
+          _count: true,
+        }),
+      ]);
+
+      return {
+        automationId: input.id,
+        name: automation.name,
+        attributedOrders: attribution,
+        messageBreakdown: messageLogs.map((m) => ({ channel: m.channel, status: m.status, count: m._count })),
+      };
+    }),
+
   /** Launch the AI agent pipeline */
   launchAgent: workspaceProcedure
     .input(z.object({ storeId: z.string(), model: aiModelSchema }))

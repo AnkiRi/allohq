@@ -6,6 +6,7 @@
   "types": "./src/index.ts",
   "dependencies": {
     "@allohq/agent-brain": "workspace:*",
+    "@allohq/customer-intelligence": "workspace:*",
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
     "@allohq/messaging": "workspace:*",

@@ -149,8 +149,8 @@ export default function CustomersPage() {
       </motion.div>
 
       {/* Customer table */}
-      <motion.div variants={itemVariants} className="glass-card-static overflow-hidden rounded-xl">
-        <table className="w-full">
+      <motion.div variants={itemVariants} className="glass-card-static overflow-hidden rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Customer</th>

@@ -147,4 +147,105 @@ export const dashboardRouter = router({
         byModel,
       };
     }),
+
+  /** Time-series data for dashboard charts */
+  timeSeries: workspaceProcedure
+    .input(
+      z.object({
+        metric: z.enum(["revenue", "customers", "orders"]),
+        days: z.enum(["7", "30", "90"]).default("30"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      const storeIds = stores.map((s) => s.id);
+      if (storeIds.length === 0) return { points: [] };
+
+      const days = Number(input.days);
+      const since = new Date(Date.now() - days * 86400000);
+
+      let points: Array<{ date: string; value: number }> = [];
+
+      switch (input.metric) {
+        case "revenue":
+          points = await ctx.prisma.$queryRaw`
+            SELECT DATE_TRUNC('day', "createdAt")::date::text AS date,
+                   COALESCE(SUM("totalPrice"), 0)::float AS value
+            FROM orders
+            WHERE "storeId" = ANY(${storeIds})
+              AND "createdAt" >= ${since}
+            GROUP BY DATE_TRUNC('day', "createdAt")
+            ORDER BY date ASC
+          `;
+          break;
+        case "customers":
+          points = await ctx.prisma.$queryRaw`
+            SELECT DATE_TRUNC('day', "createdAt")::date::text AS date,
+                   COUNT(*)::int AS value
+            FROM customers
+            WHERE "storeId" = ANY(${storeIds})
+              AND "createdAt" >= ${since}
+            GROUP BY DATE_TRUNC('day', "createdAt")
+            ORDER BY date ASC
+          `;
+          break;
+        case "orders":
+          points = await ctx.prisma.$queryRaw`
+            SELECT DATE_TRUNC('day', "createdAt")::date::text AS date,
+                   COUNT(*)::int AS value
+            FROM orders
+            WHERE "storeId" = ANY(${storeIds})
+              AND "createdAt" >= ${since}
+            GROUP BY DATE_TRUNC('day', "createdAt")
+            ORDER BY date ASC
+          `;
+          break;
+      }
+
+      return { points };
+    }),
+
+  /** Cohort revenue forecasting based on CustomerLifetimeValue data */
+  cohortForecast: workspaceProcedure
+    .input(z.object({ storeId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const stores = await ctx.prisma.store.findMany({
+        where: {
+          workspaceId: ctx.workspaceId,
+          ...(input?.storeId ? { id: input.storeId } : {}),
+        },
+        select: { id: true },
+      });
+      const storeIds = stores.map((s) => s.id);
+      if (storeIds.length === 0) return { cohorts: [] };
+
+      const cohorts = await ctx.prisma.$queryRaw<Array<{
+        cohort: string;
+        customerCount: number;
+        avgPredictedLtv: number;
+        avgChurnProb: number;
+        avgHistoricalLtv: number;
+        totalPredictedRevenue: number;
+        totalHistoricalRevenue: number;
+      }>>`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', c."createdAt"), 'YYYY-MM') AS cohort,
+          COUNT(*)::int AS "customerCount",
+          ROUND(AVG(clv."predictedLtv")::numeric, 2)::float AS "avgPredictedLtv",
+          ROUND(AVG(clv."churnProbability")::numeric, 4)::float AS "avgChurnProb",
+          ROUND(AVG(clv."historicalLtv")::numeric, 2)::float AS "avgHistoricalLtv",
+          ROUND(SUM(clv."predictedLtv")::numeric, 2)::float AS "totalPredictedRevenue",
+          ROUND(SUM(clv."historicalLtv")::numeric, 2)::float AS "totalHistoricalRevenue"
+        FROM customer_lifetime_values clv
+        JOIN customers c ON c.id = clv."customerId"
+        WHERE clv."storeId" = ANY(${storeIds})
+        GROUP BY DATE_TRUNC('month', c."createdAt")
+        ORDER BY cohort ASC
+      `;
+
+      return { cohorts };
+    }),
 });

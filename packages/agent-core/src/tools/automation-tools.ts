@@ -150,6 +150,64 @@ export const automationTools: ToolDefinition[] = [
       };
     },
   },
+  {
+    name: "edit_automation_node",
+    description:
+      "Edit a specific node in an automation workflow. Use this to change delay durations, conditions, or other node configurations.",
+    parameters: {
+      automationName: { type: "string", description: "Name of the automation" },
+      nodeId: { type: "string", description: "ID of the node to edit (e.g. '1', '2', '3')" },
+      updates: {
+        type: "object",
+        description: "Updates to apply: { type?: string, config?: { days?: number, hours?: number, subject?: string, message?: string, check?: string } }",
+      },
+    },
+    handler: async (params, ctx) => {
+      const automation = await prisma.automation.findFirst({
+        where: {
+          storeId: ctx.storeId,
+          name: { contains: String(params.automationName ?? ""), mode: "insensitive" },
+        },
+      });
+      if (!automation) return { success: false, message: `Automation "${params.automationName}" not found` };
+
+      const nodes = (automation.nodes as any[]) ?? [];
+      const nodeId = String(params.nodeId);
+      const nodeIndex = nodes.findIndex((n) => n.id === nodeId);
+      if (nodeIndex === -1) return { success: false, message: `Node "${nodeId}" not found in automation` };
+
+      const updates = (params.updates as Record<string, unknown>) ?? {};
+      const node = { ...nodes[nodeIndex] };
+      if (updates.type) node.type = updates.type;
+      if (updates.config) node.config = { ...node.config, ...(updates.config as Record<string, unknown>) };
+
+      nodes[nodeIndex] = node;
+
+      await prisma.automation.update({
+        where: { id: automation.id },
+        data: { nodes: nodes as any },
+      });
+
+      await prisma.agentAction.create({
+        data: {
+          storeId: ctx.storeId,
+          agentType: "retention_strategist",
+          actionType: "edit_automation_node",
+          input: { automationId: automation.id, nodeId, updates } as any,
+          output: { updatedNode: node },
+          status: "completed",
+        },
+      });
+
+      return {
+        success: true,
+        automationId: automation.id,
+        nodeId,
+        updatedNode: node,
+        message: `Node ${nodeId} in "${automation.name}" updated successfully.`,
+      };
+    },
+  },
 ];
 
 /** Build default workflow nodes based on automation category */

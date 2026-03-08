@@ -94,10 +94,11 @@ model Store {
   timezone         String?
   messagingConfig  Json?    // per-store messaging provider config (future use)
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  products  Product[]
-  customers Customer[]
-  orders    Order[]
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  products    Product[]
+  customers   Customer[]
+  orders      Order[]
+  collections Collection[]
   campaigns     Campaign[]
   brandProfiles BrandProfile[]
   automations   Automation[]
@@ -106,8 +107,9 @@ model Store {
   aiChats       AiChat[]
   conversations    Conversation[]
   agentActions     AgentAction[]
-  agentObservations AgentObservation[]
-  retentionOutcomes RetentionOutcome[]
+  agentObservations  AgentObservation[]
+  retentionOutcomes  RetentionOutcome[]
+  abandonedCheckouts AbandonedCheckout[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -133,8 +135,9 @@ model Product {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  store    Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  variants ProductVariant[]
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  variants           ProductVariant[]
+  collectionProducts CollectionProduct[]
 
   @@unique([storeId, externalId])
   @@map("products")
@@ -156,6 +159,40 @@ model ProductVariant {
   @@map("product_variants")
 }
 
+model Collection {
+  id             String    @id @default(cuid())
+  storeId        String
+  externalId     String    // Shopify collection ID
+  title          String
+  handle         String
+  description    String?
+  imageUrl       String?
+  sortOrder      String?   // e.g. "best-selling", "alpha-asc"
+  collectionType String    @default("custom") // "custom" or "smart"
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  collectionProducts CollectionProduct[]
+
+  @@unique([storeId, externalId])
+  @@map("collections")
+}
+
+model CollectionProduct {
+  id           String @id @default(cuid())
+  collectionId String
+  productId    String
+  position     Int    @default(0)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, productId])
+  @@map("collection_products")
+}
+
 model Customer {
   id            String   @id @default(cuid())
   storeId       String
@@ -174,8 +211,10 @@ model Customer {
   rfmScore RfmScore?
   lifetimeValue CustomerLifetimeValue?
   memories         CustomerMemory[]
-  conversations    Conversation[]
-  retentionOutcomes RetentionOutcome[]
+  conversations      Conversation[]
+  retentionOutcomes  RetentionOutcome[]
+  abandonedCheckouts AbandonedCheckout[]
+  segmentHistory     CustomerSegmentHistory[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -241,6 +280,33 @@ model OrderItem {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("order_items")
+}
+
+model AbandonedCheckout {
+  id          String    @id @default(cuid())
+  storeId     String
+  customerId  String?
+  externalId  String    // Shopify checkout token or ID
+  email       String?
+  phone       String?
+  lineItems   Json      // array of { productId, variantId, title, quantity, price }
+  totalPrice  Float     @default(0)
+  currency    String    @default("USD")
+  checkoutUrl String?   // Shopify recovery URL
+  status      String    @default("open") // open | abandoned | recovered
+  abandonedAt DateTime?
+  recoveredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@unique([storeId, externalId])
+  @@index([storeId, status])
+  @@index([customerId])
+  @@index([status, createdAt])
+  @@map("abandoned_checkouts")
 }
 
 // ============================================================================
@@ -309,6 +375,23 @@ model CustomerLifetimeValue {
   @@index([storeId])
   @@index([predictedLtv])
   @@map("customer_lifetime_values")
+}
+
+model CustomerSegmentHistory {
+  id          String   @id @default(cuid())
+  customerId  String
+  storeId     String
+  fromSegment String
+  toSegment   String
+  changedAt   DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, changedAt])
+  @@index([storeId, changedAt])
+  @@index([storeId, fromSegment])
+  @@index([storeId, toSegment])
+  @@map("customer_segment_history")
 }
 
 // ============================================================================
@@ -449,6 +532,11 @@ model Automation {
   smsTemplateIds      String[]         @default([])
   whatsappTemplateIds String[]         @default([])
   rcsTemplateIds      String[]         @default([])
+  // Performance stats (incremented by resend webhook)
+  sentCount           Int              @default(0)
+  openCount           Int              @default(0)
+  clickCount          Int              @default(0)
+  bounceCount         Int              @default(0)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -830,8 +918,9 @@ model AgentObservation {
   summary      String
   data         Json                @default("{}")
   acknowledged Boolean             @default(false)
-  actionTaken  String?             // what the agent did in response
-  createdAt    DateTime            @default(now())
+  actionTaken     String?          // what the agent did in response
+  suggestedAction Json?            // { type: "create_campaign"|"investigate"|..., description: "..." }
+  createdAt       DateTime         @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 

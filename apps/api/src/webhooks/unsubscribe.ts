@@ -9,7 +9,7 @@ import { prisma } from "@allohq/database";
  * Idempotent — safe to call multiple times.
  */
 export async function handleUnsubscribe(req: IncomingMessage, res: ServerResponse) {
-  if (req.method !== "GET") {
+  if (req.method !== "GET" && req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "text/plain" });
     res.end("Method Not Allowed");
     return;
@@ -17,7 +17,14 @@ export async function handleUnsubscribe(req: IncomingMessage, res: ServerRespons
 
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-    const token = url.searchParams.get("token");
+    let token = url.searchParams.get("token");
+
+    // RFC 8058: one-click unsubscribe via POST
+    if (req.method === "POST" && !token) {
+      const body = await readRequestBody(req);
+      const params = new URLSearchParams(body);
+      token = params.get("token");
+    }
 
     if (!token) {
       res.writeHead(400, { "Content-Type": "text/html" });
@@ -72,6 +79,15 @@ export async function handleUnsubscribe(req: IncomingMessage, res: ServerRespons
     res.writeHead(500, { "Content-Type": "text/html" });
     res.end(renderPage("Error", "Something went wrong. Please try again later."));
   }
+}
+
+function readRequestBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
 }
 
 function renderPage(title: string, message: string): string {

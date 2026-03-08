@@ -2,7 +2,7 @@ import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
-import { sendEmail, sendSms, sendWhatsApp, sendRcs } from "@allohq/messaging";
+import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
 import type { StoreMessagingConfig } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
@@ -45,7 +45,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
-      include: { rfmScore: true, orders: { take: 1, orderBy: { createdAt: "desc" } } },
+      include: { rfmScore: true, lifetimeValue: { select: { historicalLtv: true } }, orders: { take: 1, orderBy: { createdAt: "desc" } } },
     });
 
     if (!customer) {
@@ -138,12 +138,23 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             showAddress: brandProfile.showAddress,
           } : undefined;
 
-          // Build variables
+          // Build variables with all merge tags
+          const now = new Date();
           const variables: Record<string, string> = {
             first_name: customer.firstName ?? "there",
             last_name: customer.lastName ?? "",
             email: customer.email,
             unsubscribe_url: getUnsubscribeUrl(customer.id),
+            order_count: String(customer.rfmScore?.orderCount ?? 0),
+            segment: customer.rfmScore?.segment ?? "New",
+            ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
+            avg_order_value: `$${(customer.rfmScore?.avgOrderValue ?? 0).toFixed(2)}`,
+            last_order_date: customer.rfmScore?.lastOrderAt
+              ? customer.rfmScore.lastOrderAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+              : "N/A",
+            days_since_purchase: customer.rfmScore?.lastOrderAt
+              ? String(Math.floor((now.getTime() - customer.rfmScore.lastOrderAt.getTime()) / 86400000))
+              : "N/A",
           };
 
           // Create MessageLog entry
@@ -176,13 +187,18 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          // Send via Resend
+          // Send via Resend with List-Unsubscribe headers (RFC 2369 + RFC 8058)
+          const unsubscribeUrl = variables.unsubscribe_url;
           const result = await sendEmail({
             channel: "email",
             to: customer.email,
             subject: template.subject,
             html,
             from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+            headers: {
+              "List-Unsubscribe": `<${unsubscribeUrl}>`,
+              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            },
           });
 
           // Update MessageLog with result
@@ -206,15 +222,33 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           const smsTemplateId = node.config.smsTemplateId as string;
           if (!smsTemplateId || !customer.phone) break;
 
+          // Validate phone number
+          const smsPhone = normalizePhone(customer.phone);
+          if (!isValidE164(smsPhone)) {
+            console.warn(`[automation-runner] Invalid phone for SMS: ${customer.phone} (customer ${customer.id})`);
+            break;
+          }
+
           const smsTemplate = await prisma.smsTemplate.findUnique({
             where: { id: smsTemplateId },
           });
           if (!smsTemplate) break;
 
-          // Variable substitution
+          // Variable substitution (supports all merge tags)
           let body = smsTemplate.body;
-          body = body.replace(/\{\{first_name\}\}/g, customer.firstName ?? "there");
-          body = body.replace(/\{\{last_name\}\}/g, customer.lastName ?? "");
+          const smsVars: Record<string, string> = {
+            first_name: customer.firstName ?? "there",
+            last_name: customer.lastName ?? "",
+            order_count: String(customer.rfmScore?.orderCount ?? 0),
+            segment: customer.rfmScore?.segment ?? "New",
+            ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
+            days_since_purchase: customer.rfmScore?.lastOrderAt
+              ? String(Math.floor((new Date().getTime() - customer.rfmScore.lastOrderAt.getTime()) / 86400000))
+              : "N/A",
+          };
+          for (const [key, val] of Object.entries(smsVars)) {
+            body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
+          }
 
           const messageLog = await prisma.messageLog.create({
             data: {
@@ -222,7 +256,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               storeId: automation.storeId,
               customerId: customer.id,
               channel: "sms",
-              to: customer.phone,
+              to: smsPhone,
               templateId: smsTemplateId,
               automationId,
               status: "queued",
@@ -230,7 +264,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          const smsResult = await sendSms({ channel: "sms", to: customer.phone, body }, messagingConfig);
+          const smsResult = await sendSms({ channel: "sms", to: smsPhone, body }, messagingConfig);
 
           if (smsResult.status === "sent") {
             await prisma.messageLog.update({
@@ -252,6 +286,12 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           const waTemplateId = node.config.whatsappTemplateId as string;
           if (!waTemplateId || !customer.phone) break;
 
+          const waPhone = normalizePhone(customer.phone);
+          if (!isValidE164(waPhone)) {
+            console.warn(`[automation-runner] Invalid phone for WhatsApp: ${customer.phone} (customer ${customer.id})`);
+            break;
+          }
+
           const waTemplate = await prisma.whatsAppTemplate.findUnique({
             where: { id: waTemplateId },
           });
@@ -266,7 +306,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               storeId: automation.storeId,
               customerId: customer.id,
               channel: "whatsapp",
-              to: customer.phone,
+              to: waPhone,
               templateId: waTemplateId,
               automationId,
               status: "queued",
@@ -274,7 +314,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          const waResult = await sendWhatsApp({ channel: "whatsapp", to: customer.phone, body }, messagingConfig);
+          const waResult = await sendWhatsApp({ channel: "whatsapp", to: waPhone, body }, messagingConfig);
 
           if (waResult.status === "sent") {
             await prisma.messageLog.update({
@@ -296,6 +336,12 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           const rcsTemplateId = node.config.rcsTemplateId as string;
           if (!rcsTemplateId || !customer.phone) break;
 
+          const rcsPhone = normalizePhone(customer.phone);
+          if (!isValidE164(rcsPhone)) {
+            console.warn(`[automation-runner] Invalid phone for RCS: ${customer.phone} (customer ${customer.id})`);
+            break;
+          }
+
           const rcsTemplate = await prisma.rcsTemplate.findUnique({
             where: { id: rcsTemplateId },
           });
@@ -310,7 +356,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               storeId: automation.storeId,
               customerId: customer.id,
               channel: "rcs",
-              to: customer.phone,
+              to: rcsPhone,
               templateId: rcsTemplateId,
               automationId,
               status: "queued",
@@ -325,7 +371,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
           const rcsResult = await sendRcs({
             channel: "rcs",
-            to: customer.phone,
+            to: rcsPhone,
             body,
             cardTitle: rcsTemplate.cardTitle ?? undefined,
             cardImageUrl: rcsTemplate.cardImageUrl ?? undefined,

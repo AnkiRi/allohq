@@ -48,3 +48,7 @@ export { sendEmail } from "./channels/email";
 export { sendSms } from "./channels/sms";
 export { sendWhatsApp } from "./channels/whatsapp";
 export { sendRcs } from "./channels/rcs";
+
+// ── Validation utilities ──────────────────────────────────────────────────
+
+export { isValidE164, normalizePhone, isValidEmail } from "./validation";

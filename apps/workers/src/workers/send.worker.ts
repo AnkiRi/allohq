@@ -49,7 +49,10 @@ export const sendWorker = new Worker<SendJobData>(
         email: true,
         firstName: true,
         lastName: true,
-        rfmScore: { select: { segment: true, totalSpent: true } },
+        rfmScore: {
+          select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true },
+        },
+        lifetimeValue: { select: { historicalLtv: true } },
       },
     });
 
@@ -117,11 +120,22 @@ export const sendWorker = new Worker<SendJobData>(
     let sentCount = 0;
     let failCount = 0;
     for (const customer of customers) {
+      const now = new Date();
       const variables: Record<string, string> = {
         first_name: customer.firstName ?? "there",
         last_name: customer.lastName ?? "",
         email: customer.email,
         unsubscribe_url: getUnsubscribeUrl(customer.id),
+        order_count: String(customer.rfmScore?.orderCount ?? 0),
+        segment: customer.rfmScore?.segment ?? "New",
+        ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
+        avg_order_value: `$${(customer.rfmScore?.avgOrderValue ?? 0).toFixed(2)}`,
+        last_order_date: customer.rfmScore?.lastOrderAt
+          ? customer.rfmScore.lastOrderAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+          : "N/A",
+        days_since_purchase: customer.rfmScore?.lastOrderAt
+          ? String(Math.floor((now.getTime() - customer.rfmScore.lastOrderAt.getTime()) / 86400000))
+          : "N/A",
       };
 
       // Create MessageLog entry first (need its ID for UTM content)
@@ -153,13 +167,18 @@ export const sendWorker = new Worker<SendJobData>(
         },
       });
 
-      // Send via Resend
+      // Send via Resend with List-Unsubscribe headers (RFC 2369 + RFC 8058)
+      const unsubscribeUrl = variables.unsubscribe_url;
       const result = await sendEmail({
         channel: "email",
         to: customer.email,
         subject: campaign.template.subject,
         html,
         from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       });
 
       // Update MessageLog with result

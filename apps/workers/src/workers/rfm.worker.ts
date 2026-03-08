@@ -1,4 +1,4 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import {
   scoreQuintile,
@@ -8,6 +8,8 @@ import {
   DEFAULT_SEGMENTS,
 } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
+
+const segmentChangeQueue = new Queue(QUEUE_NAMES.SEGMENT_CHANGE, { connection: redisConnection });
 
 interface RfmJobData {
   storeId: string;
@@ -57,6 +59,14 @@ export const rfmWorker = new Worker<RfmJobData>(
     const frequencyValues = rawData.map((d) => d.orderCount);
     const monetaryValues = rawData.map((d) => d.totalSpent);
 
+    // Batch-fetch existing segments for change detection
+    const existingScores = await prisma.rfmScore.findMany({
+      where: { storeId },
+      select: { customerId: true, segment: true },
+    });
+    const existingSegmentMap = new Map(existingScores.map((s) => [s.customerId, s.segment]));
+    const segmentChanges: Array<{ customerId: string; fromSegment: string; toSegment: string }> = [];
+
     let rfmCalculated = 0;
     for (const data of rawData) {
       const recency = scoreQuintile(data.daysSinceLastOrder, recencyValues, true);
@@ -64,6 +74,12 @@ export const rfmWorker = new Worker<RfmJobData>(
       const monetary = scoreQuintile(data.totalSpent, monetaryValues);
       const totalScore = recency + frequency + monetary;
       const segment = getSegmentName(recency, frequency, monetary);
+
+      // Detect segment change
+      const oldSegment = existingSegmentMap.get(data.customerId);
+      if (oldSegment && oldSegment !== segment) {
+        segmentChanges.push({ customerId: data.customerId, fromSegment: oldSegment, toSegment: segment });
+      }
 
       await prisma.rfmScore.upsert({
         where: { customerId: data.customerId },
@@ -94,6 +110,29 @@ export const rfmWorker = new Worker<RfmJobData>(
         },
       });
       rfmCalculated++;
+    }
+
+    // Record segment transitions and emit events
+    if (segmentChanges.length > 0) {
+      await prisma.customerSegmentHistory.createMany({
+        data: segmentChanges.map((c) => ({
+          customerId: c.customerId,
+          storeId,
+          fromSegment: c.fromSegment,
+          toSegment: c.toSegment,
+        })),
+      });
+
+      for (const change of segmentChanges) {
+        await segmentChangeQueue.add("segment-change", {
+          storeId,
+          customerId: change.customerId,
+          fromSegment: change.fromSegment,
+          toSegment: change.toSegment,
+        });
+      }
+
+      console.log(`Segment changes detected: ${segmentChanges.length}`);
     }
 
     console.log(`RFM scores calculated for ${rfmCalculated} customers`);

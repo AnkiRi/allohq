@@ -1402,7 +1402,7 @@ export default function DashboardPage() {
           </motion.div>
 
           {/* Smart nav grid */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* CUSTOMERS */}
             <motion.div variants={itemVariants}>
               <Link href="/customers" className="block glass-card p-5 group">
@@ -1530,7 +1530,7 @@ export default function DashboardPage() {
           )}
 
           {/* Quick nav cards */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               {
                 title: "CUSTOMERS",
@@ -1579,7 +1579,7 @@ export default function DashboardPage() {
 
           {/* Stats */}
           {hasSyncedData && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
                 {
                   label: "TOTAL CUSTOMERS",

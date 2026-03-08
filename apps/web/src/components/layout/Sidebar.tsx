@@ -19,6 +19,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
+import { useMobileSidebar } from "./MobileSidebarContext";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -39,6 +40,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const { isOpen, close } = useMobileSidebar();
 
   const initials = user
     ? (user.firstName?.[0] || "") + (user.lastName?.[0] || "") ||
@@ -47,7 +49,24 @@ export function Sidebar() {
     : "U";
 
   return (
-    <aside className="w-60 bg-[#EDE7DB]/80 backdrop-blur-glass border-r border-white/20 flex flex-col">
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          onClick={close}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "w-60 bg-[#EDE7DB]/80 backdrop-blur-glass border-r border-white/20 flex flex-col",
+          // Desktop: always visible
+          "hidden md:flex",
+          // Mobile: full-screen overlay when open
+          isOpen && "fixed inset-y-0 left-0 z-50 flex"
+        )}
+      >
       {/* Logo */}
       <div className="px-6 py-5 border-b border-white/20">
         <h1 className="text-[18px] font-bold text-foreground font-mono tracking-[-0.5px]">
@@ -66,6 +85,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={close}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-[13px] font-mono active:scale-[0.97]",
                 isActive
@@ -112,5 +132,6 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }
