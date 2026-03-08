@@ -205,6 +205,30 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
       break;
     }
 
+    case "form_submitted": {
+      // Update channel preferences based on consent from form submission
+      const consent = event.data?.["consent"] as { email?: boolean; sms?: boolean; whatsapp?: boolean } | undefined;
+      if (consent) {
+        const existing = await prisma.customerState.findUnique({
+          where: { customerId },
+          select: { channelPreference: true },
+        });
+        const currentPref = (existing?.channelPreference as unknown as Record<string, number>) ?? {};
+        // Boost channels the customer consented to
+        if (consent.email) currentPref["email"] = Math.min((currentPref["email"] ?? 0.5) + 0.2, 1);
+        if (consent.sms) currentPref["sms"] = Math.min((currentPref["sms"] ?? 0.3) + 0.3, 1);
+        if (consent.whatsapp) currentPref["whatsapp"] = Math.min((currentPref["whatsapp"] ?? 0.3) + 0.3, 1);
+        await prisma.customerState.update({
+          where: { customerId },
+          data: {
+            channelPreference: currentPref as any,
+            lastStateUpdate: new Date(),
+          },
+        });
+      }
+      break;
+    }
+
     case "segment_changed":
     case "full_recalculation": {
       await computeFullState(customerId, storeId);

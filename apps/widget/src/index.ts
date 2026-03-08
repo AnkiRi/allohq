@@ -1,9 +1,11 @@
 import type { WidgetConfig, WidgetEvent } from "./types";
 import { submitEvent } from "./api";
 import { ChatWidget } from "./chat/widget";
+import { PopupWidget } from "./popup/widget";
 
 let config: WidgetConfig | null = null;
 let chatWidget: ChatWidget | null = null;
+let popupWidget: PopupWidget | null = null;
 
 /** Initialize the AlloHQ widget */
 export function init(options: WidgetConfig): void {
@@ -12,11 +14,13 @@ export function init(options: WidgetConfig): void {
     console.log("[AlloHQ] Widget initialized", { apiUrl: config.apiUrl });
   }
 
+  const apiUrl = options.apiUrl ?? "https://api.allohq.com";
+
   // Auto-mount chat if enabled (default: true)
   if (options.chat !== false) {
     chatWidget = new ChatWidget({
       apiKey: options.apiKey,
-      apiUrl: options.apiUrl ?? "https://api.allohq.com",
+      apiUrl,
       storeName: options.storeName,
       storeDomain: options.storeDomain,
       debug: options.debug,
@@ -27,6 +31,23 @@ export function init(options: WidgetConfig): void {
       document.addEventListener("DOMContentLoaded", () => chatWidget!.mount());
     } else {
       chatWidget.mount();
+    }
+  }
+
+  // Auto-mount popups if enabled (default: true when apiKey available)
+  if (options.popups !== false && options.apiKey) {
+    popupWidget = new PopupWidget({
+      storeId: options.apiKey, // apiKey doubles as storeId for widget
+      apiUrl,
+      popupIds: options.popupIds ?? [],
+      debug: options.debug,
+    });
+
+    const initPopups = () => popupWidget!.init();
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initPopups);
+    } else {
+      initPopups();
     }
   }
 }

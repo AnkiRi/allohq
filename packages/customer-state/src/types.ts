@@ -80,6 +80,7 @@ export interface StateUpdateEvent {
     | "support_opened"
     | "support_resolved"
     | "segment_changed"
+    | "form_submitted"
     | "full_recalculation";
   customerId: string;
   storeId: string;

@@ -17,6 +17,7 @@
     "@allohq/customer-state": "workspace:*",
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
+    "@allohq/forms-and-popups": "workspace:*",
     "@allohq/email-builder": "workspace:*",
     "@allohq/merchant-copilot": "workspace:*",
     "@allohq/messaging": "workspace:*",

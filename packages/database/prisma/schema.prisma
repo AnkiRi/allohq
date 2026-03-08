@@ -133,6 +133,10 @@ model Store {
   customerJourneys     CustomerJourney[]
   abTests              ABTest[]
 
+  // Sprint 6: Forms + Popups
+  forms                Form[]
+  popups               Popup[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -243,6 +247,7 @@ model Customer {
   segmentHistory     CustomerSegmentHistory[]
   customerState      CustomerState?
   customerJourneys   CustomerJourney[]
+  formSubmissions    FormSubmission[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -1259,4 +1264,66 @@ model ABTest {
   @@index([storeId, status])
   @@index([automationId])
   @@map("ab_tests")
+}
+
+// ============================================================================
+// SPRINT 6: FORMS, POPUPS + LEAD CAPTURE
+// ============================================================================
+
+model Form {
+  id            String   @id @default(cuid())
+  storeId       String
+  name          String
+  fields        Json     // FormField[] — { name, type, label, required, placeholder, options? }
+  styling       Json?    // { backgroundColor, textColor, buttonColor, buttonText, borderRadius, fontFamily }
+  submitAction  String   @default("subscribe") // subscribe, redirect, message
+  incentiveConfig Json?  // { type: 'discount'|'freeShipping', discountType?, discountValue?, code? }
+  status        String   @default("draft") // draft, active, archived
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  popups      Popup[]
+  submissions FormSubmission[]
+
+  @@index([storeId])
+  @@map("forms")
+}
+
+model Popup {
+  id            String   @id @default(cuid())
+  storeId       String
+  name          String
+  formId        String
+  trigger       String   // exit_intent, scroll, timer, page_load
+  triggerConfig Json?    // { scrollPercent?, delayMs?, pageUrl? }
+  styling       Json?    // { position, overlayColor, width, animation }
+  status        String   @default("draft") // draft, active, paused, archived
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store  Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  form   Form  @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([formId])
+  @@map("popups")
+}
+
+model FormSubmission {
+  id           String   @id @default(cuid())
+  formId       String
+  customerId   String?
+  data         Json     // submitted field values { email, phone, name, ... }
+  source       String   @default("popup") // popup, embed, api
+  consentGiven Json?    // { email?: bool, sms?: bool, whatsapp?: bool }
+  capturedAt   DateTime @default(now())
+
+  form     Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([formId])
+  @@index([customerId])
+  @@index([capturedAt])
+  @@map("form_submissions")
 }

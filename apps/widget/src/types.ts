@@ -12,6 +12,10 @@ export interface WidgetConfig {
   storeDomain?: string;
   /** Enable chat widget (default: true) */
   chat?: boolean;
+  /** Enable popup widget (default: true if storeId is provided) */
+  popups?: boolean;
+  /** Specific popup IDs to load (loads all active if not specified) */
+  popupIds?: string[];
 }
 
 /** Events emitted by the widget */

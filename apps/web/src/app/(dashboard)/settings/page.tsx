@@ -366,7 +366,7 @@ export default function SettingsPage() {
           </div>
         ) : stores && stores.length > 0 ? (
           <div className="space-y-3">
-            {stores.map((store) => (
+            {stores.map((store: { id: string; shopDomain: string; platform: string; isActive: boolean; _count: { products: number; customers: number } }) => (
               <div
                 key={store.id}
                 className="flex items-center justify-between p-4 bg-white/20 border border-white/15 rounded-lg"

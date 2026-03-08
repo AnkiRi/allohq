@@ -20,6 +20,7 @@ import {
   Shield,
   ShieldCheck,
   ListChecks,
+  MousePointerClick,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -33,6 +34,7 @@ const navigation = [
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Actions", href: "/actions", icon: ListChecks },
   { name: "Automations", href: "/automations", icon: Sparkles },
+  { name: "Forms", href: "/forms", icon: MousePointerClick },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Agent", href: "/agent", icon: Zap },
   { name: "Conversations", href: "/conversations", icon: MessageSquare },

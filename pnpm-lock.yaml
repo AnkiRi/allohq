@@ -48,6 +48,9 @@ importers:
       '@allohq/email-builder':
         specifier: workspace:*
         version: link:../../packages/email-builder
+      '@allohq/forms-and-popups':
+        specifier: workspace:*
+        version: link:../../packages/forms-and-popups
       '@allohq/merchant-copilot':
         specifier: workspace:*
         version: link:../../packages/merchant-copilot
@@ -591,10 +594,20 @@ importers:
         version: 5.2.0(eslint@9.39.2(jiti@2.6.1))
 
   packages/forms-and-popups:
+    dependencies:
+      '@allohq/database':
+        specifier: workspace:*
+        version: link:../database
+      '@allohq/ecommerce-integrations':
+        specifier: workspace:*
+        version: link:../ecommerce-integrations
     devDependencies:
       '@allohq/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.11
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

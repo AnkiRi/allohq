@@ -11,6 +11,7 @@ import { handleUnsubscribe } from "./webhooks/unsubscribe";
 import { handleGupshupWebhook } from "./webhooks/gupshup";
 import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
+import { handleWidgetPopups } from "./routes/widget-popups";
 
 // Load environment variables
 config();
@@ -53,6 +54,8 @@ const server = http.createServer((req, res) => {
       handleGupshupWebhook(req, res);
     } else if (req.url?.startsWith("/unsubscribe")) {
       handleUnsubscribe(req, res);
+    } else if (req.url?.startsWith("/widget/")) {
+      handleWidgetPopups(req, res);
     } else if (req.url?.startsWith("/v1/agent/")) {
       handleAgentStream(req, res);
     } else if (req.url?.startsWith("/v1/")) {
