@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Shield, Zap, Eye, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";

@@ -506,4 +506,92 @@ export const automationsRouter = router({
         orderBy: { createdAt: "desc" },
       });
     }),
+
+  /** Get journey statistics for an automation */
+  journeyStats: workspaceProcedure
+    .input(z.object({ automationId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const journeys = await ctx.prisma.customerJourney.findMany({
+        where: { automationId: input.automationId },
+        select: {
+          id: true,
+          status: true,
+          channelPath: true,
+          stepHistory: true,
+          suppressReason: true,
+          currentStep: true,
+          totalSteps: true,
+        },
+      });
+
+      const stats = {
+        total: journeys.length,
+        active: 0,
+        completed: 0,
+        suppressed: 0,
+        paused: 0,
+        channelUsage: {} as Record<string, number>,
+        suppressReasons: {} as Record<string, number>,
+        avgStepsCompleted: 0,
+      };
+
+      let totalSteps = 0;
+      for (const j of journeys) {
+        switch (j.status) {
+          case "active": stats.active++; break;
+          case "completed": stats.completed++; break;
+          case "suppressed": stats.suppressed++; break;
+          case "paused": stats.paused++; break;
+        }
+        const channels = (j.channelPath ?? []) as string[];
+        for (const ch of channels) {
+          stats.channelUsage[ch] = (stats.channelUsage[ch] ?? 0) + 1;
+        }
+        if (j.suppressReason) {
+          stats.suppressReasons[j.suppressReason] = (stats.suppressReasons[j.suppressReason] ?? 0) + 1;
+        }
+        totalSteps += j.currentStep;
+      }
+      stats.avgStepsCompleted = journeys.length > 0 ? Math.round(totalSteps / journeys.length) : 0;
+
+      return stats;
+    }),
+
+  /** List customer journeys for an automation */
+  listJourneys: workspaceProcedure
+    .input(z.object({
+      automationId: z.string(),
+      status: z.string().optional(),
+      limit: z.number().default(20),
+      offset: z.number().default(0),
+    }))
+    .query(async ({ ctx, input }) => {
+      const where: Record<string, unknown> = { automationId: input.automationId };
+      if (input.status) where["status"] = input.status;
+
+      const [journeys, total] = await Promise.all([
+        ctx.prisma.customerJourney.findMany({
+          where,
+          include: {
+            customer: { select: { firstName: true, lastName: true, email: true } },
+          },
+          orderBy: { startedAt: "desc" },
+          take: input.limit,
+          skip: input.offset,
+        }),
+        ctx.prisma.customerJourney.count({ where }),
+      ]);
+
+      return { journeys, total };
+    }),
+
+  /** List A/B tests for an automation */
+  listABTests: workspaceProcedure
+    .input(z.object({ automationId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.aBTest.findMany({
+        where: { automationId: input.automationId },
+        orderBy: { startedAt: "desc" },
+      });
+    }),
 });

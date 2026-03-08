@@ -956,6 +956,167 @@ function SetupChecklist({
 }
 
 // ---------------------------------------------------------------------------
+// Mission Control Section
+// ---------------------------------------------------------------------------
+
+function MissionControlSection({ storeId }: { storeId: string }) {
+  const { data: missionControl, isLoading } = (trpc as any).briefings.missionControl.useQuery(
+    { storeId },
+    { enabled: !!storeId, refetchInterval: 60000 },
+  ) as { data: any | undefined; isLoading: boolean };
+
+  const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
+    { storeId },
+    { enabled: !!storeId },
+  ) as { data: any | undefined };
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="glass-skeleton h-32 rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!missionControl) return null;
+
+  const mc = missionControl;
+  const briefingContent = latestBriefing?.content as any;
+
+  return (
+    <div className="space-y-4">
+      {/* Briefing narrative */}
+      {briefingContent && (
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Brain className="w-4 h-4 text-[#6B7A2F]" />
+            <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+              {briefingContent.title || "Morning Briefing"}
+            </span>
+          </div>
+          <p className="text-sm text-[#5C5549]">{briefingContent.summary || "No briefing available yet."}</p>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Since you were last here */}
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">
+            Since you were last here
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#5C5549]">Revenue</span>
+              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">
+                {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(mc.sinceLastVisit?.revenue ?? 0)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#5C5549]">Orders</span>
+              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.sinceLastVisit?.orders ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#5C5549]">New customers</span>
+              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.sinceLastVisit?.newCustomers ?? 0}</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Needs your attention */}
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">
+            Needs your attention
+          </h3>
+          <div className="space-y-2">
+            <Link href="/actions" className="flex items-center justify-between group">
+              <span className="text-sm text-[#5C5549] group-hover:text-[#2C2C2C] transition-colors">
+                Pending actions
+              </span>
+              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">
+                {mc.needsAttention?.pendingActions ?? 0}
+              </span>
+            </Link>
+            {(mc.needsAttention?.urgentActions ?? 0) > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Urgent
+                </span>
+                <span className="text-sm font-semibold text-red-600 font-mono">
+                  {mc.needsAttention.urgentActions}
+                </span>
+              </div>
+            )}
+            {(mc.needsAttention?.inventoryAlerts ?? 0) > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-amber-600">Low stock alerts</span>
+                <span className="text-sm font-semibold text-amber-600 font-mono">
+                  {mc.needsAttention.inventoryAlerts}
+                </span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* What Allo did */}
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">
+            What Allo did
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#5C5549]">Campaigns sent</span>
+              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.alloActivity?.campaignsSent ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#5C5549]">Emails delivered</span>
+              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.alloActivity?.emailsSent ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#5C5549]">AI-attributed revenue</span>
+              <span className="text-sm font-semibold text-[#6B7A2F] font-mono">
+                {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(mc.alloActivity?.revenue ?? 0)}
+              </span>
+            </div>
+            {(mc.alloActivity?.suppressedCount ?? 0) > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#8B8074]">Suppressed (governor)</span>
+                <span className="text-sm text-[#8B8074] font-mono">{mc.alloActivity.suppressedCount}</span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Today's opportunities */}
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">
+            Opportunities
+          </h3>
+          {(mc.opportunities?.length ?? 0) === 0 ? (
+            <p className="text-sm text-[#8B8074]">No new opportunities detected</p>
+          ) : (
+            <div className="space-y-2">
+              {(mc.opportunities as any[]).slice(0, 3).map((opp: any, i: number) => (
+                <div key={i} className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-[#5C5549] line-clamp-1">{opp.description}</span>
+                    <span className="text-xs text-[#8B8074]">{opp.customerCount} customers</span>
+                  </div>
+                  <span className="text-xs font-semibold text-[#6B7A2F] font-mono shrink-0 ml-2">
+                    {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(opp.estimatedRevenue ?? 0)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Page
 // ---------------------------------------------------------------------------
 
@@ -1121,15 +1282,17 @@ export default function DashboardPage() {
     },
   });
 
+  const storeLastSyncAt = store?.lastSyncAt ?? null;
   useEffect(() => {
-    if (!isSyncing || !store) return;
-    if (store.lastSyncAt && store.lastSyncAt !== preSyncLastSyncAt) {
+    if (!isSyncing) return;
+    if (storeLastSyncAt && storeLastSyncAt !== preSyncLastSyncAt) {
       setIsSyncing(false);
       setSyncDone(true);
       utils.stores.list.invalidate();
       utils.dashboard.stats.invalidate();
     }
-  }, [isSyncing, store, preSyncLastSyncAt, utils]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSyncing, storeLastSyncAt, preSyncLastSyncAt]);
 
   const handleSyncClick = useCallback(() => {
     if (!storeId || triggerSync.isPending || isSyncing) return;
@@ -1400,6 +1563,9 @@ export default function DashboardPage() {
               )}
             </div>
           </motion.div>
+
+          {/* Mission Control */}
+          <MissionControlSection storeId={storeId} />
 
           {/* Smart nav grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

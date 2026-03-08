@@ -119,6 +119,20 @@ model Store {
   guardrails         Guardrail[]
   customerFatigueLogs CustomerFatigueLog[]
 
+  // Sprint 3A: Creative Engine
+  brandVisualProfile   BrandVisualProfile?
+  creativeAssets       CreativeAsset[]
+  productRepurchaseCycles ProductRepurchaseCycle[]
+  processedProductImages  ProcessedProductImage[]
+
+  // Sprint 4: Merchant Copilot
+  merchantBriefings    MerchantBriefing[]
+  storeBaseline        StoreBaseline?
+
+  // Sprint 5: Journey Orchestrator
+  customerJourneys     CustomerJourney[]
+  abTests              ABTest[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -146,6 +160,10 @@ model Product {
   store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   variants           ProductVariant[]
   collectionProducts CollectionProduct[]
+
+  // Sprint 3A: Creative Engine
+  repurchaseCycle     ProductRepurchaseCycle?
+  processedImages     ProcessedProductImage[]
 
   @@unique([storeId, externalId])
   @@map("products")
@@ -224,6 +242,7 @@ model Customer {
   abandonedCheckouts AbandonedCheckout[]
   segmentHistory     CustomerSegmentHistory[]
   customerState      CustomerState?
+  customerJourneys   CustomerJourney[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -1066,4 +1085,178 @@ model CustomerFatigueLog {
   @@index([customerId, storeId, channel, sentAt])
   @@index([storeId, sentAt])
   @@map("customer_fatigue_logs")
+}
+
+// ============================================================================
+// SPRINT 3A: CREATIVE ENGINE
+// ============================================================================
+
+model BrandVisualProfile {
+  id                      String   @id @default(cuid())
+  storeId                 String   @unique
+  primaryColors           Json     // ["#hex1", "#hex2"]
+  accentColors            Json     // ["#hex1", "#hex2"]
+  fontFamily              String?  // primary heading font
+  bodyFontFamily          String?  // body text font
+  logoUrl                 String?
+  logoVariants            Json?    // { light: url, dark: url, icon: url }
+  photographyStyle        String?  // product, lifestyle, flat-lay, etc.
+  visualTone              String?  // minimal, bold, warm, etc.
+  layoutPreference        String?  // clean, dense, editorial, etc.
+  bannedElements          Json?    // ["element1", "element2"]
+  brandDesignTokens       Json?    // full token set (colors, typography, spacing, CTA, image, brand)
+  aestheticClassification String?  // clean_minimal, bold_graphic, luxury_editorial, warm_organic, playful_colorful, tech_modern, heritage_artisanal, premium_dtc
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("brand_visual_profiles")
+}
+
+model CreativeAsset {
+  id               String   @id @default(cuid())
+  storeId          String
+  type             String   // hero_banner, product_card, promo_badge, background, lifestyle, seasonal_header
+  generationMethod String   // template, ai_generated, product_composite, overlay
+  sourcePrompt     String?  // AI generation prompt if applicable
+  templateId       String?  // MJML archetype ID if template-based
+  imageUrl         String
+  thumbnailUrl     String?
+  width            Int?
+  height           Int?
+  fileSizeBytes    Int?
+  format           String?  // png, jpg, webp
+  channel          String?  // email, sms, whatsapp, rcs
+  campaignId       String?
+  metadata         Json?    // additional context (brand tokens used, overlay config, etc.)
+  createdAt        DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, type])
+  @@index([storeId, campaignId])
+  @@map("creative_assets")
+}
+
+model ProductRepurchaseCycle {
+  id             String   @id @default(cuid())
+  productId      String   @unique
+  storeId        String
+  medianDays     Float    // median days between repurchases
+  avgDays        Float    // average days between repurchases
+  sampleSize     Int      // number of repeat purchases analysed
+  confidence     Float    // 0-1 confidence score based on sample size
+  lastCalculated DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("product_repurchase_cycles")
+}
+
+model ProcessedProductImage {
+  id              String   @id @default(cuid())
+  productId       String
+  storeId         String
+  originalUrl     String   // original Shopify image URL
+  transparentUrl  String?  // background-removed version
+  brandBgUrl      String?  // with brand-colored background
+  sizes           Json?    // { hero: url, card: url, grid: url, thumb: url, whatsapp: url }
+  overlayVariants Json?    // { discount: url, new_tag: url, price: url }
+  processedAt     DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId])
+  @@index([storeId])
+  @@map("processed_product_images")
+}
+
+// ============================================================================
+// SPRINT 4: MERCHANT COPILOT
+// ============================================================================
+
+model MerchantBriefing {
+  id           String   @id @default(cuid())
+  storeId      String
+  type         String   // daily, weekly, alert
+  content      Json     // structured briefing content
+  deliveredVia String?  // email, whatsapp, in_app
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, type])
+  @@index([storeId, createdAt])
+  @@map("merchant_briefings")
+}
+
+model StoreBaseline {
+  id         String   @id @default(cuid())
+  storeId    String   @unique
+  capturedAt DateTime @default(now())
+  metrics    Json     // snapshot of all KPIs at onboarding
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("store_baselines")
+}
+
+// ============================================================================
+// SPRINT 5: ADAPTIVE JOURNEY ORCHESTRATOR
+// ============================================================================
+
+model CustomerJourney {
+  id              String    @id @default(cuid())
+  customerId      String
+  storeId         String
+  automationId    String?   // link to parent automation/journey definition
+  journeyType     String    // welcome, winback, repurchase, post_purchase, cross_sell, re_engagement
+  currentStep     Int       @default(0)
+  totalSteps      Int       @default(0)
+  status          String    @default("active") // active, completed, suppressed, paused, expired
+  channelPath     Json      @default("[]") // ["email", "whatsapp", "sms"] — channels used so far
+  stepHistory     Json      @default("[]") // [{ step, channel, sentAt, opened, clicked, converted }]
+  suppressedAt    DateTime?
+  suppressReason  String?   // fatigue, silence, governor, manual
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, storeId])
+  @@index([storeId, status])
+  @@index([storeId, journeyType])
+  @@index([automationId])
+  @@map("customer_journeys")
+}
+
+model ABTest {
+  id           String   @id @default(cuid())
+  storeId      String
+  automationId String?  // optional link to automation/journey
+  name         String
+  variable     String   // subject_line, send_time, content, channel, template
+  variantA     Json     // { value: "...", description: "..." }
+  variantB     Json     // { value: "...", description: "..." }
+  splitRatio   Float    @default(0.5) // 0-1, portion going to variant A
+  results      Json     @default("{}") // { a: { sent, opened, clicked, converted, revenue }, b: { ... } }
+  winner       String?  // "a" | "b" | null
+  confidence   Float?   // statistical confidence 0-1
+  status       String   @default("running") // running, concluded, cancelled
+  minSampleSize Int     @default(100) // minimum sends before evaluating
+  startedAt    DateTime @default(now())
+  concludedAt  DateTime?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, status])
+  @@index([automationId])
+  @@map("ab_tests")
 }

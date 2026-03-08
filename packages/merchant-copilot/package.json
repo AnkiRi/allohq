@@ -1,0 +1,15 @@
+{
+  "name": "@allohq/merchant-copilot",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@allohq/database": "workspace:*",
+    "@allohq/messaging": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,4 +1,4 @@
-import type { EmailBlock, RenderOptions, ProductData, HeaderBlock, FooterBlock } from "../types";
+import type { EmailBlock, RenderOptions, ProductData, HeaderBlock, FooterBlock, ArchetypeRenderOptions } from "../types";
 
 /** Interpolate merge tags like {{first_name}} in a string */
 function interpolate(text: string, variables: Record<string, string>): string {
@@ -414,4 +414,21 @@ ${blockHtml}
   </center>
 </body>
 </html>`;
+}
+
+/**
+ * Render an email from an MJML archetype template.
+ * Used for AI-generated campaigns that go through the creative-engine pipeline.
+ *
+ * This is a pass-through interface: the actual MJML rendering is done by
+ * @allohq/creative-engine. Consumers should import renderMjmlTemplate
+ * directly from creative-engine for full functionality.
+ *
+ * This export exists so email-builder exposes the type and concept,
+ * keeping it as the single "email rendering" API surface.
+ */
+export function renderFromArchetype(_options: ArchetypeRenderOptions): string | null {
+  // Consumers should use @allohq/creative-engine.renderMjmlTemplate() directly.
+  // This stub exists to maintain the API surface in email-builder.
+  return null;
 }

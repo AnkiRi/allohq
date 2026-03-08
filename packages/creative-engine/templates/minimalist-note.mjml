@@ -1,0 +1,47 @@
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="{{token.bodyFont}}" />
+      <mj-text font-size="{{token.bodySize}}" color="{{token.textPrimary}}" line-height="{{token.lineHeight}}" />
+      <mj-button background-color="{{token.ctaBackground}}" color="{{token.ctaTextColor}}" border-radius="{{token.ctaBorderRadius}}" font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" padding="{{token.ctaPadding}}" />
+    </mj-attributes>
+    <mj-preview>{{slot.preheaderText}}</mj-preview>
+  </mj-head>
+  <mj-body background-color="{{token.primaryBackground}}" width="600px">
+    <!-- Minimal header — just logo, no background -->
+    <mj-section padding="30px {{token.contentPadding}} 10px">
+      <mj-column>
+        <mj-image src="{{token.logoUrl}}" width="100px" alt="Logo" align="left" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Text-forward content (looks like personal email) -->
+    <mj-section padding="20px {{token.contentPadding}} 0">
+      <mj-column>
+        <mj-text font-family="{{token.headingFont}}" font-size="{{token.h2Size}}" font-weight="{{token.headingWeight}}" color="{{token.textPrimary}}" padding-bottom="16px">
+          {{slot.headline}}
+        </mj-text>
+        <mj-text font-size="{{token.bodySize}}" color="{{token.textSecondary}}" line-height="1.7">
+          {{slot.bodyText}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="24px {{token.contentPadding}} {{token.sectionPadding}}">
+      <mj-column>
+        <mj-button href="{{slot.ctaUrl}}" align="left">
+          {{slot.ctaText}}
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="0 {{token.contentPadding}} 20px">
+      <mj-column>
+        <mj-divider border-color="{{token.secondaryBackground}}" border-width="1px" />
+        <mj-text font-size="{{token.captionSize}}" color="{{token.textMuted}}" padding-top="16px">
+          <a href="{{slot.unsubscribeUrl}}" style="color: {{token.textMuted}}; text-decoration: underline;">Unsubscribe</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

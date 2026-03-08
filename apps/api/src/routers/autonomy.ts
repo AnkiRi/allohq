@@ -47,7 +47,7 @@ export const autonomyRouter = router({
       return { success: true };
     }),
 
-  /** List actions in the queue */
+  /** List actions in the queue with enriched payload data */
   listActions: workspaceProcedure
     .input(
       z.object({
@@ -61,12 +61,40 @@ export const autonomyRouter = router({
     .query(async ({ input }) => {
       // Expire stale actions first
       await expireStaleActions(input.storeId);
-      return listPendingActions(input.storeId, {
+      const result = await listPendingActions(input.storeId, {
         status: input.status,
         category: input.category,
         limit: input.limit,
         offset: input.offset,
       });
+
+      // Enrich each action by unpacking the payload JSON
+      const enrichedActions = result.actions.map((action) => {
+        const payload = (action.payload ?? {}) as Record<string, unknown>;
+        return {
+          id: action.id,
+          type: action.type,
+          category: action.category,
+          status: action.status,
+          urgencyScore: action.urgencyScore,
+          confidenceScore: action.confidenceScore,
+          reasoning: action.reasoning,
+          estimatedRevenue: action.estimatedRevenue,
+          expiresAt: action.expiresAt,
+          createdAt: action.createdAt,
+          // Enriched fields unpacked from payload
+          htmlPreview: (payload.htmlPreview as string) ?? null,
+          thumbnails: (payload.thumbnails as string[]) ?? [],
+          archetype: (payload.archetype as string) ?? null,
+          targetSegment: (payload.targetSegment as { name: string; count: number }) ?? null,
+          campaignName: (payload.campaignName as string) ?? null,
+          subjectLine: (payload.subjectLine as string) ?? null,
+          channel: (payload.channel as string) ?? null,
+          products: (payload.products as Array<{ name: string; imageUrl: string; price: number }>) ?? [],
+        };
+      });
+
+      return { actions: enrichedActions, total: result.total };
     }),
 
   /** Get a single action by ID */

@@ -1,12 +1,12 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ArrowLeft, FileText, Sparkles, Play, Zap, Clock, Mail, Timer, GitBranch, ArrowDown, Phone, MessageSquare, Radio, Pause } from "lucide-react";
+import { ArrowLeft, FileText, Sparkles, Play, Zap, Clock, Mail, Timer, GitBranch, ArrowDown, Phone, MessageSquare, Radio, Pause, Route, FlaskConical, Users, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 
-type WorkflowNodeType = "send_email" | "send_sms" | "send_whatsapp" | "send_rcs" | "wait" | "condition" | "webhook";
+type WorkflowNodeType = "send_email" | "send_sms" | "send_whatsapp" | "send_rcs" | "wait" | "condition" | "webhook" | "channel_select" | "ab_test" | "silence_check";
 
 interface WorkflowNodeData {
   id: string;
@@ -27,6 +27,9 @@ function getNodeLabel(node: WorkflowNodeData): string {
     }
     case "condition": return (node.config.condition as string)?.replace(/_/g, " ") || "Condition";
     case "webhook": return "Webhook";
+    case "channel_select": return "Adaptive Channel";
+    case "ab_test": return (node.config.testName as string) || "A/B Test";
+    case "silence_check": return `Silence Check (${(node.config.threshold as number) ?? 3} touches)`;
     default: return node.type;
   }
 }
@@ -40,6 +43,9 @@ function getNodeStyle(type: WorkflowNodeType): string {
     case "wait": return "bg-amber-50 border-amber-200 text-amber-700";
     case "condition": return "bg-emerald-50 border-emerald-200 text-emerald-700";
     case "webhook": return "bg-orange-50 border-orange-200 text-orange-700";
+    case "channel_select": return "bg-cyan-50 border-cyan-200 text-cyan-700";
+    case "ab_test": return "bg-pink-50 border-pink-200 text-pink-700";
+    case "silence_check": return "bg-rose-50 border-rose-200 text-rose-700";
     default: return "bg-muted border-border text-foreground";
   }
 }
@@ -52,6 +58,9 @@ function getNodeIcon(type: WorkflowNodeType) {
     case "send_rcs": return Radio;
     case "wait": return Timer;
     case "condition": return GitBranch;
+    case "channel_select": return Route;
+    case "ab_test": return FlaskConical;
+    case "silence_check": return VolumeX;
     default: return Zap;
   }
 }
@@ -89,6 +98,22 @@ export default function AutomationDetailPage() {
     onSuccess: () => { (utils.automations.getById as any).invalidate({ id: automationId }); toast("Automation resumed!", "success"); },
     onError: (err: { message?: string }) => toast(err.message || "Failed to resume", "error"),
   }) as { mutate: (input: { id: string }) => void; isPending: boolean };
+
+  // Journey stats & A/B tests
+  const { data: journeyStats } = (trpc as any).automations.journeyStats?.useQuery?.(
+    { automationId },
+    { enabled: !!automationId },
+  ) as { data: { total: number; active: number; completed: number; suppressed: number; paused: number; channelUsage: Record<string, number>; suppressReasons: Record<string, number>; avgStepsCompleted: number } | undefined };
+
+  const { data: journeysData } = (trpc as any).automations.listJourneys?.useQuery?.(
+    { automationId, limit: 10 },
+    { enabled: !!automationId },
+  ) as { data: { journeys: Array<{ id: string; status: string; currentStep: number; totalSteps: number; channelPath: string[]; startedAt: string; customer: { firstName: string | null; lastName: string | null; email: string } }>; total: number } | undefined };
+
+  const { data: abTests } = (trpc as any).automations.listABTests?.useQuery?.(
+    { automationId },
+    { enabled: !!automationId },
+  ) as { data: Array<{ id: string; name: string; variable: string; status: string; winner: string | null; confidence: number | null; results: Record<string, { sent: number; opened: number; clicked: number; converted: number; revenue: number }> }> | undefined };
 
   if (isLoading) {
     return <div className="text-[13px] text-muted-foreground font-mono">Loading...</div>;
@@ -372,6 +397,174 @@ export default function AutomationDetailPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Journey Monitoring */}
+      {journeyStats && journeyStats.total > 0 && (
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+            <Route className="w-4 h-4 text-muted-foreground" />
+            <h2 className="text-[13px] font-bold text-foreground font-mono">JOURNEY_MONITORING</h2>
+            <span className="ml-auto text-[10px] font-mono text-muted-foreground">{journeyStats.total} journeys</span>
+          </div>
+
+          {/* Journey stats grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
+            {[
+              { label: "Active", value: journeyStats.active, color: "text-blue-600" },
+              { label: "Completed", value: journeyStats.completed, color: "text-green-600" },
+              { label: "Suppressed", value: journeyStats.suppressed, color: "text-amber-600" },
+              { label: "Paused", value: journeyStats.paused, color: "text-gray-500" },
+              { label: "Avg Steps", value: journeyStats.avgStepsCompleted, color: "text-foreground" },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-card p-4 text-center">
+                <div className={`text-[18px] font-bold font-mono ${stat.color}`}>{stat.value}</div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase mt-1">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Channel usage */}
+          {Object.keys(journeyStats.channelUsage).length > 0 && (
+            <div className="px-6 py-3 border-t border-border">
+              <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Channel Usage</div>
+              <div className="flex gap-2">
+                {Object.entries(journeyStats.channelUsage).map(([ch, count]) => (
+                  <span key={ch} className="px-2 py-1 bg-muted rounded text-[11px] font-mono">
+                    {ch}: {count}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suppress reasons */}
+          {Object.keys(journeyStats.suppressReasons).length > 0 && (
+            <div className="px-6 py-3 border-t border-border">
+              <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Suppression Reasons</div>
+              <div className="flex gap-2">
+                {Object.entries(journeyStats.suppressReasons).map(([reason, count]) => (
+                  <span key={reason} className="px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[11px] font-mono text-amber-700">
+                    {reason}: {count}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent journeys */}
+          {journeysData && journeysData.journeys.length > 0 && (
+            <div className="border-t border-border">
+              <div className="px-6 py-3">
+                <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Recent Journeys</div>
+              </div>
+              <div className="divide-y divide-border">
+                {journeysData.journeys.map((journey) => (
+                  <div key={journey.id} className="px-6 py-3 flex items-center gap-4">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[12px] font-mono text-foreground">
+                        {journey.customer.firstName ?? ""} {journey.customer.lastName ?? journey.customer.email}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          Step {journey.currentStep}/{journey.totalSteps}
+                        </span>
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {(journey.channelPath as string[]).join(" → ")}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                      journey.status === "active" ? "bg-blue-50 text-blue-700" :
+                      journey.status === "completed" ? "bg-green-50 text-green-700" :
+                      journey.status === "suppressed" ? "bg-amber-50 text-amber-700" :
+                      "bg-gray-50 text-gray-600"
+                    }`}>
+                      {journey.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {journeysData.total > 10 && (
+                <div className="px-6 py-2 text-center text-[10px] font-mono text-muted-foreground border-t border-border">
+                  +{journeysData.total - 10} more journeys
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* A/B Tests */}
+      {abTests && abTests.length > 0 && (
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+            <FlaskConical className="w-4 h-4 text-muted-foreground" />
+            <h2 className="text-[13px] font-bold text-foreground font-mono">AB_TESTS</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {abTests.map((test) => {
+              const a = test.results?.["a"];
+              const b = test.results?.["b"];
+              return (
+                <div key={test.id} className="px-6 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-[13px] font-bold font-mono text-foreground">{test.name}</h3>
+                      <span className="text-[10px] font-mono text-muted-foreground uppercase">{test.variable.replace(/_/g, " ")}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                        test.status === "running" ? "bg-blue-50 text-blue-700" :
+                        test.status === "concluded" ? "bg-green-50 text-green-700" :
+                        "bg-gray-50 text-gray-600"
+                      }`}>
+                        {test.status}
+                      </span>
+                      {test.winner && (
+                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-[10px] font-mono font-bold">
+                          Winner: {test.winner.toUpperCase()}
+                        </span>
+                      )}
+                      {test.confidence != null && (
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {(test.confidence * 100).toFixed(1)}% confidence
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {(a || b) && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {["a", "b"].map((variant) => {
+                        const r = test.results?.[variant];
+                        if (!r) return null;
+                        return (
+                          <div key={variant} className={`p-3 rounded-lg border ${
+                            test.winner === variant ? "border-green-300 bg-green-50" : "border-border bg-muted/50"
+                          }`}>
+                            <div className="text-[11px] font-mono font-bold mb-2">Variant {variant.toUpperCase()}</div>
+                            <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-muted-foreground">
+                              <span>Sent: {r.sent}</span>
+                              <span>Opened: {r.opened}</span>
+                              <span>Clicked: {r.clicked}</span>
+                              <span>Converted: {r.converted}</span>
+                            </div>
+                            {r.revenue > 0 && (
+                              <div className="text-[11px] font-mono text-green-700 mt-1">
+                                Revenue: ${r.revenue.toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

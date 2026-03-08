@@ -18,6 +18,7 @@
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
     "@allohq/email-builder": "workspace:*",
+    "@allohq/merchant-copilot": "workspace:*",
     "@allohq/messaging": "workspace:*",
     "@prisma/client": "^6.3.0",
     "@clerk/backend": "^1.18.6",

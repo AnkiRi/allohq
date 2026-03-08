@@ -1,0 +1,57 @@
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="{{token.bodyFont}}" />
+      <mj-text font-size="{{token.bodySize}}" color="{{token.textPrimary}}" line-height="{{token.lineHeight}}" />
+      <mj-button background-color="{{token.ctaBackground}}" color="{{token.ctaTextColor}}" border-radius="{{token.ctaBorderRadius}}" font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" padding="{{token.ctaPadding}}" />
+    </mj-attributes>
+    <mj-preview>{{slot.preheaderText}}</mj-preview>
+  </mj-head>
+  <mj-body background-color="{{token.primaryBackground}}" width="600px">
+    <mj-section padding="{{token.sectionPadding}} {{token.contentPadding}} 10px">
+      <mj-column>
+        <mj-image src="{{token.logoUrl}}" width="{{token.logoWidth}}" alt="Logo" align="center" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Bold Announcement -->
+    <mj-section background-color="{{token.accentColor}}" padding="{{token.sectionPadding}} {{token.contentPadding}}">
+      <mj-column>
+        <mj-text font-family="{{token.headingFont}}" font-size="{{token.h1Size}}" font-weight="{{token.headingWeight}}" color="{{token.ctaTextColor}}" align="center">
+          {{slot.headline}}
+        </mj-text>
+        <mj-text font-size="{{token.h2Size}}" color="{{token.ctaTextColor}}" align="center" padding-top="8px" css-class="discount-highlight">
+          {{slot.subheadline}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Product + Discount -->
+    <mj-section padding="{{token.sectionPadding}} {{token.contentPadding}}">
+      {{slot.productsHtml}}
+    </mj-section>
+
+    <!-- Discount Code -->
+    <mj-section padding="0 {{token.contentPadding}} {{token.sectionPadding}}">
+      <mj-column>
+        <mj-text font-size="{{token.bodySize}}" color="{{token.textSecondary}}" align="center" padding-bottom="8px">
+          {{slot.bodyText}}
+        </mj-text>
+        <mj-text font-family="{{token.headingFont}}" font-size="{{token.h2Size}}" font-weight="700" color="{{token.accentColor}}" align="center" padding="16px" css-class="discount-code" border="2px dashed {{token.accentColor}}" border-radius="{{token.ctaBorderRadius}}">
+          {{slot.discountCode}}
+        </mj-text>
+        <mj-button href="{{slot.ctaUrl}}" align="center" padding-top="24px">
+          {{slot.ctaText}}
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="{{token.secondaryBackground}}" padding="{{token.contentPadding}}">
+      <mj-column>
+        <mj-text font-size="{{token.captionSize}}" color="{{token.textMuted}}" align="center">
+          <a href="{{slot.unsubscribeUrl}}" style="color: {{token.textMuted}}; text-decoration: underline;">Unsubscribe</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

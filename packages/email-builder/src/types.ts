@@ -245,6 +245,13 @@ export interface RenderOptions {
   tracking?: TrackingParams;
 }
 
+/** Options for rendering via MJML archetype system (AI-generated campaigns) */
+export interface ArchetypeRenderOptions {
+  archetypeId: string;
+  brandTokens: Record<string, string>;
+  contentSlots: Record<string, unknown>;
+}
+
 /** Default props factory for each block type */
 export function createDefaultBlock(type: EmailBlockType, id: string): EmailBlock {
   switch (type) {

@@ -1,9 +1,13 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections, registerWebhooks } = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { rfmQueue } from "../queues";
+
+const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
+const brandKitQueue = new Queue(QUEUE_NAMES.BRAND_KIT, { connection: redisConnection });
+const baselineQueue = new Queue(QUEUE_NAMES.BASELINE, { connection: redisConnection });
 
 interface SyncJobData {
   storeId: string;
@@ -103,6 +107,24 @@ export const syncWorker = new Worker<SyncJobData>(
     // 6. Trigger RFM + LTV calculation (background data enrichment)
     await rfmQueue.add("rfm-after-sync", { storeId });
     console.log(`RFM calculation enqueued for store ${storeId}`);
+
+    // 7. Queue product image processing for all synced products
+    const allProducts = await prisma.product.findMany({
+      where: { storeId },
+      select: { id: true },
+    });
+    for (const p of allProducts) {
+      await productImageQueue.add("product-image", { storeId, productId: p.id });
+    }
+    console.log(`Product image processing enqueued for ${allProducts.length} products`);
+
+    // 8. Queue brand kit extraction
+    await brandKitQueue.add("brand-kit", { storeId });
+    console.log(`Brand kit extraction enqueued for store ${storeId}`);
+
+    // 9. Queue baseline capture
+    await baselineQueue.add("baseline", { storeId });
+    console.log(`Baseline capture enqueued for store ${storeId}`);
 
     await job.updateProgress(100);
     console.log(`Full sync completed for store ${storeId}`);

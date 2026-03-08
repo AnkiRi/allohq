@@ -1,1 +1,1 @@
-export { renderToHtml } from "./render-to-html";
+export { renderToHtml, renderFromArchetype } from "./render-to-html";

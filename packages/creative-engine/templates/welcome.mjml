@@ -1,0 +1,54 @@
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="{{token.bodyFont}}" />
+      <mj-text font-size="{{token.bodySize}}" color="{{token.textPrimary}}" line-height="{{token.lineHeight}}" />
+      <mj-button background-color="{{token.ctaBackground}}" color="{{token.ctaTextColor}}" border-radius="{{token.ctaBorderRadius}}" font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" padding="{{token.ctaPadding}}" />
+    </mj-attributes>
+    <mj-preview>{{slot.preheaderText}}</mj-preview>
+  </mj-head>
+  <mj-body background-color="{{token.primaryBackground}}" width="600px">
+    <mj-section padding="{{token.sectionPadding}} {{token.contentPadding}} 10px">
+      <mj-column>
+        <mj-image src="{{token.logoUrl}}" width="{{token.logoWidth}}" alt="Logo" align="center" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Welcome Hero -->
+    <mj-section padding="10px {{token.contentPadding}}">
+      <mj-column>
+        <mj-image src="{{slot.heroImageUrl}}" alt="" width="560px" border-radius="{{token.imageCornerRadius}}" />
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="{{token.contentPadding}}">
+      <mj-column>
+        <mj-text font-family="{{token.headingFont}}" font-size="{{token.h1Size}}" font-weight="{{token.headingWeight}}" color="{{token.textPrimary}}" align="center">
+          {{slot.headline}}
+        </mj-text>
+        <mj-text font-size="{{token.bodySize}}" color="{{token.textSecondary}}" align="center" padding-top="12px" padding-bottom="20px">
+          {{slot.bodyText}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- What to expect (steps) -->
+    {{slot.stepsHtml}}
+
+    <mj-section padding="{{token.sectionPadding}} {{token.contentPadding}}">
+      <mj-column>
+        <mj-button href="{{slot.ctaUrl}}" align="center">
+          {{slot.ctaText}}
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="{{token.secondaryBackground}}" padding="{{token.contentPadding}}">
+      <mj-column>
+        <mj-text font-size="{{token.captionSize}}" color="{{token.textMuted}}" align="center">
+          <a href="{{slot.unsubscribeUrl}}" style="color: {{token.textMuted}}; text-decoration: underline;">Unsubscribe</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

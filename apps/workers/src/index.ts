@@ -59,6 +59,18 @@ import { abandonedCartWorker } from "./workers/abandoned-cart.worker";
 import { segmentChangeWorker } from "./workers/segment-change.worker";
 import { customerStateUpdaterWorker } from "./workers/customer-state-updater.worker";
 import { guardrailValidatorWorker } from "./workers/guardrail-validator.worker";
+import { brandKitExtractorWorker } from "./workers/brand-kit-extractor.worker";
+import { productImageProcessorWorker } from "./workers/product-image-processor.worker";
+import { creativeGeneratorWorker } from "./workers/creative-generator.worker";
+import { opportunityScannerWorker } from "./workers/opportunity-scanner.worker";
+import { campaignFactoryWorker } from "./workers/campaign-factory.worker";
+import { productCycleAnalyzerWorker } from "./workers/product-cycle-analyzer.worker";
+import { briefingGeneratorWorker } from "./workers/briefing-generator.worker";
+import { baselineCaptureWorker } from "./workers/baseline-capture.worker";
+import { weeklyReportWorker } from "./workers/weekly-report.worker";
+import { journeyStepperWorker } from "./workers/journey-stepper.worker";
+import { abTestEvaluatorWorker } from "./workers/ab-test-evaluator.worker";
+import { sendTimeOptimizerWorker } from "./workers/send-time-optimizer.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -77,6 +89,18 @@ console.log(`  - abandoned-cart worker: ${abandonedCartWorker.name}`);
 console.log(`  - segment-change worker: ${segmentChangeWorker.name}`);
 console.log(`  - customer-state-updater worker: ${customerStateUpdaterWorker.name}`);
 console.log(`  - guardrail-validator worker: ${guardrailValidatorWorker.name}`);
+console.log(`  - brand-kit-extractor worker: ${brandKitExtractorWorker.name}`);
+console.log(`  - product-image-processor worker: ${productImageProcessorWorker.name}`);
+console.log(`  - creative-generator worker: ${creativeGeneratorWorker.name}`);
+console.log(`  - opportunity-scanner worker: ${opportunityScannerWorker.name}`);
+console.log(`  - campaign-factory worker: ${campaignFactoryWorker.name}`);
+console.log(`  - product-cycle-analyzer worker: ${productCycleAnalyzerWorker.name}`);
+console.log(`  - briefing-generator worker: ${briefingGeneratorWorker.name}`);
+console.log(`  - baseline-capture worker: ${baselineCaptureWorker.name}`);
+console.log(`  - weekly-report worker: ${weeklyReportWorker.name}`);
+console.log(`  - journey-stepper worker: ${journeyStepperWorker.name}`);
+console.log(`  - ab-test-evaluator worker: ${abTestEvaluatorWorker.name}`);
+console.log(`  - send-time-optimizer worker: ${sendTimeOptimizerWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -108,6 +132,66 @@ abandonedCartQueue.upsertJobScheduler(
   console.error("Failed to set up abandoned cart check schedule:", err.message);
 });
 
+// Schedule opportunity scanning (every 2 hours)
+const opportunityScanQueue = new Queue(QUEUE_NAMES.OPPORTUNITY_SCAN, { connection: redisConnection });
+opportunityScanQueue.upsertJobScheduler(
+  "opportunity-scan-schedule",
+  { every: 2 * 60 * 60 * 1000 },
+  { name: "opportunity-scan", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up opportunity scan schedule:", err.message);
+});
+
+// Schedule product cycle analysis (daily)
+const productCyclesQueue = new Queue(QUEUE_NAMES.PRODUCT_CYCLES, { connection: redisConnection });
+productCyclesQueue.upsertJobScheduler(
+  "product-cycles-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "product-cycles", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up product cycles schedule:", err.message);
+});
+
+// Schedule daily briefings (every 24 hours)
+const briefingQueue = new Queue(QUEUE_NAMES.MERCHANT_BRIEFING, { connection: redisConnection });
+briefingQueue.upsertJobScheduler(
+  "daily-briefing-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "daily-briefing", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up daily briefing schedule:", err.message);
+});
+
+// Schedule weekly reports (every 7 days)
+const weeklyReportQueue = new Queue(QUEUE_NAMES.WEEKLY_REPORT, { connection: redisConnection });
+weeklyReportQueue.upsertJobScheduler(
+  "weekly-report-schedule",
+  { every: 7 * 24 * 60 * 60 * 1000 },
+  { name: "weekly-report", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up weekly report schedule:", err.message);
+});
+
+// Schedule A/B test evaluation (every 6 hours)
+const abTestQueue = new Queue(QUEUE_NAMES.AB_TEST, { connection: redisConnection });
+abTestQueue.upsertJobScheduler(
+  "ab-test-evaluation-schedule",
+  { every: 6 * 60 * 60 * 1000 },
+  { name: "ab-test-evaluation", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up A/B test evaluation schedule:", err.message);
+});
+
+// Schedule send time optimization (nightly)
+const sendTimeQueue = new Queue(QUEUE_NAMES.SEND_TIME, { connection: redisConnection });
+sendTimeQueue.upsertJobScheduler(
+  "send-time-optimization-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "send-time-optimization", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up send time optimization schedule:", err.message);
+});
+
 // Graceful shutdown
 const shutdown = async () => {
   console.log("Shutting down workers...");
@@ -128,6 +212,18 @@ const shutdown = async () => {
     segmentChangeWorker.close(),
     customerStateUpdaterWorker.close(),
     guardrailValidatorWorker.close(),
+    brandKitExtractorWorker.close(),
+    productImageProcessorWorker.close(),
+    creativeGeneratorWorker.close(),
+    opportunityScannerWorker.close(),
+    campaignFactoryWorker.close(),
+    productCycleAnalyzerWorker.close(),
+    briefingGeneratorWorker.close(),
+    baselineCaptureWorker.close(),
+    weeklyReportWorker.close(),
+    journeyStepperWorker.close(),
+    abTestEvaluatorWorker.close(),
+    sendTimeOptimizerWorker.close(),
   ]);
   process.exit(0);
 };

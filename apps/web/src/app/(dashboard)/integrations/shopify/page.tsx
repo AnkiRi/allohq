@@ -25,7 +25,7 @@ export default function ShopifyDetailPage() {
   const { data: stores } = trpc.stores.list.useQuery(undefined, {
     refetchInterval: isSyncing ? 3000 : false,
   });
-  const store = stores?.find((s) => s.platform === "shopify");
+  const store = stores?.find((s: { platform: string }) => s.platform === "shopify");
 
   const triggerSync = trpc.stores.triggerSync.useMutation({
     onSuccess: () => {
@@ -36,10 +36,10 @@ export default function ShopifyDetailPage() {
   });
 
   // Detect sync completion
+  const storeLastSyncAt = store?.lastSyncAt ?? null;
   useEffect(() => {
-    if (!isSyncing || !store) return;
-    const currentLastSync = store.lastSyncAt;
-    if (currentLastSync && currentLastSync !== preSyncLastSyncAt) {
+    if (!isSyncing) return;
+    if (storeLastSyncAt && storeLastSyncAt !== preSyncLastSyncAt) {
       setIsSyncing(false);
       setSyncDone(true);
       utils.stores.list.invalidate();
@@ -47,7 +47,8 @@ export default function ShopifyDetailPage() {
       const timer = setTimeout(() => setSyncDone(false), 5000);
       return () => clearTimeout(timer);
     }
-  }, [isSyncing, store, preSyncLastSyncAt, utils]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSyncing, storeLastSyncAt, preSyncLastSyncAt]);
 
   const disconnect = trpc.stores.disconnect.useMutation({
     onSuccess: () => {

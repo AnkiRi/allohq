@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Shield,
   ShieldCheck,
+  ListChecks,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Intelligence", href: "/intelligence", icon: Brain },
   { name: "Templates", href: "/templates", icon: FileText },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
+  { name: "Actions", href: "/actions", icon: ListChecks },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Agent", href: "/agent", icon: Zap },
@@ -87,8 +89,6 @@ export function Sidebar() {
           const isActive = pathname === item.href || (item.href !== "/settings" && pathname.startsWith(item.href + "/"));
           const isSettingsActive = item.href === "/settings" && pathname === "/settings";
           const isChild = "parent" in item;
-          const parentActive = isChild && pathname.startsWith("/settings");
-
           // Only show child items when parent section is active
           if (isChild && !pathname.startsWith("/settings")) return null;
 

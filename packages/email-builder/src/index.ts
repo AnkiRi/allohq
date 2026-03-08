@@ -21,6 +21,7 @@ export type {
   RenderOptions,
   RenderBrandSettings,
   TrackingParams,
+  ArchetypeRenderOptions,
 } from "./types";
 export { createDefaultBlock } from "./types";
-export { renderToHtml } from "./renderer";
+export { renderToHtml, renderFromArchetype } from "./renderer";

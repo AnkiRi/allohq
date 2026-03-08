@@ -134,9 +134,9 @@ export async function GET(request: NextRequest) {
       console.error("Failed to trigger initial sync:", syncError);
     }
 
-    // Clear the state cookie and redirect to dashboard so user sees next onboarding step
+    // Clear the state cookie and redirect to onboarding wizard
     const response = NextResponse.redirect(
-      new URL("/dashboard", request.nextUrl.origin)
+      new URL("/onboarding", request.nextUrl.origin)
     );
     response.cookies.delete("shopify_oauth_state");
     return response;

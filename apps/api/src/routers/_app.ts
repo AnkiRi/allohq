@@ -12,6 +12,7 @@ import { aiRouter } from "./ai";
 import { automationsRouter } from "./automations";
 import { autonomyRouter } from "./autonomy";
 import { guardrailsRouter } from "./guardrails";
+import { briefingsRouter } from "./briefings";
 
 /**
  * Root tRPC router
@@ -30,6 +31,7 @@ export const appRouter = router({
   automations: automationsRouter,
   autonomy: autonomyRouter,
   guardrails: guardrailsRouter,
+  briefings: briefingsRouter,
 });
 
 export type AppRouter = typeof appRouter;

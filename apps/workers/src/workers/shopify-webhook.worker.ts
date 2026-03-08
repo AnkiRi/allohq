@@ -4,6 +4,7 @@ import { redisConnection, QUEUE_NAMES } from "../config";
 import { checkEventTriggers } from "../utils/event-triggers";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
+const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
 
 interface WebhookJobData {
   topic: string;
@@ -30,9 +31,16 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
     switch (topic) {
       // --- Products ---
       case "products/create":
-      case "products/update":
-        await upsertProduct(store.id, payload);
+      case "products/update": {
+        const product = await upsertProduct(store.id, payload);
+        if (product) {
+          await productImageQueue.add("product-image", {
+            storeId: store.id,
+            productId: product.id,
+          });
+        }
         break;
+      }
       case "products/delete":
         await deleteProduct(store.id, payload);
         break;
@@ -117,7 +125,7 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
 async function upsertProduct(
   storeId: string,
   data: Record<string, unknown>
-) {
+): Promise<{ id: string } | null> {
   const p = data as {
     id: number;
     title: string;
@@ -191,6 +199,8 @@ async function upsertProduct(
       });
     }
   }
+
+  return { id: product.id };
 }
 
 async function deleteProduct(

@@ -8,6 +8,9 @@ import { campaignTools } from "./campaign-tools";
 import { segmentTools } from "./segment-tools";
 import { automationTools } from "./automation-tools";
 import { autonomyTools } from "./autonomy-tools";
+import { creativeTools } from "./creative-tools";
+import { briefingTools } from "./briefing-tools";
+import { journeyTools } from "./journey-tools";
 
 /** All tools available to the customer-facing agent */
 export function getCustomerTools(): ToolDefinition[] {
@@ -31,6 +34,9 @@ export function getMerchantTools(): ToolDefinition[] {
     ...segmentTools,
     ...automationTools,
     ...autonomyTools,
+    ...creativeTools,
+    ...briefingTools,
+    ...journeyTools,
   ];
 }
 
