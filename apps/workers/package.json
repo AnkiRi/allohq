@@ -25,6 +25,7 @@
     "@allohq/journey-orchestrator": "workspace:*",
     "@allohq/messaging": "workspace:*",
     "@allohq/product-recommendations": "workspace:*",
+    "@allohq/proactive-outreach": "workspace:*",
     "bullmq": "^5.0.0",
     "dotenv": "^16.4.7",
     "ioredis": "^5.4.0",

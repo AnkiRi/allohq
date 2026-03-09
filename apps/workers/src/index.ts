@@ -73,6 +73,11 @@ import { abTestEvaluatorWorker } from "./workers/ab-test-evaluator.worker";
 import { sendTimeOptimizerWorker } from "./workers/send-time-optimizer.worker";
 import { revenueForecastWorker } from "./workers/revenue-forecaster.worker";
 import { productRecommendationWorker } from "./workers/product-recommendation.worker";
+import { shippingUpdateWorker } from "./workers/shipping-update.worker";
+import { restockAlertWorker } from "./workers/restock-alert.worker";
+import { priceDropWorker } from "./workers/price-drop.worker";
+import { repurchaseReminderWorker } from "./workers/repurchase-reminder.worker";
+import { inventoryMonitorWorker } from "./workers/inventory-monitor.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -105,6 +110,11 @@ console.log(`  - ab-test-evaluator worker: ${abTestEvaluatorWorker.name}`);
 console.log(`  - send-time-optimizer worker: ${sendTimeOptimizerWorker.name}`);
 console.log(`  - revenue-forecaster worker: ${revenueForecastWorker.name}`);
 console.log(`  - product-recommendation worker: ${productRecommendationWorker.name}`);
+console.log(`  - shipping-update worker: ${shippingUpdateWorker.name}`);
+console.log(`  - restock-alert worker: ${restockAlertWorker.name}`);
+console.log(`  - price-drop worker: ${priceDropWorker.name}`);
+console.log(`  - repurchase-reminder worker: ${repurchaseReminderWorker.name}`);
+console.log(`  - inventory-monitor worker: ${inventoryMonitorWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -216,6 +226,26 @@ productRecommendationQueue.upsertJobScheduler(
   console.error("Failed to set up product recommendation schedule:", err.message);
 });
 
+// Schedule repurchase reminders (every 6 hours)
+const repurchaseReminderQueue = new Queue(QUEUE_NAMES.REPURCHASE_REMINDER, { connection: redisConnection });
+repurchaseReminderQueue.upsertJobScheduler(
+  "repurchase-reminder-schedule",
+  { every: 6 * 60 * 60 * 1000 },
+  { name: "repurchase-reminder", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up repurchase reminder schedule:", err.message);
+});
+
+// Schedule inventory monitor (every 2 hours)
+const inventoryMonitorQueue = new Queue(QUEUE_NAMES.INVENTORY_MONITOR, { connection: redisConnection });
+inventoryMonitorQueue.upsertJobScheduler(
+  "inventory-monitor-schedule",
+  { every: 2 * 60 * 60 * 1000 },
+  { name: "inventory-monitor", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up inventory monitor schedule:", err.message);
+});
+
 // Graceful shutdown
 const shutdown = async () => {
   console.log("Shutting down workers...");
@@ -250,6 +280,11 @@ const shutdown = async () => {
     sendTimeOptimizerWorker.close(),
     revenueForecastWorker.close(),
     productRecommendationWorker.close(),
+    shippingUpdateWorker.close(),
+    restockAlertWorker.close(),
+    priceDropWorker.close(),
+    repurchaseReminderWorker.close(),
+    inventoryMonitorWorker.close(),
   ]);
   process.exit(0);
 };

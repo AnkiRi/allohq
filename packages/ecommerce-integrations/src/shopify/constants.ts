@@ -30,6 +30,8 @@ export const SHOPIFY_WEBHOOK_TOPICS = [
   "collections/create",
   "collections/update",
   "collections/delete",
+  "fulfillments/create",
+  "fulfillments/update",
   "app/uninstalled",
 ] as const;
 

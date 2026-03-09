@@ -14,6 +14,9 @@ export enum ActionCategory {
   VIP = "vip",
   CROSS_SELL = "cross_sell",
   SUPPORT = "support",
+  SHIPPING_UPDATES = "shipping_updates",
+  RESTOCK_ALERTS = "restock_alerts",
+  PRICE_DROP = "price_drop",
 }
 
 export enum ActionStatus {
@@ -62,4 +65,7 @@ export const DEFAULT_AUTONOMY_MATRIX: Record<ActionCategory, AutonomyTier> = {
   [ActionCategory.VIP]: AutonomyTier.COPILOT,
   [ActionCategory.CROSS_SELL]: AutonomyTier.COPILOT,
   [ActionCategory.SUPPORT]: AutonomyTier.ADVISOR,
+  [ActionCategory.SHIPPING_UPDATES]: AutonomyTier.AUTOPILOT,
+  [ActionCategory.RESTOCK_ALERTS]: AutonomyTier.COPILOT,
+  [ActionCategory.PRICE_DROP]: AutonomyTier.COPILOT,
 };

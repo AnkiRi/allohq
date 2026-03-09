@@ -1,0 +1,21 @@
+{
+  "name": "@allohq/proactive-outreach",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@allohq/database": "workspace:*",
+    "@allohq/messaging": "workspace:*",
+    "@allohq/communication-governor": "workspace:*",
+    "@allohq/autonomy-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@allohq/tsconfig": "workspace:*",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.7.3"
+  }
+}

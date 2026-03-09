@@ -40,4 +40,9 @@ export const QUEUE_NAMES = {
   SEND_TIME: "send-time",
   REVENUE_FORECAST: "revenue-forecast",
   PRODUCT_RECOMMENDATION: "product-recommendation",
+  SHIPPING_UPDATE: "shipping-update",
+  RESTOCK_ALERT: "restock-alert",
+  PRICE_DROP: "price-drop",
+  REPURCHASE_REMINDER: "repurchase-reminder",
+  INVENTORY_MONITOR: "inventory-monitor",
 } as const;

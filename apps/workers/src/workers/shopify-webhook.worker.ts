@@ -5,6 +5,9 @@ import { checkEventTriggers } from "../utils/event-triggers";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
+const shippingUpdateQueue = new Queue(QUEUE_NAMES.SHIPPING_UPDATE, { connection: redisConnection });
+const restockAlertQueue = new Queue(QUEUE_NAMES.RESTOCK_ALERT, { connection: redisConnection });
+const priceDropQueue = new Queue(QUEUE_NAMES.PRICE_DROP, { connection: redisConnection });
 
 interface WebhookJobData {
   topic: string;
@@ -32,12 +35,71 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       // --- Products ---
       case "products/create":
       case "products/update": {
+        // Check for price drop and restock before upserting
+        let priceDropDetected = false;
+        let restockDetected = false;
+        let oldPrice = 0;
+
+        if (topic === "products/update") {
+          const p = payload as { id: number; variants?: Array<{ price: string; inventory_quantity: number }> };
+          const existingProduct = await prisma.product.findUnique({
+            where: { storeId_externalId: { storeId: store.id, externalId: String(p.id) } },
+            select: { id: true, price: true, variants: { select: { inventory: true, externalId: true } } },
+          });
+
+          if (existingProduct && p.variants?.[0]) {
+            const newPrice = parseFloat(p.variants[0].price);
+            oldPrice = existingProduct.price;
+            if (newPrice < oldPrice && oldPrice > 0) {
+              priceDropDetected = true;
+            }
+          }
+
+          // Check for restock: any variant going from 0 to >0
+          if (existingProduct && p.variants) {
+            const oldTotalInventory = existingProduct.variants.reduce((s, v) => s + v.inventory, 0);
+            const newTotalInventory = p.variants.reduce((s, v) => s + v.inventory_quantity, 0);
+            if (oldTotalInventory <= 0 && newTotalInventory > 0) {
+              restockDetected = true;
+            }
+          }
+        }
+
         const product = await upsertProduct(store.id, payload);
         if (product) {
           await productImageQueue.add("product-image", {
             storeId: store.id,
             productId: product.id,
           });
+
+          if (priceDropDetected) {
+            const p = payload as { variants?: Array<{ price: string }> };
+            const newPrice = p.variants?.[0] ? parseFloat(p.variants[0].price) : 0;
+            await prisma.productPriceHistory.create({
+              data: {
+                productId: product.id,
+                storeId: store.id,
+                oldPrice,
+                newPrice,
+                change: newPrice - oldPrice,
+              },
+            });
+            await priceDropQueue.add("price-drop", {
+              storeId: store.id,
+              productId: product.id,
+              oldPrice,
+              newPrice,
+            });
+            console.log(`[shopify-webhook] Price drop detected for product ${product.id}: $${oldPrice} → $${newPrice}`);
+          }
+
+          if (restockDetected) {
+            await restockAlertQueue.add("restock-alert", {
+              storeId: store.id,
+              productId: product.id,
+            });
+            console.log(`[shopify-webhook] Restock detected for product ${product.id}`);
+          }
         }
         break;
       }
@@ -105,6 +167,19 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         });
         console.log(`Collection ${(payload as any).id} deleted from store ${store.id}`);
         break;
+
+      // --- Fulfillments ---
+      case "fulfillments/create":
+      case "fulfillments/update": {
+        const fulfillment = await upsertFulfillment(store.id, payload);
+        if (fulfillment) {
+          await shippingUpdateQueue.add("shipping-update", {
+            storeId: store.id,
+            fulfillmentId: fulfillment.id,
+          });
+        }
+        break;
+      }
 
       // --- App ---
       case "app/uninstalled":
@@ -523,6 +598,62 @@ async function upsertCollection(
   });
 
   console.log(`Collection ${c.id} upserted for store ${storeId}`);
+}
+
+async function upsertFulfillment(
+  storeId: string,
+  data: Record<string, unknown>,
+): Promise<{ id: string } | null> {
+  const f = data as {
+    id: number;
+    order_id: number;
+    status: string; // pending, open, success, cancelled, error, failure
+    tracking_company: string | null;
+    tracking_number: string | null;
+    tracking_url: string | null;
+    shipment_status: string | null; // in_transit, out_for_delivery, delivered, attempted_delivery, failure
+    estimated_delivery_at: string | null;
+  };
+
+  // Find the order by Shopify order ID
+  const order = await prisma.order.findUnique({
+    where: { storeId_externalId: { storeId, externalId: String(f.order_id) } },
+  });
+
+  if (!order) {
+    console.warn(`[shopify-webhook] Order not found for fulfillment ${f.id} (order_id: ${f.order_id})`);
+    return null;
+  }
+
+  const fulfillment = await prisma.fulfillment.upsert({
+    where: {
+      storeId_externalId: { storeId, externalId: String(f.id) },
+    },
+    create: {
+      storeId,
+      orderId: order.id,
+      externalId: String(f.id),
+      status: f.status,
+      trackingCompany: f.tracking_company,
+      trackingNumber: f.tracking_number,
+      trackingUrl: f.tracking_url,
+      shipmentStatus: f.shipment_status,
+      estimatedDelivery: f.estimated_delivery_at ? new Date(f.estimated_delivery_at) : null,
+      deliveredAt: f.shipment_status === "delivered" ? new Date() : null,
+    },
+    update: {
+      status: f.status,
+      trackingCompany: f.tracking_company,
+      trackingNumber: f.tracking_number,
+      trackingUrl: f.tracking_url,
+      shipmentStatus: f.shipment_status,
+      estimatedDelivery: f.estimated_delivery_at ? new Date(f.estimated_delivery_at) : null,
+      deliveredAt: f.shipment_status === "delivered" ? new Date() : undefined,
+    },
+  });
+
+  console.log(`Fulfillment ${f.id} upserted for order ${order.id} (status: ${f.status}, shipment: ${f.shipment_status})`);
+  return { id: fulfillment.id };
 }
 
 shopifyWebhookWorker.on("completed", (job) => {

@@ -141,6 +141,11 @@ model Store {
   productAffinityPairs          ProductAffinityPair[]
   customerProductRecommendations CustomerProductRecommendation[]
 
+  // Sprint 9: Proactive Outreach
+  fulfillments              Fulfillment[]
+  productPriceHistory       ProductPriceHistory[]
+  proactiveOutreachLogs     ProactiveOutreachLog[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -175,6 +180,9 @@ model Product {
 
   // Sprint 8: Product Recommendations
   customerProductRecommendations CustomerProductRecommendation[]
+
+  // Sprint 9: Proactive Outreach
+  priceHistory ProductPriceHistory[]
 
   @@unique([storeId, externalId])
   @@map("products")
@@ -256,6 +264,7 @@ model Customer {
   customerJourneys   CustomerJourney[]
   formSubmissions    FormSubmission[]
   customerProductRecommendations CustomerProductRecommendation[]
+  proactiveOutreachLogs          ProactiveOutreachLog[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -280,7 +289,8 @@ model Order {
   store    Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer Customer    @relation(fields: [customerId], references: [id])
   items    OrderItem[]
-  attribution OrderAttribution?
+  attribution  OrderAttribution?
+  fulfillments Fulfillment[]
 
   @@unique([storeId, externalId])
   @@index([customerId])
@@ -1375,4 +1385,69 @@ model CustomerProductRecommendation {
   @@index([storeId, customerId])
   @@index([expiresAt])
   @@map("customer_product_recommendations")
+}
+
+// ============================================================================
+// SPRINT 9: PROACTIVE OUTREACH
+// ============================================================================
+
+model Fulfillment {
+  id                String    @id @default(cuid())
+  storeId           String
+  orderId           String
+  externalId        String    // Shopify fulfillment ID
+  status            String    // pending, open, success, cancelled, error, failure
+  trackingCompany   String?
+  trackingNumber    String?
+  trackingUrl       String?
+  estimatedDelivery DateTime?
+  deliveredAt       DateTime?
+  shipmentStatus    String?   // in_transit, out_for_delivery, delivered, attempted_delivery, failure
+  notifiedShipped   Boolean   @default(false)
+  notifiedDelivered Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, externalId])
+  @@index([orderId])
+  @@index([status])
+  @@map("fulfillments")
+}
+
+model ProductPriceHistory {
+  id         String   @id @default(cuid())
+  productId  String
+  storeId    String
+  oldPrice   Float
+  newPrice   Float
+  change     Float    // newPrice - oldPrice (negative = drop)
+  recordedAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([storeId, recordedAt])
+  @@map("product_price_history")
+}
+
+model ProactiveOutreachLog {
+  id           String   @id @default(cuid())
+  storeId      String
+  customerId   String
+  outreachType String   // shipping_update, restock_alert, price_drop, repurchase_reminder
+  referenceId  String   // fulfillmentId, productId, etc.
+  channel      String
+  messageLogId String?
+  createdAt    DateTime @default(now())
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, customerId, outreachType, referenceId])
+  @@index([storeId, outreachType])
+  @@map("proactive_outreach_logs")
 }

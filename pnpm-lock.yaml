@@ -299,6 +299,9 @@ importers:
       '@allohq/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@allohq/proactive-outreach':
+        specifier: workspace:*
+        version: link:../../packages/proactive-outreach
       '@allohq/product-recommendations':
         specifier: workspace:*
         version: link:../../packages/product-recommendations
@@ -686,6 +689,31 @@ importers:
         version: 22.19.11
       typescript:
         specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/proactive-outreach:
+    dependencies:
+      '@allohq/autonomy-engine':
+        specifier: workspace:*
+        version: link:../autonomy-engine
+      '@allohq/communication-governor':
+        specifier: workspace:*
+        version: link:../communication-governor
+      '@allohq/database':
+        specifier: workspace:*
+        version: link:../database
+      '@allohq/messaging':
+        specifier: workspace:*
+        version: link:../messaging
+    devDependencies:
+      '@allohq/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7.3
         version: 5.9.3
 
   packages/product-recommendations:
