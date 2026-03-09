@@ -138,6 +138,47 @@ export interface GeneratedAsset {
   generationMethod: string;
 }
 
+/** Creative asset record (mirrors DB model) */
+export interface CreativeAsset {
+  id: string;
+  storeId: string;
+  type: "hero_banner" | "product_card" | "promo_badge" | "background" | "lifestyle";
+  generationMethod: "template" | "ai_generated" | "product_composite" | "overlay";
+  sourcePrompt?: string;
+  templateId?: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  width: number;
+  height: number;
+  fileSizeBytes: number;
+  format: string;
+  channel?: string;
+  campaignId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Visual variant for A/B testing */
+export interface VisualVariant {
+  id: string;
+  label: string;
+  archetypeId: TemplateArchetypeId;
+  heroImageUrl?: string;
+  contentSlots: ContentSlots;
+  brandTokenOverrides?: Partial<BrandDesignTokens>;
+}
+
+/** Processed product image record (mirrors DB model) */
+export interface ProcessedProductImage {
+  productId: string;
+  storeId: string;
+  originalUrl: string;
+  transparentUrl?: string;
+  brandBgUrl: string;
+  sizes: ImageSizes;
+  overlayVariants?: Record<string, string>;
+  processedAt: Date;
+}
+
 /** Template archetype metadata */
 export interface TemplateArchetype {
   id: TemplateArchetypeId;

@@ -40,8 +40,24 @@ export async function learnFromResults(campaignId: string): Promise<CampaignPerf
   // Count unsubscribes (messages that resulted in unsubscribe, tracked via status)
   const unsubscribed = messages.filter((m) => m.status === "unsubscribed").length;
 
+  // Get archetype info from ActionQueue if this was an AI-generated campaign
+  const actionEntry = await prisma.actionQueue.findFirst({
+    where: {
+      storeId: campaign.storeId,
+      type: "campaign_send",
+      status: "executed",
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payload: true },
+  });
+  const actionPayload = actionEntry?.payload as Record<string, unknown> | null;
+  const archetypeId = (actionPayload?.archetypeId as string) ?? undefined;
+  const segmentName = (actionPayload?.targetSegment as { name?: string })?.name ?? undefined;
+
   const performance: CampaignPerformance = {
     campaignId,
+    archetypeId,
+    segmentName,
     openRate: totalSent > 0 ? opened / totalSent : 0,
     clickRate: totalSent > 0 ? clicked / totalSent : 0,
     conversionRate: totalSent > 0 ? conversions / totalSent : 0,
@@ -49,12 +65,40 @@ export async function learnFromResults(campaignId: string): Promise<CampaignPerf
     unsubscribeRate: totalSent > 0 ? unsubscribed / totalSent : 0,
   };
 
+  // Persist learnings into store's messagingConfig for future campaign generation
+  const store = await prisma.store.findUnique({
+    where: { id: campaign.storeId },
+    select: { messagingConfig: true },
+  });
+  const config = (store?.messagingConfig as Record<string, unknown>) ?? {};
+  const learnings = (config["campaignLearnings"] as Record<string, unknown>[]) ?? [];
+
+  // Keep last 50 campaign learnings
+  learnings.push({
+    campaignId,
+    archetypeId,
+    segmentName,
+    openRate: performance.openRate,
+    clickRate: performance.clickRate,
+    conversionRate: performance.conversionRate,
+    revenue,
+    learnedAt: new Date().toISOString(),
+  });
+  if (learnings.length > 50) learnings.splice(0, learnings.length - 50);
+
+  await prisma.store.update({
+    where: { id: campaign.storeId },
+    data: {
+      messagingConfig: { ...config, campaignLearnings: learnings } as any,
+    },
+  });
+
   console.log(
     `[performance-learner] Campaign ${campaignId}: ` +
     `open=${(performance.openRate * 100).toFixed(1)}% ` +
     `click=${(performance.clickRate * 100).toFixed(1)}% ` +
     `conv=${(performance.conversionRate * 100).toFixed(1)}% ` +
-    `rev=$${revenue.toFixed(2)}`
+    `rev=$${revenue.toFixed(2)} (persisted)`
   );
 
   return performance;

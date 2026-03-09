@@ -11,7 +11,10 @@ import {
   TrendingUp,
   Eye,
   Filter,
+  Pencil,
+  X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -59,12 +62,21 @@ function timeUntilExpiry(expiresAt: string | null | undefined): string | null {
   return `${Math.floor(hours / 24)}d left`;
 }
 
+const TYPE_OPTIONS = [
+  { value: undefined, label: "All Types" },
+  { value: "campaign", label: "Campaign" },
+  { value: "automation", label: "Automation" },
+  { value: "discount", label: "Discount" },
+] as const;
+
 export default function ActionsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading } = (trpc as any).autonomy.listActions.useQuery(
@@ -90,6 +102,14 @@ export default function ActionsPage() {
     onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
+  const dismissMut = (trpc as any).autonomy.rejectAction.useMutation({
+    onSuccess: () => {
+      toast("Action dismissed", "success");
+      (utils as any).autonomy.listActions.invalidate({ storeId });
+    },
+    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+  }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
+
   const bulkApproveMut = (trpc as any).autonomy.bulkApprove.useMutation({
     onSuccess: (result: { approved: number }) => {
       toast(`${result.approved} actions approved!`, "success");
@@ -97,7 +117,10 @@ export default function ActionsPage() {
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
-  const actions = data?.actions ?? [];
+  const allActions = data?.actions ?? [];
+  const actions = typeFilter
+    ? allActions.filter((a: any) => a.category === typeFilter || a.type?.includes(typeFilter))
+    : allActions;
   const pendingActions = actions.filter((a: any) => a.status === "pending");
 
   return (
@@ -136,6 +159,20 @@ export default function ActionsPage() {
             onClick={() => setStatusFilter(opt.value)}
             className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
               statusFilter === opt.value
+                ? "bg-[#2C2C2C] text-white"
+                : "bg-[#EDE7DB]/60 text-[#5C5549] hover:bg-[#EDE7DB]"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+        <span className="ml-2 text-xs text-[#8B8074]">|</span>
+        {TYPE_OPTIONS.map((opt) => (
+          <button
+            key={opt.label}
+            onClick={() => setTypeFilter(opt.value)}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              typeFilter === opt.value
                 ? "bg-[#2C2C2C] text-white"
                 : "bg-[#EDE7DB]/60 text-[#5C5549] hover:bg-[#EDE7DB]"
             }`}
@@ -252,6 +289,22 @@ export default function ActionsPage() {
 
                 {action.status === "pending" && (
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => dismissMut.mutate({ actionId: action.id, reason: "Dismissed" })}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-[#EDE7DB] text-[#8B8074] hover:bg-[#EDE7DB]/40 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Dismiss
+                    </button>
+                    {action.campaignId && (
+                      <button
+                        onClick={() => router.push(`/campaigns/${action.campaignId}/edit`)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-[#EDE7DB] text-[#5C5549] hover:bg-[#EDE7DB]/40 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                    )}
                     <button
                       onClick={() => rejectMut.mutate({ actionId: action.id, reason: "Rejected by merchant" })}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"

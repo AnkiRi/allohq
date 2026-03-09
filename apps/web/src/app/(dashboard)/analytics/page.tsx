@@ -44,7 +44,7 @@ function downloadCsv(csv: string, filename: string) {
 
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState(30);
-  const [tab, setTab] = useState<"overview" | "channels" | "ai" | "cohorts" | "roi">("overview");
+  const [tab, setTab] = useState<"overview" | "channels" | "ai" | "cohorts" | "roi" | "forecast">("overview");
 
   const { data: stores } = (trpc as any).stores.list.useQuery();
   const store = stores?.[0];
@@ -80,6 +80,11 @@ export default function AnalyticsPage() {
     { storeId: storeId ?? "", days: period },
     { enabled: !!storeId && tab === "overview" }
   );
+
+  const { data: forecastData, isLoading: forecastLoading } = (trpc as any).analytics.forecast.useQuery(
+    { storeId: storeId ?? "" },
+    { enabled: !!storeId && tab === "forecast" }
+  ) as { data: any | undefined; isLoading: boolean };
 
   // Export handler
   const exportMut = (trpc as any).analytics.exportCsv.useQuery(
@@ -235,6 +240,7 @@ export default function AnalyticsPage() {
           ["ai", "AI vs Manual"],
           ["cohorts", "Cohorts"],
           ["roi", "ROI"],
+          ["forecast", "Forecast"],
         ] as const).map(([key, label]) => (
           <button
             key={key}
@@ -449,6 +455,47 @@ export default function AnalyticsPage() {
                   </div>
                 ))}
               </motion.div>
+            )}
+          </div>
+        )}
+
+        {/* Forecast Tab */}
+        {tab === "forecast" && (
+          <div className="space-y-4">
+            {forecastLoading ? (
+              <Loading />
+            ) : !forecastData ? (
+              <EmptyState icon={TrendingUp} text="No forecast data yet. Forecasts are generated daily." />
+            ) : (
+              <>
+                <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
+                  {[
+                    { label: "7-Day Forecast", value: forecastData.forecast7d, trend: forecastData.trend7d },
+                    { label: "30-Day Forecast", value: forecastData.forecast30d, trend: forecastData.trend30d },
+                    { label: "90-Day Forecast", value: forecastData.forecast90d, trend: forecastData.trend90d },
+                  ].map((fc) => (
+                    <div key={fc.label} className="p-5 bg-card border border-border rounded-xl">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-2">
+                        {fc.label}
+                      </div>
+                      <div className="text-[24px] font-bold text-foreground font-mono tabular-nums">
+                        ${(fc.value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </div>
+                      {fc.trend != null && (
+                        <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          {fc.trend >= 0 ? "+" : ""}{fc.trend}% vs prior period
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </motion.div>
+
+                {forecastData.generatedAt && (
+                  <p className="text-[10px] font-mono text-muted-foreground">
+                    Last updated: {new Date(forecastData.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}

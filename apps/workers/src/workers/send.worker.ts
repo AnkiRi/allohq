@@ -4,6 +4,7 @@ import { renderToHtml } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { checkAllRules } from "@allohq/communication-governor";
+import { learnFromResults } from "@allohq/campaign-engine";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
@@ -134,7 +135,7 @@ export const sendWorker = new Worker<SendJobData>(
       });
       if (!governorCheck.allowed) {
         suppressedCount++;
-        // Log suppression
+        // Log suppression with correct status
         await prisma.messageLog.create({
           data: {
             workspaceId: campaign.store.workspaceId,
@@ -144,7 +145,7 @@ export const sendWorker = new Worker<SendJobData>(
             to: customer.email,
             subject: campaign.template.subject,
             campaignId,
-            status: "failed",
+            status: "suppressed",
             error: `Suppressed: ${governorCheck.reason}`,
             metadata: { suppressed: true, rule: governorCheck.rule },
           },
@@ -273,6 +274,14 @@ export const sendWorker = new Worker<SendJobData>(
     });
 
     console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients (${failCount} failed, ${suppressedCount} suppressed)`);
+
+    // Run performance learner to close the feedback loop
+    try {
+      await learnFromResults(campaignId);
+    } catch (err: any) {
+      console.warn(`[send-worker] Performance learning failed for ${campaignId}: ${err.message}`);
+    }
+
     return { sentCount, failCount, suppressedCount };
   },
   { connection: redisConnection }

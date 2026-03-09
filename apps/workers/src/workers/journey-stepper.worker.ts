@@ -105,9 +105,18 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
 
       const context = await getPersonalisationContext(customerId, storeId);
 
+      // Look up workspace for MessageLog
+      const storeRecord = await prisma.store.findUnique({
+        where: { id: storeId },
+        select: { workspaceId: true },
+      });
+      const workspaceId = storeRecord?.workspaceId ?? storeId;
+
       try {
+        let sendResult: { status: string; externalId?: string; provider?: string; error?: string } = { status: "sent" };
+
         if (channel === "email") {
-          await sendJourneyEmail(
+          sendResult = await sendJourneyEmail(
             customer,
             node,
             context,
@@ -124,8 +133,26 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
             console.warn(`No ${channel} contact for customer ${customerId}`);
             return { status: "skipped", reason: `No ${channel} contact` };
           }
-          await sendByChannel(channel, to, body, node);
+          sendResult = await sendByChannel(channel, to, body, node);
         }
+
+        // Create MessageLog entry for analytics visibility
+        await prisma.messageLog.create({
+          data: {
+            workspaceId,
+            storeId,
+            customerId,
+            channel,
+            to: channel === "email" ? customer.email : (customer.phone ?? ""),
+            automationId,
+            status: sendResult.status === "sent" ? "sent" : "failed",
+            externalId: sendResult.externalId,
+            provider: sendResult.provider,
+            sentAt: sendResult.status === "sent" ? new Date() : undefined,
+            error: sendResult.error,
+            metadata: { source: "journey", journeyId } as any,
+          },
+        });
 
         // Log fatigue
         await prisma.customerFatigueLog.create({
@@ -204,15 +231,36 @@ async function sendJourneyEmail(
   customer: { email: string; firstName: string | null; lastName: string | null },
   node: WorkflowNode,
   context: Awaited<ReturnType<typeof getPersonalisationContext>>,
-  _storeId: string,
+  storeId: string,
   customerId: string,
-) {
+): Promise<{ status: string; externalId?: string; provider?: string; error?: string }> {
   const templateId = node.config["templateId"] as string | undefined;
   let html: string;
   let subject = personaliseContent(
     (node.config["subject"] as string) ?? "A message for you",
     context,
   );
+
+  // Load brand settings for visual consistency
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  const brandProfile = store ? await prisma.brandProfile.findFirst({
+    where: { storeId, workspaceId: store.workspaceId },
+    select: { logoPosition: true, headerBgColor: true, footerText: true, showSocialLinks: true, showAddress: true, brandName: true },
+  }) : null;
+
+  const brandSettings = store && brandProfile ? {
+    logoUrl: store.storeLogoUrl ?? undefined,
+    logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+    headerBgColor: brandProfile.headerBgColor ?? undefined,
+    storeName: store.storeName ?? brandProfile.brandName,
+    address: store.address ? (() => {
+      const addr = store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string };
+      return [addr.address1, addr.city, addr.province, addr.zip, addr.country].filter(Boolean).join(", ");
+    })() : undefined,
+    footerText: brandProfile.footerText ?? undefined,
+    showSocialLinks: brandProfile.showSocialLinks,
+    showAddress: brandProfile.showAddress,
+  } : undefined;
 
   if (templateId) {
     const template = await prisma.emailTemplate.findUnique({
@@ -222,7 +270,10 @@ async function sendJourneyEmail(
     if (template) {
       subject = personaliseContent(template.subject ?? subject, context);
       const blocks = (template.blocks ?? []) as unknown as EmailBlock[];
-      html = renderToHtml(blocks, { variables: {} });
+      html = renderToHtml(blocks, {
+        variables: { first_name: context.firstName ?? "there" },
+        brandSettings,
+      });
     } else {
       html = personaliseContent((node.config["html"] as string) ?? "<p>Hello</p>", context);
     }
@@ -249,7 +300,7 @@ async function sendByChannel(
   to: string,
   body: string,
   _node: WorkflowNode,
-) {
+): Promise<{ status: string; externalId?: string; provider?: string; error?: string }> {
   switch (channel) {
     case "sms":
       return sendSms({ channel: "sms", to, body }, null);

@@ -1,6 +1,7 @@
 import { prisma } from "@allohq/database";
 import type { CampaignOpportunity } from "./types";
 import { estimateRevenue } from "./revenue-estimator";
+import { getUpcomingEvents } from "./calendar-awareness";
 
 /**
  * Scan a store for actionable campaign opportunities.
@@ -15,6 +16,9 @@ export async function scanOpportunities(storeId: string): Promise<CampaignOpport
     scanNewArrivals(storeId, opportunities),
     scanReEngagement(storeId, opportunities),
     scanVipMilestones(storeId, opportunities),
+    scanLowStock(storeId, opportunities),
+    scanSeasonal(storeId, opportunities),
+    scanCrossSell(storeId, opportunities),
   ]);
 
   // Sort by urgency descending
@@ -181,6 +185,146 @@ async function scanVipMilestones(storeId: string, results: CampaignOpportunity[]
     customerCount: customerIds.length,
     reasoning: `${customerIds.length} VIP customers eligible for milestone recognition and exclusive offers.`,
     urgency: 35,
+    estimatedRevenue: estimate,
+  });
+}
+
+async function scanLowStock(storeId: string, results: CampaignOpportunity[]): Promise<void> {
+  // Find products with <10 stock that have been previously purchased
+  const lowStockProducts = await prisma.product.findMany({
+    where: {
+      storeId,
+      status: "active",
+      variants: { some: { inventory: { lt: 10, gt: 0 } } },
+    },
+    select: { id: true, title: true },
+    take: 10,
+  });
+
+  if (lowStockProducts.length === 0) return;
+
+  const productIds = lowStockProducts.map((p) => p.id);
+
+  // Find customers who previously bought these products
+  const buyers = await prisma.orderItem.findMany({
+    where: {
+      productId: { in: productIds },
+      order: { storeId },
+    },
+    select: { order: { select: { customerId: true } } },
+    distinct: ["orderId"],
+  });
+
+  const customerIds = [...new Set(buyers.map((b) => b.order.customerId))];
+  if (customerIds.length < 2) return;
+
+  const estimate = await estimateRevenue(storeId, customerIds.length, "low_stock");
+
+  results.push({
+    type: "low_stock",
+    storeId,
+    segmentName: "Low Stock Interest",
+    customerIds,
+    customerCount: customerIds.length,
+    productIds,
+    reasoning: `${lowStockProducts.length} product(s) running low on stock. ${customerIds.length} past buyers may want to grab them before they're gone.`,
+    urgency: 75,
+    estimatedRevenue: estimate,
+    metadata: { productTitles: lowStockProducts.map((p) => p.title) },
+  });
+}
+
+async function scanSeasonal(storeId: string, results: CampaignOpportunity[]): Promise<void> {
+  const upcoming = getUpcomingEvents(21); // look 3 weeks ahead
+  if (upcoming.length === 0) return;
+
+  const event = upcoming[0]!; // closest event
+  const daysUntil = Math.ceil((event.date.getTime() - Date.now()) / 86400000);
+
+  const customerCount = await prisma.customer.count({
+    where: { storeId, acceptsMarketing: true },
+  });
+
+  if (customerCount < 5) return;
+
+  const estimate = await estimateRevenue(storeId, customerCount, "seasonal");
+
+  results.push({
+    type: "seasonal",
+    storeId,
+    segmentName: "All Subscribers",
+    customerCount,
+    reasoning: `${event.name} is ${daysUntil} days away. Seasonal campaign to ${customerCount} subscribers recommended.`,
+    urgency: Math.min(80, 40 + Math.max(0, 21 - daysUntil) * 3),
+    estimatedRevenue: estimate,
+    metadata: { eventName: event.name, eventDate: event.date.toISOString(), daysUntil },
+  });
+}
+
+async function scanCrossSell(storeId: string, results: CampaignOpportunity[]): Promise<void> {
+  // Find product co-occurrence: products frequently bought together
+  const recentOrders = await prisma.order.findMany({
+    where: { storeId, createdAt: { gte: new Date(Date.now() - 90 * 86400000) } },
+    select: {
+      customerId: true,
+      items: { select: { productId: true } },
+    },
+    take: 500,
+  });
+
+  // Build co-occurrence map: productA → productB → count
+  const coOccurrence = new Map<string, Map<string, number>>();
+  for (const order of recentOrders) {
+    const pids = order.items.map((i) => i.productId);
+    for (let a = 0; a < pids.length; a++) {
+      for (let b = a + 1; b < pids.length; b++) {
+        const key = pids[a]!;
+        const val = pids[b]!;
+        if (!coOccurrence.has(key)) coOccurrence.set(key, new Map());
+        const inner = coOccurrence.get(key)!;
+        inner.set(val, (inner.get(val) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Find the strongest pair
+  let bestPair: { productA: string; productB: string; count: number } | null = null;
+  for (const [a, partners] of coOccurrence) {
+    for (const [b, count] of partners) {
+      if (count >= 3 && (!bestPair || count > bestPair.count)) {
+        bestPair = { productA: a, productB: b, count };
+      }
+    }
+  }
+
+  if (!bestPair) return;
+
+  // Find customers who bought A but not B
+  const boughtA = await prisma.orderItem.findMany({
+    where: { productId: bestPair.productA, order: { storeId } },
+    select: { order: { select: { customerId: true } } },
+  });
+  const boughtB = await prisma.orderItem.findMany({
+    where: { productId: bestPair.productB, order: { storeId } },
+    select: { order: { select: { customerId: true } } },
+  });
+
+  const boughtBSet = new Set(boughtB.map((b) => b.order.customerId));
+  const crossSellIds = [...new Set(boughtA.map((a) => a.order.customerId).filter((id) => !boughtBSet.has(id)))];
+
+  if (crossSellIds.length < 3) return;
+
+  const estimate = await estimateRevenue(storeId, crossSellIds.length, "cross_sell");
+
+  results.push({
+    type: "cross_sell",
+    storeId,
+    segmentName: "Cross-Sell",
+    customerIds: crossSellIds,
+    customerCount: crossSellIds.length,
+    productIds: [bestPair.productB],
+    reasoning: `${crossSellIds.length} customers bought a commonly paired product but not its complement. Cross-sell opportunity detected (${bestPair.count} co-purchases observed).`,
+    urgency: 45,
     estimatedRevenue: estimate,
   });
 }

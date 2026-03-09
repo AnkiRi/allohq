@@ -134,6 +134,18 @@ export async function GET(request: NextRequest) {
       console.error("Failed to trigger initial sync:", syncError);
     }
 
+    // Queue brand kit extraction (runs after sync)
+    try {
+      await fetch(`${apiUrl}/stores.queueBrandKit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { storeId: store.id } }),
+      });
+    } catch {
+      // Non-fatal: brand kit will be extracted later
+      console.error("Failed to queue brand kit extraction");
+    }
+
     // Clear the state cookie and redirect to onboarding wizard
     const response = NextResponse.redirect(
       new URL("/onboarding", request.nextUrl.origin)

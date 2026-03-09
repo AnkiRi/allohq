@@ -79,9 +79,26 @@ export async function handleWidgetPopups(
       include: { form: true },
     });
 
+    // Load brand tokens for popup styling
+    const brandVisualProfile = await prisma.brandVisualProfile.findUnique({
+      where: { storeId },
+      select: { brandDesignTokens: true },
+    });
+    const brandTokens = brandVisualProfile?.brandDesignTokens as Record<string, string> | null;
+
     const configs = popups.map((popup) => {
       const fields = (popup.form.fields as unknown as FormField[]) ?? [];
       const formStyling = (popup.form.styling as unknown as FormStyling) ?? {};
+
+      // Merge brand tokens into form styling if available
+      if (brandTokens) {
+        formStyling.backgroundColor = formStyling.backgroundColor ?? brandTokens["primaryBackground"];
+        formStyling.textColor = formStyling.textColor ?? brandTokens["textPrimary"];
+        formStyling.buttonColor = formStyling.buttonColor ?? brandTokens["ctaBackground"];
+        formStyling.buttonTextColor = formStyling.buttonTextColor ?? brandTokens["ctaTextColor"];
+        formStyling.fontFamily = formStyling.fontFamily ?? brandTokens["bodyFont"];
+      }
+
       const rendered = renderFormHtml(fields, formStyling);
 
       return {
@@ -141,13 +158,28 @@ export async function handleWidgetPopups(
         return;
       }
 
+      // Extract consent from form data (checkboxes named consent_email, consent_sms, consent_whatsapp)
+      const consent: { email?: boolean; sms?: boolean; whatsapp?: boolean } = {};
+      if (data["consent_email"] !== undefined) {
+        consent.email = data["consent_email"] === "true" || data["consent_email"] === "on" || data["consent_email"] === true;
+      } else if (data["email"]) {
+        // Default: if they submitted an email without explicit consent checkbox, treat as opt-in
+        consent.email = true;
+      }
+      if (data["consent_sms"] !== undefined) {
+        consent.sms = data["consent_sms"] === "true" || data["consent_sms"] === "on" || data["consent_sms"] === true;
+      }
+      if (data["consent_whatsapp"] !== undefined) {
+        consent.whatsapp = data["consent_whatsapp"] === "true" || data["consent_whatsapp"] === "on" || data["consent_whatsapp"] === true;
+      }
+
       // Capture submission
       const result = await captureSubmission({
         formId,
         storeId,
         data,
         source,
-        consent: { email: true }, // default opt-in from popup
+        consent,
       });
 
       // Check for incentive
@@ -169,7 +201,7 @@ export async function handleWidgetPopups(
           type: "form_submitted",
           customerId: result.customerId,
           storeId,
-          data: { consent: { email: true } },
+          data: { consent },
           timestamp: new Date().toISOString(),
         });
       }

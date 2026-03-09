@@ -38,8 +38,26 @@ export async function processProductImage(options: ProcessImageOptions): Promise
     }
     const buffer = Buffer.from(await response.arrayBuffer());
 
-    // Process: center crop with brand background
-    const brandBgBuffer = await sharp(buffer)
+    // Step 1: Create a "transparent" version by extracting with alpha channel
+    // This uses Sharp's built-in capabilities — for true background removal,
+    // integrate rembg (Python) or remove.bg API in production
+    let transparentBuffer: Buffer;
+    try {
+      transparentBuffer = await sharp(buffer)
+        .resize(600, 600, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+    } catch {
+      // Fallback: just resize without transparency
+      transparentBuffer = await sharp(buffer)
+        .resize(600, 600, { fit: "contain" })
+        .png()
+        .toBuffer();
+    }
+
+    // Step 2: Apply brand-colored background
+    const brandBgBuffer = await sharp(transparentBuffer)
+      .flatten({ background: brandBgColor })
       .resize(600, 600, { fit: "contain", background: brandBgColor })
       .png()
       .toBuffer();
@@ -59,18 +77,21 @@ export async function processProductImage(options: ProcessImageOptions): Promise
     }
 
     // Upsert processed image record
+    const transparentUrl = `data:image/png;base64,${transparentBuffer.toString("base64")}`;
     await prisma.processedProductImage.upsert({
       where: { productId_storeId: { productId, storeId } },
       create: {
         productId,
         storeId,
         originalUrl,
+        transparentUrl,
         brandBgUrl: `data:image/png;base64,${brandBgBuffer.toString("base64")}`,
         sizes: sizes as any,
         processedAt: new Date(),
       },
       update: {
         originalUrl,
+        transparentUrl,
         brandBgUrl: `data:image/png;base64,${brandBgBuffer.toString("base64")}`,
         sizes: sizes as any,
         processedAt: new Date(),

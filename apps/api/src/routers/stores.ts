@@ -341,6 +341,82 @@ export const storesRouter = router({
     }),
 
   /**
+   * Get the BrandVisualProfile for a store.
+   */
+  brandVisualProfile: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new Error("Store not found");
+      return ctx.prisma.brandVisualProfile.findUnique({
+        where: { storeId: input.storeId },
+      });
+    }),
+
+  /**
+   * Update the BrandVisualProfile for a store (used by brand review onboarding).
+   */
+  updateBrandVisualProfile: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        primaryColors: z.any().optional(),
+        accentColors: z.any().optional(),
+        fontFamily: z.string().optional(),
+        bodyFontFamily: z.string().optional(),
+        aestheticClassification: z.string().optional(),
+        bannedElements: z.any().optional(),
+        brandDesignTokens: z.any().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { storeId, ...data } = input;
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new Error("Store not found");
+      return ctx.prisma.brandVisualProfile.update({
+        where: { storeId },
+        data,
+      });
+    }),
+
+  /**
+   * Mark onboarding as completed for a store.
+   */
+  completeOnboarding: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new Error("Store not found");
+      return ctx.prisma.store.update({
+        where: { id: input.storeId },
+        data: { onboardingCompletedAt: new Date() },
+      });
+    }),
+
+  /**
+   * Queue brand kit extraction for a store.
+   */
+  queueBrandKit: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new Error("Store not found");
+
+      const brandKitQueue = new Queue("brand-kit", { connection: redisConnection });
+      await brandKitQueue.add("extract", { storeId: store.id });
+
+      return { status: "queued" as const };
+    }),
+
+  /**
    * Disconnect a store — deletes all related data and soft-deletes the store.
    */
   disconnect: workspaceProcedure

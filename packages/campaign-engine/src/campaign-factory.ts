@@ -1,6 +1,6 @@
 import { prisma } from "@allohq/database";
-import { selectTemplate } from "@allohq/creative-engine";
-import type { ContentSlots, BrandDesignTokens } from "@allohq/creative-engine";
+import { selectTemplate, renderMjmlTemplate } from "@allohq/creative-engine";
+import type { ContentSlots, BrandDesignTokens, TemplateArchetypeId } from "@allohq/creative-engine";
 import { DEFAULT_BRAND_TOKENS } from "@allohq/creative-engine";
 import { routeAction, ActionCategory } from "@allohq/autonomy-engine";
 import type { CampaignOpportunity, CampaignDraft } from "./types";
@@ -31,7 +31,7 @@ export async function generateCampaignDraft(
   // Select template archetype
   const archetypeId = selectTemplate(type, opportunity.segmentName, aesthetic as any);
 
-  // Load products if referenced
+  // Load products with processed images if available
   const products = productIds && productIds.length > 0
     ? await prisma.product.findMany({
         where: { id: { in: productIds } },
@@ -39,20 +39,37 @@ export async function generateCampaignDraft(
       })
     : [];
 
+  // Load processed product images (branded backgrounds, multi-size variants)
+  const processedImages = products.length > 0
+    ? await prisma.processedProductImage.findMany({
+        where: { productId: { in: products.map((p) => p.id) }, storeId },
+        select: { productId: true, brandBgUrl: true, sizes: true },
+      })
+    : [];
+  const processedImageMap = new Map(processedImages.map((pi) => [pi.productId, pi]));
+
   // Load store for domain
   const store = await prisma.store.findUniqueOrThrow({
     where: { id: storeId },
     select: { shopDomain: true, storeName: true },
   });
 
-  // Build content slots
-  const contentSlots = buildContentSlots(type, opportunity, products, store, brandTokens);
+  // Build content slots (with processed product images)
+  const contentSlots = buildContentSlots(type, opportunity, products, store, brandTokens, processedImageMap);
 
   // Generate campaign name and subject
   const { name, subject } = generateCampaignMeta(type, opportunity, store.storeName ?? "Store");
 
   // Calculate confidence score based on opportunity quality
   const confidenceScore = calculateConfidence(opportunity);
+
+  // Render MJML template to responsive HTML
+  let html: string | undefined;
+  try {
+    html = renderMjmlTemplate(archetypeId as TemplateArchetypeId, brandTokens, contentSlots);
+  } catch (err: any) {
+    console.warn(`[campaign-factory] MJML render failed for ${archetypeId}: ${err.message}`);
+  }
 
   const draft: CampaignDraft = {
     storeId,
@@ -65,9 +82,10 @@ export async function generateCampaignDraft(
     estimatedRevenue: opportunity.estimatedRevenue ?? { low: 0, mid: 0, high: 0, conversionRate: 0, avgOrderValue: 0 },
     confidenceScore,
     reasoning: opportunity.reasoning,
+    html,
   };
 
-  // Route through autonomy engine
+  // Route through autonomy engine (include HTML preview in payload)
   const category = mapOpportunityToCategory(type);
   await routeAction({
     storeId,
@@ -82,6 +100,9 @@ export async function generateCampaignDraft(
       subject,
       customerCount,
       name,
+      htmlPreview: html,
+      targetSegment: { name: opportunity.segmentName ?? type, count: customerCount },
+      campaignName: name,
     },
   });
 
@@ -94,15 +115,21 @@ function buildContentSlots(
   products: { id: string; title: string; price: number; compareAtPrice: number | null; handle: string; imageUrl: string | null }[],
   store: { shopDomain: string },
   _brandTokens: BrandDesignTokens,
+  processedImageMap?: Map<string, { productId: string; brandBgUrl: string | null; sizes: unknown }>,
 ): ContentSlots {
-  const productSlots = products.map((p) => ({
-    id: p.id,
-    title: p.title,
-    price: `$${p.price.toFixed(2)}`,
-    compareAtPrice: p.compareAtPrice ? `$${p.compareAtPrice.toFixed(2)}` : undefined,
-    imageUrl: p.imageUrl ?? undefined,
-    url: `https://${store.shopDomain}/products/${p.handle}`,
-  }));
+  const productSlots = products.map((p) => {
+    const processed = processedImageMap?.get(p.id);
+    const sizes = processed?.sizes as Record<string, string> | null;
+    return {
+      id: p.id,
+      title: p.title,
+      price: `$${p.price.toFixed(2)}`,
+      compareAtPrice: p.compareAtPrice ? `$${p.compareAtPrice.toFixed(2)}` : undefined,
+      imageUrl: p.imageUrl ?? undefined,
+      processedImageUrl: sizes?.card ?? processed?.brandBgUrl ?? undefined,
+      url: `https://${store.shopDomain}/products/${p.handle}`,
+    };
+  });
 
   const base: ContentSlots = {
     ctaText: "Shop Now",

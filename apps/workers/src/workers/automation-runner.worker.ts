@@ -84,6 +84,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           });
           if (!emailGovCheck.allowed) {
             console.log(`[automation-runner] Suppressed email to ${customer.email}: ${emailGovCheck.reason}`);
+            await prisma.messageLog.create({
+              data: {
+                workspaceId: automation.workspaceId,
+                storeId: automation.storeId,
+                customerId: customer.id,
+                channel: "email",
+                to: customer.email,
+                automationId,
+                status: "suppressed",
+                error: emailGovCheck.reason,
+                metadata: { rule: emailGovCheck.rule } as any,
+              },
+            });
             break;
           }
 
@@ -246,6 +259,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           });
           if (!smsGovCheck.allowed) {
             console.log(`[automation-runner] Suppressed SMS to ${customer.phone}: ${smsGovCheck.reason}`);
+            await prisma.messageLog.create({
+              data: {
+                workspaceId: automation.workspaceId,
+                storeId: automation.storeId,
+                customerId: customer.id,
+                channel: "sms",
+                to: customer.phone ?? "",
+                automationId,
+                status: "suppressed",
+                error: smsGovCheck.reason,
+                metadata: { rule: smsGovCheck.rule } as any,
+              },
+            });
             break;
           }
 
@@ -325,6 +351,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           });
           if (!waGovCheck.allowed) {
             console.log(`[automation-runner] Suppressed WhatsApp to ${customer.phone}: ${waGovCheck.reason}`);
+            await prisma.messageLog.create({
+              data: {
+                workspaceId: automation.workspaceId,
+                storeId: automation.storeId,
+                customerId: customer.id,
+                channel: "whatsapp",
+                to: customer.phone ?? "",
+                automationId,
+                status: "suppressed",
+                error: waGovCheck.reason,
+                metadata: { rule: waGovCheck.rule } as any,
+              },
+            });
             break;
           }
 
@@ -390,6 +429,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           });
           if (!rcsGovCheck.allowed) {
             console.log(`[automation-runner] Suppressed RCS to ${customer.phone}: ${rcsGovCheck.reason}`);
+            await prisma.messageLog.create({
+              data: {
+                workspaceId: automation.workspaceId,
+                storeId: automation.storeId,
+                customerId: customer.id,
+                channel: "rcs",
+                to: customer.phone ?? "",
+                automationId,
+                status: "suppressed",
+                error: rcsGovCheck.reason,
+                metadata: { rule: rcsGovCheck.rule } as any,
+              },
+            });
             break;
           }
 

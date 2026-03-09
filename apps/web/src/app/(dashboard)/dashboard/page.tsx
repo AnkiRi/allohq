@@ -1244,6 +1244,12 @@ export default function DashboardPage() {
     data: { segment: string; customerCount: number; totalRevenue: number; avgOrderValue: number }[] | undefined;
   };
 
+  // Baseline metrics for before/after comparison
+  const { data: baselineData } = (trpc as any).briefings.baseline.useQuery(
+    { storeId },
+    { enabled: !!storeId }
+  ) as { data: { metrics?: { totalCustomers?: number; totalRevenue?: number; avgOrderValue?: number }; capturedAt?: string } | undefined };
+
   // Resume tracking on page load — only for in-progress pipelines.
   // Completed runs are NOT resumed; we rely on hasReadyOrActivePrograms instead.
   useEffect(() => {
@@ -1574,12 +1580,31 @@ export default function DashboardPage() {
               <Link href="/customers" className="block glass-card p-5 group">
                 <div className="flex items-center justify-between mb-2">
                   <div className="section-header text-[10px] text-muted-foreground">CUSTOMERS</div>
-                  <span className="trend-pill-up"><TrendingUp className="w-3 h-3 inline mr-1" />+12%</span>
+                  {(() => {
+                    const current = stats?.totalCustomers ?? 0;
+                    const baseline = baselineData?.metrics?.totalCustomers;
+                    if (baseline && baseline > 0) {
+                      const pct = Math.round(((current - baseline) / baseline) * 100);
+                      const isUp = pct >= 0;
+                      return (
+                        <span className={isUp ? "trend-pill-up" : "trend-pill-down"}>
+                          {isUp ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
+                          {isUp ? "+" : ""}{pct}%
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
                   <AnimatedNumber value={stats?.totalCustomers ?? 0} />
                 </div>
                 <div className="mt-2"><Sparkline data={SPARK_CUSTOMERS} color="var(--olive)" /></div>
+                {baselineData?.metrics?.totalCustomers != null && (
+                  <div className="text-[9px] font-mono text-muted-foreground mt-1">
+                    Baseline: {baselineData.metrics.totalCustomers.toLocaleString()}
+                  </div>
+                )}
               </Link>
             </motion.div>
 
@@ -1616,12 +1641,31 @@ export default function DashboardPage() {
               <Link href="/analytics" className="block glass-card p-5 group">
                 <div className="flex items-center justify-between mb-2">
                   <div className="section-header text-[10px] text-muted-foreground">REVENUE</div>
-                  <span className="trend-pill-up"><TrendingUp className="w-3 h-3 inline mr-1" />+8%</span>
+                  {(() => {
+                    const current = stats?.revenueThisMonth ?? 0;
+                    const baseline = baselineData?.metrics?.totalRevenue;
+                    if (baseline && baseline > 0) {
+                      const pct = Math.round(((current - baseline) / baseline) * 100);
+                      const isUp = pct >= 0;
+                      return (
+                        <span className={isUp ? "trend-pill-up" : "trend-pill-down"}>
+                          {isUp ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
+                          {isUp ? "+" : ""}{pct}%
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div className="text-[32px] font-bold text-[#6B7A2F] font-mono tabular-nums leading-tight">
                   <AnimatedNumber value={stats?.revenueThisMonth ?? 0} prefix="$" />
                 </div>
                 <div className="mt-2"><Sparkline data={SPARK_REVENUE} color="var(--olive)" /></div>
+                {baselineData?.metrics?.totalRevenue != null && (
+                  <div className="text-[9px] font-mono text-muted-foreground mt-1">
+                    Baseline: ${baselineData.metrics.totalRevenue.toLocaleString()}
+                  </div>
+                )}
               </Link>
             </motion.div>
           </div>

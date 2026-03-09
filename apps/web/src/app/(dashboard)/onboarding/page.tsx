@@ -146,7 +146,17 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleFinish = () => {
+  const completeMutation = (trpc as any).stores.completeOnboarding?.useMutation?.() as
+    { mutateAsync: (input: any) => Promise<any> } | undefined;
+
+  const handleFinish = async () => {
+    if (completeMutation && storeId) {
+      try {
+        await completeMutation.mutateAsync({ storeId });
+      } catch {
+        // Non-blocking — still navigate to dashboard
+      }
+    }
     router.push("/dashboard");
   };
 

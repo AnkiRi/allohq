@@ -71,4 +71,62 @@ export const briefingsRouter = router({
     .query(async ({ input }) => {
       return generateStoreReport(input.storeId);
     }),
+
+  /** Get notification preferences for briefings */
+  preferences: protectedProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findUnique({
+        where: { id: input.storeId },
+        select: { messagingConfig: true },
+      });
+      const config = (store?.messagingConfig as Record<string, unknown>) ?? {};
+      const prefs = (config["briefingPreferences"] as Record<string, unknown>) ?? {};
+      return {
+        channel: (prefs["channel"] as string) ?? "email",
+        dailyEnabled: (prefs["dailyEnabled"] as boolean) ?? true,
+        weeklyEnabled: (prefs["weeklyEnabled"] as boolean) ?? true,
+        alertsEnabled: (prefs["alertsEnabled"] as boolean) ?? true,
+        quietHoursStart: (prefs["quietHoursStart"] as string) ?? "22:00",
+        quietHoursEnd: (prefs["quietHoursEnd"] as string) ?? "07:00",
+      };
+    }),
+
+  /** Update notification preferences for briefings */
+  updatePreferences: protectedProcedure
+    .input(z.object({
+      storeId: z.string(),
+      channel: z.enum(["email", "whatsapp", "in_app"]).optional(),
+      dailyEnabled: z.boolean().optional(),
+      weeklyEnabled: z.boolean().optional(),
+      alertsEnabled: z.boolean().optional(),
+      quietHoursStart: z.string().optional(),
+      quietHoursEnd: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { storeId, ...prefs } = input;
+      const store = await ctx.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { messagingConfig: true },
+      });
+      const config = (store?.messagingConfig as Record<string, unknown>) ?? {};
+      const existing = (config["briefingPreferences"] as Record<string, unknown>) ?? {};
+
+      const updated = { ...existing };
+      for (const [k, v] of Object.entries(prefs)) {
+        if (v !== undefined) updated[k] = v;
+      }
+
+      await ctx.prisma.store.update({
+        where: { id: storeId },
+        data: {
+          messagingConfig: {
+            ...config,
+            briefingPreferences: updated,
+          } as any,
+        },
+      });
+
+      return updated;
+    }),
 });

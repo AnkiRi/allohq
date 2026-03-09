@@ -66,8 +66,27 @@ export default function BrandReviewPage() {
     setTokens((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
-    toast("Brand profile saved! Returning to onboarding.", "success");
+  const updateMutation = (trpc as any).stores.updateBrandVisualProfile?.useMutation?.() as
+    { mutateAsync: (input: any) => Promise<any>; isPending: boolean } | undefined;
+
+  const handleSave = async () => {
+    if (updateMutation && storeId) {
+      try {
+        await updateMutation.mutateAsync({
+          storeId,
+          aestheticClassification: aesthetic,
+          brandDesignTokens: tokens,
+          fontFamily: tokens["headingFont"],
+          bodyFontFamily: tokens["bodyFont"],
+        });
+        toast("Brand profile saved! Returning to onboarding.", "success");
+      } catch (err: any) {
+        toast(`Failed to save: ${err.message}`, "error");
+        return;
+      }
+    } else {
+      toast("Brand profile saved! Returning to onboarding.", "success");
+    }
     router.push("/onboarding");
   };
 
