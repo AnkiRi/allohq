@@ -1,8 +1,5 @@
 {
-  "extends": "@allohq/tsconfig/node.json",
-  "compilerOptions": {
-    "rootDir": "src"
-  },
+  "extends": "../../packages/tsconfig/base.json",
   "include": ["src"],
   "exclude": ["node_modules"]
 }

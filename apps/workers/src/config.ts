@@ -38,4 +38,5 @@ export const QUEUE_NAMES = {
   JOURNEY_STEP: "journey-step",
   AB_TEST: "ab-test",
   SEND_TIME: "send-time",
+  REVENUE_FORECAST: "revenue-forecast",
 } as const;

@@ -71,6 +71,7 @@ import { weeklyReportWorker } from "./workers/weekly-report.worker";
 import { journeyStepperWorker } from "./workers/journey-stepper.worker";
 import { abTestEvaluatorWorker } from "./workers/ab-test-evaluator.worker";
 import { sendTimeOptimizerWorker } from "./workers/send-time-optimizer.worker";
+import { revenueForecastWorker } from "./workers/revenue-forecaster.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -101,6 +102,7 @@ console.log(`  - weekly-report worker: ${weeklyReportWorker.name}`);
 console.log(`  - journey-stepper worker: ${journeyStepperWorker.name}`);
 console.log(`  - ab-test-evaluator worker: ${abTestEvaluatorWorker.name}`);
 console.log(`  - send-time-optimizer worker: ${sendTimeOptimizerWorker.name}`);
+console.log(`  - revenue-forecaster worker: ${revenueForecastWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -192,6 +194,16 @@ sendTimeQueue.upsertJobScheduler(
   console.error("Failed to set up send time optimization schedule:", err.message);
 });
 
+// Schedule revenue forecast (daily)
+const revenueForecastQueue = new Queue(QUEUE_NAMES.REVENUE_FORECAST, { connection: redisConnection });
+revenueForecastQueue.upsertJobScheduler(
+  "revenue-forecast-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "revenue-forecast", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up revenue forecast schedule:", err.message);
+});
+
 // Graceful shutdown
 const shutdown = async () => {
   console.log("Shutting down workers...");
@@ -224,6 +236,7 @@ const shutdown = async () => {
     journeyStepperWorker.close(),
     abTestEvaluatorWorker.close(),
     sendTimeOptimizerWorker.close(),
+    revenueForecastWorker.close(),
   ]);
   process.exit(0);
 };

@@ -86,4 +86,122 @@ export const analyticsTools: ToolDefinition[] = [
       }));
     },
   },
+
+  {
+    name: "compare_periods",
+    description:
+      "Compare any metric between two time periods (week-over-week, month-over-month). Useful for 'how are we doing compared to last week/month?'",
+    parameters: {
+      metric: {
+        type: "string",
+        description: "Metric to compare: revenue, orders, customers, open_rate, click_rate, messages_sent",
+      },
+      comparison: {
+        type: "string",
+        description: "Comparison type: wow (week-over-week), mom (month-over-month), custom",
+      },
+      current_days: {
+        type: "number",
+        description: "Days in current period (default: 7 for wow, 30 for mom)",
+      },
+    },
+    handler: async (params, ctx) => {
+      const metric = (params["metric"] as string) ?? "revenue";
+      const comparison = (params["comparison"] as string) ?? "wow";
+      const currentDays = Number(params["current_days"] ?? (comparison === "mom" ? 30 : 7));
+
+      const now = new Date();
+      const currentStart = new Date(now.getTime() - currentDays * 86400000);
+      const previousStart = new Date(currentStart.getTime() - currentDays * 86400000);
+
+      let currentValue = 0;
+      let previousValue = 0;
+
+      switch (metric) {
+        case "revenue": {
+          const [current, previous] = await Promise.all([
+            prisma.order.aggregate({
+              where: { storeId: ctx.storeId, createdAt: { gte: currentStart } },
+              _sum: { totalPrice: true },
+            }),
+            prisma.order.aggregate({
+              where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart } },
+              _sum: { totalPrice: true },
+            }),
+          ]);
+          currentValue = current._sum.totalPrice ?? 0;
+          previousValue = previous._sum.totalPrice ?? 0;
+          break;
+        }
+        case "orders": {
+          const [current, previous] = await Promise.all([
+            prisma.order.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart } } }),
+            prisma.order.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart } } }),
+          ]);
+          currentValue = current;
+          previousValue = previous;
+          break;
+        }
+        case "customers": {
+          const [current, previous] = await Promise.all([
+            prisma.customer.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart } } }),
+            prisma.customer.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart } } }),
+          ]);
+          currentValue = current;
+          previousValue = previous;
+          break;
+        }
+        case "messages_sent": {
+          const [current, previous] = await Promise.all([
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart }, status: { in: ["sent", "delivered"] } } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart }, status: { in: ["sent", "delivered"] } } }),
+          ]);
+          currentValue = current;
+          previousValue = previous;
+          break;
+        }
+        case "open_rate": {
+          const [currentTotal, currentOpened, prevTotal, prevOpened] = await Promise.all([
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart }, channel: "email" } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart }, channel: "email", openedAt: { not: null } } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart }, channel: "email" } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart }, channel: "email", openedAt: { not: null } } }),
+          ]);
+          currentValue = currentTotal > 0 ? Math.round((currentOpened / currentTotal) * 10000) / 100 : 0;
+          previousValue = prevTotal > 0 ? Math.round((prevOpened / prevTotal) * 10000) / 100 : 0;
+          break;
+        }
+        case "click_rate": {
+          const [currentTotal, currentClicked, prevTotal, prevClicked] = await Promise.all([
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart }, channel: "email" } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: currentStart }, channel: "email", clickedAt: { not: null } } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart }, channel: "email" } }),
+            prisma.messageLog.count({ where: { storeId: ctx.storeId, createdAt: { gte: previousStart, lt: currentStart }, channel: "email", clickedAt: { not: null } } }),
+          ]);
+          currentValue = currentTotal > 0 ? Math.round((currentClicked / currentTotal) * 10000) / 100 : 0;
+          previousValue = prevTotal > 0 ? Math.round((prevClicked / prevTotal) * 10000) / 100 : 0;
+          break;
+        }
+      }
+
+      const change = currentValue - previousValue;
+      const changePercent = previousValue !== 0
+        ? Math.round((change / previousValue) * 10000) / 100
+        : currentValue > 0 ? 100 : 0;
+
+      const comparisonLabel = comparison === "wow" ? "week-over-week" : comparison === "mom" ? "month-over-month" : `${currentDays}d-over-${currentDays}d`;
+
+      return {
+        metric,
+        comparison: comparisonLabel,
+        currentPeriod: `Last ${currentDays} days`,
+        previousPeriod: `${currentDays * 2}-${currentDays} days ago`,
+        currentValue: Math.round(currentValue * 100) / 100,
+        previousValue: Math.round(previousValue * 100) / 100,
+        change: Math.round(change * 100) / 100,
+        changePercent,
+        trend: change > 0 ? "up" : change < 0 ? "down" : "flat",
+      };
+    },
+  },
 ];
