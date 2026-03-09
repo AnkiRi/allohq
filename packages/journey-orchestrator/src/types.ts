@@ -97,6 +97,7 @@ export interface WorkflowNode {
     | "condition"
     | "channel_select"
     | "ab_test"
-    | "silence_check";
+    | "silence_check"
+    | "recommend_products";
   config: Record<string, unknown>;
 }

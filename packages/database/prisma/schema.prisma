@@ -137,6 +137,10 @@ model Store {
   forms                Form[]
   popups               Popup[]
 
+  // Sprint 8: Product Recommendations
+  productAffinityPairs          ProductAffinityPair[]
+  customerProductRecommendations CustomerProductRecommendation[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -168,6 +172,9 @@ model Product {
   // Sprint 3A: Creative Engine
   repurchaseCycle     ProductRepurchaseCycle?
   processedImages     ProcessedProductImage[]
+
+  // Sprint 8: Product Recommendations
+  customerProductRecommendations CustomerProductRecommendation[]
 
   @@unique([storeId, externalId])
   @@map("products")
@@ -248,6 +255,7 @@ model Customer {
   customerState      CustomerState?
   customerJourneys   CustomerJourney[]
   formSubmissions    FormSubmission[]
+  customerProductRecommendations CustomerProductRecommendation[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -1326,4 +1334,45 @@ model FormSubmission {
   @@index([customerId])
   @@index([capturedAt])
   @@map("form_submissions")
+}
+
+// ============================================================================
+// SPRINT 8: PRODUCT RECOMMENDATIONS
+// ============================================================================
+
+model ProductAffinityPair {
+  id         String   @id @default(cuid())
+  storeId    String
+  productA   String
+  productB   String
+  coCount    Int      @default(0)
+  confidence Float    @default(0)
+  updatedAt  DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, productA, productB])
+  @@index([storeId, productA])
+  @@index([storeId, productB])
+  @@map("product_affinity_pairs")
+}
+
+model CustomerProductRecommendation {
+  id         String   @id @default(cuid())
+  storeId    String
+  customerId String
+  productId  String
+  score      Float
+  strategy   String   // affinity, collaborative, reorder, cross_sell, trending
+  reason     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([storeId, customerId])
+  @@index([expiresAt])
+  @@map("customer_product_recommendations")
 }

@@ -59,6 +59,8 @@ export interface SpacerBlock {
   };
 }
 
+export type ProductSource = "manual" | "recommended" | "trending" | "cross_sell" | "reorder";
+
 export interface ProductBlock {
   id: string;
   type: "product";
@@ -69,6 +71,8 @@ export interface ProductBlock {
     showImage?: boolean;
     buttonText?: string;
     buttonHref?: string;
+    /** Source of product selection: manual (default) or dynamic recommendation */
+    source?: ProductSource;
     /** Resolved product data (populated by AI or at render time) */
     title?: string;
     description?: string;
@@ -85,6 +89,10 @@ export interface ProductGridBlock {
     columns?: 2 | 3;
     showPrice?: boolean;
     showDescription?: boolean;
+    /** Source of product selection: manual (default) or dynamic recommendation */
+    source?: ProductSource;
+    /** When set with source != "manual", auto-populate this many products from recommendations */
+    dynamicProductCount?: number;
   };
 }
 
@@ -239,6 +247,8 @@ export interface TrackingParams {
 export interface RenderOptions {
   variables: Record<string, string>;
   products?: Record<string, ProductData>;
+  /** Dynamic products resolved at send time from recommendation engine */
+  dynamicProducts?: ProductData[];
   previewMode?: boolean;
   inlineCss?: boolean;
   brandSettings?: RenderBrandSettings;

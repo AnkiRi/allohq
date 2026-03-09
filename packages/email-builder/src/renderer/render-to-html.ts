@@ -98,8 +98,14 @@ function renderBlock(block: EmailBlock, options: RenderOptions): string {
     }
 
     case "product": {
-      const { productId, showPrice = true, showDescription = true, showImage = true, buttonText = "Shop Now", buttonHref = "#" } = block.props;
-      const product: ProductData | undefined = products?.[productId];
+      const { productId, showPrice = true, showDescription = true, showImage = true, buttonText = "Shop Now", buttonHref = "#", source } = block.props;
+      // For dynamic sources, try dynamicProducts first, then fall back to products map
+      let product: ProductData | undefined;
+      if (source && source !== "manual" && options.dynamicProducts?.length) {
+        product = options.dynamicProducts[0];
+      } else {
+        product = products?.[productId];
+      }
       if (!product) {
         return `
           <tr>
@@ -136,9 +142,23 @@ function renderBlock(block: EmailBlock, options: RenderOptions): string {
     }
 
     case "product_grid": {
-      const { productIds, columns = 2, showPrice = true, showDescription = false } = block.props;
+      const { productIds, columns = 2, showPrice = true, showDescription = false, source: gridSource, dynamicProductCount } = block.props;
       const colWidth = Math.floor(100 / columns);
-      const productCells = productIds.map((pid) => {
+
+      // For dynamic grids, use dynamicProducts instead of productIds
+      let effectiveProductIds = productIds;
+      if (gridSource && gridSource !== "manual" && dynamicProductCount && options.dynamicProducts?.length) {
+        effectiveProductIds = options.dynamicProducts.slice(0, dynamicProductCount).map((p) => p.id);
+        // Inject dynamic products into the products map for rendering
+        for (const dp of options.dynamicProducts) {
+          if (!products?.[dp.id]) {
+            if (!options.products) (options as { products: Record<string, ProductData> }).products = {};
+            options.products![dp.id] = dp;
+          }
+        }
+      }
+
+      const productCells = effectiveProductIds.map((pid) => {
         const product = products?.[pid];
         if (!product) return `<td width="${colWidth}%" style="padding: 8px; vertical-align: top;"></td>`;
         return `

@@ -5,6 +5,7 @@ import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { checkAllRules } from "@allohq/communication-governor";
 import { learnFromResults } from "@allohq/campaign-engine";
+import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
@@ -98,6 +99,19 @@ export const sendWorker = new Worker<SendJobData>(
       }
     }
 
+    // Detect if any blocks need dynamic product recommendations
+    const hasDynamicProducts = blocks.some(
+      (b) =>
+        (b.type === "product" && b.props.source && b.props.source !== "manual") ||
+        (b.type === "product_grid" && b.props.source && b.props.source !== "manual"),
+    );
+    const maxDynamicCount = blocks.reduce((max, b) => {
+      if (b.type === "product_grid" && b.props.dynamicProductCount) {
+        return Math.max(max, b.props.dynamicProductCount);
+      }
+      return max;
+    }, hasDynamicProducts ? 4 : 0);
+
     // Fetch brand settings for auto header/footer
     const brandProfile = await prisma.brandProfile.findFirst({
       where: { storeId: campaign.storeId, workspaceId: campaign.store.workspaceId },
@@ -186,9 +200,35 @@ export const sendWorker = new Worker<SendJobData>(
         },
       });
 
+      // Resolve dynamic product recommendations per-customer if needed
+      let dynamicProducts: ProductData[] | undefined;
+      if (hasDynamicProducts && maxDynamicCount > 0) {
+        try {
+          const recs = await getRecommendations({
+            storeId: campaign.storeId,
+            customerId: customer.id,
+            limit: maxDynamicCount,
+          });
+          if (recs.length > 0) {
+            const resolved = await resolveProducts(campaign.storeId, recs.map((r) => r.productId));
+            dynamicProducts = resolved.map((r) => ({
+              id: r.productId,
+              title: r.title,
+              price: r.price,
+              compareAtPrice: r.compareAtPrice,
+              imageUrl: r.imageUrl,
+              handle: r.handle,
+            }));
+          }
+        } catch (err: any) {
+          console.warn(`[send-worker] Dynamic product resolution failed for ${customer.id}: ${err.message}`);
+        }
+      }
+
       const html = renderToHtml(blocks, {
         variables,
         products: productsMap,
+        dynamicProducts,
         previewMode: false,
         brandSettings,
         tracking: {

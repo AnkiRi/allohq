@@ -60,6 +60,9 @@ importers:
       '@allohq/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@allohq/product-recommendations':
+        specifier: workspace:*
+        version: link:../../packages/product-recommendations
       '@clerk/backend':
         specifier: ^1.18.6
         version: 1.34.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -296,6 +299,9 @@ importers:
       '@allohq/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@allohq/product-recommendations':
+        specifier: workspace:*
+        version: link:../../packages/product-recommendations
       bullmq:
         specifier: ^5.0.0
         version: 5.69.3
@@ -639,6 +645,9 @@ importers:
       '@allohq/messaging':
         specifier: workspace:*
         version: link:../messaging
+      '@allohq/product-recommendations':
+        specifier: workspace:*
+        version: link:../product-recommendations
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -680,10 +689,17 @@ importers:
         version: 5.9.3
 
   packages/product-recommendations:
+    dependencies:
+      '@allohq/database':
+        specifier: workspace:*
+        version: link:../database
     devDependencies:
       '@allohq/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.19.11
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

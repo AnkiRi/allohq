@@ -15,6 +15,7 @@ import { guardrailsRouter } from "./guardrails";
 import { briefingsRouter } from "./briefings";
 import { formsRouter } from "./forms";
 import { analyticsRouter } from "./analytics";
+import { recommendationsRouter } from "./recommendations";
 
 /**
  * Root tRPC router
@@ -36,6 +37,7 @@ export const appRouter = router({
   briefings: briefingsRouter,
   forms: formsRouter,
   analytics: analyticsRouter,
+  recommendations: recommendationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

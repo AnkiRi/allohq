@@ -1,5 +1,6 @@
 import { prisma } from "@allohq/database";
 import { checkAllRules } from "@allohq/communication-governor";
+import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import type { Channel } from "@allohq/messaging";
 import type {
   JourneyStep,
@@ -90,6 +91,50 @@ export async function executeJourneyStep(
     return { executed: true, decision: null, suppressed: false, reason: "Silence check passed" };
   }
 
+  if (node.type === "recommend_products") {
+    // Resolve product recommendations and store in step history for next send step to use
+    const productCount = (node.config["productCount"] as number) ?? 4;
+    const strategies = node.config["strategies"] as string[] | undefined;
+
+    const recs = await getRecommendations({
+      storeId,
+      customerId,
+      limit: productCount,
+      strategies: strategies as import("@allohq/product-recommendations").StrategyType[] | undefined,
+    });
+
+    const resolved = recs.length > 0
+      ? await resolveProducts(storeId, recs.map((r) => r.productId))
+      : [];
+
+    // Store resolved products in step history — next send step reads them
+    const stepRecord: JourneyStep = {
+      step: stepIndex,
+      channel: "email", // placeholder
+      sentAt: new Date().toISOString(),
+    };
+    // Attach recommended products as extra data in the step
+    (stepRecord as unknown as Record<string, unknown>)["recommendedProducts"] = resolved.map((p) => ({
+      productId: p.productId,
+      title: p.title,
+      price: p.price,
+      imageUrl: p.imageUrl,
+    }));
+
+    const stepHistory = (journey.stepHistory ?? []) as unknown as JourneyStep[];
+    stepHistory.push(stepRecord);
+
+    await prisma.customerJourney.update({
+      where: { id: journeyId },
+      data: {
+        currentStep: stepIndex + 1,
+        stepHistory: JSON.parse(JSON.stringify(stepHistory)),
+      },
+    });
+
+    return { executed: true, decision: null, suppressed: false, reason: `Resolved ${resolved.length} product recommendations` };
+  }
+
   if (node.type === "wait") {
     // Wait nodes don't need channel decisions — handled by worker re-queue
     return { executed: true, decision: null, suppressed: false, reason: "Wait step" };
@@ -173,8 +218,8 @@ export async function executeJourneyStep(
     }
   }
 
-  // Get personalisation context
-  const context = await getPersonalisationContext(customerId, storeId);
+  // Get personalisation context (pass journeyId to pick up recommended products)
+  const context = await getPersonalisationContext(customerId, storeId, journeyId);
 
   // Get template content and personalise
   const templateId =

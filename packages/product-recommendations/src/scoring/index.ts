@@ -1,2 +1,1 @@
-// Product scoring logic - to be implemented
-export {};
+export { scoreAndMerge, getRecommendations } from "./engine";

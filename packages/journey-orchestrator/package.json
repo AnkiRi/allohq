@@ -9,7 +9,8 @@
     "@allohq/customer-state": "workspace:*",
     "@allohq/communication-governor": "workspace:*",
     "@allohq/messaging": "workspace:*",
-    "@allohq/creative-engine": "workspace:*"
+    "@allohq/creative-engine": "workspace:*",
+    "@allohq/product-recommendations": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

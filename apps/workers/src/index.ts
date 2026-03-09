@@ -72,6 +72,7 @@ import { journeyStepperWorker } from "./workers/journey-stepper.worker";
 import { abTestEvaluatorWorker } from "./workers/ab-test-evaluator.worker";
 import { sendTimeOptimizerWorker } from "./workers/send-time-optimizer.worker";
 import { revenueForecastWorker } from "./workers/revenue-forecaster.worker";
+import { productRecommendationWorker } from "./workers/product-recommendation.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -103,6 +104,7 @@ console.log(`  - journey-stepper worker: ${journeyStepperWorker.name}`);
 console.log(`  - ab-test-evaluator worker: ${abTestEvaluatorWorker.name}`);
 console.log(`  - send-time-optimizer worker: ${sendTimeOptimizerWorker.name}`);
 console.log(`  - revenue-forecaster worker: ${revenueForecastWorker.name}`);
+console.log(`  - product-recommendation worker: ${productRecommendationWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -204,6 +206,16 @@ revenueForecastQueue.upsertJobScheduler(
   console.error("Failed to set up revenue forecast schedule:", err.message);
 });
 
+// Schedule product recommendation affinity build (daily)
+const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, { connection: redisConnection });
+productRecommendationQueue.upsertJobScheduler(
+  "product-recommendation-affinity-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "build-affinity", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up product recommendation schedule:", err.message);
+});
+
 // Graceful shutdown
 const shutdown = async () => {
   console.log("Shutting down workers...");
@@ -237,6 +249,7 @@ const shutdown = async () => {
     abTestEvaluatorWorker.close(),
     sendTimeOptimizerWorker.close(),
     revenueForecastWorker.close(),
+    productRecommendationWorker.close(),
   ]);
   process.exit(0);
 };

@@ -1,6 +1,6 @@
 import { prisma } from "@allohq/database";
 
-interface PersonalisationContext {
+export interface PersonalisationContext {
   firstName: string;
   lastName: string;
   email: string;
@@ -8,7 +8,7 @@ interface PersonalisationContext {
   lastOrderDate: string | null;
   daysSinceLastOrder: number | null;
   avgOrderValue: number;
-  topProducts: Array<{ title: string; id: string }>;
+  topProducts: Array<{ title: string; id: string; price?: number; imageUrl?: string }>;
   excludeProductIds: string[]; // products already purchased
   lifecycleStage: string;
   vipLevel: string;
@@ -17,10 +17,13 @@ interface PersonalisationContext {
 /**
  * Build personalisation context for a customer to use in
  * template rendering and content generation.
+ * If journeyId is provided, checks for recommended products from a
+ * preceding recommend_products step.
  */
 export async function getPersonalisationContext(
   customerId: string,
   storeId: string,
+  journeyId?: string,
 ): Promise<PersonalisationContext> {
   const [customer, orders, state] = await Promise.all([
     prisma.customer.findUnique({
@@ -86,6 +89,32 @@ export async function getPersonalisationContext(
         })
       : [];
 
+  // If a journeyId is provided, check for recommended products from a preceding recommend_products step
+  let finalTopProducts: Array<{ title: string; id: string; price?: number; imageUrl?: string }> = topProducts;
+  if (journeyId) {
+    const journey = await prisma.customerJourney.findUnique({
+      where: { id: journeyId },
+      select: { stepHistory: true },
+    });
+    const steps = (journey?.stepHistory ?? []) as unknown as Array<Record<string, unknown>>;
+    // Find the most recent recommend_products step (has recommendedProducts field)
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const step = steps[i];
+      if (step && Array.isArray(step["recommendedProducts"])) {
+        const recs = step["recommendedProducts"] as Array<{ productId: string; title: string; price?: number; imageUrl?: string }>;
+        if (recs.length > 0) {
+          finalTopProducts = recs.map((r) => ({
+            id: r.productId,
+            title: r.title,
+            price: r.price,
+            imageUrl: r.imageUrl,
+          }));
+          break;
+        }
+      }
+    }
+  }
+
   return {
     firstName: customer?.firstName ?? "",
     lastName: customer?.lastName ?? "",
@@ -94,7 +123,7 @@ export async function getPersonalisationContext(
     lastOrderDate,
     daysSinceLastOrder,
     avgOrderValue: Math.round(avgOrderValue * 100) / 100,
-    topProducts,
+    topProducts: finalTopProducts,
     excludeProductIds: Array.from(purchasedProductIds),
     lifecycleStage: state?.lifecycleStage ?? "subscriber",
     vipLevel: state?.vipLevel ?? "standard",
