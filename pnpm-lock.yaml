@@ -36,6 +36,9 @@ importers:
       '@allohq/autonomy-engine':
         specifier: workspace:*
         version: link:../../packages/autonomy-engine
+      '@allohq/conversation-engine':
+        specifier: workspace:*
+        version: link:../../packages/conversation-engine
       '@allohq/customer-intelligence':
         specifier: workspace:*
         version: link:../../packages/customer-intelligence
@@ -272,6 +275,9 @@ importers:
       '@allohq/communication-governor':
         specifier: workspace:*
         version: link:../../packages/communication-governor
+      '@allohq/conversation-engine':
+        specifier: workspace:*
+        version: link:../../packages/conversation-engine
       '@allohq/creative-engine':
         specifier: workspace:*
         version: link:../../packages/creative-engine
@@ -467,6 +473,37 @@ importers:
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/conversation-engine:
+    dependencies:
+      '@allohq/agent-brain':
+        specifier: workspace:*
+        version: link:../agent-brain
+      '@allohq/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@allohq/communication-governor':
+        specifier: workspace:*
+        version: link:../communication-governor
+      '@allohq/customer-state':
+        specifier: workspace:*
+        version: link:../customer-state
+      '@allohq/database':
+        specifier: workspace:*
+        version: link:../database
+      '@allohq/messaging':
+        specifier: workspace:*
+        version: link:../messaging
+    devDependencies:
+      '@allohq/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.15.0
         version: 22.19.11
       typescript:
         specifier: ^5.7.3

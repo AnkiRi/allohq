@@ -1,9 +1,14 @@
 import { Worker, type Job } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
-import { runCustomerAgent } from "@allohq/agent-core";
 import { sendSms, sendWhatsApp } from "@allohq/messaging";
 import { formatForChannel } from "../utils/channel-formatter";
+import {
+  routeConversation,
+  generateResponse,
+  escalateConversation,
+  onConversationOpened,
+} from "@allohq/conversation-engine";
 
 interface ConversationJobData {
   storeId: string;
@@ -16,7 +21,7 @@ interface ConversationJobData {
 
 /**
  * Process inbound messages from WhatsApp/SMS.
- * Runs the customer agent and sends the response back via the same channel.
+ * Routes to AI or merchant via conversation-engine, then sends response.
  *
  * Cross-channel continuity: loads conversation history across all channels
  * for the same customer so the agent has full context.
@@ -34,25 +39,37 @@ async function processConversation(job: Job<ConversationJobData>) {
     },
   });
 
-  // Cross-channel continuity: load recent messages from ALL conversations
-  // for the same customer (across widget, SMS, WhatsApp)
+  // Notify support-marketing bridge (suppresses marketing during support)
+  if (customerId) {
+    await onConversationOpened(storeId, customerId).catch((err) => {
+      console.error(`[conversation] Failed to update support state:`, err.message);
+    });
+  }
+
+  // Route: AI or merchant?
+  const routing = await routeConversation(storeId, customerId ?? null, conversationId, message);
+  console.log(`[conversation] Routing decision: ${routing.handler} (${routing.reason})`);
+
+  if (routing.handler === "merchant") {
+    // Escalate to merchant — build brief and update status
+    await escalateConversation(conversationId, routing.reason);
+    console.log(`[conversation] Escalated conversation ${conversationId} (${routing.priority} priority)`);
+    return;
+  }
+
+  // AI handles: build cross-channel history + generate response
   let crossChannelHistory: Array<{ role: string; content: string }> = [];
   if (customerId) {
     const allConversations = await prisma.conversation.findMany({
-      where: {
-        storeId,
-        customerId,
-      },
+      where: { storeId, customerId },
       select: { id: true },
     });
 
     const allConvIds = allConversations.map((c) => c.id);
     if (allConvIds.length > 1) {
-      // Get recent messages from other conversations for context
       const otherMessages = await prisma.conversationMessage.findMany({
         where: {
           conversationId: { in: allConvIds },
-          // Exclude current conversation — those come from the agent's own context
           NOT: { conversationId },
         },
         orderBy: { createdAt: "desc" },
@@ -69,8 +86,8 @@ async function processConversation(job: Job<ConversationJobData>) {
     }
   }
 
-  // Run agent with cross-channel context
-  const result = await runCustomerAgent({
+  // Generate AI response with knowledge base + guardrails
+  const result = await generateResponse({
     storeId,
     customerId,
     conversationId,
@@ -78,18 +95,25 @@ async function processConversation(job: Job<ConversationJobData>) {
     conversationHistory: crossChannelHistory.length > 0 ? crossChannelHistory : undefined,
   });
 
-  // Format response for the specific channel
-  const formattedResponse = formatForChannel(channel, result.response, result.toolCalls);
+  // If agent escalated via tool, the conversation is already escalated
+  if (result.confidence === 0) {
+    await escalateConversation(conversationId, "ai_escalated");
+    console.log(`[conversation] AI self-escalated conversation ${conversationId}`);
+  }
 
-  // Save agent response (store raw, not formatted)
+  // Format response for the specific channel
+  const formattedResponse = formatForChannel(channel, result.response, result.agentResult.toolCalls);
+
+  // Save agent response
   await prisma.conversationMessage.create({
     data: {
       conversationId,
       role: "assistant",
       content: result.response,
       metadata: {
-        toolCalls: result.toolCalls.map((t) => t.name),
-        tokens: { input: result.inputTokens, output: result.outputTokens },
+        toolCalls: result.toolCalls,
+        tokens: { input: result.agentResult.inputTokens, output: result.agentResult.outputTokens },
+        confidence: result.confidence,
         channel,
       } as any,
     },
@@ -117,7 +141,7 @@ async function processConversation(job: Job<ConversationJobData>) {
     data: { status: "waiting" },
   });
 
-  console.log(`[conversation] Responded to ${from} via ${channel}`);
+  console.log(`[conversation] Responded to ${from} via ${channel} (confidence: ${result.confidence})`);
 }
 
 export const conversationProcessWorker = new Worker<ConversationJobData>(

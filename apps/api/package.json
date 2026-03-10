@@ -14,6 +14,7 @@
     "@allohq/agent-core": "workspace:*",
     "@allohq/analytics": "workspace:*",
     "@allohq/autonomy-engine": "workspace:*",
+    "@allohq/conversation-engine": "workspace:*",
     "@allohq/customer-intelligence": "workspace:*",
     "@allohq/customer-state": "workspace:*",
     "@allohq/database": "workspace:*",

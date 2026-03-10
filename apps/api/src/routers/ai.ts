@@ -1351,6 +1351,8 @@ ${recentObservations.map((o) => {
         channel: c.channel,
         status: c.status,
         assignedTo: c.assignedTo,
+        sentiment: c.sentiment,
+        aiBrief: c.aiBrief,
         customer: c.customer,
         lastMessage: c.messages[0],
         messageCount: c._count.messages,
@@ -1454,5 +1456,53 @@ ${recentObservations.map((o) => {
       }
 
       return { success: true };
+    }),
+
+  /** Resolve a conversation — triggers sentiment analysis + support-marketing bridge */
+  resolveConversation: workspaceProcedure
+    .input(z.object({ conversationId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await ctx.prisma.conversation.findFirst({
+        where: { id: input.conversationId },
+        select: { storeId: true, customerId: true },
+      });
+      if (!conversation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      if (conversation.customerId) {
+        const { onConversationResolved } = await import("@allohq/conversation-engine");
+        await onConversationResolved(
+          conversation.storeId,
+          conversation.customerId,
+          input.conversationId,
+        );
+      } else {
+        // No customer linked — just mark resolved
+        await ctx.prisma.conversation.update({
+          where: { id: input.conversationId },
+          data: { status: "resolved", resolvedAt: new Date() },
+        });
+      }
+
+      return { success: true };
+    }),
+
+  /** Get full conversation context (customer profile, orders, state, AI brief) */
+  getConversationContext: workspaceProcedure
+    .input(z.object({ conversationId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const conversation = await ctx.prisma.conversation.findFirst({
+        where: { id: input.conversationId },
+        select: { storeId: true, customerId: true, aiBrief: true },
+      });
+      if (!conversation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const { buildConversationContext } = await import("@allohq/conversation-engine");
+      const context = await buildConversationContext(
+        conversation.storeId,
+        conversation.customerId,
+        input.conversationId,
+      );
+
+      return { ...context, aiBrief: conversation.aiBrief };
     }),
 });

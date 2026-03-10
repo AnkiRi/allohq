@@ -146,6 +146,9 @@ model Store {
   productPriceHistory       ProductPriceHistory[]
   proactiveOutreachLogs     ProactiveOutreachLog[]
 
+  // Sprint 10: Conversation Engine
+  knowledgeArticles         KnowledgeArticle[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -909,6 +912,9 @@ model Conversation {
   status     ConversationStatus @default(active)
   assignedTo String?            // user ID if handed to human
   metadata   Json               @default("{}") // session info, anonymous visitor data
+  sentiment  String?            // positive, neutral, negative
+  resolvedAt DateTime?
+  aiBrief    String?            @db.Text // AI summary for merchant handoff
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
@@ -1450,4 +1456,24 @@ model ProactiveOutreachLog {
   @@unique([storeId, customerId, outreachType, referenceId])
   @@index([storeId, outreachType])
   @@map("proactive_outreach_logs")
+}
+
+// ============================================================================
+// SPRINT 10: CONVERSATION ENGINE
+// ============================================================================
+
+model KnowledgeArticle {
+  id        String   @id @default(cuid())
+  storeId   String
+  category  String   // policy, faq, product_info, shipping, returns, general
+  title     String
+  content   String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, category])
+  @@map("knowledge_articles")
 }

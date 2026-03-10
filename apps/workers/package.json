@@ -23,6 +23,7 @@
     "@allohq/merchant-copilot": "workspace:*",
     "@allohq/customer-state": "workspace:*",
     "@allohq/journey-orchestrator": "workspace:*",
+    "@allohq/conversation-engine": "workspace:*",
     "@allohq/messaging": "workspace:*",
     "@allohq/product-recommendations": "workspace:*",
     "@allohq/proactive-outreach": "workspace:*",
