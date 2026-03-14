@@ -78,6 +78,7 @@ import { restockAlertWorker } from "./workers/restock-alert.worker";
 import { priceDropWorker } from "./workers/price-drop.worker";
 import { repurchaseReminderWorker } from "./workers/repurchase-reminder.worker";
 import { inventoryMonitorWorker } from "./workers/inventory-monitor.worker";
+import { storeActivationWorker } from "./workers/store-activation.worker";
 
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -115,6 +116,7 @@ console.log(`  - restock-alert worker: ${restockAlertWorker.name}`);
 console.log(`  - price-drop worker: ${priceDropWorker.name}`);
 console.log(`  - repurchase-reminder worker: ${repurchaseReminderWorker.name}`);
 console.log(`  - inventory-monitor worker: ${inventoryMonitorWorker.name}`);
+console.log(`  - store-activation worker: ${storeActivationWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -285,6 +287,7 @@ const shutdown = async () => {
     priceDropWorker.close(),
     repurchaseReminderWorker.close(),
     inventoryMonitorWorker.close(),
+    storeActivationWorker.close(),
   ]);
   process.exit(0);
 };

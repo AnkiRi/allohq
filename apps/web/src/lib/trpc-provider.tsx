@@ -13,7 +13,17 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
 
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
+        },
+      })
+  );
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
@@ -25,8 +35,9 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
               if (token) {
                 return { authorization: `Bearer ${token}` };
               }
-            } catch {
-              // Clerk not ready yet — send unauthenticated request
+              console.warn("[trpc] No token from Clerk getToken()");
+            } catch (err) {
+              console.error("[trpc] Clerk getToken error:", err);
             }
             return {};
           },

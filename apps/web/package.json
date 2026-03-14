@@ -12,6 +12,8 @@
   "dependencies": {
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.4.0",
     "@allohq/email-builder": "workspace:*",
     "@allohq/ui": "workspace:*",
     "@clerk/nextjs": "^6.9.3",

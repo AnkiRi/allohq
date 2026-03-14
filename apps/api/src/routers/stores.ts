@@ -32,6 +32,101 @@ export const storesRouter = router({
   }),
 
   /**
+   * Get store activation status for the live activity feed.
+   */
+  activationStatus: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: {
+          activatedAt: true,
+          activationLog: true,
+          onboardingCompletedAt: true,
+        },
+      });
+      if (!store) return null;
+
+      const log = store.activationLog as {
+        steps: Array<{ key: string; label: string; status: string; detail?: string; completedAt?: string }>;
+        startedAt: string;
+        completedAt?: string;
+      } | null;
+
+      // Get additional context for the activity feed
+      const [
+        automations,
+        pendingActions,
+        segmentDist,
+        customerCount,
+      ] = await Promise.all([
+        ctx.prisma.automation.findMany({
+          where: { storeId: input.storeId },
+          select: { id: true, name: true, status: true, category: true },
+        }),
+        ctx.prisma.actionQueue.count({ where: { storeId: input.storeId, status: "pending" } }),
+        ctx.prisma.rfmScore.groupBy({
+          by: ["segment"],
+          where: { storeId: input.storeId },
+          _count: { id: true },
+        }),
+        ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
+      ]);
+
+      const isActivating = !!store.onboardingCompletedAt && !store.activatedAt;
+      const isRecentlyActivated = store.activatedAt
+        ? Date.now() - new Date(store.activatedAt).getTime() < 30 * 60 * 1000
+        : false;
+
+      // Automation generation progress
+      const totalAutomations = automations.length;
+      const generatingCount = automations.filter((a) => a.status === "generating").length;
+      const readyOrActiveCount = automations.filter((a) => a.status === "ready" || a.status === "active").length;
+      const allGenerated = totalAutomations > 0 && generatingCount === 0;
+
+      // Overall progress percentage
+      const activationSteps = log?.steps ?? [];
+      const activationDoneCount = activationSteps.filter((s) => s.status === "done").length;
+      const activationTotal = activationSteps.length || 1;
+      const activationPct = Math.round((activationDoneCount / activationTotal) * 50); // 0-50%
+      const generationPct = totalAutomations > 0
+        ? Math.round((readyOrActiveCount / totalAutomations) * 50) // 50-100%
+        : (store.activatedAt ? 50 : 0);
+      const overallProgress = Math.min(activationPct + generationPct, 100);
+
+      return {
+        isActivating,
+        isRecentlyActivated,
+        activatedAt: store.activatedAt,
+        steps: activationSteps,
+        startedAt: log?.startedAt ?? null,
+        completedAt: log?.completedAt ?? null,
+        overallProgress,
+        automationProgress: {
+          total: totalAutomations,
+          generating: generatingCount,
+          ready: readyOrActiveCount,
+          allGenerated,
+          items: automations.map((a) => ({
+            id: a.id,
+            name: a.name,
+            status: a.status,
+            category: a.category,
+          })),
+        },
+        context: {
+          automationCount: totalAutomations,
+          pendingActions,
+          customerCount,
+          segments: segmentDist.map((s) => ({
+            name: s.segment,
+            count: s._count.id,
+          })),
+        },
+      };
+    }),
+
+  /**
    * Get a single store by ID with counts and sync status.
    */
   getById: workspaceProcedure
@@ -395,7 +490,7 @@ export const storesRouter = router({
       if (!store) throw new Error("Store not found");
       return ctx.prisma.store.update({
         where: { id: input.storeId },
-        data: { onboardingCompletedAt: new Date() },
+        data: { onboardingStep: 8, onboardingCompletedAt: new Date() },
       });
     }),
 

@@ -3,6 +3,13 @@ import { shopify } from "@allohq/ecommerce-integrations";
 const { exchangeCodeForToken } = shopify;
 import { prisma } from "@allohq/database";
 import { auth } from "@clerk/nextjs/server";
+import { Queue } from "bullmq";
+
+const redisConnection = {
+  host: process.env["REDIS_HOST"] ?? "localhost",
+  port: Number(process.env["REDIS_PORT"] ?? 6379),
+  password: process.env["REDIS_PASSWORD"],
+};
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -110,45 +117,46 @@ export async function GET(request: NextRequest) {
         shopDomain: shop,
         accessToken,
         isActive: true,
+        onboardingStep: 1,
       },
       update: {
         accessToken,
         isActive: true,
+        onboardingStep: 1,
+        onboardingCompletedAt: null,
       },
     });
 
-    // Trigger initial sync via API server
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+    // Queue sync and brand kit jobs directly via BullMQ
+    // (Previously called tRPC endpoints which failed without auth tokens)
     try {
-      await fetch(`${apiUrl}/stores.triggerSync`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          json: { storeId: store.id },
-        }),
+      const syncQueue = new Queue("sync", { connection: redisConnection });
+      await syncQueue.add("full-sync", {
+        storeId: store.id,
+        shopDomain: shop,
+        accessToken,
+        platform: "shopify",
       });
+      await syncQueue.close();
     } catch (syncError) {
-      // Non-fatal: sync will need to be triggered manually
-      console.error("Failed to trigger initial sync:", syncError);
+      console.error("Failed to queue initial sync:", syncError);
     }
 
-    // Queue brand kit extraction (runs after sync)
     try {
-      await fetch(`${apiUrl}/stores.queueBrandKit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ json: { storeId: store.id } }),
-      });
+      const brandKitQueue = new Queue("brand-analysis", { connection: redisConnection });
+      await brandKitQueue.add("brand-kit", {
+        storeId: store.id,
+        shopDomain: shop,
+        accessToken,
+      }, { delay: 30_000 }); // 30s delay to let sync start first
+      await brandKitQueue.close();
     } catch {
-      // Non-fatal: brand kit will be extracted later
       console.error("Failed to queue brand kit extraction");
     }
 
-    // Clear the state cookie and redirect to onboarding wizard
+    // Clear the state cookie and redirect to dashboard (which handles onboarding inline)
     const response = NextResponse.redirect(
-      new URL("/onboarding", request.nextUrl.origin)
+      new URL("/dashboard", request.nextUrl.origin)
     );
     response.cookies.delete("shopify_oauth_state");
     return response;

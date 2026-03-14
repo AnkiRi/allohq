@@ -45,4 +45,5 @@ export const QUEUE_NAMES = {
   PRICE_DROP: "price-drop",
   REPURCHASE_REMINDER: "repurchase-reminder",
   INVENTORY_MONITOR: "inventory-monitor",
+  STORE_ACTIVATION: "store-activation",
 } as const;

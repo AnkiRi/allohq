@@ -93,7 +93,10 @@ model Store {
   currency         String?
   timezone         String?
   messagingConfig  Json?    // per-store messaging provider config (future use)
+  onboardingStep        Int       @default(0)
   onboardingCompletedAt DateTime? // set when merchant completes onboarding wizard
+  activatedAt           DateTime? // timestamp when store activation completed
+  activationLog         Json?     // JSON field for tracking activation progress
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   products    Product[]

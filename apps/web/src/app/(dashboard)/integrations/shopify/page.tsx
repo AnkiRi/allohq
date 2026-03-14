@@ -22,7 +22,7 @@ export default function ShopifyDetailPage() {
   const [preSyncLastSyncAt, setPreSyncLastSyncAt] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
-  const { data: stores } = trpc.stores.list.useQuery(undefined, {
+  const { data: stores, isLoading } = trpc.stores.list.useQuery(undefined, {
     refetchInterval: isSyncing ? 3000 : false,
   });
   const store = stores?.find((s: { platform: string }) => s.platform === "shopify");
@@ -56,6 +56,24 @@ export default function ShopifyDetailPage() {
       setDisconnecting(false);
     },
   });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Link
+          href="/integrations"
+          className="inline-flex items-center gap-2 text-[13px] text-muted-foreground font-mono hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Integrations
+        </Link>
+        <div className="flex items-center gap-2 py-20 justify-center text-[13px] text-muted-foreground font-mono">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading store...
+        </div>
+      </div>
+    );
+  }
 
   if (!store) {
     return (

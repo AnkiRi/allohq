@@ -139,7 +139,7 @@ type Pill = { label: string; instruction: string | null; href?: string };
 function getSuggestions(insights: PanelInsights | undefined, pageContext: string): Pill[] {
   if (!insights) return [];
 
-  // Don't show any suggestions until data is synced — user must complete checklist first
+  // Don't show suggestions until data is synced
   if (!insights.storeState.hasSyncedData) return [];
 
   const pills: Pill[] = [];
@@ -148,7 +148,7 @@ function getSuggestions(insights: PanelInsights | undefined, pageContext: string
     pills.push({ label: "Analyze brand voice", instruction: "Analyze my brand voice" });
   }
   if (!insights.storeState.hasAutomations) {
-    pills.push({ label: "Launch AI Agent", instruction: null, href: "/automations" });
+    pills.push({ label: "View automations", instruction: null, href: "/automations" });
   }
   if (insights.segmentAlerts.atRiskCount > 0) {
     pills.push({ label: "Create win-back flow", instruction: "Create a win-back automation for at-risk customers" });
@@ -200,14 +200,11 @@ function buildWelcomeMessages(insights: PanelInsights): Message[] {
     messages.push({
       id: "welcome-syncing",
       role: "assistant",
-      content: "Your store is connected — great! Complete the setup checklist on your dashboard to sync your customer data. Once that's done, I'll have full context to help you with retention strategies, customer insights, and campaign creation.",
+      content: "Your store is connected and Allo is setting things up. Once the initial sync and activation complete, I'll have full context to help you with retention strategies, customer insights, and campaign creation.",
       timestamp: now,
-      insightCard: {
-        label: "Setup",
-        value: "Complete your checklist",
-        description: "Sync data → Analyze brand → Launch AI agent",
-        variant: "accent",
-      },
+      actionLinks: [
+        { label: "Go to Dashboard", href: "/dashboard" },
+      ],
     });
     return messages;
   }
@@ -1163,7 +1160,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) handleSubmit();
               }}
-              placeholder={!storeId ? "Connect a store to start..." : !dataReady ? "Complete setup checklist first..." : "Ask Allo anything..."}
+              placeholder={!storeId ? "Connect a store to start..." : !dataReady ? "Setting up your store..." : "Ask Allo anything..."}
               disabled={isProcessing || !storeId || !dataReady}
               className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-muted border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-colors disabled:opacity-50"
             />
