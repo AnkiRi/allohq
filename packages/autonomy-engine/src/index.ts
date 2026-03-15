@@ -27,6 +27,8 @@ export {
   expireStaleActions,
   getActionById,
   bulkApprove,
+  bulkReject,
+  executeApprovedAction,
 } from "./action-queue";
 
 export { routeAction } from "./approval-workflow";

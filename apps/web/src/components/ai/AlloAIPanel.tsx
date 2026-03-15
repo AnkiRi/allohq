@@ -347,24 +347,89 @@ function InsightCardView({ card }: { card: InsightCard }) {
   );
 }
 
-function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?: (href: string) => void }) {
+const AGENT_STEPS = [
+  { icon: "🔍", text: "Reading your store data..." },
+  { icon: "📊", text: "Analyzing customer segments..." },
+  { icon: "🧠", text: "Reasoning about the best approach..." },
+  { icon: "🛠", text: "Calling tools..." },
+  { icon: "✍️", text: "Generating content..." },
+  { icon: "🔄", text: "Processing results..." },
+  { icon: "📝", text: "Composing response..." },
+];
 
-  if (message.isLoading) {
-    return (
-      <div className="flex gap-2.5">
-        <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Sparkles className="w-3 h-3 text-[var(--color-warning)]" />
+function AgentActivityIndicator() {
+  const [stepIdx, setStepIdx] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsed((e) => e + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Progress through steps at varying intervals
+    const stepTimings = [2, 4, 6, 9, 12, 16, 20]; // cumulative seconds for each step
+    const newIdx = stepTimings.findIndex((t) => elapsed < t);
+    const idx = newIdx === -1 ? AGENT_STEPS.length - 1 : newIdx;
+    setStepIdx(idx);
+
+    // Mark previous steps as completed
+    const completed = stepTimings
+      .map((t, i) => (elapsed >= t ? i : -1))
+      .filter((i) => i >= 0);
+    setCompletedSteps(completed);
+  }, [elapsed]);
+
+  const currentStep = AGENT_STEPS[stepIdx] ?? AGENT_STEPS[AGENT_STEPS.length - 1]!;
+
+  return (
+    <div className="flex gap-2.5">
+      <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Sparkles className="w-3 h-3 text-[var(--color-warning)] animate-spin" style={{ animationDuration: "3s" }} />
+      </div>
+      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-warning)]/30 pl-3">
+        {/* Completed steps */}
+        <div className="space-y-1 mb-1.5">
+          {completedSteps.map((idx) => {
+            const step = AGENT_STEPS[idx];
+            if (!step) return null;
+            return (
+              <div key={idx} className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground/60">
+                <Check className="w-3 h-3 text-[var(--color-success)]" />
+                <span>{step.text.replace("...", "")}</span>
+              </div>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-2 py-1">
+
+        {/* Current step */}
+        <div className="flex items-center gap-2 py-0.5">
           <div className="flex gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite]" />
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.3s]" />
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.6s]" />
           </div>
-          <span className="text-[12px] font-mono text-muted-foreground">{message.content}</span>
+          <span className="text-[12px] font-mono text-[var(--color-warning)]">
+            {currentStep.text}
+          </span>
+        </div>
+
+        {/* Timer */}
+        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1">
+          {elapsed}s elapsed
         </div>
       </div>
-    );
+    </div>
+  );
+}
+
+function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?: (href: string) => void }) {
+
+  if (message.isLoading) {
+    return <AgentActivityIndicator />;
   }
 
   if (message.role === "user") {
@@ -389,9 +454,9 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
         {/* Tool calls indicator */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {message.toolCalls.map((tool) => (
+            {message.toolCalls.map((tool, i) => (
               <span
-                key={tool}
+                key={`${tool}-${i}`}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[10px] font-mono text-[var(--color-success)]"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]" />
@@ -549,6 +614,23 @@ function ActivationStatusIcon({ status }: { status: string }) {
   return <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" />;
 }
 
+const ACTIVATION_LOG_MESSAGES: Record<string, string[]> = {
+  generating: [
+    "Designing workflow triggers and conditions",
+    "Building email sequence with optimal timing",
+    "Writing subject lines and body copy",
+    "Setting up A/B test variants",
+    "Configuring segment targeting rules",
+  ],
+  analysis: [
+    "Scanning product catalog for patterns",
+    "Computing customer lifetime value distribution",
+    "Identifying churn risk signals",
+    "Building RFM segmentation model",
+    "Extracting brand voice from store copy",
+  ],
+};
+
 function ActivationProgressPanel({ activation }: { activation: ActivationData }) {
   const steps = activation.steps ?? [];
   const items = activation.automationProgress?.items ?? [];
@@ -557,19 +639,71 @@ function ActivationProgressPanel({ activation }: { activation: ActivationData })
   const doneCount = steps.filter((s) => s.status === "done").length + (total - generating);
   const totalTasks = steps.length + total;
 
+  // Elapsed timer
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Activity log — accumulates messages over time
+  const [logEntries, setLogEntries] = useState<{ time: number; text: string }[]>([]);
+  const logRef = useRef<HTMLDivElement>(null);
+  const lastLogTimeRef = useRef(0);
+
+  useEffect(() => {
+    // Add a new log entry every 3-5 seconds
+    if (elapsed - lastLogTimeRef.current < 3) return;
+    lastLogTimeRef.current = elapsed;
+
+    const generatingItem = items.find((i) => i.status === "generating");
+    const runningStep = steps.find((s) => s.status === "running");
+
+    let pool: string[];
+    if (generatingItem) {
+      const name = generatingItem.name.replace(" Automation", "");
+      pool = [
+        ...(ACTIVATION_LOG_MESSAGES.generating ?? []).map((m) => `${name}: ${m}`),
+        `${name}: Analyzing best send windows`,
+        `${name}: Matching tone to brand voice`,
+      ];
+    } else if (runningStep) {
+      pool = ACTIVATION_LOG_MESSAGES.analysis ?? [];
+    } else {
+      pool = ["Finalizing configuration...", "Running quality checks..."];
+    }
+
+    const usedTexts = new Set(logEntries.map((e) => e.text));
+    const available = pool.filter((m) => !usedTexts.has(m));
+    const msg = available.length > 0
+      ? available[Math.floor(Math.random() * available.length)]!
+      : pool[Math.floor(Math.random() * pool.length)]!;
+
+    setLogEntries((prev) => [...prev.slice(-15), { time: elapsed, text: msg }]);
+  }, [elapsed, items, steps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-scroll log
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
+  }, [logEntries]);
+
+  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
   return (
-    <div className="flex-1 overflow-y-auto p-5 space-y-5">
+    <div className="flex-1 overflow-y-auto p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-xl bg-[var(--color-warning)]/10 flex items-center justify-center">
           <Brain className="w-4 h-4 text-[var(--color-warning)] animate-pulse" />
         </div>
-        <div>
+        <div className="flex-1">
           <div className="text-[14px] font-serif font-semibold text-foreground">
-            Setting up your retention system...
+            Setting up your retention system
           </div>
-          <div className="text-[11px] font-mono text-muted-foreground">
-            {doneCount} of {totalTasks} tasks complete
+          <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
+            <span>{doneCount} of {totalTasks} tasks</span>
+            <span className="text-muted-foreground/40">•</span>
+            <span>{fmtTime(elapsed)} elapsed</span>
           </div>
         </div>
       </div>
@@ -584,66 +718,88 @@ function ActivationProgressPanel({ activation }: { activation: ActivationData })
         />
       </div>
 
-      {/* Automations section */}
-      {items.length > 0 && (
-        <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
-            Automations
+      {/* Automations + Analysis in compact view */}
+      <div className="space-y-1">
+        {items.map((item) => (
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-2.5 py-1"
+          >
+            <ActivationStatusIcon status={item.status} />
+            <span className={cn(
+              "text-[12px] font-mono flex-1 truncate",
+              (item.status === "active" || item.status === "ready") ? "text-foreground" :
+              item.status === "generating" ? "text-[var(--color-warning)]" :
+              "text-muted-foreground"
+            )}>
+              {item.name.replace(" Automation", "")}
+            </span>
+            <span className={cn(
+              "text-[10px] font-mono capitalize flex-shrink-0",
+              item.status === "active" ? "text-[var(--color-success)]" :
+              item.status === "ready" ? "text-[var(--color-accent)]" :
+              item.status === "generating" ? "text-[var(--color-warning)]" :
+              "text-muted-foreground"
+            )}>
+              {item.status === "active" ? "Active" :
+               item.status === "ready" ? "Ready" :
+               item.status}
+            </span>
+          </motion.div>
+        ))}
+        {steps.map((step) => (
+          <div key={step.key} className="flex items-center gap-2.5 py-1">
+            <ActivationStatusIcon status={step.status} />
+            <span className={cn(
+              "text-[12px] font-mono truncate",
+              step.status === "done" ? "text-foreground" :
+              step.status === "running" ? "text-[var(--color-warning)]" :
+              "text-muted-foreground"
+            )}>
+              {step.label}
+            </span>
           </div>
-          <div className="space-y-1">
-            {items.map((item) => (
+        ))}
+      </div>
+
+      {/* Live activity log */}
+      {logEntries.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 mb-1.5">
+            Live Activity
+          </div>
+          <div
+            ref={logRef}
+            className="max-h-[180px] overflow-y-auto space-y-0.5 border-l-2 border-[var(--color-warning)]/20 pl-3"
+          >
+            {logEntries.map((entry, i) => (
               <motion.div
-                key={item.id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-2.5 py-1.5"
+                key={i}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-start gap-2 py-0.5"
               >
-                <ActivationStatusIcon status={item.status} />
-                <span className={cn(
-                  "text-[12px] font-mono flex-1 truncate",
-                  (item.status === "active" || item.status === "ready") ? "text-foreground" :
-                  item.status === "generating" ? "text-[var(--color-warning)]" :
-                  "text-muted-foreground"
-                )}>
-                  {item.name.replace(" Automation", "")}
+                <span className="text-[9px] font-mono text-muted-foreground/40 w-8 flex-shrink-0 pt-px">
+                  {fmtTime(entry.time)}
                 </span>
                 <span className={cn(
-                  "text-[10px] font-mono capitalize flex-shrink-0",
-                  item.status === "active" ? "text-[var(--color-success)]" :
-                  item.status === "ready" ? "text-[var(--color-accent)]" :
-                  item.status === "generating" ? "text-[var(--color-warning)]" :
-                  "text-muted-foreground"
+                  "text-[11px] font-mono",
+                  i === logEntries.length - 1
+                    ? "text-[var(--color-warning)]"
+                    : "text-muted-foreground/60"
                 )}>
-                  {item.status === "active" ? "Active (autopilot)" :
-                   item.status === "ready" ? "Ready for review" :
-                   item.status}
+                  {entry.text}
                 </span>
               </motion.div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Analysis section */}
-      {steps.length > 0 && (
-        <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
-            Analysis
-          </div>
-          <div className="space-y-1">
-            {steps.map((step) => (
-              <div key={step.key} className="flex items-center gap-2.5 py-1.5">
-                <ActivationStatusIcon status={step.status} />
-                <span className={cn(
-                  "text-[12px] font-mono truncate",
-                  step.status === "done" ? "text-foreground" :
-                  step.status === "running" ? "text-[var(--color-warning)]" :
-                  "text-muted-foreground"
-                )}>
-                  {step.label}
-                </span>
-              </div>
-            ))}
+            {/* Blinking cursor on latest */}
+            <div className="flex items-center gap-2 py-0.5">
+              <span className="text-[9px] font-mono text-muted-foreground/40 w-8 flex-shrink-0">{fmtTime(elapsed)}</span>
+              <span className="w-1.5 h-3 bg-[var(--color-warning)] animate-[warm-pulse_1s_ease-in-out_infinite]" />
+            </div>
           </div>
         </div>
       )}
@@ -794,8 +950,41 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [welcomeBuilt, setWelcomeBuilt] = useState(false);
-  const [currentChatId, setCurrentChatId] = useState<string | undefined>();
+  const [currentChatId, setCurrentChatIdRaw] = useState<string | undefined>();
   const [currentChatTitle, setCurrentChatTitle] = useState<string | undefined>();
+
+  // Hydrate from sessionStorage after mount (avoids SSR mismatch)
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const savedId = sessionStorage.getItem("allo-chat-id") || undefined;
+    const savedTitle = sessionStorage.getItem("allo-chat-title") || undefined;
+    if (savedId) {
+      setCurrentChatIdRaw(savedId);
+      setCurrentChatTitle(savedTitle);
+    }
+  }, []);
+
+  // Sync chatId to sessionStorage so it persists across tab navigation
+  const setCurrentChatId = useCallback((id: string | undefined) => {
+    setCurrentChatIdRaw(id);
+    if (id) {
+      sessionStorage.setItem("allo-chat-id", id);
+    } else {
+      sessionStorage.removeItem("allo-chat-id");
+    }
+  }, []);
+
+  // Sync title to sessionStorage
+  const setCurrentChatTitlePersist = useCallback((title: string | undefined) => {
+    setCurrentChatTitle(title);
+    if (title) {
+      sessionStorage.setItem("allo-chat-title", title);
+    } else {
+      sessionStorage.removeItem("allo-chat-title");
+    }
+  }, []);
   const [showChatSwitcher, setShowChatSwitcher] = useState(false);
   const [chatSearch, setChatSearch] = useState("");
   const [editingHeaderTitle, setEditingHeaderTitle] = useState(false);
@@ -878,8 +1067,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   );
   // Show activation view when: in progress, or just completed (until dismissed)
   const showActivationView = !activationDismissed && activationData && (isActivationInProgress || activationJustCompleted);
-  // Disable chat during activation work
-  const agentBusy = isActivationInProgress;
+  // Only disable chat when automations are actively being generated (not paused/ready)
+  const agentBusy = !!(activationData && activationData.automationProgress && activationData.automationProgress.generating > 0);
 
   // Fetch smart suggested actions (Fix 7)
   const { data: smartSuggestions } = (trpc as any).briefings.suggestedActions.useQuery(
@@ -905,6 +1094,12 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const [editingTitle, setEditingTitle] = useState("");
   const welcomeStoreRef = useRef<string>("");
 
+  // Track whether user has sent messages (ref to avoid dep cycle)
+  const hasUserMessagesRef = useRef(false);
+  useEffect(() => {
+    hasUserMessagesRef.current = messages.some((m) => m.role === "user");
+  }, [messages]);
+
   // Build welcome messages — briefing-style on dashboard, contextual on other pages
   const welcomePageRef = useRef<string>("");
   useEffect(() => {
@@ -922,13 +1117,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       welcomePageRef.current = "";
     }
 
-    // On page change, rebuild welcome if no active chat
-    if (pageContext !== welcomePageRef.current && !currentChatId) {
+    // On page change, rebuild welcome only if no active chat and no user messages
+    if (pageContext !== welcomePageRef.current && !currentChatId && !hasUserMessagesRef.current) {
       setWelcomeBuilt(false);
       welcomePageRef.current = pageContext;
     }
 
-    if (insights && !welcomeBuilt && !currentChatId) {
+    if (insights && !welcomeBuilt && !currentChatId && !hasUserMessagesRef.current) {
       if (isDashboard) {
         setMessages(buildBriefingMessage(insights, latestBriefing));
       } else if (pageContextData) {
@@ -945,6 +1140,41 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       setWelcomeBuilt(true);
     }
   }, [insights, welcomeBuilt, storeId, latestBriefing, pageContext, isDashboard, pageContextData, currentChatId]);
+
+  // Restore persisted chat on mount (soft navigation — sessionStorage survives)
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !currentChatId || messages.some((m) => m.role === "user")) return;
+    restoredRef.current = true;
+
+    (async () => {
+      try {
+        const chat = await (utils.ai as any).getChat.fetch({ chatId: currentChatId }) as {
+          title?: string;
+          messages?: { id: string; role: string; content: string; highlights: { label: string; value: string }[] | null; createdAt: string }[];
+        };
+        if (chat?.messages && chat.messages.length > 0) {
+          setCurrentChatTitlePersist(chat.title || "Chat");
+          setMessages(chat.messages.map((m) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            highlights: m.highlights ?? undefined,
+            timestamp: new Date(m.createdAt),
+          })));
+          setWelcomeBuilt(true);
+        } else {
+          // Chat not found or empty — clear persisted state
+          setCurrentChatId(undefined);
+          setCurrentChatTitlePersist(undefined);
+        }
+      } catch {
+        // Chat load failed — start fresh
+        setCurrentChatId(undefined);
+        setCurrentChatTitlePersist(undefined);
+      }
+    })();
+  }, [currentChatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to bottom
   useEffect(() => {
@@ -1007,7 +1237,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       setIsProcessing(false);
       if (!currentChatId) {
         const lastUserMsg = messages.filter((m) => m.role === "user").pop();
-        setCurrentChatTitle(lastUserMsg?.content.slice(0, 40) || "New chat");
+        setCurrentChatTitlePersist(lastUserMsg?.content.slice(0, 40) || "New chat");
       }
       setCurrentChatId(data.chatId);
       refetchHistory();
@@ -1030,6 +1260,17 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       }
       if (data.action?.created.segmentId) {
         actionLinks.push({ label: "View Segment", href: "/segments" });
+      }
+
+      // Also extract action links from tool call names when agent used tools directly
+      if (data.toolCalls?.includes("get_automation_details") || data.toolCalls?.includes("modify_automation")) {
+        // Extract automation ID from reply if present (agent often includes it)
+        const autoIdMatch = data.reply.match(/automations?\/([a-z0-9-]+)/i) ?? data.reply.match(/automationId["\s:]+([a-z0-9-]+)/i);
+        if (autoIdMatch) {
+          actionLinks.push({ label: "View Automation", href: `/automations/${autoIdMatch[1]}` });
+        } else if (!actionLinks.some((l) => l.href.startsWith("/automations"))) {
+          actionLinks.push({ label: "View Automations", href: "/automations" });
+        }
       }
 
       let insightCard: InsightCard | undefined;
@@ -1145,7 +1386,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
 
   const startNewChat = useCallback(() => {
     setCurrentChatId(undefined);
-    setCurrentChatTitle(undefined);
+    setCurrentChatTitlePersist(undefined);
     setDynamicSuggestions([]);
     setShowChatSwitcher(false);
     setWelcomeBuilt(false);
@@ -1175,7 +1416,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     try {
       const chat = await (utils.ai as any).getChat.fetch({ chatId }) as { title?: string; messages?: { id: string; role: string; content: string; highlights: { label: string; value: string }[] | null; createdAt: string }[] };
       if (chat?.messages) {
-        setCurrentChatTitle(chat.title || "Chat");
+        setCurrentChatTitlePersist(chat.title || "Chat");
         setMessages(chat.messages.map((m) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
@@ -1270,7 +1511,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                   onKeyDown={async (e) => {
                     if (e.key === "Enter" && headerTitleDraft.trim()) {
                       await renameChatMut.mutateAsync({ chatId: currentChatId, title: headerTitleDraft.trim() });
-                      setCurrentChatTitle(headerTitleDraft.trim());
+                      setCurrentChatTitlePersist(headerTitleDraft.trim());
                       setEditingHeaderTitle(false);
                     }
                     if (e.key === "Escape") setEditingHeaderTitle(false);
@@ -1278,7 +1519,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                   onBlur={async () => {
                     if (headerTitleDraft.trim() && headerTitleDraft.trim() !== currentChatTitle) {
                       await renameChatMut.mutateAsync({ chatId: currentChatId, title: headerTitleDraft.trim() });
-                      setCurrentChatTitle(headerTitleDraft.trim());
+                      setCurrentChatTitlePersist(headerTitleDraft.trim());
                     }
                     setEditingHeaderTitle(false);
                   }}
@@ -1303,7 +1544,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                   </div>
                   {storeId && (
                     <div className="text-[10px] font-mono text-muted-foreground truncate">
-                      {isProcessing ? "Thinking..." :
+                      {isProcessing ? "Agent working..." :
                        isActivationInProgress ? "Setting up your retention system..." :
                        agentStatus?.isWorking ? `Working on ${agentStatus.activeJobs.length} task${agentStatus.activeJobs.length > 1 ? "s" : ""}...` :
                        agentStatus?.pendingActions ? `${agentStatus.pendingActions} action${agentStatus.pendingActions > 1 ? "s" : ""} need review` :
@@ -1399,7 +1640,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                             onKeyDown={async (e) => {
                               if (e.key === "Enter" && editingTitle.trim()) {
                                 await renameChatMut.mutateAsync({ chatId: chat.id, title: editingTitle.trim() });
-                                if (currentChatId === chat.id) setCurrentChatTitle(editingTitle.trim());
+                                if (currentChatId === chat.id) setCurrentChatTitlePersist(editingTitle.trim());
                                 setEditingChatId(null);
                               }
                               if (e.key === "Escape") setEditingChatId(null);
@@ -1407,7 +1648,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                             onBlur={async () => {
                               if (editingTitle.trim() && editingTitle.trim() !== chat.title) {
                                 await renameChatMut.mutateAsync({ chatId: chat.id, title: editingTitle.trim() });
-                                if (currentChatId === chat.id) setCurrentChatTitle(editingTitle.trim());
+                                if (currentChatId === chat.id) setCurrentChatTitlePersist(editingTitle.trim());
                               }
                               setEditingChatId(null);
                             }}

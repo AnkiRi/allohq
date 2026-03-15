@@ -8,8 +8,10 @@ import {
   approveAction,
   rejectAction,
   bulkApprove,
+  bulkReject,
   getActionById,
   expireStaleActions,
+  executeApprovedAction,
   AutonomyTier,
   ActionCategory,
   ActionStatus,
@@ -104,7 +106,7 @@ export const autonomyRouter = router({
       return getActionById(input.actionId);
     }),
 
-  /** Approve an action */
+  /** Approve an action and execute it (creates campaign/activates automation) */
   approveAction: workspaceProcedure
     .input(
       z.object({
@@ -114,7 +116,12 @@ export const autonomyRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await approveAction(input.actionId, ctx.userId, input.note);
-      return { success: true };
+      try {
+        const result = await executeApprovedAction(input.actionId);
+        return { success: true, ...result };
+      } catch {
+        return { success: true, executedType: "unknown" };
+      }
     }),
 
   /** Reject an action */
@@ -130,7 +137,7 @@ export const autonomyRouter = router({
       return { success: true };
     }),
 
-  /** Bulk approve multiple actions */
+  /** Bulk approve multiple actions and execute each */
   bulkApprove: workspaceProcedure
     .input(
       z.object({
@@ -139,6 +146,22 @@ export const autonomyRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const count = await bulkApprove(input.actionIds, ctx.userId);
+      for (const id of input.actionIds) {
+        try { await executeApprovedAction(id); } catch { /* best-effort */ }
+      }
       return { approved: count };
+    }),
+
+  /** Bulk reject / clear multiple actions */
+  bulkReject: workspaceProcedure
+    .input(
+      z.object({
+        actionIds: z.array(z.string()),
+        reason: z.string().default("Cleared by merchant"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const count = await bulkReject(input.actionIds, ctx.userId, input.reason);
+      return { rejected: count };
     }),
 });

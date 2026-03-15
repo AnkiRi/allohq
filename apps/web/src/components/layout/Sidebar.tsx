@@ -19,6 +19,7 @@ import {
   MousePointerClick,
   MessageSquare,
   ChevronDown,
+  Brain,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -39,6 +40,7 @@ const secondaryNav = [
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Forms", href: "/forms", icon: MousePointerClick },
+  { name: "Brand Voice", href: "/intelligence/brand", icon: Brain },
   { name: "Conversations", href: "/conversations", icon: MessageSquare },
   { name: "Integrations", href: "/integrations", icon: Store },
 ] as const;

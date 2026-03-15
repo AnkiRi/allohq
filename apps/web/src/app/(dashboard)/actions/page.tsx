@@ -13,6 +13,9 @@ import {
   Filter,
   Pencil,
   X,
+  Trash2,
+  ArrowRight,
+  Info,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -32,6 +35,7 @@ const STATUS_OPTIONS = [
   { value: undefined, label: "All" },
   { value: "pending", label: "Pending" },
   { value: "approved", label: "Approved" },
+  { value: "executed", label: "Executed" },
   { value: "rejected", label: "Rejected" },
   { value: "expired", label: "Expired" },
 ] as const;
@@ -69,6 +73,38 @@ const TYPE_OPTIONS = [
   { value: "discount", label: "Discount" },
 ] as const;
 
+function getStatusBanner(status: string | undefined): { text: string; color: string } | null {
+  switch (status) {
+    case "pending":
+      return { text: "Approve actions to create campaigns or activate automations. Reject to dismiss.", color: "bg-blue-50 text-blue-700 border-blue-200" };
+    case "approved":
+    case "executed":
+      return { text: "These actions have been executed. View results in Campaigns or Automations.", color: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+    case "rejected":
+      return { text: "Dismissed actions. These won't be executed.", color: "bg-gray-50 text-gray-600 border-gray-200" };
+    case "expired":
+      return { text: "Expired actions — the opportunity window has passed.", color: "bg-amber-50 text-amber-700 border-amber-200" };
+    default:
+      return null;
+  }
+}
+
+function getEmptyState(status: string | undefined): { title: string; description: string } {
+  switch (status) {
+    case "pending":
+      return { title: "No pending actions", description: "All caught up! Allo will propose new campaigns and automations as opportunities arise." };
+    case "approved":
+    case "executed":
+      return { title: "No executed actions", description: "Approve pending actions to create campaigns or activate automations." };
+    case "rejected":
+      return { title: "No rejected actions", description: "Actions you dismiss or reject will appear here." };
+    case "expired":
+      return { title: "No expired actions", description: "Actions that weren't reviewed in time appear here." };
+    default:
+      return { title: "No actions yet", description: "Allo will queue opportunities as it analyzes your store data." };
+  }
+}
+
 export default function ActionsPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -87,8 +123,13 @@ export default function ActionsPage() {
   const utils = trpc.useUtils();
 
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
-    onSuccess: () => {
-      toast("Action approved!", "success");
+    onSuccess: (result: { executedType?: string }) => {
+      const msg = result.executedType === "campaign"
+        ? "Action approved — campaign created! Check Campaigns tab."
+        : result.executedType === "automation"
+        ? "Action approved — automation activated!"
+        : "Action approved!";
+      toast(msg, "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
     onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
@@ -112,7 +153,14 @@ export default function ActionsPage() {
 
   const bulkApproveMut = (trpc as any).autonomy.bulkApprove.useMutation({
     onSuccess: (result: { approved: number }) => {
-      toast(`${result.approved} actions approved!`, "success");
+      toast(`${result.approved} actions approved & executed!`, "success");
+      (utils as any).autonomy.listActions.invalidate({ storeId });
+    },
+  }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
+
+  const bulkRejectMut = (trpc as any).autonomy.bulkReject.useMutation({
+    onSuccess: (result: { rejected: number }) => {
+      toast(`${result.rejected} actions cleared`, "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
@@ -122,6 +170,9 @@ export default function ActionsPage() {
     ? allActions.filter((a: any) => a.category === typeFilter || a.type?.includes(typeFilter))
     : allActions;
   const pendingActions = actions.filter((a: any) => a.status === "pending");
+
+  const banner = getStatusBanner(statusFilter);
+  const empty = getEmptyState(statusFilter);
 
   return (
     <motion.div
@@ -137,17 +188,32 @@ export default function ActionsPage() {
             Action Queue
           </h1>
           <p className="text-sm text-[#8B8074] mt-1">
-            Review AI-proposed campaigns and actions
+            Review AI-proposed campaigns and actions — approve to execute, reject to dismiss
           </p>
         </div>
-        {pendingActions.length > 1 && (
-          <button
-            onClick={() => bulkApproveMut.mutate({ actionIds: pendingActions.map((a: any) => a.id) })}
-            className="px-4 py-2 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors"
-          >
-            Approve All ({pendingActions.length})
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {pendingActions.length > 1 && (
+            <>
+              <button
+                onClick={() => bulkRejectMut.mutate({
+                  actionIds: pendingActions.map((a: any) => a.id),
+                  reason: "Cleared by merchant",
+                })}
+                className="flex items-center gap-1.5 px-4 py-2 border border-[#EDE7DB] text-[#8B8074] text-sm rounded-lg hover:bg-[#EDE7DB]/40 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear All ({pendingActions.length})
+              </button>
+              <button
+                onClick={() => bulkApproveMut.mutate({ actionIds: pendingActions.map((a: any) => a.id) })}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                Approve All ({pendingActions.length})
+              </button>
+            </>
+          )}
+        </div>
       </motion.div>
 
       {/* Filters */}
@@ -185,6 +251,17 @@ export default function ActionsPage() {
         </span>
       </motion.div>
 
+      {/* Contextual banner */}
+      {banner && (
+        <motion.div
+          variants={itemVariants}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-xs ${banner.color}`}
+        >
+          <Info className="w-3.5 h-3.5 flex-shrink-0" />
+          {banner.text}
+        </motion.div>
+      )}
+
       {/* Loading */}
       {isLoading && (
         <motion.div variants={itemVariants} className="space-y-4">
@@ -201,10 +278,8 @@ export default function ActionsPage() {
           className="glass-card-static rounded-xl p-12 text-center"
         >
           <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-[#2C2C2C]">All clear</h3>
-          <p className="text-sm text-[#8B8074] mt-1">
-            No actions waiting for review. Allo will queue new opportunities as they arise.
-          </p>
+          <h3 className="text-lg font-semibold text-[#2C2C2C]">{empty.title}</h3>
+          <p className="text-sm text-[#8B8074] mt-1">{empty.description}</p>
         </motion.div>
       )}
 
@@ -214,6 +289,7 @@ export default function ActionsPage() {
         const urgencyColor = getUrgencyColor(action.urgencyScore ?? 0);
         const expiry = timeUntilExpiry(action.expiresAt);
         const isExpanded = expandedId === action.id;
+        const isExecuted = action.status === "approved" || action.status === "executed" || action.status === "auto_executed";
 
         return (
           <motion.div
@@ -237,6 +313,11 @@ export default function ActionsPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${confidence.color}`}>
                       {confidence.label} confidence
                     </span>
+                    {action.type && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-[#EDE7DB]/60 text-[#5C5549]">
+                        {action.type === "campaign_send" ? "Campaign" : action.type === "automation_draft" ? "Automation" : action.type}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-base font-semibold text-[#2C2C2C]">
                     {action.campaignName || action.reasoning?.substring(0, 80) || action.type}
@@ -278,14 +359,36 @@ export default function ActionsPage() {
 
               {/* Preview toggle + Actions */}
               <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#EDE7DB]/60">
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : action.id)}
-                  className="flex items-center gap-1 text-xs text-[#8B8074] hover:text-[#5C5549] transition-colors"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  {isExpanded ? "Hide preview" : "Show preview"}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : action.id)}
+                    className="flex items-center gap-1 text-xs text-[#8B8074] hover:text-[#5C5549] transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    {isExpanded ? "Hide preview" : "Show preview"}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {/* Link to result for executed actions */}
+                  {isExecuted && action.type === "campaign_send" && (
+                    <button
+                      onClick={() => router.push("/campaigns")}
+                      className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 transition-colors"
+                    >
+                      View in Campaigns
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+                  {isExecuted && action.type === "automation_draft" && (
+                    <button
+                      onClick={() => router.push("/automations")}
+                      className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 transition-colors"
+                    >
+                      View in Automations
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
 
                 {action.status === "pending" && (
                   <div className="flex items-center gap-2">
@@ -323,12 +426,12 @@ export default function ActionsPage() {
                 )}
                 {action.status !== "pending" && (
                   <span className={`text-xs px-2 py-1 rounded-full ${
-                    action.status === "approved" ? "bg-emerald-50 text-emerald-600" :
+                    action.status === "approved" || action.status === "executed" ? "bg-emerald-50 text-emerald-600" :
                     action.status === "rejected" ? "bg-red-50 text-red-600" :
-                    action.status === "executed" ? "bg-blue-50 text-blue-600" :
+                    action.status === "auto_executed" ? "bg-blue-50 text-blue-600" :
                     "bg-gray-100 text-gray-500"
                   }`}>
-                    {action.status}
+                    {action.status === "auto_executed" ? "Auto-executed" : action.status}
                   </span>
                 )}
               </div>

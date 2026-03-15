@@ -21,12 +21,17 @@ export function brandVoiceBlock(brand: {
       })()
     : "";
 
+  const bannedWords = brand.vocabulary["bannedWords"] as string[] | undefined;
+  const bannedSection = bannedWords?.length
+    ? `\n- NEVER use these words/phrases: ${bannedWords.join(", ")}`
+    : "";
+
   return `
 BRAND VOICE:
 - Brand: ${brand.brandName}
 - Tone: ${Object.entries(brand.toneAttributes).map(([k, v]) => `${k}: ${v}`).join(", ")}
 - Preferred vocabulary: ${(brand.vocabulary["preferredWords"] ?? []).join(", ")}
-- CTA patterns: ${(brand.vocabulary["ctaPatterns"] ?? []).join(", ")}${colorSection}
+- CTA patterns: ${(brand.vocabulary["ctaPatterns"] ?? []).join(", ")}${colorSection}${bannedSection}
 - Sample copy from the brand:
 ${brand.sampleCopy.slice(0, 3).map((s, i) => `  ${i + 1}. "${s.slice(0, 200)}"`).join("\n")}
 

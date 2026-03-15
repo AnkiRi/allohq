@@ -86,7 +86,7 @@ export default function CampaignsPage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[13px] font-bold text-foreground font-mono truncate">{campaign.name}</h3>
                   <p className="text-[11px] text-muted-foreground font-mono truncate">
-                    {campaign.template.subject}
+                    {campaign.template?.subject ?? "No subject"}
                   </p>
                 </div>
                 {campaign.segment && (

@@ -112,6 +112,11 @@ export const templatesRouter = router({
       });
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
 
+      // Disconnect campaigns referencing this template, then delete
+      await ctx.prisma.campaign.updateMany({
+        where: { templateId: input.id },
+        data: { templateId: null },
+      });
       await ctx.prisma.emailTemplate.delete({ where: { id: input.id } });
       return { success: true };
     }),
@@ -134,6 +139,46 @@ export const templatesRouter = router({
           category: template.category,
         },
       });
+    }),
+
+  bulkDelete: workspaceProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.campaign.updateMany({
+        where: { templateId: { in: input.ids } },
+        data: { templateId: null },
+      });
+      await ctx.prisma.generatedContent.deleteMany({
+        where: { templateId: { in: input.ids }, workspaceId: ctx.workspaceId },
+      });
+      const result = await ctx.prisma.emailTemplate.deleteMany({
+        where: { id: { in: input.ids }, workspaceId: ctx.workspaceId },
+      });
+      return { deleted: result.count };
+    }),
+
+  deleteByCategory: workspaceProcedure
+    .input(
+      z.object({
+        category: z.enum(["marketing", "transactional", "automation", "ai_generated"]).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const where = {
+        workspaceId: ctx.workspaceId,
+        ...(input.category ? { category: input.category } : {}),
+      };
+      const templates = await ctx.prisma.emailTemplate.findMany({ where, select: { id: true } });
+      const ids = templates.map((t) => t.id);
+      if (ids.length > 0) {
+        await ctx.prisma.campaign.updateMany({
+          where: { templateId: { in: ids } },
+          data: { templateId: null },
+        });
+        await ctx.prisma.generatedContent.deleteMany({ where: { templateId: { in: ids } } });
+        await ctx.prisma.emailTemplate.deleteMany({ where: { id: { in: ids } } });
+      }
+      return { deleted: ids.length };
     }),
 
   // SMS templates

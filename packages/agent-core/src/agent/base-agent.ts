@@ -1,14 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { prisma } from "@allohq/database";
 import type { ToolDefinition, ToolContext, AgentResult, AgentType } from "../types";
 import { toAnthropicTools } from "../tools";
 
 const MAX_TOOL_ROUNDS = 5;
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 /**
- * Run the agent loop: send messages to Claude, execute tool calls, repeat.
- * Returns final text response and list of tool calls made.
+ * Run the agent loop: send messages to the LLM, execute tool calls, repeat.
+ * Falls back to OpenAI if Anthropic is unavailable.
  */
 export async function runAgent(opts: {
   systemPrompt: string;
@@ -31,14 +32,47 @@ export async function runAgent(opts: {
     maxTokens = 4096,
   } = opts;
 
+  // Try Anthropic first, fall back to OpenAI
+  try {
+    return await runAnthropicAgent({
+      systemPrompt, userMessage, tools, toolContext, agentType,
+      conversationHistory, model, maxTokens,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Agent] Anthropic failed: ${msg}. Falling back to OpenAI...`);
+
+    if (!process.env["OPENAI_API_KEY"]) {
+      throw new Error(`Anthropic API failed (${msg}) and no OPENAI_API_KEY configured for fallback.`);
+    }
+
+    return await runOpenAIAgent({
+      systemPrompt, userMessage, tools, toolContext, agentType,
+      conversationHistory, maxTokens,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Anthropic agent
+// ---------------------------------------------------------------------------
+
+async function runAnthropicAgent(opts: {
+  systemPrompt: string;
+  userMessage: string;
+  tools: ToolDefinition[];
+  toolContext: ToolContext;
+  agentType: AgentType;
+  conversationHistory: Array<{ role: string; content: string }>;
+  model: string;
+  maxTokens: number;
+}): Promise<AgentResult> {
+  const { systemPrompt, userMessage, tools, toolContext, agentType, conversationHistory, model, maxTokens } = opts;
+
   const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
   const anthropicTools = toAnthropicTools(tools);
-  const toolMap = new Map(tools.map((t) => [t.name, t]));
 
-  // Build messages array
   const messages: Anthropic.MessageParam[] = [];
-
-  // Add conversation history
   for (const msg of conversationHistory) {
     if (msg.role === "customer" || msg.role === "user") {
       messages.push({ role: "user", content: msg.content });
@@ -46,15 +80,12 @@ export async function runAgent(opts: {
       messages.push({ role: "assistant", content: msg.content });
     }
   }
-
-  // Add current user message
   messages.push({ role: "user", content: userMessage });
 
   const allToolCalls: AgentResult["toolCalls"] = [];
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
-  // Agent loop: call LLM, execute tools, repeat
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await client.messages.create({
       model,
@@ -67,98 +98,197 @@ export async function runAgent(opts: {
     totalInputTokens += response.usage.input_tokens;
     totalOutputTokens += response.usage.output_tokens;
 
-    // Check if we have tool calls
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
 
-    // If no tool calls, extract text response and return
     if (toolUseBlocks.length === 0 || response.stop_reason === "end_turn") {
       const textBlocks = response.content.filter(
         (b): b is Anthropic.TextBlock => b.type === "text"
       );
-      const responseText = textBlocks.map((b) => b.text).join("\n");
-
-      // Log final response
       return {
-        response: responseText,
+        response: textBlocks.map((b) => b.text).join("\n"),
         toolCalls: allToolCalls,
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
       };
     }
 
-    // Execute tool calls
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
     for (const toolUse of toolUseBlocks) {
-      const tool = toolMap.get(toolUse.name);
-      if (!tool) {
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
-          content: JSON.stringify({ error: `Unknown tool: ${toolUse.name}` }),
-          is_error: true,
-        });
-        continue;
-      }
-
-      try {
-        const input = toolUse.input as Record<string, unknown>;
-        const output = await tool.handler(input, toolContext);
-
-        // Log the action
-        await prisma.agentAction.create({
-          data: {
-            storeId: toolContext.storeId,
-            agentType,
-            actionType: toolUse.name,
-            input: input as any,
-            output: (output ?? {}) as any,
-            status: "completed",
-          },
-        });
-
-        allToolCalls.push({ name: toolUse.name, input, output });
-
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
-          content: JSON.stringify(output),
-        });
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Tool execution failed";
-
-        await prisma.agentAction.create({
-          data: {
-            storeId: toolContext.storeId,
-            agentType,
-            actionType: toolUse.name,
-            input: (toolUse.input ?? {}) as any,
-            status: "failed",
-            error: errorMsg,
-          },
-        });
-
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
-          content: JSON.stringify({ error: errorMsg }),
-          is_error: true,
-        });
-      }
+      const result = await executeToolCall(toolUse.name, toolUse.input as Record<string, unknown>, tools, toolContext, agentType, allToolCalls);
+      toolResults.push({
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: JSON.stringify(result.output),
+        ...(result.isError ? { is_error: true } : {}),
+      });
     }
 
-    // Add assistant response + tool results to messages for next round
     messages.push({ role: "assistant", content: response.content });
     messages.push({ role: "user", content: toolResults });
   }
 
-  // If we exhausted all rounds, return whatever we have
   return {
     response: "I apologize, but I wasn't able to complete your request. Please try again.",
     toolCalls: allToolCalls,
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
   };
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI agent (fallback)
+// ---------------------------------------------------------------------------
+
+function toOpenAITools(tools: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
+  return tools.map((t) => ({
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: {
+        type: "object",
+        properties: Object.fromEntries(
+          Object.entries(t.parameters).map(([key, val]) => [key, {
+            type: (val as any).type ?? "string",
+            description: (val as any).description ?? "",
+          }])
+        ),
+      },
+    },
+  }));
+}
+
+async function runOpenAIAgent(opts: {
+  systemPrompt: string;
+  userMessage: string;
+  tools: ToolDefinition[];
+  toolContext: ToolContext;
+  agentType: AgentType;
+  conversationHistory: Array<{ role: string; content: string }>;
+  maxTokens: number;
+}): Promise<AgentResult> {
+  const { systemPrompt, userMessage, tools, toolContext, agentType, conversationHistory, maxTokens } = opts;
+
+  const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
+  const openaiTools = toOpenAITools(tools);
+
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemPrompt },
+  ];
+  for (const msg of conversationHistory) {
+    if (msg.role === "customer" || msg.role === "user") {
+      messages.push({ role: "user", content: msg.content });
+    } else if (msg.role === "assistant") {
+      messages.push({ role: "assistant", content: msg.content });
+    }
+  }
+  messages.push({ role: "user", content: userMessage });
+
+  const allToolCalls: AgentResult["toolCalls"] = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await client.chat.completions.create({
+      model: "gpt-4o",
+      max_tokens: maxTokens,
+      messages,
+      tools: openaiTools.length > 0 ? openaiTools : undefined,
+    });
+
+    totalInputTokens += response.usage?.prompt_tokens ?? 0;
+    totalOutputTokens += response.usage?.completion_tokens ?? 0;
+
+    const choice = response.choices[0];
+    if (!choice) break;
+
+    const fnCalls = choice.message.tool_calls ?? [];
+
+    if (fnCalls.length === 0) {
+      return {
+        response: choice.message.content ?? "",
+        toolCalls: allToolCalls,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+      };
+    }
+
+    // Add assistant message with tool calls
+    messages.push(choice.message);
+
+    // Execute each tool call
+    for (const fnCall of fnCalls) {
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(fnCall.function.arguments || "{}");
+      } catch {}
+
+      const result = await executeToolCall(fnCall.function.name, args, tools, toolContext, agentType, allToolCalls);
+      messages.push({
+        role: "tool",
+        tool_call_id: fnCall.id,
+        content: JSON.stringify(result.output),
+      });
+    }
+  }
+
+  return {
+    response: "I apologize, but I wasn't able to complete your request. Please try again.",
+    toolCalls: allToolCalls,
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Shared tool execution
+// ---------------------------------------------------------------------------
+
+async function executeToolCall(
+  toolName: string,
+  input: Record<string, unknown>,
+  tools: ToolDefinition[],
+  toolContext: ToolContext,
+  agentType: AgentType,
+  allToolCalls: AgentResult["toolCalls"],
+): Promise<{ output: unknown; isError: boolean }> {
+  const tool = tools.find((t) => t.name === toolName);
+  if (!tool) {
+    return { output: { error: `Unknown tool: ${toolName}` }, isError: true };
+  }
+
+  try {
+    const output = await tool.handler(input, toolContext);
+
+    await prisma.agentAction.create({
+      data: {
+        storeId: toolContext.storeId,
+        agentType,
+        actionType: toolName,
+        input: input as any,
+        output: (output ?? {}) as any,
+        status: "completed",
+      },
+    });
+
+    allToolCalls.push({ name: toolName, input, output });
+    return { output, isError: false };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Tool execution failed";
+
+    await prisma.agentAction.create({
+      data: {
+        storeId: toolContext.storeId,
+        agentType,
+        actionType: toolName,
+        input: input as any,
+        status: "failed",
+        error: errorMsg,
+      },
+    });
+
+    return { output: { error: errorMsg }, isError: true };
+  }
 }

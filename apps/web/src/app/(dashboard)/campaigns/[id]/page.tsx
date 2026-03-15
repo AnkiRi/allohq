@@ -52,7 +52,7 @@ export default function CampaignDetailPage() {
           </Link>
           <div>
             <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono">{campaign.name}</h1>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{campaign.template.subject}</p>
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{campaign.template?.subject}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -120,7 +120,7 @@ export default function CampaignDetailPage() {
           <div className="space-y-3">
             {[
               { label: "Status", value: campaign.status.toUpperCase() },
-              { label: "Template", value: campaign.template.name },
+              { label: "Template", value: campaign.template?.name },
               { label: "Segment", value: campaign.segment?.name ?? "All Subscribers" },
               { label: "Store", value: campaign.store.shopDomain },
               { label: "Scheduled", value: campaign.scheduledAt ? new Date(campaign.scheduledAt).toLocaleString() : "\u2014" },
@@ -136,18 +136,55 @@ export default function CampaignDetailPage() {
 
         {/* Template preview */}
         <div className="border border-border rounded-xl p-6 bg-card">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-px h-6 bg-secondary" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">TEMPLATE_PREVIEW</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-px h-6 bg-secondary" />
+              <h2 className="text-[13px] font-bold text-foreground font-mono">TEMPLATE_PREVIEW</h2>
+            </div>
+            <Link
+              href={`/templates/${campaign.templateId}/edit`}
+              className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Edit template &rarr;
+            </Link>
           </div>
-          <Link
-            href={`/templates/${campaign.templateId}/edit`}
-            className="block p-4 bg-muted rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center"
-          >
-            <Mail className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-            <p className="text-[11px] font-mono text-muted-foreground">{campaign.template.name}</p>
-            <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Click to edit template</p>
-          </Link>
+          {campaign.template?.html ? (
+            <div className="border border-border rounded-lg overflow-hidden bg-white">
+              <iframe
+                srcDoc={campaign.template?.html}
+                className="w-full h-[400px] pointer-events-none"
+                title="Email preview"
+                sandbox=""
+              />
+            </div>
+          ) : ((campaign.template as any).blocks as any[])?.length > 0 ? (
+            <div className="p-4 bg-muted rounded-lg border border-border space-y-3">
+              {((campaign.template as any).blocks as Array<{ type: string; props?: Record<string, unknown> }>).map((block, i) => (
+                <div key={i} className="text-[11px] font-mono text-foreground">
+                  {block.type === "heading" && <h3 className="text-sm font-bold">{block.props?.text as string}</h3>}
+                  {block.type === "text" && <p className="text-muted-foreground">{block.props?.text as string}</p>}
+                  {block.type === "button" && (
+                    <span className="inline-block px-3 py-1 bg-foreground text-background rounded text-[10px]">{block.props?.text as string}</span>
+                  )}
+                  {block.type === "product" && (
+                    <div className="flex items-center gap-2 p-2 border border-border rounded">
+                      <Mail className="w-4 h-4 text-muted-foreground/50" />
+                      <span>{block.props?.title as string} — ${String(block.props?.price ?? "")}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Link
+              href={`/templates/${campaign.templateId}/edit`}
+              className="block p-4 bg-muted rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center"
+            >
+              <Mail className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
+              <p className="text-[11px] font-mono text-muted-foreground">{campaign.template?.name}</p>
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">No content yet — click to edit</p>
+            </Link>
+          )}
         </div>
       </div>
     </div>

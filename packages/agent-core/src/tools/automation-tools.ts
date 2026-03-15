@@ -79,6 +79,70 @@ export const automationTools: ToolDefinition[] = [
   },
 
   {
+    name: "get_automation_details",
+    description:
+      "Get full details about an automation — its workflow steps, trigger, status, and associated templates. Use this when the merchant asks to preview, view, or see details about an automation.",
+    parameters: {
+      automationName: { type: "string", description: "Name (or partial name) of the automation to look up" },
+    },
+    handler: async (params, ctx) => {
+      const automationName = String(params.automationName ?? "");
+
+      const automation = await prisma.automation.findFirst({
+        where: {
+          storeId: ctx.storeId,
+          name: { contains: automationName, mode: "insensitive" },
+        },
+      });
+
+      if (!automation) {
+        // Try broader search — list all automations for this store
+        const allAutomations = await prisma.automation.findMany({
+          where: { storeId: ctx.storeId },
+          select: { id: true, name: true, status: true, category: true },
+        });
+        return {
+          success: false,
+          message: `Automation "${automationName}" not found.`,
+          availableAutomations: allAutomations.map((a) => `${a.name} (${a.status})`),
+        };
+      }
+
+      const nodes = (automation.nodes as any[]) ?? [];
+
+      // Fetch associated templates
+      const templateIds = (automation.templateIds as string[]) ?? [];
+      let templates: { id: string; name: string; subject: string | null }[] = [];
+      if (templateIds.length > 0) {
+        templates = await prisma.emailTemplate.findMany({
+          where: { id: { in: templateIds } },
+          select: { id: true, name: true, subject: true },
+        });
+      }
+
+      return {
+        success: true,
+        automationId: automation.id,
+        name: automation.name,
+        description: automation.description,
+        category: automation.category,
+        status: automation.status,
+        triggerType: automation.triggerType,
+        triggerConfig: automation.triggerConfig,
+        workflowSteps: nodes.map((n: any, i: number) => ({
+          step: i + 1,
+          id: n.id,
+          type: n.type,
+          config: n.config,
+        })),
+        totalSteps: nodes.length,
+        templates: templates.map((t) => ({ id: t.id, name: t.name, subject: t.subject })),
+        message: `Automation "${automation.name}" has ${nodes.length} workflow steps and is currently "${automation.status}".`,
+      };
+    },
+  },
+
+  {
     name: "modify_automation",
     description:
       "Modify an existing automation — pause, resume, activate, or update its configuration.",

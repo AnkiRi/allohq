@@ -82,7 +82,7 @@ export const storesRouter = router({
       const isRecentlyActivated = store.activatedAt
         ? Date.now() - new Date(store.activatedAt).getTime() < 30 * 60 * 1000
         : false;
-      const readyOrActiveCount = automations.filter((a) => a.status === "ready" || a.status === "active").length;
+      const readyOrActiveCount = automations.filter((a) => a.status === "ready" || a.status === "active" || a.status === "paused").length;
       const allGenerated = totalAutomations > 0 && generatingCount === 0;
 
       // Overall progress percentage
@@ -574,7 +574,22 @@ export const storesRouter = router({
       });
       if (!store) throw new Error("Store not found");
 
+      // Collect template IDs tied to this store before deleting campaigns/automations
+      const storeCampaigns = await ctx.prisma.campaign.findMany({
+        where: { storeId: input.storeId },
+        select: { templateId: true },
+      });
+      const storeAutomations = await ctx.prisma.automation.findMany({
+        where: { storeId: input.storeId },
+        select: { templateIds: true },
+      });
+      const storeTemplateIds = [...new Set([
+        ...storeCampaigns.map((c) => c.templateId).filter((id): id is string => !!id),
+        ...storeAutomations.flatMap((a) => (a.templateIds as string[]) || []),
+      ])];
+
       // Delete related data in dependency order
+      await ctx.prisma.actionQueue.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.orderItem.deleteMany({
         where: { order: { storeId: input.storeId } },
       });
@@ -590,15 +605,26 @@ export const storesRouter = router({
         where: { product: { storeId: input.storeId } },
       });
       await ctx.prisma.product.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.campaign.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.automation.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.brandProfile.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.campaign.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.customerSegment.deleteMany({ where: { storeId: input.storeId } });
 
-      // Soft-delete the store
+      // Clean up templates tied to this store's campaigns/automations
+      if (storeTemplateIds.length > 0) {
+        // GeneratedContent cascades on EmailTemplate delete, but clean up explicitly
+        await ctx.prisma.generatedContent.deleteMany({
+          where: { templateId: { in: storeTemplateIds } },
+        });
+        await ctx.prisma.emailTemplate.deleteMany({
+          where: { id: { in: storeTemplateIds }, workspaceId: ctx.workspaceId },
+        });
+      }
+
+      // Soft-delete the store and reset activation state
       await ctx.prisma.store.update({
         where: { id: input.storeId },
-        data: { isActive: false },
+        data: { isActive: false, activatedAt: null, onboardingCompletedAt: null },
       });
 
       return { success: true };

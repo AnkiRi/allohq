@@ -80,6 +80,46 @@ import { repurchaseReminderWorker } from "./workers/repurchase-reminder.worker";
 import { inventoryMonitorWorker } from "./workers/inventory-monitor.worker";
 import { storeActivationWorker } from "./workers/store-activation.worker";
 
+// Clean up stale Redis connections from previous ungraceful shutdowns.
+// When workers are force-killed (SIGKILL/kill -9), their blocking BullMQ
+// connections stay open in Redis until TCP keepalive timeout (~5 min).
+// During that time, new workers can't pick up queued jobs because BullMQ
+// thinks the dead worker is still active. This is the root cause of the
+// "stuck at syncing" issue after restarts.
+import Redis from "ioredis";
+(async () => {
+  try {
+    const cleanupRedis = new Redis({
+      host: redisConnection.host as string,
+      port: redisConnection.port as number,
+      password: redisConnection.password,
+      maxRetriesPerRequest: 1,
+    });
+    // Kill idle connections from previous workers (idle > 30 seconds, not the current one)
+    const clients = await cleanupRedis.client("LIST") as string;
+    let cleaned = 0;
+    for (const line of clients.split("\n")) {
+      const idleMatch = line.match(/idle=(\d+)/);
+      const idStr = line.match(/id=(\d+)/);
+      if (idleMatch && idStr) {
+        const idle = parseInt(idleMatch[1]!);
+        if (idle > 30 && line.includes("name=")) {
+          try {
+            await cleanupRedis.client("KILL", "ID", idStr[1]!);
+            cleaned++;
+          } catch { /* skip */ }
+        }
+      }
+    }
+    if (cleaned > 0) {
+      console.log(`[startup] Cleaned ${cleaned} stale Redis connections from previous workers`);
+    }
+    await cleanupRedis.quit();
+  } catch (err) {
+    console.warn("[startup] Redis cleanup skipped:", (err as Error).message);
+  }
+})();
+
 console.log("Starting AlloHQ workers...");
 console.log(`  - sync worker: ${syncWorker.name}`);
 console.log(`  - rfm worker: ${rfmWorker.name}`);
@@ -248,47 +288,57 @@ inventoryMonitorQueue.upsertJobScheduler(
   console.error("Failed to set up inventory monitor schedule:", err.message);
 });
 
-// Graceful shutdown
+// Graceful shutdown with timeout — if workers don't close in 5s, force exit.
+// This prevents zombie processes that hold Redis connections and block queues.
 const shutdown = async () => {
   console.log("Shutting down workers...");
-  await Promise.all([
-    syncWorker.close(),
-    rfmWorker.close(),
-    sendWorker.close(),
-    shopifyWebhookWorker.close(),
-    brandAnalysisWorker.close(),
-    automationGeneratorWorker.close(),
-    agentPipelineWorker.close(),
-    automationRunnerWorker.close(),
-    triggerListenerWorker.close(),
-    embeddingWorker.close(),
-    agentObserveWorker.close(),
-    conversationProcessWorker.close(),
-    abandonedCartWorker.close(),
-    segmentChangeWorker.close(),
-    customerStateUpdaterWorker.close(),
-    guardrailValidatorWorker.close(),
-    brandKitExtractorWorker.close(),
-    productImageProcessorWorker.close(),
-    creativeGeneratorWorker.close(),
-    opportunityScannerWorker.close(),
-    campaignFactoryWorker.close(),
-    productCycleAnalyzerWorker.close(),
-    briefingGeneratorWorker.close(),
-    baselineCaptureWorker.close(),
-    weeklyReportWorker.close(),
-    journeyStepperWorker.close(),
-    abTestEvaluatorWorker.close(),
-    sendTimeOptimizerWorker.close(),
-    revenueForecastWorker.close(),
-    productRecommendationWorker.close(),
-    shippingUpdateWorker.close(),
-    restockAlertWorker.close(),
-    priceDropWorker.close(),
-    repurchaseReminderWorker.close(),
-    inventoryMonitorWorker.close(),
-    storeActivationWorker.close(),
-  ]);
+  const forceExitTimer = setTimeout(() => {
+    console.error("Shutdown timed out after 5s — forcing exit");
+    process.exit(1);
+  }, 5000);
+  try {
+    await Promise.all([
+      syncWorker.close(),
+      rfmWorker.close(),
+      sendWorker.close(),
+      shopifyWebhookWorker.close(),
+      brandAnalysisWorker.close(),
+      automationGeneratorWorker.close(),
+      agentPipelineWorker.close(),
+      automationRunnerWorker.close(),
+      triggerListenerWorker.close(),
+      embeddingWorker.close(),
+      agentObserveWorker.close(),
+      conversationProcessWorker.close(),
+      abandonedCartWorker.close(),
+      segmentChangeWorker.close(),
+      customerStateUpdaterWorker.close(),
+      guardrailValidatorWorker.close(),
+      brandKitExtractorWorker.close(),
+      productImageProcessorWorker.close(),
+      creativeGeneratorWorker.close(),
+      opportunityScannerWorker.close(),
+      campaignFactoryWorker.close(),
+      productCycleAnalyzerWorker.close(),
+      briefingGeneratorWorker.close(),
+      baselineCaptureWorker.close(),
+      weeklyReportWorker.close(),
+      journeyStepperWorker.close(),
+      abTestEvaluatorWorker.close(),
+      sendTimeOptimizerWorker.close(),
+      revenueForecastWorker.close(),
+      productRecommendationWorker.close(),
+      shippingUpdateWorker.close(),
+      restockAlertWorker.close(),
+      priceDropWorker.close(),
+      repurchaseReminderWorker.close(),
+      inventoryMonitorWorker.close(),
+      storeActivationWorker.close(),
+    ]);
+  } catch (err) {
+    console.error("Error during shutdown:", (err as Error).message);
+  }
+  clearTimeout(forceExitTimer);
   process.exit(0);
 };
 

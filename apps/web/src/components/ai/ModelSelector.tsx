@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check, Cpu } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
-type AIModelId = "claude-sonnet-4-5-20250929" | "gpt-4o" | "gpt-4o-mini";
+type AIModelId = "claude-sonnet-4-6" | "gpt-4o" | "gpt-4o-mini";
 
 interface ModelSelectorProps {
   value: AIModelId | undefined;
@@ -13,7 +13,7 @@ interface ModelSelectorProps {
 }
 
 const MODEL_LABELS: Record<AIModelId, { label: string; short: string; provider: string }> = {
-  "claude-sonnet-4-5-20250929": { label: "Claude Sonnet 4.5", short: "Claude 4.5", provider: "Anthropic" },
+  "claude-sonnet-4-6": { label: "Claude Sonnet 4.6", short: "Claude 4.6", provider: "Anthropic" },
   "gpt-4o": { label: "GPT-4o", short: "GPT-4o", provider: "OpenAI" },
   "gpt-4o-mini": { label: "GPT-4o Mini", short: "GPT-4o Mini", provider: "OpenAI" },
 };

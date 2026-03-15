@@ -117,10 +117,20 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
 
     const templateIds: string[] = [];
     for (const result of emailResults) {
+      // Dedup: skip if template with same name already exists
+      const templateName = `${automation.name} — ${result.subject}`;
+      const existingTemplate = await prisma.emailTemplate.findFirst({
+        where: { workspaceId, name: templateName },
+      });
+      if (existingTemplate) {
+        templateIds.push(existingTemplate.id);
+        continue;
+      }
+
       const template = await prisma.emailTemplate.create({
         data: {
           workspaceId,
-          name: `${automation.name} — ${result.subject}`,
+          name: templateName,
           subject: result.subject,
           previewText: result.previewText,
           blocks: result.blocks as any,

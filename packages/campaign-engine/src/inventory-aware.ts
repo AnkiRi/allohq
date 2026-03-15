@@ -48,6 +48,7 @@ export async function checkInventoryConflicts(
   const conflicts: InventoryConflict[] = [];
 
   for (const campaign of activeCampaigns) {
+    if (!campaign.template) continue;
     const blocks = campaign.template.blocks as unknown as { type: string; props: Record<string, unknown> }[];
     for (const block of blocks) {
       if (block.type === "product" && productIds.includes(block.props.productId as string)) {

@@ -347,17 +347,21 @@ function BackgroundAnalysisStep({
   onContinue: () => void;
   isAdvancing: boolean;
 }) {
-  const rows = [
+  const syncRows = [
     { icon: Package, label: "Syncing products", count: status?.counts.products, done: (status?.counts.products ?? 0) > 0 },
     { icon: Users, label: "Syncing customers", count: status?.counts.customers, done: (status?.counts.customers ?? 0) > 0 },
     { icon: ShoppingBag, label: "Syncing orders", count: status?.counts.orders, done: (status?.counts.orders ?? 0) > 0 },
+  ];
+  const analysisRows = [
     { icon: MessageSquare, label: "Analyzing brand voice", done: status?.brandVoiceComplete ?? false },
     { icon: Palette, label: "Extracting visual identity", done: status?.brandVisualComplete ?? false },
     { icon: Image, label: "Processing product images", done: status?.productImagesComplete ?? false },
     { icon: BarChart3, label: "Scoring customer health (RFM)", done: status?.rfmComplete ?? false },
     { icon: Boxes, label: "Capturing baseline metrics", done: status?.baselineComplete ?? false },
   ];
-  const allDone = rows.every((r) => r.done);
+  const syncDone = syncRows.every((r) => r.done);
+  const analysisDone = analysisRows.every((r) => r.done);
+  const canContinue = syncDone; // Don't block on AI analysis tasks
 
   return (
     <div className="space-y-6">
@@ -366,7 +370,7 @@ function BackgroundAnalysisStep({
         <p className="text-sm text-[#8B8074]">We&apos;re syncing your data and building intelligence. This usually takes 1-3 minutes.</p>
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
-        {rows.map((row) => (
+        {syncRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
               <div className="w-6 h-6 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center">
@@ -384,8 +388,26 @@ function BackgroundAnalysisStep({
           </div>
         ))}
       </div>
+      <div className="glass-card-static rounded-xl p-5 space-y-3">
+        <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">AI Analysis {analysisDone ? "(complete)" : "(runs in background)"}</p>
+        {analysisRows.map((row) => (
+          <div key={row.label} className="flex items-center gap-3">
+            {row.done ? (
+              <div className="w-6 h-6 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 text-[#6B7A2F]" />
+              </div>
+            ) : (
+              <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
+            )}
+            <span className={`text-sm ${row.done ? "text-[#2C2C2C]" : "text-[#8B8074]"}`}>{row.label}</span>
+          </div>
+        ))}
+      </div>
+      {syncDone && !analysisDone && (
+        <p className="text-xs text-[#8B8074]">AI analysis will continue in the background. You can proceed now.</p>
+      )}
       <div className="flex justify-end">
-        <button onClick={onContinue} disabled={!allDone || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+        <button onClick={onContinue} disabled={!canContinue || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
           {isAdvancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Continue
         </button>
@@ -543,7 +565,7 @@ function BrandReviewStep({
       storeId,
       aestheticClassification: aesthetic,
       brandDesignTokens: tokens,
-      toneAttributes: Object.keys(tone).length > 0 ? Object.values(tone) : undefined,
+      toneAttributes: Object.keys(tone).length > 0 ? tone : undefined,
       bannedWords: bannedWords.split(",").map((w) => w.trim()).filter(Boolean),
     });
   };

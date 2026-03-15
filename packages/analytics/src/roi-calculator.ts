@@ -3,7 +3,7 @@ import type { RoiMetrics } from "./types";
 
 // Cost per million tokens for each model
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-5-20250929": { input: 3, output: 15 },
+  "claude-sonnet-4-6": { input: 3, output: 15 },
   "gpt-4o": { input: 2.5, output: 10 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
 };

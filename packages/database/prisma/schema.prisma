@@ -503,7 +503,7 @@ model Campaign {
   workspaceId    String
   storeId        String
   name           String
-  templateId     String
+  templateId     String?
   segmentId      String?
   status         CampaignStatus @default(draft)
   scheduledAt    DateTime?
@@ -516,7 +516,7 @@ model Campaign {
 
   workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  template  EmailTemplate  @relation(fields: [templateId], references: [id])
+  template  EmailTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
   segment   CustomerSegment? @relation(fields: [segmentId], references: [id])
 
   @@index([workspaceId])

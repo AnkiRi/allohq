@@ -24,8 +24,8 @@ export async function compareAiVsManual(
   });
 
   // Split into AI vs manual
-  const aiCampaigns = campaigns.filter((c) => c.template.category === "ai_generated");
-  const manualCampaigns = campaigns.filter((c) => c.template.category !== "ai_generated");
+  const aiCampaigns = campaigns.filter((c) => c.template?.category === "ai_generated");
+  const manualCampaigns = campaigns.filter((c) => c.template?.category !== "ai_generated");
 
   // Get revenue attributed to each group
   const aiIds = aiCampaigns.map((c) => c.id);

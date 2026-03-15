@@ -24,7 +24,7 @@ const STOP_WORDS = new Set([
 ]);
 
 const aiModelSchema = z.enum([
-  "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4-6",
   "gpt-4o",
   "gpt-4o-mini",
 ]).optional();
@@ -800,12 +800,17 @@ ${recentObservations.map((o) => {
       // ---------------------------------------------------------------
       // 3. Action request detection — push agent toward tool calling (Fix 3)
       // ---------------------------------------------------------------
-      const isActionRequest = /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design)\b/i.test(input.message);
+      const isActionRequest = /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design|show|preview|details|view)\b/i.test(input.message);
 
       let processedMessage = input.message;
 
       if (isActionRequest) {
         processedMessage = `${input.message}\n\n[SYSTEM: This is an action request. Call the appropriate tool immediately with smart defaults from the store data in your context. Do NOT ask clarifying questions — use the store intelligence summary to choose the best parameters.]`;
+      }
+
+      // Add automation preview/detail hint
+      if (/\b(show|preview|details|view)\b.*\b(automation)\b/i.test(input.message)) {
+        processedMessage += `\n\n[TOOL HINT: The merchant wants to see automation details. Call get_automation_details with the automation name extracted from their message.]`;
       }
 
       // Add campaign-specific tool hints
@@ -846,6 +851,11 @@ ${recentObservations.map((o) => {
         }
         if (tc.name === "get_churn_risk_report" && Array.isArray(out)) {
           highlights.push({ label: "At Risk", value: `${out.length} customers` });
+        }
+        if (tc.name === "get_automation_details" && out?.success) {
+          highlights.push({ label: "Automation", value: String(out.name) });
+          highlights.push({ label: "Status", value: String(out.status) });
+          highlights.push({ label: "Steps", value: String(out.totalSteps) });
         }
       }
 
@@ -964,7 +974,7 @@ ${recentObservations.map((o) => {
       await ctx.prisma.tokenUsage.create({
         data: {
           workspaceId: ctx.workspaceId,
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           inputTokens: agentResult.inputTokens,
           outputTokens: agentResult.outputTokens,
           purpose: "chat",
@@ -1007,7 +1017,7 @@ ${recentObservations.map((o) => {
             role: "assistant",
             content: reply,
             highlights: highlights.length > 0 ? highlights : undefined,
-            model: "claude-sonnet-4-5-20250929",
+            model: "claude-sonnet-4-6",
           },
         ],
       });
@@ -1018,7 +1028,7 @@ ${recentObservations.map((o) => {
         highlights,
         suggestedFollowUps: suggestedFollowUps.slice(0, 4),
         action: actionResult,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         toolCalls: agentResult.toolCalls.map((t) => t.name),
       };
     }),
@@ -1139,6 +1149,66 @@ ${recentObservations.map((o) => {
       return ctx.prisma.brandProfile.update({
         where: { id: profile.id },
         data,
+      });
+    }),
+
+  /** Update brand voice (tone, vocabulary, banned words) */
+  updateBrandVoice: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      toneAttributes: z.record(z.string()).optional(),
+      vocabulary: z.object({
+        preferredWords: z.array(z.string()).optional(),
+        ctaPatterns: z.array(z.string()).optional(),
+        brandTerms: z.array(z.string()).optional(),
+        bannedWords: z.array(z.string()).optional(),
+      }).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const profile = await ctx.prisma.brandProfile.findFirst({
+        where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Brand profile not found. Run brand analysis first." });
+
+      const updateData: Record<string, unknown> = {};
+      if (input.toneAttributes) {
+        updateData.toneAttributes = input.toneAttributes;
+      }
+      if (input.vocabulary) {
+        const existing = (profile.vocabulary as Record<string, unknown>) ?? {};
+        updateData.vocabulary = { ...existing, ...input.vocabulary };
+      }
+
+      return ctx.prisma.brandProfile.update({
+        where: { id: profile.id },
+        data: updateData,
+      });
+    }),
+
+  /** Get brand visual profile */
+  getBrandVisualProfile: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.brandVisualProfile.findUnique({
+        where: { storeId: input.storeId },
+      });
+    }),
+
+  /** Update brand visual profile (aesthetic, colors, typography) */
+  updateBrandVisualProfile: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      aestheticClassification: z.string().optional(),
+      brandDesignTokens: z.any().optional(),
+      fontFamily: z.string().optional().nullable(),
+      bodyFontFamily: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { storeId, ...data } = input;
+      return ctx.prisma.brandVisualProfile.upsert({
+        where: { storeId },
+        create: { storeId, primaryColors: [], accentColors: [], ...data },
+        update: data,
       });
     }),
 

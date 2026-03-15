@@ -6,7 +6,7 @@ import OpenAI from "openai";
 // ---------------------------------------------------------------------------
 
 export type AIModelId =
-  | "claude-sonnet-4-5-20250929"
+  | "claude-sonnet-4-6"
   | "gpt-4o"
   | "gpt-4o-mini";
 
@@ -24,9 +24,9 @@ export interface AIModel {
 
 export const AI_MODELS: AIModel[] = [
   {
-    id: "claude-sonnet-4-5-20250929",
+    id: "claude-sonnet-4-6",
     provider: "anthropic",
-    label: "Claude Sonnet 4.5",
+    label: "Claude Sonnet 4.6",
     description: "Best quality — Anthropic's most capable model for creative content",
     inputCostPerMillion: 3,
     outputCostPerMillion: 15,
@@ -54,9 +54,9 @@ export const AI_MODELS: AIModel[] = [
 
 /** Default fallback chain: if selected model fails, try next in list */
 const FALLBACK_CHAIN: Record<AIModelId, AIModelId[]> = {
-  "claude-sonnet-4-5-20250929": ["gpt-4o", "gpt-4o-mini"],
-  "gpt-4o": ["claude-sonnet-4-5-20250929", "gpt-4o-mini"],
-  "gpt-4o-mini": ["gpt-4o", "claude-sonnet-4-5-20250929"],
+  "claude-sonnet-4-6": ["gpt-4o", "gpt-4o-mini"],
+  "gpt-4o": ["claude-sonnet-4-6", "gpt-4o-mini"],
+  "gpt-4o-mini": ["gpt-4o", "claude-sonnet-4-6"],
 };
 
 // ---------------------------------------------------------------------------
@@ -156,7 +156,7 @@ async function callOpenAI(
 // Main completion function with fallback
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-5-20250929";
+const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
 
 export async function complete(request: CompletionRequest): Promise<CompletionResult> {
   const primaryModel = request.model ?? DEFAULT_MODEL;

@@ -10,7 +10,7 @@ import { EmailCanvas } from "@/components/email-builder/EmailCanvas";
 import type { EmailBlock } from "@allohq/email-builder";
 
 const AI_MODELS = [
-  { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.5" },
   { id: "gpt-4o", label: "GPT-4o" },
   { id: "gpt-4o-mini", label: "GPT-4o Mini" },
 ] as const;
@@ -54,7 +54,7 @@ export default function EditTemplatePage() {
 
   // AI Controls state
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
-  const [aiModel, setAiModel] = useState<string>("claude-sonnet-4-5-20250929");
+  const [aiModel, setAiModel] = useState<string>("claude-sonnet-4-6");
   const [creativeIntensity, setCreativeIntensity] = useState<string>("balanced");
   const [toneOverride, setToneOverride] = useState<string>("");
   const [layoutTemplate, setLayoutTemplate] = useState<string>("");

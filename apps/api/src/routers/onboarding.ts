@@ -135,7 +135,7 @@ export const onboardingRouter = router({
         fontFamily: z.string().optional(),
         aestheticClassification: z.string().optional(),
         brandDesignTokens: z.any().optional(),
-        toneAttributes: z.array(z.string()).optional(),
+        toneAttributes: z.record(z.string()).optional(),
         bannedWords: z.array(z.string()).optional(),
       }),
     )

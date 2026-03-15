@@ -24,7 +24,7 @@ export default function BrandProfilePage() {
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
-  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-4-5-20250929");
+  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-4-6");
   const [analyzing, setAnalyzing] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -210,10 +210,152 @@ export default function BrandProfilePage() {
     });
   }
 
-  const tone = profile?.toneAttributes as Record<string, string> | undefined;
+  const rawTone = profile?.toneAttributes;
+  // Fix corrupted array data from old onboarding bug (stored Object.values instead of object)
+  const tone: Record<string, string> | undefined = (() => {
+    if (!rawTone) return undefined;
+    if (Array.isArray(rawTone)) {
+      // Reconstruct from known key order matching onboarding state init
+      const keys = ["formality", "energy", "warmth", "humor"];
+      const result: Record<string, string> = {};
+      keys.forEach((k, i) => { if (rawTone[i]) result[k] = rawTone[i] as string; });
+      return Object.keys(result).length > 0 ? result : undefined;
+    }
+    return rawTone as Record<string, string>;
+  })();
   const vocabulary = profile?.vocabulary as Record<string, string[]> | undefined;
   const visual = profile?.visualStyle as Record<string, string | string[]> | undefined;
   const sampleCopy = profile?.sampleCopy as string[] | undefined;
+
+  // Visual profile data
+  const { data: visualProfile } = (trpc.ai as any).getBrandVisualProfile.useQuery(
+    { storeId },
+    { enabled: !!storeId },
+  ) as { data: any | undefined };
+
+  // Editable tone state
+  const [editingTone, setEditingTone] = useState(false);
+  const [toneEdits, setToneEdits] = useState<Record<string, string>>({});
+  const [bannedWordsEdit, setBannedWordsEdit] = useState("");
+  const [toneInitialized, setToneInitialized] = useState(false);
+
+  // Editable visual state
+  const [editingVisual, setEditingVisual] = useState(false);
+  const [aestheticEdit, setAestheticEdit] = useState("clean_minimal");
+  const [colorTokens, setColorTokens] = useState<Record<string, string>>({});
+  const [headingFont, setHeadingFont] = useState("");
+  const [bodyFont, setBodyFont] = useState("");
+  const [visualInitialized, setVisualInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!toneInitialized && profile) {
+      const defaults: Record<string, string> = { formality: "casual", energy: "moderate", warmth: "friendly", humor: "light" };
+      setToneEdits(tone ? { ...defaults, ...tone } : defaults);
+      const bw = (vocabulary?.["bannedWords"] as unknown as string[]) ?? [];
+      setBannedWordsEdit(bw.join(", "));
+      setToneInitialized(true);
+    }
+  }, [tone, vocabulary, toneInitialized, profile]);
+
+  useEffect(() => {
+    if (visualProfile && !visualInitialized) {
+      setAestheticEdit(visualProfile.aestheticClassification ?? "clean_minimal");
+      setColorTokens((visualProfile.brandDesignTokens as Record<string, string>) ?? {});
+      setHeadingFont(visualProfile.fontFamily ?? "");
+      setBodyFont(visualProfile.bodyFontFamily ?? "");
+      setVisualInitialized(true);
+    }
+  }, [visualProfile, visualInitialized]);
+
+  const updateVoiceMut = (trpc.ai as any).updateBrandVoice.useMutation({
+    onSuccess: () => {
+      toast("Brand voice updated!", "success");
+      (utils.ai as any).brandProfile.invalidate({ storeId });
+      setEditingTone(false);
+    },
+    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+  }) as { mutate: (input: any) => void; isPending: boolean };
+
+  const handleSaveVoice = () => {
+    updateVoiceMut.mutate({
+      storeId,
+      toneAttributes: toneEdits,
+      vocabulary: {
+        bannedWords: bannedWordsEdit.split(",").map((w: string) => w.trim()).filter(Boolean),
+      },
+    });
+  };
+
+  const updateVisualMut = (trpc.ai as any).updateBrandVisualProfile.useMutation({
+    onSuccess: () => {
+      toast("Visual profile updated!", "success");
+      (utils.ai as any).getBrandVisualProfile.invalidate({ storeId });
+      setEditingVisual(false);
+    },
+    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+  }) as { mutate: (input: any) => void; isPending: boolean };
+
+  const handleSaveVisual = () => {
+    updateVisualMut.mutate({
+      storeId,
+      aestheticClassification: aestheticEdit,
+      brandDesignTokens: colorTokens,
+      fontFamily: headingFont || null,
+      bodyFontFamily: bodyFont || null,
+    });
+  };
+
+  const AESTHETIC_OPTIONS = [
+    { value: "clean_minimal", label: "Clean Minimal", desc: "Airy layouts, generous whitespace" },
+    { value: "bold_graphic", label: "Bold Graphic", desc: "Strong colors, big type, high-contrast" },
+    { value: "luxury_editorial", label: "Luxury Editorial", desc: "Refined, editorial layouts" },
+    { value: "warm_organic", label: "Warm Organic", desc: "Earthy tones, natural textures" },
+    { value: "playful_colorful", label: "Playful Colorful", desc: "Bright colors, fun typography" },
+    { value: "tech_modern", label: "Tech Modern", desc: "Sleek gradients, geometric layouts" },
+    { value: "heritage_artisanal", label: "Heritage Artisanal", desc: "Vintage feel, handcrafted touch" },
+    { value: "premium_dtc", label: "Premium DTC", desc: "Contemporary, product-focused" },
+  ];
+
+  const COLOR_TOKEN_LABELS = [
+    { key: "primaryBackground", label: "Primary BG" },
+    { key: "accentColor", label: "Accent" },
+    { key: "ctaBackground", label: "CTA BG" },
+    { key: "ctaTextColor", label: "CTA Text" },
+    { key: "textPrimary", label: "Text Primary" },
+    { key: "textSecondary", label: "Text Secondary" },
+  ];
+
+  const TONE_DIMENSIONS = [
+    {
+      key: "formality",
+      label: "Formality",
+      left: { label: "Formal", example: "We are pleased to present our newest collection" },
+      right: { label: "Casual", example: "You're going to love what we've been working on" },
+      options: ["formal", "semi-formal", "casual", "very-casual"],
+    },
+    {
+      key: "energy",
+      label: "Energy",
+      left: { label: "Calm", example: "Take your time exploring our curated range" },
+      right: { label: "High Energy", example: "Don't miss out! Limited stock — grab yours now!" },
+      options: ["calm", "moderate", "high", "intense"],
+    },
+    {
+      key: "warmth",
+      label: "Warmth",
+      left: { label: "Professional", example: "We recommend this product based on your preferences" },
+      right: { label: "Warm", example: "We think you'll love this — picked just for you" },
+      options: ["professional", "friendly", "warm", "intimate"],
+    },
+    {
+      key: "humor",
+      label: "Humor",
+      left: { label: "Serious", example: "Our premium collection is now available" },
+      right: { label: "Playful", example: "Your cart misses you (seriously, it told us)" },
+      options: ["none", "light", "moderate", "heavy"],
+    },
+  ];
+
 
   const isAnalyzing = analyzeMut.isPending || analyzing;
 
@@ -300,37 +442,110 @@ export default function BrandProfilePage() {
           <div className="grid grid-cols-2 gap-6">
             {/* Tone attributes */}
             <motion.div variants={itemVariants} className="glass-card-static p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">TONE</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                  <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">TONE</h2>
+                </div>
+                {!editingTone ? (
+                  <button
+                    onClick={() => setEditingTone(true)}
+                    className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Edit
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setEditingTone(false); if (tone) setToneEdits(tone); }}
+                      className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveVoice}
+                      disabled={updateVoiceMut.isPending}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                    >
+                      <Save className="w-3 h-3" />
+                      {updateVoiceMut.isPending ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                )}
               </div>
-              {tone && (
+              {!editingTone && (
                 <div className="space-y-3">
-                  {Object.entries(tone).map(([key, value]) => (
-                    <div key={key}>
-                      <div className="flex justify-between text-[11px] font-mono mb-1">
-                        <span className="text-muted-foreground uppercase">{key}</span>
-                        <span className="text-foreground font-bold">{value}</span>
+                  {TONE_DIMENSIONS.map((dim) => {
+                    const value = tone?.[dim.key] ?? dim.options[1] ?? "";
+                    const idx = dim.options.indexOf(value);
+                    const pct = idx >= 0 ? ((idx + 1) / dim.options.length) * 100 : 50;
+                    return (
+                      <div key={dim.key}>
+                        <div className="flex justify-between text-[11px] font-mono mb-1">
+                          <span className="text-muted-foreground uppercase">{dim.label}</span>
+                          <span className="text-foreground font-bold">{value}</span>
+                        </div>
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ backgroundColor: getToneBarColor(value), width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between mt-0.5">
+                          <span className="text-[9px] text-muted-foreground/60 font-mono">{dim.left.label}</span>
+                          <span className="text-[9px] text-muted-foreground/60 font-mono">{dim.right.label}</span>
+                        </div>
                       </div>
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            backgroundColor: getToneBarColor(value),
-                            width: `${
-                              value === "formal" || value === "none" || value === "calm" || value === "professional"
-                                ? 25
-                                : value === "semi-formal" || value === "light" || value === "moderate" || value === "friendly"
-                                  ? 50
-                                  : value === "casual" || value === "moderate" || value === "high" || value === "warm"
-                                    ? 75
-                                    : 100
-                            }%`,
-                          }}
-                        />
+                    );
+                  })}
+                </div>
+              )}
+              {editingTone && (
+                <div className="space-y-5">
+                  {TONE_DIMENSIONS.map((dim) => {
+                    const currentVal = toneEdits[dim.key] ?? dim.options[1] ?? "";
+                    const currentIdx = dim.options.indexOf(currentVal);
+                    return (
+                      <div key={dim.key}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-bold text-foreground font-mono">{dim.label}</span>
+                          <span className="text-[10px] text-[var(--color-accent)] font-mono font-medium">
+                            {dim.options[currentIdx >= 0 ? currentIdx : 1]}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-muted-foreground font-mono w-16 text-right shrink-0">{dim.left.label}</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={dim.options.length - 1}
+                            value={currentIdx >= 0 ? currentIdx : 1}
+                            onChange={(e) => {
+                              const val = dim.options[Number(e.target.value)];
+                              if (val != null) setToneEdits((prev) => ({ ...prev, [dim.key]: val }));
+                            }}
+                            className="flex-1 h-1.5 accent-[var(--terracotta)] cursor-pointer"
+                          />
+                          <span className="text-[9px] text-muted-foreground font-mono w-16 shrink-0">{dim.right.label}</span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[9px] text-muted-foreground/50 font-mono italic max-w-[45%]">&ldquo;{dim.left.example}&rdquo;</span>
+                          <span className="text-[9px] text-muted-foreground/50 font-mono italic max-w-[45%] text-right">&ldquo;{dim.right.example}&rdquo;</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  <div>
+                    <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-1.5">BANNED WORDS</span>
+                    <input
+                      type="text"
+                      value={bannedWordsEdit}
+                      onChange={(e) => setBannedWordsEdit(e.target.value)}
+                      placeholder="e.g. cheap, discount, limited time"
+                      className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    />
+                    <p className="text-[9px] text-muted-foreground/50 font-mono mt-1">Comma-separated. AI will avoid these words in all generated content.</p>
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -467,6 +682,125 @@ export default function BrandProfilePage() {
               </div>
             </motion.div>
           )}
+
+          {/* Visual Design */}
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Palette className="w-4 h-4 text-muted-foreground" />
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL_DESIGN</h2>
+              </div>
+              {!editingVisual ? (
+                <button
+                  onClick={() => setEditingVisual(true)}
+                  className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Edit
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setEditingVisual(false); if (visualProfile) { setAestheticEdit(visualProfile.aestheticClassification ?? "clean_minimal"); setColorTokens((visualProfile.brandDesignTokens as Record<string, string>) ?? {}); setHeadingFont(visualProfile.fontFamily ?? ""); setBodyFont(visualProfile.bodyFontFamily ?? ""); } }}
+                    className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveVisual}
+                    disabled={updateVisualMut.isPending}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                  >
+                    <Save className="w-3 h-3" />
+                    {updateVisualMut.isPending ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {!editingVisual ? (
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[11px] text-muted-foreground font-mono">AESTHETIC</span>
+                  <p className="text-[13px] font-bold text-foreground font-mono mt-0.5">
+                    {AESTHETIC_OPTIONS.find((a) => a.value === (visualProfile?.aestheticClassification ?? "clean_minimal"))?.label ?? visualProfile?.aestheticClassification ?? "Not set"}
+                  </p>
+                </div>
+                {Object.keys(colorTokens).length > 0 && (
+                  <div>
+                    <span className="text-[11px] text-muted-foreground font-mono mb-2 block">BRAND COLORS</span>
+                    <div className="flex gap-2 flex-wrap">
+                      {COLOR_TOKEN_LABELS.map(({ key, label }) => colorTokens[key] ? (
+                        <div key={key} className="flex items-center gap-1.5">
+                          <div className="w-6 h-6 rounded-full border border-white/20" style={{ backgroundColor: colorTokens[key] }} />
+                          <span className="text-[10px] text-muted-foreground font-mono">{label}</span>
+                        </div>
+                      ) : null)}
+                    </div>
+                  </div>
+                )}
+                {(headingFont || bodyFont) && (
+                  <div className="flex gap-6">
+                    {headingFont && <div><span className="text-[11px] text-muted-foreground font-mono">HEADING FONT</span><p className="text-[12px] font-bold text-foreground font-mono mt-0.5">{headingFont}</p></div>}
+                    {bodyFont && <div><span className="text-[11px] text-muted-foreground font-mono">BODY FONT</span><p className="text-[12px] font-bold text-foreground font-mono mt-0.5">{bodyFont}</p></div>}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Aesthetic */}
+                <div>
+                  <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-2">AESTHETIC</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {AESTHETIC_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setAestheticEdit(opt.value)}
+                        className={`text-left px-3 py-2 border rounded-lg transition-all ${
+                          aestheticEdit === opt.value
+                            ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
+                            : "border-white/20 bg-white/20 hover:border-white/40"
+                        }`}
+                      >
+                        <span className="text-[11px] font-bold text-foreground font-mono">{opt.label}</span>
+                        <span className="text-[9px] text-muted-foreground font-mono block mt-0.5">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Colors */}
+                <div>
+                  <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-2">BRAND COLORS</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {COLOR_TOKEN_LABELS.map(({ key, label }) => (
+                      <div key={key}>
+                        <label className="text-[10px] text-muted-foreground font-mono mb-1 block">{label}</label>
+                        <div className="flex items-center gap-2">
+                          <input type="color" value={colorTokens[key] || "#000000"} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="w-7 h-7 rounded border border-white/20 cursor-pointer" />
+                          <input type="text" value={colorTokens[key] || ""} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-2 py-1 text-[10px] font-mono rounded border border-white/20 bg-white/20 text-foreground" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Typography */}
+                <div>
+                  <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-2">TYPOGRAPHY</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground font-mono mb-1 block">Heading Font</label>
+                      <input type="text" value={headingFont} onChange={(e) => setHeadingFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-mono rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Playfair Display" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground font-mono mb-1 block">Body Font</label>
+                      <input type="text" value={bodyFont} onChange={(e) => setBodyFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-mono rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Inter" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </motion.div>
 
           {/* ================================================================ */}
           {/* BRAND SETTINGS — Email Header / Footer / Assets                  */}
