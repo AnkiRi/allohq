@@ -6,20 +6,15 @@ import {
   Users,
   Brain,
   Zap,
-  ShoppingBag,
   Store,
   Check,
   Sparkles,
   Loader2,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  SlidersHorizontal,
+  ChevronRight,
 } from "lucide-react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
-import { ActivationProgress } from "@/components/dashboard/ActivationProgress";
 
 // ---------------------------------------------------------------------------
 // Motion variants
@@ -29,13 +24,13 @@ const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.05 },
+    transition: { staggerChildren: 0.06 },
   },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
 // ---------------------------------------------------------------------------
@@ -44,7 +39,7 @@ const itemVariants = {
 
 function Sparkline({
   data,
-  color = "var(--olive)",
+  color = "var(--color-success)",
   width = 80,
   height = 20,
 }: {
@@ -150,13 +145,13 @@ function ConnectStorePrompt() {
       transition={{ duration: 0.5 }}
     >
       <div className="text-center max-w-md w-full">
-        <div className="w-16 h-16 rounded-2xl bg-[#6B7A2F]/10 flex items-center justify-center mx-auto mb-5">
-          <Store className="w-8 h-8 text-[#6B7A2F]" />
+        <div className="w-16 h-16 rounded-2xl bg-[var(--color-success)]/10 flex items-center justify-center mx-auto mb-5">
+          <Store className="w-8 h-8 text-[var(--color-success)]" />
         </div>
-        <h1 className="text-2xl font-semibold text-[#2C2C2C] mb-2">Connect Your Store</h1>
-        <p className="text-sm text-[#8B8074] mb-6 leading-relaxed">
+        <h1 className="text-2xl font-semibold text-foreground font-serif mb-2">Connect Your Store</h1>
+        <p className="text-sm text-muted-foreground font-sans mb-6 leading-relaxed">
           Connect your Shopify store to get started. Allo will analyze your brand,
-          segment your customers, and set up AI-powered marketing automations.
+          segment your customers, and set up AI-powered retention.
         </p>
         <div className="max-w-sm mx-auto space-y-3">
           <div className="flex items-center">
@@ -166,17 +161,17 @@ function ConnectStorePrompt() {
               value={domain}
               onChange={(e) => { setDomain(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-              className="flex-1 px-4 py-2.5 text-sm rounded-l-lg border border-[#EDE7DB] bg-white/80 text-[#2C2C2C] placeholder:text-[#A09888] focus:outline-none focus:border-[#6B7A2F] transition-colors"
+              className="flex-1 px-4 py-2.5 text-sm rounded-l-lg border border-border bg-white/80 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[var(--color-accent)] transition-colors"
             />
-            <span className="px-3 py-2.5 text-sm text-[#8B8074] bg-[#F5F0E8] border border-l-0 border-[#EDE7DB] rounded-r-lg">
+            <span className="px-3 py-2.5 text-sm text-muted-foreground bg-muted border border-l-0 border-border rounded-r-lg">
               .myshopify.com
             </span>
           </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-[var(--color-urgent)]">{error}</p>}
           <button
             onClick={handleConnect}
             disabled={connecting}
-            className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#2C2C2C] text-white text-sm font-medium rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-foreground text-background text-sm font-medium rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
           >
             {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Store className="w-4 h-4" />}
             {connecting ? "Connecting..." : "Connect Store"}
@@ -188,185 +183,40 @@ function ConnectStorePrompt() {
 }
 
 // ---------------------------------------------------------------------------
-// Mission Control Section
-// ---------------------------------------------------------------------------
-
-function MissionControlSection({ storeId }: { storeId: string }) {
-  const { data: missionControl, isLoading } = (trpc as any).briefings.missionControl.useQuery(
-    { storeId },
-    { enabled: !!storeId, refetchInterval: 60000 },
-  ) as { data: any | undefined; isLoading: boolean };
-
-  const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
-    { storeId },
-    { enabled: !!storeId },
-  ) as { data: any | undefined };
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="glass-skeleton h-32 rounded-xl" />
-        ))}
-      </div>
-    );
-  }
-
-  if (!missionControl) return null;
-
-  const mc = missionControl;
-  const briefingContent = latestBriefing?.content as any;
-
-  return (
-    <div className="space-y-4">
-      {briefingContent && (
-        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Brain className="w-4 h-4 text-[#6B7A2F]" />
-            <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
-              {briefingContent.title || "Morning Briefing"}
-            </span>
-          </div>
-          <p className="text-sm text-[#5C5549]">{briefingContent.summary || "No briefing available yet."}</p>
-        </motion.div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">Since you were last here</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#5C5549]">Revenue</span>
-              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">
-                {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(mc.sinceLastVisit?.revenue ?? 0)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#5C5549]">Orders</span>
-              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.sinceLastVisit?.orders ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#5C5549]">New customers</span>
-              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.sinceLastVisit?.newCustomers ?? 0}</span>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">Needs your attention</h3>
-          <div className="space-y-2">
-            <Link href="/actions" className="flex items-center justify-between group">
-              <span className="text-sm text-[#5C5549] group-hover:text-[#2C2C2C] transition-colors">Pending actions</span>
-              <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.needsAttention?.pendingActions ?? 0}</span>
-            </Link>
-            {(mc.needsAttention?.urgentActions ?? 0) > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-red-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Urgent</span>
-                <span className="text-sm font-semibold text-red-600 font-mono">{mc.needsAttention.urgentActions}</span>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">What Allo did</h3>
-          {(mc.alloActivity?.campaignsSent ?? 0) > 0 ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[#5C5549]">Campaigns sent</span>
-                <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.alloActivity?.campaignsSent ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[#5C5549]">Emails delivered</span>
-                <span className="text-sm font-semibold text-[#2C2C2C] font-mono">{mc.alloActivity?.emailsSent ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[#5C5549]">AI-attributed revenue</span>
-                <span className="text-sm font-semibold text-[#6B7A2F] font-mono">
-                  {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(mc.alloActivity?.revenue ?? 0)}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-[#6B7A2F]" />
-                <span className="text-sm text-[#5C5549]">Analyzed your store data</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-[#6B7A2F]" />
-                <span className="text-sm text-[#5C5549]">Segmented your customers</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-[#B8963E]" />
-                <span className="text-sm text-[#5C5549]">Setting up automations...</span>
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">Opportunities</h3>
-          {(mc.opportunities?.length ?? 0) === 0 ? (
-            <p className="text-sm text-[#8B8074]">No new opportunities detected</p>
-          ) : (
-            <div className="space-y-2">
-              {(mc.opportunities as any[]).slice(0, 3).map((opp: any, i: number) => (
-                <div key={i} className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm text-[#5C5549] line-clamp-1">{opp.description}</span>
-                    <span className="text-xs text-[#8B8074]">{opp.customerCount} customers</span>
-                  </div>
-                  <span className="text-xs font-semibold text-[#6B7A2F] font-mono shrink-0 ml-2">
-                    {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(opp.estimatedRevenue ?? 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Segment colors for health bar
 // ---------------------------------------------------------------------------
 
 const SEGMENT_COLORS: Record<string, string> = {
-  Champions: "#6B7A2F",
-  "Loyal Customers": "#B8963E",
-  "Potential Loyalists": "#C4704A",
+  Champions: "var(--color-success)",
+  "Loyal Customers": "var(--color-warning)",
+  "Potential Loyalists": "var(--color-accent)",
   "New Customers": "#8A7D6B",
-  "At Risk": "#C44A4A",
+  "At Risk": "var(--color-urgent)",
   Hibernating: "#999",
   Lost: "#888",
 };
 
 // ---------------------------------------------------------------------------
-// Dashboard Page — single hub for connect, onboard, and mission control
+// Dashboard Page
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
-  // All hooks called unconditionally (Rules of Hooks)
-  const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery();
+  const { data: stats } = trpc.dashboard.stats.useQuery();
   const { data: stores, isLoading: storesLoading } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
   const store = stores?.[0];
   const onboardingDone = !!store?.onboardingCompletedAt;
   const [justCompletedOnboarding, setJustCompletedOnboarding] = useState(false);
 
-  const { data: brandProfile } = (trpc.ai.brandProfile as any).useQuery(
+  const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
     { storeId },
     { enabled: !!storeId && onboardingDone },
   ) as { data: any | undefined };
 
-  const { data: brandStatus } = (
-    trpc.ai.brandProfileStatus as any
-  ).useQuery({ storeId }, { enabled: !!storeId && onboardingDone }) as {
-    data: { exists: boolean; creativeIntensity?: string } | undefined;
-  };
+  const { data: missionControl } = (trpc as any).briefings.missionControl.useQuery(
+    { storeId },
+    { enabled: !!storeId && onboardingDone, refetchInterval: 60000 },
+  ) as { data: any | undefined };
 
   const { data: programs } = (trpc.automations.list as any).useQuery(
     storeId ? { storeId } : undefined,
@@ -381,7 +231,6 @@ export default function DashboardPage() {
       totalOutputTokens: number;
       totalCalls: number;
       totalCost: number;
-      byModel: { model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }[];
     } | undefined;
   };
 
@@ -404,49 +253,46 @@ export default function DashboardPage() {
     { enabled: !!storeId && onboardingDone }
   ) as { data: { metrics?: { totalCustomers?: number; totalRevenue?: number; avgOrderValue?: number }; capturedAt?: string } | undefined };
 
-  const { data: aiSettings } = (trpc.ai.getSettings as any).useQuery(undefined, {
-    enabled: onboardingDone,
-  }) as {
-    data: { defaultModel: string | null } | undefined;
-  };
-
-  const { data: aiModels } = trpc.ai.models.useQuery(undefined, { enabled: onboardingDone });
-
-  const { data: pendingActionsCount } = (trpc.stores.activationStatus as any).useQuery(
+  const { data: brandProfile } = (trpc.ai.brandProfile as any).useQuery(
     { storeId },
     { enabled: !!storeId && onboardingDone },
   ) as { data: any | undefined };
 
+  const { data: brandStatus } = (
+    trpc.ai.brandProfileStatus as any
+  ).useQuery({ storeId }, { enabled: !!storeId && onboardingDone }) as {
+    data: { exists: boolean } | undefined;
+  };
+
   const utils = trpc.useUtils();
 
-  // When onboarding just completed, refresh store list to get updated onboardingCompletedAt
   const handleOnboardingComplete = () => {
     setJustCompletedOnboarding(true);
     utils.stores.list.invalidate();
   };
 
-  // Computed values (safe to compute even without data)
+  // Computed values
+  const mc = missionControl;
+  const briefingContent = latestBriefing?.content as any;
   const hasSyncedData = (stats?.totalCustomers ?? 0) > 0;
   const hasBrand = brandStatus?.exists ?? false;
-  const currentCreativeIntensity = (brandStatus as any)?.creativeIntensity ?? "balanced";
+  const automationCount = programs?.filter((p) => p.status !== "recommended").length ?? 0;
   const readyCampaigns = programs?.filter((p) => p.status === "ready" || p.status === "active").length ?? 0;
-  const modelLabel = (aiModels as any)?.find((m: any) => m.id === aiSettings?.defaultModel)?.label ?? aiSettings?.defaultModel;
-  const creativeLabel = currentCreativeIntensity === "text_heavy" ? "Text Heavy" : currentCreativeIntensity === "visual_heavy" ? "Visual Heavy" : "Balanced";
 
   const aiCost = tokenUsage?.totalCost ?? 0;
   const aiCalls = tokenUsage?.totalCalls ?? 0;
-  const automationCount = programs?.filter((p) => p.status !== "recommended").length ?? 0;
   const estimatedSavings = automationCount * 100 + (hasBrand ? 200 : 0) + (hasSyncedData ? 150 : 0);
 
+  // Attention items
   const attentionItems: { level: "urgent" | "moderate" | "positive"; text: string; detail: string; action: string; href: string }[] = [];
   if (segmentDist) {
     const hibernating = segmentDist.find((s) => s.segment === "Lost" || s.segment === "Hibernating");
     if (hibernating && hibernating.customerCount > 0) {
       attentionItems.push({
         level: "urgent",
-        text: `${hibernating.customerCount} customers are ${hibernating.segment} with $${Math.round(hibernating.totalRevenue).toLocaleString()} revenue`,
-        detail: "These customers haven't purchased recently.",
-        action: "Launch Win-Back Campaign \u2192",
+        text: `${hibernating.customerCount} hibernating customers`,
+        detail: `${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(hibernating.totalRevenue)} in past revenue at risk`,
+        action: "Launch Win-Back",
         href: "/automations",
       });
     }
@@ -455,9 +301,9 @@ export default function DashboardPage() {
     attentionItems.push({
       level: "moderate",
       text: "Marketing opt-in rate is 0%",
-      detail: "No customers have opted into email/SMS marketing.",
-      action: "Set Up Collection \u2192",
-      href: "/settings",
+      detail: "Set up a lead capture form to start collecting opt-ins",
+      action: "Create Form",
+      href: "/forms",
     });
   }
   if (programs) {
@@ -465,266 +311,243 @@ export default function DashboardPage() {
     if (readyNotLive.length > 0) {
       attentionItems.push({
         level: "positive",
-        text: `${readyNotLive.length} automation${readyNotLive.length > 1 ? "s are" : " is"} ready but not live`,
-        detail: readyNotLive.map((p) => p.name).join(", ") + (readyNotLive.length > 1 ? " are generated." : " is generated."),
-        action: "Review & Go Live \u2192",
+        text: `${readyNotLive.length} automation${readyNotLive.length > 1 ? "s" : ""} ready to go live`,
+        detail: readyNotLive.map((p) => p.name).join(", "),
+        action: "Review & Activate",
         href: "/automations",
       });
     }
   }
 
+  // Build briefing narrative
+  const buildNarrative = () => {
+    if (!mc && !briefingContent) return null;
+    const parts: string[] = [];
+    const now = new Date();
+    const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
+    const monthDay = now.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+
+    parts.push(`${dayName}, ${monthDay}`);
+
+    // First load after onboarding — recently activated
+    const activatedAt = store?.activatedAt ? new Date(store.activatedAt) : null;
+    const isRecentlyActivated = activatedAt && (Date.now() - activatedAt.getTime()) < 5 * 60 * 1000;
+    if (isRecentlyActivated) {
+      parts.push("Welcome! Allo has set up your retention system. Check the AI panel to see what was created and what needs your review.");
+      return parts;
+    }
+
+    if (briefingContent?.summary) {
+      parts.push(briefingContent.summary);
+    } else if (mc) {
+      const revenue = mc.sinceLastVisit?.revenue ?? 0;
+      const orders = mc.sinceLastVisit?.orders ?? 0;
+      if (revenue > 0) {
+        const aov = orders > 0 ? Math.round(revenue / orders) : 0;
+        parts.push(`${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(revenue)} in revenue across ${orders} orders${aov > 0 ? `, with an average order value of ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(aov)}` : ""}.`);
+      }
+    }
+
+    if (segmentDist) {
+      const hibernating = segmentDist.find((s) => s.segment === "Hibernating" || s.segment === "Lost");
+      const totalCust = segmentDist.reduce((sum, s) => sum + s.customerCount, 0);
+      if (hibernating && totalCust > 0) {
+        const pct = Math.round((hibernating.customerCount / totalCust) * 100);
+        if (pct > 20) {
+          parts.push(`${hibernating.customerCount} customers (${pct}% of your base) are hibernating. This is your biggest opportunity \u2014 a win-back campaign targeting these customers could recover significant revenue.`);
+        }
+      }
+    }
+
+    if (automationCount > 0) {
+      const active = programs?.filter((p) => p.status === "active").length ?? 0;
+      const ready = programs?.filter((p) => p.status === "ready").length ?? 0;
+      parts.push(`Allo has set up your retention system. **${automationCount} automations** created — ${active} running on autopilot${ready > 0 ? `, ${ready} ready for your review` : ""}.${aiCost > 0 ? ` AI cost so far: $${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)}.` : ""}`);
+    }
+
+    return parts;
+  };
+
   // --- Loading ---
   if (storesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B8074]" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  // --- State 1: No store → inline connect ---
+  // --- State 1: No store ---
   if (!storeId) {
     return <ConnectStorePrompt />;
   }
 
-  // --- State 2: Store exists, onboarding not done → show wizard ---
+  // --- State 2: Onboarding not done ---
   if (!onboardingDone && !justCompletedOnboarding) {
     return <OnboardingWizard storeId={storeId} onComplete={handleOnboardingComplete} />;
   }
 
-  // --- State 3: Onboarding complete → Mission Control ---
+  const narrative = buildNarrative();
+
+  // --- State 3: Mission Control ---
   return (
     <motion.div
-      className="space-y-6"
+      className="space-y-8 max-w-4xl"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
-      {/* Header with inline status pills */}
-      <motion.div variants={itemVariants} className="glass-card-static px-8 py-5">
-        <h1 className="section-header accent-bar-left text-[22px] text-foreground tracking-[-0.5px] mb-1">
-          DASHBOARD
-        </h1>
-        <p className="text-[13px] text-muted-foreground font-sans pl-4">
-          Your AI retention &amp; growth team
-        </p>
-        <div className="mt-3 flex items-center gap-2 pl-4 flex-wrap">
-          <Link href="/integrations" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#6B7A2F] hover:bg-black/[0.07] transition-colors">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#6B7A2F]" /> Connected
-          </Link>
-          {aiSettings?.defaultModel && (
-            <Link href="/settings" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#B8963E] hover:bg-black/[0.07] transition-colors">
-              <Zap className="w-3 h-3" /> {modelLabel}
-            </Link>
-          )}
-          <Link href="/settings" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#8A7D6B] hover:bg-black/[0.07] transition-colors">
-            <SlidersHorizontal className="w-3 h-3" /> {creativeLabel}
-          </Link>
-          {hasBrand && (
-            <Link href="/intelligence/brand" className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-full bg-black/[0.04] text-[#8A7D6B] hover:bg-black/[0.07] transition-colors">
-              <Check className="w-3 h-3" /> Brand
-            </Link>
-          )}
+      {/* 1. MORNING BRIEFING — Hero Section */}
+      <motion.div
+        variants={itemVariants}
+        className="glass-card-static rounded-2xl p-8 md:p-10 border-l-[3px] border-l-[var(--color-accent)]"
+        style={{
+          background: "linear-gradient(135deg, var(--glass-bg) 0%, rgba(253, 245, 238, 0.8) 100%)",
+        }}
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Brain className="w-5 h-5 text-[var(--color-accent)]" />
+          <span className="section-header text-[14px] text-foreground">
+            Your Daily Briefing
+          </span>
         </div>
-      </motion.div>
-
-      {/* Activation Progress — shows after onboarding, above everything */}
-      <ActivationProgress storeId={storeId} />
-
-      {/* Mission Control */}
-      <MissionControlSection storeId={storeId} />
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <motion.div variants={itemVariants}>
-          <Link href="/customers" className="block glass-card p-5 group">
-            <div className="flex items-center justify-between mb-2">
-              <div className="section-header text-[10px] text-muted-foreground">CUSTOMERS</div>
-              {(() => {
-                const current = stats?.totalCustomers ?? 0;
-                const baseline = baselineData?.metrics?.totalCustomers;
-                if (baseline && baseline > 0) {
-                  const pct = Math.round(((current - baseline) / baseline) * 100);
-                  const isUp = pct >= 0;
-                  return (
-                    <span className={isUp ? "trend-pill-up" : "trend-pill-down"}>
-                      {isUp ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
-                      {isUp ? "+" : ""}{pct}%
-                    </span>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-            <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
-              <AnimatedNumber value={stats?.totalCustomers ?? 0} />
-            </div>
-            <div className="mt-2"><Sparkline data={SPARK_CUSTOMERS} color="var(--olive)" /></div>
-            {baselineData?.metrics?.totalCustomers != null && (
-              <div className="text-[9px] font-mono text-muted-foreground mt-1">
-                Baseline: {baselineData.metrics.totalCustomers.toLocaleString()}
-              </div>
-            )}
-          </Link>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Link href="/segments" className="block glass-card p-5 group">
-            <div className="section-header text-[10px] text-muted-foreground mb-2">SEGMENTS</div>
-            <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
-              <AnimatedNumber value={(segmentsList as any)?.length ?? 0} />
-            </div>
-            <p className="text-[11px] text-muted-foreground font-sans mt-2">active segments</p>
-          </Link>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Link href="/campaigns" className="block glass-card p-5 group">
-            <div className="section-header text-[10px] text-muted-foreground mb-2">CAMPAIGNS</div>
-            {readyCampaigns > 0 ? (
-              <>
-                <div className="text-[32px] font-bold text-foreground font-mono tabular-nums leading-tight">
-                  <AnimatedNumber value={readyCampaigns} />
-                </div>
-                <p className="text-[11px] text-muted-foreground font-sans mt-2">ready to send</p>
-              </>
-            ) : (pendingActionsCount?.context?.pendingActions ?? 0) > 0 ? (
-              <p className="text-[13px] text-terracotta font-mono font-semibold mt-4">{pendingActionsCount.context.pendingActions} campaigns ready for review &rarr;</p>
-            ) : (
-              <p className="text-[13px] text-[#8B8074] font-mono mt-4">Allo is generating campaigns...</p>
-            )}
-          </Link>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Link href="/analytics" className="block glass-card p-5 group">
-            <div className="flex items-center justify-between mb-2">
-              <div className="section-header text-[10px] text-muted-foreground">REVENUE</div>
-              {(() => {
-                const current = stats?.revenueThisMonth ?? 0;
-                const baseline = baselineData?.metrics?.totalRevenue;
-                if (baseline && baseline > 0) {
-                  const pct = Math.round(((current - baseline) / baseline) * 100);
-                  const isUp = pct >= 0;
-                  return (
-                    <span className={isUp ? "trend-pill-up" : "trend-pill-down"}>
-                      {isUp ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
-                      {isUp ? "+" : ""}{pct}%
-                    </span>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-            <div className="text-[32px] font-bold text-[#6B7A2F] font-mono tabular-nums leading-tight">
-              <AnimatedNumber value={stats?.revenueThisMonth ?? 0} prefix="$" />
-            </div>
-            <div className="mt-2"><Sparkline data={SPARK_REVENUE} color="var(--olive)" /></div>
-            {baselineData?.metrics?.totalRevenue != null && (
-              <div className="text-[9px] font-mono text-muted-foreground mt-1">
-                Baseline: ${baselineData.metrics.totalRevenue.toLocaleString()}
-              </div>
-            )}
-          </Link>
-        </motion.div>
-      </div>
-
-      {/* ATTENTION NEEDED */}
-      <motion.div variants={itemVariants} className="glass-card-static border-l-[3px] border-l-terracotta p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="section-header accent-bar-left text-[13px] text-foreground flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-terracotta" />
-            ATTENTION NEEDED
-          </h2>
-          {attentionItems.length > 0 && (
-            <span className="text-[11px] font-mono text-muted-foreground">
-              {attentionItems.length} item{attentionItems.length !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        {attentionItems.length > 0 ? (
-          <div className="space-y-0">
-            {attentionItems.slice(0, 4).map((item, i) => (
-              <div key={i} className={`flex gap-3 py-3 ${i < attentionItems.length - 1 ? "border-b border-black/[0.04]" : ""}`}>
-                <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                  item.level === "urgent" ? "bg-[#C44A4A]" : item.level === "moderate" ? "bg-[#B8963E]" : "bg-[#6B7A2F]"
-                }`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-mono text-foreground font-medium">{item.text}</p>
-                  <p className="text-[11px] text-muted-foreground font-sans mt-0.5">{item.detail}</p>
-                  <Link href={item.href} className="text-[12px] font-mono text-terracotta hover:text-terracotta/80 transition-colors mt-1 inline-block">
-                    {item.action}
-                  </Link>
-                </div>
-              </div>
+        {narrative && narrative.length > 0 ? (
+          <div className="space-y-4">
+            <h2 className="text-[18px] font-serif font-semibold text-foreground leading-tight">
+              {narrative[0]}
+            </h2>
+            {narrative.slice(1).map((para, i) => (
+              <p key={i} className="text-[16px] leading-[1.7] text-foreground/80 font-sans">
+                {para}
+              </p>
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-3 py-2">
-            <Check className="w-4 h-4 text-[#6B7A2F]" />
-            <p className="text-[13px] font-sans text-muted-foreground">Everything looks good. Your store is on track.</p>
+          <p className="text-[16px] leading-[1.7] text-foreground/80 font-sans">
+            Welcome! As your store data syncs, Allo will generate personalized briefings with insights and recommendations.
+          </p>
+        )}
+
+        {/* Priorities */}
+        {attentionItems.length > 0 && (
+          <div className="mt-6 pt-6 border-t border-black/[0.06]">
+            <p className="text-[13px] font-serif font-semibold text-foreground mb-3">Your priorities today:</p>
+            <div className="space-y-2">
+              {attentionItems.slice(0, 3).map((item, i) => (
+                <Link
+                  key={i}
+                  href={item.href}
+                  className="flex items-center gap-3 group"
+                >
+                  <span className="text-[14px] font-sans text-foreground/70 group-hover:text-foreground transition-colors">
+                    {i + 1}.{" "}
+                    <span className={
+                      item.level === "urgent" ? "text-[var(--color-urgent)]" :
+                      item.level === "moderate" ? "text-[var(--color-warning)]" :
+                      "text-[var(--color-success)]"
+                    }>
+                      {item.text}
+                    </span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </motion.div>
 
-      {/* Two-column: AI AGENT ACTIVITY + AUTOMATION STATUS */}
-      <div className="grid grid-cols-[3fr_2fr] gap-5">
-        <motion.div variants={itemVariants} className="glass-card-static border-l-[3px] border-l-[#B8963E] p-6">
+      {/* 2. PENDING ACTIONS — Inline Action Cards */}
+      {(mc?.needsAttention?.pendingActions ?? 0) > 0 && (
+        <motion.div variants={itemVariants}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="section-header text-[15px] text-foreground flex items-center gap-2">
+              <Zap className="w-4 h-4 text-[var(--color-warning)]" />
+              Pending Actions
+            </h2>
+            <Link href="/actions" className="text-[12px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity">
+              View all <ChevronRight className="w-3 h-3 inline" />
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {attentionItems.slice(0, 3).map((item, i) => (
+              <motion.div
+                key={i}
+                variants={itemVariants}
+                className="glass-card-static rounded-xl p-5 flex items-start gap-4"
+                style={{
+                  borderLeft: `3px solid ${
+                    item.level === "urgent" ? "var(--color-urgent)" :
+                    item.level === "moderate" ? "var(--color-warning)" :
+                    "var(--color-success)"
+                  }`,
+                }}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-mono font-medium text-foreground">{item.text}</p>
+                  <p className="text-[12px] text-muted-foreground font-sans mt-1">{item.detail}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Link
+                    href={item.href}
+                    className="px-3 py-1.5 rounded-lg bg-[var(--color-accent)] text-white text-[12px] font-mono font-medium hover:opacity-90 transition-opacity"
+                  >
+                    {item.action}
+                  </Link>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 3. WHAT ALLO DID + AUTOMATIONS — side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5">
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="section-header accent-bar-left text-[13px] text-foreground flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#B8963E]" />
-              AI AGENT ACTIVITY
+            <h2 className="section-header text-[14px] text-foreground flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[var(--color-warning)]" />
+              What Allo Did
             </h2>
             <span className="text-[11px] font-mono text-muted-foreground">Last 24 hours</span>
           </div>
           <div className="space-y-0">
             {automationCount > 0 && (
-              <div className="flex items-start justify-between py-3 border-b border-black/[0.04]">
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-mono text-foreground">Generated {automationCount} automations</p>
-                    <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-                      {programs?.filter((p) => p.status !== "recommended").map((p) => p.name).slice(0, 3).join(", ")}
-                      {automationCount > 3 ? `, +${automationCount - 3} more` : ""}
-                    </p>
-                  </div>
+              <div className="flex items-start gap-2 py-3 border-b border-black/[0.04]">
+                <Check className="w-3.5 h-3.5 text-[var(--color-success)] mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-mono text-foreground">Generated {automationCount} automations</p>
+                  <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                    {programs?.filter((p) => p.status !== "recommended").map((p) => p.name).slice(0, 3).join(", ")}
+                    {automationCount > 3 ? `, +${automationCount - 3} more` : ""}
+                  </p>
                 </div>
               </div>
             )}
             {hasBrand && brandProfile && (
-              <div className="flex items-start justify-between py-3 border-b border-black/[0.04]">
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-mono text-foreground">Analyzed brand voice for {brandProfile?.brandName ?? "your store"}</p>
-                    <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-                      Tone: {Object.keys(brandProfile?.toneAttributes ?? {}).slice(0, 3).join(" \u00b7 ")}
-                    </p>
-                  </div>
+              <div className="flex items-start gap-2 py-3 border-b border-black/[0.04]">
+                <Check className="w-3.5 h-3.5 text-[var(--color-success)] mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-mono text-foreground">Analyzed brand voice for {brandProfile?.brandName ?? "your store"}</p>
+                  <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                    Tone: {Object.keys(brandProfile?.toneAttributes ?? {}).slice(0, 3).join(" \u00b7 ")}
+                  </p>
                 </div>
               </div>
             )}
             {hasSyncedData && (
-              <div className="flex items-start justify-between py-3 border-b border-black/[0.04]">
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-mono text-foreground">Segmented {stats?.totalCustomers ?? 0} customers into {segmentDist?.length ?? 0} groups</p>
-                    <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-                      {segmentDist?.slice(0, 3).map((s) => `${s.segment} (${s.customerCount})`).join(", ")}
-                    </p>
-                  </div>
+              <div className="flex items-start gap-2 py-3 border-b border-black/[0.04]">
+                <Check className="w-3.5 h-3.5 text-[var(--color-success)] mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-mono text-foreground">Segmented {stats?.totalCustomers ?? 0} customers into {segmentDist?.length ?? 0} groups</p>
                 </div>
               </div>
             )}
             {hasSyncedData && (
-              <div className="flex items-start justify-between py-3">
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-mono text-foreground">Calculated RFM scores for {stats?.totalCustomers ?? 0} customers</p>
-                  </div>
+              <div className="flex items-start gap-2 py-3">
+                <Check className="w-3.5 h-3.5 text-[var(--color-success)] mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-mono text-foreground">Calculated RFM scores for {stats?.totalCustomers ?? 0} customers</p>
                 </div>
               </div>
             )}
@@ -735,22 +558,22 @@ export default function DashboardPage() {
                 {aiCalls} actions &middot; ${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)} AI cost
               </span>
               {estimatedSavings > 0 && (
-                <span className="text-[12px] font-mono text-[#6B7A2F] font-semibold">
-                  &middot; ~${estimatedSavings.toLocaleString()} in manual work saved
+                <span className="text-[12px] font-mono text-[var(--color-success)] font-semibold">
+                  &middot; ~${estimatedSavings.toLocaleString()} saved
                 </span>
               )}
             </div>
           )}
         </motion.div>
 
-        <motion.div variants={itemVariants} className="glass-card-static p-6">
+        <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="section-header accent-bar-left text-[13px] text-foreground flex items-center gap-2">
+            <h2 className="section-header text-[14px] text-foreground flex items-center gap-2">
               <Zap className="w-4 h-4 text-muted-foreground" />
-              AUTOMATIONS
+              Automations
             </h2>
-            <Link href="/automations" className="text-[11px] font-mono text-terracotta hover:text-terracotta/80 transition-colors">
-              View all &rarr;
+            <Link href="/automations" className="text-[11px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity">
+              View all <ChevronRight className="w-3 h-3 inline" />
             </Link>
           </div>
           {programs && programs.length > 0 ? (
@@ -759,17 +582,17 @@ export default function DashboardPage() {
                 <Link key={p.id} href="/automations" className={`flex items-center justify-between py-2.5 hover:bg-white/10 -mx-2 px-2 rounded-lg transition-colors ${i < programs.length - 1 ? "border-b border-black/[0.03]" : ""}`}>
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                      p.status === "active" ? "bg-[#6B7A2F]" :
-                      p.status === "ready" ? "bg-[#B8963E]" :
-                      p.status === "generating" ? "bg-[#C4704A] animate-pulse" :
-                      p.status === "draft" ? "bg-[#C4704A]" :
+                      p.status === "active" ? "bg-[var(--color-success)]" :
+                      p.status === "ready" ? "bg-[var(--color-warning)]" :
+                      p.status === "generating" ? "bg-[var(--color-accent)] animate-pulse" :
+                      p.status === "draft" ? "bg-[var(--color-accent)]" :
                       "border border-muted-foreground"
                     }`} />
                     <span className="text-[12px] font-mono text-foreground truncate">{p.name}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-[10px] font-mono text-muted-foreground capitalize">{p.status}</span>
-                    {p.status === "ready" && <span className="text-[10px] font-mono text-terracotta">Go Live &rarr;</span>}
+                    {p.status === "ready" && <span className="text-[10px] font-mono text-[var(--color-accent)]">Go Live <ChevronRight className="w-2.5 h-2.5 inline" /></span>}
                   </div>
                 </Link>
               ))}
@@ -783,18 +606,17 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="py-6 text-center">
-              <p className="text-[12px] text-muted-foreground font-sans">No automations yet</p>
-              <Link href="/automations" className="text-[12px] font-mono text-terracotta mt-2 inline-block">Generate automations &rarr;</Link>
+              <p className="text-[12px] text-muted-foreground font-sans">Allo is setting up automations...</p>
             </div>
           )}
         </motion.div>
       </div>
 
-      {/* CUSTOMER HEALTH SNAPSHOT */}
-      <motion.div variants={itemVariants} className="glass-card-static p-6">
-        <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-4 flex items-center gap-2">
+      {/* 4. CUSTOMER HEALTH */}
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+        <h2 className="section-header text-[14px] text-foreground mb-4 flex items-center gap-2">
           <Users className="w-4 h-4 text-muted-foreground" />
-          CUSTOMER HEALTH
+          Customer Health
         </h2>
         {segmentDist && segmentDist.length > 0 ? (
           <>
@@ -815,13 +637,12 @@ export default function DashboardPage() {
                     <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: SEGMENT_COLORS[s.segment] ?? "#ccc" }} />
                     <span className="text-[11px] font-mono text-foreground">{s.segment}</span>
                     <span className="text-[10px] text-muted-foreground">{s.customerCount} ({pct}%)</span>
-                    <span className="text-[10px] text-muted-foreground">${Math.round(s.totalRevenue).toLocaleString()}</span>
                   </div>
                 );
               })}
             </div>
             {customerStats && (
-              <div className="flex items-center gap-6 mb-4 text-[11px] font-mono text-muted-foreground">
+              <div className="flex items-center gap-6 text-[11px] font-mono text-muted-foreground">
                 <span>Marketing opt-in: <strong className="text-foreground">{customerStats.marketingRate.toFixed(0)}%</strong></span>
                 <span>Avg order value: <strong className="text-foreground">${customerStats.avgOrderValue.toFixed(0)}</strong></span>
               </div>
@@ -832,11 +653,11 @@ export default function DashboardPage() {
               if (hibernating && totalCust > 0 && (hibernating.customerCount / totalCust) > 0.3) {
                 const pct = Math.round((hibernating.customerCount / totalCust) * 100);
                 return (
-                  <div className="flex items-start gap-2 p-3 bg-white/20 rounded-lg border border-white/15">
-                    <Sparkles className="w-3.5 h-3.5 text-[#B8963E] mt-0.5 flex-shrink-0" />
+                  <div className="flex items-start gap-2 p-3 mt-3 bg-white/20 rounded-lg border border-white/15">
+                    <Sparkles className="w-3.5 h-3.5 text-[var(--color-warning)] mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-[12px] font-sans text-foreground">{pct}% of your base is dormant. A win-back campaign could recover estimated revenue.</p>
-                      <Link href="/automations" className="text-[11px] font-mono text-terracotta mt-1 inline-block">Launch Win-Back &rarr;</Link>
+                      <p className="text-[12px] font-sans text-foreground italic">{pct}% of your base is dormant. A win-back campaign could recover estimated revenue.</p>
+                      <Link href="/automations" className="text-[11px] font-mono text-[var(--color-accent)] mt-1 inline-block">Launch Win-Back <ChevronRight className="w-2.5 h-2.5 inline" /></Link>
                     </div>
                   </div>
                 );
@@ -849,38 +670,77 @@ export default function DashboardPage() {
         )}
       </motion.div>
 
-      {/* Recent activity */}
-      <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
-        <div className="px-6 py-4 border-b border-white/15 flex items-center gap-3">
-          <h2 className="section-header accent-bar-left text-[13px] text-foreground">RECENT ACTIVITY</h2>
+      {/* 5. KPI CARDS — Compact row */}
+      <motion.div variants={itemVariants}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Link href="/customers" className="glass-card p-4 group">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wide">Customers</span>
+              {(() => {
+                const current = stats?.totalCustomers ?? 0;
+                const baseline = baselineData?.metrics?.totalCustomers;
+                if (baseline && baseline > 0) {
+                  const pct = Math.round(((current - baseline) / baseline) * 100);
+                  return (
+                    <span className={pct >= 0 ? "trend-pill-up" : "trend-pill-down"}>
+                      {pct >= 0 ? "+" : ""}{pct}%
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+            <div className="text-[24px] font-bold text-foreground font-mono leading-tight">
+              <AnimatedNumber value={stats?.totalCustomers ?? 0} />
+            </div>
+            <div className="mt-1.5"><Sparkline data={SPARK_CUSTOMERS} /></div>
+          </Link>
+
+          <Link href="/segments" className="glass-card p-4 group">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wide">Segments</span>
+            <div className="text-[24px] font-bold text-foreground font-mono leading-tight mt-1">
+              <AnimatedNumber value={(segmentsList as any)?.length ?? 0} />
+            </div>
+            <p className="text-[10px] text-muted-foreground font-sans mt-1.5">active segments</p>
+          </Link>
+
+          <Link href="/campaigns" className="glass-card p-4 group">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wide">Campaigns</span>
+            {readyCampaigns > 0 ? (
+              <>
+                <div className="text-[24px] font-bold text-foreground font-mono leading-tight mt-1">
+                  <AnimatedNumber value={readyCampaigns} />
+                </div>
+                <p className="text-[10px] text-muted-foreground font-sans mt-1.5">ready to send</p>
+              </>
+            ) : (
+              <p className="text-[12px] text-muted-foreground font-mono mt-3">Generating...</p>
+            )}
+          </Link>
+
+          <Link href="/analytics" className="glass-card p-4 group">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wide">Revenue</span>
+              {(() => {
+                const current = stats?.revenueThisMonth ?? 0;
+                const baseline = baselineData?.metrics?.totalRevenue;
+                if (baseline && baseline > 0) {
+                  const pct = Math.round(((current - baseline) / baseline) * 100);
+                  return (
+                    <span className={pct >= 0 ? "trend-pill-up" : "trend-pill-down"}>
+                      {pct >= 0 ? "+" : ""}{pct}%
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+            <div className="text-[24px] font-bold text-[var(--color-success)] font-mono leading-tight">
+              <AnimatedNumber value={stats?.revenueThisMonth ?? 0} prefix="$" />
+            </div>
+            <div className="mt-1.5"><Sparkline data={SPARK_REVENUE} /></div>
+          </Link>
         </div>
-        {statsLoading ? (
-          <div className="p-6 space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-8 glass-skeleton" />)}</div>
-        ) : stats?.recentOrders && stats.recentOrders.length > 0 ? (
-          <div className="divide-y divide-white/10">
-            {stats.recentOrders.map((order) => (
-              <div key={order.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-white/10 transition-colors">
-                <div className="w-1 h-8 rounded-full bg-olive flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-mono font-bold text-foreground">#{order.orderNumber}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/20 border border-white/15 text-foreground">{order.status}</span>
-                  </div>
-                  <p className="text-[11px] font-sans text-muted-foreground mt-0.5">{order.customerName} · {new Date(order.createdAt).toLocaleDateString()}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <span className="text-[15px] font-mono font-bold text-foreground tabular-nums">${order.totalPrice.toFixed(2)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-10 text-center">
-            <ShoppingBag className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground font-sans">No orders yet</p>
-            <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">Connect a store and sync data to see activity</p>
-          </div>
-        )}
       </motion.div>
     </motion.div>
   );

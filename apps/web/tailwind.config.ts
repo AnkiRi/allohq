@@ -13,6 +13,7 @@ const config: Config = {
       fontFamily: {
         sans: ["'Inter'", "system-ui", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
+        serif: ["'Fraunces'", "Georgia", "serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -59,6 +60,22 @@ const config: Config = {
         "warm-gold": {
           DEFAULT: "#B8963E",
           light: "rgba(184, 150, 62, 0.08)",
+        },
+        info: {
+          DEFAULT: "#7B9EBD",
+          light: "rgba(123, 158, 189, 0.08)",
+        },
+        success: {
+          DEFAULT: "#6B8F5E",
+          light: "rgba(107, 143, 94, 0.08)",
+        },
+        warning: {
+          DEFAULT: "#C49A3C",
+          light: "rgba(196, 154, 60, 0.08)",
+        },
+        urgent: {
+          DEFAULT: "#C4704D",
+          light: "rgba(196, 112, 77, 0.08)",
         },
       },
       backgroundImage: {

@@ -26,12 +26,16 @@ import {
   Trash2,
   Pencil,
   MessageSquare,
+  Check,
+  PartyPopper,
+  Brain,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { motion } from "framer-motion";
 
 // ---------------------------------------------------------------------------
 // Context — lets TopBar & Cmd+K open/focus the panel
@@ -81,7 +85,7 @@ interface Message {
 // ---------------------------------------------------------------------------
 
 function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
 function timeAgo(date: Date): string {
@@ -100,6 +104,30 @@ function nextId() {
 function derivePageContext(pathname: string): string {
   const segment = pathname.split("/").filter(Boolean).pop();
   return segment || "dashboard";
+}
+
+// ---------------------------------------------------------------------------
+// Rotating placeholder
+// ---------------------------------------------------------------------------
+
+const PLACEHOLDERS = [
+  "Ask Allo anything...",
+  "What should I focus on today?",
+  "Create a campaign for...",
+  "Show me at-risk customers...",
+  "How did last week go?",
+];
+
+function useRotatingPlaceholder(enabled: boolean) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % PLACEHOLDERS.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [enabled]);
+  return PLACEHOLDERS[index] ?? PLACEHOLDERS[0]!;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,39 +164,41 @@ type PanelInsights = {
 
 type Pill = { label: string; instruction: string | null; href?: string };
 
-function getSuggestions(insights: PanelInsights | undefined, pageContext: string): Pill[] {
+function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext: string): Pill[] {
   if (!insights) return [];
-
-  // Don't show suggestions until data is synced
   if (!insights.storeState.hasSyncedData) return [];
 
   const pills: Pill[] = [];
 
-  if (!insights.storeState.hasBrandProfile) {
-    pills.push({ label: "Analyze brand voice", instruction: "Analyze my brand voice" });
-  }
-  if (!insights.storeState.hasAutomations) {
-    pills.push({ label: "View automations", instruction: null, href: "/automations" });
-  }
-  if (insights.segmentAlerts.atRiskCount > 0) {
-    pills.push({ label: "Create win-back flow", instruction: "Create a win-back automation for at-risk customers" });
-  }
-  if (insights.segmentAlerts.championsCount > 0) {
-    pills.push({ label: "Reward VIP customers", instruction: "Create a VIP reward campaign for champions segment" });
-  }
-  if (insights.storeState.hasAutomations && !insights.storeState.hasCampaigns) {
-    pills.push({ label: "Send first campaign", instruction: "Create a promotional email campaign" });
-  }
-  if (insights.churnAlert.highRiskCount > 5) {
-    pills.push({ label: "Show at-risk customers", instruction: null, href: "/customers" });
+  // Context-aware suggestions
+  if (pageContext === "dashboard") {
+    if (insights.segmentAlerts.atRiskCount > 0) {
+      pills.push({ label: `${insights.segmentAlerts.atRiskCount} customers at churn risk`, instruction: "Show me at-risk customers and create a win-back campaign" });
+    }
+    if (!insights.storeState.hasCampaigns) {
+      pills.push({ label: "Your audience hasn't heard from you", instruction: "Create a promotional email campaign" });
+    }
+    if (insights.segmentAlerts.championsCount > 0) {
+      pills.push({ label: `Reward ${insights.segmentAlerts.championsCount} VIP customers`, instruction: "Create a VIP reward campaign for champion customers" });
+    }
+    pills.push({ label: "How did last week go?", instruction: "Analyze my store performance from the last 7 days" });
+  } else if (pageContext === "customers") {
+    pills.push({ label: "Show at-risk customers", instruction: "Show me customers who are at risk of churning" });
+    pills.push({ label: "Find high spenders", instruction: "Find customers who spent over $200 in the last 90 days" });
+  } else if (pageContext === "campaigns" || pageContext === "templates") {
+    pills.push({ label: "Create a campaign", instruction: "Create a new email campaign" });
+    pills.push({ label: "Generate email template", instruction: "Create a promotional email template" });
+  } else if (pageContext === "automations") {
+    pills.push({ label: "Activate recommended", instruction: "Show me all recommended automations and activate them" });
+  } else if (pageContext === "analytics") {
+    pills.push({ label: "Compare to last month", instruction: "Compare this month's performance to last month" });
+    pills.push({ label: "Show channel breakdown", instruction: "Show me a breakdown of revenue by channel" });
+  } else if (pageContext === "segments") {
+    pills.push({ label: "Show segment movements", instruction: "Show me how customer segments have shifted recently" });
   }
 
-  // Page-context-specific pills
-  if (pageContext === "campaigns" || pageContext === "templates") {
-    pills.push({ label: "Create email template", instruction: "Create a promotional email template" });
-  }
-  if (pageContext === "segments" || pageContext === "customers") {
-    pills.push({ label: "Find high spenders", instruction: "Find customers who spent over $200 in the last 90 days" });
+  if (!insights.storeState.hasBrandProfile) {
+    pills.push({ label: "Analyze brand voice", instruction: "Analyze my brand voice" });
   }
 
   pills.push({ label: "Analyze last 30 days", instruction: "Analyze my customer data from the last 30 days" });
@@ -177,126 +207,91 @@ function getSuggestions(insights: PanelInsights | undefined, pageContext: string
 }
 
 // ---------------------------------------------------------------------------
-// Build welcome messages from real data
+// Build briefing-style welcome message
 // ---------------------------------------------------------------------------
 
-function buildWelcomeMessages(insights: PanelInsights): Message[] {
+function buildBriefingMessage(insights: PanelInsights, briefingData: any): Message[] {
   const messages: Message[] = [];
   const now = new Date();
 
-  // If no store connected yet
   if (!insights.storeState.hasStore) {
     messages.push({
       id: "welcome-no-store",
       role: "assistant",
-      content: "Welcome to Allo AI! Connect your Shopify store from the dashboard to get started. I'll be ready to help once your store is set up.",
+      content: "Welcome to Allo! Connect your Shopify store from the dashboard to get started. I'll be ready to help once your store is set up.",
       timestamp: now,
     });
     return messages;
   }
 
-  // If store connected but data not synced yet
   if (!insights.storeState.hasSyncedData) {
     messages.push({
       id: "welcome-syncing",
       role: "assistant",
-      content: "Your store is connected and Allo is setting things up. Once the initial sync and activation complete, I'll have full context to help you with retention strategies, customer insights, and campaign creation.",
+      content: "Your store is connected and I'm syncing your data. This usually takes 1-3 minutes. You'll see progress in the AI panel once activation begins.",
       timestamp: now,
-      actionLinks: [
-        { label: "Go to Dashboard", href: "/dashboard" },
-      ],
     });
     return messages;
   }
 
-  // Main greeting — only when data is ready
+  if (!insights.storeState.hasAutomations && !insights.storeState.hasActiveAutomations) {
+    messages.push({
+      id: "welcome-activating",
+      role: "assistant",
+      content: "Your store data is synced! I'm setting up your retention system now — creating automations and scanning for opportunities. Watch the progress above.",
+      timestamp: now,
+    });
+    return messages;
+  }
+
+  // Build conversational briefing
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const parts: string[] = [];
+  parts.push(`${greeting}! Here's your update:`);
+  parts.push("");
+
+  // Revenue & orders
+  if (insights.metrics.revenueThisMonth > 0) {
+    const trend = insights.metrics.revenueTrend;
+    const trendText = trend > 0 ? `up ${trend}%` : trend < 0 ? `down ${Math.abs(trend)}%` : "steady";
+    parts.push(`Revenue this month: ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs last month)`);
+  }
+
+  // Customers
+  if (insights.metrics.totalCustomers > 0) {
+    parts.push(`${insights.metrics.totalCustomers.toLocaleString()} total customers`);
+  }
+
+  // Alerts
+  if (insights.segmentAlerts.atRiskCount > 0) {
+    parts.push(`${insights.segmentAlerts.atRiskCount} customers at risk of churning`);
+  }
+
+  // Automations
+  if (insights.metrics.totalAutomations > 0) {
+    parts.push(`${insights.metrics.activeAutomations} of ${insights.metrics.totalAutomations} automations active`);
+  }
+
+  // Briefing content if available
+  if (briefingData?.content) {
+    const bc = briefingData.content as any;
+    if (bc.summary) {
+      parts.push("");
+      parts.push(bc.summary);
+    }
+  }
+
+  parts.push("");
+  parts.push("What would you like to focus on?");
+
   messages.push({
-    id: "welcome-greeting",
+    id: "welcome-briefing",
     role: "assistant",
-    content: "Welcome back! Here's what's happening with your store:",
+    content: parts.join("\n"),
     timestamp: now,
   });
-
-  // Revenue trend
-  if (insights.metrics.revenueThisMonth > 0 || insights.metrics.revenueLastMonth > 0) {
-    const trend = insights.metrics.revenueTrend;
-    const direction = trend > 0 ? "up" : trend < 0 ? "down" : "flat";
-    messages.push({
-      id: "welcome-revenue",
-      role: "assistant",
-      content: direction === "flat"
-        ? `Revenue is steady this month at ${formatCurrency(insights.metrics.revenueThisMonth)}.`
-        : `Revenue is ${direction} ${Math.abs(trend)}% this month.`,
-      timestamp: now,
-      insightCard: {
-        label: "Revenue",
-        value: "",
-        variant: trend >= 0 ? "success" : "warning",
-        stats: [
-          { label: "This month", value: formatCurrency(insights.metrics.revenueThisMonth) },
-          { label: "Last month", value: formatCurrency(insights.metrics.revenueLastMonth) },
-          { label: "Trend", value: `${trend >= 0 ? "+" : ""}${trend}%` },
-        ],
-      },
-    });
-  }
-
-  // At-risk alert
-  if (insights.segmentAlerts.atRiskCount > 0) {
-    messages.push({
-      id: "welcome-at-risk",
-      role: "assistant",
-      content: `${insights.segmentAlerts.atRiskCount} customers are in the "At Risk" segment — they haven't purchased recently. I can create a win-back automation for them.`,
-      timestamp: now,
-      insightCard: {
-        label: "Attention",
-        value: `${insights.segmentAlerts.atRiskCount} at-risk customers`,
-        description: "These customers may churn without re-engagement.",
-        variant: "warning",
-      },
-    });
-  }
-
-  // Churn alert
-  if (insights.churnAlert.highRiskCount > 0 && insights.segmentAlerts.atRiskCount === 0) {
-    messages.push({
-      id: "welcome-churn",
-      role: "assistant",
-      content: `${insights.churnAlert.highRiskCount} customers have a high churn probability (avg ${insights.churnAlert.avgChurnProbability}%).`,
-      timestamp: now,
-      insightCard: {
-        label: "Churn Risk",
-        value: `${insights.churnAlert.highRiskCount} high-risk customers`,
-        variant: "warning",
-      },
-    });
-  }
-
-  // Top automation
-  if (insights.topAutomation) {
-    messages.push({
-      id: "welcome-automation",
-      role: "assistant",
-      content: `Your "${insights.topAutomation.name}" automation is ${insights.topAutomation.status}.`,
-      timestamp: now,
-      insightCard: {
-        label: "Automation",
-        value: insights.topAutomation.name,
-        description: `Status: ${insights.topAutomation.status} · Category: ${insights.topAutomation.category || "General"}`,
-        variant: "success",
-      },
-    });
-  }
-
-  // Brand profile nudge
-  if (!insights.storeState.hasBrandProfile && insights.storeState.hasSyncedData) {
-    messages.push({
-      id: "welcome-brand",
-      role: "assistant",
-      content: "I haven't analyzed your brand voice yet. Want me to? It helps me generate better content for your campaigns and automations.",
-      timestamp: now,
-    });
-  }
 
   return messages;
 }
@@ -310,17 +305,17 @@ function InsightCardView({ card }: { card: InsightCard }) {
     accent: {
       bg: "bg-[hsl(var(--accent-bg))]",
       border: "border-border",
-      text: "text-[hsl(var(--accent))]",
+      text: "text-[var(--color-accent)]",
     },
     success: {
       bg: "bg-[hsl(var(--success-bg))]",
       border: "border-[hsl(var(--success)/0.2)]",
-      text: "text-[hsl(var(--success))]",
+      text: "text-[var(--color-success)]",
     },
     warning: {
       bg: "bg-[hsl(var(--accent-bg))]",
       border: "border-border",
-      text: "text-[hsl(var(--accent))]",
+      text: "text-[var(--color-warning)]",
     },
   };
   const colors = colorMap[card.variant];
@@ -358,10 +353,14 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
     return (
       <div className="flex gap-2.5">
         <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Sparkles className="w-3 h-3 text-[hsl(var(--accent))]" />
+          <Sparkles className="w-3 h-3 text-[var(--color-warning)]" />
         </div>
         <div className="flex items-center gap-2 py-1">
-          <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+          <div className="flex gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.3s]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.6s]" />
+          </div>
           <span className="text-[12px] font-mono text-muted-foreground">{message.content}</span>
         </div>
       </div>
@@ -384,18 +383,18 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
   return (
     <div className="flex gap-2.5">
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Sparkles className="w-3 h-3 text-[hsl(var(--accent))]" />
+        <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-accent)]/20 pl-3">
         {/* Tool calls indicator */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {message.toolCalls.map((tool) => (
               <span
                 key={tool}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-600 dark:text-emerald-400"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[10px] font-mono text-[var(--color-success)]"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]" />
                 {tool.replace(/_/g, " ")}
               </span>
             ))}
@@ -412,7 +411,7 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
                 <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                   {h.label}
                 </div>
-                <div className="font-mono text-[15px] font-bold text-[hsl(var(--accent))] mt-0.5">
+                <div className="font-mono text-[15px] font-bold text-[var(--color-accent)] mt-0.5">
                   {h.value}
                 </div>
               </div>
@@ -426,12 +425,12 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
             remarkPlugins={[remarkGfm]}
             components={{
               h2: ({ children }) => (
-                <h2 className="text-[14px] font-semibold font-mono text-foreground mt-3 mb-1.5 first:mt-0">
+                <h2 className="text-[14px] font-semibold font-serif text-foreground mt-3 mb-1.5 first:mt-0">
                   {children}
                 </h2>
               ),
               h3: ({ children }) => (
-                <h3 className="text-[13px] font-semibold font-mono text-foreground mt-2.5 mb-1 first:mt-0">
+                <h3 className="text-[13px] font-semibold font-serif text-foreground mt-2.5 mb-1 first:mt-0">
                   {children}
                 </h3>
               ),
@@ -474,7 +473,7 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
               code: ({ children, className }) => {
                 const isInline = !className;
                 return isInline ? (
-                  <code className="px-1.5 py-0.5 rounded-md bg-muted text-[12px] font-mono text-[hsl(var(--accent))]">
+                  <code className="px-1.5 py-0.5 rounded-md bg-muted text-[12px] font-mono text-[var(--color-accent)]">
                     {children}
                   </code>
                 ) : (
@@ -484,7 +483,7 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
                 );
               },
               blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-[hsl(var(--accent))] pl-3 my-2 text-muted-foreground italic">
+                <blockquote className="border-l-2 border-[var(--color-accent)] pl-3 my-2 text-muted-foreground italic">
                   {children}
                 </blockquote>
               ),
@@ -501,7 +500,7 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
               <button
                 key={link.href}
                 onClick={() => onNavigate?.(link.href)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[hsl(var(--accent-bg))] border border-border text-[hsl(var(--accent))] font-mono text-[11px] hover:border-primary/50 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 transition-colors"
               >
                 {link.label}
                 <ArrowRight className="w-3 h-3" />
@@ -511,6 +510,262 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
         )}
         <div className="font-mono text-[10px] text-muted-foreground/50 mt-1">
           {timeAgo(message.timestamp)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Activation Progress Panel — replaces chat during store activation
+// ---------------------------------------------------------------------------
+
+type ActivationData = {
+  isActivating: boolean;
+  isRecentlyActivated: boolean;
+  activatedAt: string | null;
+  overallProgress: number;
+  steps: { key: string; label: string; status: string; detail?: string }[];
+  automationProgress?: {
+    items: { id: string; name: string; status: string; category: string }[];
+    total: number;
+    generating: number;
+  };
+  context?: { pendingActions: number };
+};
+
+function ActivationStatusIcon({ status }: { status: string }) {
+  if (status === "done" || status === "active" || status === "ready") {
+    return (
+      <div className="w-5 h-5 rounded-full bg-[var(--color-success)]/15 flex items-center justify-center flex-shrink-0">
+        <Check className="w-3 h-3 text-[var(--color-success)]" />
+      </div>
+    );
+  }
+  if (status === "running" || status === "generating") {
+    return <Loader2 className="w-5 h-5 animate-spin text-[var(--color-warning)] flex-shrink-0" />;
+  }
+  // pending / queued
+  return <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" />;
+}
+
+function ActivationProgressPanel({ activation }: { activation: ActivationData }) {
+  const steps = activation.steps ?? [];
+  const items = activation.automationProgress?.items ?? [];
+  const total = activation.automationProgress?.total ?? 0;
+  const generating = activation.automationProgress?.generating ?? 0;
+  const doneCount = steps.filter((s) => s.status === "done").length + (total - generating);
+  const totalTasks = steps.length + total;
+
+  return (
+    <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-xl bg-[var(--color-warning)]/10 flex items-center justify-center">
+          <Brain className="w-4 h-4 text-[var(--color-warning)] animate-pulse" />
+        </div>
+        <div>
+          <div className="text-[14px] font-serif font-semibold text-foreground">
+            Setting up your retention system...
+          </div>
+          <div className="text-[11px] font-mono text-muted-foreground">
+            {doneCount} of {totalTasks} tasks complete
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <motion.div
+          className="h-full bg-[var(--color-warning)] rounded-full"
+          initial={{ width: 0 }}
+          animate={{ width: `${activation.overallProgress}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        />
+      </div>
+
+      {/* Automations section */}
+      {items.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+            Automations
+          </div>
+          <div className="space-y-1">
+            {items.map((item) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center gap-2.5 py-1.5"
+              >
+                <ActivationStatusIcon status={item.status} />
+                <span className={cn(
+                  "text-[12px] font-mono flex-1 truncate",
+                  (item.status === "active" || item.status === "ready") ? "text-foreground" :
+                  item.status === "generating" ? "text-[var(--color-warning)]" :
+                  "text-muted-foreground"
+                )}>
+                  {item.name.replace(" Automation", "")}
+                </span>
+                <span className={cn(
+                  "text-[10px] font-mono capitalize flex-shrink-0",
+                  item.status === "active" ? "text-[var(--color-success)]" :
+                  item.status === "ready" ? "text-[var(--color-accent)]" :
+                  item.status === "generating" ? "text-[var(--color-warning)]" :
+                  "text-muted-foreground"
+                )}>
+                  {item.status === "active" ? "Active (autopilot)" :
+                   item.status === "ready" ? "Ready for review" :
+                   item.status}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Analysis section */}
+      {steps.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+            Analysis
+          </div>
+          <div className="space-y-1">
+            {steps.map((step) => (
+              <div key={step.key} className="flex items-center gap-2.5 py-1.5">
+                <ActivationStatusIcon status={step.status} />
+                <span className={cn(
+                  "text-[12px] font-mono truncate",
+                  step.status === "done" ? "text-foreground" :
+                  step.status === "running" ? "text-[var(--color-warning)]" :
+                  "text-muted-foreground"
+                )}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompletionSummary({
+  activation,
+  onDismiss,
+  onAction,
+}: {
+  activation: ActivationData;
+  onDismiss: () => void;
+  onAction: (action: string) => void;
+}) {
+  const items = activation.automationProgress?.items ?? [];
+  const activeItems = items.filter((i) => i.status === "active");
+  const reviewItems = items.filter((i) => i.status === "ready" || i.status === "draft");
+  const pendingActions = activation.context?.pendingActions ?? 0;
+
+  return (
+    <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-xl bg-[var(--color-success)]/10 flex items-center justify-center">
+          <PartyPopper className="w-4 h-4 text-[var(--color-success)]" />
+        </div>
+        <div>
+          <div className="text-[14px] font-serif font-semibold text-foreground">
+            Your AI retention system is ready!
+          </div>
+          <div className="text-[11px] font-mono text-muted-foreground">
+            Here&apos;s what I set up
+          </div>
+        </div>
+      </div>
+
+      {/* Active automations */}
+      {activeItems.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-success)] mb-2">
+            Active (running now)
+          </div>
+          <div className="space-y-1.5">
+            {activeItems.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 py-1">
+                <Check className="w-3.5 h-3.5 text-[var(--color-success)] flex-shrink-0" />
+                <span className="text-[12px] font-mono text-foreground">
+                  {item.name.replace(" Automation", "")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Review items */}
+      {reviewItems.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-accent)] mb-2">
+            Ready for your review
+          </div>
+          <div className="space-y-2">
+            {reviewItems.map((item) => (
+              <div key={item.id} className="rounded-xl border border-border p-3">
+                <div className="text-[12px] font-mono font-medium text-foreground mb-2">
+                  {item.name.replace(" Automation", "")}
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => onAction(`Approve the ${item.name.replace(" Automation", "")} automation`)}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--color-success)] text-white text-[10px] font-mono font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => onAction(`Show me details about the ${item.name.replace(" Automation", "")} automation`)}
+                    className="px-2.5 py-1 rounded-lg border border-border text-[10px] font-mono text-foreground hover:bg-muted transition-colors"
+                  >
+                    Preview
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending actions note */}
+      {pendingActions > 0 && (
+        <div className="text-[11px] font-mono text-muted-foreground">
+          {pendingActions} action{pendingActions > 1 ? "s" : ""} in your action queue for review.
+        </div>
+      )}
+
+      {/* Next step buttons */}
+      <div className="space-y-2 pt-2 border-t border-border">
+        <div className="text-[11px] font-mono text-muted-foreground mb-2">
+          What would you like to do first?
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {reviewItems.length > 0 && (
+            <button
+              onClick={() => onAction("Approve all pending automations")}
+              className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
+            >
+              Approve all automations
+            </button>
+          )}
+          <button
+            onClick={() => onAction("What should I focus on today?")}
+            className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
+          >
+            What should I focus on?
+          </button>
+          <button
+            onClick={onDismiss}
+            className="px-3 py-1.5 rounded-full border border-border text-foreground font-mono text-[11px] hover:bg-muted transition-all"
+          >
+            Start chatting
+          </button>
         </div>
       </div>
     </div>
@@ -532,6 +787,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const utils = trpc.useUtils();
   const pathname = usePathname();
   const pageContext = derivePageContext(pathname);
+  const isDashboard = pathname === "/dashboard";
 
   const [panelState, setPanelState] = useState<PanelState>("open");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -549,8 +805,11 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // On dashboard, panel is always open
+  const effectiveState = isDashboard ? (panelState === "expanded" ? "expanded" : "open") : panelState;
+
   // Get storeId
-  const { data: stores } = trpc.stores.list.useQuery();
+  const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
   const storeId = stores?.[0]?.id ?? "";
 
   // Fetch real insights
@@ -559,7 +818,76 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     { enabled: !!storeId, refetchInterval: 60_000 },
   ) as { data: PanelInsights | undefined };
 
-  // Chat history — always fetch so dropdown opens instantly
+  // Fetch latest briefing for dashboard greeting
+  const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
+    { storeId },
+    { enabled: !!storeId },
+  ) as { data: any | undefined };
+
+  // Fetch contextual page greeting for non-dashboard pages
+  const { data: pageContextData } = (trpc as any).briefings.pageContext.useQuery(
+    { storeId, page: pageContext },
+    { enabled: !!storeId && !isDashboard && !!insights?.storeState.hasSyncedData, staleTime: 60_000 },
+  ) as { data: { greeting: string; suggestions: { label: string; message: string }[] } | undefined };
+
+  // Fetch agent status for status indicator (Fix 5D)
+  const { data: agentStatus } = (trpc.stores as any).agentStatus.useQuery(
+    { storeId },
+    { enabled: !!storeId, refetchInterval: 5000 },
+  ) as { data: { isWorking: boolean; activeJobs: string[]; pendingActions: number } | undefined };
+
+  // Activation state — shows progress panel instead of chat during activation
+  const [activationDismissed, setActivationDismissed] = useState(false);
+  const prevStoreRef = useRef<string>("");
+
+  // Reset activation dismissed when store changes (e.g. reconnect)
+  if (storeId && storeId !== prevStoreRef.current) {
+    prevStoreRef.current = storeId;
+    if (activationDismissed) setActivationDismissed(false);
+  }
+
+  const { data: activationData } = (trpc.stores.activationStatus as any).useQuery(
+    { storeId },
+    {
+      enabled: !!storeId && !activationDismissed,
+      refetchInterval: (query: any) => {
+        const d = query?.state?.data;
+        if (!d) return 3000;
+        if (d.isActivating) return 2000;
+        if (d.overallProgress < 100) return 2000;
+        if (d.automationProgress?.generating > 0) return 2000;
+        if (d.isRecentlyActivated) return 5000;
+        return false;
+      },
+    },
+  ) as { data: ActivationData | undefined };
+
+  // Broader activation detection:
+  // "in progress" = onboarding done but activation not done, OR automations still generating
+  const isActivationInProgress = !!(
+    activationData &&
+    (activationData.isActivating || // worker hasn't finished
+     (activationData.overallProgress < 100) || // progress < 100%
+     (activationData.automationProgress && activationData.automationProgress.generating > 0)) // automations still generating
+  );
+  // "just completed" = recently activated AND all automations done generating
+  const activationJustCompleted = !!(
+    activationData &&
+    activationData.isRecentlyActivated &&
+    !isActivationInProgress
+  );
+  // Show activation view when: in progress, or just completed (until dismissed)
+  const showActivationView = !activationDismissed && activationData && (isActivationInProgress || activationJustCompleted);
+  // Disable chat during activation work
+  const agentBusy = isActivationInProgress;
+
+  // Fetch smart suggested actions (Fix 7)
+  const { data: smartSuggestions } = (trpc as any).briefings.suggestedActions.useQuery(
+    { storeId },
+    { enabled: !!storeId && !!insights?.storeState.hasSyncedData, staleTime: 30_000 },
+  ) as { data: Array<{ label: string; message: string; priority: number }> | undefined };
+
+  // Chat history
   const { data: chatHistory, refetch: refetchHistory } = (trpc.ai as any).listChats.useQuery(
     { storeId, limit: 30 },
     { enabled: !!storeId, staleTime: 30_000 },
@@ -573,41 +901,57 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     onSuccess: () => refetchHistory(),
   }) as { mutateAsync: (input: { chatId: string; title: string }) => Promise<{ success: boolean }>; isPending: boolean };
 
-  // Inline rename state
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
-
-  // Track which storeId the welcome was built for
   const welcomeStoreRef = useRef<string>("");
 
-  // Build welcome messages from real data — reset when store changes
+  // Build welcome messages — briefing-style on dashboard, contextual on other pages
+  const welcomePageRef = useRef<string>("");
   useEffect(() => {
     if (!storeId) {
-      // Store disconnected — clear everything
       setMessages([]);
       setWelcomeBuilt(false);
       welcomeStoreRef.current = "";
+      welcomePageRef.current = "";
       return;
     }
 
-    // Store changed — rebuild
     if (storeId !== welcomeStoreRef.current) {
       setWelcomeBuilt(false);
       welcomeStoreRef.current = storeId;
+      welcomePageRef.current = "";
     }
 
-    if (insights && !welcomeBuilt) {
-      setMessages(buildWelcomeMessages(insights));
+    // On page change, rebuild welcome if no active chat
+    if (pageContext !== welcomePageRef.current && !currentChatId) {
+      setWelcomeBuilt(false);
+      welcomePageRef.current = pageContext;
+    }
+
+    if (insights && !welcomeBuilt && !currentChatId) {
+      if (isDashboard) {
+        setMessages(buildBriefingMessage(insights, latestBriefing));
+      } else if (pageContextData) {
+        // Contextual greeting for non-dashboard pages
+        setMessages([{
+          id: "welcome-context",
+          role: "assistant",
+          content: pageContextData.greeting,
+          timestamp: new Date(),
+        }]);
+      } else {
+        setMessages(buildBriefingMessage(insights, latestBriefing));
+      }
       setWelcomeBuilt(true);
     }
-  }, [insights, welcomeBuilt, storeId]);
+  }, [insights, welcomeBuilt, storeId, latestBriefing, pageContext, isDashboard, pageContextData, currentChatId]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Click-outside + Escape to dismiss chat switcher
+  // Click-outside for chat switcher
   const switcherRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!showChatSwitcher) return;
@@ -627,7 +971,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     };
   }, [showChatSwitcher]);
 
-  // Expose open/focus to parent via ref
   useImperativeHandle(ref, () => ({
     open() {
       if (panelState === "collapsed") setPanelState("open");
@@ -638,7 +981,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     },
   }));
 
-  // AI chat mutation — real conversational AI with full store context
+  // AI chat mutation
   type ChatResult = {
     chatId: string;
     reply: string;
@@ -662,23 +1005,19 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const chatMut = (trpc.ai as any).chat.useMutation({
     onSuccess: (data: ChatResult) => {
       setIsProcessing(false);
-      // Track chat id and title
       if (!currentChatId) {
-        // New chat — derive title from the last user message
         const lastUserMsg = messages.filter((m) => m.role === "user").pop();
         setCurrentChatTitle(lastUserMsg?.content.slice(0, 40) || "New chat");
       }
       setCurrentChatId(data.chatId);
       refetchHistory();
 
-      // Update dynamic suggestions from AI response
       if (data.suggestedFollowUps?.length) {
         setDynamicSuggestions(data.suggestedFollowUps);
       } else {
         setDynamicSuggestions([]);
       }
 
-      // Build action links from action result
       const actionLinks: { label: string; href: string }[] = [];
       if (data.action?.created.automationId) {
         actionLinks.push({ label: "View Automation", href: `/automations/${data.action.created.automationId}` });
@@ -693,7 +1032,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
         actionLinks.push({ label: "View Segment", href: "/segments" });
       }
 
-      // Build insight card from action if one was executed
       let insightCard: InsightCard | undefined;
       if (data.action?.success) {
         const stats: { label: string; value: string }[] = [];
@@ -761,12 +1099,11 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       const loadingMsg: Message = {
         id: nextId(),
         role: "assistant",
-        content: "Analyzing and running tools...",
+        content: "Thinking...",
         timestamp: new Date(),
         isLoading: true,
       };
 
-      // Build conversation history from non-welcome messages
       const history = messages
         .filter((m) => !m.id.startsWith("welcome-") && !m.isLoading)
         .map((m) => ({ role: m.role, content: m.content }));
@@ -791,13 +1128,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   }, [input, sendMessage]);
 
   const handleNavigate = useCallback((href: string) => {
-    setPanelState("collapsed");
+    if (!isDashboard) setPanelState("collapsed");
     router.push(href);
-  }, [router]);
+  }, [router, isDashboard]);
 
   const handlePillClick = (pill: Pill) => {
     if (pill.href && !pill.instruction) {
-      setPanelState("collapsed");
+      if (!isDashboard) setPanelState("collapsed");
       router.push(pill.href);
       return;
     }
@@ -811,13 +1148,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
     setCurrentChatTitle(undefined);
     setDynamicSuggestions([]);
     setShowChatSwitcher(false);
+    setWelcomeBuilt(false);
     if (insights) {
-      setMessages(buildWelcomeMessages(insights));
+      if (!isDashboard && pageContextData) {
+        setMessages([{
+          id: "welcome-context",
+          role: "assistant",
+          content: pageContextData.greeting,
+          timestamp: new Date(),
+        }]);
+      } else {
+        setMessages(buildBriefingMessage(insights, latestBriefing));
+      }
+      setWelcomeBuilt(true);
     } else {
       setMessages([]);
     }
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [insights]);
+  }, [insights, latestBriefing, isDashboard, pageContextData]);
 
   const loadChat = useCallback(async (chatId: string) => {
     setShowChatSwitcher(false);
@@ -842,8 +1190,16 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   }, [utils, toast]);
 
   const dataReady = !!insights?.storeState.hasSyncedData;
-  const suggestions = getSuggestions(insights, pageContext);
+  // Use smart suggestions (Fix 7), then page context, then fallback to dynamic
+  const smartPills: Pill[] = (smartSuggestions && isDashboard)
+    ? smartSuggestions.map((s) => ({ label: s.label, instruction: s.message }))
+    : [];
+  const contextSuggestions: Pill[] = (!isDashboard && pageContextData?.suggestions)
+    ? pageContextData.suggestions.map((s) => ({ label: s.label, instruction: s.message }))
+    : [];
+  const suggestions = smartPills.length > 0 ? smartPills : contextSuggestions.length > 0 ? contextSuggestions : getDynamicSuggestions(insights, pageContext);
   const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : null;
+  const placeholder = useRotatingPlaceholder(dataReady && !isProcessing);
 
   const toggle = () => {
     setPanelState(panelState === "collapsed" ? "open" : "collapsed");
@@ -859,48 +1215,53 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       <aside
         className={cn(
           "flex flex-col border-l transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] relative",
-          panelState === "open" && "w-[380px] flex-shrink-0 bg-[hsl(var(--ai-panel-bg))] border-border",
-          panelState === "collapsed" && "w-0 border-l-0 overflow-hidden",
-          panelState === "expanded" &&
-            "fixed top-14 right-0 bottom-0 w-[60%] z-50 bg-[hsl(var(--ai-panel-bg))] border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
+          effectiveState === "open" && "w-[380px] flex-shrink-0 ai-panel-bg border-border",
+          effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
+          effectiveState === "expanded" &&
+            "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
+          isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]",
         )}
       >
-        {/* Toggle button */}
-        <button
-          onClick={toggle}
-          className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-          title={panelState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
-        >
-          {panelState === "collapsed" ? (
-            <ChevronLeft className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
-        </button>
+        {/* Toggle button — hidden on dashboard */}
+        {!isDashboard && (
+          <button
+            onClick={toggle}
+            className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
+            title={effectiveState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
+          >
+            {effectiveState === "collapsed" ? (
+              <ChevronLeft className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+        )}
 
         {/* Expand button */}
         <button
           onClick={toggleExpand}
           className="absolute top-3 right-3 w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-          title={panelState === "expanded" ? "Collapse panel" : "Expand to full view"}
+          title={effectiveState === "expanded" ? "Collapse panel" : "Expand to full view"}
         >
-          {panelState === "expanded" ? (
+          {effectiveState === "expanded" ? (
             <Minimize2 className="w-3.5 h-3.5" />
           ) : (
             <Maximize2 className="w-3.5 h-3.5" />
           )}
         </button>
 
-        {/* Header with chat switcher */}
+        {/* Header */}
         <div className="relative" ref={switcherRef}>
           <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
             <div
               className={cn(
                 "w-2 h-2 rounded-full flex-shrink-0",
-                isProcessing ? "bg-primary animate-pulse" : storeId ? "bg-[hsl(var(--success))]" : "bg-muted-foreground",
+                isProcessing ? "bg-[var(--color-warning)] animate-pulse" :
+                isActivationInProgress ? "bg-[var(--color-warning)] animate-pulse" :
+                agentStatus?.isWorking ? "bg-[var(--color-warning)] animate-pulse" :
+                storeId ? "bg-[var(--color-success)]" : "bg-muted-foreground",
               )}
             />
-            {/* Chat switcher trigger + rename */}
             {editingHeaderTitle && currentChatId ? (
               <div className="flex-1 min-w-0">
                 <input
@@ -932,17 +1293,21 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                   "flex-1 text-left flex items-center gap-2 min-w-0 px-2.5 py-1.5 rounded-lg border transition-all",
                   showChatSwitcher
                     ? "border-foreground/20 bg-muted"
-                    : "border-border hover:border-foreground/20 hover:bg-muted/50",
+                    : "border-transparent hover:border-foreground/10 hover:bg-muted/50",
                 )}
               >
                 <MessageSquare className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-mono font-bold text-foreground truncate">
+                  <div className="text-[12px] font-serif font-bold text-foreground truncate">
                     {currentChatTitle || "Allo AI"}
                   </div>
-                  {chatHistory?.chats && chatHistory.chats.length > 0 && (
+                  {storeId && (
                     <div className="text-[10px] font-mono text-muted-foreground truncate">
-                      {chatHistory.chats.length} conversation{chatHistory.chats.length !== 1 ? "s" : ""}
+                      {isProcessing ? "Thinking..." :
+                       isActivationInProgress ? "Setting up your retention system..." :
+                       agentStatus?.isWorking ? `Working on ${agentStatus.activeJobs.length} task${agentStatus.activeJobs.length > 1 ? "s" : ""}...` :
+                       agentStatus?.pendingActions ? `${agentStatus.pendingActions} action${agentStatus.pendingActions > 1 ? "s" : ""} need review` :
+                       "All systems running"}
                     </div>
                   )}
                 </div>
@@ -952,7 +1317,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                 )} />
               </button>
             )}
-            {/* Rename button */}
             {currentChatId && currentChatTitle && !editingHeaderTitle && (
               <button
                 onClick={() => {
@@ -966,7 +1330,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                 <Pencil className="w-3 h-3" />
               </button>
             )}
-            {/* New chat button */}
             <button
               onClick={startNewChat}
               className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
@@ -978,8 +1341,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
 
           {/* Chat switcher dropdown */}
           {showChatSwitcher && (
-            <div className="absolute top-full left-0 right-0 z-50 bg-[hsl(var(--ai-panel-bg))] border-b border-border shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-h-[400px] flex flex-col">
-              {/* Search */}
+            <div className="absolute top-full left-0 right-0 z-50 ai-panel-bg border-b border-border shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-h-[400px] flex flex-col">
               <div className="px-3 py-2 border-b border-border">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
@@ -992,8 +1354,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                   />
                 </div>
               </div>
-
-              {/* New conversation option */}
               <button
                 onClick={() => { startNewChat(); }}
                 className={cn(
@@ -1004,8 +1364,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                 <Plus className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <span className="text-[12px] font-mono font-medium text-foreground">New conversation</span>
               </button>
-
-              {/* Chat list */}
               <div className="flex-1 overflow-y-auto">
                 {(() => {
                   const chats = chatHistory?.chats ?? [];
@@ -1087,7 +1445,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
                             deleteChatMut.mutate({ chatId: chat.id });
                             if (currentChatId === chat.id) startNewChat();
                           }}
-                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/40 hover:text-[var(--color-urgent)] hover:bg-[var(--color-urgent)]/10 transition-colors"
                           title="Delete chat"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -1101,92 +1459,131 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
           )}
         </div>
 
-        {/* Messages area — always visible */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} onNavigate={handleNavigate} />
-          ))}
-
-          {/* Dynamic suggestion pills from AI response */}
-          {!isProcessing && activeSuggestions && (
-            <div className="pl-[34px]">
-              <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                Follow up
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {activeSuggestions.map((text) => (
-                  <button
-                    key={text}
-                    onClick={() => sendMessage(text)}
-                    className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[hsl(var(--accent))] font-mono text-[11px] hover:border-primary/50 transition-colors text-left"
-                  >
-                    {text}
-                  </button>
-                ))}
+        {/* Content area — activation progress OR completion OR chat */}
+        {showActivationView && isActivationInProgress && activationData ? (
+          <>
+            <ActivationProgressPanel activation={activationData} />
+            {/* Disabled input during activation */}
+            <div className="px-5 py-4 border-t border-border">
+              <div className="relative">
+                <input
+                  disabled
+                  value=""
+                  readOnly
+                  placeholder="Allo is setting up your retention system..."
+                  className="w-full pl-4 pr-10 py-3 rounded-[20px] bg-muted/80 border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50"
+                />
               </div>
             </div>
-          )}
-
-          {/* Static suggestion pills — fallback when no dynamic suggestions */}
-          {!isProcessing && !activeSuggestions && suggestions.length > 0 && (
-            <div className="pl-[34px]">
-              <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                Suggested actions
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {suggestions.map((pill) => (
-                  <button
-                    key={pill.label}
-                    onClick={() => handlePillClick(pill)}
-                    className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[hsl(var(--accent))] font-mono text-[11px] hover:border-primary/50 transition-colors"
-                  >
-                    {pill.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input area */}
-        <div className="px-5 py-4 border-t border-border">
-          <div className="relative">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) handleSubmit();
+          </>
+        ) : showActivationView && activationJustCompleted && activationData ? (
+          <>
+            <CompletionSummary
+              activation={activationData}
+              onDismiss={() => setActivationDismissed(true)}
+              onAction={(action) => {
+                setActivationDismissed(true);
+                setTimeout(() => sendMessage(action), 100);
               }}
-              placeholder={!storeId ? "Connect a store to start..." : !dataReady ? "Setting up your store..." : "Ask Allo anything..."}
-              disabled={isProcessing || !storeId || !dataReady}
-              className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-muted border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-colors disabled:opacity-50"
             />
-            <button
-              onClick={handleSubmit}
-              disabled={isProcessing || !input.trim() || !storeId || !dataReady}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-primary hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30"
-            >
-              {isProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
+          </>
+        ) : (
+          <>
+            {/* Messages area */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.03, duration: 0.3 }}
+                >
+                  <MessageBubble message={msg} onNavigate={handleNavigate} />
+                </motion.div>
+              ))}
+
+              {/* Dynamic suggestion pills from AI response */}
+              {!isProcessing && activeSuggestions && (
+                <div className="pl-[34px]">
+                  <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                    Follow up
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeSuggestions.map((text) => (
+                      <button
+                        key={text}
+                        onClick={() => sendMessage(text)}
+                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all text-left"
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
-            </button>
-          </div>
-        </div>
+
+              {/* Static suggestion pills */}
+              {!isProcessing && !activeSuggestions && suggestions.length > 0 && (
+                <div className="pl-[34px]">
+                  <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                    Suggested
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestions.map((pill) => (
+                      <button
+                        key={pill.label}
+                        onClick={() => handlePillClick(pill)}
+                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all"
+                      >
+                        {pill.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input area */}
+            <div className="px-5 py-4 border-t border-border">
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) handleSubmit();
+                  }}
+                  placeholder={!storeId ? "Connect a store to start..." : agentBusy ? "Allo is setting up your system..." : !dataReady ? "Setting up your store..." : placeholder}
+                  disabled={isProcessing || !storeId || !dataReady || agentBusy}
+                  className="w-full pl-4 pr-10 py-3 rounded-[20px] bg-muted/80 border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_1px_var(--color-accent)] transition-all disabled:opacity-50"
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={isProcessing || !input.trim() || !storeId || !dataReady || agentBusy}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[var(--color-accent)] hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </aside>
 
-      {/* Floating button when collapsed */}
-      {panelState === "collapsed" && (
+      {/* Floating button when collapsed — only on non-dashboard pages */}
+      {!isDashboard && effectiveState === "collapsed" && (
         <button
           onClick={() => {
             setPanelState("open");
             setTimeout(() => inputRef.current?.focus(), 200);
           }}
-          className="fixed bottom-6 right-6 w-12 h-12 rounded-[14px] bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-[60]"
+          className="fixed bottom-6 right-6 w-12 h-12 rounded-[14px] bg-[var(--color-accent)] text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-[60]"
           title="Open Allo AI"
         >
           <Sparkles className="w-5 h-5" />
@@ -1197,7 +1594,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
 });
 
 // ---------------------------------------------------------------------------
-// Provider — wraps layout so TopBar can call openPanel / focusInput
+// Provider
 // ---------------------------------------------------------------------------
 
 const PanelRefContext = createContext<React.RefObject<AlloAIPanelHandle | null> | null>(null);
@@ -1219,7 +1616,6 @@ export function AlloAIPanelProvider({ children }: { children: React.ReactNode })
   );
 }
 
-/** Renders the panel — place this inside AlloAIPanelProvider where the panel should appear */
 export function AlloAIPanelSlot() {
   const panelRef = useContext(PanelRefContext);
   return <AlloAIPanel ref={panelRef} />;

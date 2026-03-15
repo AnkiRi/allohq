@@ -85,7 +85,7 @@ export default function CustomersPage() {
             CUSTOMERS
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            Customer intelligence & segmentation
+            {stats ? `${stats.totalCustomers.toLocaleString()} customers — ${stats.marketingRate.toFixed(0)}% marketing opt-in` : "Customer intelligence & segmentation"}
           </p>
         </div>
       </motion.div>

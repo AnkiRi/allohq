@@ -129,4 +129,167 @@ export const briefingsRouter = router({
 
       return updated;
     }),
+
+  /** Get contextual page greeting and suggestions for the AI panel */
+  pageContext: protectedProcedure
+    .input(z.object({ storeId: z.string(), page: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { storeId, page } = input;
+
+      // Gather counts in parallel
+      // Get workspaceId from store
+      const store = await ctx.prisma.store.findUnique({ where: { id: storeId }, select: { workspaceId: true } });
+      const workspaceId = store?.workspaceId ?? "";
+
+      const [customerCount, segmentGroups, campaignCount, automationCount, templateCount, formCount, conversationCount] = await Promise.all([
+        ctx.prisma.customer.count({ where: { storeId } }),
+        ctx.prisma.rfmScore.groupBy({ by: ["segment"], where: { storeId }, _count: { id: true } }),
+        ctx.prisma.campaign.count({ where: { storeId } }),
+        ctx.prisma.automation.count({ where: { storeId } }),
+        ctx.prisma.emailTemplate.count({ where: { workspaceId } }),
+        ctx.prisma.form.count({ where: { storeId } }),
+        ctx.prisma.conversation.count({ where: { storeId } }),
+      ]);
+
+      const atRisk = segmentGroups.find((s: { segment: string; _count: { id: number } }) => s.segment === "At Risk")?._count.id ?? 0;
+      const champions = segmentGroups.find((s: { segment: string; _count: { id: number } }) => s.segment === "Champions")?._count.id ?? 0;
+      const activeAutomations = await ctx.prisma.automation.count({ where: { storeId, status: "active" } });
+      const draftCampaigns = await ctx.prisma.campaign.count({ where: { storeId, status: "draft" } });
+
+      type Suggestion = { label: string; message: string };
+
+      let greeting = "";
+      const suggestions: Suggestion[] = [];
+
+      switch (page) {
+        case "customers":
+          greeting = `You have ${customerCount} customers.${champions > 0 ? ` ${champions} are Champions.` : ""}${atRisk > 0 ? ` ${atRisk} are at risk \u2014 want me to draft a win-back?` : ""}`;
+          if (atRisk > 0) suggestions.push({ label: "Show at-risk customers", message: "Show me customers who are at risk of churning" });
+          suggestions.push({ label: "Draft win-back campaign", message: "Create a win-back automation for at-risk customers" });
+          break;
+        case "campaigns":
+          greeting = `You have ${campaignCount} campaign${campaignCount !== 1 ? "s" : ""}.${draftCampaigns > 0 ? ` ${draftCampaigns} draft${draftCampaigns > 1 ? "s" : ""} awaiting review.` : ""} Want me to create a new one?`;
+          suggestions.push({ label: "Review drafts", message: "Show me my draft campaigns" });
+          suggestions.push({ label: "Create campaign", message: "Create a new email campaign" });
+          suggestions.push({ label: "Show best performers", message: "Show me my best performing campaigns" });
+          break;
+        case "automations":
+          greeting = `${automationCount} automations configured. ${activeAutomations} live, ${automationCount - activeAutomations} paused or in draft.`;
+          suggestions.push({ label: "Activate recommended", message: "Activate all recommended automations" });
+          suggestions.push({ label: "Show performance", message: "Show me automation performance stats" });
+          break;
+        case "analytics":
+          greeting = `Your analytics dashboard. Ask me to compare time periods, break down by channel, or export data.`;
+          suggestions.push({ label: "Compare to last month", message: "Compare this month's performance to last month" });
+          suggestions.push({ label: "Show channel breakdown", message: "Show me revenue breakdown by channel" });
+          suggestions.push({ label: "Export report", message: "Generate a weekly performance report" });
+          break;
+        case "segments":
+          greeting = `${segmentGroups.length} active segments.${champions > 0 ? ` Champions: ${champions} customers.` : ""}${atRisk > 0 ? ` At Risk: ${atRisk} customers.` : ""}`;
+          suggestions.push({ label: "Show segment movements", message: "Show me how segments have shifted recently" });
+          suggestions.push({ label: "Draft campaign for segment", message: "Create a campaign targeting a specific segment" });
+          break;
+        case "forms":
+          greeting = `${formCount} form${formCount !== 1 ? "s" : ""} created.${formCount === 0 ? " Set up a popup to capture marketing opt-ins." : ""}`;
+          suggestions.push({ label: "Create popup", message: "Create a new email capture popup" });
+          suggestions.push({ label: "Show best practices", message: "What are the best practices for email capture forms?" });
+          break;
+        case "conversations":
+          greeting = `${conversationCount} conversation${conversationCount !== 1 ? "s" : ""} tracked.`;
+          suggestions.push({ label: "Show escalated", message: "Show me escalated conversations that need attention" });
+          suggestions.push({ label: "Review resolved", message: "Show me recently resolved conversations" });
+          break;
+        case "templates":
+          greeting = `${templateCount} template${templateCount !== 1 ? "s" : ""} available.`;
+          suggestions.push({ label: "Generate new template", message: "Generate a new email template matching my brand" });
+          suggestions.push({ label: "Duplicate best performer", message: "Duplicate my best performing template" });
+          break;
+        default:
+          greeting = `How can I help you?`;
+          suggestions.push({ label: "Show overview", message: "Give me an overview of my store" });
+          break;
+      }
+
+      return { greeting, suggestions };
+    }),
+
+  /** Get smart suggested actions based on current store state */
+  suggestedActions: protectedProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { storeId } = input;
+
+      const [pendingActions, automations, segmentGroups, customerCount] = await Promise.all([
+        ctx.prisma.actionQueue.count({ where: { storeId, status: "pending" } }),
+        ctx.prisma.automation.findMany({
+          where: { storeId },
+          select: { status: true },
+        }),
+        ctx.prisma.rfmScore.groupBy({
+          by: ["segment"],
+          where: { storeId },
+          _count: { id: true },
+        }),
+        ctx.prisma.customer.count({ where: { storeId } }),
+      ]);
+
+      const suggestions: Array<{
+        label: string;
+        message: string;
+        priority: number;
+      }> = [];
+
+      // Pending actions
+      if (pendingActions > 0) {
+        suggestions.push({
+          label: `Review ${pendingActions} pending action${pendingActions > 1 ? "s" : ""}`,
+          message: `Show me the ${pendingActions} pending actions and help me decide which to approve`,
+          priority: 1,
+        });
+      }
+
+      // Hibernating customers
+      const hibernating = segmentGroups.find((s: { segment: string; _count: { id: number } }) =>
+        s.segment.toLowerCase().includes("hibernat") || s.segment === "Lost"
+      );
+      if (hibernating && hibernating._count.id > 0) {
+        suggestions.push({
+          label: `Win back ${hibernating._count.id} dormant customers`,
+          message: `Create a win-back campaign for my ${hibernating._count.id} ${hibernating.segment.toLowerCase()} customers`,
+          priority: 2,
+        });
+      }
+
+      // Ready automations
+      const readyCount = automations.filter((a) => a.status === "ready").length;
+      if (readyCount > 0) {
+        suggestions.push({
+          label: `Activate ${readyCount} automation${readyCount > 1 ? "s" : ""}`,
+          message: `Activate the ${readyCount} automations that are ready to go live`,
+          priority: 3,
+        });
+      }
+
+      // Marketing opt-in
+      const acceptsMarketing = await ctx.prisma.customer.count({
+        where: { storeId, acceptsMarketing: true },
+      });
+      const optInRate = customerCount > 0 ? Math.round((acceptsMarketing / customerCount) * 100) : 0;
+      if (optInRate < 5) {
+        suggestions.push({
+          label: "Set up lead capture",
+          message: "Create a popup form to capture email subscribers with an incentive",
+          priority: 4,
+        });
+      }
+
+      // Always include a strategic option
+      suggestions.push({
+        label: "What should I focus on today?",
+        message: "Based on my store data, what's the highest-impact thing I should do today?",
+        priority: 10,
+      });
+
+      return suggestions.sort((a, b) => a.priority - b.priority).slice(0, 4);
+    }),
 });

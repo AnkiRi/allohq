@@ -5,7 +5,6 @@ import { RouteProgress } from "@/components/layout/RouteProgress";
 import { AlloAIPanelProvider, AlloAIPanelSlot } from "@/components/ai/AlloAIPanel";
 import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext";
 import { OnboardingGate } from "@/components/layout/OnboardingGate";
-import { AgentActivityPanelWrapper } from "@/components/layout/AgentActivityPanelWrapper";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -29,7 +28,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <AlloAIPanelSlot />
             </div>
           </div>
-          <AgentActivityPanelWrapper />
         </AlloAIPanelProvider>
       </div>
     </MobileSidebarProvider>

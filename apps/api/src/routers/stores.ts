@@ -73,14 +73,15 @@ export const storesRouter = router({
         ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
       ]);
 
-      const isActivating = !!store.onboardingCompletedAt && !store.activatedAt;
-      const isRecentlyActivated = store.activatedAt
-        ? Date.now() - new Date(store.activatedAt).getTime() < 30 * 60 * 1000
-        : false;
-
       // Automation generation progress
       const totalAutomations = automations.length;
       const generatingCount = automations.filter((a) => a.status === "generating").length;
+
+      // isActivating: worker running (onboarding done, not yet activated) OR automations still generating
+      const isActivating = (!!store.onboardingCompletedAt && !store.activatedAt) || generatingCount > 0;
+      const isRecentlyActivated = store.activatedAt
+        ? Date.now() - new Date(store.activatedAt).getTime() < 30 * 60 * 1000
+        : false;
       const readyOrActiveCount = automations.filter((a) => a.status === "ready" || a.status === "active").length;
       const allGenerated = totalAutomations > 0 && generatingCount === 0;
 
@@ -123,6 +124,57 @@ export const storesRouter = router({
             count: s._count.id,
           })),
         },
+      };
+    }),
+
+  /**
+   * Get agent working status for the AI panel status indicator.
+   */
+  agentStatus: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [automations, pendingActions] = await Promise.all([
+        ctx.prisma.automation.findMany({
+          where: { storeId: input.storeId, status: "generating" },
+          select: { name: true },
+        }),
+        ctx.prisma.actionQueue.count({
+          where: { storeId: input.storeId, status: "pending" },
+        }),
+      ]);
+
+      const activeJobs = automations.map((a) => a.name);
+      const isWorking = activeJobs.length > 0;
+
+      return {
+        isWorking,
+        activeJobs,
+        pendingActions,
+      };
+    }),
+
+  /**
+   * Get agent activity feed for the home page.
+   */
+  agentActivity: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const automations = await ctx.prisma.automation.findMany({
+        where: { storeId: input.storeId },
+        select: { id: true, name: true, status: true, category: true },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      return {
+        items: automations.map((a) => ({
+          id: a.id,
+          name: a.name,
+          status: a.status,
+          category: a.category,
+        })),
+        totalCount: automations.length,
+        readyCount: automations.filter((a) => a.status === "ready" || a.status === "active").length,
+        generatingCount: automations.filter((a) => a.status === "generating").length,
       };
     }),
 

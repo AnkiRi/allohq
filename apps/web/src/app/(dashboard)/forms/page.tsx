@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -97,18 +98,12 @@ export default function FormsPage() {
 
       {/* Forms List */}
       {(!forms || forms.length === 0) ? (
-        <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-xl">
-          <FileText className="w-10 h-10 text-muted-foreground/50 mb-4" />
-          <p className="text-[13px] text-muted-foreground font-mono mb-4">
-            No forms yet
-          </p>
-          <Link
-            href="/forms/new"
-            className="px-4 py-2 bg-foreground text-background rounded-lg text-[11px] font-mono font-bold hover:opacity-90 transition-opacity"
-          >
-            Create Your First Form
-          </Link>
-        </div>
+        <SmartEmptyState
+          icon={MousePointerClick}
+          title="No forms yet"
+          description="Your marketing opt-in rate is 0%. Allo can create a popup that captures emails."
+          actions={[{ label: "Create a Popup", primary: true }]}
+        />
       ) : (
         <motion.div
           variants={containerVariants}

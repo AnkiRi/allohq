@@ -924,48 +924,43 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 // Step 7: First Actions
 // ---------------------------------------------------------------------------
 
-function FirstActionsStep({ storeId, onComplete, isCompleting }: { storeId: string; onComplete: () => void; isCompleting: boolean }) {
-  const { data: actionsData } = trpc.autonomy.listActions.useQuery({ storeId, status: "pending" as any, limit: 3 }, { enabled: !!storeId });
-  const approve = trpc.autonomy.approveAction.useMutation();
-  const actions = actionsData?.actions ?? [];
-
+function FirstActionsStep({ onComplete, isCompleting }: { storeId: string; onComplete: () => void; isCompleting: boolean }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Your First Actions</h2>
-        <p className="text-sm text-[#8B8074]">
-          {actions.length > 0 ? "Allo has already identified some opportunities. Review and approve them to get started." : "Allo is still analyzing your store. Actions will appear in Mission Control once ready."}
+      <div className="text-center py-6">
+        <div className="w-16 h-16 rounded-2xl bg-[#6B7A2F]/10 flex items-center justify-center mx-auto mb-4">
+          <Sparkles className="w-8 h-8 text-[#6B7A2F]" />
+        </div>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">You&apos;re all set!</h2>
+        <p className="text-sm text-[#8B8074] max-w-md mx-auto leading-relaxed">
+          When you continue, Allo will start building your retention system — creating automations,
+          scanning for campaign opportunities, and generating your first briefing. You&apos;ll see
+          everything happening live in the AI panel.
         </p>
       </div>
-      {actions.length > 0 ? (
+
+      <div className="glass-card-static rounded-xl p-5">
+        <div className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">What happens next</div>
         <div className="space-y-3">
-          {actions.map((action: any) => (
-            <div key={action.id} className="glass-card-static rounded-xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="w-4 h-4 text-[#6B7A2F]" />
-                    <span className="text-sm font-medium text-[#2C2C2C]">{action.campaignName || action.type}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#6B7A2F]/10 text-[#6B7A2F] font-medium">{action.category}</span>
-                  </div>
-                  {action.reasoning && <p className="text-xs text-[#8B8074] mb-2">{action.reasoning}</p>}
-                  {action.targetSegment && <p className="text-xs text-[#5C5549]">Target: {action.targetSegment.name} ({action.targetSegment.count} customers)</p>}
-                </div>
-                <button onClick={() => approve.mutate({ actionId: action.id })} disabled={approve.isPending} className="shrink-0 px-3 py-1.5 text-xs bg-[#6B7A2F] text-white rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">Approve</button>
+          {[
+            { icon: Zap, text: "Automations created based on your autonomy preferences" },
+            { icon: Sparkles, text: "Campaign opportunities identified from your customer data" },
+            { icon: Boxes, text: "First merchant briefing generated with insights" },
+          ].map(({ icon: Icon, text }, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center flex-shrink-0">
+                <Icon className="w-3.5 h-3.5 text-[#6B7A2F]" />
               </div>
+              <span className="text-sm text-[#5C5549]">{text}</span>
             </div>
           ))}
         </div>
-      ) : (
-        <div className="glass-card-static rounded-xl p-8 text-center">
-          <Zap className="w-10 h-10 text-[#8B8074] mx-auto mb-3" />
-          <p className="text-sm text-[#8B8074]">No pending actions yet. Allo will start generating recommendations once it finishes analyzing your store data.</p>
-        </div>
-      )}
+      </div>
+
       <div className="flex justify-end">
-        <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40">
+        <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-6 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
           {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-          Go to Mission Control
+          Launch Allo
         </button>
       </div>
     </div>

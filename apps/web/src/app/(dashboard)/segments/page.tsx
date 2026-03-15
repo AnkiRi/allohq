@@ -67,7 +67,9 @@ export default function SegmentsPage() {
             SEGMENTS
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            RFM-based customer segmentation
+            {mergedSegments.length > 0 && largestSegment
+              ? `${mergedSegments.length} segments — largest: ${largestSegment.name} (${largestSegment.liveCount} customers)`
+              : "RFM-based customer segmentation"}
           </p>
         </div>
         <Link

@@ -8,7 +8,7 @@ import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { useMobileSidebar } from "./MobileSidebarContext";
 
 const routeLabels: Record<string, string> = {
-  "/dashboard": "Dashboard",
+  "/dashboard": "Home",
   "/customers": "Customers",
   "/segments": "Segments",
   "/intelligence": "Intelligence",

@@ -97,9 +97,22 @@ export async function generateDailyBriefing(storeId: string): Promise<BriefingCo
     }
   }
 
+  // Build narrative summary
+  const summaryParts: string[] = [];
+  if (totalRevenue > 0) {
+    summaryParts.push(`$${totalRevenue.toFixed(2)} revenue from ${orderCount} orders`);
+  }
+  if (sentCount > 0) {
+    summaryParts.push(`${sentCount} messages sent`);
+  }
+  if (pendingActions.length > 0) {
+    const urgentCount = pendingActions.filter((a) => a.urgencyScore > 70).length;
+    summaryParts.push(`${pendingActions.length} action${pendingActions.length > 1 ? "s" : ""} need${pendingActions.length === 1 ? "s" : ""} your attention${urgentCount > 0 ? ` (${urgentCount} urgent)` : ""}`);
+  }
+
   const briefing: BriefingContent = {
     title: `Daily Briefing — ${now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`,
-    summary: `$${totalRevenue.toFixed(2)} revenue from ${orderCount} orders. ${sentCount} messages sent. ${pendingActions.length} pending actions.`,
+    summary: summaryParts.join(". ") + ".",
     sections,
     generatedAt: now.toISOString(),
   };

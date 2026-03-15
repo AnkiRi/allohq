@@ -11,10 +11,10 @@ import {
   DollarSign,
   Users,
   Zap,
-  Target,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -263,7 +263,12 @@ export default function AnalyticsPage() {
         {tab === "overview" && (
           <div className="space-y-4">
             {!attributionData || attributionData.length === 0 ? (
-              <EmptyState icon={Target} text="No attribution data yet" />
+              <SmartEmptyState
+                icon={BarChart3}
+                title="No analytics data yet"
+                description="Once your first campaign sends, Allo will track revenue attribution, channel performance, and customer health automatically."
+                actions={[{ label: "View Pending Actions", href: "/actions", primary: true }]}
+              />
             ) : (
               <div className="border border-border rounded-xl overflow-hidden">
                 <table className="w-full">

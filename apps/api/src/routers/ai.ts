@@ -579,11 +579,11 @@ export const aiRouter = router({
         segments,
         automations,
         campaigns,
-        recentOrders,
+        ,
         revenueThisMonth,
         brandProfile,
         searchedCustomers,
-        tokenUsageRecords,
+        ,
         recentObservations,
       ] = await Promise.all([
         // Top 100 customers with RFM + LTV
@@ -672,107 +672,151 @@ export const aiRouter = router({
       ]);
 
       // ---------------------------------------------------------------
-      // 2. Build store context for the system prompt
+      // 2. Build store intelligence summary for the system prompt
       // ---------------------------------------------------------------
       const totalCustomers = allCustomers.length;
-      const segmentBreakdown = segments.map((s) => `${s.name}: ${s.customerCount} customers, $${Math.round(s.totalRevenue).toLocaleString()} revenue`).join("\n");
 
-      const topCustomers = [...allCustomers]
+      // Helper: get segment insight text
+      function getSegmentInsight(s: { name: string; customerCount: number; totalRevenue: number }): string {
+        const n = s.name.toLowerCase();
+        if (n.includes("hibernat") || n === "lost") return "WIN-BACK OPPORTUNITY — highest recovery potential";
+        if (n.includes("at risk") || n.includes("can't lose")) return "URGENT — intervene before they churn";
+        if (n.includes("champion")) return "VIP — reward and retain";
+        if (n.includes("loyal")) return "NURTURE — grow to Champion";
+        if (n.includes("new")) return "ONBOARD — convert to repeat buyer";
+        if (n.includes("potential")) return "ENGAGE — high growth potential";
+        return "";
+      }
+
+      // Generate top opportunities ranked by estimated revenue impact
+      function generateTopOpportunities(): string {
+        const opportunities: string[] = [];
+        let idx = 1;
+
+        // Check for hibernating/at-risk customers
+        const hibernating = segments.find((s) => s.name.toLowerCase().includes("hibernat") || s.name === "Lost");
+        if (hibernating && hibernating.customerCount > 0) {
+          opportunities.push(`${idx++}. WIN-BACK: ${hibernating.customerCount} ${hibernating.name} customers, ~$${Math.round(hibernating.totalRevenue).toLocaleString()} past revenue at risk. Best action: create win-back campaign with 10-15% discount.`);
+        }
+
+        const atRisk = segments.find((s) => s.name.toLowerCase().includes("at risk") || s.name.toLowerCase().includes("can't lose"));
+        if (atRisk && atRisk.customerCount > 0) {
+          opportunities.push(`${idx++}. RETENTION: ${atRisk.customerCount} ${atRisk.name} customers showing churn signals. Best action: personal check-in or loyalty reward.`);
+        }
+
+        // Check for 0% opt-in
+        const acceptsMarketing = allCustomers.filter((c) => c.acceptsMarketing).length;
+        const optInRate = totalCustomers > 0 ? Math.round((acceptsMarketing / totalCustomers) * 100) : 0;
+        if (optInRate < 5) {
+          opportunities.push(`${idx++}. LEAD CAPTURE: Marketing opt-in rate is ${optInRate}% — CRITICAL. Cannot send campaigns until customers opt in. Set up a popup form with incentive.`);
+        }
+
+        // Automations ready but not active
+        const readyAutomations = automations.filter((a) => a.status === "ready");
+        if (readyAutomations.length > 0) {
+          opportunities.push(`${idx++}. ACTIVATE: ${readyAutomations.length} automation(s) ready to go live: ${readyAutomations.map((a) => a.name).join(", ")}`);
+        }
+
+        // Champions who could be rewarded
+        const champions = segments.find((s) => s.name === "Champions");
+        if (champions && champions.customerCount > 0) {
+          opportunities.push(`${idx++}. VIP REWARD: ${champions.customerCount} Champions generating $${Math.round(champions.totalRevenue).toLocaleString()} — consider exclusive offers to deepen loyalty.`);
+        }
+
+        return opportunities.join("\n") || "No urgent opportunities detected.";
+      }
+
+      const topCustomersList = [...allCustomers]
         .sort((a, b) => (b.rfmScore?.totalSpent ?? 0) - (a.rfmScore?.totalSpent ?? 0))
-        .slice(0, 30)
+        .slice(0, 10)
         .map((c) => {
           const rfm = c.rfmScore;
-          const ltv = c.lifetimeValue;
-          return `- ${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email}) | Segment: ${rfm?.segment ?? "Unknown"} | Spent: $${rfm?.totalSpent?.toFixed(2) ?? "0"} | Orders: ${rfm?.orderCount ?? 0} | AOV: $${rfm?.avgOrderValue?.toFixed(2) ?? "0"} | Last order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"} | Churn risk: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"} | Predicted LTV: $${ltv?.predictedLtv?.toFixed(0) ?? "N/A"}`;
+          const daysSinceOrder = rfm?.lastOrderAt ? Math.round((Date.now() - new Date(rfm.lastOrderAt).getTime()) / (86400000)) : -1;
+          return `- ${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email}): $${rfm?.totalSpent?.toFixed(0) ?? "0"}, ${rfm?.orderCount ?? 0} orders, last order ${daysSinceOrder >= 0 ? daysSinceOrder + " days ago" : "Never"}`;
         })
         .join("\n");
 
       const searchResults = searchedCustomers.length > 0
-        ? "\n\n--- SEARCH RESULTS (customers matching terms in user's message) ---\n" +
+        ? `\n### Search Results (customers matching "${searchTerms.join(", ")}")\n` +
           searchedCustomers.map((c) => {
             const rfm = c.rfmScore;
             const ltv = c.lifetimeValue;
             const orders = c.orders.map((o) => `  Order #${o.orderNumber}: $${o.totalPrice} (${o.status}) on ${o.createdAt.toISOString().split("T")[0]}`).join("\n");
-            return `CUSTOMER: ${c.firstName ?? ""} ${c.lastName ?? ""}\n  Email: ${c.email}\n  Phone: ${c.phone ?? "N/A"}\n  Tags: ${c.tags.join(", ") || "None"}\n  Segment: ${rfm?.segment ?? "Unknown"}\n  RFM Score: R${rfm?.recency ?? 0}/F${rfm?.frequency ?? 0}/M${rfm?.monetary ?? 0} (Total: ${rfm?.totalSpent?.toFixed(2) ?? "0"})\n  Orders: ${rfm?.orderCount ?? 0} | AOV: $${rfm?.avgOrderValue?.toFixed(2) ?? "0"}\n  Last Order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"}\n  Historical LTV: $${ltv?.historicalLtv?.toFixed(0) ?? "0"} | Predicted LTV: $${ltv?.predictedLtv?.toFixed(0) ?? "0"}\n  Churn Probability: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"}\n  Recent Orders:\n${orders || "  None"}`;
+            return `CUSTOMER: ${c.firstName ?? ""} ${c.lastName ?? ""}\n  Email: ${c.email}\n  Segment: ${rfm?.segment ?? "Unknown"}\n  Spent: $${rfm?.totalSpent?.toFixed(0) ?? "0"} | Orders: ${rfm?.orderCount ?? 0} | AOV: $${rfm?.avgOrderValue?.toFixed(0) ?? "0"}\n  Last Order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"}\n  Churn Probability: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"}\n  Recent Orders:\n${orders || "  None"}`;
           }).join("\n\n")
         : "";
 
-      const automationList = automations.length > 0
-        ? automations.map((a) => `- ${a.name} (${a.status}) — ${a.category}`).join("\n")
-        : "No automations created yet.";
+      // Pending actions count
+      const pendingActionCount = await ctx.prisma.actionQueue.count({
+        where: { storeId: input.storeId, status: "pending" },
+      });
 
-      const campaignList = campaigns.length > 0
-        ? campaigns.map((c) => `- ${c.name} (${c.status}) | Recipients: ${c.recipientCount} | Opens: ${c.openCount} | Clicks: ${c.clickCount}${c.sentAt ? ` | Sent: ${c.sentAt.toISOString().split("T")[0]}` : ""}`).join("\n")
-        : "No campaigns created yet.";
+      const monthRevenue = (revenueThisMonth._sum.totalPrice ?? 0);
+      const monthOrders = revenueThisMonth._count;
+      const avgOrderValue = monthOrders > 0 ? (monthRevenue / monthOrders) : 0;
 
-      const recentOrderList = recentOrders.slice(0, 20).map((o) =>
-        `- Order #${o.orderNumber}: $${o.totalPrice} by ${o.customer.firstName ?? ""} ${o.customer.lastName ?? ""} (${o.customer.email}) on ${o.createdAt.toISOString().split("T")[0]}`
-      ).join("\n");
-
-      // Token usage summary
-      const TOKEN_COSTS: Record<string, { input: number; output: number }> = {
-        "claude-sonnet-4-5-20250929": { input: 3, output: 15 },
-        "gpt-4o": { input: 2.5, output: 10 },
-        "gpt-4o-mini": { input: 0.15, output: 0.6 },
-      };
-      let totalTokenCalls = 0;
-      let totalTokenInput = 0;
-      let totalTokenOutput = 0;
-      let totalTokenCost = 0;
-      const tokenByModel = tokenUsageRecords.map((g) => {
-        const inp = g._sum.inputTokens ?? 0;
-        const out = g._sum.outputTokens ?? 0;
-        const calls = g._count.id;
-        const costs = TOKEN_COSTS[g.model] ?? { input: 0, output: 0 };
-        const cost = (inp / 1_000_000) * costs.input + (out / 1_000_000) * costs.output;
-        totalTokenCalls += calls;
-        totalTokenInput += inp;
-        totalTokenOutput += out;
-        totalTokenCost += cost;
-        return `- ${g.model}: ${calls} calls, ${inp.toLocaleString()} input tokens, ${out.toLocaleString()} output tokens, $${cost.toFixed(4)} cost`;
-      }).join("\n");
+      const acceptsMarketing = allCustomers.filter((c) => c.acceptsMarketing).length;
+      const optInRate = totalCustomers > 0 ? Math.round((acceptsMarketing / totalCustomers) * 100) : 0;
 
       const storeContext = `
-STORE: ${store.shopDomain}
-Platform: ${store.platform}
-Last data sync: ${store.lastSyncAt?.toISOString() ?? "Never"}
-Brand: ${brandProfile ? `${brandProfile.brandName} — ${brandProfile.brandDescription ?? ""}` : "No brand profile yet"}
+## STORE INTELLIGENCE SUMMARY FOR ${brandProfile?.brandName ?? store.shopDomain}
 
-METRICS:
-- Total customers: ${totalCustomers}
-- Revenue this month: $${(revenueThisMonth._sum.totalPrice ?? 0).toFixed(2)}
-- Orders this month: ${revenueThisMonth._count}
+### Customer Health (USE THIS TO MAKE DECISIONS)
+- ${totalCustomers} total customers
+${segments.map((s) => `- ${s.name}: ${s.customerCount} customers ($${Math.round(s.totalRevenue).toLocaleString()} revenue) — ${getSegmentInsight(s)}`).join("\n")}
+- Marketing opt-in rate: ${optInRate}%${optInRate === 0 ? " — CRITICAL: cannot send campaigns until customers opt in" : ""}
 
-CUSTOMER SEGMENTS:
-${segmentBreakdown || "No segments calculated yet."}
+### Top Opportunities (RANKED BY ESTIMATED REVENUE IMPACT)
+${generateTopOpportunities()}
 
-TOP CUSTOMERS (by spend):
-${topCustomers || "No customer data yet."}
+### Revenue
+- Month to date: $${monthRevenue.toFixed(2)} from ${monthOrders} orders
+- Average order value: $${avgOrderValue.toFixed(2)}
+
+### Active Automations
+${automations.length > 0 ? automations.map((a) => `- ${a.name}: ${a.status}${a.status === "active" ? " (running)" : a.status === "ready" ? " (needs activation)" : ""}`).join("\n") : "No automations created yet."}
+
+### Pending Actions
+- ${pendingActionCount} actions awaiting merchant approval
+
+### Recent Campaigns
+${campaigns.length > 0 ? campaigns.map((c) => {
+  const openRate = c.recipientCount > 0 ? Math.round((c.openCount / c.recipientCount) * 100) : 0;
+  const clickRate = c.recipientCount > 0 ? Math.round((c.clickCount / c.recipientCount) * 100) : 0;
+  return `- ${c.name} (${c.status}): ${openRate}% open, ${clickRate}% click, ${c.recipientCount} recipients`;
+}).join("\n") : "No campaigns created yet."}
+
+### Top 10 Customers (by lifetime spend)
+${topCustomersList || "No customer data yet."}
 ${searchResults}
-
-AUTOMATIONS:
-${automationList}
-
-CAMPAIGNS:
-${campaignList}
-
-RECENT ORDERS (last 30 days):
-${recentOrderList || "No recent orders."}
-
-AI TOKEN USAGE (all time):
-- Total API calls: ${totalTokenCalls}
-- Total input tokens: ${totalTokenInput.toLocaleString()}
-- Total output tokens: ${totalTokenOutput.toLocaleString()}
-- Total AI cost: $${totalTokenCost.toFixed(4)}
-By model:
-${tokenByModel || "No token usage recorded yet."}
 ${recentObservations.length > 0 ? `
-PROACTIVE ALERTS (unacknowledged observations — mention these if relevant to the conversation):
+### PROACTIVE ALERTS (address these when relevant)
 ${recentObservations.map((o) => {
   const action = o.suggestedAction as Record<string, unknown> | null;
   return `- [${o.severity.toUpperCase()}] ${o.summary}${action?.message ? ` → Suggested: ${action.message}` : ""}`;
 }).join("\n")}` : ""}
 `.trim();
+
+      // ---------------------------------------------------------------
+      // 3. Action request detection — push agent toward tool calling (Fix 3)
+      // ---------------------------------------------------------------
+      const isActionRequest = /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design)\b/i.test(input.message);
+
+      let processedMessage = input.message;
+
+      if (isActionRequest) {
+        processedMessage = `${input.message}\n\n[SYSTEM: This is an action request. Call the appropriate tool immediately with smart defaults from the store data in your context. Do NOT ask clarifying questions — use the store intelligence summary to choose the best parameters.]`;
+      }
+
+      // Add campaign-specific tool hints
+      if (/\b(campaign|promotional|email|win-?back|re-?engage)\b/i.test(input.message)) {
+        const bestTarget = segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
+          segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
+          segments.find((s) => s.customerCount > 0);
+        if (bestTarget) {
+          processedMessage += `\n\n[TOOL HINT: Recommended target: ${bestTarget.name} (${bestTarget.customerCount} customers, highest impact). Channel: email. Discount: 15%. Call create_campaign or generate_campaign_template with these parameters.]`;
+        }
+      }
 
       // ---------------------------------------------------------------
       // 4. Call Agent (tool-calling LLM with real capabilities)
@@ -781,7 +825,7 @@ ${recentObservations.map((o) => {
 
       const agentResult = await runMerchantAgent({
         storeId: input.storeId,
-        message: input.message,
+        message: processedMessage,
         conversationHistory: input.history,
         storeContext: storeContext,
       });
@@ -805,24 +849,42 @@ ${recentObservations.map((o) => {
         }
       }
 
-      // Generate follow-ups based on tool calls made
-      const suggestedFollowUps: string[] = [];
+      // Generate contextual follow-ups: first try agent-generated, then response-based
       const toolNames = agentResult.toolCalls.map((t) => t.name);
-      if (toolNames.includes("get_dashboard_metrics")) {
-        suggestedFollowUps.push("Show me who's about to churn");
-        suggestedFollowUps.push("Compare to last month");
-      }
-      if (toolNames.includes("get_churn_risk_report")) {
-        suggestedFollowUps.push("Create a win-back campaign for them");
-        suggestedFollowUps.push("Send them personalized offers");
-      }
-      if (toolNames.includes("search_products")) {
-        suggestedFollowUps.push("Show me top sellers this month");
-      }
-      if (suggestedFollowUps.length === 0) {
-        suggestedFollowUps.push("Show me the dashboard overview");
-        suggestedFollowUps.push("Who are my top customers?");
-        suggestedFollowUps.push("Any customers at churn risk?");
+      let suggestedFollowUps: string[] = [];
+
+      // Try to extract agent-generated follow-ups from response
+      const followUpMatch = reply.match(/\[FOLLOW_UPS?:\s*"([^"]+)"(?:,\s*"([^"]+)")?(?:,\s*"([^"]+)")?\]/i);
+
+      if (followUpMatch) {
+        suggestedFollowUps = [followUpMatch[1], followUpMatch[2], followUpMatch[3]].filter((x): x is string => !!x);
+        // Remove the tag from the displayed response
+        reply = reply.replace(/\[FOLLOW_UPS?:.*?\]/gi, "").trim();
+      } else {
+        // Fallback: generate contextual follow-ups based on response content
+        const lowerReply = reply.toLowerCase();
+
+        if (lowerReply.includes("campaign") || lowerReply.includes("drafted")) {
+          suggestedFollowUps.push("Adjust the target segment");
+          suggestedFollowUps.push("Change the discount amount");
+          suggestedFollowUps.push("Preview the email");
+        } else if (lowerReply.includes("hibernating") || lowerReply.includes("at risk") || lowerReply.includes("churn")) {
+          suggestedFollowUps.push("Create a win-back campaign for them");
+          suggestedFollowUps.push("Show me their purchase history");
+          suggestedFollowUps.push("What products did they buy?");
+        } else if (toolNames.includes("get_dashboard_metrics") || lowerReply.includes("revenue")) {
+          suggestedFollowUps.push("Compare to last month");
+          suggestedFollowUps.push("Which channel performs best?");
+          suggestedFollowUps.push("Create a campaign to boost revenue");
+        } else if (lowerReply.includes("automation") || toolNames.includes("create_automation")) {
+          suggestedFollowUps.push("Show me the automation details");
+          suggestedFollowUps.push("What other automations should I set up?");
+          suggestedFollowUps.push("Activate all recommended automations");
+        } else {
+          suggestedFollowUps.push("What should I focus on today?");
+          suggestedFollowUps.push("Show me my biggest opportunities");
+          suggestedFollowUps.push("How are my campaigns performing?");
+        }
       }
 
       // Detect if agent wants to create something (from response text)

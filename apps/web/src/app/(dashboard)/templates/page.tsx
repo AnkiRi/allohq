@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FileText, Plus, Copy, Trash2, Sparkles, Loader2, Eye, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 import { useToast } from "@/components/ui/Toast";
 
 const containerVariants = {
@@ -233,20 +234,15 @@ export default function TemplatesPage() {
           ))}
         </motion.div>
       ) : (
-        <div className="glass-card-static text-center py-20 rounded-xl">
-          <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-4" />
-          <p className="text-[14px] text-foreground font-mono font-bold mb-1">No templates yet</p>
-          <p className="text-[12px] text-muted-foreground font-sans mb-6">
-            Create your first email template to get started with campaigns and automations.
-          </p>
-          <Link
-            href="/templates/new"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Create Template
-          </Link>
-        </div>
+        <SmartEmptyState
+          icon={FileText}
+          title="No templates yet"
+          description="Allo can generate beautiful email templates matching your brand."
+          actions={[
+            { label: "Generate Welcome Email", primary: true },
+            { label: "Generate Win-Back Email" },
+          ]}
+        />
       )}
     </div>
   );

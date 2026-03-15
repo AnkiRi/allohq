@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, Play, Pause, RefreshCw, Zap, Loader2, Mail, AlertTriangle, Palette, Bot, Phone, MessageSquare, Radio } from "lucide-react";
+import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, Phone, MessageSquare, Radio } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { ModelSelector, type AIModelId } from "@/components/ai/ModelSelector";
 
@@ -19,27 +20,27 @@ const itemVariants = {
 
 const STATUS_BADGES: Record<string, { className: string; label: string }> = {
   recommended: { className: "bg-white/20 text-muted-foreground border border-white/15", label: "Recommended" },
-  generating: { className: "bg-warm-gold/10 text-warm-gold border border-warm-gold/20", label: "Generating..." },
+  generating: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Generating..." },
   draft: { className: "bg-white/15 text-muted-foreground border border-white/10", label: "Draft" },
-  ready: { className: "bg-olive/10 text-olive border border-olive/20", label: "Ready" },
-  active: { className: "bg-olive text-white", label: "Active" },
+  ready: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Ready" },
+  active: { className: "bg-[var(--color-success)] text-white", label: "Active" },
   paused: { className: "bg-white/15 text-muted-foreground border border-white/10", label: "Paused" },
 };
 
 function getCardClasses(status: string): string {
   switch (status) {
     case "recommended":
-      return "glass-card-static border-dashed border-white/40 p-6 hover:border-white/60 transition-all";
+      return "glass-card-static rounded-xl border-dashed border-white/40 p-6 hover:border-white/60 transition-all";
     case "generating":
-      return "glass-card-static border-l-4 border-l-terracotta animate-pulse p-6 transition-all";
+      return "glass-card-static rounded-xl border-l-4 border-l-[var(--color-warning)] animate-pulse p-6 transition-all";
     case "ready":
-      return "glass-card border-l-4 border-l-olive p-6 hover:shadow-lg transition-all";
+      return "glass-card rounded-xl border-l-4 border-l-[var(--color-warning)] p-6 hover:shadow-lg transition-all";
     case "active":
-      return "glass-card border-l-4 border-l-olive p-6 hover:shadow-lg transition-all";
+      return "glass-card rounded-xl border-l-4 border-l-[var(--color-success)] p-6 hover:shadow-lg transition-all";
     case "paused":
-      return "glass-card-static opacity-60 p-6 hover:opacity-80 transition-all";
+      return "glass-card-static rounded-xl opacity-60 p-6 hover:opacity-80 transition-all";
     default:
-      return "glass-card p-6 hover:shadow-lg transition-all";
+      return "glass-card rounded-xl p-6 hover:shadow-lg transition-all";
   }
 }
 
@@ -82,11 +83,6 @@ export default function AutomationsPage() {
   type MutOpts<D> = { onSuccess: (data: D) => void; onError: (err: { message?: string }) => void };
   type Mut<I, D = void> = { mutate: (input: I) => void; mutateAsync: (input: I) => Promise<D>; isPending: boolean };
 
-  const recommendMut = (trpc.automations.recommend as any).useMutation({
-    onSuccess: (data: unknown[]) => { utils.automations.list.invalidate(); toast(`${data.length} automations recommended!`, "success"); },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to analyze", "error"),
-  } satisfies MutOpts<unknown[]>) as Mut<{ storeId: string }, unknown[]>;
-
   const generateMut = (trpc.automations.generate as any).useMutation({
     onSuccess: () => { utils.automations.list.invalidate(); toast("Content generation started \u2014 this may take a minute", "info"); },
     onError: (err: { message?: string }) => toast(err.message || "Failed to generate", "error"),
@@ -112,23 +108,6 @@ export default function AutomationsPage() {
     onError: (err: { message?: string }) => toast(err.message || "Failed to resume", "error"),
   } satisfies MutOpts<unknown>) as Mut<{ id: string }>;
 
-  const launchAgentMut = (trpc.automations.launchAgent as any).useMutation({
-    onSuccess: () => { toast("AI Agent launched! Check the dashboard for progress.", "success"); },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to launch agent", "error"),
-  } satisfies MutOpts<unknown>) as Mut<{ storeId: string; model?: string }>;
-
-  const [recommending, setRecommending] = useState(false);
-
-  async function handleRecommend() {
-    if (!storeId) return;
-    setRecommending(true);
-    try {
-      await recommendMut.mutateAsync({ storeId });
-    } finally {
-      setRecommending(false);
-    }
-  }
-
   const isGenerating = automations?.some((a) => a.status === "generating");
 
   return (
@@ -145,61 +124,26 @@ export default function AutomationsPage() {
             <Sparkles className="w-5 h-5" /> AUTOMATIONS
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            AI-powered multi-channel automations — one click to activate your entire retention strategy
+            {automations ? `${automations.filter((a) => a.status === "active").length} active, ${automations.filter((a) => a.status === "ready").length} ready for activation, ${automations.filter((a) => a.status === "generating").length} generating content` : "AI-powered multi-channel automations"}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {!storeId ? (
-            <span className="flex items-center gap-2 px-4 py-2 glass-card-static text-muted-foreground rounded-lg text-xs font-mono cursor-not-allowed">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Connect Store First
-            </span>
-          ) : (
-            <>
-              {/* Primary CTA: Launch AI Agent */}
-              <button
-                onClick={() => storeId && launchAgentMut.mutate({ storeId, model: selectedModel })}
-                disabled={launchAgentMut.isPending || !hasBrandProfile}
-                title={!hasBrandProfile ? "Run brand analysis first" : ""}
-                className="flex items-center gap-2 px-5 py-2.5 bg-terracotta text-white rounded-lg text-xs font-mono font-bold hover:bg-terracotta/90 disabled:opacity-50 transition-all shadow-sm"
-              >
-                {launchAgentMut.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Bot className="w-4 h-4" />
-                )}
-                {launchAgentMut.isPending ? "Launching..." : "Launch AI Agent"}
-              </button>
-              {/* Secondary: Analyze & Recommend */}
-              <button
-                onClick={handleRecommend}
-                disabled={recommending || !hasBrandProfile}
-                title={!hasBrandProfile ? "Run brand analysis first" : ""}
-                className="flex items-center gap-2 px-4 py-2 border border-white/30 bg-white/20 rounded-lg text-xs font-mono text-foreground hover:bg-white/30 disabled:opacity-50 transition-all"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${recommending ? "animate-spin" : ""}`} />
-                {recommending ? "Analyzing..." : "Analyze & Recommend"}
-              </button>
-              {/* Model selector: smaller, tertiary position */}
-              <ModelSelector value={selectedModel} onChange={setSelectedModel} compact />
-              {/* Activate All: outline, less prominent */}
-              {automations && automations.some((a) => a.status === "recommended") && (
-                <button
-                  onClick={() => storeId && generateAllMut.mutate({ storeId, model: selectedModel })}
-                  disabled={generateAllMut.isPending || !hasBrandProfile}
-                  title={!hasBrandProfile ? "Run brand analysis first" : ""}
-                  className="flex items-center gap-2 px-3 py-2 border border-white/30 rounded-lg text-xs font-mono text-foreground hover:bg-white/10 disabled:opacity-50 transition-all"
-                >
-                  {generateAllMut.isPending ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Zap className="w-3.5 h-3.5" />
-                  )}
-                  {generateAllMut.isPending ? "Queuing..." : "Activate All"}
-                </button>
+          {storeId && automations && automations.some((a) => a.status === "recommended") && (
+            <button
+              onClick={() => storeId && generateAllMut.mutate({ storeId, model: selectedModel })}
+              disabled={generateAllMut.isPending || !hasBrandProfile}
+              title={!hasBrandProfile ? "Run brand analysis first" : ""}
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+            >
+              {generateAllMut.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Zap className="w-3.5 h-3.5" />
               )}
-            </>
+              {generateAllMut.isPending ? "Generating..." : "Generate All"}
+            </button>
           )}
+          <ModelSelector value={selectedModel} onChange={setSelectedModel} compact />
         </div>
       </motion.div>
 
@@ -402,23 +346,12 @@ export default function AutomationsPage() {
           })}
         </motion.div>
       ) : (
-        <motion.div variants={itemVariants} className="glass-card-static text-center py-20">
-          <Sparkles className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-[13px] text-foreground font-mono font-bold">No automations yet</p>
-          <p className="text-[11px] text-muted-foreground font-sans mt-1 mb-4">
-            Click &quot;Analyze &amp; Recommend&quot; to get AI-powered automation suggestions
-          </p>
-          {storeId && hasBrandProfile && (
-            <button
-              onClick={handleRecommend}
-              disabled={recommending}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-terracotta text-white rounded-lg text-xs font-mono font-bold hover:bg-terracotta/90 disabled:opacity-50 transition-all"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${recommending ? "animate-spin" : ""}`} />
-              {recommending ? "Analyzing..." : "Analyze & Recommend"}
-            </button>
-          )}
-        </motion.div>
+        <SmartEmptyState
+          icon={Sparkles}
+          title="No automations yet"
+          description="Allo has recommended automations for your store based on customer analysis."
+          actions={[{ label: "Review & Activate", href: "/automations", primary: true }]}
+        />
       )}
     </motion.div>
   );

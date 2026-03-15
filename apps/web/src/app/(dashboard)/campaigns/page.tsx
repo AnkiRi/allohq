@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { Mail, Plus, Clock, Send, Check, XCircle, Users, DollarSign, MousePointerClick, Eye } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 
 const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: string }> = {
   draft: { icon: Clock, color: "text-muted-foreground", label: "Draft" },
-  scheduled: { icon: Clock, color: "text-blue-500", label: "Scheduled" },
-  sending: { icon: Send, color: "text-yellow-500", label: "Sending" },
-  sent: { icon: Check, color: "text-green-500", label: "Sent" },
-  cancelled: { icon: XCircle, color: "text-red-400", label: "Cancelled" },
+  scheduled: { icon: Clock, color: "text-[var(--color-warning)]", label: "Scheduled" },
+  sending: { icon: Send, color: "text-[var(--color-warning)]", label: "Sending" },
+  sent: { icon: Check, color: "text-[var(--color-success)]", label: "Sent" },
+  cancelled: { icon: XCircle, color: "text-[var(--color-urgent)]", label: "Cancelled" },
 };
 
 export default function CampaignsPage() {
@@ -31,7 +32,9 @@ export default function CampaignsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">CAMPAIGNS</h1>
-          <p className="text-[13px] text-muted-foreground font-mono mt-1">Create and manage email campaigns</p>
+          <p className="text-[13px] text-muted-foreground font-sans mt-1">
+            {campaigns ? `${campaigns.filter((c: any) => c.status === "draft").length} drafts, ${campaigns.filter((c: any) => c.status === "sent").length} sent` : "Create and manage email campaigns"}
+          </p>
         </div>
         <Link
           href="/campaigns/new"
@@ -133,11 +136,12 @@ export default function CampaignsPage() {
           })}
         </div>
       ) : (
-        <div className="text-center py-20 border border-border rounded-xl bg-card">
-          <Mail className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-[13px] text-muted-foreground font-mono">No campaigns yet</p>
-          <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">Create your first email campaign</p>
-        </div>
+        <SmartEmptyState
+          icon={Mail}
+          title="No campaigns yet"
+          description="Allo has identified campaign opportunities for your store."
+          actions={[{ label: "Create Campaign", href: "/campaigns", primary: true }]}
+        />
       )}
     </div>
   );

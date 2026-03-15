@@ -1,6 +1,7 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { scanOpportunities } from "@allohq/campaign-engine";
+import { logAgentActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 const campaignFactoryQueue = new Queue(QUEUE_NAMES.CAMPAIGN_FACTORY, { connection: redisConnection });
@@ -42,6 +43,13 @@ export const opportunityScannerWorker = new Worker<OpportunityScanJobData>(
           await campaignFactoryQueue.add("generate-draft", {
             opportunity: opp,
           });
+        }
+
+        if (opportunities.length > 0) {
+          await logAgentActivity(sid,
+            `Found **${opportunities.length}** new campaign opportunit${opportunities.length === 1 ? "y" : "ies"} — creating drafts now`,
+            { type: "opportunities_found" },
+          ).catch(() => {});
         }
       } catch (err) {
         console.error(`[opportunity-scanner] Error scanning store ${sid}:`, (err as Error).message);

@@ -8,6 +8,7 @@ const AutonomyTier = {
 } as const;
 import { scanOpportunities } from "@allohq/campaign-engine";
 import { generateDailyBriefing } from "@allohq/merchant-copilot";
+import { logAgentActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 const automationGenerateQueue = new Queue(QUEUE_NAMES.AUTOMATION_GENERATE, {
@@ -109,6 +110,12 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
       throw new Error(`Store ${storeId} not found`);
     }
 
+    // Only run after onboarding is fully complete
+    if (store.onboardingStep < 8) {
+      console.log(`[store-activation] Skipping — store ${storeId} onboarding not complete (step ${store.onboardingStep})`);
+      return { storeId, automationsCreated: 0, automationsQueued: 0, opportunitiesFound: 0 };
+    }
+
     const workspaceId = store.workspaceId;
 
     // Initialize activation log
@@ -166,23 +173,29 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
           automationsCreated++;
 
           // For COPILOT / ADVISOR categories, add to ActionQueue for merchant approval
+          // Deduplicate: skip if identical pending entry already exists
           if (!isAutopilot) {
-            await prisma.actionQueue.create({
-              data: {
-                storeId,
-                type: "automation_draft",
-                status: "pending",
-                category: config.category,
-                urgencyScore: 50,
-                confidenceScore: 80,
-                reasoning: `${label} automation created as draft. Review and approve to activate.`,
-                payload: {
-                  automationId: automation.id,
-                  programType,
-                  tier: config.tier,
-                },
-              },
+            const existing = await prisma.actionQueue.findFirst({
+              where: { storeId, type: "automation_draft", status: "pending", category: config.category },
             });
+            if (!existing) {
+              await prisma.actionQueue.create({
+                data: {
+                  storeId,
+                  type: "automation_draft",
+                  status: "pending",
+                  category: config.category,
+                  urgencyScore: 50,
+                  confidenceScore: 80,
+                  reasoning: `${label} automation created as draft. Review and approve to activate.`,
+                  payload: {
+                    automationId: automation.id,
+                    programType,
+                    tier: config.tier,
+                  },
+                },
+              });
+            }
           }
 
           // Queue content generation for every automation
@@ -196,6 +209,12 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
           console.log(
             `[store-activation] Created ${label} automation (${config.tier}) → ${automation.id}`,
           );
+
+          // Log activity to AI chat
+          await logAgentActivity(storeId,
+            `✓ Created **${label}** automation — ${isAutopilot ? "now active on autopilot" : "draft ready for your review"}`,
+            { type: "automation_created", entityId: automation.id, entityType: "automation" },
+          ).catch(() => {});
         } catch (err) {
           console.error(
             `[store-activation] Failed to create ${label} automation:`,
@@ -280,23 +299,8 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
     try {
       await updateStep(storeId, activationLog, "finalize", { status: "running" });
 
-      // Create activation_complete action queue entry
-      await prisma.actionQueue.create({
-        data: {
-          storeId,
-          type: "activation_complete",
-          status: "pending",
-          category: "welcome",
-          urgencyScore: 100,
-          confidenceScore: 100,
-          reasoning: "Store activation completed. All automations and initial campaigns have been set up.",
-          payload: {
-            automationsCreated,
-            opportunitiesFound,
-            activatedAt: new Date().toISOString(),
-          },
-        },
-      });
+      // Activation completion is tracked via store.activatedAt — not as an ActionQueue entry.
+      // ActionQueue should only contain merchant-approvable items.
 
       // Set activatedAt timestamp on the store
       const now = new Date();
@@ -320,6 +324,12 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
         `[store-activation] Store ${storeId} activated: ` +
           `${automationsCreated} automations, ${opportunitiesFound} opportunities`,
       );
+
+      // Log activation complete to AI chat
+      await logAgentActivity(storeId,
+        `Your AI retention system is set up! **${automationsCreated} automations** created${opportunitiesFound > 0 ? `, **${opportunitiesFound} campaign opportunities** identified` : ""}. Check your pending actions to review and approve.`,
+        { type: "activation_complete" },
+      ).catch(() => {});
     } catch (err) {
       console.error(`[store-activation] Step 4 (finalize) failed:`, (err as Error).message);
       await updateStep(storeId, activationLog, "finalize", {

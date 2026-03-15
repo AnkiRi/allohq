@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import { generateCampaignDraft } from "@allohq/campaign-engine";
 import type { CampaignOpportunity } from "@allohq/campaign-engine";
+import { logAgentActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 interface CampaignFactoryJobData {
@@ -21,6 +22,13 @@ export const campaignFactoryWorker = new Worker<CampaignFactoryJobData>(
     const draft = await generateCampaignDraft(opportunity);
 
     console.log(`[campaign-factory] Draft created: "${draft.name}" targeting ${draft.targetCount} customers`);
+
+    // Log activity to AI chat
+    await logAgentActivity(opportunity.storeId,
+      `✓ Drafted **${draft.name}** targeting ${draft.targetCount} customers — awaiting your review`,
+      { type: "campaign_drafted", entityType: "campaign" },
+    ).catch(() => {});
+
     return { draftName: draft.name, targetCount: draft.targetCount, confidence: draft.confidenceScore };
   },
   { connection: redisConnection },
