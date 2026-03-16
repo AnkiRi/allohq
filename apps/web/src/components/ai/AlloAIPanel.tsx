@@ -435,7 +435,7 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] px-3.5 py-2.5 rounded-xl bg-foreground text-background">
+        <div className="max-w-[85%] px-3.5 py-2.5 rounded-xl rounded-br-sm bg-foreground text-background">
           <div className="text-[13px] leading-[1.6] font-sans">{message.content}</div>
           <div className="font-mono text-[10px] text-background/40 mt-1">
             {timeAgo(message.timestamp)}
@@ -450,7 +450,7 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
         <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
       </div>
-      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-accent)]/20 pl-3">
+      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-accent)]/20 pl-3 rounded-xl rounded-bl-sm">
         {/* Tool calls indicator */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
@@ -994,8 +994,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // On dashboard, panel is always open
-  const effectiveState = isDashboard ? (panelState === "expanded" ? "expanded" : "open") : panelState;
+  // On dashboard, panel defaults open but can be collapsed
+  const effectiveState = panelState;
 
   // Get storeId
   const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
@@ -1463,20 +1463,18 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
           isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]",
         )}
       >
-        {/* Toggle button — hidden on dashboard */}
-        {!isDashboard && (
-          <button
-            onClick={toggle}
-            className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-            title={effectiveState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
-          >
-            {effectiveState === "collapsed" ? (
-              <ChevronLeft className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
-        )}
+        {/* Toggle button */}
+        <button
+          onClick={toggle}
+          className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
+          title={effectiveState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
+        >
+          {effectiveState === "collapsed" ? (
+            <ChevronLeft className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
+        </button>
 
         {/* Expand button */}
         <button
@@ -1817,8 +1815,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
         )}
       </aside>
 
-      {/* Floating button when collapsed — only on non-dashboard pages */}
-      {!isDashboard && effectiveState === "collapsed" && (
+      {/* Floating button when collapsed */}
+      {effectiveState === "collapsed" && (
         <button
           onClick={() => {
             setPanelState("open");

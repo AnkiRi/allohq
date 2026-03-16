@@ -5,9 +5,11 @@ import { RouteProgress } from "@/components/layout/RouteProgress";
 import { AlloAIPanelProvider, AlloAIPanelSlot } from "@/components/ai/AlloAIPanel";
 import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext";
 import { OnboardingGate } from "@/components/layout/OnboardingGate";
+import { CommandPaletteProvider, CommandPalette } from "@/components/ui/CommandPalette";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
+    <CommandPaletteProvider>
     <MobileSidebarProvider>
       <div className="flex h-screen canvas-noise relative overflow-hidden">
         <Suspense fallback={null}>
@@ -29,7 +31,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </AlloAIPanelProvider>
+        <CommandPalette />
       </div>
     </MobileSidebarProvider>
+    </CommandPaletteProvider>
   );
 }

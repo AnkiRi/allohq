@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
-import { Bell, ChevronRight, Menu } from "lucide-react";
-import { useAlloAI } from "@/components/ai/AlloAIPanel";
+import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search } from "lucide-react";
+import Link from "next/link";
 import { useMobileSidebar } from "./MobileSidebarContext";
+import { PulseDot } from "@/components/ui/PulseDot";
+import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
+import { useCommandPalette } from "@/components/ui/CommandPalette";
+import { trpc } from "@/lib/trpc";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Home",
@@ -24,17 +26,8 @@ const routeLabels: Record<string, string> = {
   "/settings": "Settings",
 };
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
-
 function getBreadcrumb(pathname: string): string[] {
-  // Direct match
   if (routeLabels[pathname]) {
-    // Check if it's a nested route (has a parent)
     const segments = pathname.split("/").filter(Boolean);
     if (segments.length > 1) {
       const parent = "/" + segments[0];
@@ -44,34 +37,56 @@ function getBreadcrumb(pathname: string): string[] {
     }
     return [routeLabels[pathname]];
   }
-
-  // Fallback: build from path segments
   const segments = pathname.split("/").filter(Boolean);
   return segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
 }
 
 export function TopBar() {
-  const { openPanel, focusInput } = useAlloAI();
   const { toggle } = useMobileSidebar();
   const pathname = usePathname();
-  const { user } = useUser();
+  const commandPalette = useCommandPalette();
+  const isDashboard = pathname === "/dashboard";
 
-  const greeting = getGreeting();
-  const firstName = user?.firstName || "there";
   const breadcrumb = getBreadcrumb(pathname);
 
-  // Cmd+K to open AI panel & focus input
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        openPanel();
-        focusInput();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [openPanel, focusInput]);
+  // Data queries
+  const { data: stores } = trpc.stores.list.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const store = stores?.[0];
+  const onboardingDone = !!store?.onboardingCompletedAt;
+
+  const { data: stats } = trpc.dashboard.stats.useQuery(undefined, {
+    enabled: onboardingDone,
+    refetchInterval: 60000,
+  });
+
+  const storeId = store?.id ?? "";
+  const totalCustomers = stats?.totalCustomers ?? 0;
+
+  // ROI data — real AI-attributed revenue
+  const { data: roiData } = (trpc.analytics.roi as any).useQuery(
+    { storeId, days: 30 },
+    { enabled: !!storeId && onboardingDone },
+  ) as { data: { aiAttributedRevenue: number } | undefined };
+  const aiRevenue = roiData?.aiAttributedRevenue ?? 0;
+
+  // Latest agent activity timestamp
+  const { data: latestAgentRun } = (trpc.automations.latestAgentRun as any).useQuery(
+    { storeId },
+    { enabled: !!storeId && onboardingDone },
+  ) as { data: { createdAt: string | Date } | null | undefined };
+
+  const lastActivityText = (() => {
+    if (!latestAgentRun?.createdAt) return null;
+    const diff = Date.now() - new Date(latestAgentRun.createdAt).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Last activity just now";
+    if (mins < 60) return `Last activity ${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `Last activity ${hours}h ago`;
+    return `Last activity ${Math.floor(hours / 24)}d ago`;
+  })();
 
   return (
     <header className="flex items-center justify-between px-3 sm:px-4 md:px-6 py-3">
@@ -83,31 +98,96 @@ export function TopBar() {
         >
           <Menu className="w-5 h-5 text-foreground" />
         </button>
-        <span className="text-[13px] font-mono text-foreground hidden sm:inline">
-          {greeting}, <span className="font-semibold">{firstName}</span>
-        </span>
-        <span className="text-[11px] text-muted-foreground/40 select-none">/</span>
-        <div className="flex items-center gap-1">
-          {breadcrumb.map((label, i) => (
-            <span key={i} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/40" />}
-              <span
-                className={`text-[11px] font-mono tracking-[0.5px] uppercase ${
-                  i === breadcrumb.length - 1
-                    ? "text-muted-foreground"
-                    : "text-muted-foreground/50"
-                }`}
-              >
-                {label}
-              </span>
+
+        {/* Dashboard: back arrow + breadcrumb only */}
+        {isDashboard ? (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </Link>
+            <span className="text-[11px] font-mono tracking-[0.5px] uppercase text-muted-foreground">
+              Home
             </span>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/dashboard"
+                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </Link>
+              {breadcrumb.map((label, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/40" />}
+                  <span
+                    className={`text-[11px] font-mono tracking-[0.5px] uppercase ${
+                      i === breadcrumb.length - 1
+                        ? "text-muted-foreground"
+                        : "text-muted-foreground/50"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
-      <button className="relative p-2 rounded-lg hover:bg-white/30 transition-colors">
-        <Bell className="w-4 h-4 text-muted-foreground" />
-        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-terracotta rounded-full" />
-      </button>
+
+      <div className="flex items-center gap-2">
+        {/* Agent Status Pill */}
+        {onboardingDone && (
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#6B7A2F]/8 border border-[#6B7A2F]/15">
+            <PulseDot color="bg-[#6B7A2F]" />
+            <span className="text-[11px] font-mono text-[#6B7A2F]/80">
+              Agent monitoring {totalCustomers.toLocaleString()} customers
+            </span>
+            {lastActivityText && (
+              <span className="text-[10px] font-mono text-[#6B7A2F]/50">
+                {lastActivityText}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Revenue Counter */}
+        {aiRevenue > 0 && (
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/8 border border-amber-500/15">
+            <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+            <AnimatedCounter
+              value={Math.round(aiRevenue)}
+              prefix="$"
+              className="text-[12px] font-mono font-bold text-amber-700 tabular-nums"
+              duration={0.8}
+            />
+            <span className="text-[10px] font-mono text-amber-600/50">AI revenue this month</span>
+          </div>
+        )}
+
+        {/* Command Palette Trigger */}
+        <button
+          onClick={commandPalette.open}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/3 hover:bg-black/5 transition-colors"
+        >
+          <Search className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">Search...</span>
+          <kbd className="text-[10px] font-mono text-muted-foreground/60 bg-white/80 px-1.5 py-0.5 rounded border border-black/5 hidden sm:inline">
+            ⌘K
+          </kbd>
+        </button>
+
+        {/* Bell */}
+        <button className="relative p-2 rounded-lg hover:bg-black/3 transition-colors">
+          <Bell className="w-4 h-4 text-muted-foreground" />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#c4704a]" />
+        </button>
+      </div>
     </header>
   );
 }

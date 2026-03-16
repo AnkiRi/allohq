@@ -50,7 +50,7 @@ export function Sidebar() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const { isOpen, close } = useMobileSidebar();
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(true);
 
   // Fetch pending actions count for badge
   const { data: stores } = trpc.stores.list.useQuery(undefined, {
@@ -160,7 +160,7 @@ export function Sidebar() {
           <AnimatePresence initial={false}>
             {(moreOpen || isSecondaryActive) && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
+                initial={false}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
