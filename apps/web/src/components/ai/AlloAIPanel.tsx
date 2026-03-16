@@ -937,7 +937,12 @@ export interface AlloAIPanelHandle {
   focusInput: () => void;
 }
 
-export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_, ref) {
+export interface AlloAIPanelProps {
+  /** When true the panel fills its parent container, hides toggle/expand chrome, and stays permanently open. */
+  embedded?: boolean;
+}
+
+export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(function AlloAIPanel({ embedded }, ref) {
   const { toast } = useToast();
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -995,7 +1000,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // On dashboard, panel defaults open but can be collapsed
-  const effectiveState = panelState;
+  // In embedded mode, always open — no collapsing
+  const effectiveState = embedded ? "open" : panelState;
 
   // Get storeId
   const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
@@ -1369,13 +1375,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
   }, [input, sendMessage]);
 
   const handleNavigate = useCallback((href: string) => {
-    if (!isDashboard) setPanelState("collapsed");
+    if (!embedded && !isDashboard) setPanelState("collapsed");
     router.push(href);
-  }, [router, isDashboard]);
+  }, [router, isDashboard, embedded]);
 
   const handlePillClick = (pill: Pill) => {
     if (pill.href && !pill.instruction) {
-      if (!isDashboard) setPanelState("collapsed");
+      if (!embedded && !isDashboard) setPanelState("collapsed");
       router.push(pill.href);
       return;
     }
@@ -1455,39 +1461,48 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
       {/* Main panel */}
       <aside
         className={cn(
-          "flex flex-col border-l transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] relative",
-          effectiveState === "open" && "w-[380px] flex-shrink-0 ai-panel-bg border-border",
-          effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
-          effectiveState === "expanded" &&
-            "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
+          "flex flex-col transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] relative",
+          embedded
+            ? "w-full h-full ai-panel-bg border-0"
+            : cn(
+                "border-l",
+                effectiveState === "open" && "w-[380px] flex-shrink-0 ai-panel-bg border-border",
+                effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
+                effectiveState === "expanded" &&
+                  "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
+              ),
           isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]",
         )}
       >
-        {/* Toggle button */}
-        <button
-          onClick={toggle}
-          className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-          title={effectiveState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
-        >
-          {effectiveState === "collapsed" ? (
-            <ChevronLeft className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
-        </button>
+        {/* Toggle button — hidden in embedded mode */}
+        {!embedded && (
+          <button
+            onClick={toggle}
+            className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
+            title={effectiveState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
+          >
+            {effectiveState === "collapsed" ? (
+              <ChevronLeft className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+        )}
 
-        {/* Expand button */}
-        <button
-          onClick={toggleExpand}
-          className="absolute top-3 right-3 w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-          title={effectiveState === "expanded" ? "Collapse panel" : "Expand to full view"}
-        >
-          {effectiveState === "expanded" ? (
-            <Minimize2 className="w-3.5 h-3.5" />
-          ) : (
-            <Maximize2 className="w-3.5 h-3.5" />
-          )}
-        </button>
+        {/* Expand button — hidden in embedded mode */}
+        {!embedded && (
+          <button
+            onClick={toggleExpand}
+            className="absolute top-3 right-3 w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
+            title={effectiveState === "expanded" ? "Collapse panel" : "Expand to full view"}
+          >
+            {effectiveState === "expanded" ? (
+              <Minimize2 className="w-3.5 h-3.5" />
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5" />
+            )}
+          </button>
+        )}
 
         {/* Header */}
         <div className="relative" ref={switcherRef}>
@@ -1815,8 +1830,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle>(function AlloAIPanel(_,
         )}
       </aside>
 
-      {/* Floating button when collapsed */}
-      {effectiveState === "collapsed" && (
+      {/* Floating button when collapsed — hidden in embedded mode */}
+      {!embedded && effectiveState === "collapsed" && (
         <button
           onClick={() => {
             setPanelState("open");
@@ -1858,4 +1873,9 @@ export function AlloAIPanelProvider({ children }: { children: React.ReactNode })
 export function AlloAIPanelSlot() {
   const panelRef = useContext(PanelRefContext);
   return <AlloAIPanel ref={panelRef} />;
+}
+
+/** Standalone embedded version — fills parent container, no toggle/expand chrome. */
+export function AlloAIPanelEmbedded() {
+  return <AlloAIPanel embedded />;
 }
