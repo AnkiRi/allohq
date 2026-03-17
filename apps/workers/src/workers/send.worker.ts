@@ -185,6 +185,19 @@ export const sendWorker = new Worker<SendJobData>(
           : "N/A",
       };
 
+      // Capture ML training features at send time
+      const sendTime = new Date();
+      const subjectLine = campaign.template?.subject ?? "";
+      const messageFeatures = {
+        channel: "email",
+        messageType: "campaign",
+        hasDiscount: /discount|off|save|%/i.test(subjectLine),
+        subjectLineLength: subjectLine.length,
+        sendHour: sendTime.getHours(),
+        sendDayOfWeek: sendTime.getDay(),
+        segment: customer.rfmScore?.segment ?? null,
+      };
+
       // Create MessageLog entry first (need its ID for UTM content)
       const messageLog = await prisma.messageLog.create({
         data: {
@@ -197,6 +210,7 @@ export const sendWorker = new Worker<SendJobData>(
           templateId: campaign.templateId,
           campaignId,
           status: "queued",
+          messageFeatures,
         },
       });
 

@@ -791,6 +791,13 @@ model MessageLog {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // Outcome tracking — for ML training data (Sprint 12+)
+  outcome            String?   // opened, clicked, purchased, unsubscribed, ignored
+  outcomeRevenue     Decimal?  @db.Decimal(12, 2) // revenue attributed to this message
+  outcomeTimestamp   DateTime? // when outcome was recorded
+  customerStateSnap  Json?     // snapshot of CustomerState at send time
+  messageFeatures    Json?     // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
+
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
@@ -799,6 +806,7 @@ model MessageLog {
   @@index([externalId])
   @@index([channel, status])
   @@index([customerId, status, createdAt])
+  @@index([outcome, createdAt])
   @@map("message_logs")
 }
 

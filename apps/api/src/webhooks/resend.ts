@@ -1,6 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
 import crypto from "crypto";
+import { Queue } from "bullmq";
+
+const redisConnection = {
+  host: process.env["REDIS_HOST"] ?? "localhost",
+  port: Number(process.env["REDIS_PORT"] ?? 6379),
+  password: process.env["REDIS_PASSWORD"],
+};
+
+const customerStateQueue = new Queue("customer-state", { connection: redisConnection });
 
 /**
  * Handle Resend webhook events for email delivery status updates.
@@ -133,6 +142,40 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
           await prisma.campaign.update({
             where: { id: messageLog.campaignId },
             data: { clickCount: { increment: 1 } },
+          }).catch(() => {});
+        }
+      }
+
+      // Enqueue customer state events for intent detection + channel preference
+      if (messageLog.customerId && messageLog.storeId) {
+        if (eventType === "email.opened") {
+          await customerStateQueue.add("email-opened", {
+            type: "email_opened",
+            customerId: messageLog.customerId,
+            storeId: messageLog.storeId,
+          }).catch((err) => console.error("[resend-webhook] Failed to enqueue email_opened:", err));
+          // Update ML outcome field
+          await prisma.messageLog.update({
+            where: { id: messageLog.id },
+            data: { outcome: "opened", outcomeTimestamp: now },
+          }).catch(() => {});
+        }
+        if (eventType === "email.clicked") {
+          await customerStateQueue.add("email-clicked", {
+            type: "email_clicked",
+            customerId: messageLog.customerId,
+            storeId: messageLog.storeId,
+          }).catch((err) => console.error("[resend-webhook] Failed to enqueue email_clicked:", err));
+          await prisma.messageLog.update({
+            where: { id: messageLog.id },
+            data: { outcome: "clicked", outcomeTimestamp: now },
+          }).catch(() => {});
+        }
+        if (eventType === "email.complained") {
+          // Unsubscribe signal → update outcome
+          await prisma.messageLog.update({
+            where: { id: messageLog.id },
+            data: { outcome: "unsubscribed", outcomeTimestamp: now },
           }).catch(() => {});
         }
       }

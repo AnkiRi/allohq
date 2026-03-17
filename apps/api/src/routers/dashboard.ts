@@ -248,4 +248,56 @@ export const dashboardRouter = router({
 
       return { cohorts };
     }),
+
+  /** Fatigue suppression stats — shows how many messages were prevented */
+  suppressionStats: workspaceProcedure
+    .input(z.object({ days: z.number().min(1).max(90).default(7) }).optional())
+    .query(async ({ ctx, input }) => {
+      const days = input?.days ?? 7;
+      const since = new Date(Date.now() - days * 86400000);
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      const storeIds = stores.map((s) => s.id);
+      if (storeIds.length === 0) return { suppressed: 0, sent: 0, byReason: [] };
+
+      const suppressed = await ctx.prisma.messageLog.count({
+        where: {
+          storeId: { in: storeIds },
+          status: "suppressed",
+          createdAt: { gte: since },
+        },
+      });
+
+      const sent = await ctx.prisma.messageLog.count({
+        where: {
+          storeId: { in: storeIds },
+          status: { in: ["sent", "delivered", "opened", "clicked"] },
+          createdAt: { gte: since },
+        },
+      });
+
+      // Break down suppression reasons from error field
+      const suppressedLogs = await ctx.prisma.messageLog.findMany({
+        where: {
+          storeId: { in: storeIds },
+          status: "suppressed",
+          createdAt: { gte: since },
+        },
+        select: { error: true },
+      });
+
+      const reasonMap = new Map<string, number>();
+      for (const log of suppressedLogs) {
+        const reason = log.error?.replace("Suppressed: ", "") ?? "Unknown";
+        reasonMap.set(reason, (reasonMap.get(reason) ?? 0) + 1);
+      }
+
+      const byReason = Array.from(reasonMap.entries())
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count);
+
+      return { suppressed, sent, byReason };
+    }),
 });

@@ -459,6 +459,82 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
   );
 }
 
+function SuppressionStatsSection() {
+  const [days, setDays] = useState(7);
+  const { data } = (trpc.dashboard.suppressionStats as any).useQuery(
+    { days },
+    { refetchInterval: 60000 },
+  ) as { data: { suppressed: number; sent: number; byReason: { reason: string; count: number }[] } | undefined };
+
+  const suppressed = data?.suppressed ?? 0;
+  const sent = data?.sent ?? 0;
+  const total = suppressed + sent;
+  const pct = total > 0 ? Math.round((suppressed / total) * 100) : 0;
+
+  return (
+    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <Activity className="w-4 h-4 text-[var(--color-success)]" />
+          <h2 className="section-header accent-bar-left text-[13px]">MESSAGE PROTECTION</h2>
+        </div>
+        <div className="flex gap-1">
+          {[7, 30, 90].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-mono transition-colors ${
+                days === d ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="rounded-lg bg-[var(--color-success)]/8 border border-[var(--color-success)]/15 p-3 text-center">
+          <div className="text-[22px] font-bold font-mono text-[var(--color-success)]">{suppressed}</div>
+          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Messages Prevented</div>
+        </div>
+        <div className="rounded-lg bg-muted/50 border border-border p-3 text-center">
+          <div className="text-[22px] font-bold font-mono text-foreground">{sent}</div>
+          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Messages Sent</div>
+        </div>
+        <div className="rounded-lg bg-muted/50 border border-border p-3 text-center">
+          <div className="text-[22px] font-bold font-mono text-foreground">{pct}%</div>
+          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Protection Rate</div>
+        </div>
+      </div>
+
+      {suppressed > 0 && (
+        <p className="text-[11px] text-[var(--color-success)] font-mono mb-3">
+          Allo prevented {suppressed} messages that would have annoyed your customers
+        </p>
+      )}
+
+      {data?.byReason && data.byReason.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Suppression Reasons</div>
+          {data.byReason.map((r) => (
+            <div key={r.reason} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+              <span className="text-[11px] font-mono text-foreground">{r.reason}</span>
+              <span className="text-[11px] font-mono text-muted-foreground">{r.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {suppressed === 0 && sent === 0 && (
+        <p className="text-[11px] text-muted-foreground font-sans">
+          No messages sent yet. Once campaigns start sending, you'll see protection stats here.
+        </p>
+      )}
+    </motion.div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useUser();
   const { toast } = useToast();
@@ -698,6 +774,9 @@ export default function SettingsPage() {
 
       {/* Token Usage */}
       <TokenUsageSection />
+
+      {/* Message Protection — fatigue suppression stats */}
+      <SuppressionStatsSection />
 
       {/* Coming Soon sections */}
       {[
