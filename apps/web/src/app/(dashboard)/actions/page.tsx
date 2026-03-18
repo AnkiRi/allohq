@@ -36,6 +36,7 @@ const STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
   { value: "approved", label: "Approved" },
   { value: "executed", label: "Executed" },
+  { value: "auto_executed", label: "Auto-Executed" },
   { value: "rejected", label: "Rejected" },
   { value: "expired", label: "Expired" },
 ] as const;
@@ -82,6 +83,8 @@ function getStatusBanner(status: string | undefined): { text: string; color: str
       return { text: "These actions have been executed. View results in Campaigns or Automations.", color: "bg-emerald-50 text-emerald-700 border-emerald-200" };
     case "rejected":
       return { text: "Dismissed actions. These won't be executed.", color: "bg-gray-50 text-gray-600 border-gray-200" };
+    case "auto_executed":
+      return { text: "These actions were automatically executed by the AI agent based on your autonomy settings.", color: "bg-blue-50 text-blue-700 border-blue-200" };
     case "expired":
       return { text: "Expired actions — the opportunity window has passed.", color: "bg-amber-50 text-amber-700 border-amber-200" };
     default:
@@ -98,6 +101,8 @@ function getEmptyState(status: string | undefined): { title: string; description
       return { title: "No executed actions", description: "Approve pending actions to create campaigns or activate automations." };
     case "rejected":
       return { title: "No rejected actions", description: "Actions you dismiss or reject will appear here." };
+    case "auto_executed":
+      return { title: "No auto-executed actions", description: "When the AI agent has enough confidence, it will execute actions autonomously. They'll appear here." };
     case "expired":
       return { title: "No expired actions", description: "Actions that weren't reviewed in time appear here." };
     default:

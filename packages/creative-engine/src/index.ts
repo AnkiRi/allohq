@@ -36,3 +36,7 @@ export { formatForChannel, formatForAllChannels, CHANNEL_SPECS } from "./channel
 
 // Asset Manager
 export { storeAsset, getAsset, listAssets, linkToCampaign, deleteAsset } from "./asset-manager";
+
+// Subject Line Scorer
+export { scoreSubjectLine } from "./subject-line-scorer";
+export type { SubjectLineScore } from "./subject-line-scorer";

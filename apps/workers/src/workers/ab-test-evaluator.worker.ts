@@ -1,31 +1,39 @@
 import { Worker } from "bullmq";
 import {
   evaluateTest,
-  concludeTest,
-  listRunningTests,
-} from "@allohq/journey-orchestrator";
+  listAllRunningTests,
+} from "@allohq/campaign-engine";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 interface ABTestJobData {
-  storeId: string;
+  storeId?: string;
+  type?: string;
 }
 
 /**
  * A/B Test Evaluator Worker
- * Evaluates all running A/B tests for a store, declares winners
- * when statistical significance is reached.
+ * Evaluates all running A/B tests (or per-store if storeId is given),
+ * auto-concludes when statistical significance is reached.
  */
 export const abTestEvaluatorWorker = new Worker<ABTestJobData>(
   QUEUE_NAMES.AB_TEST,
   async (job) => {
     const { storeId } = job.data;
 
-    console.log(`Evaluating A/B tests for store ${storeId}`);
+    console.log(
+      storeId
+        ? `Evaluating A/B tests for store ${storeId}`
+        : "Evaluating all running A/B tests (cron)",
+    );
 
-    const runningTests = await listRunningTests(storeId);
+    // Fetch all running tests — filter by store if given
+    const allTests = await listAllRunningTests();
+    const runningTests = storeId
+      ? allTests.filter((t) => t.storeId === storeId)
+      : allTests;
 
     if (runningTests.length === 0) {
-      console.log(`No running A/B tests for store ${storeId}`);
+      console.log("No running A/B tests to evaluate");
       return { evaluated: 0, concluded: 0 };
     }
 
@@ -37,20 +45,23 @@ export const abTestEvaluatorWorker = new Worker<ABTestJobData>(
         const evaluation = await evaluateTest(test.id);
         evaluated++;
 
-        if (evaluation.ready && evaluation.winner) {
-          await concludeTest(test.id, evaluation.winner, evaluation.confidence);
+        if (evaluation.autoConcluded) {
           concluded++;
           console.log(
-            `A/B test ${test.id} (${test.name}) concluded: winner=${evaluation.winner}, confidence=${(evaluation.confidence * 100).toFixed(1)}%`,
+            `A/B test ${test.id} (${test.name}) auto-concluded: winner=${evaluation.winner}, confidence=${(evaluation.confidence * 100).toFixed(1)}%`,
           );
-        } else if (evaluation.ready && !evaluation.winner) {
+        } else if (evaluation.significanceReached && !evaluation.winner) {
           console.log(
             `A/B test ${test.id} (${test.name}) has enough data but no clear winner (confidence=${(evaluation.confidence * 100).toFixed(1)}%)`,
           );
-        } else {
-          const totalSent = evaluation.aResults.sent + evaluation.bResults.sent;
+        } else if (!evaluation.sampleSizeMet) {
+          const totalSent = evaluation.variantA.sent + evaluation.variantB.sent;
           console.log(
             `A/B test ${test.id} (${test.name}) needs more data: ${totalSent}/${test.minSampleSize} samples`,
+          );
+        } else {
+          console.log(
+            `A/B test ${test.id} (${test.name}) evaluated: confidence=${(evaluation.confidence * 100).toFixed(1)}% (below 95% threshold)`,
           );
         }
       } catch (err: any) {
@@ -58,7 +69,9 @@ export const abTestEvaluatorWorker = new Worker<ABTestJobData>(
       }
     }
 
-    console.log(`A/B test evaluation complete for store ${storeId}: ${evaluated} evaluated, ${concluded} concluded`);
+    console.log(
+      `A/B test evaluation complete: ${evaluated} evaluated, ${concluded} auto-concluded`,
+    );
     return { evaluated, concluded };
   },
   { connection: redisConnection },

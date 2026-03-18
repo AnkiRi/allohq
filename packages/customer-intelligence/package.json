@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@allohq/database": "workspace:*",
     "@allohq/email-builder": "workspace:*",
     "@anthropic-ai/sdk": "^0.78.0",
     "openai": "^4.73.0",

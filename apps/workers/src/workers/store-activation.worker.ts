@@ -58,6 +58,95 @@ const PROGRAM_LABELS: Record<string, string> = {
   promotional: "Promotional",
 };
 
+/** Keyword-based heuristic for classifying a store into a category */
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  fashion: [
+    "dress", "shirt", "pants", "jeans", "jacket", "coat", "sweater", "hoodie",
+    "skirt", "blouse", "shoes", "sneakers", "boots", "sandals", "heels",
+    "handbag", "wallet", "belt", "scarf", "hat", "apparel", "clothing",
+    "fashion", "wear", "outfit", "denim", "leather", "silk", "cotton",
+    "t-shirt", "polo", "blazer", "suit", "lingerie", "underwear", "socks",
+  ],
+  beauty: [
+    "skincare", "makeup", "lipstick", "foundation", "mascara", "serum",
+    "moisturizer", "cleanser", "toner", "sunscreen", "primer", "concealer",
+    "blush", "eyeshadow", "perfume", "fragrance", "cologne", "nail polish",
+    "shampoo", "conditioner", "hair care", "body lotion", "face cream",
+    "beauty", "cosmetic", "anti-aging", "retinol", "vitamin c", "exfoliant",
+  ],
+  food: [
+    "chocolate", "coffee", "tea", "snack", "spice", "sauce", "honey",
+    "protein", "supplement", "organic", "vegan", "gluten-free", "granola",
+    "candy", "cookie", "cake", "gourmet", "olive oil", "vinegar", "jam",
+    "food", "edible", "drink", "beverage", "juice", "smoothie", "meal",
+  ],
+  electronics: [
+    "phone", "laptop", "tablet", "headphone", "earbuds", "speaker", "camera",
+    "charger", "cable", "adapter", "keyboard", "mouse", "monitor", "usb",
+    "bluetooth", "wireless", "smart watch", "fitness tracker", "drone",
+    "electronics", "gadget", "tech", "device", "battery", "power bank",
+  ],
+  home: [
+    "candle", "pillow", "blanket", "rug", "curtain", "lamp", "vase",
+    "furniture", "shelf", "table", "chair", "sofa", "bed", "mattress",
+    "kitchen", "cookware", "dinnerware", "towel", "storage", "organizer",
+    "home decor", "garden", "plant", "pot", "frame", "mirror", "clock",
+  ],
+  health: [
+    "vitamin", "supplement", "probiotic", "omega", "magnesium", "collagen",
+    "protein powder", "fitness", "yoga", "workout", "exercise", "wellness",
+    "essential oil", "aromatherapy", "cbd", "hemp", "herbal", "natural",
+    "health", "medical", "therapeutic", "recovery", "sleep", "meditation",
+  ],
+};
+
+/**
+ * Classify a store into a category based on its product titles and types.
+ * Returns null if no category can be confidently determined.
+ */
+async function classifyStoreCategory(storeId: string): Promise<string | null> {
+  const products = await prisma.product.findMany({
+    where: { storeId },
+    select: { title: true, productType: true },
+    take: 100,
+  });
+
+  if (products.length === 0) return null;
+
+  // Build a combined text corpus from product titles and types
+  const corpus = products
+    .map((p) => `${p.title} ${p.productType ?? ""}`.toLowerCase())
+    .join(" ");
+
+  // Score each category
+  const scores: Record<string, number> = {};
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    let score = 0;
+    for (const kw of keywords) {
+      // Count occurrences (word boundary-ish matching)
+      const regex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      const matches = corpus.match(regex);
+      if (matches) score += matches.length;
+    }
+    scores[category] = score;
+  }
+
+  // Find the top category
+  let bestCategory: string | null = null;
+  let bestScore = 0;
+  for (const [category, score] of Object.entries(scores)) {
+    if (score > bestScore) {
+      bestScore = score;
+      bestCategory = category;
+    }
+  }
+
+  // Require at least a minimum signal (3 keyword matches)
+  if (bestScore < 3) return null;
+
+  return bestCategory;
+}
+
 /**
  * Persist the activation log on the store record.
  */
@@ -118,10 +207,29 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
 
     const workspaceId = store.workspaceId;
 
+    // ── Step 0: Classify store category (for cross-store benchmarks) ──────
+    if (!store.storeCategory) {
+      try {
+        const category = await classifyStoreCategory(storeId);
+        if (category) {
+          await prisma.store.update({
+            where: { id: storeId },
+            data: { storeCategory: category },
+          });
+          console.log(`[store-activation] Classified store ${storeId} as "${category}"`);
+        } else {
+          console.log(`[store-activation] Could not classify store ${storeId} — insufficient signal`);
+        }
+      } catch (err) {
+        console.error(`[store-activation] Store classification failed:`, (err as Error).message);
+      }
+    }
+
     // Initialize activation log
     const activationLog: ActivationLog = {
       startedAt: new Date().toISOString(),
       steps: [
+        { key: "classify_category", label: "Classify store category", status: "done" },
         { key: "create_automations", label: "Create automations from autonomy config", status: "pending" },
         { key: "scan_opportunities", label: "Scan for campaign opportunities", status: "pending" },
         { key: "generate_briefing", label: "Generate first merchant briefing", status: "pending" },
@@ -199,10 +307,13 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
           }
 
           // Queue content generation for every automation
+          // Stagger Claude jobs by 15s to avoid API overload; GPT handles concurrency fine
+          const isClaudeModel = ((store as any).workspace?.defaultModel || "").includes("claude");
+          const staggerDelay = isClaudeModel ? automationsQueued * 15000 : 0;
           await automationGenerateQueue.add(
             `activation-${programType}`,
             { automationId: automation.id, storeId },
-            { attempts: 3 },
+            { attempts: 3, delay: staggerDelay },
           );
           automationsQueued++;
 

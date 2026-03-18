@@ -153,7 +153,7 @@ const VIP_COLORS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 function ContextSidebar({ conversationId }: { conversationId: string }) {
-  const { data: ctx } = (trpc.ai as any).getConversationContext.useQuery(
+  const { data: ctx } = (trpc.conversations as any).getContext.useQuery(
     { conversationId },
     { enabled: !!conversationId },
   ) as { data: ConversationContext | undefined };
@@ -329,32 +329,32 @@ export function ConversationManager() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const queryStatus = statusFilter === "all" ? undefined : statusFilter;
-  const { data: conversations, refetch: refetchList } = (trpc.ai as any).listConversations.useQuery(
+  const { data: conversations, refetch: refetchList } = (trpc.conversations as any).list.useQuery(
     { storeId, status: queryStatus },
     { enabled: !!storeId, refetchInterval: 15_000 }
   ) as { data: ConversationSummary[] | undefined; refetch: () => void };
 
-  const { data: detail, refetch: refetchDetail } = (trpc.ai as any).getConversation.useQuery(
+  const { data: detail, refetch: refetchDetail } = (trpc.conversations as any).get.useQuery(
     { conversationId: selectedId },
     { enabled: !!selectedId, refetchInterval: 10_000 }
   ) as { data: ConversationDetail | undefined; refetch: () => void };
 
-  const claimMut = (trpc.ai as any).claimConversation.useMutation({
+  const claimMut = (trpc.conversations as any).claim.useMutation({
     onSuccess: () => { refetchList(); refetchDetail(); },
   });
 
-  const releaseMut = (trpc.ai as any).releaseConversation.useMutation({
+  const releaseMut = (trpc.conversations as any).release.useMutation({
     onSuccess: () => { refetchList(); refetchDetail(); },
   });
 
-  const replyMut = (trpc.ai as any).sendConversationReply.useMutation({
+  const replyMut = (trpc.conversations as any).reply.useMutation({
     onSuccess: () => {
       setReplyText("");
       refetchDetail();
     },
   });
 
-  const resolveMut = (trpc.ai as any).resolveConversation.useMutation({
+  const resolveMut = (trpc.conversations as any).resolve.useMutation({
     onSuccess: () => {
       refetchList();
       refetchDetail();

@@ -25,3 +25,20 @@ export { checkInventoryConflicts } from "./inventory-aware";
 
 // Performance Learner
 export { learnFromResults, getArchetypePerformance } from "./performance-learner";
+
+// A/B Test Execution Engine
+export {
+  assignVariant,
+  recordConversion,
+  evaluateTest,
+  getTestResults,
+  getActiveTestForAutomation,
+  getActiveTestForStore,
+  listAllRunningTests,
+} from "./ab-test-engine";
+
+export type {
+  VariantStats,
+  TestResults,
+  EvaluationOutcome,
+} from "./ab-test-engine";

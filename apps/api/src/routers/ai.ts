@@ -41,6 +41,99 @@ const emailIntentSchema = z.enum([
   "vip_reward",
 ]);
 
+/**
+ * Auto-write a memory if the chat response indicates a significant action was taken.
+ * Uses simple keyword/pattern matching to detect notable events.
+ */
+async function writeMemoryIfSignificant(
+  prisma: any,
+  storeId: string,
+  reply: string,
+  toolCalls: string[],
+  actionResult: { intent: string; success: boolean; summary: string } | null,
+): Promise<void> {
+  try {
+    const memories: { memoryType: string; content: string; importance: number }[] = [];
+
+    // If an action was executed successfully, record it
+    if (actionResult?.success) {
+      const type = actionResult.intent.includes("campaign") ? "campaign_outcome" : "store_pattern";
+      memories.push({
+        memoryType: type,
+        content: actionResult.summary,
+        importance: 0.7,
+      });
+    }
+
+    // Detect significant tool calls
+    if (toolCalls.includes("create_campaign")) {
+      const match = reply.match(/campaign[:\s]+"?([^".\n]+)"?/i);
+      memories.push({
+        memoryType: "campaign_outcome",
+        content: `Created campaign${match?.[1] ? `: "${match[1].trim()}"` : ""} on ${new Date().toISOString().split("T")[0]}`,
+        importance: 0.7,
+      });
+    }
+
+    if (toolCalls.includes("create_automation")) {
+      const match = reply.match(/automation[:\s]+"?([^".\n]+)"?/i);
+      memories.push({
+        memoryType: "store_pattern",
+        content: `Set up automation${match?.[1] ? `: "${match[1].trim()}"` : ""} on ${new Date().toISOString().split("T")[0]}`,
+        importance: 0.6,
+      });
+    }
+
+    // Detect merchant preferences from the conversation
+    const lowerReply = reply.toLowerCase();
+    if (lowerReply.includes("prefer") && (lowerReply.includes("email") || lowerReply.includes("sms"))) {
+      const channel = lowerReply.includes("email") ? "email" : "sms";
+      memories.push({
+        memoryType: "merchant_preference",
+        content: `Merchant expressed preference for ${channel} as communication channel`,
+        importance: 0.6,
+      });
+    }
+
+    if (lowerReply.includes("discount") && /\d+%/.test(reply)) {
+      const discountMatch = reply.match(/(\d+)%/);
+      if (discountMatch) {
+        memories.push({
+          memoryType: "merchant_preference",
+          content: `Merchant discussed using ${discountMatch[1]}% discount in campaigns`,
+          importance: 0.5,
+        });
+      }
+    }
+
+    // Detect customer insights from analysis tool calls
+    if (toolCalls.includes("get_churn_risk_report") || toolCalls.includes("get_dashboard_metrics")) {
+      if (lowerReply.includes("churn") || lowerReply.includes("at risk")) {
+        memories.push({
+          memoryType: "customer_insight",
+          content: `Reviewed churn risk analysis on ${new Date().toISOString().split("T")[0]}. ${reply.match(/(\d+)\s*(?:customers?\s+(?:at risk|churning|hibernating))/i)?.[0] ?? ""}`.trim(),
+          importance: 0.5,
+        });
+      }
+    }
+
+    // Deduplicate and write
+    for (const mem of memories.slice(0, 3)) {
+      await prisma.agentMemory.create({
+        data: {
+          storeId,
+          memoryType: mem.memoryType,
+          content: mem.content,
+          importance: mem.importance,
+        },
+      });
+    }
+  } catch (err) {
+    // Non-critical — log and move on
+    console.error("[Agent Memory] Failed to write memory:", (err as Error).message);
+  }
+}
+
 export const aiRouter = router({
   /** Aggregated insights for the AI panel */
   panelInsights: workspaceProcedure
@@ -59,6 +152,15 @@ export const aiRouter = router({
           churnAlert: { highRiskCount: 0, avgChurnProbability: 0 },
           storeState: { hasStore: false, hasSyncedData: false, hasBrandProfile: false, hasAutomations: false, hasActiveAutomations: false, hasCampaigns: false },
           topAutomation: null,
+          recoveryOpportunities: {
+            abandonedCarts: { count: 0, totalValue: 0 },
+            cartRecovery: { count: 0, estimatedRevenue: 0 },
+            priceDrop: { count: 0, estimatedRevenue: 0 },
+            restock: { count: 0, estimatedRevenue: 0 },
+            repurchase: { count: 0, estimatedRevenue: 0 },
+            totalEstimatedRevenue: 0,
+            totalOpportunities: 0,
+          },
         };
       }
 
@@ -75,6 +177,9 @@ export const aiRouter = router({
         campaigns,
         brandProfile,
         topAutomation,
+        abandonedCartCount,
+        abandonedCartValue,
+        recoveryActions,
       ] = await Promise.all([
         // Revenue this month
         ctx.prisma.order.aggregate({
@@ -121,6 +226,34 @@ export const aiRouter = router({
           orderBy: { updatedAt: "desc" },
           select: { name: true, status: true, category: true },
         }),
+        // Abandoned carts (last 24h)
+        ctx.prisma.order.count({
+          where: {
+            storeId: input.storeId,
+            status: "abandoned",
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        // Abandoned cart total value
+        ctx.prisma.order.aggregate({
+          where: {
+            storeId: input.storeId,
+            status: "abandoned",
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+          _sum: { totalPrice: true },
+        }),
+        // Pending recovery actions grouped by type
+        ctx.prisma.actionQueue.groupBy({
+          by: ["type"],
+          where: {
+            storeId: input.storeId,
+            status: "pending",
+            type: { in: ["cart_recovery", "price_drop_alert", "restock_alert", "repurchase_reminder"] },
+          },
+          _count: true,
+          _sum: { estimatedRevenue: true },
+        }),
       ]);
 
       const thisMonth = revenueThisMonth._sum.totalPrice ?? 0;
@@ -128,6 +261,13 @@ export const aiRouter = router({
       const revenueTrend = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : 0;
 
       const segmentMap = Object.fromEntries(segmentCounts.map((s) => [s.segment, s._count]));
+
+      // Build recovery opportunity summary for AI context
+      const recoveryMap = Object.fromEntries(
+        recoveryActions.map((r) => [r.type, { count: r._count, estimatedRevenue: r._sum.estimatedRevenue ?? 0 }]),
+      );
+      const totalRecoveryRevenue = recoveryActions.reduce((sum, r) => sum + (r._sum.estimatedRevenue ?? 0), 0)
+        + (abandonedCartValue._sum.totalPrice ?? 0);
 
       return {
         store: { domain: store.shopDomain, lastSyncAt: store.lastSyncAt?.toISOString() ?? null },
@@ -160,6 +300,15 @@ export const aiRouter = router({
         topAutomation: topAutomation
           ? { name: topAutomation.name, status: topAutomation.status, category: topAutomation.category ?? "" }
           : null,
+        recoveryOpportunities: {
+          abandonedCarts: { count: abandonedCartCount, totalValue: abandonedCartValue._sum.totalPrice ?? 0 },
+          cartRecovery: recoveryMap["cart_recovery"] ?? { count: 0, estimatedRevenue: 0 },
+          priceDrop: recoveryMap["price_drop_alert"] ?? { count: 0, estimatedRevenue: 0 },
+          restock: recoveryMap["restock_alert"] ?? { count: 0, estimatedRevenue: 0 },
+          repurchase: recoveryMap["repurchase_reminder"] ?? { count: 0, estimatedRevenue: 0 },
+          totalEstimatedRevenue: totalRecoveryRevenue,
+          totalOpportunities: recoveryActions.reduce((sum, r) => sum + r._count, 0) + abandonedCartCount,
+        },
       };
     }),
 
@@ -198,6 +347,85 @@ export const aiRouter = router({
         data: { defaultModel: input.model },
       });
       return { success: true };
+    }),
+
+  /** Explain the reasoning behind an AI recommendation, metric, or action */
+  explain: workspaceProcedure
+    .input(z.object({
+      context: z.string().min(1).max(500),
+      storeId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true, shopDomain: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      // Gather store metrics for grounded explanations
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [segments, revenueAgg, customerCount, brandProfile] = await Promise.all([
+        ctx.prisma.rfmScore.groupBy({
+          by: ["segment"],
+          where: { customer: { storeId: input.storeId } },
+          _count: true,
+          _sum: { totalSpent: true },
+        }),
+        ctx.prisma.order.aggregate({
+          where: { storeId: input.storeId, createdAt: { gte: startOfMonth } },
+          _sum: { totalPrice: true },
+          _count: true,
+        }),
+        ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
+        ctx.prisma.brandProfile.findFirst({
+          where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+          select: { brandName: true },
+        }),
+      ]);
+
+      const monthRevenue = revenueAgg._sum.totalPrice ?? 0;
+      const monthOrders = revenueAgg._count;
+      const avgOrderValue = monthOrders > 0 ? monthRevenue / monthOrders : 0;
+
+      const segmentSummary = segments
+        .map((s) => `${s.segment}: ${s._count} customers, $${Math.round(s._sum.totalSpent ?? 0).toLocaleString()} spent`)
+        .join("; ");
+
+      const storeData = `Store: ${brandProfile?.brandName ?? store.shopDomain}. ${customerCount} customers. Month revenue: $${monthRevenue.toFixed(0)}. ${monthOrders} orders. AOV: $${avgOrderValue.toFixed(0)}. Segments: ${segmentSummary}`;
+
+      // Use Anthropic directly for a focused, fast explanation
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 256,
+        system: "You are a marketing analyst. Explain concisely (2-3 sentences) why this recommendation was made, using data from the store. Be specific with numbers. Do not use markdown or bullet points — plain text only.",
+        messages: [
+          {
+            role: "user",
+            content: `Store data: ${storeData}\n\nExplain why: ${input.context}`,
+          },
+        ],
+      });
+
+      const textBlock = response.content.find((b) => b.type === "text");
+      const explanation = textBlock ? (textBlock as { type: "text"; text: string }).text : "Unable to generate explanation.";
+
+      // Record token usage
+      await ctx.prisma.tokenUsage.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          model: "claude-sonnet-4-6",
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          purpose: "explain_why",
+        },
+      });
+
+      return { explanation };
     }),
 
   /** Generate an email template using AI */
@@ -336,8 +564,9 @@ export const aiRouter = router({
   regenerateEmail: workspaceProcedure
     .input(
       z.object({
-        templateId: z.string(),
+        templateId: z.string().optional(),
         storeId: z.string(),
+        blocks: z.any().optional(),
         feedback: z.string().optional(),
         model: aiModelSchema,
         creativeIntensity: z.enum(["text_heavy", "balanced", "visual_heavy"]).optional(),
@@ -348,13 +577,17 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Load existing template + generation context
       const [template, existing, store, brandProfile] = await Promise.all([
-        ctx.prisma.emailTemplate.findFirst({
-          where: { id: input.templateId, workspaceId: ctx.workspaceId },
-        }),
-        ctx.prisma.generatedContent.findFirst({
-          where: { templateId: input.templateId, workspaceId: ctx.workspaceId },
-          orderBy: { createdAt: "desc" },
-        }),
+        input.templateId
+          ? ctx.prisma.emailTemplate.findFirst({
+              where: { id: input.templateId, workspaceId: ctx.workspaceId },
+            })
+          : null,
+        input.templateId
+          ? ctx.prisma.generatedContent.findFirst({
+              where: { templateId: input.templateId, workspaceId: ctx.workspaceId },
+              orderBy: { createdAt: "desc" },
+            })
+          : null,
         ctx.prisma.store.findFirst({
           where: { id: input.storeId, workspaceId: ctx.workspaceId },
         }),
@@ -363,7 +596,7 @@ export const aiRouter = router({
         }),
       ]);
 
-      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      if (input.templateId && !template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
       const storeUrl = `https://${store.shopDomain}`;
@@ -378,8 +611,9 @@ export const aiRouter = router({
       // Build feedback/tweaks from user input and current blocks
       const tweakParts: string[] = [];
       if (input.feedback) tweakParts.push(input.feedback);
-      if (template.blocks) {
-        tweakParts.push(`Here is the current email structure (JSON blocks): ${JSON.stringify(template.blocks).slice(0, 2000)}`);
+      const currentBlocks = template?.blocks ?? input.blocks;
+      if (currentBlocks) {
+        tweakParts.push(`Here is the current email structure (JSON blocks): ${JSON.stringify(currentBlocks).slice(0, 2000)}`);
         tweakParts.push("Improve upon this existing email based on the feedback above. Keep what works, change what's requested.");
       }
 
@@ -427,18 +661,20 @@ export const aiRouter = router({
       });
 
       // Save audit trail (don't overwrite template — let frontend accept/reject)
-      await ctx.prisma.generatedContent.create({
-        data: {
-          workspaceId: ctx.workspaceId,
-          templateId: input.templateId,
-          prompt: result.promptUsed,
-          response: JSON.stringify(result),
-          model: result.model,
-          intent: existing?.intent ?? "promotion",
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-        },
-      });
+      if (input.templateId) {
+        await ctx.prisma.generatedContent.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            templateId: input.templateId,
+            prompt: result.promptUsed,
+            response: JSON.stringify(result),
+            model: result.model,
+            intent: existing?.intent ?? "promotion",
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+          },
+        });
+      }
 
       // Record token usage
       await ctx.prisma.tokenUsage.create({
@@ -585,6 +821,8 @@ export const aiRouter = router({
         searchedCustomers,
         ,
         recentObservations,
+        agentMemories,
+        latestVoiceReport,
       ] = await Promise.all([
         // Top 100 customers with RFM + LTV
         ctx.prisma.customer.findMany({
@@ -668,6 +906,23 @@ export const aiRouter = router({
           select: { type: true, severity: true, summary: true, suggestedAction: true },
           orderBy: { createdAt: "desc" },
           take: 5,
+        }),
+        // Top agent memories (non-expired, sorted by importance)
+        ctx.prisma.agentMemory.findMany({
+          where: {
+            storeId: input.storeId,
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } },
+            ],
+          },
+          orderBy: { importance: "desc" },
+          take: 10,
+        }),
+        // Latest customer voice report
+        ctx.prisma.customerVoiceReport.findFirst({
+          where: { storeId: input.storeId },
+          orderBy: { weekOf: "desc" },
         }),
       ]);
 
@@ -795,6 +1050,19 @@ ${recentObservations.map((o) => {
   const action = o.suggestedAction as Record<string, unknown> | null;
   return `- [${o.severity.toUpperCase()}] ${o.summary}${action?.message ? ` → Suggested: ${action.message}` : ""}`;
 }).join("\n")}` : ""}
+${agentMemories.length > 0 ? `
+### Your Memory (past observations about this store)
+${agentMemories.map((m) => `- [${m.memoryType}] ${m.content}`).join("\n")}` : ""}
+${latestVoiceReport ? (() => {
+  const themes = latestVoiceReport.themes as Array<{ theme: string; count: number; sentiment: number }>;
+  const insights = latestVoiceReport.actionableInsights as Array<{ insight: string; priority: string; relatedTheme: string }>;
+  return `
+### Recent Customer Feedback Themes (week of ${latestVoiceReport.weekOf.toISOString().split("T")[0]})
+${themes.map((t) => `- "${t.theme}": mentioned ${t.count} times (sentiment: ${t.sentiment > 0 ? "+" : ""}${t.sentiment.toFixed(1)})`).join("\n")}
+${insights.length > 0 ? `\nActionable Insights:\n${insights.map((i) => `- [${i.priority.toUpperCase()}] ${i.insight} (re: ${i.relatedTheme})`).join("\n")}` : ""}
+${latestVoiceReport.summary ? `\nCustomer Voice Summary: ${latestVoiceReport.summary}` : ""}
+NOTE: Use this customer feedback data to inform recommendations. For example, if customers complain about slow shipping, avoid promoting fast shipping claims.`;
+})() : ""}
 `.trim();
 
       // ---------------------------------------------------------------
@@ -811,6 +1079,11 @@ ${recentObservations.map((o) => {
       // Add automation preview/detail hint
       if (/\b(show|preview|details|view)\b.*\b(automation)\b/i.test(input.message)) {
         processedMessage += `\n\n[TOOL HINT: The merchant wants to see automation details. Call get_automation_details with the automation name extracted from their message.]`;
+      }
+
+      // Add "what if" simulation hint
+      if (/\b(what if|what would|what happens|hypothetical|simulate|scenario|if i|if we)\b/i.test(input.message)) {
+        processedMessage += `\n\n[TOOL HINT: This is a "what if" question. Call simulate_scenario immediately to model the impact. Extract the scenario description, target metric, and percentage change from the merchant's question. Present results as a markdown before/after table.]`;
       }
 
       // Add campaign-specific tool hints
@@ -857,6 +1130,12 @@ ${recentObservations.map((o) => {
           highlights.push({ label: "Status", value: String(out.status) });
           highlights.push({ label: "Steps", value: String(out.totalSteps) });
         }
+        if (tc.name === "simulate_scenario" && out) {
+          const unit = String(out.unit ?? "");
+          highlights.push({ label: "Current", value: `${unit}${Number(out.currentValue).toLocaleString()}` });
+          highlights.push({ label: "Projected", value: `${unit}${Number(out.projectedValue).toLocaleString()}` });
+          if (out.changePercent) highlights.push({ label: "Impact", value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%` });
+        }
       }
 
       // Generate contextual follow-ups: first try agent-generated, then response-based
@@ -874,7 +1153,11 @@ ${recentObservations.map((o) => {
         // Fallback: generate contextual follow-ups based on response content
         const lowerReply = reply.toLowerCase();
 
-        if (lowerReply.includes("campaign") || lowerReply.includes("drafted")) {
+        if (toolNames.includes("simulate_scenario")) {
+          suggestedFollowUps.push("What if I doubled the discount instead?");
+          suggestedFollowUps.push("Simulate the impact on customer retention");
+          suggestedFollowUps.push("Run this scenario for a different segment");
+        } else if (lowerReply.includes("campaign") || lowerReply.includes("drafted")) {
           suggestedFollowUps.push("Adjust the target segment");
           suggestedFollowUps.push("Change the discount amount");
           suggestedFollowUps.push("Preview the email");
@@ -1021,6 +1304,11 @@ ${recentObservations.map((o) => {
           },
         ],
       });
+
+      // ---------------------------------------------------------------
+      // 8. Auto-write agent memory if something significant happened
+      // ---------------------------------------------------------------
+      writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(() => {});
 
       return {
         chatId,
@@ -1636,5 +1924,87 @@ ${recentObservations.map((o) => {
       );
 
       return { ...context, aiBrief: conversation.aiBrief };
+    }),
+
+  // =========================================================================
+  // Agent Memory — persistent store-level memories that make the AI smarter
+  // =========================================================================
+
+  /** Save an agent memory for a store */
+  saveMemory: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      memoryType: z.enum(["campaign_outcome", "merchant_preference", "store_pattern", "customer_insight"]),
+      content: z.string(),
+      importance: z.number().min(0).max(1).optional(),
+      metadata: z.record(z.unknown()).optional(),
+      expiresAt: z.string().datetime().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      const memory = await ctx.prisma.agentMemory.create({
+        data: {
+          storeId: input.storeId,
+          memoryType: input.memoryType,
+          content: input.content,
+          importance: input.importance ?? 0.5,
+          metadata: (input.metadata as any) ?? undefined,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : undefined,
+        },
+      });
+
+      return { id: memory.id, success: true };
+    }),
+
+  /** Get agent memories for a store, sorted by importance */
+  getMemories: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      type: z.string().optional(),
+      limit: z.number().default(20),
+    }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      const memories = await ctx.prisma.agentMemory.findMany({
+        where: {
+          storeId: input.storeId,
+          ...(input.type ? { memoryType: input.type } : {}),
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        orderBy: { importance: "desc" },
+        take: input.limit,
+      });
+
+      return memories;
+    }),
+
+  /** Delete an agent memory */
+  deleteMemory: workspaceProcedure
+    .input(z.object({ memoryId: z.string(), storeId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      await ctx.prisma.agentMemory.delete({
+        where: { id: input.memoryId },
+      });
+
+      return { success: true };
     }),
 });

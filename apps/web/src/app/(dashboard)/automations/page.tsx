@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, Phone, MessageSquare, Radio } from "lucide-react";
+import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, Phone, MessageSquare, Radio, FlaskConical } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -228,7 +228,7 @@ export default function AutomationsPage() {
                       </span>
                     </div>
                   </div>
-                  {/* Channel counts */}
+                  {/* Channel counts + A/B link */}
                   <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground font-mono flex-shrink-0 ml-3">
                     <span className="flex items-center gap-1" title="Email templates">
                       <Mail className="w-3 h-3" />
@@ -252,6 +252,14 @@ export default function AutomationsPage() {
                         {rcsCount}
                       </span>
                     )}
+                    <Link
+                      href={`/automations/${automation.id}/ab-test`}
+                      title="A/B Tests"
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-50 border border-pink-200 text-pink-700 hover:bg-pink-100 transition-colors text-[10px] font-mono font-bold"
+                    >
+                      <FlaskConical className="w-3 h-3" />
+                      A/B
+                    </Link>
                   </div>
                 </div>
 

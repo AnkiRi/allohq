@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { renderToHtml } from "@allohq/email-builder";
+import { renderToHtml } from "@allohq/email-builder/src/server";
+import { scoreSubjectLine } from "@allohq/creative-engine";
 
 export const templatesRouter = router({
   list: workspaceProcedure
@@ -190,6 +191,59 @@ export const templatesRouter = router({
       });
     }),
 
+  createSms: workspaceProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      content: z.string().max(1600),
+      variables: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.smsTemplate.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          name: input.name,
+          body: input.content,
+          variables: input.variables ?? [],
+        },
+      });
+    }),
+
+  updateSms: workspaceProcedure
+    .input(z.object({
+      id: z.string(),
+      name: z.string().optional(),
+      content: z.string().max(1600).optional(),
+      variables: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+      const template = await ctx.prisma.smsTemplate.findFirst({
+        where: { id, workspaceId: ctx.workspaceId },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      return ctx.prisma.smsTemplate.update({
+        where: { id },
+        data: {
+          ...(rest.name !== undefined ? { name: rest.name } : {}),
+          ...(rest.content !== undefined ? { body: rest.content } : {}),
+          ...(rest.variables !== undefined ? { variables: rest.variables } : {}),
+        },
+      });
+    }),
+
+  deleteSms: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const template = await ctx.prisma.smsTemplate.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await ctx.prisma.smsTemplate.delete({ where: { id: input.id } });
+      return { success: true };
+    }),
+
   // WhatsApp templates
   listWhatsApp: workspaceProcedure
     .query(async ({ ctx }) => {
@@ -199,6 +253,82 @@ export const templatesRouter = router({
       });
     }),
 
+  createWhatsApp: workspaceProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      content: z.string(),
+      headerType: z.enum(["none", "text", "image", "document"]).optional(),
+      headerContent: z.string().optional(),
+      footerText: z.string().optional(),
+      buttons: z.array(z.object({ type: z.string(), text: z.string(), url: z.string().optional() })).optional(),
+      variables: z.array(z.string()).optional(),
+      category: z.enum(["MARKETING", "UTILITY", "AUTHENTICATION"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.whatsAppTemplate.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          name: input.name,
+          body: input.content,
+          variables: {
+            list: input.variables ?? [],
+            headerType: input.headerType ?? "none",
+            headerContent: input.headerContent ?? "",
+            footerText: input.footerText ?? "",
+            buttons: input.buttons ?? [],
+          },
+          category: input.category ?? "MARKETING",
+        },
+      });
+    }),
+
+  updateWhatsApp: workspaceProcedure
+    .input(z.object({
+      id: z.string(),
+      name: z.string().optional(),
+      content: z.string().optional(),
+      headerType: z.enum(["none", "text", "image", "document"]).optional(),
+      headerContent: z.string().optional(),
+      footerText: z.string().optional(),
+      buttons: z.array(z.object({ type: z.string(), text: z.string(), url: z.string().optional() })).optional(),
+      variables: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+      const template = await ctx.prisma.whatsAppTemplate.findFirst({
+        where: { id, workspaceId: ctx.workspaceId },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const currentVars = template.variables as any ?? {};
+      return ctx.prisma.whatsAppTemplate.update({
+        where: { id },
+        data: {
+          ...(rest.name !== undefined ? { name: rest.name } : {}),
+          ...(rest.content !== undefined ? { body: rest.content } : {}),
+          variables: {
+            list: rest.variables ?? currentVars.list ?? [],
+            headerType: rest.headerType ?? currentVars.headerType ?? "none",
+            headerContent: rest.headerContent ?? currentVars.headerContent ?? "",
+            footerText: rest.footerText ?? currentVars.footerText ?? "",
+            buttons: rest.buttons ?? currentVars.buttons ?? [],
+          },
+        },
+      });
+    }),
+
+  deleteWhatsApp: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const template = await ctx.prisma.whatsAppTemplate.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await ctx.prisma.whatsAppTemplate.delete({ where: { id: input.id } });
+      return { success: true };
+    }),
+
   // RCS templates
   listRcs: workspaceProcedure
     .query(async ({ ctx }) => {
@@ -206,6 +336,71 @@ export const templatesRouter = router({
         where: { workspaceId: ctx.workspaceId },
         orderBy: { createdAt: "desc" },
       });
+    }),
+
+  createRcs: workspaceProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      content: z.string(),
+      cardTitle: z.string().optional(),
+      cardImageUrl: z.string().optional(),
+      actions: z.array(z.object({ type: z.string(), text: z.string(), url: z.string().optional() })).optional(),
+      variables: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.rcsTemplate.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          name: input.name,
+          body: input.content,
+          cardTitle: input.cardTitle,
+          cardImageUrl: input.cardImageUrl,
+          actions: input.actions ?? [],
+          variables: input.variables ?? [],
+        },
+      });
+    }),
+
+  updateRcs: workspaceProcedure
+    .input(z.object({
+      id: z.string(),
+      name: z.string().optional(),
+      content: z.string().optional(),
+      cardTitle: z.string().optional(),
+      cardImageUrl: z.string().optional(),
+      actions: z.array(z.object({ type: z.string(), text: z.string(), url: z.string().optional() })).optional(),
+      variables: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+      const template = await ctx.prisma.rcsTemplate.findFirst({
+        where: { id, workspaceId: ctx.workspaceId },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      return ctx.prisma.rcsTemplate.update({
+        where: { id },
+        data: {
+          ...(rest.name !== undefined ? { name: rest.name } : {}),
+          ...(rest.content !== undefined ? { body: rest.content } : {}),
+          ...(rest.cardTitle !== undefined ? { cardTitle: rest.cardTitle } : {}),
+          ...(rest.cardImageUrl !== undefined ? { cardImageUrl: rest.cardImageUrl } : {}),
+          ...(rest.actions !== undefined ? { actions: rest.actions } : {}),
+          ...(rest.variables !== undefined ? { variables: rest.variables } : {}),
+        },
+      });
+    }),
+
+  deleteRcs: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const template = await ctx.prisma.rcsTemplate.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await ctx.prisma.rcsTemplate.delete({ where: { id: input.id } });
+      return { success: true };
     }),
 
   renderPreview: workspaceProcedure
@@ -261,5 +456,15 @@ export const templatesRouter = router({
         previewMode: true,
       });
       return { html };
+    }),
+
+  scoreSubjectLine: workspaceProcedure
+    .input(
+      z.object({
+        subject: z.string(),
+      })
+    )
+    .query(({ input }) => {
+      return scoreSubjectLine(input.subject);
     }),
 });

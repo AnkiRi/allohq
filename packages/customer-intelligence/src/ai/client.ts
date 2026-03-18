@@ -165,7 +165,8 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
   const jsonMode = request.jsonMode ?? false;
   const system = request.system;
 
-  const modelsToTry: AIModelId[] = [primaryModel, ...FALLBACK_CHAIN[primaryModel]];
+  const fallbacks = FALLBACK_CHAIN[primaryModel] ?? FALLBACK_CHAIN[DEFAULT_MODEL] ?? [];
+  const modelsToTry: AIModelId[] = [primaryModel, ...fallbacks];
 
   let lastError: Error | undefined;
 

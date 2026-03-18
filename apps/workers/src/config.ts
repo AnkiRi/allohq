@@ -46,4 +46,10 @@ export const QUEUE_NAMES = {
   REPURCHASE_REMINDER: "repurchase-reminder",
   INVENTORY_MONITOR: "inventory-monitor",
   STORE_ACTIVATION: "store-activation",
+  OUTCOME_ATTRIBUTION: "outcome-attribution",
+  CHURN_INTERVENTION: "churn-intervention",
+  BENCHMARK_AGGREGATE: "benchmark-aggregate",
+  CUSTOMER_VOICE: "customer-voice",
+  MEMORY_WRITER: "memory-writer",
+  DAILY_REVENUE_EMAIL: "daily-revenue-email",
 } as const;

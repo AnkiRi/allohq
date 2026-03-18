@@ -141,6 +141,13 @@ export default function AutomationDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Link
+            href={`/automations/${automationId}/ab-test`}
+            className="flex items-center gap-2 px-3 py-2 border border-pink-200 bg-pink-50 text-pink-700 rounded-lg text-xs font-mono font-bold hover:bg-pink-100 transition-all"
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            A/B Tests
+          </Link>
           {data.status === "ready" && (
             <button
               onClick={() => activateMut.mutate({ id: automationId })}

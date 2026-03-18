@@ -79,6 +79,12 @@ import { priceDropWorker } from "./workers/price-drop.worker";
 import { repurchaseReminderWorker } from "./workers/repurchase-reminder.worker";
 import { inventoryMonitorWorker } from "./workers/inventory-monitor.worker";
 import { storeActivationWorker } from "./workers/store-activation.worker";
+import { outcomeAttributionWorker } from "./workers/outcome-attribution.worker";
+import { churnInterventionWorker } from "./workers/churn-intervention.worker";
+import { benchmarkAggregatorWorker } from "./workers/benchmark-aggregator.worker";
+import { customerVoiceWorker } from "./workers/customer-voice.worker";
+import { memoryWriterWorker } from "./workers/memory-writer.worker";
+import { dailyRevenueEmailWorker } from "./workers/daily-revenue-email.worker";
 
 // Clean up stale Redis connections from previous ungraceful shutdowns.
 // When workers are force-killed (SIGKILL/kill -9), their blocking BullMQ
@@ -157,6 +163,12 @@ console.log(`  - price-drop worker: ${priceDropWorker.name}`);
 console.log(`  - repurchase-reminder worker: ${repurchaseReminderWorker.name}`);
 console.log(`  - inventory-monitor worker: ${inventoryMonitorWorker.name}`);
 console.log(`  - store-activation worker: ${storeActivationWorker.name}`);
+console.log(`  - outcome-attribution worker: ${outcomeAttributionWorker.name}`);
+console.log(`  - churn-intervention worker: ${churnInterventionWorker.name}`);
+console.log(`  - benchmark-aggregator worker: ${benchmarkAggregatorWorker.name}`);
+console.log(`  - customer-voice worker: ${customerVoiceWorker.name}`);
+console.log(`  - memory-writer worker: ${memoryWriterWorker.name}`);
+console.log(`  - daily-revenue-email worker: ${dailyRevenueEmailWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -288,6 +300,75 @@ inventoryMonitorQueue.upsertJobScheduler(
   console.error("Failed to set up inventory monitor schedule:", err.message);
 });
 
+// Schedule outcome attribution (hourly)
+const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, { connection: redisConnection });
+outcomeAttributionQueue.upsertJobScheduler(
+  "outcome-attribution-schedule",
+  { every: 60 * 60 * 1000 },
+  { name: "outcome-attribution", data: { type: "hourly" } }
+).catch((err) => {
+  console.error("Failed to set up outcome attribution schedule:", err.message);
+});
+
+// Schedule daily revenue summary (every 24 hours)
+outcomeAttributionQueue.upsertJobScheduler(
+  "daily-revenue-summary-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "daily-revenue-summary", data: { type: "daily-summary" } }
+).catch((err) => {
+  console.error("Failed to set up daily revenue summary schedule:", err.message);
+});
+
+// Schedule churn intervention scan (daily)
+const churnInterventionQueue = new Queue(QUEUE_NAMES.CHURN_INTERVENTION, { connection: redisConnection });
+churnInterventionQueue.upsertJobScheduler(
+  "churn-intervention-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "churn-intervention", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up churn intervention schedule:", err.message);
+});
+
+// Schedule benchmark aggregation (weekly)
+const benchmarkQueue = new Queue(QUEUE_NAMES.BENCHMARK_AGGREGATE, { connection: redisConnection });
+benchmarkQueue.upsertJobScheduler(
+  "benchmark-aggregate-schedule",
+  { every: 7 * 24 * 60 * 60 * 1000 },
+  { name: "benchmark-aggregate", data: { type: "weekly" } }
+).catch((err) => {
+  console.error("Failed to set up benchmark aggregate schedule:", err.message);
+});
+
+// Schedule customer voice synthesis (weekly — every Monday)
+const customerVoiceQueue = new Queue(QUEUE_NAMES.CUSTOMER_VOICE, { connection: redisConnection });
+customerVoiceQueue.upsertJobScheduler(
+  "customer-voice-schedule",
+  { every: 7 * 24 * 60 * 60 * 1000 },
+  { name: "customer-voice", data: { type: "weekly" } }
+).catch((err) => {
+  console.error("Failed to set up customer voice schedule:", err.message);
+});
+
+// Schedule daily revenue email (daily at ~8am — runs every 24 hours)
+const dailyRevenueEmailQueue = new Queue(QUEUE_NAMES.DAILY_REVENUE_EMAIL, { connection: redisConnection });
+dailyRevenueEmailQueue.upsertJobScheduler(
+  "daily-revenue-email-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "daily-revenue-email", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up daily revenue email schedule:", err.message);
+});
+
+// Schedule customer state decay (daily — recomputes stale lifecycle stages)
+const customerStateDecayQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
+customerStateDecayQueue.upsertJobScheduler(
+  "state-decay-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "state-decay", data: { type: "state_decay", customerId: "", storeId: "" } }
+).catch((err) => {
+  console.error("Failed to set up state decay schedule:", err.message);
+});
+
 // Graceful shutdown with timeout — if workers don't close in 5s, force exit.
 // This prevents zombie processes that hold Redis connections and block queues.
 const shutdown = async () => {
@@ -334,6 +415,12 @@ const shutdown = async () => {
       repurchaseReminderWorker.close(),
       inventoryMonitorWorker.close(),
       storeActivationWorker.close(),
+      outcomeAttributionWorker.close(),
+      churnInterventionWorker.close(),
+      benchmarkAggregatorWorker.close(),
+      customerVoiceWorker.close(),
+      memoryWriterWorker.close(),
+      dailyRevenueEmailWorker.close(),
     ]);
   } catch (err) {
     console.error("Error during shutdown:", (err as Error).message);

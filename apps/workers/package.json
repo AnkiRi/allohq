@@ -17,6 +17,7 @@
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
     "@allohq/email-builder": "workspace:*",
+    "@allohq/autonomy-engine": "workspace:*",
     "@allohq/communication-governor": "workspace:*",
     "@allohq/campaign-engine": "workspace:*",
     "@allohq/creative-engine": "workspace:*",

@@ -9,6 +9,7 @@ import {
   type DragEndEvent,
   pointerWithin,
 } from "@dnd-kit/core";
+import { useId } from "react";
 import {
   SortableContext,
   useSortable,
@@ -400,6 +401,7 @@ function deduplicateBlockIds(blocks: EmailBlock[]): EmailBlock[] {
 }
 
 export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateId }: EmailCanvasProps) {
+  const dndId = useId();
   const [blocks, setBlocks] = useState<EmailBlock[]>(() => deduplicateBlockIds(initialBlocks));
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -496,6 +498,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
 
   return (
     <DndContext
+      id={dndId}
       collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}

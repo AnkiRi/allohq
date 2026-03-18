@@ -1,4 +1,16 @@
-import type { EmailBlock, RenderOptions, ProductData, HeaderBlock, FooterBlock, ArchetypeRenderOptions } from "../types";
+import mjml2html from "mjml";
+import type {
+  EmailBlock,
+  RenderOptions,
+  ProductData,
+  HeaderBlock,
+  FooterBlock,
+  ArchetypeRenderOptions,
+} from "../types";
+
+// ============================================================================
+// Utility functions (preserved from original)
+// ============================================================================
 
 /** Interpolate merge tags like {{first_name}} in a string */
 function interpolate(text: string, variables: Record<string, string>): string {
@@ -21,84 +33,99 @@ function formatPrice(price: number): string {
   return `$${price.toFixed(2)}`;
 }
 
-/** Render a single block to HTML */
-function renderBlock(block: EmailBlock, options: RenderOptions): string {
+// ============================================================================
+// MJML Block Renderer
+// ============================================================================
+
+/** Render a single block to MJML markup */
+function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
   const { variables, products } = options;
 
   switch (block.type) {
     case "text": {
-      const { html, align = "left", fontSize = 16, color = "#333333", fontFamily = "Arial, sans-serif" } = block.props;
+      const {
+        html,
+        align = "left",
+        fontSize = 16,
+        color = "#333333",
+        fontFamily = "Arial, sans-serif",
+      } = block.props;
       const content = interpolate(html, variables);
       return `
-        <tr>
-          <td style="padding: 8px 24px; text-align: ${align}; font-size: ${fontSize}px; color: ${color}; font-family: ${fontFamily}; line-height: 1.6;">
-            ${content}
-          </td>
-        </tr>`;
+        <mj-section padding="0">
+          <mj-column>
+            <mj-text align="${align}" font-size="${fontSize}px" color="${color}" font-family="${fontFamily}" line-height="1.6" padding="8px 24px">
+              ${content}
+            </mj-text>
+          </mj-column>
+        </mj-section>`;
     }
 
     case "image": {
-      const { src, alt = "", width, height, href, align = "center" } = block.props;
-      const imgStyle = [
-        "max-width: 100%",
-        "display: block",
-        width ? `width: ${width}px` : "",
-        height ? `height: ${height}px` : "",
-      ].filter(Boolean).join("; ");
-      const img = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" style="${imgStyle}" />`;
-      const wrapped = href ? `<a href="${escapeHtml(interpolate(href, variables))}" target="_blank">${img}</a>` : img;
+      const { src, alt = "", width, href, align = "center" } = block.props;
+      if (!src) return ""; // Skip broken/empty images
+      const hrefAttr = href
+        ? ` href="${escapeHtml(interpolate(href, variables))}"`
+        : "";
       return `
-        <tr>
-          <td style="padding: 8px 24px; text-align: ${align};">
-            ${wrapped}
-          </td>
-        </tr>`;
+        <mj-section padding="0">
+          <mj-column>
+            <mj-image src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${width ? ` width="${width}px"` : ""} align="${align}"${hrefAttr} padding="8px 24px" />
+          </mj-column>
+        </mj-section>`;
     }
 
     case "button": {
-      const { text, href, bgColor = "#000000", textColor = "#FFFFFF", borderRadius = 4, align = "center", fullWidth = false } = block.props;
-      const btnStyle = [
-        `background-color: ${bgColor}`,
-        `color: ${textColor}`,
-        `border-radius: ${borderRadius}px`,
-        "padding: 12px 24px",
-        "text-decoration: none",
-        "font-family: Arial, sans-serif",
-        "font-size: 14px",
-        "font-weight: bold",
-        "display: inline-block",
-        fullWidth ? "width: 100%; text-align: center; box-sizing: border-box" : "",
-      ].filter(Boolean).join("; ");
+      const {
+        text,
+        href,
+        bgColor = "#000000",
+        textColor = "#FFFFFF",
+        borderRadius = 4,
+        align = "center",
+        fullWidth = false,
+      } = block.props;
       return `
-        <tr>
-          <td style="padding: 16px 24px; text-align: ${align};">
-            <a href="${escapeHtml(interpolate(href, variables))}" target="_blank" style="${btnStyle}">
+        <mj-section padding="0">
+          <mj-column>
+            <mj-button href="${escapeHtml(interpolate(href, variables))}" background-color="${bgColor}" color="${textColor}" border-radius="${borderRadius}px" align="${align}" font-size="14px" font-weight="bold" font-family="Arial, sans-serif" padding="16px 24px"${fullWidth ? ' width="100%"' : ""}>
               ${escapeHtml(interpolate(text, variables))}
-            </a>
-          </td>
-        </tr>`;
+            </mj-button>
+          </mj-column>
+        </mj-section>`;
     }
 
     case "divider": {
       const { color = "#E5E7EB", thickness = 1, margin = 16 } = block.props;
       return `
-        <tr>
-          <td style="padding: ${margin}px 24px;">
-            <hr style="border: none; border-top: ${thickness}px solid ${color}; margin: 0;" />
-          </td>
-        </tr>`;
+        <mj-section padding="0">
+          <mj-column>
+            <mj-divider border-color="${color}" border-width="${thickness}px" padding="${margin}px 24px" />
+          </mj-column>
+        </mj-section>`;
     }
 
     case "spacer": {
       const { height } = block.props;
       return `
-        <tr>
-          <td style="height: ${height}px; line-height: ${height}px; font-size: 1px;">&nbsp;</td>
-        </tr>`;
+        <mj-section padding="0">
+          <mj-column>
+            <mj-spacer height="${height}px" />
+          </mj-column>
+        </mj-section>`;
     }
 
     case "product": {
-      const { productId, showPrice = true, showDescription = true, showImage = true, buttonText = "Shop Now", buttonHref = "#", source } = block.props;
+      const {
+        productId,
+        showPrice = true,
+        showDescription = true,
+        showImage = true,
+        buttonText = "Shop Now",
+        buttonHref = "#",
+        source,
+      } = block.props;
+
       // For dynamic sources, try dynamicProducts first, then fall back to products map
       let product: ProductData | undefined;
       if (source && source !== "manual" && options.dynamicProducts?.length) {
@@ -106,218 +133,366 @@ function renderBlock(block: EmailBlock, options: RenderOptions): string {
       } else {
         product = products?.[productId];
       }
+
       if (!product) {
-        return `
-          <tr>
-            <td style="padding: 16px 24px; text-align: center; color: #999; font-family: Arial, sans-serif;">
-              ${options.previewMode ? "[Product placeholder]" : ""}
-            </td>
-          </tr>`;
+        return options.previewMode
+          ? `
+          <mj-section padding="16px 24px">
+            <mj-column>
+              <mj-text align="center" color="#999" font-family="Arial, sans-serif">[Product placeholder]</mj-text>
+            </mj-column>
+          </mj-section>`
+          : "";
       }
+
+      const imageColumn =
+        showImage && product.imageUrl
+          ? `
+            <mj-column width="40%" padding-right="16px">
+              <mj-image src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" border-radius="4px" />
+            </mj-column>`
+          : "";
+
+      const priceHtml = showPrice
+        ? `<p style="font-size: 16px; font-weight: bold; margin: 0 0 16px; color: #111;">
+            ${formatPrice(product.price)}
+            ${product.compareAtPrice ? `<span style="text-decoration: line-through; color: #999; font-weight: normal; margin-left: 8px;">${formatPrice(product.compareAtPrice)}</span>` : ""}
+          </p>`
+        : "";
+
+      const descHtml =
+        showDescription && product.description
+          ? `<p style="font-size: 14px; color: #666; margin: 0 0 12px; line-height: 1.5;">${escapeHtml(product.description)}</p>`
+          : "";
+
+      const textColumnWidth = showImage && product.imageUrl ? '60%' : '100%';
+
       return `
-        <tr>
-          <td style="padding: 16px 24px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                ${showImage && product.imageUrl ? `
-                  <td width="40%" style="padding-right: 16px; vertical-align: top;">
-                    <img src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" style="max-width: 100%; display: block; border-radius: 4px;" />
-                  </td>` : ""}
-                <td style="vertical-align: top; font-family: Arial, sans-serif;">
-                  <p style="font-size: 18px; font-weight: bold; margin: 0 0 8px; color: #111;">${escapeHtml(product.title)}</p>
-                  ${showDescription && product.description ? `<p style="font-size: 14px; color: #666; margin: 0 0 12px; line-height: 1.5;">${escapeHtml(product.description)}</p>` : ""}
-                  ${showPrice ? `
-                    <p style="font-size: 16px; font-weight: bold; margin: 0 0 16px; color: #111;">
-                      ${formatPrice(product.price)}
-                      ${product.compareAtPrice ? `<span style="text-decoration: line-through; color: #999; font-weight: normal; margin-left: 8px;">${formatPrice(product.compareAtPrice)}</span>` : ""}
-                    </p>` : ""}
-                  <a href="${escapeHtml(interpolate(buttonHref || "#", variables))}" target="_blank" style="background-color: #000; color: #fff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: bold; border-radius: 4px; display: inline-block;">
-                    ${escapeHtml(buttonText)}
-                  </a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>`;
+        <mj-section padding="16px 24px">
+          ${imageColumn}
+          <mj-column width="${textColumnWidth}">
+            <mj-text font-family="Arial, sans-serif" padding="0">
+              <p style="font-size: 18px; font-weight: bold; margin: 0 0 8px; color: #111;">${escapeHtml(product.title)}</p>
+              ${descHtml}
+              ${priceHtml}
+            </mj-text>
+            <mj-button href="${escapeHtml(interpolate(buttonHref || "#", variables))}" background-color="#000" color="#fff" font-size="13px" font-weight="bold" border-radius="4px" align="left" padding="0">
+              ${escapeHtml(buttonText)}
+            </mj-button>
+          </mj-column>
+        </mj-section>`;
     }
 
     case "product_grid": {
-      const { productIds, columns = 2, showPrice = true, showDescription = false, source: gridSource, dynamicProductCount } = block.props;
-      const colWidth = Math.floor(100 / columns);
+      const {
+        productIds,
+        columns = 2,
+        showPrice = true,
+        showDescription = false,
+        source: gridSource,
+        dynamicProductCount,
+      } = block.props;
 
       // For dynamic grids, use dynamicProducts instead of productIds
       let effectiveProductIds = productIds;
-      if (gridSource && gridSource !== "manual" && dynamicProductCount && options.dynamicProducts?.length) {
-        effectiveProductIds = options.dynamicProducts.slice(0, dynamicProductCount).map((p) => p.id);
+      if (
+        gridSource &&
+        gridSource !== "manual" &&
+        dynamicProductCount &&
+        options.dynamicProducts?.length
+      ) {
+        effectiveProductIds = options.dynamicProducts
+          .slice(0, dynamicProductCount)
+          .map((p) => p.id);
         // Inject dynamic products into the products map for rendering
         for (const dp of options.dynamicProducts) {
           if (!products?.[dp.id]) {
-            if (!options.products) (options as { products: Record<string, ProductData> }).products = {};
+            if (!options.products)
+              (options as { products: Record<string, ProductData> }).products =
+                {};
             options.products![dp.id] = dp;
           }
         }
       }
 
-      const productCells = effectiveProductIds.map((pid) => {
-        const product = products?.[pid];
-        if (!product) return `<td width="${colWidth}%" style="padding: 8px; vertical-align: top;"></td>`;
-        return `
-          <td width="${colWidth}%" style="padding: 8px; vertical-align: top; font-family: Arial, sans-serif;">
-            ${product.imageUrl ? `<img src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" style="max-width: 100%; display: block; border-radius: 4px; margin-bottom: 8px;" />` : ""}
-            <p style="font-size: 14px; font-weight: bold; margin: 0 0 4px; color: #111;">${escapeHtml(product.title)}</p>
-            ${showDescription && product.description ? `<p style="font-size: 12px; color: #666; margin: 0 0 4px;">${escapeHtml(product.description)}</p>` : ""}
-            ${showPrice ? `<p style="font-size: 14px; font-weight: bold; margin: 0; color: #111;">${formatPrice(product.price)}</p>` : ""}
-          </td>`;
-      });
-
-      // Split into rows
+      // Build rows of products, each row is an mj-section with columns
       const rows: string[] = [];
-      for (let i = 0; i < productCells.length; i += columns) {
-        const rowCells = productCells.slice(i, i + columns);
-        while (rowCells.length < columns) {
-          rowCells.push(`<td width="${colWidth}%" style="padding: 8px;"></td>`);
+      for (let i = 0; i < effectiveProductIds.length; i += columns) {
+        const rowIds = effectiveProductIds.slice(i, i + columns);
+        const columnMarkup = rowIds.map((pid) => {
+          const product = options.products?.[pid];
+          if (!product) {
+            return `<mj-column></mj-column>`;
+          }
+          return `
+            <mj-column padding="8px">
+              ${product.imageUrl ? `<mj-image src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" border-radius="4px" padding-bottom="8px" />` : ""}
+              <mj-text font-family="Arial, sans-serif" padding="0">
+                <p style="font-size: 14px; font-weight: bold; margin: 0 0 4px; color: #111;">${escapeHtml(product.title)}</p>
+                ${showDescription && product.description ? `<p style="font-size: 12px; color: #666; margin: 0 0 4px;">${escapeHtml(product.description)}</p>` : ""}
+                ${showPrice ? `<p style="font-size: 14px; font-weight: bold; margin: 0; color: #111;">${formatPrice(product.price)}</p>` : ""}
+              </mj-text>
+            </mj-column>`;
+        });
+
+        // Pad with empty columns if the last row is incomplete
+        while (columnMarkup.length < columns) {
+          columnMarkup.push(`<mj-column></mj-column>`);
         }
-        rows.push(`<tr>${rowCells.join("")}</tr>`);
+
+        rows.push(`
+          <mj-section padding="8px 16px">
+            ${columnMarkup.join("")}
+          </mj-section>`);
       }
 
-      return `
-        <tr>
-          <td style="padding: 8px 16px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              ${rows.join("")}
-            </table>
-          </td>
-        </tr>`;
+      return rows.join("\n");
     }
 
     case "columns": {
       const { columns, columnWidths } = block.props;
       const defaultWidth = Math.floor(100 / columns.length);
-      const cells = columns.map((colBlocks, i) => {
-        const width = columnWidths?.[i] ?? defaultWidth;
-        const inner = colBlocks.map((b) => renderBlock(b, options)).join("");
-        return `
-          <td width="${width}%" style="vertical-align: top;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              ${inner}
-            </table>
-          </td>`;
-      });
+      const columnMarkup = columns
+        .map((colBlocks, i) => {
+          const width = columnWidths?.[i] ?? defaultWidth;
+          // Since MJML doesn't allow mj-section inside mj-column, render inner content directly
+          const innerContent = colBlocks
+            .map((b) => renderBlockInnerMjml(b, options))
+            .join("");
+          return `
+            <mj-column width="${width}%">
+              ${innerContent}
+            </mj-column>`;
+        })
+        .join("");
+
       return `
-        <tr>
-          <td style="padding: 0 24px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>${cells.join("")}</tr>
-            </table>
-          </td>
-        </tr>`;
+        <mj-section padding="0 24px">
+          ${columnMarkup}
+        </mj-section>`;
     }
 
     case "social": {
       const { links } = block.props;
       if (links.length === 0) return "";
-      const items = links.map((link) => {
-        return `<a href="${escapeHtml(link.url)}" target="_blank" style="display: inline-block; margin: 0 8px; color: #666; text-decoration: none; font-size: 13px; font-family: Arial, sans-serif;">${escapeHtml(link.platform)}</a>`;
-      }).join("");
+      const elements = links
+        .map(
+          (link) =>
+            `<mj-social-element name="${escapeHtml(link.platform)}" href="${escapeHtml(link.url)}">${escapeHtml(link.platform)}</mj-social-element>`
+        )
+        .join("\n              ");
       return `
-        <tr>
-          <td style="padding: 16px 24px; text-align: center;">
-            ${items}
-          </td>
-        </tr>`;
+        <mj-section padding="0">
+          <mj-column>
+            <mj-social font-size="13px" icon-size="24px" mode="horizontal" padding="16px 24px">
+              ${elements}
+            </mj-social>
+          </mj-column>
+        </mj-section>`;
     }
 
     case "header": {
-      const { logoSrc, logoAlt = "", bgColor = "#FFFFFF", align = "center" } = block.props;
+      const {
+        logoSrc,
+        logoAlt = "",
+        bgColor = "#FFFFFF",
+        align = "center",
+      } = block.props;
       return `
-        <tr>
-          <td style="padding: 24px; text-align: ${align}; background-color: ${bgColor};">
-            ${logoSrc ? `<img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(logoAlt)}" style="max-height: 48px; display: inline-block;" />` : ""}
-          </td>
-        </tr>`;
+        <mj-section background-color="${bgColor}" padding="24px">
+          <mj-column>
+            ${logoSrc ? `<mj-image src="${escapeHtml(logoSrc)}" alt="${escapeHtml(logoAlt)}" align="${align}" width="150px" padding="0" />` : ""}
+          </mj-column>
+        </mj-section>`;
     }
 
     case "footer": {
       const { text, unsubscribeText = "Unsubscribe" } = block.props;
+      const unsubUrl = variables.unsubscribe_url ?? "#";
       return `
-        <tr>
-          <td style="padding: 24px; text-align: center; font-size: 12px; color: #999; font-family: Arial, sans-serif; line-height: 1.5;">
-            <p style="margin: 0 0 8px;">${interpolate(text, variables)}</p>
-            <a href="${variables.unsubscribe_url ?? '#'}" style="color: #999; text-decoration: underline;">${escapeHtml(unsubscribeText)}</a>
-          </td>
-        </tr>`;
+        <mj-section padding="24px">
+          <mj-column>
+            <mj-text align="center" font-size="12px" color="#999" font-family="Arial, sans-serif" line-height="1.5" padding="0 0 8px 0">
+              <p style="margin: 0;">${interpolate(text, variables)}</p>
+            </mj-text>
+            <mj-text align="center" font-size="12px" padding="0">
+              <a href="${escapeHtml(unsubUrl)}" style="color: #999; text-decoration: underline;">${escapeHtml(unsubscribeText)}</a>
+            </mj-text>
+          </mj-column>
+        </mj-section>`;
     }
 
     case "hero": {
-      const { heading, subtext, buttonText, buttonHref, bgColor = "#000000", textColor = "#FFFFFF", align = "center" } = block.props;
-      const bgImage = block.props.bgImageSrc ? `background-image: url('${escapeHtml(block.props.bgImageSrc)}'); background-size: cover; background-position: center;` : "";
+      const {
+        heading,
+        subtext,
+        buttonText,
+        buttonHref,
+        bgColor = "#000000",
+        textColor = "#FFFFFF",
+        align = "center",
+        bgImageSrc,
+      } = block.props;
+
+      const bgImageAttr = bgImageSrc
+        ? ` background-url="${escapeHtml(bgImageSrc)}" background-size="cover" background-position="center"`
+        : "";
+
       return `
-        <tr>
-          <td style="padding: 48px 32px; text-align: ${align}; background-color: ${bgColor}; ${bgImage} font-family: Arial, sans-serif;">
-            <h1 style="margin: 0 0 12px; font-size: 32px; font-weight: bold; color: ${textColor}; line-height: 1.2;">${escapeHtml(interpolate(heading, variables))}</h1>
-            ${subtext ? `<p style="margin: 0 0 24px; font-size: 16px; color: ${textColor}; opacity: 0.85; line-height: 1.5;">${escapeHtml(interpolate(subtext, variables))}</p>` : ""}
-            ${buttonText && buttonHref ? `<a href="${escapeHtml(interpolate(buttonHref, variables))}" target="_blank" style="display: inline-block; padding: 14px 32px; background-color: ${textColor}; color: ${bgColor}; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 6px;">${escapeHtml(interpolate(buttonText, variables))}</a>` : ""}
-          </td>
-        </tr>`;
+        <mj-hero mode="fluid-height" background-color="${bgColor}"${bgImageAttr} padding="48px 32px">
+          <mj-text align="${align}" color="${textColor}" font-family="Arial, sans-serif" font-size="32px" font-weight="bold" line-height="1.2" padding="0 0 12px 0">
+            ${escapeHtml(interpolate(heading, variables))}
+          </mj-text>
+          ${subtext ? `<mj-text align="${align}" color="${textColor}" font-family="Arial, sans-serif" font-size="16px" line-height="1.5" padding="0 0 24px 0" css-class="hero-subtext"><span style="opacity: 0.85;">${escapeHtml(interpolate(subtext, variables))}</span></mj-text>` : ""}
+          ${buttonText && buttonHref ? `<mj-button href="${escapeHtml(interpolate(buttonHref, variables))}" background-color="${textColor}" color="${bgColor}" font-size="14px" font-weight="bold" border-radius="6px" align="${align}">${escapeHtml(interpolate(buttonText, variables))}</mj-button>` : ""}
+        </mj-hero>`;
     }
 
     case "icon_row": {
       const { items } = block.props;
-      const colWidth = Math.floor(100 / Math.max(items.length, 1));
-      const cells = items.map((item) => `
-        <td width="${colWidth}%" style="padding: 16px 8px; text-align: center; vertical-align: top; font-family: Arial, sans-serif;">
-          <div style="font-size: 28px; line-height: 1; margin-bottom: 8px;">${escapeHtml(item.icon)}</div>
-          <p style="margin: 0; font-size: 13px; font-weight: bold; color: #333;">${escapeHtml(item.label)}</p>
-          ${item.description ? `<p style="margin: 4px 0 0; font-size: 11px; color: #999;">${escapeHtml(item.description)}</p>` : ""}
-        </td>`).join("");
+      const columnMarkup = items
+        .map(
+          (item) => `
+            <mj-column padding="16px 8px">
+              <mj-text align="center" font-family="Arial, sans-serif" padding="0">
+                <div style="font-size: 28px; line-height: 1; margin-bottom: 8px;">${escapeHtml(item.icon)}</div>
+                <p style="margin: 0; font-size: 13px; font-weight: bold; color: #333;">${escapeHtml(item.label)}</p>
+                ${item.description ? `<p style="margin: 4px 0 0; font-size: 11px; color: #999;">${escapeHtml(item.description)}</p>` : ""}
+              </mj-text>
+            </mj-column>`
+        )
+        .join("");
+
       return `
-        <tr>
-          <td style="padding: 8px 24px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>${cells}</tr>
-            </table>
-          </td>
-        </tr>`;
+        <mj-section padding="8px 24px">
+          ${columnMarkup}
+        </mj-section>`;
     }
 
     case "countdown": {
-      const { endDate, label, bgColor = "#FF0000", textColor = "#FFFFFF" } = block.props;
+      const {
+        endDate,
+        label,
+        bgColor = "#FF0000",
+        textColor = "#FFFFFF",
+      } = block.props;
       const end = new Date(endDate);
       const now = new Date();
       const diffMs = Math.max(0, end.getTime() - now.getTime());
       const days = Math.ceil(diffMs / 86400000);
-      const displayText = days > 0 ? `${days} day${days !== 1 ? "s" : ""} left` : "Ending soon!";
+      const displayText =
+        days > 0 ? `${days} day${days !== 1 ? "s" : ""} left` : "Ending soon!";
+
       return `
-        <tr>
-          <td style="padding: 20px 24px; text-align: center; background-color: ${bgColor}; font-family: Arial, sans-serif;">
-            <p style="margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: ${textColor}; opacity: 0.85;">${escapeHtml(interpolate(label, variables))}</p>
-            <p style="margin: 0; font-size: 28px; font-weight: bold; color: ${textColor};">${displayText}</p>
-          </td>
-        </tr>`;
+        <mj-section background-color="${bgColor}" padding="20px 24px">
+          <mj-column>
+            <mj-text align="center" color="${textColor}" font-family="Arial, sans-serif" font-size="13px" padding="0 0 4px 0" css-class="countdown-label">
+              <span style="text-transform: uppercase; letter-spacing: 1px; opacity: 0.85;">${escapeHtml(interpolate(label, variables))}</span>
+            </mj-text>
+            <mj-text align="center" color="${textColor}" font-family="Arial, sans-serif" font-size="28px" font-weight="bold" padding="0">
+              ${displayText}
+            </mj-text>
+          </mj-column>
+        </mj-section>`;
     }
 
     case "testimonial": {
       const { quote, author, rating, avatarUrl } = block.props;
-      const stars = rating ? "★".repeat(Math.min(rating, 5)) + "☆".repeat(Math.max(0, 5 - rating)) : "";
+      const stars = rating
+        ? "&#9733;".repeat(Math.min(rating, 5)) +
+          "&#9734;".repeat(Math.max(0, 5 - rating))
+        : "";
+
+      const avatarHtml = avatarUrl
+        ? `<img src="${escapeHtml(avatarUrl)}" alt="" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; vertical-align: middle;" />`
+        : "";
+
       return `
-        <tr>
-          <td style="padding: 24px 32px; font-family: Arial, sans-serif;">
-            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 24px; border-left: 4px solid #E5E7EB;">
-              ${stars ? `<p style="margin: 0 0 8px; font-size: 18px; color: #F59E0B; letter-spacing: 2px;">${stars}</p>` : ""}
-              <p style="margin: 0 0 12px; font-size: 15px; font-style: italic; color: #374151; line-height: 1.6;">"${escapeHtml(interpolate(quote, variables))}"</p>
-              <div style="display: flex; align-items: center;">
-                ${avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px;" />` : ""}
-                <p style="margin: 0; font-size: 13px; font-weight: bold; color: #6B7280;">— ${escapeHtml(author)}</p>
+        <mj-section padding="24px 32px">
+          <mj-column>
+            <mj-text font-family="Arial, sans-serif" padding="0">
+              <div style="background-color: #F9FAFB; border-radius: 12px; padding: 24px; border-left: 4px solid #E5E7EB;">
+                ${stars ? `<p style="margin: 0 0 8px; font-size: 18px; color: #F59E0B; letter-spacing: 2px;">${stars}</p>` : ""}
+                <p style="margin: 0 0 12px; font-size: 15px; font-style: italic; color: #374151; line-height: 1.6;">"${escapeHtml(interpolate(quote, variables))}"</p>
+                <div>
+                  ${avatarHtml}
+                  <span style="font-size: 13px; font-weight: bold; color: #6B7280; vertical-align: middle;">&#8212; ${escapeHtml(author)}</span>
+                </div>
               </div>
-            </div>
-          </td>
-        </tr>`;
+            </mj-text>
+          </mj-column>
+        </mj-section>`;
     }
 
     default:
       return "";
   }
 }
+
+/**
+ * Render a block's inner content (without wrapping mj-section) for use inside mj-column.
+ * Used for nested blocks inside columns.
+ */
+function renderBlockInnerMjml(
+  block: EmailBlock,
+  options: RenderOptions
+): string {
+  const { variables } = options;
+
+  switch (block.type) {
+    case "text": {
+      const {
+        html,
+        align = "left",
+        fontSize = 16,
+        color = "#333333",
+        fontFamily = "Arial, sans-serif",
+      } = block.props;
+      const content = interpolate(html, variables);
+      return `<mj-text align="${align}" font-size="${fontSize}px" color="${color}" font-family="${fontFamily}" line-height="1.6" padding="8px 0">${content}</mj-text>`;
+    }
+
+    case "image": {
+      const { src, alt = "", width, href, align = "center" } = block.props;
+      if (!src) return ""; // Skip broken/empty images
+      const hrefAttr = href
+        ? ` href="${escapeHtml(interpolate(href, variables))}"`
+        : "";
+      return `<mj-image src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${width ? ` width="${width}px"` : ""} align="${align}"${hrefAttr} padding="8px 0" />`;
+    }
+
+    case "button": {
+      const {
+        text,
+        href,
+        bgColor = "#000000",
+        textColor = "#FFFFFF",
+        borderRadius = 4,
+        align = "center",
+        fullWidth = false,
+      } = block.props;
+      return `<mj-button href="${escapeHtml(interpolate(href, variables))}" background-color="${bgColor}" color="${textColor}" border-radius="${borderRadius}px" align="${align}" font-size="14px" font-weight="bold" font-family="Arial, sans-serif" padding="8px 0"${fullWidth ? ' width="100%"' : ""}>${escapeHtml(interpolate(text, variables))}</mj-button>`;
+    }
+
+    case "divider": {
+      const { color = "#E5E7EB", thickness = 1, margin = 16 } = block.props;
+      return `<mj-divider border-color="${color}" border-width="${thickness}px" padding="${margin}px 0" />`;
+    }
+
+    case "spacer": {
+      const { height } = block.props;
+      return `<mj-spacer height="${height}px" />`;
+    }
+
+    default:
+      // For complex block types inside columns, fall back to text rendering
+      return "";
+  }
+}
+
+// ============================================================================
+// UTM Injection (preserved from original, applied AFTER MJML compilation)
+// ============================================================================
 
 /** Inject UTM params into all <a href> URLs matching the store domain */
 function injectUtmParams(html: string, options: RenderOptions): string {
@@ -326,7 +501,11 @@ function injectUtmParams(html: string, options: RenderOptions): string {
 
   return html.replace(/href="([^"]+)"/g, (_match, url: string) => {
     // Skip unsubscribe, mailto, anchor-only links
-    if (url.startsWith("mailto:") || url.startsWith("#") || url.includes("unsubscribe")) {
+    if (
+      url.startsWith("mailto:") ||
+      url.startsWith("#") ||
+      url.includes("unsubscribe")
+    ) {
       return `href="${url}"`;
     }
     // Skip non-http links
@@ -342,18 +521,30 @@ function injectUtmParams(html: string, options: RenderOptions): string {
       `utm_source=${encodeURIComponent(tracking.utmSource)}`,
       `utm_medium=${encodeURIComponent(tracking.utmMedium)}`,
       `utm_campaign=${encodeURIComponent(tracking.utmCampaign)}`,
-      ...(tracking.utmContent ? [`utm_content=${encodeURIComponent(tracking.utmContent)}`] : []),
+      ...(tracking.utmContent
+        ? [`utm_content=${encodeURIComponent(tracking.utmContent)}`]
+        : []),
     ].join("&");
     return `href="${url}${separator}${params}"`;
   });
 }
 
-/** Render an array of email blocks to a complete HTML email string */
-export function renderToHtml(blocks: EmailBlock[], options: RenderOptions): string {
+// ============================================================================
+// Main render function
+// ============================================================================
+
+/** Render an array of email blocks to a complete HTML email string via MJML */
+export function renderToHtml(
+  blocks: EmailBlock[],
+  options: RenderOptions
+): string {
   let finalBlocks = [...blocks];
 
   // Auto-inject header if brandSettings has a logo but blocks don't start with header
-  if (options.brandSettings?.logoUrl && finalBlocks[0]?.type !== "header") {
+  if (
+    options.brandSettings?.logoUrl &&
+    finalBlocks[0]?.type !== "header"
+  ) {
     const headerBlock: HeaderBlock = {
       id: "auto-header",
       type: "header",
@@ -367,15 +558,20 @@ export function renderToHtml(blocks: EmailBlock[], options: RenderOptions): stri
   }
 
   // Auto-inject footer if brandSettings exist but blocks don't end with footer
-  if (options.brandSettings && finalBlocks[finalBlocks.length - 1]?.type !== "footer") {
+  if (
+    options.brandSettings &&
+    finalBlocks[finalBlocks.length - 1]?.type !== "footer"
+  ) {
     const bs = options.brandSettings;
     const footerParts: string[] = [];
-    if (bs.showAddress !== false && bs.address) footerParts.push(`${bs.storeName ?? ""} · ${bs.address}`);
+    if (bs.showAddress !== false && bs.address)
+      footerParts.push(`${bs.storeName ?? ""} · ${bs.address}`);
     if (bs.showSocialLinks !== false && bs.socialLinks?.length) {
       footerParts.push(bs.socialLinks.map((l) => l.platform).join(" · "));
     }
     if (bs.footerText) footerParts.push(bs.footerText);
-    if (footerParts.length === 0 && bs.storeName) footerParts.push(bs.storeName);
+    if (footerParts.length === 0 && bs.storeName)
+      footerParts.push(bs.storeName);
 
     const footerBlock: FooterBlock = {
       id: "auto-footer",
@@ -388,52 +584,44 @@ export function renderToHtml(blocks: EmailBlock[], options: RenderOptions): stri
     finalBlocks.push(footerBlock);
   }
 
-  let blockHtml = finalBlocks.map((block) => renderBlock(block, options)).join("\n");
+  // Build block MJML markup
+  const blockMjml = finalBlocks
+    .map((block) => renderBlockToMjml(block, options))
+    .join("\n");
 
-  // Inject UTM tracking params
-  blockHtml = injectUtmParams(blockHtml, options);
+  // Compose full MJML document
+  const mjmlString = `
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="Arial, sans-serif" />
+      <mj-text color="#333333" />
+      <mj-body background-color="#F5F5F5" />
+    </mj-attributes>
+    <mj-style>
+      .email-container { max-width: 600px; }
+    </mj-style>
+    <mj-breakpoint width="600px" />
+  </mj-head>
+  <mj-body background-color="#F5F5F5" width="600px">
+    <mj-wrapper background-color="#FFFFFF" border-radius="8px" padding="0">
+      ${blockMjml}
+    </mj-wrapper>
+  </mj-body>
+</mjml>`;
 
-  return `<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title></title>
-  <!--[if mso]>
-  <noscript>
-    <xml>
-      <o:OfficeDocumentSettings>
-        <o:PixelsPerInch>96</o:PixelsPerInch>
-      </o:OfficeDocumentSettings>
-    </xml>
-  </noscript>
-  <![endif]-->
-  <style type="text/css">
-    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
-    body { margin: 0; padding: 0; width: 100% !important; }
-    @media only screen and (max-width: 620px) {
-      .email-container { width: 100% !important; max-width: 100% !important; }
-      .email-container td { padding-left: 16px !important; padding-right: 16px !important; }
-    }
-  </style>
-</head>
-<body style="margin: 0; padding: 0; background-color: #F5F5F5;">
-  <center>
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F5F5F5;">
-      <tr>
-        <td style="padding: 24px 0;">
-          <table class="email-container" role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" align="center" style="max-width: 600px; background-color: #FFFFFF; border-radius: 8px; overflow: hidden;">
-${blockHtml}
-          </table>
-        </td>
-      </tr>
-    </table>
-  </center>
-</body>
-</html>`;
+  // Compile MJML to HTML
+  const { html, errors } = mjml2html(mjmlString, {
+    validationLevel: "soft",
+    minify: false,
+  });
+
+  // MJML validation errors are non-fatal; we silently ignore them.
+  // The compiled HTML is still usable even with soft validation warnings.
+  void errors;
+
+  // Apply UTM injection on the compiled HTML
+  return injectUtmParams(html, options);
 }
 
 /**
@@ -447,7 +635,9 @@ ${blockHtml}
  * This export exists so email-builder exposes the type and concept,
  * keeping it as the single "email rendering" API surface.
  */
-export function renderFromArchetype(_options: ArchetypeRenderOptions): string | null {
+export function renderFromArchetype(
+  _options: ArchetypeRenderOptions
+): string | null {
   // Consumers should use @allohq/creative-engine.renderMjmlTemplate() directly.
   // This stub exists to maintain the API surface in email-builder.
   return null;

@@ -459,6 +459,157 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
   );
 }
 
+function NotificationPreferencesSection() {
+  const { toast } = useToast();
+  const { data: prefs, isLoading } = trpc.notifications.getPreferences.useQuery();
+  const utils = trpc.useUtils();
+  const upsert = trpc.notifications.upsertPreferences.useMutation({
+    onSuccess: () => {
+      utils.notifications.getPreferences.invalidate();
+      toast("Notification preferences saved", "success");
+    },
+    onError: (err) => toast(err.message, "error"),
+  });
+
+  const toggle = (field: string, value: boolean) => {
+    upsert.mutate({ [field]: value });
+  };
+
+  const channels = [
+    { key: "emailDigest", label: "Daily Email Digest", desc: "Summary of activity sent once per day" },
+    { key: "emailRealtime", label: "Real-time Email", desc: "Immediate email for each event" },
+    { key: "inApp", label: "In-App Notifications", desc: "Notifications inside the dashboard" },
+  ] as const;
+
+  const events = [
+    { key: "onActionRequired", label: "Action Required", desc: "Agent needs your approval" },
+    { key: "onCampaignSent", label: "Campaign Sent", desc: "A campaign finished sending" },
+    { key: "onEscalation", label: "Escalations", desc: "Conversation escalated to human" },
+    { key: "onChurnAlert", label: "Churn Alerts", desc: "Customer churn risk spike detected" },
+    { key: "onRevenueGoal", label: "Revenue Milestones", desc: "Revenue goal reached" },
+    { key: "onWeeklyReport", label: "Weekly Report", desc: "Weekly performance summary" },
+  ] as const;
+
+  if (isLoading) {
+    return (
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Bell className="w-4 h-4 text-muted-foreground" />
+          <h2 className="section-header accent-bar-left text-[13px]">NOTIFICATIONS</h2>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-10 glass-skeleton rounded-lg" />)}
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Use defaults if no preferences saved yet
+  const p = {
+    emailDigest: prefs?.emailDigest ?? true,
+    emailRealtime: prefs?.emailRealtime ?? false,
+    inApp: prefs?.inApp ?? true,
+    onActionRequired: prefs?.onActionRequired ?? true,
+    onCampaignSent: prefs?.onCampaignSent ?? true,
+    onEscalation: prefs?.onEscalation ?? true,
+    onChurnAlert: prefs?.onChurnAlert ?? true,
+    onRevenueGoal: prefs?.onRevenueGoal ?? false,
+    onWeeklyReport: prefs?.onWeeklyReport ?? true,
+    quietHoursStart: prefs?.quietHoursStart ?? null,
+    quietHoursEnd: prefs?.quietHoursEnd ?? null,
+    timezone: prefs?.timezone ?? "UTC",
+  };
+
+  return (
+    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Bell className="w-4 h-4 text-muted-foreground" />
+        <h2 className="section-header accent-bar-left text-[13px]">NOTIFICATIONS</h2>
+      </div>
+
+      {/* Channels */}
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Delivery Channels</p>
+      <div className="space-y-2 mb-6">
+        {channels.map((ch) => (
+          <button
+            key={ch.key}
+            onClick={() => toggle(ch.key, !p[ch.key])}
+            disabled={upsert.isPending}
+            className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all"
+          >
+            <div className="text-left">
+              <p className="text-[11px] font-mono font-bold text-foreground">{ch.label}</p>
+              <p className="text-[10px] font-mono text-muted-foreground">{ch.desc}</p>
+            </div>
+            <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ch.key] ? "bg-[var(--olive)]" : "bg-white/20"}`}>
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ch.key] ? "translate-x-4" : "translate-x-0.5"}`} />
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Events */}
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Event Types</p>
+      <div className="space-y-2 mb-6">
+        {events.map((ev) => (
+          <button
+            key={ev.key}
+            onClick={() => toggle(ev.key, !p[ev.key])}
+            disabled={upsert.isPending}
+            className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all"
+          >
+            <div className="text-left">
+              <p className="text-[11px] font-mono font-bold text-foreground">{ev.label}</p>
+              <p className="text-[10px] font-mono text-muted-foreground">{ev.desc}</p>
+            </div>
+            <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ev.key] ? "bg-[var(--olive)]" : "bg-white/20"}`}>
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ev.key] ? "translate-x-4" : "translate-x-0.5"}`} />
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Quiet Hours */}
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Quiet Hours</p>
+      <div className="flex items-center gap-3">
+        <select
+          value={p.quietHoursStart ?? ""}
+          onChange={(e) => upsert.mutate({ quietHoursStart: e.target.value === "" ? null : Number(e.target.value) })}
+          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
+        >
+          <option value="">Off</option>
+          {Array.from({ length: 24 }, (_, i) => (
+            <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
+          ))}
+        </select>
+        <span className="text-[10px] text-muted-foreground font-mono">to</span>
+        <select
+          value={p.quietHoursEnd ?? ""}
+          onChange={(e) => upsert.mutate({ quietHoursEnd: e.target.value === "" ? null : Number(e.target.value) })}
+          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
+        >
+          <option value="">Off</option>
+          {Array.from({ length: 24 }, (_, i) => (
+            <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
+          ))}
+        </select>
+        <select
+          value={p.timezone}
+          onChange={(e) => upsert.mutate({ timezone: e.target.value })}
+          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
+        >
+          {["UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Asia/Kolkata", "Australia/Sydney"].map((tz) => (
+            <option key={tz} value={tz}>{tz.replace("_", " ")}</option>
+          ))}
+        </select>
+      </div>
+      <p className="text-[10px] text-muted-foreground font-mono mt-2">
+        No notifications during quiet hours (does not affect critical escalations)
+      </p>
+    </motion.div>
+  );
+}
+
 function SuppressionStatsSection() {
   const [days, setDays] = useState(7);
   const { data } = (trpc.dashboard.suppressionStats as any).useQuery(
@@ -778,34 +929,24 @@ export default function SettingsPage() {
       {/* Message Protection — fatigue suppression stats */}
       <SuppressionStatsSection />
 
-      {/* Coming Soon sections */}
-      {[
-        {
-          icon: Bell,
-          title: "NOTIFICATIONS",
-          description: "Email and in-app notification preferences are coming in our next update.",
-        },
-        {
-          icon: CreditCard,
-          title: "BILLING",
-          description: "Subscription management and payment methods are coming in our next update.",
-        },
-      ].map((section) => (
-        <motion.div key={section.title} variants={itemVariants} className="glass-card-static rounded-xl p-6 opacity-80">
-          <div className="flex items-center gap-3 mb-4">
-            <section.icon className="w-4 h-4 text-muted-foreground" />
-            <h2 className="section-header accent-bar-left text-[13px]">{section.title}</h2>
-          </div>
-          <div className="py-6">
-            <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
-              {section.description}
-            </p>
-            <p className="text-[11px] font-mono mt-3" style={{ color: "var(--terracotta)" }}>
-              We'll notify you when this is available
-            </p>
-          </div>
-        </motion.div>
-      ))}
+      {/* Notification Preferences */}
+      <NotificationPreferencesSection />
+
+      {/* Billing — Coming Soon */}
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 opacity-80">
+        <div className="flex items-center gap-3 mb-4">
+          <CreditCard className="w-4 h-4 text-muted-foreground" />
+          <h2 className="section-header accent-bar-left text-[13px]">BILLING</h2>
+        </div>
+        <div className="py-6">
+          <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
+            Subscription management and payment methods are coming in our next update.
+          </p>
+          <p className="text-[11px] font-mono mt-3" style={{ color: "var(--terracotta)" }}>
+            We&apos;ll notify you when this is available
+          </p>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

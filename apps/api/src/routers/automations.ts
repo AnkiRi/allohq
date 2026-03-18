@@ -594,4 +594,143 @@ export const automationsRouter = router({
         orderBy: { startedAt: "desc" },
       });
     }),
+
+  /** Get a single A/B test by id */
+  getABTest: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const test = await ctx.prisma.aBTest.findFirst({
+        where: { id: input.id },
+        include: { store: { select: { workspaceId: true } } },
+      });
+      if (!test || test.store.workspaceId !== ctx.workspaceId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return test;
+    }),
+
+  /** Create a new A/B test */
+  createABTest: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        automationId: z.string(),
+        name: z.string(),
+        variable: z.enum(["subject_line", "send_time", "discount_level", "channel", "content"]),
+        variantA: z.record(z.unknown()),
+        variantB: z.record(z.unknown()),
+        splitRatio: z.number().min(0.1).max(0.9).default(0.5),
+        minSampleSize: z.number().min(50).default(200),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify the automation belongs to this workspace
+      const automation = await ctx.prisma.automation.findFirst({
+        where: { id: input.automationId, workspaceId: ctx.workspaceId, storeId: input.storeId },
+      });
+      if (!automation) throw new TRPCError({ code: "NOT_FOUND", message: "Automation not found" });
+
+      return ctx.prisma.aBTest.create({
+        data: {
+          storeId: input.storeId,
+          automationId: input.automationId,
+          name: input.name,
+          variable: input.variable,
+          variantA: input.variantA as any,
+          variantB: input.variantB as any,
+          splitRatio: input.splitRatio,
+          minSampleSize: input.minSampleSize,
+          status: "draft",
+        },
+      });
+    }),
+
+  /** Update an A/B test */
+  updateABTest: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        status: z.enum(["draft", "running", "concluded", "cancelled"]).optional(),
+        variantA: z.record(z.unknown()).optional(),
+        variantB: z.record(z.unknown()).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...data } = input;
+      const test = await ctx.prisma.aBTest.findFirst({
+        where: { id },
+        include: { store: { select: { workspaceId: true } } },
+      });
+      if (!test || test.store.workspaceId !== ctx.workspaceId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const updateData: Record<string, unknown> = {};
+      if (data.name !== undefined) updateData["name"] = data.name;
+      if (data.variantA !== undefined) updateData["variantA"] = data.variantA as any;
+      if (data.variantB !== undefined) updateData["variantB"] = data.variantB as any;
+      if (data.status !== undefined) {
+        updateData["status"] = data.status;
+        if (data.status === "running" && test.status === "draft") {
+          updateData["startedAt"] = new Date();
+        }
+        if (data.status === "concluded" || data.status === "cancelled") {
+          updateData["concludedAt"] = new Date();
+        }
+      }
+
+      return ctx.prisma.aBTest.update({ where: { id }, data: updateData });
+    }),
+
+  /** Get A/B test results with full stats */
+  getABTestResults: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const test = await ctx.prisma.aBTest.findFirst({
+        where: { id: input.id },
+        include: { store: { select: { workspaceId: true } } },
+      });
+      if (!test || test.store.workspaceId !== ctx.workspaceId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const { getTestResults } = await import("@allohq/campaign-engine");
+      return getTestResults(input.id);
+    }),
+
+  /** Manually evaluate an A/B test (triggers stat re-computation) */
+  evaluateABTest: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const test = await ctx.prisma.aBTest.findFirst({
+        where: { id: input.id },
+        include: { store: { select: { workspaceId: true } } },
+      });
+      if (!test || test.store.workspaceId !== ctx.workspaceId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const { evaluateTest } = await import("@allohq/campaign-engine");
+      return evaluateTest(input.id);
+    }),
+
+  /** Delete an A/B test */
+  deleteABTest: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const test = await ctx.prisma.aBTest.findFirst({
+        where: { id: input.id },
+        include: { store: { select: { workspaceId: true } } },
+      });
+      if (!test || test.store.workspaceId !== ctx.workspaceId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (test.status === "running") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Cancel a running test before deleting" });
+      }
+
+      await ctx.prisma.aBTest.delete({ where: { id: input.id } });
+      return { success: true };
+    }),
 });

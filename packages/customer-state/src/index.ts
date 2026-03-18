@@ -20,4 +20,6 @@ export { detectIntent } from "./intent-detector";
 export { computeChannelPreference } from "./channel-preference";
 export { computeFatigueState, isOverFatigueLimit } from "./fatigue-tracker";
 export { predictReorderTiming } from "./reorder-predictor";
-export { computeFullState, updateStateOnEvent } from "./state-engine";
+export { computeFullState, updateStateOnEvent, decayStaleStates } from "./state-engine";
+export { computeChurnProbability } from "./churn-prediction";
+export type { ChurnSignals } from "./churn-prediction";

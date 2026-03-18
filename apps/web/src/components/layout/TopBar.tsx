@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search } from "lucide-react";
+import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search, Sun, Moon } from "lucide-react";
 import Link from "next/link";
 import { useMobileSidebar } from "./MobileSidebarContext";
+import { useTheme } from "@/components/theme/ThemeProvider";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
@@ -43,6 +44,7 @@ function getBreadcrumb(pathname: string): string[] {
 
 export function TopBar() {
   const { toggle } = useMobileSidebar();
+  const { theme, mounted, toggleTheme } = useTheme();
   const pathname = usePathname();
   const commandPalette = useCommandPalette();
   const isDashboard = pathname === "/dashboard";
@@ -94,7 +96,7 @@ export function TopBar() {
         {/* Hamburger — visible on mobile only */}
         <button
           onClick={toggle}
-          className="p-1.5 rounded-lg hover:bg-white/30 transition-colors md:hidden"
+          className="p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-white/10 transition-colors md:hidden"
         >
           <Menu className="w-5 h-5 text-foreground" />
         </button>
@@ -173,17 +175,32 @@ export function TopBar() {
         {/* Command Palette Trigger */}
         <button
           onClick={commandPalette.open}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/3 hover:bg-black/5 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/3 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
         >
           <Search className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-[11px] text-muted-foreground hidden sm:inline">Search...</span>
-          <kbd className="text-[10px] font-mono text-muted-foreground/60 bg-white/80 px-1.5 py-0.5 rounded border border-black/5 hidden sm:inline">
+          <kbd className="text-[10px] font-mono text-muted-foreground/60 bg-white/80 dark:bg-white/10 px-1.5 py-0.5 rounded border border-black/5 dark:border-white/10 hidden sm:inline">
             ⌘K
           </kbd>
         </button>
 
+        {/* Dark mode toggle */}
+        {mounted && (
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/8 transition-colors"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <Moon className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
+        )}
+
         {/* Bell */}
-        <button className="relative p-2 rounded-lg hover:bg-black/3 transition-colors">
+        <button className="relative p-2 rounded-lg hover:bg-black/3 dark:hover:bg-white/5 transition-colors">
           <Bell className="w-4 h-4 text-muted-foreground" />
           <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#c4704a]" />
         </button>

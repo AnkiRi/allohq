@@ -3,14 +3,47 @@ import { router, protectedProcedure } from "../trpc";
 import { getMissionControlData, getBaseline, generateStoreReport } from "@allohq/merchant-copilot";
 
 export const briefingsRouter = router({
-  /** Get the latest briefing for a store */
+  /** Get the latest briefing for a store, enriched with customer voice themes */
   latest: protectedProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.merchantBriefing.findFirst({
-        where: { storeId: input.storeId },
-        orderBy: { createdAt: "desc" },
-      });
+      const [briefing, voiceReport] = await Promise.all([
+        ctx.prisma.merchantBriefing.findFirst({
+          where: { storeId: input.storeId },
+          orderBy: { createdAt: "desc" },
+        }),
+        ctx.prisma.customerVoiceReport.findFirst({
+          where: { storeId: input.storeId },
+          orderBy: { weekOf: "desc" },
+        }),
+      ]);
+
+      if (!briefing) return null;
+
+      // Enrich briefing with customer voice snippet if a report exists for the current week
+      let customerVoiceSnippet: string | null = null;
+      if (voiceReport) {
+        const themes = voiceReport.themes as Array<{ theme: string; count: number; sentiment: number }>;
+        const insights = voiceReport.actionableInsights as Array<{ insight: string; priority: string; relatedTheme: string }>;
+        const topTheme = themes.length > 0 ? themes.sort((a, b) => b.count - a.count)[0] : null;
+        const topInsight = insights.length > 0 ? insights.find((i) => i.priority === "high") ?? insights[0] : null;
+
+        if (topTheme) {
+          customerVoiceSnippet = `This week, ${voiceReport.totalConversations} customers mentioned "${topTheme.theme}".${topInsight ? ` ${topInsight.insight}.` : ""}`;
+        }
+      }
+
+      return {
+        ...briefing,
+        customerVoiceSnippet,
+        customerVoiceReport: voiceReport ? {
+          weekOf: voiceReport.weekOf,
+          totalConversations: voiceReport.totalConversations,
+          avgSentiment: voiceReport.avgSentiment,
+          themes: voiceReport.themes,
+          summary: voiceReport.summary,
+        } : null,
+      };
     }),
 
   /** List briefings with pagination */

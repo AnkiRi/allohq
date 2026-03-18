@@ -46,3 +46,11 @@ export type { GenerateImageInput, GenerateImageOutput } from "./images";
 // Natural Language Instructions
 export { parseInstruction, executeInstruction } from "./instruction";
 export type { InstructionIntent, ParsedInstruction, ExecutionResult } from "./instruction";
+
+// Churn Prediction Model
+export { predictChurn } from "./churn-model";
+export type { ChurnModelInput, ChurnPrediction } from "./churn-model";
+
+// Send Time Optimization
+export { getOptimalSendTime } from "./send-time-optimizer";
+export type { SendTimeResult } from "./send-time-optimizer";

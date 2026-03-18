@@ -1,10 +1,15 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
-import { renderToHtml } from "@allohq/email-builder";
+import { renderToHtml } from "@allohq/email-builder/src/server";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { checkAllRules } from "@allohq/communication-governor";
-import { learnFromResults } from "@allohq/campaign-engine";
+import {
+  learnFromResults,
+  assignVariant as abAssignVariant,
+  recordConversion,
+  getActiveTestForStore,
+} from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
@@ -36,6 +41,10 @@ export const sendWorker = new Worker<SendJobData>(
       throw new Error(`Campaign ${campaignId} not found`);
     }
 
+    if (!campaign.template) {
+      throw new Error(`Campaign ${campaignId} has no template`);
+    }
+
     // Fetch recipients based on segment
     const customerWhere: Record<string, unknown> = {
       storeId: campaign.storeId,
@@ -61,6 +70,8 @@ export const sendWorker = new Worker<SendJobData>(
       },
     });
 
+    // Check for active A/B tests on this store (subject_line or content)
+    const activeSubjectTest = await getActiveTestForStore(campaign.storeId, "subject_line");
     console.log(`Found ${customers.length} recipients for campaign ${campaign.name}`);
 
     // Update recipient count
@@ -139,6 +150,22 @@ export const sendWorker = new Worker<SendJobData>(
     let failCount = 0;
     let suppressedCount = 0;
     for (const customer of customers) {
+      // A/B test variant assignment for subject line
+      let effectiveSubject = campaign.template.subject;
+      let abTestId: string | undefined;
+      let abVariant: "a" | "b" | undefined;
+
+      if (activeSubjectTest) {
+        abVariant = abAssignVariant(activeSubjectTest.id, customer.id, activeSubjectTest.splitRatio);
+        abTestId = activeSubjectTest.id;
+        const variantData = abVariant === "a"
+          ? activeSubjectTest.variantA as Record<string, unknown>
+          : activeSubjectTest.variantB as Record<string, unknown>;
+        if (variantData && typeof variantData["value"] === "string") {
+          effectiveSubject = variantData["value"];
+        }
+      }
+
       // Governor check before sending
       const governorCheck = await checkAllRules({
         customerId: customer.id,
@@ -157,7 +184,7 @@ export const sendWorker = new Worker<SendJobData>(
             customerId: customer.id,
             channel: "email",
             to: customer.email,
-            subject: campaign.template.subject,
+            subject: effectiveSubject,
             campaignId,
             status: "suppressed",
             error: `Suppressed: ${governorCheck.reason}`,
@@ -206,11 +233,12 @@ export const sendWorker = new Worker<SendJobData>(
           customerId: customer.id,
           channel: "email",
           to: customer.email,
-          subject: campaign.template.subject,
+          subject: effectiveSubject,
           templateId: campaign.templateId,
           campaignId,
           status: "queued",
           messageFeatures,
+          metadata: abTestId ? { abTestId, abVariant } : undefined,
         },
       });
 
@@ -259,7 +287,7 @@ export const sendWorker = new Worker<SendJobData>(
       const result = await sendEmail({
         channel: "email",
         to: customer.email,
-        subject: campaign.template.subject,
+        subject: effectiveSubject,
         html,
         from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
         headers: {
@@ -280,6 +308,14 @@ export const sendWorker = new Worker<SendJobData>(
           },
         });
         sentCount++;
+        // Record A/B test "sent" event
+        if (abTestId && abVariant) {
+          try {
+            await recordConversion(abTestId, abVariant, "sent");
+          } catch (err: any) {
+            console.warn(`[send-worker] A/B test recording failed: ${err.message}`);
+          }
+        }
         // Log fatigue and queue state update
         if (customer.id) {
           await prisma.customerFatigueLog.create({

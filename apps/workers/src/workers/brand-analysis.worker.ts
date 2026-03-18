@@ -1,7 +1,9 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { analyzeBrandVoice } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
+
+const memoryWriterQueue = new Queue(QUEUE_NAMES.MEMORY_WRITER, { connection: redisConnection });
 
 interface BrandAnalysisJobData {
   storeId: string;
@@ -90,6 +92,18 @@ export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
         sampleCopy: result.sampleCopy as any,
         analyzedAt: new Date(),
       },
+    });
+
+    // Queue a memory write for the brand analysis outcome
+    await memoryWriterQueue.add("memory-write", {
+      type: "brand_analysis_complete",
+      storeId,
+      payload: {
+        brandName: result.brandName,
+        brandDescription: result.brandDescription,
+      },
+    }).catch((err) => {
+      console.warn(`[brand-analysis] Failed to queue memory write:`, (err as Error).message);
     });
 
     console.log(`[brand-analysis] Completed for store ${storeId}: ${result.brandName}`);

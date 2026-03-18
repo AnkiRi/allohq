@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
-import { renderToHtml } from "@allohq/email-builder";
+import { renderToHtml } from "@allohq/email-builder/src/server";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
 import type { StoreMessagingConfig } from "@allohq/messaging";

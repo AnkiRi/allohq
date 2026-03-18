@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { FileText, Plus, Copy, Trash2, Sparkles, Loader2, Eye, Pencil, Search, ChevronDown, AlertTriangle, CheckSquare, Square } from "lucide-react";
+import { FileText, Plus, Copy, Trash2, Sparkles, Loader2, Eye, Pencil, Search, ChevronDown, AlertTriangle, CheckSquare, Square, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -167,6 +167,14 @@ export default function TemplatesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Channel templates link */}
+          <Link
+            href="/templates/channel"
+            className="flex items-center gap-2 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-mono hover:bg-muted/50 transition-all"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            SMS / WhatsApp / RCS
+          </Link>
           {/* Remove menu */}
           <div className="relative">
             <button

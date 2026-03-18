@@ -5,6 +5,7 @@ import { classifyLifecycleStage } from "./lifecycle-classifier";
 import { computeChannelPreference } from "./channel-preference";
 import { computeFatigueState } from "./fatigue-tracker";
 import { detectIntent } from "./intent-detector";
+import { computeChurnProbability } from "./churn-prediction";
 
 /**
  * Compute full customer state from all available data sources.
@@ -69,7 +70,13 @@ export async function computeFullState(
     hasEmail: !!customer?.email,
   });
 
-  const churnRisk = ltv?.churnProbability ?? 0;
+  const totalSpend = orders.reduce((s, o) => s + o.totalPrice, 0);
+  const churnRisk = await computeChurnProbability(customerId, storeId, {
+    daysSinceLastOrder,
+    orderCount,
+    totalSpend,
+    avgOrderIntervalDays,
+  });
   const discountSensitivity = computeDiscountSensitivity(orders);
   const vipLevel = computeVipLevel(orderCount, ltv?.historicalLtv ?? 0);
   const trustScore = computeTrustScore(lifecycleStage, orderCount, churnRisk);
@@ -235,6 +242,49 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
       break;
     }
   }
+}
+
+/**
+ * Decay stale customer states — runs daily to prevent lifecycle stage rot.
+ * Finds customers whose state hasn't been updated in 7+ days and recalculates.
+ * This catches customers drifting from CHAMPION → AT_RISK → LOST without
+ * any triggering event (the absence of activity IS the signal).
+ */
+export async function decayStaleStates(storeId: string): Promise<number> {
+  const staleThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Find states that haven't been updated in 7+ days AND are in active stages
+  // (no need to recompute LOST customers — they're already at terminal state)
+  const staleStates = await prisma.customerState.findMany({
+    where: {
+      storeId,
+      lastStateUpdate: { lt: staleThreshold },
+      lifecycleStage: {
+        in: [
+          LifecycleStage.CHAMPION,
+          LifecycleStage.LOYAL,
+          LifecycleStage.REPEAT,
+          LifecycleStage.FIRST_BUYER,
+          LifecycleStage.SUBSCRIBER,
+          LifecycleStage.AT_RISK,
+        ],
+      },
+    },
+    select: { customerId: true },
+    take: 500, // batch to avoid overwhelming the system
+  });
+
+  let updated = 0;
+  for (const { customerId } of staleStates) {
+    try {
+      await computeFullState(customerId, storeId);
+      updated++;
+    } catch (err) {
+      console.warn(`[state-decay] Failed to recompute state for ${customerId}:`, err);
+    }
+  }
+
+  return updated;
 }
 
 function computeDiscountSensitivity(

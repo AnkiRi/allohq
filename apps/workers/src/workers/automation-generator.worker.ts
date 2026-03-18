@@ -347,8 +347,9 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
   },
   {
     connection: redisConnection,
+    concurrency: 1, // Process one at a time to avoid API rate limits
     settings: {
-      backoffStrategy: (attemptsMade: number) => Math.min(attemptsMade * 5000, 30000),
+      backoffStrategy: (attemptsMade: number) => Math.min(attemptsMade * 30000, 120000), // 30s, 60s, 120s backoff
     },
   }
 );

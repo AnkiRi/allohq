@@ -1,11 +1,11 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
-import { computeFullState, updateStateOnEvent } from "@allohq/customer-state";
+import { computeFullState, updateStateOnEvent, decayStaleStates } from "@allohq/customer-state";
 import type { StateUpdateEvent } from "@allohq/customer-state";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 interface CustomerStateJobData {
-  type: StateUpdateEvent["type"];
+  type: StateUpdateEvent["type"] | "state_decay";
   customerId: string;
   storeId: string;
   data?: Record<string, unknown>;
@@ -15,6 +15,21 @@ export const customerStateUpdaterWorker = new Worker<CustomerStateJobData>(
   QUEUE_NAMES.CUSTOMER_STATE,
   async (job) => {
     const { type, customerId, storeId, data } = job.data;
+
+    // Daily state decay — recompute stale states across all active stores
+    if (type === "state_decay") {
+      const stores = await prisma.store.findMany({
+        where: { isActive: true, onboardingCompletedAt: { not: null } },
+        select: { id: true },
+      });
+      let totalUpdated = 0;
+      for (const store of stores) {
+        const updated = await decayStaleStates(store.id);
+        totalUpdated += updated;
+      }
+      console.log(`[customer-state] Decayed ${totalUpdated} stale states across ${stores.length} stores`);
+      return;
+    }
 
     console.log(`[customer-state] Processing ${type} for customer ${customerId}`);
 

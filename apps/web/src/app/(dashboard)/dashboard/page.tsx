@@ -15,10 +15,14 @@ import {
   TrendingUp,
   AlertTriangle,
   Info,
+  Activity,
+  Clock,
+  X,
 } from "lucide-react";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { PulseDot } from "@/components/ui/PulseDot";
+import { WhyButton } from "@/components/ui/WhyButton";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useUser } from "@clerk/nextjs";
@@ -98,7 +102,7 @@ function ConnectStorePrompt() {
               value={domain}
               onChange={(e) => { setDomain(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-              className="flex-1 px-4 py-2.5 text-sm rounded-l-lg border border-border bg-white/80 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+              className="flex-1 px-4 py-2.5 text-sm rounded-l-lg border border-border bg-white/80 dark:bg-[rgba(40,36,30,0.8)] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[var(--color-accent)] transition-colors"
             />
             <span className="px-3 py-2.5 text-sm text-muted-foreground bg-muted border border-l-0 border-border rounded-r-lg">
               .myshopify.com
@@ -145,6 +149,40 @@ function getGreeting(): string {
   return "Good evening";
 }
 
+// ---------------------------------------------------------------------------
+// Helper: relative time formatting
+// ---------------------------------------------------------------------------
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  if (diffMs < 0 || diffMs < 60_000) return "Just now";
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: humanize action type
+// ---------------------------------------------------------------------------
+function formatActionType(type: string): string {
+  const map: Record<string, string> = {
+    campaign_send: "Preparing campaign",
+    campaign_queued: "Campaign queued",
+    automation_draft: "Drafted automation",
+    content_generation: "Generated content",
+    segment_refresh: "Refreshing segments",
+  };
+  if (map[type]) return map[type];
+  return type
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function DashboardPage() {
   const { user } = useUser();
   const rawFirst = user?.firstName || "there";
@@ -169,11 +207,11 @@ export default function DashboardPage() {
 
   const { data: programs } = (trpc.automations.list as any).useQuery(
     storeId ? { storeId } : undefined,
-    { enabled: !!storeId && onboardingDone },
+    { enabled: !!storeId && onboardingDone, refetchInterval: 15000 },
   ) as { data: { id: string; name: string; description: string | null; programType: string; status: string }[] | undefined };
 
   const { data: tokenUsage } = (trpc.dashboard.tokenUsage as any).useQuery(undefined, {
-    enabled: onboardingDone,
+    enabled: onboardingDone, refetchInterval: 15000,
   }) as {
     data: {
       totalInputTokens: number;
@@ -212,6 +250,11 @@ export default function DashboardPage() {
   ).useQuery({ storeId }, { enabled: !!storeId && onboardingDone }) as {
     data: { exists: boolean } | undefined;
   };
+
+  const { data: recentActions } = (trpc.autonomy.listActions as any).useQuery(
+    { storeId, limit: 10 },
+    { enabled: !!storeId && onboardingDone, refetchInterval: 5000 },
+  ) as { data: { actions: { id: string; type: string; category: string | null; status: string; reasoning: string | null; createdAt: string; confidenceScore: number | null }[]; total: number } | undefined };
 
   // Time-series data for sparklines
   const { data: revenueSeries } = trpc.dashboard.timeSeries.useQuery(
@@ -467,15 +510,23 @@ export default function DashboardPage() {
           <Link
             key={i}
             href={kpi.href}
-            className="group relative rounded-2xl p-5 border border-black/5 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)" }}
+            className="group relative rounded-2xl p-5 border border-black/5 dark:border-[rgba(200,180,150,0.12)] transition-all duration-300 hover:-translate-y-0.5 cursor-pointer bg-white/60 dark:bg-[rgba(40,36,30,0.7)]"
+            style={{ backdropFilter: "blur(20px)" }}
           >
             <div className="flex items-center justify-between mb-3">
-              <span
-                className="text-[10px] font-mono uppercase tracking-[0.1em] text-gray-400"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
-              >
-                {kpi.label}
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#9ca3af] dark:text-[#6B6358]"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  {kpi.label}
+                </span>
+                {storeId && kpi.value > 0 && (
+                  <WhyButton
+                    context={`${kpi.label}: ${kpi.prefix}${kpi.value.toLocaleString()} (${kpi.change} trend). Why this number and trend?`}
+                    storeId={storeId}
+                  />
+                )}
               </span>
               <Sparkline data={kpi.spark} color={kpi.color} />
             </div>
@@ -489,7 +540,7 @@ export default function DashboardPage() {
               <span
                 className={`inline-flex items-center gap-0.5 text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full mb-1 ${
                   kpi.neutral
-                    ? "bg-gray-500/10 text-gray-400"
+                    ? "bg-gray-500/10 text-gray-400 dark:bg-[rgba(200,180,150,0.1)] dark:text-[#6B6358]"
                     : kpi.up
                       ? "bg-[#6B7A2F]/10 text-[#6B7A2F]"
                       : "bg-[#c4704a]/10 text-[#c4704a]"
@@ -516,18 +567,18 @@ export default function DashboardPage() {
           {/* Daily Briefing — single card with inline feed */}
           <motion.div
             variants={itemVariants}
-            className="rounded-2xl border border-black/5 p-6"
-            style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)" }}
+            className="rounded-2xl border border-black/5 dark:border-[rgba(200,180,150,0.12)] p-6 bg-white/60 dark:bg-[rgba(40,36,30,0.7)]"
+            style={{ backdropFilter: "blur(20px)" }}
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span
-                  className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-gray-400"
+                  className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
                   style={{ fontFamily: "'JetBrains Mono', monospace" }}
                 >
                   Daily Briefing
                 </span>
-                <span className="text-[10px] font-mono text-gray-300">{briefingDate}</span>
+                <span className="text-[10px] font-mono text-[#d1d5db] dark:text-[#6B6358]">{briefingDate}</span>
               </div>
             </div>
 
@@ -539,7 +590,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={`priority-${i}`}
-                    className={`flex items-start gap-3 py-3.5 ${i < attentionItems.length - 1 || (narrative && narrative.length > 1) ? "border-b border-black/[0.04]" : ""}`}
+                    className={`flex items-start gap-3 py-3.5 ${i < attentionItems.length - 1 || (narrative && narrative.length > 1) ? "border-b border-black/[0.04] dark:border-[rgba(200,180,150,0.08)]" : ""}`}
                   >
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -548,12 +599,20 @@ export default function DashboardPage() {
                       <Icon className="w-3.5 h-3.5" style={{ color }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-semibold text-foreground">{item.text}</div>
-                      <p className="text-[11px] text-gray-500 mt-0.5">{item.detail}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13px] font-semibold text-foreground">{item.text}</span>
+                        {storeId && (
+                          <WhyButton
+                            context={`${item.text}. ${item.detail}`}
+                            storeId={storeId}
+                          />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-[#A09888] mt-0.5">{item.detail}</p>
                     </div>
                     <Link
                       href={item.href}
-                      className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-lg bg-[#2c2418] text-[#faf8f5] hover:bg-[#2c2418]/90 transition-colors flex-shrink-0 mt-1"
+                      className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-lg bg-[#2c2418] text-[#faf8f5] hover:bg-[#2c2418]/90 dark:bg-[#E8E2D8] dark:text-[#1A1815] dark:hover:bg-[#E8E2D8]/90 transition-colors flex-shrink-0 mt-1"
                     >
                       {item.action}
                     </Link>
@@ -570,7 +629,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={`narrative-${i}`}
-                    className={`flex items-start gap-3 py-3.5 ${i < (narrative.length - 2) ? "border-b border-black/[0.04]" : ""}`}
+                    className={`flex items-start gap-3 py-3.5 ${i < (narrative.length - 2) ? "border-b border-black/[0.04] dark:border-[rgba(200,180,150,0.08)]" : ""}`}
                   >
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -598,64 +657,126 @@ export default function DashboardPage() {
           </motion.div>
 
           {/* Agent Activity */}
-          {onboardingDone && hasSyncedData && (
-            <motion.div
-              variants={itemVariants}
-              className="rounded-2xl border border-black/5 p-6"
-              style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)" }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2
-                  className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-gray-400"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  Agent Activity
-                </h2>
-                <div className="flex items-center gap-2">
-                  <PulseDot color="bg-[#6B7A2F]" />
-                  <span className="text-[10px] font-mono text-muted-foreground">Live</span>
-                </div>
-              </div>
-              <div className="space-y-0">
-                {[
-                  ...(automationCount > 0 ? [{
-                    action: `Generated ${automationCount} automations`,
-                    detail: (programs?.filter((p) => p.status !== "recommended").map((p) => p.name).slice(0, 2).join(", ") ?? "") + (automationCount > 2 ? ` +${automationCount - 2} more` : ""),
-                    time: "Recently",
-                  }] : []),
-                  ...(hasBrand ? [{
-                    action: `Analyzed brand voice for ${brandProfile?.brandName ?? "your store"}`,
-                    detail: `Tone: ${Object.keys(brandProfile?.toneAttributes ?? {}).slice(0, 3).join(" · ")}`,
-                    time: "Recently",
-                  }] : []),
-                  ...(hasSyncedData ? [{
-                    action: `Segmented ${stats?.totalCustomers ?? 0} customers into ${segmentDist?.length ?? 0} groups`,
-                    detail: "",
-                    time: "Recently",
-                  }] : []),
-                ].map((item, i, arr) => (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-3 py-3 ${i < arr.length - 1 ? "border-b border-black/[0.04]" : ""}`}
-                  >
-                    <CheckCircle className="w-4 h-4 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium text-foreground">{item.action}</div>
-                      {item.detail && <span className="text-[11px] text-muted-foreground">{item.detail}</span>}
-                    </div>
-                    <span className="text-[10px] font-mono text-muted-foreground/50 flex-shrink-0">{item.time}</span>
+          {onboardingDone && hasSyncedData && (() => {
+            // Build activity items from live action queue + static fallbacks
+            const liveItems = (recentActions?.actions ?? []).map((action) => ({
+              id: action.id,
+              action: formatActionType(action.type),
+              detail: action.reasoning ? (action.reasoning.length > 80 ? action.reasoning.slice(0, 80) + "..." : action.reasoning) : "",
+              time: formatRelativeTime(action.createdAt),
+              status: action.status as "pending" | "approved" | "executed" | "rejected",
+            }));
+
+            const fallbackItems: { id: string; action: string; detail: string; time: string; status: "approved" | "executed" }[] = [];
+            if (liveItems.length < 3) {
+              if (automationCount > 0) {
+                fallbackItems.push({
+                  id: "fallback-automations",
+                  action: `Generated ${automationCount} automations`,
+                  detail: (programs?.filter((p) => p.status !== "recommended").map((p) => p.name).slice(0, 2).join(", ") ?? "") + (automationCount > 2 ? ` +${automationCount - 2} more` : ""),
+                  time: "Recently",
+                  status: "executed",
+                });
+              }
+              if (hasBrand) {
+                fallbackItems.push({
+                  id: "fallback-brand",
+                  action: `Analyzed brand voice for ${brandProfile?.brandName ?? "your store"}`,
+                  detail: `Tone: ${Object.keys(brandProfile?.toneAttributes ?? {}).slice(0, 3).join(" · ")}`,
+                  time: "Recently",
+                  status: "executed",
+                });
+              }
+              if (hasSyncedData) {
+                fallbackItems.push({
+                  id: "fallback-segments",
+                  action: `Segmented ${stats?.totalCustomers ?? 0} customers into ${segmentDist?.length ?? 0} groups`,
+                  detail: "",
+                  time: "Recently",
+                  status: "executed",
+                });
+              }
+            }
+
+            const allItems = [...liveItems, ...fallbackItems].slice(0, 8);
+
+            return (
+              <motion.div
+                variants={itemVariants}
+                className="rounded-2xl border border-black/5 p-6"
+                style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)" }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-[#9ca3af] dark:text-[#6B6358]" />
+                    <h2
+                      className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Agent Activity
+                    </h2>
                   </div>
-                ))}
-              </div>
-              {tokenUsage && tokenUsage.totalCalls > 0 && (
-                <div className="mt-4 pt-3 border-t border-black/[0.06] flex items-center gap-3">
-                  <span className="text-[11px] font-mono text-muted-foreground">
-                    {aiCalls} actions &middot; ${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)} AI cost
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <PulseDot color="bg-[#6B7A2F]" />
+                    <span className="text-[10px] font-mono text-muted-foreground">Live</span>
+                  </div>
                 </div>
-              )}
-            </motion.div>
-          )}
+                <div className="space-y-0">
+                  {allItems.map((item, i) => (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: i * 0.04 }}
+                      className={`flex items-start gap-3 py-3 ${i < allItems.length - 1 ? "border-b border-black/[0.04] dark:border-[rgba(200,180,150,0.08)]" : ""}`}
+                    >
+                      {/* Status indicator */}
+                      {item.status === "pending" ? (
+                        <span className="mt-1 flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                        </span>
+                      ) : item.status === "rejected" ? (
+                        <X className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium text-foreground">{item.action}</div>
+                        {item.detail && <span className="text-[11px] text-muted-foreground">{item.detail}</span>}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Clock className="w-3 h-3 text-muted-foreground/40" />
+                        <span className="text-[10px] font-mono text-muted-foreground/50">{item.time}</span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+                {tokenUsage && tokenUsage.totalCalls > 0 && (
+                  <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-[rgba(200,180,150,0.08)] flex items-center justify-between">
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      {aiCalls} actions &middot; ${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)} AI cost
+                    </span>
+                    <Link
+                      href="/actions"
+                      className="text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity"
+                    >
+                      View all <ChevronRight className="w-2.5 h-2.5 inline" />
+                    </Link>
+                  </div>
+                )}
+                {(!tokenUsage || tokenUsage.totalCalls === 0) && (
+                  <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-[rgba(200,180,150,0.08)] flex items-center justify-end">
+                    <Link
+                      href="/actions"
+                      className="text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity"
+                    >
+                      View all <ChevronRight className="w-2.5 h-2.5 inline" />
+                    </Link>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
         </div>
 
         {/* RIGHT COLUMN — 2/5 */}
@@ -663,12 +784,12 @@ export default function DashboardPage() {
           {/* Automations */}
           <motion.div
             variants={itemVariants}
-            className="rounded-2xl border border-black/5 p-6"
-            style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)" }}
+            className="rounded-2xl border border-black/5 dark:border-[rgba(200,180,150,0.12)] p-6 bg-white/60 dark:bg-[rgba(40,36,30,0.7)]"
+            style={{ backdropFilter: "blur(20px)" }}
           >
             <div className="flex items-center justify-between mb-4">
               <h2
-                className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-gray-400"
+                className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
                 style={{ fontFamily: "'JetBrains Mono', monospace" }}
               >
                 Automations
@@ -683,7 +804,7 @@ export default function DashboardPage() {
                   <Link
                     key={p.id}
                     href="/automations"
-                    className={`flex items-center justify-between py-2.5 hover:bg-white/30 -mx-2 px-2 rounded-lg transition-colors ${i < programs.length - 1 ? "border-b border-black/[0.03]" : ""}`}
+                    className={`flex items-center justify-between py-2.5 hover:bg-white/30 dark:hover:bg-[rgba(200,180,150,0.08)] -mx-2 px-2 rounded-lg transition-colors ${i < programs.length - 1 ? "border-b border-black/[0.03] dark:border-[rgba(200,180,150,0.06)]" : ""}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       {p.status === "active" ? (
@@ -708,7 +829,7 @@ export default function DashboardPage() {
                     </div>
                   </Link>
                 ))}
-                <div className="pt-3 mt-1 border-t border-black/[0.04]">
+                <div className="pt-3 mt-1 border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)]">
                   <p className="text-[11px] font-mono text-muted-foreground">
                     {programs.filter((p) => p.status === "active").length} live
                     {" \u00b7 "}{programs.filter((p) => p.status === "ready").length} ready
@@ -726,12 +847,12 @@ export default function DashboardPage() {
           {/* Customer Segments — concept-a animated bars */}
           <motion.div
             variants={itemVariants}
-            className="rounded-2xl border border-black/5 p-6"
-            style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)" }}
+            className="rounded-2xl border border-black/5 dark:border-[rgba(200,180,150,0.12)] p-6 bg-white/60 dark:bg-[rgba(40,36,30,0.7)]"
+            style={{ backdropFilter: "blur(20px)" }}
           >
             <div className="flex items-center justify-between mb-4">
               <h2
-                className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-gray-400"
+                className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
                 style={{ fontFamily: "'JetBrains Mono', monospace" }}
               >
                 Customer Segments
@@ -758,7 +879,7 @@ export default function DashboardPage() {
                           <span className="text-[10px] font-mono text-muted-foreground/60">{Math.round(pct)}%</span>
                         </div>
                       </div>
-                      <div className="h-1.5 rounded-full bg-black/[0.04] overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-black/[0.04] dark:bg-[rgba(200,180,150,0.1)] overflow-hidden">
                         <motion.div
                           className="h-full rounded-full"
                           style={{ backgroundColor: style.color }}
@@ -771,7 +892,7 @@ export default function DashboardPage() {
                   );
                 })}
                 {customerStats && (
-                  <div className="pt-3 mt-1 border-t border-black/[0.04] flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
+                  <div className="pt-3 mt-1 border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
                     <span>Opt-in: <strong className="text-foreground">{customerStats.marketingRate.toFixed(0)}%</strong></span>
                     <span>AOV: <strong className="text-foreground">${customerStats.avgOrderValue.toFixed(0)}</strong></span>
                   </div>

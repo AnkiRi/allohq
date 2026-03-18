@@ -9,6 +9,11 @@ const redisConnection = {
 };
 
 const syncQueue = new Queue("sync", { connection: redisConnection });
+const automationGenerateQueue = new Queue("automation-generate", { connection: redisConnection });
+const storeActivationQueue = new Queue("store-activation", { connection: redisConnection });
+const campaignFactoryQueue = new Queue("campaign-factory", { connection: redisConnection });
+const brandAnalysisQueue = new Queue("brand-analysis", { connection: redisConnection });
+const agentPipelineQueue = new Queue("agent-pipeline", { connection: redisConnection });
 
 export const storesRouter = router({
   /**
@@ -574,6 +579,38 @@ export const storesRouter = router({
       });
       if (!store) throw new Error("Store not found");
 
+      // ── Kill all pending/delayed jobs for this store ──────────────────────
+      // This ensures a fresh start when the user reconnects
+      const queuesToClean = [
+        automationGenerateQueue,
+        storeActivationQueue,
+        campaignFactoryQueue,
+        brandAnalysisQueue,
+        agentPipelineQueue,
+      ];
+      for (const queue of queuesToClean) {
+        try {
+          // Remove waiting and delayed jobs
+          const waiting = await queue.getJobs(["waiting", "delayed", "active"]);
+          for (const job of waiting) {
+            const data = job.data as Record<string, unknown>;
+            if (data?.storeId === input.storeId) {
+              await job.remove().catch(() => {});
+            }
+          }
+          // Also clean failed jobs for this store
+          const failed = await queue.getJobs(["failed"]);
+          for (const job of failed) {
+            const data = job.data as Record<string, unknown>;
+            if (data?.storeId === input.storeId) {
+              await job.remove().catch(() => {});
+            }
+          }
+        } catch {
+          // Queue cleanup is best-effort
+        }
+      }
+
       // Collect template IDs tied to this store before deleting campaigns/automations
       const storeCampaigns = await ctx.prisma.campaign.findMany({
         where: { storeId: input.storeId },
@@ -581,7 +618,7 @@ export const storesRouter = router({
       });
       const storeAutomations = await ctx.prisma.automation.findMany({
         where: { storeId: input.storeId },
-        select: { templateIds: true },
+        select: { id: true, templateIds: true, smsTemplateIds: true, whatsappTemplateIds: true, rcsTemplateIds: true },
       });
       const storeTemplateIds = [...new Set([
         ...storeCampaigns.map((c) => c.templateId).filter((id): id is string => !!id),
@@ -606,7 +643,17 @@ export const storesRouter = router({
       });
       await ctx.prisma.product.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.campaign.deleteMany({ where: { storeId: input.storeId } });
+
+      // Clean up messaging templates tied to automations
+      const automationIds = storeAutomations.map((a) => a.id);
+      if (automationIds.length > 0) {
+        await ctx.prisma.smsTemplate.deleteMany({ where: { automationId: { in: automationIds } } }).catch(() => {});
+        await ctx.prisma.whatsAppTemplate.deleteMany({ where: { automationId: { in: automationIds } } }).catch(() => {});
+        await ctx.prisma.rcsTemplate.deleteMany({ where: { automationId: { in: automationIds } } }).catch(() => {});
+      }
+
       await ctx.prisma.automation.deleteMany({ where: { storeId: input.storeId } });
+      await ctx.prisma.autonomyConfig.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.brandProfile.deleteMany({ where: { storeId: input.storeId } });
       await ctx.prisma.customerSegment.deleteMany({ where: { storeId: input.storeId } });
 

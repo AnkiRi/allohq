@@ -4,11 +4,22 @@
   "private": true,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./src/server": "./src/server.ts"
+  },
   "scripts": {
+    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@allohq/tsconfig": "workspace:*",
+    "@types/mjml": "^4.7.4",
     "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "mjml": "^4.15.3",
+    "mjml-core": "^4.18.0"
   }
 }

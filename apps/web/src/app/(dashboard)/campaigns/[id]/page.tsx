@@ -1,7 +1,8 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2 } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -11,8 +12,21 @@ export default function CampaignDetailPage() {
   const campaignId = params.id as string;
   const { toast } = useToast();
 
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const { data: campaign, isLoading } = trpc.campaigns.getById.useQuery({ id: campaignId });
   const { data: stats } = trpc.campaigns.stats.useQuery({ id: campaignId });
+
+  // Render preview from blocks if template has no pre-rendered HTML
+  const templateBlocks = campaign?.template && !campaign.template.html
+    ? ((campaign.template as any).blocks as any[] | undefined)
+    : undefined;
+  const renderMut = trpc.templates.renderPreview.useMutation();
+  useEffect(() => {
+    if (templateBlocks && templateBlocks.length > 0 && !renderMut.data && !renderMut.isPending) {
+      renderMut.mutate({ blocks: templateBlocks });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateBlocks]);
   const utils = trpc.useUtils();
   const sendMut = trpc.campaigns.sendNow.useMutation({
     onSuccess: () => {
@@ -110,80 +124,86 @@ export default function CampaignDetailPage() {
         ))}
       </div>
 
-      {/* Campaign info */}
-      <div className="grid grid-cols-2 gap-6">
-        <div className="border border-border rounded-xl p-6 bg-card">
-          <div className="flex items-center gap-3 mb-4">
+      {/* Campaign details */}
+      <div className="border border-border rounded-xl p-6 bg-card">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-px h-6 bg-secondary" />
+          <h2 className="text-[13px] font-bold text-foreground font-mono">DETAILS</h2>
+        </div>
+        <div className="grid grid-cols-3 gap-x-8 gap-y-2">
+          {[
+            { label: "Status", value: campaign.status.toUpperCase() },
+            { label: "Template", value: campaign.template?.name },
+            { label: "Segment", value: campaign.segment?.name ?? "All Subscribers" },
+            { label: "Store", value: campaign.store.shopDomain },
+            { label: "Scheduled", value: campaign.scheduledAt ? new Date(campaign.scheduledAt).toLocaleString() : "\u2014" },
+            { label: "Sent At", value: campaign.sentAt ? new Date(campaign.sentAt).toLocaleString() : "\u2014" },
+          ].map((item) => (
+            <div key={item.label} className="flex justify-between py-1.5 border-b border-border">
+              <span className="text-[11px] text-muted-foreground font-mono">{item.label}</span>
+              <span className="text-[11px] font-bold text-foreground font-mono">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Email preview — full width */}
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <div className="w-px h-6 bg-secondary" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">DETAILS</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">EMAIL_PREVIEW</h2>
           </div>
-          <div className="space-y-3">
-            {[
-              { label: "Status", value: campaign.status.toUpperCase() },
-              { label: "Template", value: campaign.template?.name },
-              { label: "Segment", value: campaign.segment?.name ?? "All Subscribers" },
-              { label: "Store", value: campaign.store.shopDomain },
-              { label: "Scheduled", value: campaign.scheduledAt ? new Date(campaign.scheduledAt).toLocaleString() : "\u2014" },
-              { label: "Sent At", value: campaign.sentAt ? new Date(campaign.sentAt).toLocaleString() : "\u2014" },
-            ].map((item) => (
-              <div key={item.label} className="flex justify-between py-1.5 border-b border-border last:border-0">
-                <span className="text-[11px] text-muted-foreground font-mono">{item.label}</span>
-                <span className="text-[11px] font-bold text-foreground font-mono">{item.value}</span>
-              </div>
-            ))}
+          <div className="flex items-center gap-3">
+            {(campaign.template?.html || renderMut.data?.html) && (
+              <button
+                onClick={() => setPreviewExpanded((v) => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
+              >
+                {previewExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                {previewExpanded ? "Collapse" : "Full Preview"}
+              </button>
+            )}
+            {campaign.templateId && (
+              <Link
+                href={`/templates/${campaign.templateId}/edit`}
+                className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Edit template &rarr;
+              </Link>
+            )}
           </div>
         </div>
-
-        {/* Template preview */}
-        <div className="border border-border rounded-xl p-6 bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-px h-6 bg-secondary" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">TEMPLATE_PREVIEW</h2>
-            </div>
-            <Link
-              href={`/templates/${campaign.templateId}/edit`}
-              className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Edit template &rarr;
-            </Link>
-          </div>
-          {campaign.template?.html ? (
-            <div className="border border-border rounded-lg overflow-hidden bg-white">
+        <div className="flex justify-center bg-muted/50 p-6">
+          {(campaign.template?.html || renderMut.data?.html) ? (
+            <div className="border border-border rounded-lg overflow-hidden bg-white shadow-sm" style={{ width: 620 }}>
               <iframe
-                srcDoc={campaign.template?.html}
-                className="w-full h-[400px] pointer-events-none"
+                srcDoc={campaign.template?.html ?? renderMut.data?.html}
+                className={`w-full transition-all duration-300 ${previewExpanded ? "h-[1200px]" : "h-[700px]"}`}
                 title="Email preview"
-                sandbox=""
+                sandbox="allow-same-origin"
+                style={{ pointerEvents: previewExpanded ? "auto" : "none" }}
               />
             </div>
-          ) : ((campaign.template as any).blocks as any[])?.length > 0 ? (
-            <div className="p-4 bg-muted rounded-lg border border-border space-y-3">
-              {((campaign.template as any).blocks as Array<{ type: string; props?: Record<string, unknown> }>).map((block, i) => (
-                <div key={i} className="text-[11px] font-mono text-foreground">
-                  {block.type === "heading" && <h3 className="text-sm font-bold">{block.props?.text as string}</h3>}
-                  {block.type === "text" && <p className="text-muted-foreground">{block.props?.text as string}</p>}
-                  {block.type === "button" && (
-                    <span className="inline-block px-3 py-1 bg-foreground text-background rounded text-[10px]">{block.props?.text as string}</span>
-                  )}
-                  {block.type === "product" && (
-                    <div className="flex items-center gap-2 p-2 border border-border rounded">
-                      <Mail className="w-4 h-4 text-muted-foreground/50" />
-                      <span>{block.props?.title as string} — ${String(block.props?.price ?? "")}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
+          ) : renderMut.isPending ? (
+            <div className="flex items-center justify-center py-16 w-full">
+              <Loader2 className="w-4 h-4 text-muted-foreground animate-spin mr-2" />
+              <span className="text-[11px] font-mono text-muted-foreground">Rendering preview...</span>
             </div>
-          ) : (
+          ) : campaign.templateId ? (
             <Link
               href={`/templates/${campaign.templateId}/edit`}
-              className="block p-4 bg-muted rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center"
+              className="block p-8 bg-card rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center w-full max-w-md"
             >
-              <Mail className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-[11px] font-mono text-muted-foreground">{campaign.template?.name}</p>
-              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">No content yet — click to edit</p>
+              <Eye className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
+              <p className="text-[11px] font-mono text-muted-foreground">{campaign.template?.name ?? "Email Template"}</p>
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Click to view & edit</p>
             </Link>
+          ) : (
+            <div className="p-8 text-center w-full">
+              <Mail className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
+              <p className="text-[10px] text-muted-foreground font-mono">No template attached</p>
+            </div>
           )}
         </div>
       </div>

@@ -18,6 +18,9 @@ import {
   ChevronDown,
   Maximize2,
   Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
   Send,
   Loader2,
   ArrowRight,
@@ -29,13 +32,20 @@ import {
   Check,
   PartyPopper,
   Brain,
+  ShoppingCart,
+  TrendingDown,
+  Package,
+  RefreshCw,
+  Eye,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { useMobileSidebar } from "@/components/layout/MobileSidebarContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 // ---------------------------------------------------------------------------
 // Context — lets TopBar & Cmd+K open/focus the panel
@@ -44,11 +54,13 @@ import { motion } from "framer-motion";
 type AlloAIPanelContextType = {
   openPanel: () => void;
   focusInput: () => void;
+  setInput: (text: string) => void;
 };
 
 const AlloAIPanelContext = createContext<AlloAIPanelContextType>({
   openPanel: () => {},
   focusInput: () => {},
+  setInput: () => {},
 });
 
 export const useAlloAI = () => useContext(AlloAIPanelContext);
@@ -57,7 +69,7 @@ export const useAlloAI = () => useContext(AlloAIPanelContext);
 // Types
 // ---------------------------------------------------------------------------
 
-type PanelState = "open" | "collapsed" | "expanded";
+type PanelState = "open" | "collapsed" | "expanded" | "fullscreen";
 
 interface InsightCard {
   label: string;
@@ -160,6 +172,15 @@ type PanelInsights = {
     hasCampaigns: boolean;
   };
   topAutomation: { name: string; status: string; category: string } | null;
+  recoveryOpportunities?: {
+    abandonedCarts: { count: number; totalValue: number };
+    cartRecovery: { count: number; estimatedRevenue: number };
+    priceDrop: { count: number; estimatedRevenue: number };
+    restock: { count: number; estimatedRevenue: number };
+    repurchase: { count: number; estimatedRevenue: number };
+    totalEstimatedRevenue: number;
+    totalOpportunities: number;
+  };
 };
 
 type Pill = { label: string; instruction: string | null; href?: string };
@@ -182,6 +203,13 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
       pills.push({ label: `Reward ${insights.segmentAlerts.championsCount} VIP customers`, instruction: "Create a VIP reward campaign for champion customers" });
     }
     pills.push({ label: "How did last week go?", instruction: "Analyze my store performance from the last 7 days" });
+    // Recovery opportunity pills
+    if (insights.recoveryOpportunities && insights.recoveryOpportunities.abandonedCarts.count > 0) {
+      pills.push({
+        label: `Recover ${insights.recoveryOpportunities.abandonedCarts.count} abandoned carts`,
+        instruction: `I see ${insights.recoveryOpportunities.abandonedCarts.count} abandoned carts worth ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(insights.recoveryOpportunities.abandonedCarts.totalValue)}. Send recovery emails for all of them.`,
+      });
+    }
   } else if (pageContext === "customers") {
     pills.push({ label: "Show at-risk customers", instruction: "Show me customers who are at risk of churning" });
     pills.push({ label: "Find high spenders", instruction: "Find customers who spent over $200 in the last 90 days" });
@@ -274,6 +302,28 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     parts.push(`${insights.metrics.activeAutomations} of ${insights.metrics.totalAutomations} automations active`);
   }
 
+  // Recovery opportunities
+  if (insights.recoveryOpportunities && insights.recoveryOpportunities.totalOpportunities > 0) {
+    const ro = insights.recoveryOpportunities;
+    const opportunityParts: string[] = [];
+    if (ro.abandonedCarts.count > 0) {
+      opportunityParts.push(`${ro.abandonedCarts.count} abandoned cart${ro.abandonedCarts.count > 1 ? "s" : ""} worth ${formatCurrency(ro.abandonedCarts.totalValue)}`);
+    }
+    if (ro.priceDrop.count > 0) {
+      opportunityParts.push(`${ro.priceDrop.count} price drop alert${ro.priceDrop.count > 1 ? "s" : ""}`);
+    }
+    if (ro.restock.count > 0) {
+      opportunityParts.push(`${ro.restock.count} restock alert${ro.restock.count > 1 ? "s" : ""}`);
+    }
+    if (ro.repurchase.count > 0) {
+      opportunityParts.push(`${ro.repurchase.count} repurchase reminder${ro.repurchase.count > 1 ? "s" : ""}`);
+    }
+    if (opportunityParts.length > 0) {
+      parts.push("");
+      parts.push(`**Revenue recovery:** I see ${opportunityParts.join(", ")}. Want me to send recovery emails?`);
+    }
+  }
+
   // Briefing content if available
   if (briefingData?.content) {
     const bc = briefingData.content as any;
@@ -343,6 +393,208 @@ function InsightCardView({ card }: { card: InsightCard }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recovery Opportunity Cards — proactive revenue recovery surface
+// ---------------------------------------------------------------------------
+
+type RecoveryCardType = "cart_recovery" | "price_drop_alert" | "restock_alert" | "repurchase_reminder";
+
+const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
+  icon: typeof ShoppingCart;
+  label: string;
+  accentColor: string;
+  accentBg: string;
+  accentBorder: string;
+  description: (count: number) => string;
+}> = {
+  cart_recovery: {
+    icon: ShoppingCart,
+    label: "Abandoned Carts",
+    accentColor: "text-amber-500",
+    accentBg: "bg-amber-500/10",
+    accentBorder: "border-amber-500/20",
+    description: (count) => `${count} abandoned cart${count !== 1 ? "s" : ""} detected. Recovery emails drafted.`,
+  },
+  price_drop_alert: {
+    icon: TrendingDown,
+    label: "Price Drops",
+    accentColor: "text-blue-500",
+    accentBg: "bg-blue-500/10",
+    accentBorder: "border-blue-500/20",
+    description: (count) => `${count} product${count !== 1 ? "s" : ""} with price drops for interested customers.`,
+  },
+  restock_alert: {
+    icon: Package,
+    label: "Restock Alerts",
+    accentColor: "text-emerald-500",
+    accentBg: "bg-emerald-500/10",
+    accentBorder: "border-emerald-500/20",
+    description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock. Notify waiting customers.`,
+  },
+  repurchase_reminder: {
+    icon: RefreshCw,
+    label: "Repurchase Reminders",
+    accentColor: "text-purple-500",
+    accentBg: "bg-purple-500/10",
+    accentBorder: "border-purple-500/20",
+    description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a repurchase reminder.`,
+  },
+};
+
+function RecoveryOpportunityCards({
+  storeId,
+  onApproveAll,
+  onReview,
+}: {
+  storeId: string;
+  onApproveAll: (type: RecoveryCardType, actionIds: string[]) => void;
+  onReview: (type: RecoveryCardType) => void;
+}) {
+  const { data, isLoading } = (trpc.dashboard as any).recoveryOpportunities.useQuery(
+    { storeId },
+    { enabled: !!storeId, refetchInterval: 30_000 },
+  ) as {
+    data: {
+      abandonedCarts: { count: number; totalValue: number };
+      opportunities: {
+        id: string;
+        type: string;
+        estimatedRevenue: number | null;
+        createdAt: string;
+        payload: unknown;
+        reasoning: string;
+      }[];
+    } | undefined;
+    isLoading: boolean;
+  };
+
+  const [approvingType, setApprovingType] = useState<string | null>(null);
+  const bulkApproveMut = (trpc.autonomy as any).bulkApprove.useMutation({
+    onSuccess: () => setApprovingType(null),
+    onError: () => setApprovingType(null),
+  }) as { mutate: (input: { actionIds: string[] }) => void; isPending: boolean };
+
+  if (isLoading || !data) return null;
+
+  // Group opportunities by type
+  const grouped = new Map<RecoveryCardType, { ids: string[]; count: number; totalRevenue: number }>();
+
+  // Add abandoned carts as cart_recovery if they exist
+  if (data.abandonedCarts.count > 0) {
+    grouped.set("cart_recovery", {
+      ids: [],
+      count: data.abandonedCarts.count,
+      totalRevenue: data.abandonedCarts.totalValue,
+    });
+  }
+
+  for (const opp of data.opportunities) {
+    const type = opp.type as RecoveryCardType;
+    const existing = grouped.get(type);
+    if (existing) {
+      existing.ids.push(opp.id);
+      existing.count += 1;
+      existing.totalRevenue += opp.estimatedRevenue ?? 0;
+    } else {
+      grouped.set(type, {
+        ids: [opp.id],
+        count: 1,
+        totalRevenue: opp.estimatedRevenue ?? 0,
+      });
+    }
+  }
+
+  if (grouped.size === 0) return null;
+
+  const entries = Array.from(grouped.entries());
+
+  return (
+    <div className="space-y-2 mb-3">
+      <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+        Revenue Recovery
+      </div>
+      <AnimatePresence mode="popLayout">
+        {entries.map(([type, info], i) => {
+          const config = RECOVERY_CARD_CONFIG[type];
+          if (!config) return null;
+          const Icon = config.icon;
+
+          return (
+            <motion.div
+              key={type}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8, transition: { duration: 0.2 } }}
+              transition={{ delay: i * 0.08, duration: 0.35, ease: "easeOut" }}
+              className={cn(
+                "rounded-xl border p-3",
+                config.accentBg,
+                config.accentBorder,
+              )}
+            >
+              <div className="flex items-start gap-2.5">
+                <div className={cn(
+                  "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
+                  config.accentBg,
+                )}>
+                  <Icon className={cn("w-3.5 h-3.5", config.accentColor)} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className={cn("font-mono text-[10px] uppercase tracking-wider", config.accentColor)}>
+                      {config.label}
+                    </div>
+                    {info.totalRevenue > 0 && (
+                      <div className="font-mono text-[11px] font-bold text-foreground">
+                        {formatCurrency(info.totalRevenue)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed font-sans">
+                    {config.description(info.count)}
+                  </div>
+                  <div className="flex gap-1.5 mt-2">
+                    {info.ids.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setApprovingType(type);
+                          onApproveAll(type, info.ids);
+                          bulkApproveMut.mutate({ actionIds: info.ids });
+                        }}
+                        disabled={approvingType === type}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono font-medium transition-all",
+                          approvingType === type
+                            ? "bg-muted text-muted-foreground"
+                            : cn("text-white", type === "cart_recovery" ? "bg-amber-500 hover:bg-amber-600" : type === "price_drop_alert" ? "bg-blue-500 hover:bg-blue-600" : type === "restock_alert" ? "bg-emerald-500 hover:bg-emerald-600" : "bg-purple-500 hover:bg-purple-600"),
+                        )}
+                      >
+                        {approvingType === type ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3 h-3" />
+                        )}
+                        {approvingType === type ? "Approving..." : "Approve All"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onReview(type)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border text-[10px] font-mono text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Eye className="w-3 h-3" />
+                      Review
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
@@ -935,6 +1187,7 @@ function CompletionSummary({
 export interface AlloAIPanelHandle {
   open: () => void;
   focusInput: () => void;
+  setInput: (text: string) => void;
 }
 
 export interface AlloAIPanelProps {
@@ -951,6 +1204,9 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const isDashboard = pathname === "/dashboard";
 
   const [panelState, setPanelState] = useState<PanelState>("open");
+  const [panelWidth, setPanelWidth] = useState(380);
+  const [isResizing, setIsResizing] = useState(false);
+  const { collapsed: sidebarCollapsed, toggleCollapsed: toggleSidebar } = useMobileSidebar();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1197,7 +1453,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       }
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowChatSwitcher(false);
+      if (e.key === "Escape") {
+        setShowChatSwitcher(false);
+        if (panelState === "fullscreen") setPanelState("open");
+      }
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -1207,12 +1466,30 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     };
   }, [showChatSwitcher]);
 
+  // ESC key exits fullscreen mode
+  useEffect(() => {
+    if (panelState !== "fullscreen") return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPanelState("open");
+      }
+    };
+    document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [panelState]);
+
   useImperativeHandle(ref, () => ({
     open() {
       if (panelState === "collapsed") setPanelState("open");
     },
     focusInput() {
       if (panelState === "collapsed") setPanelState("open");
+      setTimeout(() => inputRef.current?.focus(), 100);
+    },
+    setInput(text: string) {
+      if (panelState === "collapsed") setPanelState("open");
+      setInput(text);
       setTimeout(() => inputRef.current?.focus(), 100);
     },
   }));
@@ -1453,29 +1730,89 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   };
 
   const toggleExpand = () => {
-    setPanelState(panelState === "expanded" ? "open" : "expanded");
+    if (panelState === "expanded" || panelState === "fullscreen") {
+      setPanelState("open");
+    } else {
+      setPanelState("expanded");
+    }
   };
+
+  const goFullscreen = () => {
+    setPanelState(panelState === "fullscreen" ? "open" : "fullscreen");
+  };
+
+  // Drag-to-resize handler
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    if (panelState !== "open") return;
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Panel is on the right, so dragging left = wider
+      const delta = startX - moveEvent.clientX;
+      const newWidth = Math.min(Math.max(startWidth + delta, 320), 800);
+      setPanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [panelState, panelWidth]);
 
   return (
     <>
+      {/* Fullscreen backdrop */}
+      {effectiveState === "fullscreen" && !embedded && (
+        <div
+          className="fixed inset-0 bg-black/40 z-[59] backdrop-blur-sm"
+          onClick={goFullscreen}
+        />
+      )}
+
       {/* Main panel */}
       <aside
+        style={!embedded && effectiveState === "open" ? { width: `${panelWidth}px` } : undefined}
         className={cn(
-          "flex flex-col transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] relative",
+          "flex flex-col relative",
+          !isResizing && "transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
           embedded
             ? "w-full h-full ai-panel-bg border-0"
             : cn(
                 "border-l",
-                effectiveState === "open" && "w-[380px] flex-shrink-0 ai-panel-bg border-border",
+                effectiveState === "open" && "flex-shrink-0 ai-panel-bg border-border",
                 effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
                 effectiveState === "expanded" &&
                   "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
+                effectiveState === "fullscreen" &&
+                  "fixed inset-4 z-[60] rounded-2xl ai-panel-bg border-border shadow-2xl",
               ),
           isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]",
         )}
       >
+        {/* Resize handle — only in open (docked) mode */}
+        {!embedded && effectiveState === "open" && (
+          <div
+            onMouseDown={handleResizeStart}
+            className="absolute top-0 -left-1 bottom-0 w-2 cursor-col-resize z-20 group flex items-center"
+            title="Drag to resize"
+          >
+            <div className="w-1 h-8 rounded-full bg-border opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+
         {/* Toggle button — hidden in embedded mode */}
-        {!embedded && (
+        {!embedded && effectiveState !== "fullscreen" && (
           <button
             onClick={toggle}
             className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
@@ -1489,19 +1826,55 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           </button>
         )}
 
-        {/* Expand button — hidden in embedded mode */}
-        {!embedded && (
-          <button
-            onClick={toggleExpand}
-            className="absolute top-3 right-3 w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-            title={effectiveState === "expanded" ? "Collapse panel" : "Expand to full view"}
-          >
-            {effectiveState === "expanded" ? (
-              <Minimize2 className="w-3.5 h-3.5" />
-            ) : (
-              <Maximize2 className="w-3.5 h-3.5" />
+        {/* Panel controls — hidden in embedded mode */}
+        {!embedded && effectiveState !== "collapsed" && (
+          <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
+            {/* Sidebar collapse toggle */}
+            {effectiveState === "open" && (
+              <button
+                onClick={toggleSidebar}
+                className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen className="w-3.5 h-3.5" />
+                ) : (
+                  <PanelLeftClose className="w-3.5 h-3.5" />
+                )}
+              </button>
             )}
-          </button>
+            {/* Expand button */}
+            <button
+              onClick={toggleExpand}
+              className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title={effectiveState === "expanded" || effectiveState === "fullscreen" ? "Collapse panel" : "Expand panel"}
+            >
+              {effectiveState === "expanded" || effectiveState === "fullscreen" ? (
+                <Minimize2 className="w-3.5 h-3.5" />
+              ) : (
+                <Maximize2 className="w-3.5 h-3.5" />
+              )}
+            </button>
+            {/* Fullscreen button */}
+            {effectiveState !== "fullscreen" && (
+              <button
+                onClick={goFullscreen}
+                className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Pop out to fullscreen"
+              >
+                <Maximize2 className="w-3.5 h-3.5 rotate-45" />
+              </button>
+            )}
+            {effectiveState === "fullscreen" && (
+              <button
+                onClick={goFullscreen}
+                className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Exit fullscreen"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         )}
 
         {/* Header */}
@@ -1745,6 +2118,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           <>
             {/* Messages area */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* Recovery Opportunity Cards — proactive revenue recovery */}
+              {storeId && dataReady && !currentChatId && (
+                <RecoveryOpportunityCards
+                  storeId={storeId}
+                  onApproveAll={(type, actionIds) => {
+                    toast(`Approving ${actionIds.length} ${type.replace(/_/g, " ")} action${actionIds.length > 1 ? "s" : ""}...`, "success");
+                  }}
+                  onReview={(type) => {
+                    const filterMap: Record<string, string> = {
+                      cart_recovery: "cart_recovery",
+                      price_drop_alert: "price_drop_alert",
+                      restock_alert: "restock_alert",
+                      repurchase_reminder: "repurchase_reminder",
+                    };
+                    handleNavigate(`/actions?type=${filterMap[type] ?? type}`);
+                  }}
+                />
+              )}
               {messages.map((msg, i) => (
                 <motion.div
                   key={msg.id}
@@ -1859,6 +2250,7 @@ export function AlloAIPanelProvider({ children }: { children: React.ReactNode })
   const value: AlloAIPanelContextType = {
     openPanel: () => panelRef.current?.open(),
     focusInput: () => panelRef.current?.focusInput(),
+    setInput: (text: string) => panelRef.current?.setInput(text),
   };
 
   return (

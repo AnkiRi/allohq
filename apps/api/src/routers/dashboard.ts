@@ -37,6 +37,61 @@ function periodToDateFilter(period: string | undefined): { gte?: Date; lt?: Date
 }
 
 export const dashboardRouter = router({
+  /** Revenue recovery opportunities — abandoned carts, price drops, restock, repurchase */
+  recoveryOpportunities: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Verify store belongs to workspace
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!store) {
+        return {
+          abandonedCarts: { count: 0, totalValue: 0 },
+          opportunities: [],
+        };
+      }
+
+      // Find recent abandoned carts (last 24h) not yet recovered
+      const abandonedCarts = await ctx.prisma.order.findMany({
+        where: {
+          storeId: input.storeId,
+          status: "abandoned",
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+        select: { id: true, totalPrice: true, customerId: true },
+      });
+
+      // Find pending actions of recovery types
+      const pendingActions = await ctx.prisma.actionQueue.findMany({
+        where: {
+          storeId: input.storeId,
+          status: "pending",
+          type: { in: ["cart_recovery", "price_drop_alert", "restock_alert", "repurchase_reminder"] },
+        },
+        select: { id: true, type: true, payload: true, createdAt: true, estimatedRevenue: true, reasoning: true },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+
+      return {
+        abandonedCarts: {
+          count: abandonedCarts.length,
+          totalValue: abandonedCarts.reduce((sum, o) => sum + (o.totalPrice ?? 0), 0),
+        },
+        opportunities: pendingActions.map((a) => ({
+          id: a.id,
+          type: a.type,
+          estimatedRevenue: a.estimatedRevenue,
+          createdAt: a.createdAt,
+          payload: a.payload,
+          reasoning: a.reasoning,
+        })),
+      };
+    }),
+
+
   /** Dashboard stats overview */
   stats: workspaceProcedure.query(async ({ ctx }) => {
     const stores = await ctx.prisma.store.findMany({
@@ -299,5 +354,16 @@ export const dashboardRouter = router({
         .sort((a, b) => b.count - a.count);
 
       return { suppressed, sent, byReason };
+    }),
+
+  /** Customer Voice — latest weekly voice synthesis report */
+  customerVoice: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const report = await ctx.prisma.customerVoiceReport.findFirst({
+        where: { storeId: input.storeId },
+        orderBy: { weekOf: "desc" },
+      });
+      return report;
     }),
 });

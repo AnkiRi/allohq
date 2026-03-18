@@ -2,7 +2,7 @@ import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs } from "@allohq/messaging";
 import type { Channel } from "@allohq/messaging";
-import { renderToHtml } from "@allohq/email-builder";
+import { renderToHtml } from "@allohq/email-builder/src/server";
 import type { EmailBlock } from "@allohq/email-builder";
 import {
   executeJourneyStep,

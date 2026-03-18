@@ -11,6 +11,7 @@ import { autonomyTools } from "./autonomy-tools";
 import { creativeTools } from "./creative-tools";
 import { briefingTools } from "./briefing-tools";
 import { journeyTools } from "./journey-tools";
+import { simulationTools } from "./simulation-tools";
 
 /** All tools available to the customer-facing agent */
 export function getCustomerTools(): ToolDefinition[] {
@@ -37,6 +38,7 @@ export function getMerchantTools(): ToolDefinition[] {
     ...creativeTools,
     ...briefingTools,
     ...journeyTools,
+    ...simulationTools,
   ];
 }
 

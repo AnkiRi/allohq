@@ -50,6 +50,7 @@ model Workspace {
   tokenUsages    TokenUsage[]
   aiChats        AiChat[]
   brandAssets    BrandAsset[]
+  notificationPreferences NotificationPreference[]
 
   @@map("workspaces")
 }
@@ -66,6 +67,34 @@ model WorkspaceMember {
 
   @@unique([workspaceId, userId])
   @@map("workspace_members")
+}
+
+model NotificationPreference {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  // Channel toggles
+  emailDigest       Boolean @default(true)   // daily email summary
+  emailRealtime     Boolean @default(false)  // immediate email on events
+  inApp             Boolean @default(true)   // in-app notifications
+  // Event types
+  onActionRequired  Boolean @default(true)   // agent needs approval
+  onCampaignSent    Boolean @default(true)   // campaign completed
+  onEscalation      Boolean @default(true)   // conversation escalated
+  onChurnAlert      Boolean @default(true)   // customer churn risk spike
+  onRevenueGoal     Boolean @default(false)  // revenue milestone hit
+  onWeeklyReport    Boolean @default(true)   // weekly performance summary
+  // Quiet hours
+  quietHoursStart   Int?                     // hour (0-23), null = no quiet hours
+  quietHoursEnd     Int?
+  timezone          String  @default("UTC")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("notification_preferences")
 }
 
 // ============================================================================
@@ -97,6 +126,7 @@ model Store {
   onboardingCompletedAt DateTime? // set when merchant completes onboarding wizard
   activatedAt           DateTime? // timestamp when store activation completed
   activationLog         Json?     // JSON field for tracking activation progress
+  storeCategory         String?   // fashion, beauty, food, electronics, home, health
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   products    Product[]
@@ -151,6 +181,15 @@ model Store {
 
   // Sprint 10: Conversation Engine
   knowledgeArticles         KnowledgeArticle[]
+
+  // Sprint 11: Agent Memory
+  agentMemories             AgentMemory[]
+
+  // Sprint 13: Customer Voice Synthesis
+  customerVoiceReports      CustomerVoiceReport[]
+
+  // Sprint 14: Revenue Forecasting
+  revenueForecasts          RevenueForecast[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -1487,4 +1526,96 @@ model KnowledgeArticle {
 
   @@index([storeId, category])
   @@map("knowledge_articles")
+}
+
+// ============================================================================
+// SPRINT 11: AGENT MEMORY
+// ============================================================================
+
+model AgentMemory {
+  id          String   @id @default(cuid())
+  storeId     String
+  memoryType  String   // campaign_outcome, merchant_preference, store_pattern, customer_insight
+  content     String   @db.Text
+  importance  Float    @default(0.5) // 0-1, used to prioritize memory retrieval
+  metadata    Json?    // structured data for the memory
+  expiresAt   DateTime? // optional expiry for time-sensitive memories
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, memoryType])
+  @@index([storeId, importance])
+  @@map("agent_memories")
+}
+
+// ============================================================================
+// BENCHMARKS
+// ============================================================================
+
+model StoreBenchmark {
+  id          String   @id @default(cuid())
+  category    String   // fashion, beauty, food, electronics, home, health, etc.
+  metric      String   // open_rate, click_rate, conversion_rate, churn_rate, avg_order_value, etc.
+  channel     String?  // email, sms, whatsapp, or null for aggregate
+  period      String   // weekly, monthly
+  periodStart DateTime
+  value       Float    // the benchmark value
+  sampleSize  Int      // number of stores contributing
+  p25         Float?   // 25th percentile
+  p50         Float?   // median
+  p75         Float?   // 75th percentile
+  createdAt   DateTime @default(now())
+
+  @@unique([category, metric, channel, period, periodStart])
+  @@index([category, metric])
+  @@map("store_benchmarks")
+}
+
+// ============================================================================
+// SPRINT 13: CUSTOMER VOICE SYNTHESIS
+// ============================================================================
+
+model CustomerVoiceReport {
+  id                 String   @id @default(cuid())
+  storeId            String
+  weekOf             DateTime // Start of the week
+  totalConversations Int      @default(0)
+  resolvedCount      Int      @default(0)
+  escalatedCount     Int      @default(0)
+  avgSentiment       Float?   // -1 to 1
+  themes             Json     // [{ theme: "slow shipping", count: 8, sentiment: -0.6 }, ...]
+  actionableInsights Json     // [{ insight: "Check US East Coast fulfillment", priority: "high", relatedTheme: "slow shipping" }]
+  summary            String?  @db.Text // LLM-generated executive summary
+  createdAt          DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, weekOf])
+  @@index([storeId])
+  @@map("customer_voice_reports")
+}
+
+// ============================================================================
+// SPRINT 14: REVENUE FORECASTING
+// ============================================================================
+
+model RevenueForecast {
+  id           String   @id @default(cuid())
+  storeId      String
+  forecastDate DateTime // the date being forecasted
+  predicted    Float    // predicted revenue
+  lower        Float    // lower bound (confidence interval)
+  upper        Float    // upper bound
+  confidence   Float    // 0-1
+  actual       Float?   // actual revenue (filled in later)
+  accuracy     Float?   // |1 - (actual/predicted)| (filled in later)
+  createdAt    DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, forecastDate])
+  @@index([storeId])
+  @@map("revenue_forecasts")
 }
