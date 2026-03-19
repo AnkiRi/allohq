@@ -46,6 +46,7 @@ import { useMobileSidebar } from "@/components/layout/MobileSidebarContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
+import { CampaignPreviewCard } from "./CampaignPreviewCard";
 
 // ---------------------------------------------------------------------------
 // Context — lets TopBar & Cmd+K open/focus the panel
@@ -79,6 +80,14 @@ interface InsightCard {
   stats?: { label: string; value: string }[];
 }
 
+interface CampaignPreviewData {
+  previewHtml: string;
+  subject: string;
+  campaignName: string;
+  draftCampaignId: string;
+  estimatedRecipients?: number;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -89,6 +98,7 @@ interface Message {
   actionLinks?: { label: string; href: string }[];
   toolCalls?: string[];
   isLoading?: boolean;
+  campaignPreview?: CampaignPreviewData;
 }
 
 
@@ -678,7 +688,7 @@ function AgentActivityIndicator() {
   );
 }
 
-function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?: (href: string) => void }) {
+function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign }: { message: Message; onNavigate?: (href: string) => void; onApproveCampaign?: (campaignId: string) => void; onEditCampaign?: (campaignId: string) => void }) {
 
   if (message.isLoading) {
     return <AgentActivityIndicator />;
@@ -811,6 +821,17 @@ function MessageBubble({ message, onNavigate }: { message: Message; onNavigate?:
         </div>
 
         {message.insightCard && <InsightCardView card={message.insightCard} />}
+        {message.campaignPreview && (
+          <CampaignPreviewCard
+            previewHtml={message.campaignPreview.previewHtml}
+            subject={message.campaignPreview.subject}
+            campaignName={message.campaignPreview.campaignName}
+            draftCampaignId={message.campaignPreview.draftCampaignId}
+            estimatedRecipients={message.campaignPreview.estimatedRecipients}
+            onApprove={(id) => onApproveCampaign?.(id)}
+            onEdit={(id) => onEditCampaign?.(id)}
+          />
+        )}
         {message.actionLinks && message.actionLinks.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {message.actionLinks.map((link) => (
@@ -1513,6 +1534,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     } | null;
     model: string;
     toolCalls?: string[];
+    campaignPreview?: CampaignPreviewData;
   };
 
   const chatMut = (trpc.ai as any).chat.useMutation({
@@ -1584,6 +1606,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 insightCard,
                 actionLinks: actionLinks.length > 0 ? actionLinks : undefined,
                 toolCalls: data.toolCalls?.length ? data.toolCalls : undefined,
+                campaignPreview: data.campaignPreview ?? undefined,
               }
             : m,
         ),
@@ -1609,6 +1632,34 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       toast(err.message ?? "Chat failed", "error");
     },
   }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[] }) => void };
+
+  // Campaign approve/reject mutation
+  const executeChatActionMut = (trpc.ai as any).executeChatAction.useMutation({
+    onSuccess: (data: { success: boolean; status: string }) => {
+      if (data.success && data.status === "sending") {
+        toast("Campaign approved and sending!", "success");
+      } else if (data.success && data.status === "cancelled") {
+        toast("Campaign cancelled.", "success");
+      }
+    },
+    onError: (err: { message?: string }) => {
+      toast(err.message ?? "Action failed", "error");
+    },
+  }) as { mutate: (input: { actionType: "approve_campaign" | "reject_campaign"; campaignId: string }) => void };
+
+  const handleApproveCampaign = useCallback(
+    (campaignId: string) => {
+      executeChatActionMut.mutate({ actionType: "approve_campaign", campaignId });
+    },
+    [],
+  );
+
+  const handleEditCampaign = useCallback(
+    (_campaignId: string) => {
+      router.push("/campaigns");
+    },
+    [router],
+  );
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -2143,7 +2194,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.03, duration: 0.3 }}
                 >
-                  <MessageBubble message={msg} onNavigate={handleNavigate} />
+                  <MessageBubble message={msg} onNavigate={handleNavigate} onApproveCampaign={handleApproveCampaign} onEditCampaign={handleEditCampaign} />
                 </motion.div>
               ))}
 

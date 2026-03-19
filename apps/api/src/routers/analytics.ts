@@ -150,6 +150,97 @@ export const analyticsRouter = router({
       return { csv: exportToCsv(input.type, data) };
     }),
 
+  /** Attributed revenue summary — supports period filtering */
+  attributedRevenue: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        period: z.enum(["today", "week", "month", "all"]).default("month"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      let since: Date | undefined;
+
+      switch (input.period) {
+        case "today":
+          since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case "week":
+          since = new Date(now.getTime() - 7 * 86400000);
+          break;
+        case "month":
+          since = new Date(now.getTime() - 30 * 86400000);
+          break;
+        case "all":
+          since = undefined;
+          break;
+      }
+
+      const attributions = await ctx.prisma.orderAttribution.findMany({
+        where: {
+          storeId: input.storeId,
+          ...(since ? { attributedAt: { gte: since } } : {}),
+        },
+        select: { revenue: true, channel: true, automationId: true, campaignId: true },
+      });
+
+      const totalRevenue = attributions.reduce((sum, a) => sum + a.revenue, 0);
+
+      // Breakdown by channel
+      const byChannel: Record<string, number> = {};
+      for (const a of attributions) {
+        byChannel[a.channel] = (byChannel[a.channel] ?? 0) + a.revenue;
+      }
+
+      // Breakdown by source type (automation vs campaign)
+      let automationRevenue = 0;
+      let campaignRevenue = 0;
+      let directRevenue = 0;
+
+      for (const a of attributions) {
+        if (a.automationId) {
+          automationRevenue += a.revenue;
+        } else if (a.campaignId) {
+          campaignRevenue += a.revenue;
+        } else {
+          directRevenue += a.revenue;
+        }
+      }
+
+      // Breakdown by automation category (if available)
+      const automationIds = [...new Set(attributions.filter((a) => a.automationId).map((a) => a.automationId!))];
+      const byCategory: Record<string, number> = {};
+
+      if (automationIds.length > 0) {
+        const automations = await ctx.prisma.automation.findMany({
+          where: { id: { in: automationIds } },
+          select: { id: true, category: true },
+        });
+        const catMap = new Map(automations.map((a) => [a.id, a.category ?? "other"]));
+
+        for (const a of attributions) {
+          if (a.automationId) {
+            const cat = catMap.get(a.automationId) ?? "other";
+            byCategory[cat] = (byCategory[cat] ?? 0) + a.revenue;
+          }
+        }
+      }
+
+      return {
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        orderCount: attributions.length,
+        byChannel,
+        bySource: {
+          automation: Math.round(automationRevenue * 100) / 100,
+          campaign: Math.round(campaignRevenue * 100) / 100,
+          direct: Math.round(directRevenue * 100) / 100,
+        },
+        byCategory,
+        period: input.period,
+      };
+    }),
+
   /** Churn intervention analytics: interventions sent, customers saved, revenue preserved */
   churnInterventions: workspaceProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))

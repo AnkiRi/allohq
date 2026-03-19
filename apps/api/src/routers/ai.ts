@@ -1066,14 +1066,43 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 `.trim();
 
       // ---------------------------------------------------------------
-      // 3. Action request detection — push agent toward tool calling (Fix 3)
+      // 3. Intent detection + action request detection
       // ---------------------------------------------------------------
+      const { detectIntent } = await import("@allohq/agent-core");
+      const detectedIntent = detectIntent(input.message);
+
       const isActionRequest = /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design|show|preview|details|view)\b/i.test(input.message);
 
       let processedMessage = input.message;
 
-      if (isActionRequest) {
+      // Prepend detected intent context if confidence is high
+      if (detectedIntent.confidence >= 0.7 && detectedIntent.intent !== "general") {
+        processedMessage = `${input.message}\n\n[DETECTED INTENT: ${detectedIntent.intent} with params: ${JSON.stringify(detectedIntent.extractedParams)}. Prioritize using the relevant tool to fulfill this request.]`;
+      } else if (isActionRequest) {
         processedMessage = `${input.message}\n\n[SYSTEM: This is an action request. Call the appropriate tool immediately with smart defaults from the store data in your context. Do NOT ask clarifying questions — use the store intelligence summary to choose the best parameters.]`;
+      }
+
+      // Add tool hints based on detected intent
+      if (detectedIntent.intent === "create_flash_sale" || detectedIntent.intent === "create_campaign") {
+        const discount = detectedIntent.extractedParams.discountPercent ?? "15";
+        const seg = detectedIntent.extractedParams.segment;
+        const bestTarget = seg
+          ? segments.find((s) => s.name.toLowerCase().includes(seg.toLowerCase()))
+          : segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
+            segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
+            segments.find((s) => s.customerCount > 0);
+        if (bestTarget) {
+          processedMessage += `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. Target: ${bestTarget.name} (${bestTarget.customerCount} customers). Discount: ${discount}%. This gives the merchant an inline email preview they can approve directly.]`;
+        }
+      }
+
+      if (detectedIntent.intent === "analytics_query" || detectedIntent.intent === "revenue_question") {
+        const timeframe = detectedIntent.extractedParams.timeframe;
+        processedMessage += `\n\n[TOOL HINT: Use explain_revenue_change for revenue analysis, automation_performance_report for automation comparison, or customer_focus_analysis for retention priorities.${timeframe ? ` Timeframe mentioned: "${timeframe}".` : ""}]`;
+      }
+
+      if (detectedIntent.intent === "customer_question") {
+        processedMessage += `\n\n[TOOL HINT: Use customer_focus_analysis to rank customers by retention priority (LTV x churn risk).${detectedIntent.extractedParams.segment ? ` Segment mentioned: "${detectedIntent.extractedParams.segment}".` : ""}]`;
       }
 
       // Add automation preview/detail hint
@@ -1086,13 +1115,13 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         processedMessage += `\n\n[TOOL HINT: This is a "what if" question. Call simulate_scenario immediately to model the impact. Extract the scenario description, target metric, and percentage change from the merchant's question. Present results as a markdown before/after table.]`;
       }
 
-      // Add campaign-specific tool hints
-      if (/\b(campaign|promotional|email|win-?back|re-?engage)\b/i.test(input.message)) {
+      // Add campaign-specific tool hints (fallback if intent detector didn't catch it)
+      if (detectedIntent.intent === "general" && /\b(campaign|promotional|email|win-?back|re-?engage)\b/i.test(input.message)) {
         const bestTarget = segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
           segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
           segments.find((s) => s.customerCount > 0);
         if (bestTarget) {
-          processedMessage += `\n\n[TOOL HINT: Recommended target: ${bestTarget.name} (${bestTarget.customerCount} customers, highest impact). Channel: email. Discount: 15%. Call create_campaign or generate_campaign_template with these parameters.]`;
+          processedMessage += `\n\n[TOOL HINT: Recommended target: ${bestTarget.name} (${bestTarget.customerCount} customers, highest impact). Channel: email. Discount: 15%. Call create_campaign_with_preview for inline preview or generate_campaign_template with these parameters.]`;
         }
       }
 
@@ -1135,6 +1164,22 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           highlights.push({ label: "Current", value: `${unit}${Number(out.currentValue).toLocaleString()}` });
           highlights.push({ label: "Projected", value: `${unit}${Number(out.projectedValue).toLocaleString()}` });
           if (out.changePercent) highlights.push({ label: "Impact", value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%` });
+        }
+        if (tc.name === "explain_revenue_change" && out) {
+          highlights.push({ label: "Trend", value: String(out.trend ?? "flat") });
+          if (out.changePercent) highlights.push({ label: "Change", value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%` });
+        }
+        if (tc.name === "customer_focus_analysis" && out) {
+          const customers = (out as Record<string, unknown>).customers;
+          if (Array.isArray(customers)) {
+            highlights.push({ label: "Priority Customers", value: `${customers.length}` });
+          }
+        }
+        if (tc.name === "automation_performance_report" && out) {
+          const autos = (out as Record<string, unknown>).automations;
+          if (Array.isArray(autos)) {
+            highlights.push({ label: "Automations", value: `${autos.length}` });
+          }
         }
       }
 
@@ -1310,6 +1355,32 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       // ---------------------------------------------------------------
       writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(() => {});
 
+      // ---------------------------------------------------------------
+      // 9. Extract campaign preview from tool call results
+      // ---------------------------------------------------------------
+      let campaignPreview: {
+        previewHtml: string;
+        subject: string;
+        campaignName: string;
+        draftCampaignId: string;
+        estimatedRecipients?: number;
+      } | undefined;
+
+      for (const tc of agentResult.toolCalls) {
+        if (tc.name === "create_campaign_with_preview") {
+          const out = tc.output as Record<string, unknown>;
+          if (out?.success && out?.contentType === "campaign_preview") {
+            campaignPreview = {
+              previewHtml: String(out.previewHtml ?? ""),
+              subject: String(out.subject ?? ""),
+              campaignName: String(out.campaignName ?? ""),
+              draftCampaignId: String(out.draftCampaignId ?? ""),
+              estimatedRecipients: typeof out.estimatedRecipients === "number" ? out.estimatedRecipients : undefined,
+            };
+          }
+        }
+      }
+
       return {
         chatId,
         reply,
@@ -1318,6 +1389,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         action: actionResult,
         model: "claude-sonnet-4-6",
         toolCalls: agentResult.toolCalls.map((t) => t.name),
+        campaignPreview,
       };
     }),
 
@@ -1391,6 +1463,37 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       }
 
       return result;
+    }),
+
+  /** Execute an action from the AI chat (approve/reject campaign) */
+  executeChatAction: workspaceProcedure
+    .input(z.object({
+      actionType: z.enum(["approve_campaign", "reject_campaign"]),
+      campaignId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.actionType === "approve_campaign") {
+        const campaign = await ctx.prisma.campaign.findFirst({
+          where: { id: input.campaignId, workspaceId: ctx.workspaceId },
+        });
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+
+        // Update campaign status to sending
+        await ctx.prisma.campaign.update({
+          where: { id: input.campaignId },
+          data: { status: "sending" },
+        });
+
+        return { success: true, status: "sending" };
+      }
+
+      // reject_campaign
+      await ctx.prisma.campaign.update({
+        where: { id: input.campaignId },
+        data: { status: "cancelled" },
+      });
+
+      return { success: true, status: "cancelled" };
     }),
 
   // =========================================================================

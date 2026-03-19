@@ -20,6 +20,7 @@ import { knowledgeRouter } from "./knowledge";
 import { onboardingRouter } from "./onboarding";
 import { notificationsRouter } from "./notifications";
 import { conversationsRouter } from "./conversations";
+import { eventsRouter } from "./events";
 
 /**
  * Root tRPC router
@@ -46,6 +47,7 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   notifications: notificationsRouter,
   conversations: conversationsRouter,
+  events: eventsRouter,
 });
 
 export type AppRouter = typeof appRouter;

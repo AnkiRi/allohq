@@ -8,6 +8,7 @@ const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: red
 const shippingUpdateQueue = new Queue(QUEUE_NAMES.SHIPPING_UPDATE, { connection: redisConnection });
 const restockAlertQueue = new Queue(QUEUE_NAMES.RESTOCK_ALERT, { connection: redisConnection });
 const priceDropQueue = new Queue(QUEUE_NAMES.PRICE_DROP, { connection: redisConnection });
+const eventReactQueue = new Queue(QUEUE_NAMES.EVENT_REACT, { connection: redisConnection });
 
 interface WebhookJobData {
   topic: string;
@@ -90,6 +91,16 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
               oldPrice,
               newPrice,
             });
+            // Queue to event reactor for unified processing
+            await eventReactQueue.add("price-drop-event", {
+              storeId: store.id,
+              eventType: "price_drop",
+              payload: {
+                productId: product.id,
+                oldPrice,
+                newPrice,
+              },
+            });
             console.log(`[shopify-webhook] Price drop detected for product ${product.id}: $${oldPrice} → $${newPrice}`);
           }
 
@@ -97,6 +108,14 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             await restockAlertQueue.add("restock-alert", {
               storeId: store.id,
               productId: product.id,
+            });
+            // Queue to event reactor for unified processing
+            await eventReactQueue.add("back-in-stock-event", {
+              storeId: store.id,
+              eventType: "back_in_stock",
+              payload: {
+                productId: product.id,
+              },
             });
             console.log(`[shopify-webhook] Restock detected for product ${product.id}`);
           }
@@ -142,6 +161,16 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             customerId: order.customerId,
             storeId: store.id,
           });
+          // Queue to event reactor for unified processing
+          await eventReactQueue.add("order-placed", {
+            storeId: store.id,
+            eventType: "order_placed",
+            customerId: order.customerId,
+            payload: {
+              orderId: order.id,
+              totalPrice: (payload as any).total_price,
+            },
+          });
         }
         break;
       }
@@ -151,9 +180,29 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
 
       // --- Checkouts (abandoned cart detection) ---
       case "checkouts/create":
-      case "checkouts/update":
+      case "checkouts/update": {
         await upsertCheckout(store.id, payload);
+        // Queue cart_abandoned event for unified processing
+        const checkoutPayload = payload as { customer?: { id: number }; total_price?: string };
+        if (checkoutPayload.customer?.id) {
+          const checkoutCustomer = await prisma.customer.findUnique({
+            where: { storeId_externalId: { storeId: store.id, externalId: String(checkoutPayload.customer.id) } },
+            select: { id: true },
+          });
+          if (checkoutCustomer) {
+            await eventReactQueue.add("cart-abandoned", {
+              storeId: store.id,
+              eventType: "cart_abandoned",
+              customerId: checkoutCustomer.id,
+              payload: {
+                totalPrice: checkoutPayload.total_price,
+                source: "shopify_checkout_webhook",
+              },
+            });
+          }
+        }
         break;
+      }
 
       // --- Collections ---
       case "collections/create":

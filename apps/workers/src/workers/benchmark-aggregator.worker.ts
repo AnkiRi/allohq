@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
+import { getBenchmarkComparison } from "@allohq/campaign-engine";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 interface BenchmarkJobData {
@@ -407,6 +408,42 @@ export const benchmarkAggregatorWorker = new Worker<BenchmarkJobData>(
     }
 
     console.log(`[benchmark-aggregator] Done — upserted ${totalUpserted} benchmark records across ${Object.keys(byCategory).length} categories`);
+
+    // Store per-store benchmark comparison insights in AgentMemory
+    try {
+      for (const storeIds of Object.values(byCategory)) {
+        for (const sid of storeIds) {
+          try {
+            const comparison = await getBenchmarkComparison(sid);
+            if (comparison && !comparison.includes("No benchmarks") && !comparison.includes("No store category")) {
+              await prisma.agentMemory.upsert({
+                where: {
+                  id: `benchmark-${sid}`, // deterministic ID so we overwrite weekly
+                },
+                create: {
+                  id: `benchmark-${sid}`,
+                  storeId: sid,
+                  memoryType: "store_pattern",
+                  content: comparison,
+                  importance: 0.7,
+                  metadata: { source: "benchmark_aggregator", periodStart: periodStart.toISOString() },
+                },
+                update: {
+                  content: comparison,
+                  importance: 0.7,
+                  metadata: { source: "benchmark_aggregator", periodStart: periodStart.toISOString() },
+                },
+              });
+            }
+          } catch (err: any) {
+            console.warn(`[benchmark-aggregator] Failed to store comparison for ${sid}:`, err.message);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn("[benchmark-aggregator] Failed to store benchmark comparisons:", err.message);
+    }
+
     return { totalUpserted, categories: Object.keys(byCategory).length };
   },
   { connection: redisConnection },

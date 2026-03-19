@@ -13,6 +13,7 @@ import { redisConnection, QUEUE_NAMES } from "../config";
 const CHURN_RISK_THRESHOLD = 0.7;
 const INTERVENTION_COOLDOWN_DAYS = 14;
 const BATCH_SIZE = 50;
+const NEWLY_AT_RISK_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours — matches scan frequency
 
 interface ChurnInterventionJobData {
   storeId?: string; // If set, scan single store; otherwise scan all active stores
@@ -64,11 +65,14 @@ export const churnInterventionWorker = new Worker<ChurnInterventionJobData>(
 async function processStoreChurn(storeId: string): Promise<{ interventions: number; skipped: number }> {
   const cooldownCutoff = new Date(Date.now() - INTERVENTION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
 
-  // Find customers with high churn risk who haven't had a recent intervention
+  // Find customers who *newly* crossed the churn risk threshold since last scan
+  const newlyAtRiskCutoff = new Date(Date.now() - NEWLY_AT_RISK_WINDOW_MS);
+
   const atRiskCustomers = await prisma.customerState.findMany({
     where: {
       storeId,
       churnRisk: { gte: CHURN_RISK_THRESHOLD },
+      updatedAt: { gte: newlyAtRiskCutoff }, // Only target newly at-risk customers
     },
     include: {
       customer: {
@@ -211,6 +215,27 @@ async function processStoreChurn(storeId: string): Promise<{ interventions: numb
 
       if (result.id) {
         interventions++;
+
+        // Log to AgentActivityLog for overnight ops visibility
+        await prisma.agentActivityLog.create({
+          data: {
+            storeId,
+            activityType: "churn_intervention",
+            summary: `Churn intervention proposed for ${customerName} — ${Math.round(state.churnRisk * 100)}% risk, strategy: ${strategy.type}`,
+            category: "win_back",
+            tier: result.autoExecuted ? "autopilot" : "copilot",
+            actionTaken: result.autoExecuted ? "triggered_journey" : "queued_for_review",
+            entityId: state.customerId,
+            entityType: "customer",
+            metadata: {
+              churnRisk: state.churnRisk,
+              lifecycleStage: state.lifecycleStage,
+              vipLevel: state.vipLevel,
+              strategy: strategy.type,
+              channel,
+            },
+          },
+        }).catch(() => {});
       }
     } catch (err) {
       console.error(

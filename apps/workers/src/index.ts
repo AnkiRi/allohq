@@ -85,6 +85,10 @@ import { benchmarkAggregatorWorker } from "./workers/benchmark-aggregator.worker
 import { customerVoiceWorker } from "./workers/customer-voice.worker";
 import { memoryWriterWorker } from "./workers/memory-writer.worker";
 import { dailyRevenueEmailWorker } from "./workers/daily-revenue-email.worker";
+import { overnightOpsWorker } from "./workers/overnight-ops.worker";
+import { eventReactorWorker } from "./workers/event-reactor.worker";
+import { browseAbandonmentWorker } from "./workers/browse-abandonment.worker";
+import { copyLearnerWorker } from "./workers/copy-learner.worker";
 
 // Clean up stale Redis connections from previous ungraceful shutdowns.
 // When workers are force-killed (SIGKILL/kill -9), their blocking BullMQ
@@ -96,9 +100,9 @@ import Redis from "ioredis";
 (async () => {
   try {
     const cleanupRedis = new Redis({
-      host: redisConnection.host as string,
-      port: redisConnection.port as number,
-      password: redisConnection.password,
+      host: (redisConnection as any).host as string,
+      port: (redisConnection as any).port as number,
+      password: (redisConnection as any).password,
       maxRetriesPerRequest: 1,
     });
     // Kill idle connections from previous workers (idle > 30 seconds, not the current one)
@@ -169,6 +173,10 @@ console.log(`  - benchmark-aggregator worker: ${benchmarkAggregatorWorker.name}`
 console.log(`  - customer-voice worker: ${customerVoiceWorker.name}`);
 console.log(`  - memory-writer worker: ${memoryWriterWorker.name}`);
 console.log(`  - daily-revenue-email worker: ${dailyRevenueEmailWorker.name}`);
+console.log(`  - overnight-ops worker: ${overnightOpsWorker.name}`);
+console.log(`  - event-reactor worker: ${eventReactorWorker.name}`);
+console.log(`  - browse-abandonment worker: ${browseAbandonmentWorker.name}`);
+console.log(`  - copy-learner worker: ${copyLearnerWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -319,11 +327,11 @@ outcomeAttributionQueue.upsertJobScheduler(
   console.error("Failed to set up daily revenue summary schedule:", err.message);
 });
 
-// Schedule churn intervention scan (daily)
+// Schedule churn intervention scan (every 6 hours — increased from daily for faster detection)
 const churnInterventionQueue = new Queue(QUEUE_NAMES.CHURN_INTERVENTION, { connection: redisConnection });
 churnInterventionQueue.upsertJobScheduler(
   "churn-intervention-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { every: 6 * 60 * 60 * 1000 },
   { name: "churn-intervention", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up churn intervention schedule:", err.message);
@@ -367,6 +375,36 @@ customerStateDecayQueue.upsertJobScheduler(
   { name: "state-decay", data: { type: "state_decay", customerId: "", storeId: "" } }
 ).catch((err) => {
   console.error("Failed to set up state decay schedule:", err.message);
+});
+
+// Schedule overnight ops (every 2 hours)
+const overnightOpsQueue = new Queue(QUEUE_NAMES.OVERNIGHT_OPS, { connection: redisConnection });
+overnightOpsQueue.upsertJobScheduler(
+  "overnight-ops-schedule",
+  { every: 2 * 60 * 60 * 1000 },
+  { name: "overnight-scan", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up overnight ops schedule:", err.message);
+});
+
+// Schedule browse abandonment scan (every 30 minutes)
+const browseAbandonmentQueue = new Queue(QUEUE_NAMES.BROWSE_ABANDONMENT, { connection: redisConnection });
+browseAbandonmentQueue.upsertJobScheduler(
+  "browse-abandonment-schedule",
+  { every: 30 * 60 * 1000 },
+  { name: "browse-abandonment", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up browse abandonment schedule:", err.message);
+});
+
+// Schedule copy learner (weekly)
+const copyLearnerQueue = new Queue(QUEUE_NAMES.COPY_LEARNER, { connection: redisConnection });
+copyLearnerQueue.upsertJobScheduler(
+  "copy-learner-schedule",
+  { every: 7 * 24 * 60 * 60 * 1000 },
+  { name: "copy-learner", data: { type: "weekly" } }
+).catch((err) => {
+  console.error("Failed to set up copy learner schedule:", err.message);
 });
 
 // Graceful shutdown with timeout — if workers don't close in 5s, force exit.
@@ -421,6 +459,10 @@ const shutdown = async () => {
       customerVoiceWorker.close(),
       memoryWriterWorker.close(),
       dailyRevenueEmailWorker.close(),
+      overnightOpsWorker.close(),
+      eventReactorWorker.close(),
+      browseAbandonmentWorker.close(),
+      copyLearnerWorker.close(),
     ]);
   } catch (err) {
     console.error("Error during shutdown:", (err as Error).message);

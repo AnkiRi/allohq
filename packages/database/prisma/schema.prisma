@@ -38,18 +38,18 @@ model Workspace {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  members WorkspaceMember[]
-  stores  Store[]
-  emailTemplates EmailTemplate[]
-  campaigns      Campaign[]
-  brandProfiles  BrandProfile[]
-  automations      Automation[]
-  generatedContent GeneratedContent[]
-  messageLogs      MessageLog[]
-  generatedImages  GeneratedImage[]
-  tokenUsages    TokenUsage[]
-  aiChats        AiChat[]
-  brandAssets    BrandAsset[]
+  members                 WorkspaceMember[]
+  stores                  Store[]
+  emailTemplates          EmailTemplate[]
+  campaigns               Campaign[]
+  brandProfiles           BrandProfile[]
+  automations             Automation[]
+  generatedContent        GeneratedContent[]
+  messageLogs             MessageLog[]
+  generatedImages         GeneratedImage[]
+  tokenUsages             TokenUsage[]
+  aiChats                 AiChat[]
+  brandAssets             BrandAsset[]
   notificationPreferences NotificationPreference[]
 
   @@map("workspaces")
@@ -70,26 +70,26 @@ model WorkspaceMember {
 }
 
 model NotificationPreference {
-  id          String   @id @default(cuid())
-  workspaceId String
-  userId      String
+  id               String   @id @default(cuid())
+  workspaceId      String
+  userId           String
   // Channel toggles
-  emailDigest       Boolean @default(true)   // daily email summary
-  emailRealtime     Boolean @default(false)  // immediate email on events
-  inApp             Boolean @default(true)   // in-app notifications
+  emailDigest      Boolean  @default(true) // daily email summary
+  emailRealtime    Boolean  @default(false) // immediate email on events
+  inApp            Boolean  @default(true) // in-app notifications
   // Event types
-  onActionRequired  Boolean @default(true)   // agent needs approval
-  onCampaignSent    Boolean @default(true)   // campaign completed
-  onEscalation      Boolean @default(true)   // conversation escalated
-  onChurnAlert      Boolean @default(true)   // customer churn risk spike
-  onRevenueGoal     Boolean @default(false)  // revenue milestone hit
-  onWeeklyReport    Boolean @default(true)   // weekly performance summary
+  onActionRequired Boolean  @default(true) // agent needs approval
+  onCampaignSent   Boolean  @default(true) // campaign completed
+  onEscalation     Boolean  @default(true) // conversation escalated
+  onChurnAlert     Boolean  @default(true) // customer churn risk spike
+  onRevenueGoal    Boolean  @default(false) // revenue milestone hit
+  onWeeklyReport   Boolean  @default(true) // weekly performance summary
   // Quiet hours
-  quietHoursStart   Int?                     // hour (0-23), null = no quiet hours
-  quietHoursEnd     Int?
-  timezone          String  @default("UTC")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  quietHoursStart  Int? // hour (0-23), null = no quiet hours
+  quietHoursEnd    Int?
+  timezone         String   @default("UTC")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -102,94 +102,103 @@ model NotificationPreference {
 // ============================================================================
 
 model Store {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   workspaceId String
-  platform    String   // shopify, woocommerce, bigcommerce
+  platform    String // shopify, woocommerce, bigcommerce
   shopDomain  String
-  accessToken String   // encrypted
-  isActive    Boolean  @default(true)
-  installedAt DateTime @default(now())
+  accessToken String // encrypted
+  isActive    Boolean   @default(true)
+  installedAt DateTime  @default(now())
   lastSyncAt  DateTime?
 
   // Shop metadata (synced from Shopify)
-  storeName        String?
-  storeEmail       String?
-  storePhone       String?
-  storeLogoUrl     String?
-  storeDescription String?
-  address          Json?    // { address1, address2, city, province, zip, country }
-  socialLinks      Json?    // { instagram?, facebook?, twitter?, tiktok?, pinterest?, youtube? }
-  currency         String?
-  timezone         String?
-  messagingConfig  Json?    // per-store messaging provider config (future use)
+  storeName             String?
+  storeEmail            String?
+  storePhone            String?
+  storeLogoUrl          String?
+  storeDescription      String?
+  address               Json? // { address1, address2, city, province, zip, country }
+  socialLinks           Json? // { instagram?, facebook?, twitter?, tiktok?, pinterest?, youtube? }
+  currency              String?
+  timezone              String?
+  messagingConfig       Json? // per-store messaging provider config (future use)
   onboardingStep        Int       @default(0)
   onboardingCompletedAt DateTime? // set when merchant completes onboarding wizard
   activatedAt           DateTime? // timestamp when store activation completed
-  activationLog         Json?     // JSON field for tracking activation progress
-  storeCategory         String?   // fashion, beauty, food, electronics, home, health
+  activationLog         Json? // JSON field for tracking activation progress
+  storeCategory         String? // fashion, beauty, food, electronics, home, health
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  products    Product[]
-  customers   Customer[]
-  orders      Order[]
-  collections Collection[]
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  products      Product[]
+  customers     Customer[]
+  orders        Order[]
+  collections   Collection[]
   campaigns     Campaign[]
   brandProfiles BrandProfile[]
   automations   Automation[]
   brandAssets   BrandAsset[]
 
-  aiChats       AiChat[]
-  conversations    Conversation[]
-  agentActions     AgentAction[]
+  aiChats            AiChat[]
+  conversations      Conversation[]
+  agentActions       AgentAction[]
   agentObservations  AgentObservation[]
   retentionOutcomes  RetentionOutcome[]
   abandonedCheckouts AbandonedCheckout[]
 
   // Sprint 1: Customer State + Autonomy
-  customerStates     CustomerState[]
-  autonomyConfigs    AutonomyConfig[]
-  actionQueue        ActionQueue[]
-  guardrails         Guardrail[]
+  customerStates      CustomerState[]
+  autonomyConfigs     AutonomyConfig[]
+  actionQueue         ActionQueue[]
+  guardrails          Guardrail[]
   customerFatigueLogs CustomerFatigueLog[]
 
   // Sprint 3A: Creative Engine
-  brandVisualProfile   BrandVisualProfile?
-  creativeAssets       CreativeAsset[]
+  brandVisualProfile      BrandVisualProfile?
+  creativeAssets          CreativeAsset[]
   productRepurchaseCycles ProductRepurchaseCycle[]
   processedProductImages  ProcessedProductImage[]
 
   // Sprint 4: Merchant Copilot
-  merchantBriefings    MerchantBriefing[]
-  storeBaseline        StoreBaseline?
+  merchantBriefings MerchantBriefing[]
+  storeBaseline     StoreBaseline?
 
   // Sprint 5: Journey Orchestrator
-  customerJourneys     CustomerJourney[]
-  abTests              ABTest[]
+  customerJourneys CustomerJourney[]
+  abTests          ABTest[]
 
   // Sprint 6: Forms + Popups
-  forms                Form[]
-  popups               Popup[]
+  forms  Form[]
+  popups Popup[]
 
   // Sprint 8: Product Recommendations
-  productAffinityPairs          ProductAffinityPair[]
+  productAffinityPairs           ProductAffinityPair[]
   customerProductRecommendations CustomerProductRecommendation[]
 
   // Sprint 9: Proactive Outreach
-  fulfillments              Fulfillment[]
-  productPriceHistory       ProductPriceHistory[]
-  proactiveOutreachLogs     ProactiveOutreachLog[]
+  fulfillments          Fulfillment[]
+  productPriceHistory   ProductPriceHistory[]
+  proactiveOutreachLogs ProactiveOutreachLog[]
 
   // Sprint 10: Conversation Engine
-  knowledgeArticles         KnowledgeArticle[]
+  knowledgeArticles KnowledgeArticle[]
 
   // Sprint 11: Agent Memory
-  agentMemories             AgentMemory[]
+  agentMemories AgentMemory[]
 
   // Sprint 13: Customer Voice Synthesis
-  customerVoiceReports      CustomerVoiceReport[]
+  customerVoiceReports CustomerVoiceReport[]
 
   // Sprint 14: Revenue Forecasting
-  revenueForecasts          RevenueForecast[]
+  revenueForecasts RevenueForecast[]
+
+  // Sprint 12: Overnight Ops + Revenue Attribution
+  agentActivityLogs AgentActivityLog[]
+
+  // Sprint 13: Real-Time Event Triggers
+  browseEvents BrowseEvent[]
+
+  // Sprint 14B: Self-Optimizing Agent
+  copyPerformance CopyPerformance[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -202,7 +211,7 @@ model Store {
 model Product {
   id             String   @id @default(cuid())
   storeId        String
-  externalId     String   // Shopify product ID
+  externalId     String // Shopify product ID
   title          String
   description    String?
   handle         String
@@ -220,8 +229,8 @@ model Product {
   collectionProducts CollectionProduct[]
 
   // Sprint 3A: Creative Engine
-  repurchaseCycle     ProductRepurchaseCycle?
-  processedImages     ProcessedProductImage[]
+  repurchaseCycle ProductRepurchaseCycle?
+  processedImages ProcessedProductImage[]
 
   // Sprint 8: Product Recommendations
   customerProductRecommendations CustomerProductRecommendation[]
@@ -236,7 +245,7 @@ model Product {
 model ProductVariant {
   id         String  @id @default(cuid())
   productId  String
-  externalId String  // Shopify variant ID
+  externalId String // Shopify variant ID
   title      String
   sku        String?
   price      Float
@@ -252,12 +261,12 @@ model ProductVariant {
 model Collection {
   id             String    @id @default(cuid())
   storeId        String
-  externalId     String    // Shopify collection ID
+  externalId     String // Shopify collection ID
   title          String
   handle         String
   description    String?
   imageUrl       String?
-  sortOrder      String?   // e.g. "best-selling", "alpha-asc"
+  sortOrder      String? // e.g. "best-selling", "alpha-asc"
   collectionType String    @default("custom") // "custom" or "smart"
   publishedAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -284,30 +293,30 @@ model CollectionProduct {
 }
 
 model Customer {
-  id            String   @id @default(cuid())
-  storeId       String
-  externalId    String   // Shopify customer ID
-  email         String
-  phone         String?
-  firstName     String?
-  lastName      String?
-  acceptsMarketing Boolean @default(false)
-  tags          String[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  storeId          String
+  externalId       String // Shopify customer ID
+  email            String
+  phone            String?
+  firstName        String?
+  lastName         String?
+  acceptsMarketing Boolean  @default(false)
+  tags             String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  store  Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  orders Order[]
-  rfmScore RfmScore?
-  lifetimeValue CustomerLifetimeValue?
-  memories         CustomerMemory[]
-  conversations      Conversation[]
-  retentionOutcomes  RetentionOutcome[]
-  abandonedCheckouts AbandonedCheckout[]
-  segmentHistory     CustomerSegmentHistory[]
-  customerState      CustomerState?
-  customerJourneys   CustomerJourney[]
-  formSubmissions    FormSubmission[]
+  store                          Store                           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orders                         Order[]
+  rfmScore                       RfmScore?
+  lifetimeValue                  CustomerLifetimeValue?
+  memories                       CustomerMemory[]
+  conversations                  Conversation[]
+  retentionOutcomes              RetentionOutcome[]
+  abandonedCheckouts             AbandonedCheckout[]
+  segmentHistory                 CustomerSegmentHistory[]
+  customerState                  CustomerState?
+  customerJourneys               CustomerJourney[]
+  formSubmissions                FormSubmission[]
   customerProductRecommendations CustomerProductRecommendation[]
   proactiveOutreachLogs          ProactiveOutreachLog[]
 
@@ -320,20 +329,20 @@ model Order {
   id          String   @id @default(cuid())
   storeId     String
   customerId  String
-  externalId  String   // Shopify order ID
+  externalId  String // Shopify order ID
   orderNumber String
   totalPrice  Float
   subtotal    Float
   tax         Float
   shipping    Float
   currency    String   @default("USD")
-  status      String   // pending, paid, fulfilled, cancelled
+  status      String // pending, paid, fulfilled, cancelled
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  store    Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer Customer    @relation(fields: [customerId], references: [id])
-  items    OrderItem[]
+  store        Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  items        OrderItem[]
   attribution  OrderAttribution?
   fulfillments Fulfillment[]
 
@@ -347,14 +356,14 @@ model OrderAttribution {
   orderId      String   @unique
   customerId   String
   storeId      String
-  messageLogId String?  // which email/sms led to this order
+  messageLogId String? // which email/sms led to this order
   campaignId   String?
   automationId String?
-  channel      String   // "email" | "sms"
+  channel      String // "email" | "sms"
   revenue      Float
   attributedAt DateTime @default(now())
-  touchType    String   // "click" | "open" | "direct"
-  windowDays   Int      // attribution window used (7, 14, 30)
+  touchType    String // "click" | "open" | "direct"
+  windowDays   Int // attribution window used (7, 14, 30)
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -365,7 +374,7 @@ model OrderAttribution {
 }
 
 model OrderItem {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   orderId   String
   productId String
   variantId String?
@@ -382,13 +391,13 @@ model AbandonedCheckout {
   id          String    @id @default(cuid())
   storeId     String
   customerId  String?
-  externalId  String    // Shopify checkout token or ID
+  externalId  String // Shopify checkout token or ID
   email       String?
   phone       String?
-  lineItems   Json      // array of { productId, variantId, title, quantity, price }
+  lineItems   Json // array of { productId, variantId, title, quantity, price }
   totalPrice  Float     @default(0)
   currency    String    @default("USD")
-  checkoutUrl String?   // Shopify recovery URL
+  checkoutUrl String? // Shopify recovery URL
   status      String    @default("open") // open | abandoned | recovered
   abandonedAt DateTime?
   recoveredAt DateTime?
@@ -410,19 +419,19 @@ model AbandonedCheckout {
 // ============================================================================
 
 model RfmScore {
-  id          String   @id @default(cuid())
-  customerId  String   @unique
-  storeId     String
-  recency     Int      // 1-5 score
-  frequency   Int      // 1-5 score
-  monetary    Int      // 1-5 score
-  totalScore  Int      // sum of R+F+M
-  segment     String   // Champions, Loyal, At Risk, Lost, etc.
-  lastOrderAt DateTime?
-  orderCount  Int      @default(0)
-  totalSpent  Float    @default(0)
-  avgOrderValue Float  @default(0)
-  calculatedAt DateTime @default(now())
+  id            String    @id @default(cuid())
+  customerId    String    @unique
+  storeId       String
+  recency       Int // 1-5 score
+  frequency     Int // 1-5 score
+  monetary      Int // 1-5 score
+  totalScore    Int // sum of R+F+M
+  segment       String // Champions, Loyal, At Risk, Lost, etc.
+  lastOrderAt   DateTime?
+  orderCount    Int       @default(0)
+  totalSpent    Float     @default(0)
+  avgOrderValue Float     @default(0)
+  calculatedAt  DateTime  @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -433,20 +442,20 @@ model RfmScore {
 }
 
 model CustomerSegment {
-  id          String   @id @default(cuid())
-  storeId     String
-  name        String   // Champions, Loyal Customers, Potential Loyalists, etc.
-  slug        String
-  description String?
-  rfmMin      Int      @default(0)  // min total RFM score
-  rfmMax      Int      @default(15) // max total RFM score
-  color       String   @default("#000000")
-  customerCount Int    @default(0)
-  totalRevenue  Float  @default(0)
-  conditions  Json?    // custom segment rules: { operator, conditions[] }
-  isSystem    Boolean  @default(false) // system-generated vs custom
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  storeId       String
+  name          String // Champions, Loyal Customers, Potential Loyalists, etc.
+  slug          String
+  description   String?
+  rfmMin        Int      @default(0) // min total RFM score
+  rfmMax        Int      @default(15) // max total RFM score
+  color         String   @default("#000000")
+  customerCount Int      @default(0)
+  totalRevenue  Float    @default(0)
+  conditions    Json? // custom segment rules: { operator, conditions[] }
+  isSystem      Boolean  @default(false) // system-generated vs custom
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   campaigns Campaign[]
 
@@ -455,15 +464,15 @@ model CustomerSegment {
 }
 
 model CustomerLifetimeValue {
-  id               String   @id @default(cuid())
-  customerId       String   @unique
-  storeId          String
-  historicalLtv    Float    @default(0) // actual spend to date
-  predictedLtv     Float    @default(0) // projected future value
-  avgOrderValue    Float    @default(0)
-  purchaseFrequency Float   @default(0) // orders per month
-  customerLifespan  Float   @default(0) // months since first order
-  churnProbability  Float   @default(0) // 0-1
+  id                String   @id @default(cuid())
+  customerId        String   @unique
+  storeId           String
+  historicalLtv     Float    @default(0) // actual spend to date
+  predictedLtv      Float    @default(0) // projected future value
+  avgOrderValue     Float    @default(0)
+  purchaseFrequency Float    @default(0) // orders per month
+  customerLifespan  Float    @default(0) // months since first order
+  churnProbability  Float    @default(0) // 0-1
   lastCalculatedAt  DateTime @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -509,7 +518,6 @@ enum CampaignStatus {
   cancelled
 }
 
-
 enum ContentRating {
   good
   bad
@@ -517,20 +525,20 @@ enum ContentRating {
 }
 
 model EmailTemplate {
-  id          String           @id @default(cuid())
-  workspaceId String
-  name        String
-  subject     String
-  previewText String?
-  blocks      Json             // Array of EmailBlock objects
-  html        String?          // Rendered HTML cache
-  category    TemplateCategory @default(marketing)
+  id           String           @id @default(cuid())
+  workspaceId  String
+  name         String
+  subject      String
+  previewText  String?
+  blocks       Json // Array of EmailBlock objects
+  html         String? // Rendered HTML cache
+  category     TemplateCategory @default(marketing)
   thumbnailUrl String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  campaigns  Campaign[]
+  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns        Campaign[]
   generatedContent GeneratedContent[]
 
   @@index([workspaceId])
@@ -553,9 +561,9 @@ model Campaign {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  template  EmailTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  template  EmailTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
   segment   CustomerSegment? @relation(fields: [segmentId], references: [id])
 
   @@index([workspaceId])
@@ -565,27 +573,27 @@ model Campaign {
 }
 
 model BrandProfile {
-  id                 String   @id @default(cuid())
-  workspaceId        String
-  storeId            String
-  brandName          String
-  brandDescription   String?
-  toneAttributes     Json     // { formality, humor, energy, warmth }
-  vocabulary         Json     // preferred words, phrases, CTA patterns
-  visualStyle        Json     // colors, font preferences, image style
-  sampleCopy         Json     // extracted examples from product descriptions
-  creativeIntensity  String   @default("balanced") // "text_heavy" | "balanced" | "visual_heavy"
+  id                String  @id @default(cuid())
+  workspaceId       String
+  storeId           String
+  brandName         String
+  brandDescription  String?
+  toneAttributes    Json // { formality, humor, energy, warmth }
+  vocabulary        Json // preferred words, phrases, CTA patterns
+  visualStyle       Json // colors, font preferences, image style
+  sampleCopy        Json // extracted examples from product descriptions
+  creativeIntensity String  @default("balanced") // "text_heavy" | "balanced" | "visual_heavy"
 
   // Hard params for email generation
-  logoPosition     String?  @default("center") // "left" | "center" | "right"
-  headerBgColor    String?  // hex color for email header background
-  footerText       String?  // custom footer text / legal
-  showSocialLinks  Boolean  @default(true)
-  showAddress      Boolean  @default(true)
+  logoPosition    String? @default("center") // "left" | "center" | "right"
+  headerBgColor   String? // hex color for email header background
+  footerText      String? // custom footer text / legal
+  showSocialLinks Boolean @default(true)
+  showAddress     Boolean @default(true)
 
-  analyzedAt         DateTime @default(now())
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  analyzedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -598,7 +606,7 @@ model BrandAsset {
   id          String   @id @default(cuid())
   workspaceId String
   storeId     String
-  type        String   // "logo" | "logo_dark" | "hero" | "lifestyle" | "icon" | "other"
+  type        String // "logo" | "logo_dark" | "hero" | "lifestyle" | "icon" | "other"
   url         String
   fileName    String
   mimeType    String?
@@ -614,27 +622,27 @@ model BrandAsset {
 }
 
 model Automation {
-  id                  String           @id @default(cuid())
+  id                  String   @id @default(cuid())
   workspaceId         String
   storeId             String
   name                String
   description         String?
-  category            String           // welcome_series, abandoned_cart, etc.
-  status              String           @default("recommended") // recommended|generating|draft|ready|active|paused
-  triggerType         String           @default("event")       // event|schedule|segment_entry|segment_exit
-  triggerConfig       Json             @default("{}")
-  nodes               Json             @default("[]")           // WorkflowNode[] DAG
-  templateIds         String[]         @default([])
-  smsTemplateIds      String[]         @default([])
-  whatsappTemplateIds String[]         @default([])
-  rcsTemplateIds      String[]         @default([])
+  category            String // welcome_series, abandoned_cart, etc.
+  status              String   @default("recommended") // recommended|generating|draft|ready|active|paused
+  triggerType         String   @default("event") // event|schedule|segment_entry|segment_exit
+  triggerConfig       Json     @default("{}")
+  nodes               Json     @default("[]") // WorkflowNode[] DAG
+  templateIds         String[] @default([])
+  smsTemplateIds      String[] @default([])
+  whatsappTemplateIds String[] @default([])
+  rcsTemplateIds      String[] @default([])
   // Performance stats (incremented by resend webhook)
-  sentCount           Int              @default(0)
-  openCount           Int              @default(0)
-  clickCount          Int              @default(0)
-  bounceCount         Int              @default(0)
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  sentCount           Int      @default(0)
+  openCount           Int      @default(0)
+  clickCount          Int      @default(0)
+  bounceCount         Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -650,14 +658,14 @@ model GeneratedContent {
   templateId   String
   prompt       String
   response     String
-  model        String   // e.g. gpt-4o
-  intent       String   // e.g. welcome, cart_recovery, seasonal_sale
+  model        String // e.g. gpt-4o
+  intent       String // e.g. welcome, cart_recovery, seasonal_sale
   inputTokens  Int?
   outputTokens Int?
   createdAt    DateTime @default(now())
 
-  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  template  EmailTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template  EmailTemplate     @relation(fields: [templateId], references: [id], onDelete: Cascade)
   feedback  ContentFeedback[]
 
   @@index([workspaceId])
@@ -687,7 +695,7 @@ model TokenUsage {
   model        String
   inputTokens  Int
   outputTokens Int
-  purpose      String   // brand_analysis, generate_email, generate_sms, generate_whatsapp, generate_rcs
+  purpose      String // brand_analysis, generate_email, generate_sms, generate_whatsapp, generate_rcs
   createdAt    DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -696,7 +704,6 @@ model TokenUsage {
   @@index([workspaceId, createdAt])
   @@map("token_usages")
 }
-
 
 // ============================================================================
 // SMS TEMPLATES
@@ -707,8 +714,8 @@ model SmsTemplate {
   workspaceId  String
   automationId String?
   name         String
-  body         String   // message body with {{variable}} placeholders
-  variables    Json     // variable definitions
+  body         String // message body with {{variable}} placeholders
+  variables    Json // variable definitions
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -726,8 +733,8 @@ model WhatsAppTemplate {
   workspaceId  String
   automationId String?
   name         String
-  body         String   // message body with {{1}} placeholders
-  variables    Json     // variable definitions
+  body         String // message body with {{1}} placeholders
+  variables    Json // variable definitions
   category     String   @default("MARKETING")
   language     String   @default("en")
   createdAt    DateTime @default(now())
@@ -747,11 +754,11 @@ model RcsTemplate {
   workspaceId  String
   automationId String?
   name         String
-  body         String   // rich message body
-  cardTitle    String?  // rich card title
-  cardImageUrl String?  // rich card image
-  actions      Json     @default("[]")  // suggested actions (buttons, links)
-  variables    Json     // variable definitions
+  body         String // rich message body
+  cardTitle    String? // rich card title
+  cardImageUrl String? // rich card image
+  actions      Json     @default("[]") // suggested actions (buttons, links)
+  variables    Json // variable definitions
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -789,7 +796,7 @@ model AgentPipelineRun {
   jobId         String?             @unique
   status        AgentPipelineStatus @default(pending)
   phase         AgentPipelinePhase  @default(recommend)
-  progress      Json                @default("{}")  // { message, currentProgram, etc. }
+  progress      Json                @default("{}") // { message, currentProgram, etc. }
   programsCount Int                 @default(0)
   programsDone  Int                 @default(0)
   error         String?
@@ -811,15 +818,15 @@ model MessageLog {
   id           String    @id @default(cuid())
   workspaceId  String
   storeId      String
-  customerId   String?   // link to customer for attribution
-  channel      String    // email|sms|whatsapp|rcs
-  to           String    // email address or phone number
-  subject      String?   // email only
-  templateId   String?   // reference to the template used
-  campaignId   String?   // if sent via campaign
-  automationId String?   // if sent via automation
-  externalId   String?   // provider message ID (Resend ID, Twilio SID)
-  provider     String?   // twilio|gupshup|resend — which provider sent this message
+  customerId   String? // link to customer for attribution
+  channel      String // email|sms|whatsapp|rcs
+  to           String // email address or phone number
+  subject      String? // email only
+  templateId   String? // reference to the template used
+  campaignId   String? // if sent via campaign
+  automationId String? // if sent via automation
+  externalId   String? // provider message ID (Resend ID, Twilio SID)
+  provider     String? // twilio|gupshup|resend — which provider sent this message
   status       String    @default("queued") // queued|sent|delivered|opened|clicked|bounced|failed
   error        String?
   metadata     Json      @default("{}")
@@ -831,13 +838,13 @@ model MessageLog {
   updatedAt    DateTime  @updatedAt
 
   // Outcome tracking — for ML training data (Sprint 12+)
-  outcome            String?   // opened, clicked, purchased, unsubscribed, ignored
-  outcomeRevenue     Decimal?  @db.Decimal(12, 2) // revenue attributed to this message
-  outcomeTimestamp   DateTime? // when outcome was recorded
-  customerStateSnap  Json?     // snapshot of CustomerState at send time
-  messageFeatures    Json?     // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
+  outcome           String? // opened, clicked, purchased, unsubscribed, ignored
+  outcomeRevenue    Decimal?  @db.Decimal(12, 2) // revenue attributed to this message
+  outcomeTimestamp  DateTime? // when outcome was recorded
+  customerStateSnap Json? // snapshot of CustomerState at send time
+  messageFeatures   Json? // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
 
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
   @@index([campaignId])
@@ -856,16 +863,16 @@ model MessageLog {
 model GeneratedImage {
   id          String   @id @default(cuid())
   workspaceId String
-  provider    String   // flux|dalle|unsplash
+  provider    String // flux|dalle|unsplash
   prompt      String
   url         String
-  purpose     String   // hero_banner|product_lifestyle|background|card
+  purpose     String // hero_banner|product_lifestyle|background|card
   cost        Float    @default(0)
   width       Int?
   height      Int?
   createdAt   DateTime @default(now())
 
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
   @@index([prompt])
@@ -884,7 +891,7 @@ model AiChat {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   messages  AiChatMessage[]
 
@@ -896,7 +903,7 @@ model AiChat {
 model AiChatMessage {
   id         String   @id @default(cuid())
   chatId     String
-  role       String   // "user" | "assistant"
+  role       String // "user" | "assistant"
   content    String   @db.Text
   highlights Json?
   model      String?
@@ -913,15 +920,15 @@ model AiChatMessage {
 // ============================================================================
 
 model Embedding {
-  id         String   @id @default(cuid())
+  id         String                      @id @default(cuid())
   storeId    String
-  entityType String   // product, brand, customer, faq
-  entityId   String   // ID of the source entity
-  chunk      String   @db.Text // text chunk that was embedded
+  entityType String // product, brand, customer, faq
+  entityId   String // ID of the source entity
+  chunk      String                      @db.Text // text chunk that was embedded
   embedding  Unsupported("vector(1536)")
-  metadata   Json     @default("{}")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  metadata   Json                        @default("{}")
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
 
   @@index([storeId, entityType])
   @@index([entityId])
@@ -932,9 +939,9 @@ model CustomerMemory {
   id         String   @id @default(cuid())
   storeId    String
   customerId String
-  memoryType String   // preference, complaint, interaction_note, purchase_pattern
+  memoryType String // preference, complaint, interaction_note, purchase_pattern
   content    String   @db.Text
-  source     String   // agent, import, observation
+  source     String // agent, import, observation
   confidence Float    @default(1.0) // 0-1
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -949,20 +956,20 @@ model CustomerMemory {
 
 enum ConversationStatus {
   active
-  waiting    // waiting for customer response
+  waiting // waiting for customer response
   resolved
-  escalated  // handed off to human
+  escalated // handed off to human
 }
 
 model Conversation {
   id         String             @id @default(cuid())
   storeId    String
   customerId String?
-  channel    String             // widget, whatsapp, sms, email
+  channel    String // widget, whatsapp, sms, email
   status     ConversationStatus @default(active)
-  assignedTo String?            // user ID if handed to human
+  assignedTo String? // user ID if handed to human
   metadata   Json               @default("{}") // session info, anonymous visitor data
-  sentiment  String?            // positive, neutral, negative
+  sentiment  String? // positive, neutral, negative
   resolvedAt DateTime?
   aiBrief    String?            @db.Text // AI summary for merchant handoff
   createdAt  DateTime           @default(now())
@@ -980,7 +987,7 @@ model Conversation {
 model ConversationMessage {
   id             String   @id @default(cuid())
   conversationId String
-  role           String   // customer, assistant, system, tool
+  role           String // customer, assistant, system, tool
   content        String   @db.Text
   contentType    String   @default("text") // text, product_card, order_card, discount_card, tool_call, tool_result
   metadata       Json     @default("{}") // tool name, product data, etc.
@@ -995,8 +1002,8 @@ model ConversationMessage {
 model AgentAction {
   id         String   @id @default(cuid())
   storeId    String
-  agentType  String   // customer_assistant, retention_strategist
-  actionType String   // send_message, create_discount, lookup_order, create_campaign, etc.
+  agentType  String // customer_assistant, retention_strategist
+  actionType String // send_message, create_discount, lookup_order, create_campaign, etc.
   input      Json     @default("{}")
   output     Json     @default("{}")
   status     String   @default("pending") // pending, running, completed, failed
@@ -1018,16 +1025,16 @@ enum ObservationSeverity {
 }
 
 model AgentObservation {
-  id           String              @id @default(cuid())
-  storeId      String
-  type         String              // churn_spike, revenue_anomaly, campaign_underperformance, trending_product
-  severity     ObservationSeverity @default(info)
-  summary      String
-  data         Json                @default("{}")
-  acknowledged Boolean             @default(false)
-  actionTaken     String?          // what the agent did in response
-  suggestedAction Json?            // { type: "create_campaign"|"investigate"|..., description: "..." }
-  createdAt       DateTime         @default(now())
+  id              String              @id @default(cuid())
+  storeId         String
+  type            String // churn_spike, revenue_anomaly, campaign_underperformance, trending_product
+  severity        ObservationSeverity @default(info)
+  summary         String
+  data            Json                @default("{}")
+  acknowledged    Boolean             @default(false)
+  actionTaken     String? // what the agent did in response
+  suggestedAction Json? // { type: "create_campaign"|"investigate"|..., description: "..." }
+  createdAt       DateTime            @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -1040,9 +1047,9 @@ model RetentionOutcome {
   id               String   @id @default(cuid())
   storeId          String
   customerId       String
-  interventionType String   // win_back_email, discount_offer, whatsapp_outreach, agent_conversation
-  interventionId   String?  // ID of the campaign, message, or conversation
-  outcome          String   // purchased, retained, reactivated, churned, no_response
+  interventionType String // win_back_email, discount_offer, whatsapp_outreach, agent_conversation
+  interventionId   String? // ID of the campaign, message, or conversation
+  outcome          String // purchased, retained, reactivated, churned, no_response
   revenueImpact    Float    @default(0) // attributed revenue from this intervention
   measuredAt       DateTime @default(now())
   createdAt        DateTime @default(now())
@@ -1061,24 +1068,24 @@ model RetentionOutcome {
 // ============================================================================
 
 model CustomerState {
-  id                    String   @id @default(cuid())
-  customerId            String   @unique
-  storeId               String
-  lifecycleStage        String   // visitor, subscriber, first_buyer, repeat, loyal, champion, at_risk, lost
-  churnRisk             Float    @default(0) // 0-1 probability
-  churnRiskUpdatedAt    DateTime @default(now())
-  intentState           String   @default("inactive") // browsing, considering, ready_to_buy, needs_help, inactive
-  channelPreference     Json     @default("{}") // { email: 0.7, whatsapp: 0.9, sms: 0.3, rcs: 0.0 }
-  optimalSendWindow     Json     @default("{}") // { timezone: "Asia/Kolkata", bestHours: [10, 14, 19] }
-  communicationFatigue  Json     @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
-  discountSensitivity   Float    @default(0.5) // 0-1
-  supportState          String   @default("clear") // clear, open_issue, recent_complaint, escalated
-  trustScore            Float    @default(0.5) // 0-1
-  vipLevel              String   @default("standard") // standard, silver, gold, platinum
-  campaignEligibility   Json     @default("[]") // list of eligible campaign types
-  lastStateUpdate       DateTime @default(now())
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  customerId           String   @unique
+  storeId              String
+  lifecycleStage       String // visitor, subscriber, first_buyer, repeat, loyal, champion, at_risk, lost
+  churnRisk            Float    @default(0) // 0-1 probability
+  churnRiskUpdatedAt   DateTime @default(now())
+  intentState          String   @default("inactive") // browsing, considering, ready_to_buy, needs_help, inactive
+  channelPreference    Json     @default("{}") // { email: 0.7, whatsapp: 0.9, sms: 0.3, rcs: 0.0 }
+  optimalSendWindow    Json     @default("{}") // { timezone: "Asia/Kolkata", bestHours: [10, 14, 19] }
+  communicationFatigue Json     @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
+  discountSensitivity  Float    @default(0.5) // 0-1
+  supportState         String   @default("clear") // clear, open_issue, recent_complaint, escalated
+  trustScore           Float    @default(0.5) // 0-1
+  vipLevel             String   @default("standard") // standard, silver, gold, platinum
+  campaignEligibility  Json     @default("[]") // list of eligible campaign types
+  lastStateUpdate      DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -1096,8 +1103,8 @@ model CustomerState {
 model AutonomyConfig {
   id        String   @id @default(cuid())
   storeId   String
-  category  String   // cart_abandonment, repurchase_reminders, win_back, post_purchase, shipping_updates, cross_sell, new_campaigns, discounts, vip_comms, segment_reassignment, support_responses, brand_voice
-  tier      String   // autopilot, copilot, advisor
+  category  String // cart_abandonment, repurchase_reminders, win_back, post_purchase, shipping_updates, cross_sell, new_campaigns, discounts, vip_comms, segment_reassignment, support_responses, brand_voice
+  tier      String // autopilot, copilot, advisor
   settings  Json     @default("{}") // category-specific settings (e.g., { confidenceThreshold: 85 })
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1109,22 +1116,22 @@ model AutonomyConfig {
 }
 
 model ActionQueue {
-  id              String    @id @default(cuid())
-  storeId         String
-  type            String    // campaign, automation, outreach, alert
-  status          String    @default("pending") // pending, approved, rejected, expired, auto_executed
-  category        String?   // maps to AutonomyConfig category
-  urgencyScore    Float     @default(50)
-  confidenceScore Float     @default(50)
-  expiresAt       DateTime?
-  reasoning       String    // "Why I recommend this"
+  id               String    @id @default(cuid())
+  storeId          String
+  type             String // campaign, automation, outreach, alert
+  status           String    @default("pending") // pending, approved, rejected, expired, auto_executed
+  category         String? // maps to AutonomyConfig category
+  urgencyScore     Float     @default(50)
+  confidenceScore  Float     @default(50)
+  expiresAt        DateTime?
+  reasoning        String // "Why I recommend this"
   estimatedRevenue Float?
-  payload         Json      // action-specific data (campaign draft, automation config, etc.)
-  createdAt       DateTime  @default(now())
-  reviewedBy      String?   // user ID who reviewed
-  reviewedAt      DateTime?
-  reviewNote      String?   // optional note from reviewer
-  assignedTo      String?   // team member for review
+  payload          Json // action-specific data (campaign draft, automation config, etc.)
+  createdAt        DateTime  @default(now())
+  reviewedBy       String? // user ID who reviewed
+  reviewedAt       DateTime?
+  reviewNote       String? // optional note from reviewer
+  assignedTo       String? // team member for review
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -1137,8 +1144,8 @@ model ActionQueue {
 model Guardrail {
   id        String   @id @default(cuid())
   storeId   String
-  ruleType  String   // max_discount, max_sends_per_week, blocked_words, quiet_hours, spending_caps, segment_exclusions, channel_preferences, collision_avoidance, visual_guardrails
-  ruleValue Json     // rule-specific configuration
+  ruleType  String // max_discount, max_sends_per_week, blocked_words, quiet_hours, spending_caps, segment_exclusions, channel_preferences, collision_avoidance, visual_guardrails
+  ruleValue Json // rule-specific configuration
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1153,8 +1160,8 @@ model CustomerFatigueLog {
   id           String   @id @default(cuid())
   customerId   String
   storeId      String
-  channel      String   // email, sms, whatsapp, rcs
-  messageType  String   // campaign, automation, proactive, support
+  channel      String // email, sms, whatsapp, rcs
+  messageType  String // campaign, automation, proactive, support
   campaignId   String?
   automationId String?
   sentAt       DateTime @default(now())
@@ -1173,18 +1180,18 @@ model CustomerFatigueLog {
 model BrandVisualProfile {
   id                      String   @id @default(cuid())
   storeId                 String   @unique
-  primaryColors           Json     // ["#hex1", "#hex2"]
-  accentColors            Json     // ["#hex1", "#hex2"]
-  fontFamily              String?  // primary heading font
-  bodyFontFamily          String?  // body text font
+  primaryColors           Json // ["#hex1", "#hex2"]
+  accentColors            Json // ["#hex1", "#hex2"]
+  fontFamily              String? // primary heading font
+  bodyFontFamily          String? // body text font
   logoUrl                 String?
-  logoVariants            Json?    // { light: url, dark: url, icon: url }
-  photographyStyle        String?  // product, lifestyle, flat-lay, etc.
-  visualTone              String?  // minimal, bold, warm, etc.
-  layoutPreference        String?  // clean, dense, editorial, etc.
-  bannedElements          Json?    // ["element1", "element2"]
-  brandDesignTokens       Json?    // full token set (colors, typography, spacing, CTA, image, brand)
-  aestheticClassification String?  // clean_minimal, bold_graphic, luxury_editorial, warm_organic, playful_colorful, tech_modern, heritage_artisanal, premium_dtc
+  logoVariants            Json? // { light: url, dark: url, icon: url }
+  photographyStyle        String? // product, lifestyle, flat-lay, etc.
+  visualTone              String? // minimal, bold, warm, etc.
+  layoutPreference        String? // clean, dense, editorial, etc.
+  bannedElements          Json? // ["element1", "element2"]
+  brandDesignTokens       Json? // full token set (colors, typography, spacing, CTA, image, brand)
+  aestheticClassification String? // clean_minimal, bold_graphic, luxury_editorial, warm_organic, playful_colorful, tech_modern, heritage_artisanal, premium_dtc
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -1196,19 +1203,19 @@ model BrandVisualProfile {
 model CreativeAsset {
   id               String   @id @default(cuid())
   storeId          String
-  type             String   // hero_banner, product_card, promo_badge, background, lifestyle, seasonal_header
-  generationMethod String   // template, ai_generated, product_composite, overlay
-  sourcePrompt     String?  // AI generation prompt if applicable
-  templateId       String?  // MJML archetype ID if template-based
+  type             String // hero_banner, product_card, promo_badge, background, lifestyle, seasonal_header
+  generationMethod String // template, ai_generated, product_composite, overlay
+  sourcePrompt     String? // AI generation prompt if applicable
+  templateId       String? // MJML archetype ID if template-based
   imageUrl         String
   thumbnailUrl     String?
   width            Int?
   height           Int?
   fileSizeBytes    Int?
-  format           String?  // png, jpg, webp
-  channel          String?  // email, sms, whatsapp, rcs
+  format           String? // png, jpg, webp
+  channel          String? // email, sms, whatsapp, rcs
   campaignId       String?
-  metadata         Json?    // additional context (brand tokens used, overlay config, etc.)
+  metadata         Json? // additional context (brand tokens used, overlay config, etc.)
   createdAt        DateTime @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -1222,10 +1229,10 @@ model ProductRepurchaseCycle {
   id             String   @id @default(cuid())
   productId      String   @unique
   storeId        String
-  medianDays     Float    // median days between repurchases
-  avgDays        Float    // average days between repurchases
-  sampleSize     Int      // number of repeat purchases analysed
-  confidence     Float    // 0-1 confidence score based on sample size
+  medianDays     Float // median days between repurchases
+  avgDays        Float // average days between repurchases
+  sampleSize     Int // number of repeat purchases analysed
+  confidence     Float // 0-1 confidence score based on sample size
   lastCalculated DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -1239,11 +1246,11 @@ model ProcessedProductImage {
   id              String   @id @default(cuid())
   productId       String
   storeId         String
-  originalUrl     String   // original Shopify image URL
-  transparentUrl  String?  // background-removed version
-  brandBgUrl      String?  // with brand-colored background
-  sizes           Json?    // { hero: url, card: url, grid: url, thumb: url, whatsapp: url }
-  overlayVariants Json?    // { discount: url, new_tag: url, price: url }
+  originalUrl     String // original Shopify image URL
+  transparentUrl  String? // background-removed version
+  brandBgUrl      String? // with brand-colored background
+  sizes           Json? // { hero: url, card: url, grid: url, thumb: url, whatsapp: url }
+  overlayVariants Json? // { discount: url, new_tag: url, price: url }
   processedAt     DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -1259,13 +1266,13 @@ model ProcessedProductImage {
 // ============================================================================
 
 model MerchantBriefing {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   storeId      String
-  type         String   // daily, weekly, alert
-  content      Json     // structured briefing content
-  deliveredVia String?  // email, whatsapp, in_app
+  type         String // daily, weekly, alert
+  content      Json // structured briefing content
+  deliveredVia String? // email, whatsapp, in_app
   readAt       DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -1278,7 +1285,7 @@ model StoreBaseline {
   id         String   @id @default(cuid())
   storeId    String   @unique
   capturedAt DateTime @default(now())
-  metrics    Json     // snapshot of all KPIs at onboarding
+  metrics    Json // snapshot of all KPIs at onboarding
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -1290,21 +1297,21 @@ model StoreBaseline {
 // ============================================================================
 
 model CustomerJourney {
-  id              String    @id @default(cuid())
-  customerId      String
-  storeId         String
-  automationId    String?   // link to parent automation/journey definition
-  journeyType     String    // welcome, winback, repurchase, post_purchase, cross_sell, re_engagement
-  currentStep     Int       @default(0)
-  totalSteps      Int       @default(0)
-  status          String    @default("active") // active, completed, suppressed, paused, expired
-  channelPath     Json      @default("[]") // ["email", "whatsapp", "sms"] — channels used so far
-  stepHistory     Json      @default("[]") // [{ step, channel, sentAt, opened, clicked, converted }]
-  suppressedAt    DateTime?
-  suppressReason  String?   // fatigue, silence, governor, manual
-  startedAt       DateTime  @default(now())
-  completedAt     DateTime?
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  customerId     String
+  storeId        String
+  automationId   String? // link to parent automation/journey definition
+  journeyType    String // welcome, winback, repurchase, post_purchase, cross_sell, re_engagement
+  currentStep    Int       @default(0)
+  totalSteps     Int       @default(0)
+  status         String    @default("active") // active, completed, suppressed, paused, expired
+  channelPath    Json      @default("[]") // ["email", "whatsapp", "sms"] — channels used so far
+  stepHistory    Json      @default("[]") // [{ step, channel, sentAt, opened, clicked, converted }]
+  suppressedAt   DateTime?
+  suppressReason String? // fatigue, silence, governor, manual
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  updatedAt      DateTime  @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -1317,21 +1324,21 @@ model CustomerJourney {
 }
 
 model ABTest {
-  id           String   @id @default(cuid())
-  storeId      String
-  automationId String?  // optional link to automation/journey
-  name         String
-  variable     String   // subject_line, send_time, content, channel, template
-  variantA     Json     // { value: "...", description: "..." }
-  variantB     Json     // { value: "...", description: "..." }
-  splitRatio   Float    @default(0.5) // 0-1, portion going to variant A
-  results      Json     @default("{}") // { a: { sent, opened, clicked, converted, revenue }, b: { ... } }
-  winner       String?  // "a" | "b" | null
-  confidence   Float?   // statistical confidence 0-1
-  status       String   @default("running") // running, concluded, cancelled
-  minSampleSize Int     @default(100) // minimum sends before evaluating
-  startedAt    DateTime @default(now())
-  concludedAt  DateTime?
+  id            String    @id @default(cuid())
+  storeId       String
+  automationId  String? // optional link to automation/journey
+  name          String
+  variable      String // subject_line, send_time, content, channel, template
+  variantA      Json // { value: "...", description: "..." }
+  variantB      Json // { value: "...", description: "..." }
+  splitRatio    Float     @default(0.5) // 0-1, portion going to variant A
+  results       Json      @default("{}") // { a: { sent, opened, clicked, converted, revenue }, b: { ... } }
+  winner        String? // "a" | "b" | null
+  confidence    Float? // statistical confidence 0-1
+  status        String    @default("running") // running, concluded, cancelled
+  minSampleSize Int       @default(100) // minimum sends before evaluating
+  startedAt     DateTime  @default(now())
+  concludedAt   DateTime?
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -1345,16 +1352,16 @@ model ABTest {
 // ============================================================================
 
 model Form {
-  id            String   @id @default(cuid())
-  storeId       String
-  name          String
-  fields        Json     // FormField[] — { name, type, label, required, placeholder, options? }
-  styling       Json?    // { backgroundColor, textColor, buttonColor, buttonText, borderRadius, fontFamily }
-  submitAction  String   @default("subscribe") // subscribe, redirect, message
-  incentiveConfig Json?  // { type: 'discount'|'freeShipping', discountType?, discountValue?, code? }
-  status        String   @default("draft") // draft, active, archived
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String
+  fields          Json // FormField[] — { name, type, label, required, placeholder, options? }
+  styling         Json? // { backgroundColor, textColor, buttonColor, buttonText, borderRadius, fontFamily }
+  submitAction    String   @default("subscribe") // subscribe, redirect, message
+  incentiveConfig Json? // { type: 'discount'|'freeShipping', discountType?, discountValue?, code? }
+  status          String   @default("draft") // draft, active, archived
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   popups      Popup[]
@@ -1369,15 +1376,15 @@ model Popup {
   storeId       String
   name          String
   formId        String
-  trigger       String   // exit_intent, scroll, timer, page_load
-  triggerConfig Json?    // { scrollPercent?, delayMs?, pageUrl? }
-  styling       Json?    // { position, overlayColor, width, animation }
+  trigger       String // exit_intent, scroll, timer, page_load
+  triggerConfig Json? // { scrollPercent?, delayMs?, pageUrl? }
+  styling       Json? // { position, overlayColor, width, animation }
   status        String   @default("draft") // draft, active, paused, archived
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  store  Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  form   Form  @relation(fields: [formId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  form  Form  @relation(fields: [formId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([formId])
@@ -1388,9 +1395,9 @@ model FormSubmission {
   id           String   @id @default(cuid())
   formId       String
   customerId   String?
-  data         Json     // submitted field values { email, phone, name, ... }
+  data         Json // submitted field values { email, phone, name, ... }
   source       String   @default("popup") // popup, embed, api
-  consentGiven Json?    // { email?: bool, sms?: bool, whatsapp?: bool }
+  consentGiven Json? // { email?: bool, sms?: bool, whatsapp?: bool }
   capturedAt   DateTime @default(now())
 
   form     Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
@@ -1429,7 +1436,7 @@ model CustomerProductRecommendation {
   customerId String
   productId  String
   score      Float
-  strategy   String   // affinity, collaborative, reorder, cross_sell, trending
+  strategy   String // affinity, collaborative, reorder, cross_sell, trending
   reason     String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
@@ -1451,14 +1458,14 @@ model Fulfillment {
   id                String    @id @default(cuid())
   storeId           String
   orderId           String
-  externalId        String    // Shopify fulfillment ID
-  status            String    // pending, open, success, cancelled, error, failure
+  externalId        String // Shopify fulfillment ID
+  status            String // pending, open, success, cancelled, error, failure
   trackingCompany   String?
   trackingNumber    String?
   trackingUrl       String?
   estimatedDelivery DateTime?
   deliveredAt       DateTime?
-  shipmentStatus    String?   // in_transit, out_for_delivery, delivered, attempted_delivery, failure
+  shipmentStatus    String? // in_transit, out_for_delivery, delivered, attempted_delivery, failure
   notifiedShipped   Boolean   @default(false)
   notifiedDelivered Boolean   @default(false)
   createdAt         DateTime  @default(now())
@@ -1479,7 +1486,7 @@ model ProductPriceHistory {
   storeId    String
   oldPrice   Float
   newPrice   Float
-  change     Float    // newPrice - oldPrice (negative = drop)
+  change     Float // newPrice - oldPrice (negative = drop)
   recordedAt DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -1494,8 +1501,8 @@ model ProactiveOutreachLog {
   id           String   @id @default(cuid())
   storeId      String
   customerId   String
-  outreachType String   // shipping_update, restock_alert, price_drop, repurchase_reminder
-  referenceId  String   // fulfillmentId, productId, etc.
+  outreachType String // shipping_update, restock_alert, price_drop, repurchase_reminder
+  referenceId  String // fulfillmentId, productId, etc.
   channel      String
   messageLogId String?
   createdAt    DateTime @default(now())
@@ -1515,7 +1522,7 @@ model ProactiveOutreachLog {
 model KnowledgeArticle {
   id        String   @id @default(cuid())
   storeId   String
-  category  String   // policy, faq, product_info, shipping, returns, general
+  category  String // policy, faq, product_info, shipping, returns, general
   title     String
   content   String   @db.Text
   isActive  Boolean  @default(true)
@@ -1533,15 +1540,15 @@ model KnowledgeArticle {
 // ============================================================================
 
 model AgentMemory {
-  id          String   @id @default(cuid())
-  storeId     String
-  memoryType  String   // campaign_outcome, merchant_preference, store_pattern, customer_insight
-  content     String   @db.Text
-  importance  Float    @default(0.5) // 0-1, used to prioritize memory retrieval
-  metadata    Json?    // structured data for the memory
-  expiresAt   DateTime? // optional expiry for time-sensitive memories
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String    @id @default(cuid())
+  storeId    String
+  memoryType String // campaign_outcome, merchant_preference, store_pattern, customer_insight
+  content    String    @db.Text
+  importance Float     @default(0.5) // 0-1, used to prioritize memory retrieval
+  metadata   Json? // structured data for the memory
+  expiresAt  DateTime? // optional expiry for time-sensitive memories
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -1556,16 +1563,16 @@ model AgentMemory {
 
 model StoreBenchmark {
   id          String   @id @default(cuid())
-  category    String   // fashion, beauty, food, electronics, home, health, etc.
-  metric      String   // open_rate, click_rate, conversion_rate, churn_rate, avg_order_value, etc.
-  channel     String?  // email, sms, whatsapp, or null for aggregate
-  period      String   // weekly, monthly
+  category    String // fashion, beauty, food, electronics, home, health, etc.
+  metric      String // open_rate, click_rate, conversion_rate, churn_rate, avg_order_value, etc.
+  channel     String? // email, sms, whatsapp, or null for aggregate
+  period      String // weekly, monthly
   periodStart DateTime
-  value       Float    // the benchmark value
-  sampleSize  Int      // number of stores contributing
-  p25         Float?   // 25th percentile
-  p50         Float?   // median
-  p75         Float?   // 75th percentile
+  value       Float // the benchmark value
+  sampleSize  Int // number of stores contributing
+  p25         Float? // 25th percentile
+  p50         Float? // median
+  p75         Float? // 75th percentile
   createdAt   DateTime @default(now())
 
   @@unique([category, metric, channel, period, periodStart])
@@ -1584,9 +1591,9 @@ model CustomerVoiceReport {
   totalConversations Int      @default(0)
   resolvedCount      Int      @default(0)
   escalatedCount     Int      @default(0)
-  avgSentiment       Float?   // -1 to 1
-  themes             Json     // [{ theme: "slow shipping", count: 8, sentiment: -0.6 }, ...]
-  actionableInsights Json     // [{ insight: "Check US East Coast fulfillment", priority: "high", relatedTheme: "slow shipping" }]
+  avgSentiment       Float? // -1 to 1
+  themes             Json // [{ theme: "slow shipping", count: 8, sentiment: -0.6 }, ...]
+  actionableInsights Json // [{ insight: "Check US East Coast fulfillment", priority: "high", relatedTheme: "slow shipping" }]
   summary            String?  @db.Text // LLM-generated executive summary
   createdAt          DateTime @default(now())
 
@@ -1605,12 +1612,12 @@ model RevenueForecast {
   id           String   @id @default(cuid())
   storeId      String
   forecastDate DateTime // the date being forecasted
-  predicted    Float    // predicted revenue
-  lower        Float    // lower bound (confidence interval)
-  upper        Float    // upper bound
-  confidence   Float    // 0-1
-  actual       Float?   // actual revenue (filled in later)
-  accuracy     Float?   // |1 - (actual/predicted)| (filled in later)
+  predicted    Float // predicted revenue
+  lower        Float // lower bound (confidence interval)
+  upper        Float // upper bound
+  confidence   Float // 0-1
+  actual       Float? // actual revenue (filled in later)
+  accuracy     Float? // |1 - (actual/predicted)| (filled in later)
   createdAt    DateTime @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -1618,4 +1625,75 @@ model RevenueForecast {
   @@unique([storeId, forecastDate])
   @@index([storeId])
   @@map("revenue_forecasts")
+}
+
+// ============================================================================
+// SPRINT 13: REAL-TIME EVENT TRIGGERS
+// ============================================================================
+
+model BrowseEvent {
+  id         String   @id @default(cuid())
+  storeId    String
+  customerId String?
+  sessionId  String
+  productId  String
+  pageUrl    String?
+  duration   Int? // seconds on page
+  createdAt  DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, customerId, createdAt])
+  @@index([storeId, sessionId])
+  @@index([storeId, createdAt])
+  @@map("browse_events")
+}
+
+// ============================================================================
+// SPRINT 12: OVERNIGHT OPS + REVENUE ATTRIBUTION
+// ============================================================================
+
+model AgentActivityLog {
+  id           String   @id @default(cuid())
+  storeId      String
+  activityType String // cart_recovery_sent, churn_intervention, ab_test_concluded, campaign_opportunity, auto_send, browse_abandon
+  summary      String   @db.Text
+  category     String? // automation category
+  tier         String? // autopilot, copilot, advisor
+  actionTaken  String? // triggered_journey, queued_for_review, auto_concluded
+  entityId     String?
+  entityType   String? // automation, campaign, customer, ab_test
+  metadata     Json?
+  revenue      Float?
+  createdAt    DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@index([storeId, activityType])
+  @@map("agent_activity_logs")
+}
+
+// ============================================================================
+// SPRINT 14B: SELF-OPTIMIZING AGENT — COPY PERFORMANCE
+// ============================================================================
+
+model CopyPerformance {
+  id           String   @id @default(cuid())
+  storeId      String
+  category     String // subject_line, cta, body_tone, headline
+  pattern      String // urgency, curiosity, social_proof, scarcity, benefit, personal, humor
+  sampleText   String?  @db.Text
+  metricType   String // open_rate, click_rate, conversion_rate
+  metricValue  Float
+  sampleSize   Int
+  automationId String?
+  campaignId   String?
+  createdAt    DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, category, pattern])
+  @@index([storeId, metricType])
+  @@map("copy_performance")
 }

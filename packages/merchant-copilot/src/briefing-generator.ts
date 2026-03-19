@@ -3,17 +3,37 @@ import type { BriefingContent, BriefingSection } from "./types";
 
 /**
  * Generate a daily briefing for a store.
- * Compiles overnight activity, pending actions, and insights into narrative format.
+ * Compiles overnight activity, pending actions, revenue attribution, and insights into narrative format.
  */
 export async function generateDailyBriefing(storeId: string): Promise<BriefingContent> {
   const now = new Date();
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  // Compute midnight in store timezone (fallback to UTC)
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { timezone: true },
+  });
+  const tz = store?.timezone || "UTC";
+  let sinceMidnight: Date;
+  try {
+    const midnightStr = new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
+    sinceMidnight = new Date(`${midnightStr}T00:00:00`);
+    // If the computed date is in the future (timezone ahead), fall back to yesterday
+    if (sinceMidnight > now) {
+      sinceMidnight = new Date(sinceMidnight.getTime() - 24 * 60 * 60 * 1000);
+    }
+  } catch {
+    sinceMidnight = yesterday;
+  }
 
   const [
     recentOrders,
     recentMessages,
     pendingActions,
     recentCampaigns,
+    agentActivityLogs,
+    attributedOrders,
   ] = await Promise.all([
     // Orders in last 24h
     prisma.order.findMany({
@@ -36,6 +56,16 @@ export async function generateDailyBriefing(storeId: string): Promise<BriefingCo
     prisma.campaign.findMany({
       where: { storeId, sentAt: { gte: yesterday } },
       select: { name: true, recipientCount: true },
+    }),
+    // Agent activity since midnight
+    prisma.agentActivityLog.findMany({
+      where: { storeId, createdAt: { gte: sinceMidnight } },
+      orderBy: { createdAt: "desc" },
+    }),
+    // Revenue attributed in last 24h
+    prisma.orderAttribution.findMany({
+      where: { storeId, attributedAt: { gte: yesterday } },
+      select: { revenue: true, channel: true, automationId: true, campaignId: true },
     }),
   ]);
 
@@ -97,6 +127,77 @@ export async function generateDailyBriefing(storeId: string): Promise<BriefingCo
     }
   }
 
+  // Agent Activity section (from AgentActivityLog)
+  if (agentActivityLogs.length > 0) {
+    const cartRecoveries = agentActivityLogs.filter((l) => l.activityType === "cart_recovery_sent").length;
+    const churnInterventions = agentActivityLogs.filter((l) => l.activityType === "churn_intervention").length;
+    const abTestsConcluded = agentActivityLogs.filter((l) => l.activityType === "ab_test_concluded").length;
+    const opportunitiesFound = agentActivityLogs.filter((l) => l.activityType === "campaign_opportunity").length;
+
+    const journeysTriggered = agentActivityLogs.filter((l) => l.actionTaken === "triggered_journey").length;
+    const actionsQueued = agentActivityLogs.filter((l) => l.actionTaken === "queued_for_review").length;
+
+    const agentItems: { text: string; metric?: { value: string } }[] = [];
+    if (cartRecoveries > 0) agentItems.push({ text: `${cartRecoveries} cart recovery journey(s) triggered` });
+    if (churnInterventions > 0) agentItems.push({ text: `${churnInterventions} churn intervention(s) initiated` });
+    if (abTestsConcluded > 0) agentItems.push({ text: `${abTestsConcluded} A/B test(s) auto-concluded` });
+    if (opportunitiesFound > 0) agentItems.push({ text: `${opportunitiesFound} campaign opportunity(ies) identified` });
+
+    if (agentItems.length === 0) {
+      agentItems.push({ text: `${agentActivityLogs.length} agent action(s) logged overnight` });
+    }
+
+    agentItems.push({
+      text: `Summary: ${journeysTriggered} journeys triggered, ${actionsQueued} actions queued for review`,
+      metric: { value: `${agentActivityLogs.length} total` },
+    });
+
+    sections.push({
+      heading: "Agent Activity (Overnight)",
+      items: agentItems,
+    });
+  }
+
+  // Revenue Attributed section (from OrderAttribution)
+  if (attributedOrders.length > 0) {
+    const totalAttributed = attributedOrders.reduce((sum, a) => sum + a.revenue, 0);
+    const byChannel: Record<string, number> = {};
+    let automationRevenue = 0;
+    let campaignRevenue = 0;
+
+    for (const attr of attributedOrders) {
+      byChannel[attr.channel] = (byChannel[attr.channel] ?? 0) + attr.revenue;
+      if (attr.automationId) automationRevenue += attr.revenue;
+      if (attr.campaignId) campaignRevenue += attr.revenue;
+    }
+
+    const revenueItems: { text: string; metric?: { value: string } }[] = [
+      {
+        text: `$${totalAttributed.toFixed(2)} total AI-attributed revenue (last 24h)`,
+        metric: { value: `$${totalAttributed.toFixed(2)}` },
+      },
+    ];
+
+    const channelParts = Object.entries(byChannel)
+      .map(([ch, rev]) => `${ch}: $${rev.toFixed(2)}`)
+      .join(", ");
+    if (channelParts) {
+      revenueItems.push({ text: `By channel: ${channelParts}` });
+    }
+
+    if (automationRevenue > 0) {
+      revenueItems.push({ text: `Automation-attributed: $${automationRevenue.toFixed(2)}` });
+    }
+    if (campaignRevenue > 0) {
+      revenueItems.push({ text: `Campaign-attributed: $${campaignRevenue.toFixed(2)}` });
+    }
+
+    sections.push({
+      heading: "Revenue Attributed",
+      items: revenueItems,
+    });
+  }
+
   // Build narrative summary
   const summaryParts: string[] = [];
   if (totalRevenue > 0) {
@@ -108,6 +209,14 @@ export async function generateDailyBriefing(storeId: string): Promise<BriefingCo
   if (pendingActions.length > 0) {
     const urgentCount = pendingActions.filter((a) => a.urgencyScore > 70).length;
     summaryParts.push(`${pendingActions.length} action${pendingActions.length > 1 ? "s" : ""} need${pendingActions.length === 1 ? "s" : ""} your attention${urgentCount > 0 ? ` (${urgentCount} urgent)` : ""}`);
+  }
+  if (agentActivityLogs.length > 0) {
+    const journeysTriggered = agentActivityLogs.filter((l) => l.actionTaken === "triggered_journey").length;
+    summaryParts.push(`Agent: ${agentActivityLogs.length} actions (${journeysTriggered} journeys triggered)`);
+  }
+  if (attributedOrders.length > 0) {
+    const totalAttributed = attributedOrders.reduce((sum, a) => sum + a.revenue, 0);
+    summaryParts.push(`$${totalAttributed.toFixed(2)} AI-attributed revenue`);
   }
 
   const briefing: BriefingContent = {

@@ -356,6 +356,58 @@ export const dashboardRouter = router({
       return { suppressed, sent, byReason };
     }),
 
+  /** Revenue attribution summary for dashboard KPI cards */
+  revenueAttribution: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfWeek = new Date(now.getTime() - 7 * 86400000);
+      const startOfMonth = new Date(now.getTime() - 30 * 86400000);
+
+      const [todayAttr, weekAttr, monthAttr, totalAttr] = await Promise.all([
+        ctx.prisma.orderAttribution.aggregate({
+          where: { storeId: input.storeId, attributedAt: { gte: startOfToday } },
+          _sum: { revenue: true },
+          _count: true,
+        }),
+        ctx.prisma.orderAttribution.aggregate({
+          where: { storeId: input.storeId, attributedAt: { gte: startOfWeek } },
+          _sum: { revenue: true },
+          _count: true,
+        }),
+        ctx.prisma.orderAttribution.aggregate({
+          where: { storeId: input.storeId, attributedAt: { gte: startOfMonth } },
+          _sum: { revenue: true },
+          _count: true,
+        }),
+        ctx.prisma.orderAttribution.aggregate({
+          where: { storeId: input.storeId },
+          _sum: { revenue: true },
+          _count: true,
+        }),
+      ]);
+
+      return {
+        today: {
+          revenue: Math.round((todayAttr._sum.revenue ?? 0) * 100) / 100,
+          orders: todayAttr._count,
+        },
+        week: {
+          revenue: Math.round((weekAttr._sum.revenue ?? 0) * 100) / 100,
+          orders: weekAttr._count,
+        },
+        month: {
+          revenue: Math.round((monthAttr._sum.revenue ?? 0) * 100) / 100,
+          orders: monthAttr._count,
+        },
+        total: {
+          revenue: Math.round((totalAttr._sum.revenue ?? 0) * 100) / 100,
+          orders: totalAttr._count,
+        },
+      };
+    }),
+
   /** Customer Voice — latest weekly voice synthesis report */
   customerVoice: workspaceProcedure
     .input(z.object({ storeId: z.string() }))

@@ -52,4 +52,8 @@ export const QUEUE_NAMES = {
   CUSTOMER_VOICE: "customer-voice",
   MEMORY_WRITER: "memory-writer",
   DAILY_REVENUE_EMAIL: "daily-revenue-email",
+  OVERNIGHT_OPS: "overnight-ops",
+  EVENT_REACT: "event-react",
+  BROWSE_ABANDONMENT: "browse-abandonment",
+  COPY_LEARNER: "copy-learner",
 } as const;

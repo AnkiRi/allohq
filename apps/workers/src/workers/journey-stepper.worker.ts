@@ -10,8 +10,15 @@ import {
   personaliseContent,
 } from "@allohq/journey-orchestrator";
 import type { WorkflowNode, JourneyStepInput } from "@allohq/journey-orchestrator";
+import { getOptimalSendTime } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
+
+// Time-sensitive automation categories that should not be delayed
+const TIME_SENSITIVE_CATEGORIES = ["cart_recovery", "abandoned_cart", "shipping_updates"];
+
+// Max send-time delay: 12 hours in ms
+const MAX_SEND_TIME_DELAY_MS = 12 * 60 * 60 * 1000;
 
 interface JourneyStepJobData {
   journeyId: string;
@@ -20,6 +27,7 @@ interface JourneyStepJobData {
   automationId?: string;
   stepIndex: number;
   nodes: WorkflowNode[];
+  sendTimeOptimized?: boolean;
 }
 
 const journeyStepQueue = new Queue(QUEUE_NAMES.JOURNEY_STEP, { connection: redisConnection });
@@ -91,6 +99,61 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
     }
 
     // Handle send nodes — execute the actual send
+    // Send-time optimization: check if now is a good time for this customer
+    if (result.decision && !job.data.sendTimeOptimized) {
+      // Determine if this automation is time-sensitive
+      let isTimeSensitive = false;
+      if (automationId) {
+        const automation = await prisma.automation.findUnique({
+          where: { id: automationId },
+          select: { category: true },
+        });
+        if (automation?.category && TIME_SENSITIVE_CATEGORIES.includes(automation.category)) {
+          isTimeSensitive = true;
+        }
+      }
+
+      if (!isTimeSensitive) {
+        try {
+          const sendTime = await getOptimalSendTime(customerId, storeId);
+          const currentHour = new Date().getUTCHours();
+          const bestHours = sendTime.topHours.map((h) => h.hour);
+
+          // Check if current hour is within the customer's optimal window (+/- 1 hour)
+          const isInWindow = bestHours.some(
+            (h) => Math.abs(currentHour - h) <= 1 || Math.abs(currentHour - h) >= 23,
+          );
+
+          if (!isInWindow && sendTime.confidence >= 0.3) {
+            // Calculate delay to next optimal hour
+            const nextBestHour = bestHours[0] ?? 10;
+            let hoursUntilOptimal = nextBestHour - currentHour;
+            if (hoursUntilOptimal <= 0) hoursUntilOptimal += 24;
+
+            const delayMs = Math.min(hoursUntilOptimal * 60 * 60 * 1000, MAX_SEND_TIME_DELAY_MS);
+
+            console.log(
+              `Journey ${journeyId}: delaying send by ${hoursUntilOptimal}h for optimal send time (current=${currentHour}, optimal=${nextBestHour}, confidence=${sendTime.confidence})`,
+            );
+
+            await journeyStepQueue.add(
+              `journey-step-${journeyId}-${stepIndex}-optimized`,
+              {
+                ...job.data,
+                sendTimeOptimized: true,
+              },
+              { delay: delayMs },
+            );
+
+            return { status: "delayed_for_send_time", delay: delayMs, optimalHour: nextBestHour };
+          }
+        } catch (err: any) {
+          // Non-critical: if send-time optimization fails, proceed with immediate send
+          console.warn(`Send-time optimization failed for journey ${journeyId}:`, err.message);
+        }
+      }
+    }
+
     if (result.decision) {
       const channel = result.decision.channel;
       const customer = await prisma.customer.findUnique({

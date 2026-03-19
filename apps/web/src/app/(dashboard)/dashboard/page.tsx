@@ -276,6 +276,19 @@ export default function DashboardPage() {
     { enabled: !!storeId && onboardingDone },
   ) as { data: { aiTokenCost: number; aiAttributedRevenue: number; roi: number; campaignsSent: number; automationsSent: number } | undefined };
 
+  // Revenue Attribution breakdown
+  const { data: revenueAttribution } = (trpc.dashboard.revenueAttribution as any).useQuery(
+    { storeId },
+    { enabled: !!storeId && onboardingDone, refetchInterval: 60000 },
+  ) as {
+    data: {
+      today: { revenue: number; orders: number };
+      week: { revenue: number; orders: number };
+      month: { revenue: number; orders: number };
+      total: { revenue: number; orders: number };
+    } | undefined;
+  };
+
   const utils = trpc.useUtils();
 
   const handleOnboardingComplete = () => {
@@ -464,15 +477,21 @@ export default function DashboardPage() {
             return { change: pct > 0 ? `+${pct}%` : `${pct}%`, up: pct > 0, neutral: pct === 0 };
           })();
 
+          // Use revenue attribution breakdown for the Allo Revenue card
+          const alloRevenue = revenueAttribution?.month?.revenue ?? aiAttributedRevenue;
+          const alloRevenueToday = revenueAttribution?.today?.revenue ?? 0;
+          const alloRevenueWeek = revenueAttribution?.week?.revenue ?? 0;
+
           return [
             {
-              label: "AI Revenue",
-              value: Math.round(aiAttributedRevenue),
+              label: "Allo Revenue",
+              value: Math.round(alloRevenue),
               prefix: "$",
               ...revenueDelta,
               spark: revenueSparkVals,
               color: "#B8963E",
               href: "/analytics",
+              subtitle: alloRevenueToday > 0 ? `$${alloRevenueToday.toLocaleString()} today` : alloRevenueWeek > 0 ? `$${alloRevenueWeek.toLocaleString()} this week` : undefined,
             },
             {
               label: "Customers",
@@ -556,6 +575,9 @@ export default function DashboardPage() {
                 {kpi.change}
               </span>
             </div>
+            {(kpi as any).subtitle && (
+              <p className="text-[10px] font-mono text-muted-foreground mt-1">{(kpi as any).subtitle}</p>
+            )}
           </Link>
         ))}
       </motion.div>
@@ -641,6 +663,48 @@ export default function DashboardPage() {
                   </div>
                 );
               })}
+
+              {/* Briefing sections: Agent Activity + Revenue Attributed */}
+              {briefingContent?.sections?.filter((s: any) => s.heading === "Agent Activity (Overnight)" || s.heading === "Revenue Attributed").map((section: any, si: number) => {
+                const isRevenue = section.heading === "Revenue Attributed";
+                const sectionColor = isRevenue ? "#B8963E" : "#7c3aed";
+                const SectionIcon = isRevenue ? TrendingUp : Activity;
+                return (
+                  <div key={`briefing-section-${si}`} className="border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] pt-3 mt-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <SectionIcon className="w-3.5 h-3.5" style={{ color: sectionColor }} />
+                      <span className="text-[10px] font-mono uppercase tracking-[0.1em] font-bold" style={{ color: sectionColor }}>
+                        {section.heading}
+                      </span>
+                    </div>
+                    {section.items.map((item: any, ii: number) => (
+                      <div key={`bs-${si}-${ii}`} className="flex items-start gap-2 py-1.5">
+                        <span className="text-[12px] text-foreground/80 leading-relaxed flex-1">{item.text}</span>
+                        {item.metric?.value && (
+                          <span className="text-[11px] font-mono font-semibold text-foreground flex-shrink-0">{item.metric.value}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              {/* Revenue Attribution KPI — inline if no briefing sections */}
+              {revenueAttribution && revenueAttribution.month.revenue > 0 && !briefingContent?.sections?.some((s: any) => s.heading === "Revenue Attributed") && (
+                <div className="border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] pt-3 mt-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-3.5 h-3.5 text-[#B8963E]" />
+                    <span className="text-[10px] font-mono uppercase tracking-[0.1em] font-bold text-[#B8963E]">
+                      Allo Revenue
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-[11px] font-mono text-muted-foreground">
+                    <span>Today: <strong className="text-foreground">${revenueAttribution.today.revenue.toLocaleString()}</strong></span>
+                    <span>Week: <strong className="text-foreground">${revenueAttribution.week.revenue.toLocaleString()}</strong></span>
+                    <span>Month: <strong className="text-foreground">${revenueAttribution.month.revenue.toLocaleString()}</strong></span>
+                  </div>
+                </div>
+              )}
 
               {/* Fallback when no content */}
               {attentionItems.length === 0 && (!narrative || narrative.length <= 1) && (

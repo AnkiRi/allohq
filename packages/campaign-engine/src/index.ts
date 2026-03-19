@@ -42,3 +42,24 @@ export type {
   TestResults,
   EvaluationOutcome,
 } from "./ab-test-engine";
+
+// A/B Test Evolver (Self-Optimizing Agent)
+export {
+  applyWinner,
+  generateNextHypothesis,
+  createFollowUpTest,
+} from "./ab-test-evolver";
+
+export type { Hypothesis } from "./ab-test-evolver";
+
+// Copy Learner (Self-Optimizing Agent)
+export {
+  analyzeCopyPatterns,
+  getWinningPatterns,
+  generateCopyBrief,
+} from "./copy-learner";
+
+export type { PatternRanking } from "./copy-learner";
+
+// Benchmark Comparison
+export { getBenchmarkComparison } from "./benchmark-comparison";
