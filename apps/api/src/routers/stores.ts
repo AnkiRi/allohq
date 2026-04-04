@@ -668,10 +668,27 @@ export const storesRouter = router({
         });
       }
 
-      // Soft-delete the store and reset activation state
+      // Clean up new analytics tables
+      await ctx.prisma.productSegmentMember.deleteMany({
+        where: { productSegment: { storeId: input.storeId } },
+      }).catch(() => {});
+      await ctx.prisma.productSegment.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
+      await ctx.prisma.basketArchetype.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
+      await ctx.prisma.agentActivityLog.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
+      await ctx.prisma.browseEvent.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
+      await ctx.prisma.copyPerformance.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
+      await ctx.prisma.brandVisualProfile.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
+
+      // Reset the store — full clean slate for reconnection
       await ctx.prisma.store.update({
         where: { id: input.storeId },
-        data: { isActive: false, activatedAt: null, onboardingCompletedAt: null },
+        data: {
+          isActive: false,
+          activatedAt: null,
+          onboardingCompletedAt: null,
+          onboardingStep: 0,
+          activationLog: { set: null } as any,
+        },
       });
 
       return { success: true };

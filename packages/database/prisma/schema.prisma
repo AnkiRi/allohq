@@ -200,6 +200,12 @@ model Store {
   // Sprint 14B: Self-Optimizing Agent
   copyPerformance CopyPerformance[]
 
+  // Product-Based Smart Segments
+  productSegments ProductSegment[]
+
+  // Basket Intelligence
+  basketArchetypes BasketArchetype[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -578,6 +584,7 @@ model BrandProfile {
   storeId           String
   brandName         String
   brandDescription  String?
+  brandDocument     String?   @db.Text   // Raw brand guidelines pasted/uploaded by merchant
   toneAttributes    Json // { formality, humor, energy, warmth }
   vocabulary        Json // preferred words, phrases, CTA patterns
   visualStyle       Json // colors, font preferences, image style
@@ -1696,4 +1703,72 @@ model CopyPerformance {
   @@index([storeId, category, pattern])
   @@index([storeId, metricType])
   @@map("copy_performance")
+}
+
+// ============================================================================
+// PRODUCT-BASED SMART SEGMENTS
+// ============================================================================
+
+model ProductSegment {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String
+  slug            String
+  description     String?
+  segmentType     String   // "product_category", "basket_pattern", "behavior"
+  conditions      Json     // Rules that define this segment: { productTypes: [], minOrders: N, etc. }
+  customerCount   Int      @default(0)
+  totalRevenue    Decimal  @default(0) @db.Decimal(12, 2)
+  avgOrderValue   Decimal  @default(0) @db.Decimal(12, 2)
+  insights        Json?    // AI-generated insights about this segment
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store   Store                  @relation(fields: [storeId], references: [id])
+  members ProductSegmentMember[]
+
+  @@unique([storeId, slug])
+  @@map("product_segments")
+}
+
+model ProductSegmentMember {
+  id               String   @id @default(cuid())
+  productSegmentId String
+  customerId       String
+  storeId          String
+  score            Float    @default(1.0) // How strongly they belong (0-1)
+  joinedAt         DateTime @default(now())
+
+  productSegment ProductSegment @relation(fields: [productSegmentId], references: [id], onDelete: Cascade)
+
+  @@unique([productSegmentId, customerId])
+  @@map("product_segment_members")
+}
+
+// ============================================================================
+// BASKET INTELLIGENCE
+// ============================================================================
+
+model BasketArchetype {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String   // AI-generated name like "The Wellness Stack"
+  slug            String
+  description     String?  // "Customers who buy protein powder + shaker + pre-workout together"
+  productIds      Json     // Array of product IDs in this basket pattern
+  productTitles   Json     // Array of product titles (for display without joins)
+  frequency       Int      @default(0)  // How many orders match this pattern
+  avgOrderValue   Decimal  @default(0) @db.Decimal(12, 2)
+  customerCount   Int      @default(0)  // Unique customers who've ordered this combo
+  confidence      Float    @default(0)  // How strong this pattern is (0-1)
+  suggestedBundle Json?    // { bundleName, discount, reasoning } — AI suggestion
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, slug])
+  @@map("basket_archetypes")
 }

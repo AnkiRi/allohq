@@ -222,6 +222,7 @@ export function OnboardingWizard({
   const saveGuardrails = trpc.onboarding.saveGuardrails.useMutation({ onSuccess: () => refetchStatus() });
   const acknowledgeReport = trpc.onboarding.acknowledgeReport.useMutation({ onSuccess: () => refetchStatus() });
   const complete = trpc.onboarding.complete.useMutation({ onSuccess: () => onComplete() });
+  const goBack = trpc.onboarding.goBack.useMutation({ onSuccess: () => refetchStatus() });
 
   // Step 0→1: auto-advance when store is connected
   useEffect(() => {
@@ -256,27 +257,27 @@ export function OnboardingWizard({
         )}
         {currentStep === 3 && (
           <StepWrapper key="step3">
-            <BrandReviewStep storeId={storeId} onSave={saveBrandReview} />
+            <BrandReviewStep storeId={storeId} onSave={saveBrandReview} onBack={() => goBack.mutate({ storeId, step: 2 })} />
           </StepWrapper>
         )}
         {currentStep === 4 && (
           <StepWrapper key="step4">
-            <AutonomyStep storeId={storeId} onSave={saveAutonomySetup} />
+            <AutonomyStep storeId={storeId} onSave={saveAutonomySetup} onBack={() => goBack.mutate({ storeId, step: 3 })} />
           </StepWrapper>
         )}
         {currentStep === 5 && (
           <StepWrapper key="step5">
-            <GuardrailsStep storeId={storeId} onSave={saveGuardrails} />
+            <GuardrailsStep storeId={storeId} onSave={saveGuardrails} onBack={() => goBack.mutate({ storeId, step: 4 })} />
           </StepWrapper>
         )}
         {currentStep === 6 && (
           <StepWrapper key="step6">
-            <StoreReportStep storeId={storeId} onAcknowledge={() => acknowledgeReport.mutate({ storeId })} isAdvancing={acknowledgeReport.isPending} />
+            <StoreReportStep storeId={storeId} onAcknowledge={() => acknowledgeReport.mutate({ storeId })} isAdvancing={acknowledgeReport.isPending} onBack={() => goBack.mutate({ storeId, step: 5 })} />
           </StepWrapper>
         )}
         {currentStep === 7 && (
           <StepWrapper key="step7">
-            <FirstActionsStep storeId={storeId} onComplete={() => complete.mutate({ storeId })} isCompleting={complete.isPending} />
+            <FirstActionsStep storeId={storeId} onComplete={() => complete.mutate({ storeId })} isCompleting={complete.isPending} onBack={() => goBack.mutate({ storeId, step: 6 })} />
           </StepWrapper>
         )}
       </AnimatePresence>
@@ -361,7 +362,7 @@ function BackgroundAnalysisStep({
   ];
   const syncDone = syncRows.every((r) => r.done);
   const analysisDone = analysisRows.every((r) => r.done);
-  const canContinue = syncDone; // Don't block on AI analysis tasks
+  const canContinue = syncDone && analysisDone;
 
   return (
     <div className="space-y-6">
@@ -404,7 +405,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       {syncDone && !analysisDone && (
-        <p className="text-xs text-[#8B8074]">AI analysis will continue in the background. You can proceed now.</p>
+        <p className="text-xs text-[#8B8074]">Almost there — waiting for AI analysis to complete...</p>
       )}
       <div className="flex justify-end">
         <button onClick={onContinue} disabled={!canContinue || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -504,14 +505,16 @@ function ModelSelectionStep({
 function BrandReviewStep({
   storeId,
   onSave,
+  onBack,
 }: {
   storeId: string;
   onSave: { mutate: (input: any) => void; isPending: boolean };
+  onBack?: () => void;
 }) {
-  const { data: reviewData, isLoading } = (trpc as any).onboarding.getBrandReviewData.useQuery(
+  const { data: reviewData, isLoading, refetch: refetchReviewData } = (trpc as any).onboarding.getBrandReviewData.useQuery(
     { storeId },
     { enabled: !!storeId },
-  ) as { data: any; isLoading: boolean };
+  ) as { data: any; isLoading: boolean; refetch: () => void };
 
   const bp = reviewData?.brandProfile;
   const vp = reviewData?.visualProfile;
@@ -527,6 +530,9 @@ function BrandReviewStep({
   const [aesthetic, setAesthetic] = useState("clean_minimal");
   const [bannedWords, setBannedWords] = useState("");
   const [initialized, setInitialized] = useState(false);
+  const [brandDocument, setBrandDocument] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisDone, setAnalysisDone] = useState(false);
 
   useEffect(() => {
     if (!initialized && (bp || vp)) {
@@ -553,6 +559,45 @@ function BrandReviewStep({
       setInitialized(true);
     }
   }, [bp, vp, initialized]);
+
+  // Load existing brand document
+  useEffect(() => {
+    if (bp?.brandDocument && !brandDocument) {
+      setBrandDocument(bp.brandDocument as string);
+    }
+  }, [bp]);
+
+  const saveBrandDocMut = (trpc as any).onboarding.saveBrandDocument.useMutation();
+
+  const handleAnalyzeFromDocument = async () => {
+    setIsAnalyzing(true);
+    try {
+      const result = await saveBrandDocMut.mutateAsync({ storeId, document: brandDocument });
+      // Apply returned brand profile to UI immediately
+      if (result.brandProfile) {
+        const ta = result.brandProfile.toneAttributes as Record<string, string> | null;
+        if (ta) {
+          setTone({
+            formality: ta.formality ?? "casual",
+            energy: ta.energy ?? "moderate",
+            warmth: ta.warmth ?? "friendly",
+            humor: ta.humor ?? "light",
+          });
+        }
+        const vocab = result.brandProfile.vocabulary as Record<string, unknown> | null;
+        if (vocab?.bannedWords) {
+          setBannedWords((vocab.bannedWords as string[]).join(", "));
+        }
+      }
+      // Refetch server data so "What Allo Found" section updates too
+      refetchReviewData();
+      setIsAnalyzing(false);
+      setAnalysisDone(true);
+      setTimeout(() => setAnalysisDone(false), 5000);
+    } catch (err) {
+      setIsAnalyzing(false);
+    }
+  };
 
   const updateToken = (key: string, value: string) => {
     setTokens((prev) => ({ ...prev, [key]: value }));
@@ -593,6 +638,37 @@ function BrandReviewStep({
         <p className="text-sm text-[#8B8074]">
           Allo analyzed your store and extracted your brand identity. Review and adjust anything.
         </p>
+      </div>
+
+      {/* Brand Document Upload */}
+      <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
+        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand Guidelines</h3>
+        <p className="text-sm text-[#8B8074] mb-4">
+          Have brand guidelines? Paste them here and we&apos;ll use them as the primary source for your brand voice.
+          This overrides our auto-detected analysis.
+        </p>
+        <textarea
+          value={brandDocument}
+          onChange={(e) => setBrandDocument(e.target.value)}
+          placeholder="Paste your brand tone of voice, personality, guidelines, or any brand document here..."
+          className="w-full h-40 p-4 border border-[#E8E4DE] rounded-lg text-sm bg-white resize-y focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+        />
+        {brandDocument.trim() && (
+          <div className="flex items-center gap-3 mt-3">
+            <button
+              onClick={handleAnalyzeFromDocument}
+              disabled={isAnalyzing}
+              className="px-4 py-2 bg-[#2D2A26] text-white rounded-lg text-sm font-medium hover:bg-[#3D3A36] disabled:opacity-50 flex items-center gap-2"
+            >
+              {isAnalyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing your brand voice...</> : "Re-analyze from Document"}
+            </button>
+            {analysisDone && (
+              <span className="flex items-center gap-1.5 text-sm text-[#6B7A2F] font-medium">
+                <Check className="w-4 h-4" /> Brand voice updated — review the changes below
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* What Allo Found */}
@@ -770,7 +846,10 @@ function BrandReviewStep({
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        {onBack ? (
+          <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
+        ) : <div />}
         <button onClick={handleSave} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
           {onSave.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Save & Continue
@@ -784,7 +863,7 @@ function BrandReviewStep({
 // Step 4: Autonomy Configuration
 // ---------------------------------------------------------------------------
 
-function AutonomyStep({ storeId, onSave }: { storeId: string; onSave: { mutate: (input: any) => void; isPending: boolean } }) {
+function AutonomyStep({ storeId, onSave, onBack }: { storeId: string; onSave: { mutate: (input: any) => void; isPending: boolean }; onBack?: () => void }) {
   const [tiers, setTiers] = useState<Record<string, string>>({
     cart_recovery: "autopilot",
     win_back: "copilot",
@@ -816,7 +895,10 @@ function AutonomyStep({ storeId, onSave }: { storeId: string; onSave: { mutate: 
           </div>
         ))}
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        {onBack ? (
+          <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
+        ) : <div />}
         <button onClick={() => onSave.mutate({ storeId, configs: Object.entries(tiers).map(([category, tier]) => ({ category, tier })) })} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
           {onSave.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Save & Continue
@@ -830,7 +912,7 @@ function AutonomyStep({ storeId, onSave }: { storeId: string; onSave: { mutate: 
 // Step 5: Guardrails
 // ---------------------------------------------------------------------------
 
-function GuardrailsStep({ storeId, onSave }: { storeId: string; onSave: { mutate: (input: any) => void; isPending: boolean } }) {
+function GuardrailsStep({ storeId, onSave, onBack }: { storeId: string; onSave: { mutate: (input: any) => void; isPending: boolean }; onBack?: () => void }) {
   const [maxEmails, setMaxEmails] = useState(3);
   const [maxDiscount, setMaxDiscount] = useState(20);
   const [quietStart, setQuietStart] = useState(22);
@@ -865,7 +947,12 @@ function GuardrailsStep({ storeId, onSave }: { storeId: string; onSave: { mutate
         </div>
       </div>
       <div className="flex items-center justify-between">
-        <button onClick={() => onSave.mutate({ storeId, skip: true })} disabled={onSave.isPending} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">Skip for now</button>
+        <div className="flex items-center gap-4">
+          {onBack && (
+            <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
+          )}
+          <button onClick={() => onSave.mutate({ storeId, skip: true })} disabled={onSave.isPending} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">Skip for now</button>
+        </div>
         <button onClick={() => onSave.mutate({ storeId, maxEmailsPerWeek: maxEmails, maxDiscountPercent: maxDiscount, quietHoursStart: quietStart, quietHoursEnd: quietEnd })} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
           {onSave.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Save & Continue
@@ -879,7 +966,7 @@ function GuardrailsStep({ storeId, onSave }: { storeId: string; onSave: { mutate
 // Step 6: Store Intelligence Report
 // ---------------------------------------------------------------------------
 
-function StoreReportStep({ storeId, onAcknowledge, isAdvancing }: { storeId: string; onAcknowledge: () => void; isAdvancing: boolean }) {
+function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { storeId: string; onAcknowledge: () => void; isAdvancing: boolean; onBack?: () => void }) {
   const { data: report, isLoading } = trpc.briefings.storeReport.useQuery({ storeId }, { enabled: !!storeId });
 
   if (isLoading) {
@@ -923,7 +1010,10 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing }: { storeId: str
           )}
         </div>
       )}
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        {onBack ? (
+          <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
+        ) : <div />}
         <button onClick={onAcknowledge} disabled={isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40">
           {isAdvancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Got it, show me what Allo can do
@@ -946,7 +1036,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 // Step 7: First Actions
 // ---------------------------------------------------------------------------
 
-function FirstActionsStep({ onComplete, isCompleting }: { storeId: string; onComplete: () => void; isCompleting: boolean }) {
+function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: string; onComplete: () => void; isCompleting: boolean; onBack?: () => void }) {
   return (
     <div className="space-y-6">
       <div className="text-center py-6">
@@ -979,7 +1069,10 @@ function FirstActionsStep({ onComplete, isCompleting }: { storeId: string; onCom
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        {onBack ? (
+          <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
+        ) : <div />}
         <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-6 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
           {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Launch Allo

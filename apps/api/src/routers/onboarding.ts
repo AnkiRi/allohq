@@ -74,6 +74,7 @@ export const onboardingRouter = router({
           select: {
             brandName: true,
             brandDescription: true,
+            brandDocument: true,
             toneAttributes: true,
             vocabulary: true,
             sampleCopy: true,
@@ -122,6 +123,129 @@ export const onboardingRouter = router({
         where: { id: input.storeId },
         data,
       });
+    }),
+
+  /**
+   * Go back to a previous step. Only allowed to go backwards.
+   */
+  goBack: workspaceProcedure
+    .input(z.object({ storeId: z.string(), step: z.number().int().min(1).max(7) }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      if (input.step >= store.onboardingStep) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Can only go back to a previous step (current: ${store.onboardingStep})`,
+        });
+      }
+
+      // Don't allow going back to step 0 (store connection) or step 1 (sync)
+      if (input.step < 2) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot go back to sync step",
+        });
+      }
+
+      return ctx.prisma.store.update({
+        where: { id: input.storeId },
+        data: { onboardingStep: input.step },
+      });
+    }),
+
+  /**
+   * Save brand document and run analysis inline (returns updated profile).
+   */
+  saveBrandDocument: workspaceProcedure
+    .input(z.object({ storeId: z.string(), document: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        include: {
+          products: {
+            where: { status: "active" },
+            take: 15,
+            orderBy: { updatedAt: "desc" },
+          },
+        },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      // Run analysis inline so we can return results immediately
+      const { analyzeBrandFromDocument } = await import("@allohq/customer-intelligence");
+
+      const result = await analyzeBrandFromDocument(
+        input.document,
+        {
+          storeName: store.storeName || store.shopDomain.replace(".myshopify.com", ""),
+          products: store.products.map((p) => ({
+            title: p.title,
+            description: p.description ?? undefined,
+            productType: p.productType ?? undefined,
+            vendor: p.vendor ?? undefined,
+            price: p.price,
+          })),
+        },
+      );
+
+      // Record token usage
+      await ctx.prisma.tokenUsage.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          model: result.model,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          purpose: "brand_document_analysis",
+        },
+      });
+
+      // Upsert brand profile with new analysis + document
+      const brandProfile = await ctx.prisma.brandProfile.upsert({
+        where: {
+          workspaceId_storeId: {
+            workspaceId: ctx.workspaceId,
+            storeId: input.storeId,
+          },
+        },
+        create: {
+          workspaceId: ctx.workspaceId,
+          storeId: input.storeId,
+          brandName: result.brandName,
+          brandDescription: result.brandDescription,
+          brandDocument: input.document,
+          toneAttributes: result.toneAttributes as any,
+          vocabulary: result.vocabulary as any,
+          visualStyle: result.visualStyle as any,
+          sampleCopy: result.sampleCopy as any,
+          analyzedAt: new Date(),
+        },
+        update: {
+          brandName: result.brandName,
+          brandDescription: result.brandDescription,
+          brandDocument: input.document,
+          toneAttributes: result.toneAttributes as any,
+          vocabulary: result.vocabulary as any,
+          visualStyle: result.visualStyle as any,
+          sampleCopy: result.sampleCopy as any,
+          analyzedAt: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+        brandProfile: {
+          brandName: brandProfile.brandName,
+          brandDescription: brandProfile.brandDescription,
+          toneAttributes: brandProfile.toneAttributes,
+          vocabulary: brandProfile.vocabulary,
+          visualStyle: brandProfile.visualStyle,
+          sampleCopy: brandProfile.sampleCopy,
+        },
+      };
     }),
 
   /**

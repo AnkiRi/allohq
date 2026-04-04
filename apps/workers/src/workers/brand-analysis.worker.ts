@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
-import { analyzeBrandVoice } from "@allohq/customer-intelligence";
+import { analyzeBrandVoice, analyzeBrandFromDocument } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 const memoryWriterQueue = new Queue(QUEUE_NAMES.MEMORY_WRITER, { connection: redisConnection });
@@ -8,6 +8,7 @@ const memoryWriterQueue = new Queue(QUEUE_NAMES.MEMORY_WRITER, { connection: red
 interface BrandAnalysisJobData {
   storeId: string;
   model?: string;
+  document?: string;
 }
 
 export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
@@ -33,25 +34,37 @@ export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
       throw new Error(`Store ${storeId} not found`);
     }
 
-    if (store.products.length === 0) {
-      console.warn(`[brand-analysis] No products found for store ${storeId}, skipping`);
-      return { skipped: true, reason: "no_products" };
-    }
+    const storeDataForAnalysis = {
+      storeName: store.shopDomain.replace(".myshopify.com", ""),
+      products: store.products.map((p) => ({
+        title: p.title,
+        description: p.description ?? undefined,
+        productType: p.productType ?? undefined,
+        vendor: p.vendor ?? undefined,
+        price: p.price,
+      })),
+    };
 
-    // Run brand analysis
-    const result = await analyzeBrandVoice(
-      {
-        storeName: store.shopDomain.replace(".myshopify.com", ""),
-        products: store.products.map((p) => ({
-          title: p.title,
-          description: p.description ?? undefined,
-          productType: p.productType ?? undefined,
-          vendor: p.vendor ?? undefined,
-          price: p.price,
-        })),
-      },
-      job.data.model ? { model: job.data.model as any } : undefined,
-    );
+    const modelOpts = job.data.model ? { model: job.data.model as any } : undefined;
+
+    let result;
+    if (job.data.document) {
+      // Use merchant-provided brand document as primary source
+      console.log(`[brand-analysis] Using brand document for store ${storeId}`);
+      result = await analyzeBrandFromDocument(
+        job.data.document,
+        storeDataForAnalysis,
+        modelOpts,
+      );
+    } else {
+      if (store.products.length === 0) {
+        console.warn(`[brand-analysis] No products found for store ${storeId}, skipping`);
+        return { skipped: true, reason: "no_products" };
+      }
+
+      // Run brand analysis from product data
+      result = await analyzeBrandVoice(storeDataForAnalysis, modelOpts);
+    }
 
     // Record token usage
     await prisma.tokenUsage.create({
@@ -65,6 +78,7 @@ export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
     });
 
     // Upsert brand profile
+    const brandDocumentData = job.data.document ? { brandDocument: job.data.document } : {};
     await prisma.brandProfile.upsert({
       where: {
         workspaceId_storeId: {
@@ -82,6 +96,7 @@ export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
         visualStyle: result.visualStyle as any,
         sampleCopy: result.sampleCopy as any,
         analyzedAt: new Date(),
+        ...brandDocumentData,
       },
       update: {
         brandName: result.brandName,
@@ -91,6 +106,7 @@ export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
         visualStyle: result.visualStyle as any,
         sampleCopy: result.sampleCopy as any,
         analyzedAt: new Date(),
+        ...brandDocumentData,
       },
     });
 

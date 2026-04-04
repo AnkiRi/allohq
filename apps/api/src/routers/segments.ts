@@ -1,6 +1,15 @@
 import { z } from "zod";
+import { Queue } from "bullmq";
 import { router, workspaceProcedure } from "../trpc";
 import { DEFAULT_SEGMENTS } from "@allohq/customer-intelligence";
+
+const redisConnection = {
+  host: process.env["REDIS_HOST"] ?? "localhost",
+  port: Number(process.env["REDIS_PORT"] ?? 6379),
+  password: process.env["REDIS_PASSWORD"],
+};
+
+const productSegmentsQueue = new Queue("product-segments", { connection: redisConnection });
 
 const conditionSchema = z.object({
   field: z.enum([
@@ -205,6 +214,104 @@ export const segmentsRouter = router({
         where: { id: input.id },
       });
       return { success: true };
+    }),
+
+  /** Get basket archetypes for the workspace's stores */
+  getBasketArchetypes: workspaceProcedure.query(async ({ ctx }) => {
+    const stores = await ctx.prisma.store.findMany({
+      where: { workspaceId: ctx.workspaceId },
+      select: { id: true },
+    });
+    const storeIds = stores.map((s) => s.id);
+
+    const archetypes = await ctx.prisma.basketArchetype.findMany({
+      where: { storeId: { in: storeIds }, isActive: true },
+      orderBy: { frequency: "desc" },
+    });
+
+    return archetypes;
+  }),
+
+  /** List product-based smart segments for the workspace */
+  getProductSegments: workspaceProcedure
+    .input(z.object({ storeId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      const storeIds = input?.storeId ? [input.storeId] : stores.map((s) => s.id);
+
+      const segments = await ctx.prisma.productSegment.findMany({
+        where: { storeId: { in: storeIds }, isActive: true },
+        orderBy: { customerCount: "desc" },
+        include: {
+          _count: { select: { members: true } },
+        },
+      });
+
+      return segments.map((s) => ({
+        id: s.id,
+        storeId: s.storeId,
+        name: s.name,
+        slug: s.slug,
+        description: s.description,
+        segmentType: s.segmentType,
+        conditions: s.conditions,
+        customerCount: s.customerCount,
+        totalRevenue: s.totalRevenue,
+        avgOrderValue: s.avgOrderValue,
+        insights: s.insights,
+        memberCount: s._count.members,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      }));
+    }),
+
+  /** Get a single product segment with member details */
+  getProductSegmentById: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const segment = await ctx.prisma.productSegment.findUnique({
+        where: { id: input.id },
+        include: {
+          members: {
+            take: 50,
+            orderBy: { score: "desc" },
+          },
+        },
+      });
+
+      if (!segment) {
+        throw new Error("Product segment not found");
+      }
+
+      // Verify workspace access
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: segment.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) {
+        throw new Error("Access denied");
+      }
+
+      return segment;
+    }),
+
+  /** Trigger a refresh of product segments for a store */
+  refreshProductSegments: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify workspace access
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) {
+        throw new Error("Store not found");
+      }
+
+      await productSegmentsQueue.add("refresh", { storeId: input.storeId }, { attempts: 3 });
+
+      return { success: true, message: "Product segment analysis queued" };
     }),
 
   /** Preview a segment — count matching customers and return a sample */

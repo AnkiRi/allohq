@@ -17,6 +17,9 @@ const automationGenerateQueue = new Queue(QUEUE_NAMES.AUTOMATION_GENERATE, {
 const campaignFactoryQueue = new Queue(QUEUE_NAMES.CAMPAIGN_FACTORY, {
   connection: redisConnection,
 });
+const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, {
+  connection: redisConnection,
+});
 
 interface StoreActivationJobData {
   storeId: string;
@@ -232,6 +235,7 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
         { key: "classify_category", label: "Classify store category", status: "done" },
         { key: "create_automations", label: "Create automations from autonomy config", status: "pending" },
         { key: "scan_opportunities", label: "Scan for campaign opportunities", status: "pending" },
+        { key: "product_segments", label: "Discover product-based smart segments", status: "pending" },
         { key: "generate_briefing", label: "Generate first merchant briefing", status: "pending" },
         { key: "finalize", label: "Finalize activation", status: "pending" },
       ],
@@ -376,6 +380,29 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
     } catch (err) {
       console.error(`[store-activation] Step 2 (scan opportunities) failed:`, (err as Error).message);
       await updateStep(storeId, activationLog, "scan_opportunities", {
+        status: "error",
+        detail: (err as Error).message,
+        completedAt: new Date().toISOString(),
+      });
+    }
+
+    // ── Step 2b: Queue product-based smart segments analysis ─────────────
+
+    try {
+      await updateStep(storeId, activationLog, "product_segments", { status: "running" });
+
+      await productSegmentsQueue.add("activation", { storeId }, { attempts: 3 });
+
+      console.log(`[store-activation] Queued product segments analysis for store ${storeId}`);
+
+      await updateStep(storeId, activationLog, "product_segments", {
+        status: "done",
+        detail: "Product segment analysis queued",
+        completedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error(`[store-activation] Step 2b (product segments) failed:`, (err as Error).message);
+      await updateStep(storeId, activationLog, "product_segments", {
         status: "error",
         detail: (err as Error).message,
         completedAt: new Date().toISOString(),

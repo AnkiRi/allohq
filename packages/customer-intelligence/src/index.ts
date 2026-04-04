@@ -6,6 +6,10 @@ export type { AIModelId, AIProvider, AIModel, CompletionRequest, CompletionResul
 export { scoreQuintile, getSegmentName, computeRfmRawData } from "./rfm";
 export { calculateCustomerLtv } from "./ltv";
 export { DEFAULT_SEGMENTS } from "./segments";
+export { analyzeBasketPatterns, saveBasketArchetypes, generateArchetypeName } from "./segments";
+export type { BasketPattern } from "./segments";
+export { discoverProductSegments, saveProductSegments } from "./segments";
+export type { ProductSegmentDefinition } from "./segments";
 export type {
   RfmSegmentName,
   SegmentDefinition,
@@ -15,7 +19,7 @@ export type {
 } from "./types";
 
 // Brand Intelligence
-export { analyzeBrandVoice } from "./brand";
+export { analyzeBrandVoice, analyzeBrandFromDocument } from "./brand";
 export type { StoreData, BrandVoiceResult } from "./brand";
 
 // AI Content Generation

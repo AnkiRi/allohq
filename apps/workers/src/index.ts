@@ -89,6 +89,8 @@ import { overnightOpsWorker } from "./workers/overnight-ops.worker";
 import { eventReactorWorker } from "./workers/event-reactor.worker";
 import { browseAbandonmentWorker } from "./workers/browse-abandonment.worker";
 import { copyLearnerWorker } from "./workers/copy-learner.worker";
+import { basketAnalysisWorker } from "./workers/basket-analysis.worker";
+import { productSegmentsWorker } from "./workers/product-segments.worker";
 
 // Clean up stale Redis connections from previous ungraceful shutdowns.
 // When workers are force-killed (SIGKILL/kill -9), their blocking BullMQ
@@ -177,6 +179,8 @@ console.log(`  - overnight-ops worker: ${overnightOpsWorker.name}`);
 console.log(`  - event-reactor worker: ${eventReactorWorker.name}`);
 console.log(`  - browse-abandonment worker: ${browseAbandonmentWorker.name}`);
 console.log(`  - copy-learner worker: ${copyLearnerWorker.name}`);
+console.log(`  - basket-analysis worker: ${basketAnalysisWorker.name}`);
+console.log(`  - product-segments worker: ${productSegmentsWorker.name}`);
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
@@ -407,6 +411,26 @@ copyLearnerQueue.upsertJobScheduler(
   console.error("Failed to set up copy learner schedule:", err.message);
 });
 
+// Schedule basket analysis (daily)
+const basketAnalysisQueue = new Queue(QUEUE_NAMES.BASKET_ANALYSIS, { connection: redisConnection });
+basketAnalysisQueue.upsertJobScheduler(
+  "basket-analysis-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "basket-analysis", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up basket analysis schedule:", err.message);
+});
+
+// Schedule product segments analysis (daily)
+const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, { connection: redisConnection });
+productSegmentsQueue.upsertJobScheduler(
+  "product-segments-schedule",
+  { every: 24 * 60 * 60 * 1000 },
+  { name: "product-segments", data: { type: "cron" } }
+).catch((err) => {
+  console.error("Failed to set up product segments schedule:", err.message);
+});
+
 // Graceful shutdown with timeout — if workers don't close in 5s, force exit.
 // This prevents zombie processes that hold Redis connections and block queues.
 const shutdown = async () => {
@@ -463,6 +487,8 @@ const shutdown = async () => {
       eventReactorWorker.close(),
       browseAbandonmentWorker.close(),
       copyLearnerWorker.close(),
+      basketAnalysisWorker.close(),
+      productSegmentsWorker.close(),
     ]);
   } catch (err) {
     console.error("Error during shutdown:", (err as Error).message);
