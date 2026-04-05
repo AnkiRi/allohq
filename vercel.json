@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "pnpm --filter database exec prisma generate && NODE_OPTIONS='--max-old-space-size=7168' pnpm --filter web build",
+  "installCommand": "pnpm install",
+  "outputDirectory": "apps/web/.next",
+  "ignoreCommand": "npx turbo-ignore --fallback=HEAD~1 --task=build --scope=@allohq/web"
+}
