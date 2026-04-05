@@ -12,8 +12,7 @@ const nextConfig = {
   },
   outputFileTracingIncludes: {
     "/api/**": [
-      resolve(__dirname, "../../node_modules/.prisma/client/**"),
-      resolve(__dirname, "../../node_modules/@prisma/client/**"),
+      resolve(__dirname, "../../packages/database/generated/client/**"),
     ],
   },
   images: {
