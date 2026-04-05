@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "prisma generate --schema=../../packages/database/prisma/schema.prisma"
   },
   "dependencies": {
     "@allohq/database": "workspace:*",
+    "@prisma/client": "^6.19.2",
+    "prisma": "^6.19.2",
     "@allohq/ecommerce-integrations": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.0",
