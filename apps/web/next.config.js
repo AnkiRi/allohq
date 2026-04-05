@@ -1,5 +1,3 @@
-const { resolve } = require("path");
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -11,9 +9,7 @@ const nextConfig = {
     optimizePackageImports: ["@allohq/ui", "lucide-react"],
   },
   outputFileTracingIncludes: {
-    "/api/**": [
-      resolve(__dirname, "../../packages/database/generated/client/**"),
-    ],
+    "/api/**": ["../../packages/database/generated/client/**"],
   },
   images: {
     remotePatterns: [
