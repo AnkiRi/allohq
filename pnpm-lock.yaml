@@ -256,7 +256,7 @@ importers:
         version: 10.4.24(postcss@8.5.6)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@2.6.1)
+        version: 9.39.2(jiti@1.21.7)
       postcss:
         specifier: ^8.4.49
         version: 8.5.6
@@ -403,6 +403,9 @@ importers:
       '@allohq/ecommerce-integrations':
         specifier: workspace:*
         version: link:../ecommerce-integrations
+      '@allohq/email-builder':
+        specifier: workspace:*
+        version: link:../email-builder
       '@allohq/journey-orchestrator':
         specifier: workspace:*
         version: link:../journey-orchestrator
@@ -849,7 +852,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@1.21.7)
+        version: 9.39.2(jiti@2.6.1)
       react:
         specifier: ^19.0.0
         version: 19.2.4
