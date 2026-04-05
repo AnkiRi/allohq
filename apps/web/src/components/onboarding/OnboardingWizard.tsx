@@ -594,7 +594,7 @@ function BrandReviewStep({
       setIsAnalyzing(false);
       setAnalysisDone(true);
       setTimeout(() => setAnalysisDone(false), 5000);
-    } catch (err) {
+    } catch {
       setIsAnalyzing(false);
     }
   };
