@@ -8,9 +8,7 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["@allohq/ui", "lucide-react"],
   },
-  outputFileTracingIncludes: {
-    "/api/**": ["../../packages/database/generated/client/**"],
-  },
+  outputFileTracingRoot: require("path").join(__dirname, "../../"),
   images: {
     remotePatterns: [
       {
