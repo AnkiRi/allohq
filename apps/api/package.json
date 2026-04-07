@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsup src/index.ts --format cjs --out-dir dist --no-splitting",
     "start": "node dist/index.js",
     "lint": "eslint ./src",
     "typecheck": "tsc --noEmit"
@@ -41,6 +41,7 @@
     "@types/cors": "^2.8.17",
     "@types/node": "^22.10.7",
     "eslint": "^9.18.0",
+    "tsup": "^8.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.3"
   }
