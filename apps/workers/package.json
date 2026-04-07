@@ -7,7 +7,7 @@
     "predev": "pkill -f 'workers/src/index.ts' 2>/dev/null; sleep 1; pkill -9 -f 'workers/src/index.ts' 2>/dev/null || true",
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsup src/index.ts --format cjs --out-dir dist --no-splitting",
+    "build": "tsup",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
