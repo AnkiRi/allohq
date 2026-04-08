@@ -6,4 +6,5 @@ export default defineConfig({
   outDir: "dist",
   splitting: false,
   noExternal: [/@allohq\/.*/],
+  external: ["mjml", "mjml-core", "uglify-js", "html-minifier"],
 });
