@@ -102,6 +102,12 @@ importers:
       ioredis:
         specifier: ^5.4.0
         version: 5.9.3
+      mjml:
+        specifier: ^4.18.0
+        version: 4.18.0
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -344,6 +350,9 @@ importers:
       '@allohq/product-recommendations':
         specifier: workspace:*
         version: link:../../packages/product-recommendations
+      '@prisma/client':
+        specifier: ^6.3.0
+        version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
       bullmq:
         specifier: ^5.0.0
         version: 5.69.3
@@ -353,6 +362,12 @@ importers:
       ioredis:
         specifier: ^5.4.0
         version: 5.9.3
+      mjml:
+        specifier: ^4.18.0
+        version: 4.18.0
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
       undici:
         specifier: ^7.22.0
         version: 7.22.0
