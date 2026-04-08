@@ -22,7 +22,12 @@ export async function createContext(opts: { req?: any; res?: any }) {
     try {
       const payload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY!,
-        authorizedParties: ["http://localhost:3000", "http://localhost:3001"],
+        authorizedParties: [
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "https://agent.allohq.ai",
+          "https://allohq.ai",
+        ],
       });
       userId = payload.sub;
       console.log("[auth] Clerk userId:", userId);
