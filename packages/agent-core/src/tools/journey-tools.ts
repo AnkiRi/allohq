@@ -29,7 +29,14 @@ export const journeyTools: ToolDefinition[] = [
       },
       steps: {
         type: "array",
-        description: "Array of step objects: { type: 'channel_select'|'send_email'|'send_sms'|'send_whatsapp'|'wait'|'condition'|'silence_check'|'ab_test', config: {} }",
+        description: "Array of step objects",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", description: "Step type: channel_select, send_email, send_sms, send_whatsapp, wait, condition, silence_check, ab_test" },
+            config: { type: "object", description: "Step configuration" },
+          },
+        },
       },
       category: {
         type: "string",

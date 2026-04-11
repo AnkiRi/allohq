@@ -150,10 +150,7 @@ function toOpenAITools(tools: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
       parameters: {
         type: "object",
         properties: Object.fromEntries(
-          Object.entries(t.parameters).map(([key, val]) => [key, {
-            type: (val as any).type ?? "string",
-            description: (val as any).description ?? "",
-          }])
+          Object.entries(t.parameters).map(([key, val]) => [key, val])
         ),
       },
     },

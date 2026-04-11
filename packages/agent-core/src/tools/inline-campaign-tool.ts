@@ -27,6 +27,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
       productIds: {
         type: "array",
         description: "Array of product IDs to feature in the email",
+        items: { type: "string" },
       },
       customInstructions: {
         type: "string",
