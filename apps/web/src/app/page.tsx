@@ -26,82 +26,56 @@ function LandingPage() {
       : "http://localhost:3000";
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-[#2c2418] selection:bg-[#C4704D]/20">
-      {/* Nav */}
-      <nav className="flex items-center justify-between px-6 sm:px-10 py-5 max-w-5xl mx-auto">
-        <div className="text-xl font-semibold tracking-tight font-[family-name:var(--font-fraunces)]">
+    <div className="min-h-screen bg-[#09090b] text-white antialiased">
+      {/* Nav — just the logo and a single link */}
+      <nav className="flex items-center justify-between px-6 py-6 max-w-6xl mx-auto">
+        <span className="text-[15px] font-medium tracking-[-0.02em] text-white/90">
           allo
-        </div>
+        </span>
         <Link
           href={`${agentUrl}/sign-in`}
-          className="px-4 py-2 bg-[#3d3529] text-[#faf8f5] rounded-lg text-sm font-medium hover:bg-[#2c2418] transition-colors"
+          className="text-[13px] text-white/50 hover:text-white transition-colors"
         >
           Sign in
         </Link>
       </nav>
 
-      {/* Hero */}
-      <main className="flex flex-col items-center text-center px-6 sm:px-10 pt-20 sm:pt-32 pb-24 max-w-3xl mx-auto">
-        <p className="text-sm text-[#8a7e6d] tracking-wide uppercase mb-6">
-          Early access
-        </p>
-
-        <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.1] mb-5 font-[family-name:var(--font-fraunces)]">
-          The AI agent that runs
+      {/* Hero — all vertical rhythm, nothing else */}
+      <main className="flex flex-col items-center px-6 pt-[18vh] pb-32 max-w-2xl mx-auto">
+        <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-medium tracking-[-0.04em] leading-[1.05] text-center text-balance">
+          AI marketing
           <br />
-          your e-commerce marketing
+          <span className="text-white/30">for e-commerce</span>
         </h1>
 
-        <p className="text-base sm:text-lg text-[#8a7e6d] max-w-xl mb-10 leading-relaxed">
-          Connect your Shopify store. Allo learns your brand, segments your
-          customers, and creates campaigns — all on autopilot.
+        <p className="mt-6 text-[15px] leading-relaxed text-white/40 text-center max-w-md">
+          Connects to your store. Learns your brand.
+          <br />
+          Segments customers. Writes campaigns.
+          <br />
+          You approve. It ships.
         </p>
 
         <Link
           href={`${agentUrl}/sign-up`}
-          className="px-7 py-3 bg-[#3d3529] text-[#faf8f5] rounded-lg text-sm font-semibold hover:bg-[#2c2418] transition-colors"
+          className="mt-10 px-5 py-2.5 rounded-full bg-white text-[#09090b] text-[13px] font-medium hover:bg-white/90 transition-colors"
         >
-          Get started
+          Start free
         </Link>
+
+        {/* Three words */}
+        <div className="mt-24 flex items-center gap-6 text-[13px] text-white/20 tracking-wide">
+          <span>brand intelligence</span>
+          <span className="w-1 h-1 rounded-full bg-white/10" />
+          <span>smart segments</span>
+          <span className="w-1 h-1 rounded-full bg-white/10" />
+          <span>autonomous campaigns</span>
+        </div>
       </main>
 
-      {/* Divider */}
-      <div className="max-w-5xl mx-auto px-6 sm:px-10">
-        <div className="border-t border-[#e8e2d8]" />
-      </div>
-
-      {/* What it does */}
-      <section className="px-6 sm:px-10 py-20 max-w-5xl mx-auto">
-        <div className="grid sm:grid-cols-3 gap-10">
-          {[
-            {
-              label: "Learns your brand",
-              text: "Paste your guidelines or let Allo analyze your store. It picks up your voice, tone, and visual identity.",
-            },
-            {
-              label: "Finds your segments",
-              text: "Loyalists, one-time buyers, at-risk customers — discovered automatically from your order history.",
-            },
-            {
-              label: "Runs your campaigns",
-              text: "Drafts emails, builds automations, suggests next actions. You approve what goes out.",
-            },
-          ].map((item) => (
-            <div key={item.label}>
-              <h3 className="text-sm font-semibold text-[#C4704D] uppercase tracking-wide mb-2">
-                {item.label}
-              </h3>
-              <p className="text-[#8a7e6d] text-sm leading-relaxed">
-                {item.text}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="px-6 sm:px-10 py-8 text-center text-xs text-[#8a7e6d]">
-        AlloHQ
+      {/* Footer — barely there */}
+      <footer className="fixed bottom-0 w-full py-5 text-center text-[11px] text-white/15 tracking-wide">
+        allohq.ai
       </footer>
     </div>
   );
