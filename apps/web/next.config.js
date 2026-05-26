@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  webpack: (config) => {
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: /node_modules/,
+    };
+    return config;
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
