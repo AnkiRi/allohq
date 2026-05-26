@@ -34,8 +34,8 @@ export function LandingMotion() {
 
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
-      typeEl.textContent = DRAFTS[0].body;
-      if (toEl) toEl.textContent = DRAFTS[0].to;
+      typeEl.textContent = DRAFTS[0]!.body;
+      if (toEl) toEl.textContent = DRAFTS[0]!.to;
       return;
     }
 
