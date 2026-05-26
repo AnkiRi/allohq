@@ -45,7 +45,7 @@ export function LandingMotion() {
     let timer: ReturnType<typeof setTimeout>;
 
     function tick() {
-      const m = DRAFTS[mi];
+      const m = DRAFTS[mi]!;
       if (toEl) toEl.textContent = m.to;
       if (phase === "typing") {
         if (ci < m.body.length) {
