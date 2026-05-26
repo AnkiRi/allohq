@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, Phone, MessageSquare, Radio, FlaskConical } from "lucide-react";
+import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, Phone, MessageSquare, Radio, FlaskConical, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -294,6 +294,13 @@ export default function AutomationsPage() {
                       >
                         View Details
                       </Link>
+                      <Link
+                        href={`/automations/${automation.id}/edit`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-mono text-foreground hover:bg-white/10 transition-all"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit Flow
+                      </Link>
                       <button
                         onClick={() => activateMut.mutate({ id: automation.id })}
                         disabled={activateMut.isPending}
@@ -311,6 +318,13 @@ export default function AutomationsPage() {
                         className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-mono text-foreground hover:bg-white/10 transition-all"
                       >
                         View
+                      </Link>
+                      <Link
+                        href={`/automations/${automation.id}/edit`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-mono text-foreground hover:bg-white/10 transition-all"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit
                       </Link>
                       <button
                         onClick={() => pauseMut.mutate({ id: automation.id })}
@@ -330,6 +344,13 @@ export default function AutomationsPage() {
                       >
                         View
                       </Link>
+                      <Link
+                        href={`/automations/${automation.id}/edit`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-mono text-foreground hover:bg-white/10 transition-all"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit
+                      </Link>
                       <button
                         onClick={() => resumeMut.mutate({ id: automation.id })}
                         disabled={resumeMut.isPending}
@@ -342,10 +363,11 @@ export default function AutomationsPage() {
                   )}
                   {automation.status === "draft" && (
                     <Link
-                      href={`/automations/${automation.id}`}
+                      href={`/automations/${automation.id}/edit`}
                       className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-mono text-foreground hover:bg-white/10 transition-all"
                     >
-                      Edit
+                      <Pencil className="w-3 h-3" />
+                      Edit Flow
                     </Link>
                   )}
                 </div>

@@ -348,10 +348,11 @@ function BackgroundAnalysisStep({
   onContinue: () => void;
   isAdvancing: boolean;
 }) {
+  const productsDone = (status?.counts.products ?? 0) > 0;
   const syncRows = [
-    { icon: Package, label: "Syncing products", count: status?.counts.products, done: (status?.counts.products ?? 0) > 0 },
+    { icon: Package, label: "Syncing products", count: status?.counts.products, done: productsDone },
     { icon: Users, label: "Syncing customers", count: status?.counts.customers, done: (status?.counts.customers ?? 0) > 0 },
-    { icon: ShoppingBag, label: "Syncing orders", count: status?.counts.orders, done: (status?.counts.orders ?? 0) > 0 },
+    { icon: ShoppingBag, label: "Syncing orders", count: status?.counts.orders, done: productsDone },
   ];
   const analysisRows = [
     { icon: MessageSquare, label: "Analyzing brand voice", done: status?.brandVoiceComplete ?? false },

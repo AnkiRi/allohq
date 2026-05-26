@@ -127,34 +127,30 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Queue sync and brand kit jobs via BullMQ (only if Redis is configured)
-    if (redisConnection.host !== "localhost") {
-      try {
-        const syncQueue = new Queue("sync", { connection: redisConnection });
-        await syncQueue.add("full-sync", {
-          storeId: store.id,
-          shopDomain: shop,
-          accessToken,
-          platform: "shopify",
-        });
-        await syncQueue.close();
-      } catch (syncError) {
-        console.error("Failed to queue initial sync:", syncError);
-      }
+    // Queue sync and brand kit jobs via BullMQ
+    try {
+      const syncQueue = new Queue("sync", { connection: redisConnection });
+      await syncQueue.add("full-sync", {
+        storeId: store.id,
+        shopDomain: shop,
+        accessToken,
+        platform: "shopify",
+      });
+      await syncQueue.close();
+    } catch (syncError) {
+      console.error("Failed to queue initial sync:", syncError);
+    }
 
-      try {
-        const brandKitQueue = new Queue("brand-analysis", { connection: redisConnection });
-        await brandKitQueue.add("brand-kit", {
-          storeId: store.id,
-          shopDomain: shop,
-          accessToken,
-        }, { delay: 30_000 });
-        await brandKitQueue.close();
-      } catch {
-        console.error("Failed to queue brand kit extraction");
-      }
-    } else {
-      console.log("Redis not configured, skipping job queues. Sync will be triggered from onboarding.");
+    try {
+      const brandKitQueue = new Queue("brand-analysis", { connection: redisConnection });
+      await brandKitQueue.add("brand-kit", {
+        storeId: store.id,
+        shopDomain: shop,
+        accessToken,
+      }, { delay: 30_000 });
+      await brandKitQueue.close();
+    } catch {
+      console.error("Failed to queue brand kit extraction");
     }
 
     // Clear the state cookie and redirect to dashboard (which handles onboarding inline)

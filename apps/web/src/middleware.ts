@@ -6,18 +6,22 @@ const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/"]);
 export default clerkMiddleware(async (auth, request) => {
   const host = request.headers.get("host") || "";
 
+  const isRootDomain =
+    !host.startsWith("agent.") &&
+    !host.startsWith("localhost") &&
+    !host.startsWith("allohq-web");
+
   // Root domain (allohq.ai) — only serve landing page, redirect everything else
-  if (!host.startsWith("agent.") && !host.startsWith("localhost") && !host.startsWith("allohq-web")) {
+  if (isRootDomain) {
     if (request.nextUrl.pathname === "/") {
       return NextResponse.next();
     }
-    // Redirect any other path to agent subdomain
     const agentUrl = new URL(request.url);
     agentUrl.hostname = `agent.${host}`;
     return NextResponse.redirect(agentUrl);
   }
 
-  // agent.allohq.ai — normal auth
+  // agent.allohq.ai / localhost — normal auth
   if (!isPublicRoute(request)) {
     await auth.protect();
   }

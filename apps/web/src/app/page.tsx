@@ -7,7 +7,8 @@ export default async function HomePage() {
   const headersList = await headers();
   const host = headersList.get("host") || "";
 
-  if (host.startsWith("agent.") || host.startsWith("localhost")) {
+  // agent.allohq.ai — skip landing page, go straight to app
+  if (host.startsWith("agent.")) {
     const { userId } = await auth();
     if (userId) {
       redirect("/dashboard");
@@ -16,6 +17,7 @@ export default async function HomePage() {
     }
   }
 
+  // Everything else (allohq.ai, localhost) — show landing page
   return <LandingPage />;
 }
 

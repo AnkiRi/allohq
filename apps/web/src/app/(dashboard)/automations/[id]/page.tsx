@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ArrowLeft, FileText, Sparkles, Play, Zap, Clock, Mail, Timer, GitBranch, ArrowDown, Phone, MessageSquare, Radio, Pause, Route, FlaskConical, Users, VolumeX } from "lucide-react";
+import { ArrowLeft, FileText, Sparkles, Play, Zap, Clock, Mail, Timer, GitBranch, ArrowDown, Phone, MessageSquare, Radio, Pause, Route, FlaskConical, Users, VolumeX, Pencil } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -141,6 +141,13 @@ export default function AutomationDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Link
+            href={`/automations/${automationId}/edit`}
+            className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-xs font-mono font-bold text-foreground hover:bg-muted transition-all"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit Flow
+          </Link>
           <Link
             href={`/automations/${automationId}/ab-test`}
             className="flex items-center gap-2 px-3 py-2 border border-pink-200 bg-pink-50 text-pink-700 rounded-lg text-xs font-mono font-bold hover:bg-pink-100 transition-all"
