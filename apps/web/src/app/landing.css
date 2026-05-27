@@ -92,7 +92,6 @@
 @media (max-width: 960px) {
   .hero { grid-template-columns: 1fr; gap: 48px; }
   .hero-text { max-width: 640px; }
-  .hero-visual { display: none; }
 }
 
 /* ── Hero visual — dialed-up: dual orbs + KPI + activity + ribbon ──── */
@@ -968,12 +967,20 @@
   .allo-landing .spot { width: 19px; height: 19px; }
 }
 
-/* Hide all the motion-panel filler on phones (already display:none at 960,
-   but reinforced here for clarity + because some descendants use min-widths). */
+/* Show motion panel on tablet/phone — scaled down, centered below hero text */
 @media (max-width: 960px) {
-  .allo-landing .hero-visual,
-  .allo-landing .aurora-orb,
-  .allo-landing .hero-activity { display: none; }
+  .allo-landing .hero-visual {
+    min-height: auto;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+  .allo-landing .aurora-orb { display: none; }
+  .allo-landing .hero-activity {
+    width: 100%;
+    max-width: 380px;
+    margin: 0 auto;
+  }
 }
 
 
@@ -1039,4 +1046,15 @@
     gap: 14px;
   }
   .allo-landing .hero .cta-primary { width: 100%; max-width: 280px; justify-content: center; }
+
+  /* Activity card — fit phone width */
+  .allo-landing .hero-visual { max-width: 100%; }
+  .allo-landing .hero-activity {
+    max-width: 100%;
+    padding: 14px 16px 12px;
+    border-radius: 14px;
+    font-size: 12px;
+  }
+  .allo-landing .ha-kpi-val { font-size: 22px; }
+  .allo-landing .ha-draft-bubble { min-height: 44px; font-size: 12px; padding: 8px 12px; }
 }
