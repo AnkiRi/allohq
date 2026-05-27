@@ -835,3 +835,143 @@
   transition: transform 250ms var(--ease);
 }
 .allo-landing .founding-cta:hover .arrow { transform: translateX(3px); }
+
+
+/* ============================================================
+ * RESPONSIVE OVERHAUL — mobile + small-tablet
+ * Tightens vertical rhythm, stacks CTAs, sizes type down,
+ * tames padding everywhere a phone touches.
+ * ========================================================== */
+
+/* — Tablet and below (≤960px): single-column hero, hide motion panel — */
+@media (max-width: 960px) {
+  .allo-landing .hero { padding: 80px 0 64px; gap: 36px; }
+  .allo-landing .hero h1 { font-size: clamp(40px, 8vw, 56px); }
+  .allo-landing .section-briefing,
+  .allo-landing .section-how      { padding: 72px 0; }
+  .allo-landing .section-cta      { padding: 88px 0 80px; }
+  .allo-landing .briefing-card-inner { padding: 26px 28px; }
+}
+
+/* — Phone (≤640px): everything compacts — */
+@media (max-width: 640px) {
+  .allo-landing .shell { padding: 0 20px; }
+
+  /* Nav — keep brand + sign-in only */
+  .allo-landing .nav { padding: 18px 0; }
+
+  /* Hero — half the vertical, tighter line breaks */
+  .allo-landing .hero { padding: 56px 0 56px; gap: 28px; }
+  .allo-landing .hero .eyebrow { margin: 0 0 16px; letter-spacing: 0.18em; }
+  .allo-landing .hero h1 {
+    font-size: clamp(34px, 9.5vw, 44px);
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+  }
+  .allo-landing .hero .lede {
+    margin: 18px 0 0;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* CTA row — stack vertically, full-width primary, link below */
+  .allo-landing .hero .cta-row {
+    margin-top: 26px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .allo-landing .hero .cta-primary {
+    padding: 12px 18px;
+    border: 1px solid var(--aurora-fg-light);
+    border-radius: 9999px;
+    background: var(--aurora-fg-light);
+    color: var(--aurora-bone);
+    font-size: 14px;
+  }
+  .allo-landing .hero .cta-primary:hover {
+    border-color: var(--aurora-fg-light);
+    background: var(--aurora-indigo);
+  }
+
+  /* Founding partners — restack, smaller spots */
+  .allo-landing .founding { padding: 22px 0 24px; gap: 18px; }
+  .allo-landing .founding-headline { font-size: 19px; }
+  .allo-landing .founding-spots-row { gap: 7px; }
+  .allo-landing .spot { width: 22px; height: 22px; }
+  .allo-landing .founding-spots-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  /* Briefing section */
+  .allo-landing .section-briefing { padding: 56px 0; }
+  .allo-landing .section-briefing .head { margin: 0 auto 30px; }
+  .allo-landing .section-briefing .head h2 { font-size: clamp(26px, 7vw, 34px); }
+  .allo-landing .briefing-card { border-radius: 16px; }
+  .allo-landing .briefing-card-inner { padding: 22px 20px; gap: 18px; }
+  .allo-landing .briefing-card .lead { font-size: 22px; line-height: 1.2; }
+  .allo-landing .briefing-card .body-copy { font-size: 13px; }
+  .allo-landing .briefing-card .cta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .allo-landing .briefing-card .btn-primary { width: 100%; padding: 11px 16px; }
+  .allo-landing .briefing-card .kpi-row { padding: 10px 0; }
+  .allo-landing .briefing-card .kpi-value { font-size: 18px; }
+
+  /* How-it-works */
+  .allo-landing .section-how { padding: 56px 0; }
+  .allo-landing .section-how .head { margin: 0 0 32px; }
+  .allo-landing .section-how .head h2 { font-size: clamp(24px, 6vw, 30px); }
+  .allo-landing .section-how .step h3 { font-size: 19px; margin: 8px 0 8px; }
+  .allo-landing .section-how .step p  { font-size: 13px; }
+
+  /* Final CTA */
+  .allo-landing .section-cta { padding: 72px 0 64px; }
+  .allo-landing .section-cta h2 { font-size: clamp(28px, 8vw, 40px); }
+  .allo-landing .section-cta p  { font-size: 14px; margin-top: 16px; }
+  .allo-landing .section-cta .cta-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: 26px;
+    width: 100%;
+  }
+  .allo-landing .section-cta .btn-pill { width: 100%; max-width: 320px; padding: 13px 22px; }
+
+  /* Footer — stack to two centered rows */
+  .allo-landing .footer { padding: 22px 0 24px; }
+  .allo-landing .footer .row {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+  .allo-landing .footer .row .links {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 18px;
+  }
+}
+
+/* — Very small (≤380px): one more notch tighter — */
+@media (max-width: 380px) {
+  .allo-landing .shell { padding: 0 16px; }
+  .allo-landing .hero h1 { font-size: 32px; }
+  .allo-landing .briefing-card-inner { padding: 18px 16px; }
+  .allo-landing .founding-spots-row { gap: 6px; }
+  .allo-landing .spot { width: 19px; height: 19px; }
+}
+
+/* Hide all the motion-panel filler on phones (already display:none at 960,
+   but reinforced here for clarity + because some descendants use min-widths). */
+@media (max-width: 960px) {
+  .allo-landing .hero-visual,
+  .allo-landing .aurora-orb,
+  .allo-landing .hero-activity { display: none; }
+}
