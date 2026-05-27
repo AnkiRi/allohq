@@ -906,23 +906,26 @@
     gap: 10px;
   }
 
-  /* Briefing section */
-  .allo-landing .section-briefing { padding: 56px 0; }
-  .allo-landing .section-briefing .head { margin: 0 auto 30px; }
-  .allo-landing .section-briefing .head h2 { font-size: clamp(26px, 7vw, 34px); }
-  .allo-landing .briefing-card { border-radius: 16px; }
-  .allo-landing .briefing-card-inner { padding: 22px 20px; gap: 18px; }
-  .allo-landing .briefing-card .lead { font-size: 22px; line-height: 1.2; }
-  .allo-landing .briefing-card .body-copy { font-size: 13px; }
+  /* Briefing section — compact on phone */
+  .allo-landing .section-briefing { padding: 44px 0; }
+  .allo-landing .section-briefing .head { margin: 0 auto 22px; }
+  .allo-landing .section-briefing .head h2 { font-size: clamp(24px, 7vw, 32px); }
+  .allo-landing .section-briefing .head p { font-size: 13px; margin-top: 10px; }
+  .allo-landing .briefing-card { border-radius: 14px; }
+  .allo-landing .briefing-card-inner { padding: 18px 16px; gap: 14px; }
+  .allo-landing .briefing-card .lead { font-size: 20px; line-height: 1.2; }
+  .allo-landing .briefing-card .body-copy { font-size: 12px; line-height: 1.5; margin-top: 8px; }
   .allo-landing .briefing-card .cta-row {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: 12px;
-    margin-top: 18px;
+    margin-top: 14px;
   }
-  .allo-landing .briefing-card .btn-primary { width: 100%; padding: 11px 16px; }
-  .allo-landing .briefing-card .kpi-row { padding: 10px 0; }
-  .allo-landing .briefing-card .kpi-value { font-size: 18px; }
+  .allo-landing .briefing-card .btn-primary { padding: 8px 14px; font-size: 11px; }
+  .allo-landing .briefing-card .btn-link { font-size: 11px; }
+  .allo-landing .briefing-card .kpi-row { padding: 8px 0; }
+  .allo-landing .briefing-card .kpi-value { font-size: 16px; }
+  .allo-landing .briefing-card .kpi-label { font-size: 9px; }
 
   /* How-it-works */
   .allo-landing .section-how { padding: 56px 0; }
