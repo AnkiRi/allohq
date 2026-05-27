@@ -26,6 +26,7 @@
   letter-spacing: -0.01em;
   color: var(--aurora-fg-light);
   background: var(--aurora-bone);
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -973,14 +974,13 @@
   .allo-landing .hero-visual {
     min-height: auto;
     width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
+    overflow: hidden;
   }
   .allo-landing .aurora-orb { display: none; }
   .allo-landing .hero-activity {
     width: 100%;
-    max-width: 380px;
-    margin: 0 auto;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 }
 
