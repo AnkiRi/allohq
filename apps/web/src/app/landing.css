@@ -975,3 +975,68 @@
   .allo-landing .aurora-orb,
   .allo-landing .hero-activity { display: none; }
 }
+
+
+/* ============================================================
+ * V2 RESPONSIVE — pull founding above fold + center hero when
+ * the motion panel is hidden + tame in-between widths.
+ * ========================================================== */
+
+/* Desktop: shrink hero padding so the founding row sits above the fold */
+.allo-landing .hero {
+  padding: 64px 0 48px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 1fr);
+  gap: 48px;
+}
+
+/* In-between (960–1180px): tighter gap, narrower text, ensure panel breathes */
+@media (min-width: 961px) and (max-width: 1180px) {
+  .allo-landing .hero {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 32px;
+    padding: 56px 0 40px;
+  }
+  .allo-landing .hero-text { max-width: 460px; }
+  .allo-landing .hero h1 { font-size: clamp(36px, 4.8vw, 52px); }
+}
+
+/* Tablet/below — single column, CENTER the text so no empty right side */
+@media (max-width: 960px) {
+  .allo-landing .hero {
+    grid-template-columns: 1fr;
+    padding: 56px 0 36px;
+    gap: 24px;
+    justify-items: center;
+    text-align: center;
+  }
+  .allo-landing .hero-text {
+    max-width: 580px;
+    margin: 0 auto;
+  }
+  .allo-landing .hero .lede { margin-left: auto; margin-right: auto; }
+  .allo-landing .hero .cta-row { justify-content: center; }
+
+  /* Founding row also centers + tightens */
+  .allo-landing .founding {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 20px 0 24px;
+    justify-items: center;
+    text-align: center;
+  }
+  .allo-landing .founding-headline { font-size: 20px; }
+  .allo-landing .founding-sub { margin-left: auto; margin-right: auto; }
+  .allo-landing .founding-spots { align-items: center; }
+  .allo-landing .founding-spots-meta { justify-content: center; }
+}
+
+/* Phone — keep CTA stack but center everything cleanly */
+@media (max-width: 640px) {
+  .allo-landing .hero { padding: 44px 0 28px; gap: 22px; }
+  .allo-landing .hero .cta-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .allo-landing .hero .cta-primary { width: 100%; max-width: 280px; justify-content: center; }
+}
