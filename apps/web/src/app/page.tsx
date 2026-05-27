@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import "./landing.css";
 import { LandingMotion } from "./LandingMotion";
+import { ApplyForm } from "./ApplyForm";
 
 export default async function HomePage() {
   const headersList = await headers();
@@ -36,7 +37,6 @@ function LandingPage() {
             <span className="brand">allo</span>
             <div className="links">
               <Link href="#briefing">Product</Link>
-              <Link href="#how">Pricing</Link>
               <Link href="#how">Customers</Link>
               <Link href={`${agentUrl}/sign-in`} className="sign-in">
                 Sign in
@@ -50,11 +50,14 @@ function LandingPage() {
               <h1>
                 One marketer<br />
                 for every<br />
-                <em>customer.</em>
+                <em className="with-mark">customer.</em>
               </h1>
               <p className="lede">
                 allo connects to your store, learns your brand, and attends to
                 every customer one by one — across email, WhatsApp, and SMS.
+              </p>
+              <p className="for-instance">
+                Drafts before sunrise. Approvals over coffee.
               </p>
               <div className="cta-row">
                 <Link href={`${agentUrl}/sign-up`} className="cta-primary">
@@ -74,10 +77,9 @@ function LandingPage() {
                 <header className="ha-head">
                   <span className="ha-dot" />
                   <span className="ha-label">allo · live</span>
-                  <span className="ha-stamp">09:42 IST</span>
+                  <span className="ha-stamp" data-now>—</span>
                 </header>
 
-                {/* KPI block — count-up + sparkline */}
                 <div className="ha-kpi">
                   <div className="ha-kpi-row">
                     <span
@@ -91,12 +93,7 @@ function LandingPage() {
                     <span className="ha-kpi-delta">↗ +28%</span>
                   </div>
                   <div className="ha-kpi-label">revenue · last 30 days</div>
-                  <svg
-                    className="ha-spark"
-                    viewBox="0 0 240 28"
-                    preserveAspectRatio="none"
-                    aria-hidden="true"
-                  >
+                  <svg className="ha-spark" viewBox="0 0 240 28" preserveAspectRatio="none" aria-hidden="true">
                     <defs>
                       <linearGradient id="sparkGrad" x1="0" x2="1" y1="0" y2="0">
                         <stop offset="0%" stopColor="#5C9D7E" />
@@ -116,7 +113,6 @@ function LandingPage() {
 
                 <div className="ha-divider" />
 
-                {/* Activity feed — rotating items */}
                 <div className="ha-items">
                   <div className="ha-item">
                     <div className="ha-text">
@@ -146,16 +142,13 @@ function LandingPage() {
 
                 <div className="ha-divider" />
 
-                {/* Live draft preview — typewriter */}
                 <div className="ha-draft">
                   <div className="ha-draft-head">
                     <span className="ha-draft-channel">
                       <span className="ha-draft-channel-dot" />
                       now drafting · whatsapp
                     </span>
-                    <span className="ha-draft-to" data-typewriter-to>
-                      to priya
-                    </span>
+                    <span className="ha-draft-to" data-typewriter-to>to priya</span>
                   </div>
                   <div className="ha-draft-bubble">
                     <span data-typewriter />
@@ -180,10 +173,7 @@ function LandingPage() {
             </div>
 
             <div className="founding-spots">
-              <div
-                className="founding-spots-row"
-                aria-label="3 of 8 spots filled"
-              >
+              <div className="founding-spots-row" aria-label="3 of 8 spots filled">
                 <span className="spot filled" />
                 <span className="spot filled" />
                 <span className="spot filled" />
@@ -197,7 +187,7 @@ function LandingPage() {
                 <span>
                   <strong>3</strong> of 8 onboarded · 5 spots left
                 </span>
-                <Link href="#" className="founding-cta">
+                <Link href="#apply" className="founding-cta">
                   Apply <span className="arrow">→</span>
                 </Link>
               </div>
@@ -206,6 +196,7 @@ function LandingPage() {
         </div>
       </header>
 
+      {/* Briefing section */}
       <section className="section-briefing" id="briefing">
         <div className="shell">
           <div className="head">
@@ -215,23 +206,26 @@ function LandingPage() {
               <em>Everything allo did overnight.</em>
             </h2>
             <p>
-              What&apos;s at risk, what&apos;s queued for your approval, what to
-              act on. A daily artifact you actually want to read — printable,
-              shareable, on your phone before the first coffee.
+              What&apos;s at risk, what&apos;s queued for your approval, what
+              to act on. A daily artifact you actually want to read —
+              printable, shareable, on your phone before the first coffee.
             </p>
           </div>
 
           <div className="briefing-card">
             <div className="briefing-card-inner">
               <div>
-                <div className="meta">Daily briefing · Tuesday, May 26</div>
+                <div className="meta">
+                  <span data-today>Today&apos;s briefing</span>
+                </div>
                 <div className="lead">
                   Good morning, Ashley.<br />
                   <em>187 customers haven&apos;t visited in a while.</em>
                 </div>
                 <p className="body-copy">
-                  Last spring&apos;s seasonal cohort. ₹4.2L of past revenue,
-                  mostly bought once. I&apos;ve drafted a 3-variant WhatsApp
+                  Last spring&apos;s seasonal cohort — the ones who bought
+                  during the March linen drop. ₹4.2L of past revenue, mostly
+                  bought once. I&apos;ve drafted a 3-variant WhatsApp
                   win-back — expected recovery ₹1.2L.
                 </p>
                 <div className="cta-row">
@@ -265,11 +259,106 @@ function LandingPage() {
         </div>
       </section>
 
+      {/* Evidence — three customer-level proofs, 3 'moment' cards */}
+      <section className="section-evidence">
+        <div className="shell">
+          <div className="head">
+            <p className="eyebrow">one marketer for every customer</p>
+            <h2>How <em>allo notices.</em></h2>
+          </div>
+          <div className="moments">
+            <article className="moment">
+              <div className="moment-meta">
+                <span className="num">01</span>
+                <span className="dot" />
+                <span>memory</span>
+                <span className="stamp">held back</span>
+              </div>
+              <p className="moment-body">
+                Priya bought a linen tunic in March.{" "}
+                <em>allo</em> won&apos;t pitch her wool in October.
+              </p>
+              <div className="moment-tag">noticed · kept her on the list</div>
+            </article>
+            <article className="moment">
+              <div className="moment-meta">
+                <span className="num">02</span>
+                <span className="dot" />
+                <span>pre-emptive</span>
+                <span className="stamp">06:14 am</span>
+              </div>
+              <p className="moment-body">
+                Reema&apos;s order shipped late last month.{" "}
+                <em>allo</em> writes the apology before she does.
+              </p>
+              <div className="moment-tag">noticed · drafted for your sign-off</div>
+            </article>
+            <article className="moment">
+              <div className="moment-meta">
+                <span className="num">03</span>
+                <span className="dot" />
+                <span>timing</span>
+                <span className="stamp">00:14 am</span>
+              </div>
+              <p className="moment-body">
+                Karan reads email at midnight, not 9am.{" "}
+                <em>allo</em> writes him at midnight.
+              </p>
+              <div className="moment-tag">noticed · delivered on his clock</div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      {/* Founder quotes — dark emerald crossfade carousel */}
+      <section className="section-quotes">
+        <div className="shell">
+          <div className="quote-stack" data-quote-stack>
+            <figure className="pull-quote is-active" data-quote="0">
+              <span className="quote-mark" aria-hidden="true">&ldquo;</span>
+              <blockquote>
+                At Zymrat, the moment I stopped writing every email myself
+                was the moment retention died. allo would have given me back
+                my Sundays.
+              </blockquote>
+              <figcaption>
+                <span className="attr-name">Ujjawal Asthana</span>
+                <span className="attr-role">ex-founder · Zymrat</span>
+              </figcaption>
+            </figure>
+            <figure className="pull-quote" data-quote="1">
+              <span className="quote-mark" aria-hidden="true">&ldquo;</span>
+              <blockquote>
+                Most retention tools assume you already have a team. allo
+                assumes you don&apos;t — and that&apos;s exactly what every
+                DTC brand under ten people needs.
+              </blockquote>
+              <figcaption>
+                <span className="attr-name">Raviraj R</span>
+                <span className="attr-role">CRM &amp; Growth Lead · HealthifyMe</span>
+              </figcaption>
+            </figure>
+          </div>
+          <div className="quote-dots" data-quote-dots>
+            <button
+              className="quote-dot is-active"
+              data-go="0"
+              aria-label="Show first quote"
+            />
+            <button
+              className="quote-dot"
+              data-go="1"
+              aria-label="Show second quote"
+            />
+          </div>
+        </div>
+      </section>
+
       <section className="section-how" id="how">
         <div className="shell">
           <div className="head">
             <p className="eyebrow">how it works</p>
-            <h2>Three steps. No marketers required.</h2>
+            <h2>Three steps. <em>Live by lunch.</em></h2>
           </div>
           <div className="grid">
             <article className="step">
@@ -305,6 +394,21 @@ function LandingPage() {
         </div>
       </section>
 
+      {/* Apply form — 3 questions, mailto submit */}
+      <section className="section-apply" id="apply">
+        <div className="shell">
+          <div className="head">
+            <p className="eyebrow">founding cohort · application</p>
+            <h2>
+              Three questions.<br />
+              <em>We read every one.</em>
+            </h2>
+            <p>If you&apos;re a fit, we&apos;ll write back within 48 hours.</p>
+          </div>
+          <ApplyForm />
+        </div>
+      </section>
+
       <section className="section-cta" id="cta">
         <div className="shell">
           <h2>
@@ -326,19 +430,23 @@ function LandingPage() {
         </div>
       </section>
 
-      <footer className="footer">
+      <footer className="footer-taste">
         <div className="shell">
           <div className="row">
-            <span>allohq · bangalore</span>
-            <div className="links">
+            <div className="col">
+              hand-built in bangalore
+              <span className="meta">© 2026 AlloHQ</span>
+            </div>
+            <div className="col">
+              made for founders<br />who write their own emails
+            </div>
+            <div className="col links">
               <Link href="#">Product</Link>
               <Link href="#">Pricing</Link>
               <Link href="#">Customers</Link>
               <Link href="#">Brand</Link>
               <Link href="#">Privacy</Link>
-              <Link href="#">Terms</Link>
             </div>
-            <span>© 2026 AlloHQ</span>
           </div>
         </div>
       </footer>
