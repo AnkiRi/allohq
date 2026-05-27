@@ -92,7 +92,7 @@
 @media (max-width: 960px) {
   .hero { grid-template-columns: 1fr; gap: 48px; }
   .hero-text { max-width: 640px; }
-  .hero-visual { display: none; } /* TEMP: uncomment to hide on mobile */
+  /* .hero-visual { display: none; } */
 }
 
 /* ── Hero visual — dialed-up: dual orbs + KPI + activity + ribbon ──── */
@@ -968,7 +968,7 @@
   .allo-landing .spot { width: 19px; height: 19px; }
 }
 
-/* TEMP COMMENTED OUT — Show motion panel on tablet/phone
+/* Show motion panel on tablet/phone — scaled down, centered below hero text */
 @media (max-width: 960px) {
   .allo-landing .hero-visual {
     min-height: auto;
@@ -983,7 +983,6 @@
     margin: 0 auto;
   }
 }
-*/
 
 
 /* ============================================================
@@ -1049,7 +1048,7 @@
   }
   .allo-landing .hero .cta-primary { width: 100%; max-width: 280px; justify-content: center; }
 
-  /* TEMP COMMENTED OUT — Activity card phone sizing
+  /* Activity card — fit phone width */
   .allo-landing .hero-visual { max-width: 100%; }
   .allo-landing .hero-activity {
     max-width: 100%;
@@ -1059,5 +1058,4 @@
   }
   .allo-landing .ha-kpi-val { font-size: 22px; }
   .allo-landing .ha-draft-bubble { min-height: 44px; font-size: 12px; padding: 8px 12px; }
-  */
 }
