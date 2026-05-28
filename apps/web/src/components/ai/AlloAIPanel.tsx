@@ -1930,7 +1930,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
 
         {/* Header */}
         <div className="relative" ref={switcherRef}>
-          <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
+          <div className="aurora-hero-dark px-5 py-4 border-b border-border flex items-center gap-2.5">
             <div
               className={cn(
                 "w-2 h-2 rounded-full flex-shrink-0",

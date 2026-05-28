@@ -145,13 +145,13 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         {/* Agent Status Pill */}
         {onboardingDone && (
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#6B7A2F]/8 border border-[#6B7A2F]/15">
-            <PulseDot color="bg-[#6B7A2F]" />
-            <span className="text-[11px] font-mono text-[#6B7A2F]/80">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1F7A4F]/8 border border-[#1F7A4F]/15">
+            <PulseDot color="bg-[#1F7A4F]" />
+            <span className="text-[11px] font-mono text-[#1F7A4F]/85">
               Agent monitoring {totalCustomers.toLocaleString()} customers
             </span>
             {lastActivityText && (
-              <span className="text-[10px] font-mono text-[#6B7A2F]/50">
+              <span className="text-[10px] font-mono text-[#1F7A4F]/55">
                 {lastActivityText}
               </span>
             )}
@@ -160,15 +160,15 @@ export function TopBar() {
 
         {/* Revenue Counter */}
         {aiRevenue > 0 && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/8 border border-amber-500/15">
-            <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#B89466]/10 border border-[#B89466]/22">
+            <DollarSign className="w-3.5 h-3.5 text-[#8a6f3a]" />
             <AnimatedCounter
               value={Math.round(aiRevenue)}
               prefix="$"
-              className="text-[12px] font-mono font-bold text-amber-700 tabular-nums"
+              className="text-[12px] font-mono font-bold text-[#8a6f3a] tabular-nums"
               duration={0.8}
             />
-            <span className="text-[10px] font-mono text-amber-600/50">AI revenue this month</span>
+            <span className="text-[10px] font-mono text-[#8a6f3a]/55">AI revenue this month</span>
           </div>
         )}
 

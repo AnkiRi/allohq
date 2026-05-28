@@ -589,8 +589,7 @@ export default function DashboardPage() {
           {/* Daily Briefing — single card with inline feed */}
           <motion.div
             variants={itemVariants}
-            className="rounded-2xl border border-black/5 dark:border-[rgba(200,180,150,0.12)] p-6 bg-white/60 dark:bg-[rgba(40,36,30,0.7)]"
-            style={{ backdropFilter: "blur(20px)" }}
+            className="aurora-card p-6 dark:border-[rgba(200,180,150,0.12)] dark:bg-[rgba(40,36,30,0.7)]"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">

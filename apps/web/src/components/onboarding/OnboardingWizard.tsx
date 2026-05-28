@@ -242,7 +242,7 @@ export function OnboardingWizard({
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-4 sm:py-8">
+    <div className="aurora-canvas-light max-w-3xl mx-auto py-4 sm:py-8">
       <PhaseIndicator currentStep={currentStep} />
       <AnimatePresence mode="wait">
         {currentStep === 1 && (
