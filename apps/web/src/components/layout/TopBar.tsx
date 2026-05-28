@@ -202,7 +202,7 @@ export function TopBar() {
         {/* Bell */}
         <button className="relative p-2 rounded-lg hover:bg-black/3 dark:hover:bg-white/5 transition-colors">
           <Bell className="w-4 h-4 text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#c4704a]" />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#1F7A4F]" />
         </button>
       </div>
     </header>

@@ -129,11 +129,11 @@ function ConnectStorePrompt() {
 
 // Concept-a style segment styling for animated bars
 const SEGMENT_STYLES: Record<string, { dot: string; color: string }> = {
-  Champions: { dot: "bg-[#B8963E]", color: "#B8963E" },
-  "Loyal Customers": { dot: "bg-[#6B7A2F]", color: "#6B7A2F" },
+  Champions: { dot: "bg-[#B89466]", color: "#B89466" },
+  "Loyal Customers": { dot: "bg-[#1F7A4F]", color: "#1F7A4F" },
   "Potential Loyalists": { dot: "bg-cyan-500", color: "#06b6d4" },
   "New Customers": { dot: "bg-[#8A7D6B]", color: "#8A7D6B" },
-  "At Risk": { dot: "bg-[#c4704a]", color: "#c4704a" },
+  "At Risk": { dot: "bg-[#C4704D]", color: "#C4704D" },
   Hibernating: { dot: "bg-gray-400", color: "#9ca3af" },
   Lost: { dot: "bg-gray-400", color: "#9ca3af" },
 };
@@ -489,7 +489,7 @@ export default function DashboardPage() {
               prefix: "$",
               ...revenueDelta,
               spark: revenueSparkVals,
-              color: "#B8963E",
+              color: "#B89466",
               href: "/analytics",
               subtitle: alloRevenueToday > 0 ? `$${alloRevenueToday.toLocaleString()} today` : alloRevenueWeek > 0 ? `$${alloRevenueWeek.toLocaleString()} this week` : undefined,
             },
@@ -499,7 +499,7 @@ export default function DashboardPage() {
               prefix: "",
               ...customerDelta,
               spark: customerSparkVals,
-              color: "#6B7A2F",
+              color: "#1F7A4F",
               href: "/customers",
             },
             {
@@ -510,7 +510,7 @@ export default function DashboardPage() {
               up: false,
               neutral: true,
               spark: [] as number[],
-              color: "#c4704a",
+              color: "#C4704D",
               href: "/segments",
             },
             {
@@ -561,8 +561,8 @@ export default function DashboardPage() {
                   kpi.neutral
                     ? "bg-gray-500/10 text-gray-400 dark:bg-[rgba(200,180,150,0.1)] dark:text-[#6B6358]"
                     : kpi.up
-                      ? "bg-[#6B7A2F]/10 text-[#6B7A2F]"
-                      : "bg-[#c4704a]/10 text-[#c4704a]"
+                      ? "bg-[#1F7A4F]/10 text-[#1F7A4F]"
+                      : "bg-[#C4704D]/10 text-[#C4704D]"
                 }`}
               >
                 {kpi.neutral ? (
@@ -606,7 +606,7 @@ export default function DashboardPage() {
             <div className="space-y-0">
               {/* Priority action items */}
               {attentionItems.map((item, i) => {
-                const color = item.level === "urgent" ? "#c4704a" : item.level === "moderate" ? "#B8963E" : "#6B7A2F";
+                const color = item.level === "urgent" ? "#C4704D" : item.level === "moderate" ? "#B89466" : "#1F7A4F";
                 const Icon = item.level === "urgent" ? ShieldAlert : item.level === "moderate" ? AlertTriangle : CheckCircle;
                 return (
                   <div
@@ -646,7 +646,7 @@ export default function DashboardPage() {
                 const isChurn = /hibernat|churn|at.risk|dormant|win.back/i.test(para);
                 const isSuccess = /automation|set up|running|active|generated/i.test(para);
                 const Icon = isChurn ? ShieldAlert : isSuccess ? TrendingUp : Brain;
-                const iconColor = isChurn ? "#c4704a" : isSuccess ? "#6B7A2F" : "#B8963E";
+                const iconColor = isChurn ? "#C4704D" : isSuccess ? "#1F7A4F" : "#B89466";
                 return (
                   <div
                     key={`narrative-${i}`}
@@ -666,7 +666,7 @@ export default function DashboardPage() {
               {/* Briefing sections: Agent Activity + Revenue Attributed */}
               {briefingContent?.sections?.filter((s: any) => s.heading === "Agent Activity (Overnight)" || s.heading === "Revenue Attributed").map((section: any, si: number) => {
                 const isRevenue = section.heading === "Revenue Attributed";
-                const sectionColor = isRevenue ? "#B8963E" : "#7c3aed";
+                const sectionColor = isRevenue ? "#B89466" : "#7c3aed";
                 const SectionIcon = isRevenue ? TrendingUp : Activity;
                 return (
                   <div key={`briefing-section-${si}`} className="border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] pt-3 mt-2">
@@ -692,8 +692,8 @@ export default function DashboardPage() {
               {revenueAttribution && revenueAttribution.month.revenue > 0 && !briefingContent?.sections?.some((s: any) => s.heading === "Revenue Attributed") && (
                 <div className="border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] pt-3 mt-2">
                   <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="w-3.5 h-3.5 text-[#B8963E]" />
-                    <span className="text-[10px] font-mono uppercase tracking-[0.1em] font-bold text-[#B8963E]">
+                    <TrendingUp className="w-3.5 h-3.5 text-[#B89466]" />
+                    <span className="text-[10px] font-mono uppercase tracking-[0.1em] font-bold text-[#B89466]">
                       Allo Revenue
                     </span>
                   </div>
@@ -708,8 +708,8 @@ export default function DashboardPage() {
               {/* Fallback when no content */}
               {attentionItems.length === 0 && (!narrative || narrative.length <= 1) && (
                 <div className="flex items-start gap-3 py-3.5">
-                  <div className="w-7 h-7 rounded-full bg-[#B8963E]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Info className="w-3.5 h-3.5 text-[#B8963E]" />
+                  <div className="w-7 h-7 rounded-full bg-[#B89466]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Info className="w-3.5 h-3.5 text-[#B89466]" />
                   </div>
                   <p className="text-[12px] text-foreground/80 leading-relaxed">
                     Welcome! As your store data syncs, Allo will generate personalized briefings with insights and recommendations.
@@ -780,7 +780,7 @@ export default function DashboardPage() {
                     </h2>
                   </div>
                   <div className="flex items-center gap-2">
-                    <PulseDot color="bg-[#6B7A2F]" />
+                    <PulseDot color="bg-[#1F7A4F]" />
                     <span className="text-[10px] font-mono text-muted-foreground">Live</span>
                   </div>
                 </div>
@@ -801,7 +801,7 @@ export default function DashboardPage() {
                       ) : item.status === "rejected" ? (
                         <X className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                       ) : (
-                        <CheckCircle className="w-4 h-4 text-[#6B7A2F] mt-0.5 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-[#1F7A4F] mt-0.5 flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-medium text-foreground">{item.action}</div>

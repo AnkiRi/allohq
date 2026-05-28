@@ -297,13 +297,13 @@ function PhaseIndicator({ currentStep }: { currentStep: number }) {
         const isDone = phase.steps.every((s) => s < currentStep);
         return (
           <div key={i} className="flex items-center gap-2 shrink-0">
-            {i > 0 && <div className={`w-6 h-px ${isDone ? "bg-[#6B7A2F]" : "bg-[#EDE7DB]"}`} />}
+            {i > 0 && <div className={`w-6 h-px ${isDone ? "bg-[#1F7A4F]" : "bg-[#EDE7DB]"}`} />}
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 isActive
-                  ? "bg-[#6B7A2F]/10 text-[#6B7A2F] border border-[#6B7A2F]/30"
+                  ? "bg-[#1F7A4F]/10 text-[#1F7A4F] border border-[#1F7A4F]/30"
                   : isDone
-                    ? "bg-[#6B7A2F]/5 text-[#6B7A2F]"
+                    ? "bg-[#1F7A4F]/5 text-[#1F7A4F]"
                     : "text-[#8B8074]"
               }`}
             >
@@ -375,8 +375,8 @@ function BackgroundAnalysisStep({
         {syncRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
-              <div className="w-6 h-6 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center">
-                <Check className="w-3.5 h-3.5 text-[#6B7A2F]" />
+              <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
               </div>
             ) : (
               <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
@@ -384,7 +384,7 @@ function BackgroundAnalysisStep({
             <span className={`text-sm ${row.done ? "text-[#2C2C2C]" : "text-[#8B8074]"}`}>
               {row.label}
               {row.count != null && row.count > 0 && (
-                <span className="ml-1 text-[#6B7A2F] font-medium">({row.count} found)</span>
+                <span className="ml-1 text-[#1F7A4F] font-medium">({row.count} found)</span>
               )}
             </span>
           </div>
@@ -395,8 +395,8 @@ function BackgroundAnalysisStep({
         {analysisRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
-              <div className="w-6 h-6 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center">
-                <Check className="w-3.5 h-3.5 text-[#6B7A2F]" />
+              <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
               </div>
             ) : (
               <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
@@ -466,12 +466,12 @@ function ModelSelectionStep({
                 onClick={() => handleSelect(model.id)}
                 className={`relative rounded-xl p-4 text-left transition-all ${
                   isSelected
-                    ? "border-2 border-[#6B7A2F] bg-[#6B7A2F]/5 shadow-sm"
+                    ? "border-2 border-[#1F7A4F] bg-[#1F7A4F]/5 shadow-sm"
                     : "border border-[#EDE7DB] bg-white/30 backdrop-blur-sm hover:bg-white/50"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-[#6B7A2F] flex items-center justify-center">
+                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-[#1F7A4F] flex items-center justify-center">
                     <Check className="w-3.5 h-3.5 text-white" />
                   </div>
                 )}
@@ -664,7 +664,7 @@ function BrandReviewStep({
               {isAnalyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing your brand voice...</> : "Re-analyze from Document"}
             </button>
             {analysisDone && (
-              <span className="flex items-center gap-1.5 text-sm text-[#6B7A2F] font-medium">
+              <span className="flex items-center gap-1.5 text-sm text-[#1F7A4F] font-medium">
                 <Check className="w-4 h-4" /> Brand voice updated — review the changes below
               </span>
             )}
@@ -676,8 +676,8 @@ function BrandReviewStep({
       {bp && (
         <div className="glass-card-static rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-[#6B7A2F]" />
-            <span className="text-xs font-medium uppercase tracking-wide text-[#6B7A2F]">What Allo Found</span>
+            <Sparkles className="w-4 h-4 text-[#1F7A4F]" />
+            <span className="text-xs font-medium uppercase tracking-wide text-[#1F7A4F]">What Allo Found</span>
           </div>
           <p className="text-sm text-[#2C2C2C] font-medium mb-1">
             {bp.brandName || "Your Store"}
@@ -715,7 +715,7 @@ function BrandReviewStep({
               <div key={dim.key}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-medium text-[#2C2C2C]">{dim.label}</span>
-                  <span className="text-[10px] text-[#6B7A2F] font-medium">
+                  <span className="text-[10px] text-[#1F7A4F] font-medium">
                     {dim.options[currentIdx >= 0 ? currentIdx : 1] ?? ""}
                   </span>
                 </div>
@@ -731,7 +731,7 @@ function BrandReviewStep({
                       const val = dim.options[idx];
                       if (val != null) setTone((prev) => ({ ...prev, [dim.key]: val }));
                     }}
-                    className="flex-1 h-1.5 accent-[#6B7A2F] cursor-pointer"
+                    className="flex-1 h-1.5 accent-[#1F7A4F] cursor-pointer"
                   />
                   <span className="text-[10px] text-[#8B8074] w-16 shrink-0">{dim.right.label}</span>
                 </div>
@@ -749,7 +749,7 @@ function BrandReviewStep({
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#8B8074] block mb-2">Live Preview</span>
           <p className="text-xs font-medium text-[#2C2C2C]">Subject: {sampleCopy.subject}</p>
           <p className="text-xs text-[#5C5549] mt-1">{sampleCopy.body}</p>
-          <span className="inline-block mt-2 px-3 py-1 text-[10px] font-medium bg-[#6B7A2F] text-white rounded">{sampleCopy.cta}</span>
+          <span className="inline-block mt-2 px-3 py-1 text-[10px] font-medium bg-[#1F7A4F] text-white rounded">{sampleCopy.cta}</span>
         </div>
       </div>
 
@@ -764,7 +764,7 @@ function BrandReviewStep({
             <span className="text-[10px] font-medium uppercase tracking-wide text-[#8B8074] block mb-1">Detected brand terms</span>
             <div className="flex flex-wrap gap-1">
               {[...((bp.vocabulary as any).preferredWords ?? []), ...((bp.vocabulary as any).brandTerms ?? [])].slice(0, 15).map((word: string, i: number) => (
-                <span key={i} className="px-2 py-0.5 text-[10px] bg-[#6B7A2F]/10 text-[#6B7A2F] rounded-full">{word}</span>
+                <span key={i} className="px-2 py-0.5 text-[10px] bg-[#1F7A4F]/10 text-[#1F7A4F] rounded-full">{word}</span>
               ))}
             </div>
           </div>
@@ -790,18 +790,18 @@ function BrandReviewStep({
                 onClick={() => setAesthetic(opt.value)}
                 className={`relative text-left p-3 rounded-xl transition-all ${
                   isSelected
-                    ? "border-2 border-[#6B7A2F] bg-[#6B7A2F]/5"
+                    ? "border-2 border-[#1F7A4F] bg-[#1F7A4F]/5"
                     : "border border-[#EDE7DB] hover:bg-white/40"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#6B7A2F] flex items-center justify-center">
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#1F7A4F] flex items-center justify-center">
                     <Check className="w-3 h-3 text-white" />
                   </div>
                 )}
                 <span className="text-xs font-medium text-[#2C2C2C] block pr-6">{opt.label}</span>
                 <span className="text-[10px] text-[#8B8074] block mt-0.5">{opt.desc}</span>
-                <span className="text-[10px] text-[#6B7A2F] block mt-1">Best for: {opt.bestFor}</span>
+                <span className="text-[10px] text-[#1F7A4F] block mt-1">Best for: {opt.bestFor}</span>
                 <div className="mt-2 pt-2 border-t border-[#EDE7DB]/50 space-y-0.5">
                   <p className="text-[10px] text-[#5C5549]"><span className="font-medium">Subject:</span> {opt.exampleSubject}</p>
                   <p className="text-[10px] text-[#5C5549]"><span className="font-medium">CTA:</span> {opt.exampleCTA}</p>
@@ -851,7 +851,7 @@ function BrandReviewStep({
         {onBack ? (
           <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
         ) : <div />}
-        <button onClick={handleSave} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
+        <button onClick={handleSave} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40">
           {onSave.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Save & Continue
         </button>
@@ -887,7 +887,7 @@ function AutonomyStep({ storeId, onSave, onBack }: { storeId: string; onSave: { 
             </div>
             <div className="flex gap-2">
               {TIER_OPTIONS.map((tier) => (
-                <button key={tier.value} onClick={() => setTiers((prev) => ({ ...prev, [key]: tier.value }))} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${tiers[key] === tier.value ? "border-[#6B7A2F] bg-[#6B7A2F]/10 text-[#6B7A2F] font-medium" : "border-[#EDE7DB] text-[#5C5549] hover:bg-[#EDE7DB]/40"}`}>
+                <button key={tier.value} onClick={() => setTiers((prev) => ({ ...prev, [key]: tier.value }))} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${tiers[key] === tier.value ? "border-[#1F7A4F] bg-[#1F7A4F]/10 text-[#1F7A4F] font-medium" : "border-[#EDE7DB] text-[#5C5549] hover:bg-[#EDE7DB]/40"}`}>
                   <div className="font-medium">{tier.label}</div>
                   <div className="text-[10px] mt-0.5 opacity-70">{tier.desc}</div>
                 </button>
@@ -900,7 +900,7 @@ function AutonomyStep({ storeId, onSave, onBack }: { storeId: string; onSave: { 
         {onBack ? (
           <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
         ) : <div />}
-        <button onClick={() => onSave.mutate({ storeId, configs: Object.entries(tiers).map(([category, tier]) => ({ category, tier })) })} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
+        <button onClick={() => onSave.mutate({ storeId, configs: Object.entries(tiers).map(([category, tier]) => ({ category, tier })) })} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40">
           {onSave.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Save & Continue
         </button>
@@ -954,7 +954,7 @@ function GuardrailsStep({ storeId, onSave, onBack }: { storeId: string; onSave: 
           )}
           <button onClick={() => onSave.mutate({ storeId, skip: true })} disabled={onSave.isPending} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">Skip for now</button>
         </div>
-        <button onClick={() => onSave.mutate({ storeId, maxEmailsPerWeek: maxEmails, maxDiscountPercent: maxDiscount, quietHoursStart: quietStart, quietHoursEnd: quietEnd })} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
+        <button onClick={() => onSave.mutate({ storeId, maxEmailsPerWeek: maxEmails, maxDiscountPercent: maxDiscount, quietHoursStart: quietStart, quietHoursEnd: quietEnd })} disabled={onSave.isPending} className="flex items-center gap-2 px-5 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40">
           {onSave.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Save & Continue
         </button>
@@ -1004,7 +1004,7 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
               <div className="flex items-center gap-2 mb-3"><FileText className="w-4 h-4 text-[#8B8074]" /><span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">Recommendations</span></div>
               <ul className="space-y-2">
                 {report.recommendations.map((rec: string, i: number) => (
-                  <li key={i} className="flex gap-2 text-sm text-[#5C5549]"><Sparkles className="w-4 h-4 text-[#6B7A2F] shrink-0 mt-0.5" />{rec}</li>
+                  <li key={i} className="flex gap-2 text-sm text-[#5C5549]"><Sparkles className="w-4 h-4 text-[#1F7A4F] shrink-0 mt-0.5" />{rec}</li>
                 ))}
               </ul>
             </div>
@@ -1041,8 +1041,8 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
   return (
     <div className="space-y-6">
       <div className="text-center py-6">
-        <div className="w-16 h-16 rounded-2xl bg-[#6B7A2F]/10 flex items-center justify-center mx-auto mb-4">
-          <Sparkles className="w-8 h-8 text-[#6B7A2F]" />
+        <div className="w-16 h-16 rounded-2xl bg-[#1F7A4F]/10 flex items-center justify-center mx-auto mb-4">
+          <Sparkles className="w-8 h-8 text-[#1F7A4F]" />
         </div>
         <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">You&apos;re all set!</h2>
         <p className="text-sm text-[#8B8074] max-w-md mx-auto leading-relaxed">
@@ -1061,8 +1061,8 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
             { icon: Boxes, text: "First merchant briefing generated with insights" },
           ].map(({ icon: Icon, text }, i) => (
             <div key={i} className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center flex-shrink-0">
-                <Icon className="w-3.5 h-3.5 text-[#6B7A2F]" />
+              <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center flex-shrink-0">
+                <Icon className="w-3.5 h-3.5 text-[#1F7A4F]" />
               </div>
               <span className="text-sm text-[#5C5549]">{text}</span>
             </div>
@@ -1074,7 +1074,7 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         {onBack ? (
           <button onClick={onBack} className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors">← Back</button>
         ) : <div />}
-        <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-6 py-2.5 bg-[#6B7A2F] text-white text-sm rounded-lg hover:bg-[#5A6828] transition-colors disabled:opacity-40">
+        <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-6 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40">
           {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           Launch Allo
         </button>

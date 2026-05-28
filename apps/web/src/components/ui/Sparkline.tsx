@@ -2,7 +2,7 @@
 
 export function Sparkline({
   data,
-  color = "#6B7A2F",
+  color = "#1F7A4F",
   width = 60,
   height = 20,
 }: {

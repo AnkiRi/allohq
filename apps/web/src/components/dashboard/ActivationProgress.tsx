@@ -84,13 +84,13 @@ export function ActivationProgress({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={{ duration: 0.4 }}
-      className="glass-card-static rounded-xl border-l-[3px] border-l-[#6B7A2F] p-6 mb-6"
+      className="glass-card-static rounded-xl border-l-[3px] border-l-[#1F7A4F] p-6 mb-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#6B7A2F]/10 flex items-center justify-center">
-            <Sparkles className={`w-4 h-4 text-[#6B7A2F] ${!allDone ? "animate-pulse" : ""}`} />
+          <div className="w-8 h-8 rounded-lg bg-[#1F7A4F]/10 flex items-center justify-center">
+            <Sparkles className={`w-4 h-4 text-[#1F7A4F] ${!allDone ? "animate-pulse" : ""}`} />
           </div>
           <div>
             <h2 className="text-sm font-semibold text-[#2C2C2C]">
@@ -127,18 +127,18 @@ export function ActivationProgress({
                 className="flex items-start gap-3 py-1"
               >
                 {step.status === "done" ? (
-                  <div className="w-5 h-5 rounded-full bg-[#6B7A2F]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 text-[#6B7A2F]" />
+                  <div className="w-5 h-5 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-[#1F7A4F]" />
                   </div>
                 ) : step.status === "running" ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-[#B8963E] flex-shrink-0 mt-0.5" />
+                  <Loader2 className="w-5 h-5 animate-spin text-[#B89466] flex-shrink-0 mt-0.5" />
                 ) : step.status === "error" ? (
-                  <AlertCircle className="w-5 h-5 text-[#C44A4A] flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-[#1F7A4F] flex-shrink-0 mt-0.5" />
                 ) : (
                   <div className="w-5 h-5 rounded-full border border-[#EDE7DB] flex-shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <span className={`text-[13px] font-mono ${step.status === "done" ? "text-[#2C2C2C]" : step.status === "running" ? "text-[#B8963E]" : "text-[#8B8074]"}`}>
+                  <span className={`text-[13px] font-mono ${step.status === "done" ? "text-[#2C2C2C]" : step.status === "running" ? "text-[#B89466]" : "text-[#8B8074]"}`}>
                     {label}
                   </span>
                   {step.status === "done" && step.detail && (
@@ -182,7 +182,7 @@ export function ActivationProgress({
             {ctx.pendingActions > 0 && (
               <Link
                 href="/actions"
-                className="flex items-center gap-1 text-[12px] font-mono text-[#C4704A] hover:text-[#C4704A]/80 transition-colors"
+                className="flex items-center gap-1 text-[12px] font-mono text-[#1F7A4F] hover:text-[#1F7A4F]/80 transition-colors"
               >
                 {ctx.pendingActions} actions need your approval
                 <ChevronRight className="w-3.5 h-3.5" />

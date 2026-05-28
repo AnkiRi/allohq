@@ -32,7 +32,7 @@ export function Footer() {
         {/* Right */}
         <span className="flex items-center gap-1 text-[10px] font-mono shrink-0">
           Made with
-          <Heart className="w-2.5 h-2.5 text-[#c4704a] fill-[#c4704a]" />
+          <Heart className="w-2.5 h-2.5 text-[#1F7A4F] fill-[#1F7A4F]" />
           by Allo
         </span>
       </div>

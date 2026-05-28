@@ -46,7 +46,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
             height={140}
             rx={6}
             fill="rgba(107, 122, 47, 0.15)"
-            stroke="#C4704A"
+            stroke="#1F7A4F"
             strokeWidth={2}
           />
           <text
@@ -111,7 +111,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
         <polyline
           points={linePoints}
           fill="none"
-          stroke="#C4704A"
+          stroke="#1F7A4F"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -119,7 +119,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
 
         {/* Data dots */}
         {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={3} fill="#C4704A" />
+          <circle key={i} cx={p.x} cy={p.y} r={3} fill="#1F7A4F" />
         ))}
 
         {/* X-axis labels */}
@@ -146,11 +146,11 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
 /* ------------------------------------------------------------------ */
 
 const SEGMENT_COLORS: Record<string, string> = {
-  Champions: "#6B7A2F",
-  "Loyal Customers": "#B8963E",
-  "Potential Loyalists": "#C4704A",
+  Champions: "#1F7A4F",
+  "Loyal Customers": "#B89466",
+  "Potential Loyalists": "#1F7A4F",
   "New Customers": "#8A7D6B",
-  "At Risk": "#C44A4A",
+  "At Risk": "#1F7A4F",
   Hibernating: "#999",
   Unscored: "#ccc",
 };
@@ -420,13 +420,13 @@ export default function CohortAnalysisPage() {
               <div className="flex items-center gap-4 mt-3">
                 <Link
                   href="/segments"
-                  className="text-[11px] font-mono text-[#C4704A] hover:underline"
+                  className="text-[11px] font-mono text-[#1F7A4F] hover:underline"
                 >
                   View Segments &rarr;
                 </Link>
                 <Link
                   href="/campaigns"
-                  className="text-[11px] font-mono text-[#C4704A] hover:underline"
+                  className="text-[11px] font-mono text-[#1F7A4F] hover:underline"
                 >
                   Create Campaign &rarr;
                 </Link>

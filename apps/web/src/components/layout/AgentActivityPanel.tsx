@@ -20,16 +20,16 @@ import { trpc } from "@/lib/trpc";
 function StatusIcon({ status }: { status: string }) {
   if (status === "done" || status === "active" || status === "ready") {
     return (
-      <div className="w-4 h-4 rounded-full bg-[#6B7A2F]/15 flex items-center justify-center flex-shrink-0">
-        <Check className="w-2.5 h-2.5 text-[#6B7A2F]" />
+      <div className="w-4 h-4 rounded-full bg-[#1F7A4F]/15 flex items-center justify-center flex-shrink-0">
+        <Check className="w-2.5 h-2.5 text-[#1F7A4F]" />
       </div>
     );
   }
   if (status === "running" || status === "generating") {
-    return <Loader2 className="w-4 h-4 animate-spin text-[#B8963E] flex-shrink-0" />;
+    return <Loader2 className="w-4 h-4 animate-spin text-[#B89466] flex-shrink-0" />;
   }
   if (status === "error") {
-    return <AlertCircle className="w-4 h-4 text-[#C44A4A] flex-shrink-0" />;
+    return <AlertCircle className="w-4 h-4 text-[#1F7A4F] flex-shrink-0" />;
   }
   // pending / draft
   return <div className="w-4 h-4 rounded-full border border-[#EDE7DB] flex-shrink-0" />;
@@ -118,12 +118,12 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
           {/* Activity indicator */}
           <div className="relative flex-shrink-0">
             {isComplete ? (
-              <div className="w-8 h-8 rounded-lg bg-[#6B7A2F]/10 flex items-center justify-center">
-                <Check className="w-4 h-4 text-[#6B7A2F]" />
+              <div className="w-8 h-8 rounded-lg bg-[#1F7A4F]/10 flex items-center justify-center">
+                <Check className="w-4 h-4 text-[#1F7A4F]" />
               </div>
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-[#B8963E]/10 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-[#B8963E] animate-pulse" />
+              <div className="w-8 h-8 rounded-lg bg-[#B89466]/10 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-[#B89466] animate-pulse" />
               </div>
             )}
           </div>
@@ -164,7 +164,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
         {/* Progress bar */}
         <div className="h-[2px] bg-black/[0.04]">
           <motion.div
-            className={`h-full ${isComplete ? "bg-[#6B7A2F]" : "bg-[#B8963E]"}`}
+            className={`h-full ${isComplete ? "bg-[#1F7A4F]" : "bg-[#B89466]"}`}
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.5, ease: "easeOut" }}
@@ -196,7 +196,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                             step.status === "done"
                               ? "text-[#5C5549]"
                               : step.status === "running"
-                                ? "text-[#B8963E]"
+                                ? "text-[#B89466]"
                                 : "text-[#8B8074]"
                           }`}
                         >
@@ -226,7 +226,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                             item.status === "active" || item.status === "ready"
                               ? "text-[#5C5549]"
                               : item.status === "generating"
-                                ? "text-[#B8963E]"
+                                ? "text-[#B89466]"
                                 : "text-[#8B8074]"
                           }`}
                         >
@@ -235,9 +235,9 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                         <span
                           className={`text-[10px] font-mono ml-auto flex-shrink-0 ${
                             item.status === "active"
-                              ? "text-[#6B7A2F]"
+                              ? "text-[#1F7A4F]"
                               : item.status === "generating"
-                                ? "text-[#B8963E]"
+                                ? "text-[#B89466]"
                                 : "text-[#8B8074]"
                           }`}
                         >
@@ -254,7 +254,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                     <p className="text-[11px] text-[#8B8074]">
                       {total} automations set up
                       {activation.context?.pendingActions > 0 && (
-                        <span className="text-[#C4704A]">
+                        <span className="text-[#1F7A4F]">
                           {" "}&middot; {activation.context.pendingActions} actions need review
                         </span>
                       )}
