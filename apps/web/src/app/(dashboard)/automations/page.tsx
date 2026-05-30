@@ -120,8 +120,8 @@ export default function AutomationsPage() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono flex items-center gap-2">
-            <Sparkles className="w-5 h-5" /> AUTOMATIONS
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif flex items-center gap-2">
+            <Sparkles className="w-5 h-5" /> Automations
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
             {automations ? `${automations.filter((a) => a.status === "active").length} active, ${automations.filter((a) => a.status === "ready").length} ready for activation, ${automations.filter((a) => a.status === "generating").length} generating content` : "AI-powered multi-channel automations"}
@@ -155,7 +155,7 @@ export default function AutomationsPage() {
         >
           <Palette className="w-4 h-4 text-terracotta flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-bold text-foreground font-mono">Set up your brand voice first</p>
+            <p className="text-[13px] font-bold text-foreground">Set up your brand voice first</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
               Brand analysis is required before generating automations. This helps AI create on-brand content.
             </p>
@@ -178,11 +178,11 @@ export default function AutomationsPage() {
         >
           <Loader2 className="w-4 h-4 text-warm-gold animate-spin flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground font-mono">Generating content...</p>
+            <p className="text-[13px] font-bold text-foreground">Generating content...</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
               AI is creating email, SMS, WhatsApp, and RCS content. This may take 30-60 seconds per automation.
             </p>
-            <p className="text-[10px] text-warm-gold font-mono mt-1">
+            <p className="text-[10px] text-warm-gold mt-1">
               Progress updates will appear automatically as each automation completes.
             </p>
           </div>

@@ -128,10 +128,10 @@ export default function NewSegmentPage() {
         >
           <ArrowLeft className="w-3.5 h-3.5" /> BACK TO SEGMENTS
         </Link>
-        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+        <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           NEW SEGMENT
         </h1>
-        <p className="text-[13px] text-muted-foreground font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground mt-1">
           Define conditions to create a custom customer segment
         </p>
       </div>
@@ -319,7 +319,7 @@ export default function NewSegmentPage() {
               <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">
                 {previewQuery.data.count}
               </span>
-              <span className="text-[13px] text-muted-foreground font-mono">matching customers</span>
+              <span className="text-[13px] text-muted-foreground">matching customers</span>
             </div>
             {previewQuery.data.sample.length > 0 && (
               <div className="border border-border rounded-lg overflow-hidden">
@@ -354,7 +354,7 @@ export default function NewSegmentPage() {
             )}
           </div>
         ) : (
-          <p className="text-[13px] text-muted-foreground font-mono">
+          <p className="text-[13px] text-muted-foreground">
             Add conditions to see matching customers
           </p>
         )}

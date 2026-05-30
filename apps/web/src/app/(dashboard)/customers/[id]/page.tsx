@@ -78,7 +78,7 @@ export default function CustomerDetailPage() {
   if (!customer) {
     return (
       <div className="text-center py-16">
-        <p className="text-muted-foreground font-mono">Customer not found</p>
+        <p className="text-muted-foreground">Customer not found</p>
       </div>
     );
   }
@@ -115,7 +115,7 @@ export default function CustomerDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+                <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
                   {customer.firstName} {customer.lastName}
                 </h1>
                 {segment && (
@@ -163,7 +163,7 @@ export default function CustomerDetailPage() {
       <div className="grid grid-cols-2 gap-6">
         {/* RFM Card */}
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-          <h2 className="section-header accent-bar-left text-[13px] mb-6">RFM_ANALYSIS</h2>
+          <h2 className="section-header accent-bar-left text-[13px] mb-6">RFM ANALYSIS</h2>
           {rfm ? (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
@@ -227,7 +227,7 @@ export default function CustomerDetailPage() {
 
         {/* LTV Card */}
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-          <h2 className="section-header accent-bar-left text-[13px] mb-6">LIFETIME_VALUE</h2>
+          <h2 className="section-header accent-bar-left text-[13px] mb-6">LIFETIME VALUE</h2>
           {ltv ? (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
@@ -397,7 +397,7 @@ export default function CustomerDetailPage() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-3">
           <ShoppingBag className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header text-[13px]">RECENT_ORDERS</h2>
+          <h2 className="section-header text-[13px]">RECENT ORDERS</h2>
         </div>
         {customer.orders.length === 0 ? (
           <div className="px-6 py-10 text-center">

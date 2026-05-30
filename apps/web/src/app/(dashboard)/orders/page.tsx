@@ -32,10 +32,10 @@ export default function OrdersPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+        <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           ORDERS
         </h1>
-        <p className="text-[13px] text-muted-foreground font-mono mt-1">
+        <p className="text-[13px] text-muted-foreground mt-1">
           Orders synced from your store
         </p>
       </div>
@@ -93,10 +93,10 @@ export default function OrdersPage() {
               <tr>
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <ShoppingCart className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-[13px] text-muted-foreground font-mono">
+                  <p className="text-[13px] text-muted-foreground">
                     No orders found
                   </p>
-                  <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
+                  <p className="text-[11px] text-muted-foreground/50 mt-1">
                     Sync your store to import orders
                   </p>
                 </td>

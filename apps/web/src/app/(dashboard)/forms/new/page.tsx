@@ -135,8 +135,8 @@ export default function NewFormPage() {
           <ArrowLeft className="w-3.5 h-3.5" />
           Forms
         </Link>
-        <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
-          NEW FORM
+        <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
+          New form
         </h1>
       </div>
 

@@ -114,7 +114,7 @@ export default function IntegrationsPage() {
     >
       {/* Header */}
       <motion.div variants={itemVariants}>
-        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           INTEGRATIONS
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
@@ -213,7 +213,7 @@ export default function IntegrationsPage() {
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground font-mono mb-4">
+              <p className="text-[11px] text-muted-foreground mb-4">
                 {platform.description}
               </p>
               {platform.status === "available" ? (
@@ -259,7 +259,7 @@ export default function IntegrationsPage() {
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground font-mono mb-4">
+              <p className="text-[11px] text-muted-foreground mb-4">
                 {platform.description}
               </p>
               <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center mb-2">
@@ -296,7 +296,7 @@ export default function IntegrationsPage() {
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground font-mono mb-4">
+              <p className="text-[11px] text-muted-foreground mb-4">
                 {platform.description}
               </p>
               <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center mb-2">
@@ -352,7 +352,7 @@ export default function IntegrationsPage() {
                   </span>
                 </div>
                 {error && (
-                  <p className="text-[11px] text-red-500 font-mono mt-1.5">
+                  <p className="text-[11px] text-red-500 mt-1.5">
                     {error}
                   </p>
                 )}

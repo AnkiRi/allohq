@@ -68,7 +68,7 @@ export default function AutonomySettingsPage() {
       animate="visible"
     >
       <motion.div variants={itemVariants}>
-        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           AUTONOMY SETTINGS
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
@@ -79,7 +79,7 @@ export default function AutonomySettingsPage() {
       {!storeId ? (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <Shield className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground font-mono">Connect a store first</p>
+          <p className="text-[11px] text-muted-foreground">Connect a store first</p>
         </motion.div>
       ) : isLoading ? (
         <div className="space-y-3">
@@ -91,7 +91,7 @@ export default function AutonomySettingsPage() {
         <>
           {(!configs || configs.length === 0) && (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
-              <p className="text-[11px] text-muted-foreground font-mono mb-3">
+              <p className="text-[11px] text-muted-foreground mb-3">
                 No autonomy settings configured yet
               </p>
               <button
@@ -116,8 +116,8 @@ export default function AutonomySettingsPage() {
               {TIERS.map((t) => (
                 <div key={t.value} className="text-center">
                   <t.icon className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-[10px] font-mono font-bold text-foreground">{t.label}</p>
-                  <p className="text-[9px] font-mono text-muted-foreground">{t.desc}</p>
+                  <p className="text-[10px] font-bold text-foreground">{t.label}</p>
+                  <p className="text-[9px] text-muted-foreground">{t.desc}</p>
                 </div>
               ))}
             </div>
@@ -132,8 +132,8 @@ export default function AutonomySettingsPage() {
                     className="grid grid-cols-[1fr_repeat(3,120px)] gap-2 items-center p-3 bg-white/10 rounded-lg"
                   >
                     <div>
-                      <p className="text-[11px] font-mono font-bold text-foreground">{cat.label}</p>
-                      <p className="text-[9px] font-mono text-muted-foreground">{cat.desc}</p>
+                      <p className="text-[11px] font-bold text-foreground">{cat.label}</p>
+                      <p className="text-[9px] text-muted-foreground">{cat.desc}</p>
                     </div>
                     {TIERS.map((t) => (
                       <button

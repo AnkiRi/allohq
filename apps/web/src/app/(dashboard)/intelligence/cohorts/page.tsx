@@ -349,7 +349,7 @@ export default function CohortAnalysisPage() {
         >
           <ArrowLeft className="w-3.5 h-3.5" /> BACK TO INTELLIGENCE
         </Link>
-        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] text-foreground">
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           COHORT ANALYSIS
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
@@ -446,7 +446,7 @@ export default function CohortAnalysisPage() {
           </h2>
           <CohortAreaChart data={chartData} />
           {bestCohort && (
-            <p className="text-[11px] text-muted-foreground font-mono mt-4 text-center">
+            <p className="text-[11px] text-muted-foreground mt-4 text-center">
               {bestCohort.month} cohort: {bestCohort.customers} customers generated{" "}
               {formatCurrency(bestCohort.revenue)}
             </p>
@@ -460,7 +460,7 @@ export default function CohortAnalysisPage() {
       <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
         <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
           <div className="w-px h-5 bg-secondary" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">COHORT_OVERVIEW</h2>
+          <h2 className="text-[13px] font-bold text-foreground font-mono">COHORT OVERVIEW</h2>
         </div>
 
         {isLoading ? (
@@ -615,7 +615,7 @@ export default function CohortAnalysisPage() {
             <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">
               NO COHORT DATA
             </h3>
-            <p className="text-[11px] text-muted-foreground font-mono max-w-sm mx-auto">
+            <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
               Sync orders and run RFM analysis to generate cohort data
             </p>
           </div>

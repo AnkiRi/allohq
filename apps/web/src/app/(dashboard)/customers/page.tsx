@@ -81,7 +81,7 @@ export default function CustomersPage() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             CUSTOMERS
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
@@ -173,8 +173,8 @@ export default function CustomersPage() {
               <tr>
                 <td colSpan={5} className="px-5 py-16 text-center">
                   <Users className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-[13px] text-muted-foreground font-mono">No customers found</p>
-                  <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
+                  <p className="text-[13px] text-muted-foreground">No customers found</p>
+                  <p className="text-[11px] text-muted-foreground/50 mt-1">
                     Connect a store to sync customers
                   </p>
                   <p className="text-[12px] text-muted-foreground/70 font-sans mt-4">

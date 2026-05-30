@@ -78,7 +78,7 @@ function TokenUsageSection() {
       {/* Human-readable summary */}
       {usage && (
         <div className="mb-5">
-          <p className="text-[20px] tracking-[-0.5px] font-bold text-foreground font-mono">
+          <p className="text-[20px] tracking-[-0.5px] font-bold text-foreground">
             You've spent ${usage.totalCost.toFixed(4)} on AI this period
           </p>
           <p className="text-[12px] text-muted-foreground font-sans mt-1">
@@ -134,17 +134,17 @@ function TokenUsageSection() {
           {/* Per-model breakdown */}
           {usage.byModel.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">By Model</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">By Model</p>
               {usage.byModel.map((m) => (
                 <div
                   key={m.model}
                   className="flex items-center justify-between p-3 bg-white/20 border border-white/15 rounded-lg"
                 >
                   <div>
-                    <p className="text-[12px] font-bold text-foreground font-mono">
+                    <p className="text-[12px] font-bold text-foreground">
                       {MODEL_LABELS[m.model] ?? m.model}
                     </p>
-                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                       {m.calls} calls · {formatTokens(m.inputTokens)} in · {formatTokens(m.outputTokens)} out
                     </p>
                   </div>
@@ -156,7 +156,7 @@ function TokenUsageSection() {
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-[11px] text-muted-foreground font-mono">
+              <p className="text-[11px] text-muted-foreground">
                 No token usage in this period
               </p>
             </div>
@@ -256,7 +256,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
           <Plus className="w-3 h-3" /> Add Article
         </button>
       </div>
-      <p className="text-[11px] text-muted-foreground font-mono mb-4">
+      <p className="text-[11px] text-muted-foreground mb-4">
         Add policies, FAQs, and product info that the AI support agent uses to answer customer questions.
       </p>
 
@@ -388,7 +388,7 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
         <MessageSquare className="w-4 h-4 text-muted-foreground" />
         <h2 className="section-header accent-bar-left text-[13px]">MESSAGING PROVIDERS</h2>
       </div>
-      <p className="text-[11px] text-muted-foreground font-mono mb-5">
+      <p className="text-[11px] text-muted-foreground mb-5">
         Choose which provider handles each messaging channel for this store. Defaults to Twilio if not set.
       </p>
 
@@ -423,8 +423,8 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
                         <Check className="w-2.5 h-2.5 text-white" />
                       </div>
                     )}
-                    <p className="text-[11px] font-bold text-foreground font-mono">Default</p>
-                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Use global setting</p>
+                    <p className="text-[11px] font-bold text-foreground">Default</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Use global setting</p>
                   </button>
                   {PROVIDERS.map((prov) => {
                     const isSelected = current === prov.value;
@@ -444,8 +444,8 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
                             <Check className="w-2.5 h-2.5 text-white" />
                           </div>
                         )}
-                        <p className="text-[11px] font-bold text-foreground font-mono">{prov.label}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{prov.desc}</p>
+                        <p className="text-[11px] font-bold text-foreground">{prov.label}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{prov.desc}</p>
                       </button>
                     );
                   })}
@@ -528,7 +528,7 @@ function NotificationPreferencesSection() {
       </div>
 
       {/* Channels */}
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Delivery Channels</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Delivery Channels</p>
       <div className="space-y-2 mb-6">
         {channels.map((ch) => (
           <button
@@ -538,8 +538,8 @@ function NotificationPreferencesSection() {
             className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all"
           >
             <div className="text-left">
-              <p className="text-[11px] font-mono font-bold text-foreground">{ch.label}</p>
-              <p className="text-[10px] font-mono text-muted-foreground">{ch.desc}</p>
+              <p className="text-[11px] font-bold text-foreground">{ch.label}</p>
+              <p className="text-[10px] text-muted-foreground">{ch.desc}</p>
             </div>
             <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ch.key] ? "bg-[var(--olive)]" : "bg-white/20"}`}>
               <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ch.key] ? "translate-x-4" : "translate-x-0.5"}`} />
@@ -549,7 +549,7 @@ function NotificationPreferencesSection() {
       </div>
 
       {/* Events */}
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Event Types</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Event Types</p>
       <div className="space-y-2 mb-6">
         {events.map((ev) => (
           <button
@@ -559,8 +559,8 @@ function NotificationPreferencesSection() {
             className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all"
           >
             <div className="text-left">
-              <p className="text-[11px] font-mono font-bold text-foreground">{ev.label}</p>
-              <p className="text-[10px] font-mono text-muted-foreground">{ev.desc}</p>
+              <p className="text-[11px] font-bold text-foreground">{ev.label}</p>
+              <p className="text-[10px] text-muted-foreground">{ev.desc}</p>
             </div>
             <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ev.key] ? "bg-[var(--olive)]" : "bg-white/20"}`}>
               <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ev.key] ? "translate-x-4" : "translate-x-0.5"}`} />
@@ -570,7 +570,7 @@ function NotificationPreferencesSection() {
       </div>
 
       {/* Quiet Hours */}
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Quiet Hours</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Quiet Hours</p>
       <div className="flex items-center gap-3">
         <select
           value={p.quietHoursStart ?? ""}
@@ -603,7 +603,7 @@ function NotificationPreferencesSection() {
           ))}
         </select>
       </div>
-      <p className="text-[10px] text-muted-foreground font-mono mt-2">
+      <p className="text-[10px] text-muted-foreground mt-2">
         No notifications during quiet hours (does not affect critical escalations)
       </p>
     </motion.div>
@@ -660,7 +660,7 @@ function SuppressionStatsSection() {
       </div>
 
       {suppressed > 0 && (
-        <p className="text-[11px] text-[var(--color-success)] font-mono mb-3">
+        <p className="text-[11px] text-[var(--color-success)] mb-3">
           Allo prevented {suppressed} messages that would have annoyed your customers
         </p>
       )}
@@ -728,7 +728,7 @@ export default function SettingsPage() {
     >
       {/* Header */}
       <motion.div variants={itemVariants}>
-        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
+        <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           SETTINGS
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
@@ -751,13 +751,13 @@ export default function SettingsPage() {
             </div>
           )}
           <div>
-            <p className="text-[13px] font-bold text-foreground font-mono">
+            <p className="text-[13px] font-bold text-foreground">
               {user?.fullName || "User"}
             </p>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               {user?.emailAddresses[0]?.emailAddress || ""}
             </p>
-            <p className="text-[11px] text-muted-foreground/50 font-mono mt-0.5">
+            <p className="text-[11px] text-muted-foreground/50 mt-0.5">
               Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"}
             </p>
           </div>
@@ -788,10 +788,10 @@ export default function SettingsPage() {
                     <Store className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <p className="text-[13px] font-medium text-foreground font-mono">
+                    <p className="text-[13px] font-medium text-foreground">
                       {store.shopDomain}
                     </p>
-                    <p className="text-[11px] text-muted-foreground font-mono">
+                    <p className="text-[11px] text-muted-foreground">
                       {store.platform} · {store._count.products} products · {store._count.customers} customers
                     </p>
                   </div>
@@ -803,7 +803,7 @@ export default function SettingsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-[13px] text-muted-foreground font-mono">
+          <p className="text-[13px] text-muted-foreground">
             No stores connected. Go to Integrations to connect a store.
           </p>
         )}
@@ -843,8 +843,8 @@ export default function SettingsPage() {
                           : "border border-white/20 bg-white/20 hover:border-white/40"
                       }`}
                     >
-                      <p className="text-[11px] font-bold text-foreground font-mono">{opt.label}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono mt-1">{opt.desc}</p>
+                      <p className="text-[11px] font-bold text-foreground">{opt.label}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">{opt.desc}</p>
                     </button>
                   );
                 })}
@@ -854,7 +854,7 @@ export default function SettingsPage() {
         ) : (
           <div className="text-center py-6">
             <Sparkles className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-            <p className="text-[11px] text-muted-foreground font-mono">
+            <p className="text-[11px] text-muted-foreground">
               Run brand analysis first to unlock AI preferences
             </p>
           </div>
@@ -867,7 +867,7 @@ export default function SettingsPage() {
           <Cpu className="w-4 h-4 text-muted-foreground" />
           <h2 className="section-header accent-bar-left text-[13px]">DEFAULT AI MODEL</h2>
         </div>
-        <p className="text-[11px] text-muted-foreground font-mono mb-4">
+        <p className="text-[11px] text-muted-foreground mb-4">
           Choose which model is used by default for all AI content generation
         </p>
         {models && models.length > 0 ? (
@@ -894,13 +894,13 @@ export default function SettingsPage() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="text-[11px] font-bold text-foreground font-mono">{model.label}</p>
+                    <p className="text-[11px] font-bold text-foreground">{model.label}</p>
                     <span className="text-[9px] font-mono text-muted-foreground">{model.provider}</span>
                   </div>
                   <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${tier.bg} ${tier.text} mb-2`}>
                     {tier.label}
                   </span>
-                  <p className="text-[10px] text-muted-foreground font-mono mb-3">{model.description}</p>
+                  <p className="text-[10px] text-muted-foreground mb-3">{model.description}</p>
                   <div className="text-[10px] font-mono text-muted-foreground space-y-0.5">
                     <p>Input: ${(model as any).inputCostPerMillion}/M tokens</p>
                     <p>Output: ${(model as any).outputCostPerMillion}/M tokens</p>
@@ -917,7 +917,7 @@ export default function SettingsPage() {
           </div>
         )}
         {aiSettings?.defaultModel === null && models && (
-          <p className="text-[10px] text-muted-foreground/50 font-mono mt-3">
+          <p className="text-[10px] text-muted-foreground/50 mt-3">
             No default selected — AI will use Claude Sonnet 4.5
           </p>
         )}
@@ -942,7 +942,7 @@ export default function SettingsPage() {
           <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
             Subscription management and payment methods are coming in our next update.
           </p>
-          <p className="text-[11px] font-mono mt-3" style={{ color: "var(--terracotta)" }}>
+          <p className="text-[11px] mt-3" style={{ color: "var(--terracotta)" }}>
             We&apos;ll notify you when this is available
           </p>
         </div>

@@ -31,7 +31,7 @@ export default function CampaignsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">CAMPAIGNS</h1>
+          <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">Campaigns</h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
             {campaigns ? `${campaigns.filter((c: any) => c.status === "draft").length} drafts, ${campaigns.filter((c: any) => c.status === "sent").length} sent` : "Create and manage email campaigns"}
           </p>
@@ -85,7 +85,7 @@ export default function CampaignsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[13px] font-bold text-foreground font-mono truncate">{campaign.name}</h3>
-                  <p className="text-[11px] text-muted-foreground font-mono truncate">
+                  <p className="text-[11px] text-muted-foreground truncate">
                     {campaign.template?.subject ?? "No subject"}
                   </p>
                 </div>

@@ -288,7 +288,7 @@ function TemplateCard({
         </h3>
 
         {/* Content preview */}
-        <p className="text-[11px] text-muted-foreground font-mono leading-relaxed line-clamp-2">
+        <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
           {body.length > 120 ? body.slice(0, 120) + "..." : body || "No content"}
         </p>
 
@@ -912,8 +912,8 @@ export default function ChannelTemplatesPage() {
               Back to Email Templates
             </Link>
           </div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
-            CHANNEL TEMPLATES
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
+            Channel templates
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
             SMS, WhatsApp, and RCS message templates

@@ -416,11 +416,11 @@ export default function ABTestPage() {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono flex items-center gap-2">
+            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif flex items-center gap-2">
               <FlaskConical className="w-4 h-4" />
               A/B TESTS
             </h1>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               {automation?.name ?? "..."} &mdash; {abTests?.length ?? 0} test{(abTests?.length ?? 0) !== 1 ? "s" : ""}
             </p>
           </div>
@@ -443,7 +443,7 @@ export default function ABTestPage() {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Plus className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">NEW_AB_TEST</h2>
+              <h2 className="text-[13px] font-bold text-foreground font-mono">NEW AB TEST</h2>
             </div>
             <button onClick={resetForm} className="p-1.5 rounded hover:bg-muted transition-colors">
               <X className="w-4 h-4 text-muted-foreground" />
@@ -504,7 +504,7 @@ export default function ABTestPage() {
                           : "border-border bg-muted/30 hover:border-muted-foreground/30 hover:bg-muted/50"
                       }`}
                     >
-                      <p className="text-[11px] font-mono font-bold text-foreground mb-1">{s.label}</p>
+                      <p className="text-[11px] font-bold text-foreground mb-1">{s.label}</p>
                       <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
                         <span className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-blue-700 dark:text-blue-300 truncate max-w-[45%]">
                           A: {s.a}
@@ -517,7 +517,7 @@ export default function ABTestPage() {
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] text-muted-foreground/60 font-mono mt-1.5">
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
                   Click to apply, then customize if needed
                 </p>
               </div>
@@ -682,7 +682,7 @@ export default function ABTestPage() {
                 min={50}
                 className="w-48 px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
-              <p className="text-[10px] text-muted-foreground font-mono mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 Total sends before evaluating statistical significance (min 50)
               </p>
             </div>

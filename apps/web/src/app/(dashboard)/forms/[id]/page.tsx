@@ -104,7 +104,7 @@ export default function FormDetailPage() {
             <ArrowLeft className="w-3.5 h-3.5" />
             Forms
           </Link>
-          <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+          <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             {form.name}
           </h1>
           <div className="flex items-center gap-2">
@@ -241,7 +241,7 @@ export default function FormDetailPage() {
           {!submissions || submissions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 border border-dashed border-border rounded-xl">
               <MousePointerClick className="w-8 h-8 text-muted-foreground/50 mb-3" />
-              <p className="text-[13px] text-muted-foreground font-mono">
+              <p className="text-[13px] text-muted-foreground">
                 No submissions yet
               </p>
             </div>
@@ -330,7 +330,7 @@ export default function FormDetailPage() {
       {/* Embed Tab */}
       {tab === "embed" && (
         <div className="space-y-4">
-          <p className="text-[13px] font-mono text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             Paste this code into your Shopify theme&apos;s &lt;head&gt; section to enable popups.
           </p>
           <div className="relative">

@@ -133,11 +133,11 @@ export default function AutomationDetailPage() {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono flex items-center gap-2">
+            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
               {data.name}
             </h1>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{data.description}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{data.description}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -210,7 +210,7 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Zap className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">AUTOMATION_FLOW</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">AUTOMATION FLOW</h2>
           </div>
           <div className="p-6">
             <div className="flex flex-col items-center space-y-0">
@@ -260,7 +260,7 @@ export default function AutomationDetailPage() {
       <div className="border border-border rounded-xl bg-card overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-3">
           <Sparkles className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">GENERATED_EMAILS</h2>
+          <h2 className="text-[13px] font-bold text-foreground font-mono">GENERATED EMAILS</h2>
         </div>
         {data.templates.length > 0 ? (
           <div className="divide-y divide-border">
@@ -271,7 +271,7 @@ export default function AutomationDetailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[13px] font-bold text-foreground font-mono truncate">{template.name}</h3>
-                  <p className="text-[11px] text-muted-foreground font-mono truncate">{template.subject}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{template.subject}</p>
                 </div>
                 <Link
                   href={`/templates/${template.id}/edit`}
@@ -286,7 +286,7 @@ export default function AutomationDetailPage() {
         ) : (
           <div className="p-16 text-center">
             <FileText className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground font-mono">No emails generated yet</p>
+            <p className="text-[13px] text-muted-foreground">No emails generated yet</p>
           </div>
         )}
       </div>
@@ -296,7 +296,7 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <MessageSquare className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">SMS_MESSAGES</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">SMS MESSAGES</h2>
           </div>
           <div className="divide-y divide-border">
             {data.smsTemplates.map((template, i) => (
@@ -307,7 +307,7 @@ export default function AutomationDetailPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-[13px] font-bold text-foreground font-mono">{template.name}</h3>
-                    <p className="text-[11px] text-muted-foreground font-mono mt-1 whitespace-pre-line leading-relaxed bg-muted rounded-lg p-3 border border-border">
+                    <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-line leading-relaxed bg-muted rounded-lg p-3 border border-border">
                       {template.body}
                     </p>
                     {template.variables && (template.variables as string[]).length > 0 && (
@@ -333,7 +333,7 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Phone className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">WHATSAPP_MESSAGES</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">WHATSAPP MESSAGES</h2>
           </div>
           <div className="divide-y divide-border">
             {data.whatsappTemplates.map((template, i) => (
@@ -344,7 +344,7 @@ export default function AutomationDetailPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-[13px] font-bold text-foreground font-mono">{template.name}</h3>
-                    <p className="text-[11px] text-muted-foreground font-mono mt-1 whitespace-pre-line leading-relaxed bg-muted rounded-lg p-3 border border-border">
+                    <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-line leading-relaxed bg-muted rounded-lg p-3 border border-border">
                       {template.body}
                     </p>
                     {template.variables && (template.variables as string[]).length > 0 && (
@@ -370,7 +370,7 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Radio className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">RCS_MESSAGES</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">RCS MESSAGES</h2>
           </div>
           <div className="divide-y divide-border">
             {data.rcsTemplates.map((template, i) => (
@@ -382,9 +382,9 @@ export default function AutomationDetailPage() {
                   <div className="flex-1 min-w-0">
                     <h3 className="text-[13px] font-bold text-foreground font-mono">{template.name}</h3>
                     {template.cardTitle && (
-                      <p className="text-[11px] font-bold text-orange-700 font-mono mt-1">{template.cardTitle}</p>
+                      <p className="text-[11px] font-bold text-orange-700 mt-1">{template.cardTitle}</p>
                     )}
-                    <p className="text-[11px] text-muted-foreground font-mono mt-1 whitespace-pre-line leading-relaxed bg-muted rounded-lg p-3 border border-border">
+                    <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-line leading-relaxed bg-muted rounded-lg p-3 border border-border">
                       {template.body}
                     </p>
                     {template.actions && template.actions.length > 0 && (
@@ -420,7 +420,7 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Route className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">JOURNEY_MONITORING</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">JOURNEY MONITORING</h2>
             <span className="ml-auto text-[10px] font-mono text-muted-foreground">{journeyStats.total} journeys</span>
           </div>
 
@@ -517,7 +517,7 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <FlaskConical className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">AB_TESTS</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">AB TESTS</h2>
           </div>
           <div className="divide-y divide-border">
             {abTests.map((test) => {

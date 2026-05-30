@@ -77,7 +77,7 @@ export default function IntelligencePage() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] text-foreground">
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             INTELLIGENCE
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
@@ -235,7 +235,7 @@ export default function IntelligencePage() {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground font-mono">No RFM data yet</p>
+            <p className="text-[13px] text-muted-foreground">No RFM data yet</p>
           )}
         </div>
 
@@ -269,7 +269,7 @@ export default function IntelligencePage() {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground font-mono">No LTV data yet</p>
+            <p className="text-[13px] text-muted-foreground">No LTV data yet</p>
           )}
         </div>
       </motion.div>
@@ -278,7 +278,7 @@ export default function IntelligencePage() {
       <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
         <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
           <Brain className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px] text-foreground">SEGMENT_BREAKDOWN</h2>
+          <h2 className="section-header accent-bar-left text-[13px] text-foreground">SEGMENT BREAKDOWN</h2>
         </div>
         {rfmData && rfmData.segments.length > 0 ? (
           <table className="w-full">
@@ -341,8 +341,8 @@ export default function IntelligencePage() {
         ) : (
           <div className="p-16 text-center">
             <Brain className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground font-mono">No segment data yet</p>
-            <p className="text-[11px] text-muted-foreground/50 font-mono mt-1">
+            <p className="text-[13px] text-muted-foreground">No segment data yet</p>
+            <p className="text-[11px] text-muted-foreground/50 mt-1">
               Click &quot;Run Analysis&quot; to generate insights
             </p>
           </div>
@@ -354,7 +354,7 @@ export default function IntelligencePage() {
         <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
           <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
             <TrendingUp className="w-4 h-4 text-muted-foreground" />
-            <h2 className="section-header accent-bar-left text-[13px] text-foreground">TOP_CUSTOMERS</h2>
+            <h2 className="section-header accent-bar-left text-[13px] text-foreground">TOP CUSTOMERS</h2>
           </div>
           <table className="w-full">
             <thead>

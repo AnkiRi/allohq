@@ -576,7 +576,7 @@ export default function DashboardPage() {
               </span>
             </div>
             {(kpi as any).subtitle && (
-              <p className="text-[10px] font-mono text-muted-foreground mt-1">{(kpi as any).subtitle}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{(kpi as any).subtitle}</p>
             )}
           </Link>
         ))}
@@ -893,7 +893,7 @@ export default function DashboardPage() {
                   </Link>
                 ))}
                 <div className="pt-3 mt-1 border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)]">
-                  <p className="text-[11px] font-mono text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     {programs.filter((p) => p.status === "active").length} live
                     {" \u00b7 "}{programs.filter((p) => p.status === "ready").length} ready
                     {" \u00b7 "}{programs.filter((p) => p.status === "draft" || p.status === "generating").length} draft

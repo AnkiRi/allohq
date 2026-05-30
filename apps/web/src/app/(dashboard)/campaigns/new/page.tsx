@@ -74,7 +74,7 @@ export default function NewCampaignPage() {
         <Link href="/campaigns" className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
-        <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono">NEW_CAMPAIGN</h1>
+        <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">New campaign</h1>
       </div>
 
       {/* Step indicator */}
@@ -104,8 +104,8 @@ export default function NewCampaignPage() {
         <div className="flex items-center gap-3 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl">
           <Palette className="w-4 h-4 text-purple-600 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-bold text-purple-900 font-mono">Set up your brand voice first</p>
-            <p className="text-[11px] text-purple-600 font-mono mt-0.5">
+            <p className="text-[13px] font-bold text-purple-900">Set up your brand voice first</p>
+            <p className="text-[11px] text-purple-600 mt-0.5">
               Brand analysis is required before creating campaigns. This helps AI create on-brand content.
             </p>
           </div>
@@ -162,13 +162,13 @@ export default function NewCampaignPage() {
                         : "border-border hover:border-primary/50"
                     }`}
                   >
-                    <p className="text-[11px] font-bold text-foreground font-mono truncate">{t.name}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{t.subject}</p>
+                    <p className="text-[11px] font-bold text-foreground truncate">{t.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">{t.subject}</p>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="text-[13px] text-muted-foreground font-mono">
+              <p className="text-[13px] text-muted-foreground">
                 No templates yet.{" "}
                 <Link href="/templates/new" className="underline">
                   Create one
@@ -200,8 +200,8 @@ export default function NewCampaignPage() {
                   !segmentId ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                 }`}
               >
-                <p className="text-[11px] font-bold text-foreground font-mono">All Subscribers</p>
-                <p className="text-[10px] text-muted-foreground font-mono">Send to all marketing-opted-in customers</p>
+                <p className="text-[11px] font-bold text-foreground">All Subscribers</p>
+                <p className="text-[10px] text-muted-foreground">Send to all marketing-opted-in customers</p>
               </button>
               {segments?.map((seg) => (
                 <button
@@ -212,10 +212,10 @@ export default function NewCampaignPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-bold text-foreground font-mono">{seg.name}</p>
+                    <p className="text-[11px] font-bold text-foreground">{seg.name}</p>
                     <span className="text-[10px] text-muted-foreground font-mono">{seg.customerCount} customers</span>
                   </div>
-                  {seg.description && <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{seg.description}</p>}
+                  {seg.description && <p className="text-[10px] text-muted-foreground mt-0.5">{seg.description}</p>}
                 </button>
               ))}
             </div>
@@ -239,8 +239,8 @@ export default function NewCampaignPage() {
                   sendNow ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                 }`}
               >
-                <p className="text-[11px] font-bold text-foreground font-mono">Send Now</p>
-                <p className="text-[10px] text-muted-foreground font-mono">Send immediately after creation</p>
+                <p className="text-[11px] font-bold text-foreground">Send Now</p>
+                <p className="text-[10px] text-muted-foreground">Send immediately after creation</p>
               </button>
               <button
                 onClick={() => setSendNow(false)}
@@ -248,8 +248,8 @@ export default function NewCampaignPage() {
                   !sendNow ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]" : "border-border hover:border-primary/50"
                 }`}
               >
-                <p className="text-[11px] font-bold text-foreground font-mono">Schedule</p>
-                <p className="text-[10px] text-muted-foreground font-mono">Pick a date and time</p>
+                <p className="text-[11px] font-bold text-foreground">Schedule</p>
+                <p className="text-[10px] text-muted-foreground">Pick a date and time</p>
               </button>
               {!sendNow && (
                 <input

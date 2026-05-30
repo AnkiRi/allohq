@@ -159,7 +159,7 @@ export default function TemplatesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             TEMPLATES
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
@@ -355,7 +355,7 @@ export default function TemplatesPage() {
                         </h3>
 
                         {/* Subject line */}
-                        <p className="text-[11px] text-muted-foreground font-mono leading-relaxed line-clamp-1">
+                        <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-1">
                           {template.subject}
                         </p>
 

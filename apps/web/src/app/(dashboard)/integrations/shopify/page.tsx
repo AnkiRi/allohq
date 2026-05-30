@@ -87,7 +87,7 @@ export default function ShopifyDetailPage() {
         </Link>
         <div className="flex flex-col items-center justify-center py-20">
           <Package className="w-10 h-10 text-muted-foreground/50 mb-4" />
-          <p className="text-[13px] text-muted-foreground font-mono">
+          <p className="text-[13px] text-muted-foreground">
             No Shopify store connected
           </p>
           <Link
@@ -115,10 +115,10 @@ export default function ShopifyDetailPage() {
             <ArrowLeft className="w-3.5 h-3.5" />
             Integrations
           </Link>
-          <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+          <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             SHOPIFY
           </h1>
-          <p className="text-[13px] text-muted-foreground font-mono">{store.shopDomain}</p>
+          <p className="text-[13px] text-muted-foreground">{store.shopDomain}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -150,10 +150,10 @@ export default function ShopifyDetailPage() {
         <div className="bg-muted border border-border rounded-xl p-4 flex items-center gap-3">
           <Loader2 className="w-5 h-5 text-foreground animate-spin flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-mono font-bold text-foreground">
+            <p className="text-[13px] font-bold text-foreground">
               Syncing store data...
             </p>
-            <p className="text-[11px] font-mono text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               Importing products, customers, and orders from {store.shopDomain}
             </p>
           </div>
@@ -181,10 +181,10 @@ export default function ShopifyDetailPage() {
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
           <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-mono font-bold text-green-700">
+            <p className="text-[13px] font-bold text-green-700">
               Sync complete!
             </p>
-            <p className="text-[11px] font-mono text-green-600 mt-0.5">
+            <p className="text-[11px] text-green-600 mt-0.5">
               All data imported successfully from {store.shopDomain}
             </p>
           </div>
@@ -282,7 +282,7 @@ export default function ShopifyDetailPage() {
             <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">
               Disconnect Store?
             </h3>
-            <p className="text-[11px] text-muted-foreground font-mono mb-5">
+            <p className="text-[11px] text-muted-foreground mb-5">
               This will stop syncing data from {store.shopDomain}. Your existing
               data will be preserved.
             </p>

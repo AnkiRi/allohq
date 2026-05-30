@@ -189,8 +189,8 @@ export default function ActionsPage() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] font-bold text-[#2C2C2C]">
-            Action Queue
+          <h1 className="section-header accent-bar-left text-[22px] font-semibold text-foreground font-serif">
+            Action queue
           </h1>
           <p className="text-sm text-[#8B8074] mt-1">
             Review AI-proposed campaigns and actions — approve to execute, reject to dismiss
@@ -327,9 +327,11 @@ export default function ActionsPage() {
                   <h3 className="text-base font-semibold text-[#2C2C2C]">
                     {action.campaignName || action.reasoning?.substring(0, 80) || action.type}
                   </h3>
-                  <p className="text-sm text-[#5C5549] mt-1 line-clamp-2">
-                    {action.reasoning}
-                  </p>
+                  {action.reasoning && action.campaignName && (
+                    <p className="text-sm text-[#5C5549] mt-1 line-clamp-2">
+                      {action.reasoning}
+                    </p>
+                  )}
                 </div>
 
                 {/* Metrics column */}

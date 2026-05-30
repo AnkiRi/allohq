@@ -51,11 +51,11 @@ export default function EditAutomationPage() {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono">
+            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">
               Edit: {data.name}
             </h1>
             {data.description && (
-              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{data.description}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{data.description}</p>
             )}
           </div>
         </div>

@@ -105,7 +105,7 @@ export default function GuardrailsPage() {
     >
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             GUARDRAILS
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
@@ -182,7 +182,7 @@ export default function GuardrailsPage() {
       {!storeId ? (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground font-mono">Connect a store first</p>
+          <p className="text-[11px] text-muted-foreground">Connect a store first</p>
         </motion.div>
       ) : isLoading ? (
         <div className="space-y-3">
@@ -204,10 +204,10 @@ export default function GuardrailsPage() {
               <div className="flex items-center gap-3">
                 <ShieldCheck className={`w-4 h-4 ${rule.isActive ? "text-foreground" : "text-muted-foreground"}`} />
                 <div>
-                  <p className="text-[11px] font-mono font-bold text-foreground">
+                  <p className="text-[11px] font-bold text-foreground">
                     {getRuleLabel(rule.ruleType)}
                   </p>
-                  <p className="text-[10px] font-mono text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground">
                     {formatRuleValue(rule.ruleType, rule.ruleValue)}
                   </p>
                 </div>
@@ -240,7 +240,7 @@ export default function GuardrailsPage() {
       ) : (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground font-mono">
+          <p className="text-[11px] text-muted-foreground">
             No guardrails configured. Add rules to set boundaries for AI actions.
           </p>
         </motion.div>

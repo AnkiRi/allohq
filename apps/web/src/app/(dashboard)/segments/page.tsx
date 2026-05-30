@@ -72,7 +72,7 @@ export default function SegmentsPage() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground">
+          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             SEGMENTS
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
@@ -229,7 +229,7 @@ export default function SegmentsPage() {
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <h3 className="text-[13px] font-bold text-foreground font-mono">{seg.name}</h3>
-                          <p className="text-[11px] text-muted-foreground font-mono mt-1">{seg.description}</p>
+                          <p className="text-[11px] text-muted-foreground mt-1">{seg.description}</p>
                         </div>
                         <ArrowUpRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-terracotta transition-colors" />
                       </div>
@@ -292,14 +292,14 @@ export default function SegmentsPage() {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <h3 className="text-[13px] font-bold text-foreground font-mono">{seg.name}</h3>
-                          <p className="text-[11px] text-muted-foreground font-mono mt-1">{seg.description}</p>
+                          <p className="text-[11px] text-muted-foreground mt-1">{seg.description}</p>
                         </div>
                       </div>
                       <div className="flex items-baseline gap-3 mb-3">
                         <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">0</span>
                         <span className="text-[11px] text-muted-foreground font-mono">customers</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground font-mono">
+                      <p className="text-[11px] text-muted-foreground">
                         No customers match this segment yet
                       </p>
                     </motion.div>
@@ -375,7 +375,7 @@ export default function SegmentsPage() {
                       {/* Name and description */}
                       <div className="mb-4">
                         <h3 className="text-[13px] font-bold text-foreground font-mono">{basket.name}</h3>
-                        <p className="text-[11px] text-muted-foreground font-mono mt-1 line-clamp-2">
+                        <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
                           {basket.description}
                         </p>
                       </div>

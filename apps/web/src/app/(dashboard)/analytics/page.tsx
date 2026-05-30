@@ -116,10 +116,10 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">
+          <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
             ANALYTICS
           </h1>
-          <p className="text-[13px] text-muted-foreground font-mono mt-1">
+          <p className="text-[13px] text-muted-foreground mt-1">
             Performance metrics and revenue attribution
           </p>
         </div>
@@ -496,7 +496,7 @@ export default function AnalyticsPage() {
                 </motion.div>
 
                 {forecastData.generatedAt && (
-                  <p className="text-[10px] font-mono text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground">
                     Last updated: {new Date(forecastData.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 )}
@@ -521,7 +521,7 @@ function EmptyState({ icon: Icon, text }: { icon: typeof Mail; text: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 border border-dashed border-border rounded-xl">
       <Icon className="w-8 h-8 text-muted-foreground/50 mb-3" />
-      <p className="text-[13px] text-muted-foreground font-mono">{text}</p>
+      <p className="text-[13px] text-muted-foreground">{text}</p>
     </div>
   );
 }

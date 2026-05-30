@@ -48,7 +48,7 @@ export default function CampaignDetailPage() {
     return (
       <div className="flex items-center justify-center h-64 gap-2">
         <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
-        <span className="text-[13px] text-muted-foreground font-mono">Loading campaign...</span>
+        <span className="text-[13px] text-muted-foreground">Loading campaign...</span>
       </div>
     );
   }
@@ -65,8 +65,8 @@ export default function CampaignDetailPage() {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono">{campaign.name}</h1>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{campaign.template?.subject}</p>
+            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">{campaign.name}</h1>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{campaign.template?.subject}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export default function CampaignDetailPage() {
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-px h-6 bg-secondary" />
-            <h2 className="text-[13px] font-bold text-foreground font-mono">EMAIL_PREVIEW</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-mono">EMAIL PREVIEW</h2>
           </div>
           <div className="flex items-center gap-3">
             {(campaign.template?.html || renderMut.data?.html) && (
@@ -196,13 +196,13 @@ export default function CampaignDetailPage() {
               className="block p-8 bg-card rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center w-full max-w-md"
             >
               <Eye className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-[11px] font-mono text-muted-foreground">{campaign.template?.name ?? "Email Template"}</p>
-              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Click to view & edit</p>
+              <p className="text-[11px] text-muted-foreground">{campaign.template?.name ?? "Email Template"}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Click to view & edit</p>
             </Link>
           ) : (
             <div className="p-8 text-center w-full">
               <Mail className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-[10px] text-muted-foreground font-mono">No template attached</p>
+              <p className="text-[10px] text-muted-foreground">No template attached</p>
             </div>
           )}
         </div>

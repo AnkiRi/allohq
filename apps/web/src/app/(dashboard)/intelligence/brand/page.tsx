@@ -372,7 +372,7 @@ export default function BrandProfilePage() {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono">BRAND_VOICE</h1>
+            <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">Brand voice</h1>
             <p className="text-[13px] text-muted-foreground font-sans mt-1">
               AI-extracted brand personality from your store data
             </p>
@@ -397,8 +397,8 @@ export default function BrandProfilePage() {
         <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-terracotta flex items-center gap-3 px-4 py-3">
           <RefreshCw className="w-4 h-4 text-terracotta animate-spin flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground font-mono">Analyzing brand voice...</p>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+            <p className="text-[13px] font-bold text-foreground">Analyzing brand voice...</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               AI is reading your product catalog and extracting brand personality. This typically takes 10-20 seconds.
             </p>
           </div>
@@ -410,8 +410,8 @@ export default function BrandProfilePage() {
         <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[#C44A4A] flex items-center gap-3 px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-[#C44A4A] flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground font-mono">Analysis failed</p>
-            <p className="text-[11px] text-[#C44A4A] font-mono mt-0.5">{error}</p>
+            <p className="text-[13px] font-bold text-foreground">Analysis failed</p>
+            <p className="text-[11px] text-[#C44A4A] mt-0.5">{error}</p>
           </div>
           <button
             onClick={() => setError(null)}
@@ -433,8 +433,8 @@ export default function BrandProfilePage() {
           {/* Brand overview */}
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <h2 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">{profile.brandName}</h2>
-            <p className="text-[13px] text-muted-foreground font-mono">{profile.brandDescription}</p>
-            <p className="text-[10px] text-muted-foreground/50 font-mono mt-3">
+            <p className="text-[13px] text-muted-foreground">{profile.brandDescription}</p>
+            <p className="text-[10px] text-muted-foreground/50 mt-3">
               Last analyzed: {new Date(profile.analyzedAt).toLocaleString()}
             </p>
           </motion.div>
@@ -529,8 +529,8 @@ export default function BrandProfilePage() {
                           <span className="text-[9px] text-muted-foreground font-mono w-16 shrink-0">{dim.right.label}</span>
                         </div>
                         <div className="flex justify-between mt-1">
-                          <span className="text-[9px] text-muted-foreground/50 font-mono italic max-w-[45%]">&ldquo;{dim.left.example}&rdquo;</span>
-                          <span className="text-[9px] text-muted-foreground/50 font-mono italic max-w-[45%] text-right">&ldquo;{dim.right.example}&rdquo;</span>
+                          <span className="text-[9px] text-muted-foreground/50 italic max-w-[45%]">&ldquo;{dim.left.example}&rdquo;</span>
+                          <span className="text-[9px] text-muted-foreground/50 italic max-w-[45%] text-right">&ldquo;{dim.right.example}&rdquo;</span>
                         </div>
                       </div>
                     );
@@ -544,7 +544,7 @@ export default function BrandProfilePage() {
                       placeholder="e.g. cheap, discount, limited time"
                       className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                     />
-                    <p className="text-[9px] text-muted-foreground/50 font-mono mt-1">Comma-separated. AI will avoid these words in all generated content.</p>
+                    <p className="text-[9px] text-muted-foreground/50 mt-1">Comma-separated. AI will avoid these words in all generated content.</p>
                   </div>
                 </div>
               )}
@@ -554,19 +554,19 @@ export default function BrandProfilePage() {
             <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Palette className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL_STYLE</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL STYLE</h2>
               </div>
               {visual && (
                 <div className="space-y-4">
                   <div>
                     <span className="text-[11px] text-muted-foreground font-mono">AESTHETIC</span>
-                    <p className="text-[13px] font-bold text-foreground font-mono mt-0.5">
+                    <p className="text-[13px] font-bold text-foreground mt-0.5">
                       {typeof visual["aesthetic"] === "string" ? visual["aesthetic"] : ""}
                     </p>
                   </div>
                   <div>
                     <span className="text-[11px] text-muted-foreground font-mono">FONT STYLE</span>
-                    <p className="text-[13px] font-bold text-foreground font-mono mt-0.5">
+                    <p className="text-[13px] font-bold text-foreground mt-0.5">
                       {typeof visual["fontStyle"] === "string" ? visual["fontStyle"] : ""}
                     </p>
                   </div>
@@ -593,9 +593,9 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Sliders className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">CREATIVE_INTENSITY</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">CREATIVE INTENSITY</h2>
             </div>
-            <p className="text-[11px] text-muted-foreground font-mono mb-4">
+            <p className="text-[11px] text-muted-foreground mb-4">
               Controls the visual richness of AI-generated emails
             </p>
             <div className="grid grid-cols-3 gap-3">
@@ -616,8 +616,8 @@ export default function BrandProfilePage() {
                         : "border-white/20 bg-white/20 hover:border-white/40"
                     }`}
                   >
-                    <p className="text-[11px] font-bold text-foreground font-mono">{opt.label}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono mt-1">{opt.desc}</p>
+                    <p className="text-[11px] font-bold text-foreground">{opt.label}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{opt.desc}</p>
                   </button>
                 );
               })}
@@ -671,12 +671,12 @@ export default function BrandProfilePage() {
             <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Quote className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SAMPLE_COPY</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SAMPLE COPY</h2>
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
                   <div key={i} className="p-3 bg-white/20 rounded-lg border-l-2 border-l-terracotta">
-                    <p className="text-[11px] text-foreground font-mono leading-relaxed">{copy}</p>
+                    <p className="text-[11px] text-foreground leading-relaxed">{copy}</p>
                   </div>
                 ))}
               </div>
@@ -688,7 +688,7 @@ export default function BrandProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Palette className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL_DESIGN</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL DESIGN</h2>
               </div>
               {!editingVisual ? (
                 <button
@@ -721,7 +721,7 @@ export default function BrandProfilePage() {
               <div className="space-y-4">
                 <div>
                   <span className="text-[11px] text-muted-foreground font-mono">AESTHETIC</span>
-                  <p className="text-[13px] font-bold text-foreground font-mono mt-0.5">
+                  <p className="text-[13px] font-bold text-foreground mt-0.5">
                     {AESTHETIC_OPTIONS.find((a) => a.value === (visualProfile?.aestheticClassification ?? "clean_minimal"))?.label ?? visualProfile?.aestheticClassification ?? "Not set"}
                   </p>
                 </div>
@@ -740,8 +740,8 @@ export default function BrandProfilePage() {
                 )}
                 {(headingFont || bodyFont) && (
                   <div className="flex gap-6">
-                    {headingFont && <div><span className="text-[11px] text-muted-foreground font-mono">HEADING FONT</span><p className="text-[12px] font-bold text-foreground font-mono mt-0.5">{headingFont}</p></div>}
-                    {bodyFont && <div><span className="text-[11px] text-muted-foreground font-mono">BODY FONT</span><p className="text-[12px] font-bold text-foreground font-mono mt-0.5">{bodyFont}</p></div>}
+                    {headingFont && <div><span className="text-[11px] text-muted-foreground">HEADING FONT</span><p className="text-[12px] font-bold text-foreground mt-0.5">{headingFont}</p></div>}
+                    {bodyFont && <div><span className="text-[11px] text-muted-foreground">BODY FONT</span><p className="text-[12px] font-bold text-foreground mt-0.5">{bodyFont}</p></div>}
                   </div>
                 )}
               </div>
@@ -762,7 +762,7 @@ export default function BrandProfilePage() {
                         }`}
                       >
                         <span className="text-[11px] font-bold text-foreground font-mono">{opt.label}</span>
-                        <span className="text-[9px] text-muted-foreground font-mono block mt-0.5">{opt.desc}</span>
+                        <span className="text-[9px] text-muted-foreground block mt-0.5">{opt.desc}</span>
                       </button>
                     ))}
                   </div>
@@ -807,7 +807,7 @@ export default function BrandProfilePage() {
           {/* ================================================================ */}
 
           <motion.div variants={itemVariants} className="pt-4 border-t border-white/10">
-            <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">EMAIL_SETTINGS</h2>
+            <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">EMAIL SETTINGS</h2>
             <p className="text-[11px] text-muted-foreground font-sans mb-6">Hard parameters applied to every generated email</p>
           </motion.div>
 
@@ -816,7 +816,7 @@ export default function BrandProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Image className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">LOGO_&_HEADER</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">LOGO & HEADER</h2>
               </div>
               <button
                 onClick={handleSaveBrandSettings}
@@ -887,7 +887,7 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <MapPin className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">FOOTER_DEFAULTS</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">FOOTER DEFAULTS</h2>
             </div>
             <div className="space-y-4">
               <div>
@@ -932,7 +932,7 @@ export default function BrandProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Share2 className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SOCIAL_LINKS</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SOCIAL LINKS</h2>
               </div>
               <button
                 onClick={handleSaveStoreDetails}
@@ -963,9 +963,9 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Store className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">STORE_DETAILS</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">STORE DETAILS</h2>
             </div>
-            <p className="text-[10px] text-muted-foreground font-mono mb-4">Auto-populated from Shopify. Edit to override.</p>
+            <p className="text-[10px] text-muted-foreground mb-4">Auto-populated from Shopify. Edit to override.</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] text-muted-foreground font-mono block mb-1">STORE NAME</label>
@@ -1026,7 +1026,7 @@ export default function BrandProfilePage() {
       ) : (
         <motion.div variants={itemVariants} className="text-center py-20 glass-card-static">
           <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-[13px] text-muted-foreground font-mono">No brand profile yet</p>
+          <p className="text-[13px] text-muted-foreground">No brand profile yet</p>
           <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
             Brand analysis runs automatically after Shopify sync, or click &quot;Re-analyze&quot; above to get started.
           </p>

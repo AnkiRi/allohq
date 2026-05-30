@@ -456,7 +456,7 @@ export default function NewTemplatePage() {
         <Link href="/templates" className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
-        <h1 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono">
+        <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">
           Create Email
         </h1>
       </div>
@@ -517,7 +517,7 @@ export default function NewTemplatePage() {
               <h2 className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground mb-1">
                 STEP 1
               </h2>
-              <p className="text-[15px] font-mono text-foreground font-bold">
+              <p className="text-[15px] text-foreground font-bold">
                 What's the goal of this email?
               </p>
             </div>
@@ -550,10 +550,10 @@ export default function NewTemplatePage() {
                         <Icon className="w-5 h-5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[13px] font-mono font-bold text-foreground">
+                        <p className="text-[13px] font-bold text-foreground">
                           {g.label}
                         </p>
-                        <p className="text-[11px] font-mono text-muted-foreground mt-0.5 leading-relaxed">
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
                           {g.description}
                         </p>
                       </div>
@@ -632,7 +632,7 @@ export default function NewTemplatePage() {
               <h2 className="text-[16px] font-mono font-bold text-foreground">
                 Generating your {GOALS.find((g) => g.id === goal)?.label} email...
               </h2>
-              <p className="text-[13px] font-mono text-muted-foreground">
+              <p className="text-[13px] text-muted-foreground">
                 Crafting blocks, subject line, and content
               </p>
             </div>
@@ -954,7 +954,7 @@ export default function NewTemplatePage() {
               <h2 className="text-[20px] font-mono font-bold text-foreground tracking-[-0.5px]">
                 Your email is ready!
               </h2>
-              <p className="text-[13px] font-mono text-muted-foreground max-w-md mx-auto">
+              <p className="text-[13px] text-muted-foreground max-w-md mx-auto">
                 &ldquo;{templateName}&rdquo; with {blocks.length} blocks is ready to go. What would you like to do?
               </p>
             </div>
@@ -966,8 +966,8 @@ export default function NewTemplatePage() {
                   <Sparkles className="w-5 h-5 text-[var(--color-accent)]" />
                 </div>
                 <div>
-                  <p className="text-[13px] font-mono font-bold text-foreground">{templateName}</p>
-                  <p className="text-[11px] font-mono text-muted-foreground">{subject}</p>
+                  <p className="text-[13px] font-bold text-foreground">{templateName}</p>
+                  <p className="text-[11px] text-muted-foreground">{subject}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
