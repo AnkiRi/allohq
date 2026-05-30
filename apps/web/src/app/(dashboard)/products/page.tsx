@@ -22,7 +22,7 @@ export default function ProductsPage() {
       {/* Header */}
       <div>
         <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          PRODUCTS
+          Products
         </h1>
         <p className="text-[13px] text-muted-foreground mt-1">
           Products synced from your store

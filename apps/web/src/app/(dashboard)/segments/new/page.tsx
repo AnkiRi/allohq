@@ -129,7 +129,7 @@ export default function NewSegmentPage() {
           <ArrowLeft className="w-3.5 h-3.5" /> BACK TO SEGMENTS
         </Link>
         <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          NEW SEGMENT
+          New segment
         </h1>
         <p className="text-[13px] text-muted-foreground mt-1">
           Define conditions to create a custom customer segment

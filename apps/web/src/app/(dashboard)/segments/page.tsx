@@ -73,7 +73,7 @@ export default function SegmentsPage() {
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            SEGMENTS
+            Segments
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
             {activeTab === "rfm"

@@ -33,7 +33,7 @@ export default function OrdersPage() {
       {/* Header */}
       <div>
         <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          ORDERS
+          Orders
         </h1>
         <p className="text-[13px] text-muted-foreground mt-1">
           Orders synced from your store

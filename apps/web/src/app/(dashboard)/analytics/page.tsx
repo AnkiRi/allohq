@@ -117,7 +117,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            ANALYTICS
+            Analytics
           </h1>
           <p className="text-[13px] text-muted-foreground mt-1">
             Performance metrics and revenue attribution

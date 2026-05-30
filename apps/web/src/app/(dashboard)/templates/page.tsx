@@ -160,7 +160,7 @@ export default function TemplatesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            TEMPLATES
+            Templates
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
             Email templates for campaigns and automations

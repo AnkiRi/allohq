@@ -82,7 +82,7 @@ export default function CustomersPage() {
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            CUSTOMERS
+            Customers
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
             {stats ? `${stats.totalCustomers.toLocaleString()} customers — ${stats.marketingRate.toFixed(0)}% marketing opt-in` : "Customer intelligence & segmentation"}

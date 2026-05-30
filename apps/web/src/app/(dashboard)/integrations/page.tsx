@@ -115,7 +115,7 @@ export default function IntegrationsPage() {
       {/* Header */}
       <motion.div variants={itemVariants}>
         <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          INTEGRATIONS
+          Integrations
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
           Connect your e-commerce platforms and marketing tools
