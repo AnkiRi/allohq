@@ -79,7 +79,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
 
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase">
+      <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase">
         Template
       </label>
 
@@ -87,7 +87,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-[13px] font-mono text-left hover:border-primary/50 transition-all"
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-[13px] font-sans text-left hover:border-primary/50 transition-all"
       >
         <Icon className={`w-3.5 h-3.5 ${meta.color} flex-shrink-0`} />
         <span className={`flex-1 truncate ${currentTemplateId ? "text-foreground" : "text-muted-foreground"}`}>
@@ -111,7 +111,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={`Search ${meta.label.toLowerCase()}...`}
-                className="flex-1 text-[13px] font-mono text-foreground bg-transparent outline-none placeholder:text-muted-foreground/50"
+                className="flex-1 text-[13px] font-sans text-foreground bg-transparent outline-none placeholder:text-muted-foreground/50"
                 autoFocus
               />
               {search && (
@@ -123,7 +123,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
 
             {/* Header */}
             <div className="px-3 py-1.5 bg-muted border-b border-border">
-              <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase">
+              <span className="text-[10px] font-sans font-bold text-muted-foreground uppercase">
                 {meta.label} ({filtered.length})
               </span>
             </div>
@@ -147,11 +147,11 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
                     >
                       <Icon className={`w-3.5 h-3.5 ${isSelected ? meta.color : "text-muted-foreground/50"} flex-shrink-0`} />
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[11px] font-mono truncate ${isSelected ? "font-bold text-foreground" : "text-foreground"}`}>
+                        <p className={`text-[11px] font-sans truncate ${isSelected ? "font-bold text-foreground" : "text-foreground"}`}>
                           {t.name}
                         </p>
                         {t.subject && (
-                          <p className="text-[10px] font-mono text-muted-foreground truncate">{t.subject}</p>
+                          <p className="text-[10px] font-sans text-muted-foreground truncate">{t.subject}</p>
                         )}
                       </div>
                       {isSelected && <Check className="w-3 h-3 text-blue-600 flex-shrink-0" />}
@@ -160,8 +160,8 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
                 })
               ) : (
                 <div className="px-3 py-6 text-center">
-                  <p className="text-[11px] font-mono text-muted-foreground">{meta.emptyText}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground/50 mt-1">
+                  <p className="text-[11px] font-sans text-muted-foreground">{meta.emptyText}</p>
+                  <p className="text-[10px] font-sans text-muted-foreground/50 mt-1">
                     Generate content via the AI Agent first
                   </p>
                 </div>

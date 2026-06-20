@@ -78,23 +78,23 @@ export default function IntelligencePage() {
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            INTELLIGENCE
+            Intelligence
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
-            Customer intelligence, RFM analysis & lifetime value
+            What allo has learned about your customers — who they are, and what they&apos;re worth.
           </p>
         </div>
         <div className="flex gap-2">
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-primary/50 transition-all"
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-primary/50 transition-all"
           >
             <Palette className="w-3.5 h-3.5" />
             Brand Voice
           </Link>
           <Link
             href="/intelligence/cohorts"
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-primary/50 transition-all"
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-primary/50 transition-all"
           >
             <Grid3X3 className="w-3.5 h-3.5" />
             Cohort Analysis
@@ -103,7 +103,7 @@ export default function IntelligencePage() {
             onClick={runAnalysis}
             disabled={!storeId || analyzing}
             title={!storeId ? "Connect a store first" : ""}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? "animate-spin" : ""}`} />
             {!storeId ? "Connect Store First" : analyzing ? "Analyzing..." : "Run Analysis"}
@@ -127,12 +127,12 @@ export default function IntelligencePage() {
           {
             icon: DollarSign,
             label: "AVG LTV",
-            value: ltvData ? `$${ltvData.avgPredictedLtv.toFixed(0)}` : "---",
+            value: ltvData ? `₹${ltvData.avgPredictedLtv.toFixed(0)}` : "---",
           },
           {
             icon: DollarSign,
             label: "TOTAL LTV",
-            value: ltvData ? `$${(ltvData.totalPredictedLtv / 1000).toFixed(0)}K` : "---",
+            value: ltvData ? `₹${(ltvData.totalPredictedLtv / 1000).toFixed(0)}K` : "---",
           },
           {
             icon: AlertTriangle,
@@ -145,7 +145,7 @@ export default function IntelligencePage() {
             className="glass-card p-5 group"
           >
             <kpi.icon className="w-5 h-5 text-muted-foreground/50 mb-3 group-hover:text-foreground transition-colors" />
-            <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-1">
+            <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-1">
               {kpi.label}
             </div>
             {isLoading ? (
@@ -163,34 +163,34 @@ export default function IntelligencePage() {
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-4 h-4 text-muted-foreground" />
             <h2 className="section-header accent-bar-left text-[13px] text-foreground">
-              KEY INSIGHTS
+              What stands out
             </h2>
           </div>
           <ul className="space-y-2 mb-5">
             {championsSegment && championsRevenuePct && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--olive)] shrink-0" />
-                Champions ({championsSegment.count}) generate {championsRevenuePct}% of your revenue ($
+                Your {championsSegment.count} Champions bring in {championsRevenuePct}% of your revenue (₹
                 {(championsSegment.revenue / 1000).toFixed(0)}K)
               </li>
             )}
             {avgLTV && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--warm-gold)] shrink-0" />
-                Avg LTV is ${avgLTV} {Number(avgLTV) >= 200 ? "--- above industry average" : Number(avgLTV) >= 100 ? "--- on par with industry" : "--- below industry average"}
+                Average lifetime value is ₹{avgLTV} {Number(avgLTV) >= 200 ? "— above the industry norm" : Number(avgLTV) >= 100 ? "— right in line with the industry" : "— below the industry norm"}
               </li>
             )}
             {hibernatingSegment && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--terracotta)] shrink-0" />
-                {hibernatingSegment.count} Hibernating customers represent $
-                {(hibernatingSegment.revenue / 1000).toFixed(0)}K revenue --- high win-back potential
+                {hibernatingSegment.count} Hibernating customers are worth ₹
+                {(hibernatingSegment.revenue / 1000).toFixed(0)}K — plenty of room to win them back
               </li>
             )}
           </ul>
           <Link
             href="/automations"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 transition-all"
           >
             <Sparkles className="w-3.5 h-3.5" />
             Generate Recommendations
@@ -202,7 +202,7 @@ export default function IntelligencePage() {
       <motion.div variants={itemVariants} className="grid grid-cols-2 gap-6">
         <div className="glass-card-static p-6">
           <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-6">
-            RFM_AVERAGES
+            RFM averages
           </h2>
           {rfmData ? (
             <div className="space-y-5">
@@ -212,9 +212,9 @@ export default function IntelligencePage() {
                 { label: "MONETARY", value: rfmData.avgScores.monetary },
               ].map((dim) => (
                 <div key={dim.label}>
-                  <div className="flex justify-between text-[11px] font-mono mb-2">
-                    <span className="text-muted-foreground">{dim.label}</span>
-                    <span className="text-foreground font-bold">{dim.value.toFixed(1)}/5</span>
+                  <div className="flex justify-between text-[11px] mb-2">
+                    <span className="text-muted-foreground font-sans">{dim.label}</span>
+                    <span className="text-foreground font-bold font-mono">{dim.value.toFixed(1)}/5</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
@@ -235,21 +235,21 @@ export default function IntelligencePage() {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground">No RFM data yet</p>
+            <p className="text-[13px] text-muted-foreground">Nothing to show yet — run an analysis to begin.</p>
           )}
         </div>
 
         {/* LTV Stats */}
         <div className="glass-card-static p-6">
           <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-6">
-            LTV_METRICS
+            Lifetime value
           </h2>
           {ltvData ? (
             <div className="space-y-4">
               {[
-                { label: "AVG HISTORICAL LTV", value: `$${ltvData.avgHistoricalLtv.toFixed(0)}` },
-                { label: "AVG PREDICTED LTV", value: `$${ltvData.avgPredictedLtv.toFixed(0)}` },
-                { label: "AVG ORDER VALUE", value: `$${ltvData.avgOrderValue.toFixed(2)}` },
+                { label: "AVG HISTORICAL LTV", value: `₹${ltvData.avgHistoricalLtv.toFixed(0)}` },
+                { label: "AVG PREDICTED LTV", value: `₹${ltvData.avgPredictedLtv.toFixed(0)}` },
+                { label: "AVG ORDER VALUE", value: `₹${ltvData.avgOrderValue.toFixed(2)}` },
                 { label: "PURCHASE FREQUENCY", value: `${ltvData.avgPurchaseFrequency.toFixed(2)}/mo` },
                 { label: "AVG CHURN RISK", value: `${(ltvData.avgChurnProbability * 100).toFixed(1)}%` },
               ].map((stat) => (
@@ -257,7 +257,7 @@ export default function IntelligencePage() {
                   key={stat.label}
                   className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
                 >
-                  <span className="text-[11px] text-muted-foreground font-mono">{stat.label}</span>
+                  <span className="text-[11px] text-muted-foreground font-sans">{stat.label}</span>
                   <span className="text-[13px] font-bold text-foreground font-mono">{stat.value}</span>
                 </div>
               ))}
@@ -269,7 +269,7 @@ export default function IntelligencePage() {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground">No LTV data yet</p>
+            <p className="text-[13px] text-muted-foreground">Nothing to show yet — run an analysis to begin.</p>
           )}
         </div>
       </motion.div>
@@ -278,17 +278,17 @@ export default function IntelligencePage() {
       <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
         <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
           <Brain className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px] text-foreground">SEGMENT BREAKDOWN</h2>
+          <h2 className="section-header accent-bar-left text-[13px] text-foreground">Segment breakdown</h2>
         </div>
         {rfmData && rfmData.segments.length > 0 ? (
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/50">
-                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Segment</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Customers</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Revenue</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Avg Order</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Avg Score</th>
+                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Segment</th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Customers</th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Revenue</th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Avg Order</th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Avg Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -299,7 +299,7 @@ export default function IntelligencePage() {
                   return (
                     <tr key={seg.name} className="glass-row-hover transition-colors">
                       <td className="px-6 py-3">
-                        <span className="text-[13px] font-bold text-foreground font-mono">
+                        <span className="text-[13px] font-bold text-foreground font-sans">
                           {seg.name}
                         </span>
                       </td>
@@ -317,10 +317,10 @@ export default function IntelligencePage() {
                         </div>
                       </td>
                       <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground">
-                        ${(seg.revenue / 1000).toFixed(1)}K
+                        ₹{(seg.revenue / 1000).toFixed(1)}K
                       </td>
                       <td className="px-6 py-3 text-right text-[13px] font-mono text-foreground">
-                        ${seg.avgOrderValue.toFixed(2)}
+                        ₹{seg.avgOrderValue.toFixed(2)}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <span className="inline-block px-2 py-0.5 bg-secondary text-secondary-foreground text-[11px] font-mono font-bold rounded">
@@ -341,9 +341,9 @@ export default function IntelligencePage() {
         ) : (
           <div className="p-16 text-center">
             <Brain className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground">No segment data yet</p>
+            <p className="text-[13px] text-muted-foreground">No segments yet.</p>
             <p className="text-[11px] text-muted-foreground/50 mt-1">
-              Click &quot;Run Analysis&quot; to generate insights
+              Run an analysis and allo will group your customers for you.
             </p>
           </div>
         )}
@@ -354,16 +354,16 @@ export default function IntelligencePage() {
         <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
           <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
             <TrendingUp className="w-4 h-4 text-muted-foreground" />
-            <h2 className="section-header accent-bar-left text-[13px] text-foreground">TOP CUSTOMERS</h2>
+            <h2 className="section-header accent-bar-left text-[13px] text-foreground">Top customers</h2>
           </div>
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/50">
-                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">#</th>
-                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Customer</th>
-                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Segment</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Score</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Spent</th>
+                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">#</th>
+                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Customer</th>
+                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Segment</th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Score</th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Spent</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -389,7 +389,7 @@ export default function IntelligencePage() {
                       <div className="text-[11px] text-muted-foreground font-mono">{tc.customer.email}</div>
                     </td>
                     <td className="px-6 py-3">
-                      <span className="px-2 py-0.5 bg-muted text-foreground text-[11px] font-mono rounded">
+                      <span className="px-2 py-0.5 bg-muted text-foreground text-[11px] font-sans rounded">
                         {tc.segment}
                       </span>
                     </td>
@@ -399,7 +399,7 @@ export default function IntelligencePage() {
                       </span>
                     </td>
                     <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground tabular-nums">
-                      ${tc.totalSpent.toFixed(2)}
+                      ₹{tc.totalSpent.toFixed(2)}
                     </td>
                   </tr>
                 );

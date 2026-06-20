@@ -54,7 +54,7 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
       <div className="relative w-full max-w-4xl mx-4 bg-card rounded-xl border border-border shadow-xl flex flex-col max-h-[90vh]">
         {/* Toolbar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="text-[10px] font-bold font-mono text-foreground tracking-[1px] uppercase">
+          <h3 className="text-[10px] font-bold font-serif text-foreground tracking-[1px] uppercase">
             Preview
           </h3>
 
@@ -64,7 +64,7 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
               <button
                 onClick={() => setMode("desktop")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono transition-colors",
+                  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-sans transition-colors",
                   mode === "desktop"
                     ? "bg-secondary text-secondary-foreground"
                     : "bg-card text-muted-foreground hover:text-foreground"
@@ -76,7 +76,7 @@ export function PreviewPane({ blocks, mode: initialMode, open, onClose }: Previe
               <button
                 onClick={() => setMode("mobile")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono transition-colors",
+                  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-sans transition-colors",
                   mode === "mobile"
                     ? "bg-secondary text-secondary-foreground"
                     : "bg-card text-muted-foreground hover:text-foreground"

@@ -45,7 +45,7 @@ export function ModelSelector({ value, onChange, compact }: ModelSelectorProps) 
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-primary/50 transition-all bg-card"
+        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-primary/50 transition-all bg-card"
       >
         <Cpu className="w-3 h-3 text-muted-foreground" />
         {compact
@@ -57,7 +57,7 @@ export function ModelSelector({ value, onChange, compact }: ModelSelectorProps) 
       {open && (
         <div className="absolute top-full mt-1 right-0 z-50 w-72 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
           <div className="px-3 py-2 border-b border-border">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">AI Model</p>
+            <p className="text-[10px] font-sans text-muted-foreground uppercase tracking-wider">Choose a model</p>
           </div>
           {models?.map((model) => {
             const info = MODEL_LABELS[model.id as AIModelId];
@@ -85,18 +85,18 @@ export function ModelSelector({ value, onChange, compact }: ModelSelectorProps) 
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono font-bold text-foreground">{info.label}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">{info.provider}</span>
+                    <span className="text-[11px] font-sans font-bold text-foreground">{info.label}</span>
+                    <span className="text-[10px] font-sans text-muted-foreground">{info.provider}</span>
                     {(model as any).tier && (() => {
                       const tier = TIER_BADGE[(model as any).tier];
                       return tier ? (
-                        <span className={`px-1 py-0.5 rounded text-[8px] font-mono font-bold ${tier.bg} ${tier.text}`}>
+                        <span className={`px-1 py-0.5 rounded text-[8px] font-sans font-bold ${tier.bg} ${tier.text}`}>
                           {tier.label}
                         </span>
                       ) : null;
                     })()}
                   </div>
-                  <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                  <p className="text-[10px] font-sans text-muted-foreground mt-0.5">
                     {model.description}
                     {!isAvailable && " — API key not configured"}
                   </p>
@@ -110,7 +110,7 @@ export function ModelSelector({ value, onChange, compact }: ModelSelectorProps) 
               </button>
             );
           }) ?? (
-            <div className="px-3 py-4 text-[11px] font-mono text-muted-foreground text-center">Loading models...</div>
+            <div className="px-3 py-4 text-[11px] font-sans text-muted-foreground text-center">Loading models...</div>
           )}
         </div>
       )}

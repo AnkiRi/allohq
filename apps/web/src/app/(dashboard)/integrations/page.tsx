@@ -19,7 +19,7 @@ const ecommercePlatforms = [
   {
     id: "shopify",
     name: "Shopify",
-    description: "Sync products, customers, and orders from your Shopify store",
+    description: "Connect Shopify and allo will start learning your store — products, customers, and orders.",
     status: "available" as const,
   },
   {
@@ -87,7 +87,7 @@ export default function IntegrationsPage() {
   function handleConnect() {
     const domain = shopDomain.trim();
     if (!domain) {
-      setError("Please enter your shop domain");
+      setError("Please enter your shop domain to continue");
       return;
     }
 
@@ -97,7 +97,7 @@ export default function IntegrationsPage() {
       : `${domain}.myshopify.com`;
 
     if (!/^[a-zA-Z0-9-]+\.myshopify\.com$/.test(fullDomain)) {
-      setError("Invalid domain format");
+      setError("That doesn't look like a Shopify domain. Try just your store name.");
       return;
     }
 
@@ -118,7 +118,7 @@ export default function IntegrationsPage() {
           Integrations
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
-          Connect your e-commerce platforms and marketing tools
+          Connect your store and tools so allo can work across all of them
         </p>
       </motion.div>
 
@@ -157,7 +157,7 @@ export default function IntegrationsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-[11px] font-mono text-green-600">
+                <span className="flex items-center gap-1.5 text-[11px] font-sans text-green-600">
                   <Check className="w-3.5 h-3.5" />
                   Connected
                 </span>
@@ -171,11 +171,11 @@ export default function IntegrationsPage() {
       {/* Loading indicator */}
       {isLoading && (
         <motion.div
-          className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground"
+          className="flex items-center gap-2 text-[11px] font-sans text-muted-foreground"
           variants={itemVariants}
         >
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          Loading stores...
+          Loading your stores...
         </motion.div>
       )}
 
@@ -208,7 +208,7 @@ export default function IntegrationsPage() {
                   />
                 </div>
                 <div>
-                  <div className="text-[13px] font-medium text-foreground font-mono">
+                  <div className="text-[13px] font-medium text-foreground font-sans">
                     {platform.name}
                   </div>
                 </div>
@@ -219,12 +219,12 @@ export default function IntegrationsPage() {
               {platform.status === "available" ? (
                 <button
                   onClick={() => setShowDialog(true)}
-                  className="w-full py-2 px-3 bg-secondary text-secondary-foreground text-[11px] font-mono rounded-lg hover:bg-secondary/90 transition-colors"
+                  className="w-full py-2 px-3 bg-secondary text-secondary-foreground text-[11px] font-sans rounded-lg hover:bg-secondary/90 transition-colors"
                 >
                   Connect Shopify
                 </button>
               ) : (
-                <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center">
+                <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-sans rounded-lg text-center">
                   Coming Soon
                 </div>
               )}
@@ -254,7 +254,7 @@ export default function IntegrationsPage() {
                   )}
                 </div>
                 <div>
-                  <div className="text-[13px] font-medium text-foreground font-mono">
+                  <div className="text-[13px] font-medium text-foreground font-sans">
                     {platform.name}
                   </div>
                 </div>
@@ -262,10 +262,10 @@ export default function IntegrationsPage() {
               <p className="text-[11px] text-muted-foreground mb-4">
                 {platform.description}
               </p>
-              <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center mb-2">
+              <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-sans rounded-lg text-center mb-2">
                 Coming Soon
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground font-sans">
                 <Bell className="w-3 h-3" />
                 Notify me when available
               </div>
@@ -291,7 +291,7 @@ export default function IntegrationsPage() {
                   <BarChart3 className="w-5 h-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[13px] font-medium text-foreground font-mono">
+                  <div className="text-[13px] font-medium text-foreground font-sans">
                     {platform.name}
                   </div>
                 </div>
@@ -299,10 +299,10 @@ export default function IntegrationsPage() {
               <p className="text-[11px] text-muted-foreground mb-4">
                 {platform.description}
               </p>
-              <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-mono rounded-lg text-center mb-2">
+              <div className="w-full py-2 px-3 bg-muted text-muted-foreground text-[11px] font-sans rounded-lg text-center mb-2">
                 Coming Soon
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground font-sans">
                 <Bell className="w-3 h-3" />
                 Notify me when available
               </div>
@@ -316,8 +316,8 @@ export default function IntegrationsPage() {
         <div className="fixed inset-0 glass-card-static flex items-center justify-center z-50" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" }}>
           <div className="glass-card-static rounded-xl p-6 w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[13px] font-bold text-foreground font-mono">
-                Connect Shopify Store
+              <h3 className="text-[13px] font-bold text-foreground font-serif">
+                Connect your Shopify store
               </h3>
               <button
                 onClick={() => {
@@ -332,8 +332,8 @@ export default function IntegrationsPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-[11px] font-mono text-muted-foreground mb-1.5">
-                  Shop Domain
+                <label className="block text-[11px] font-sans text-muted-foreground mb-1.5">
+                  Your store address
                 </label>
                 <div className="flex items-center">
                   <input
@@ -360,10 +360,10 @@ export default function IntegrationsPage() {
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="w-full py-2.5 bg-secondary text-secondary-foreground text-[13px] font-mono rounded-lg hover:bg-secondary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-secondary text-secondary-foreground text-[13px] font-sans rounded-lg hover:bg-secondary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
               >
                 {connecting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {connecting ? "Connecting..." : "Connect Store"}
+                {connecting ? "Connecting..." : "Connect store"}
               </button>
             </div>
           </div>

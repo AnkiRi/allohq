@@ -77,16 +77,16 @@ const TYPE_OPTIONS = [
 function getStatusBanner(status: string | undefined): { text: string; color: string } | null {
   switch (status) {
     case "pending":
-      return { text: "Approve actions to create campaigns or activate automations. Reject to dismiss.", color: "bg-blue-50 text-blue-700 border-blue-200" };
+      return { text: "Approve an action to put it live, or reject it to let it go. Allo handles the rest.", color: "bg-blue-50 text-blue-700 border-blue-200" };
     case "approved":
     case "executed":
-      return { text: "These actions have been executed. View results in Campaigns or Automations.", color: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+      return { text: "These are live. You'll find the results over in Campaigns or Automations.", color: "bg-emerald-50 text-emerald-700 border-emerald-200" };
     case "rejected":
-      return { text: "Dismissed actions. These won't be executed.", color: "bg-gray-50 text-gray-600 border-gray-200" };
+      return { text: "These were set aside and won't run.", color: "bg-gray-50 text-gray-600 border-gray-200" };
     case "auto_executed":
-      return { text: "These actions were automatically executed by the AI agent based on your autonomy settings.", color: "bg-blue-50 text-blue-700 border-blue-200" };
+      return { text: "Allo ran these on its own, based on the autonomy settings you chose.", color: "bg-blue-50 text-blue-700 border-blue-200" };
     case "expired":
-      return { text: "Expired actions — the opportunity window has passed.", color: "bg-amber-50 text-amber-700 border-amber-200" };
+      return { text: "These timed out before anyone got to them — the moment for each has passed.", color: "bg-amber-50 text-amber-700 border-amber-200" };
     default:
       return null;
   }
@@ -95,18 +95,18 @@ function getStatusBanner(status: string | undefined): { text: string; color: str
 function getEmptyState(status: string | undefined): { title: string; description: string } {
   switch (status) {
     case "pending":
-      return { title: "No pending actions", description: "All caught up! Allo will propose new campaigns and automations as opportunities arise." };
+      return { title: "You're all caught up", description: "Nothing needs you right now. Allo will surface new ideas as the moment's right." };
     case "approved":
     case "executed":
-      return { title: "No executed actions", description: "Approve pending actions to create campaigns or activate automations." };
+      return { title: "Nothing live yet", description: "Approve a pending action and it'll show up here." };
     case "rejected":
-      return { title: "No rejected actions", description: "Actions you dismiss or reject will appear here." };
+      return { title: "Nothing set aside", description: "Anything you pass on will land here." };
     case "auto_executed":
-      return { title: "No auto-executed actions", description: "When the AI agent has enough confidence, it will execute actions autonomously. They'll appear here." };
+      return { title: "Allo hasn't run anything on its own yet", description: "Once it's confident enough, Allo will act without waiting — and you'll see it here." };
     case "expired":
-      return { title: "No expired actions", description: "Actions that weren't reviewed in time appear here." };
+      return { title: "Nothing's expired", description: "Ideas that time out before anyone acts on them show up here." };
     default:
-      return { title: "No actions yet", description: "Allo will queue opportunities as it analyzes your store data." };
+      return { title: "Nothing here yet", description: "As Allo gets to know your store, it'll line up ideas for you here." };
   }
 }
 
@@ -130,42 +130,42 @@ export default function ActionsPage() {
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
     onSuccess: (result: { executedType?: string }) => {
       const msg = result.executedType === "campaign"
-        ? "Action approved — campaign created! Check Campaigns tab."
+        ? "Done — your campaign is ready in the Campaigns tab."
         : result.executedType === "automation"
-        ? "Action approved — automation activated!"
-        : "Action approved!";
+        ? "Done — that automation is now live."
+        : "Approved.";
       toast(msg, "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const rejectMut = (trpc as any).autonomy.rejectAction.useMutation({
     onSuccess: () => {
-      toast("Action rejected", "success");
+      toast("Passed on it.", "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const dismissMut = (trpc as any).autonomy.rejectAction.useMutation({
     onSuccess: () => {
-      toast("Action dismissed", "success");
+      toast("Set aside.", "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const bulkApproveMut = (trpc as any).autonomy.bulkApprove.useMutation({
     onSuccess: (result: { approved: number }) => {
-      toast(`${result.approved} actions approved & executed!`, "success");
+      toast(`${result.approved} actions approved and live.`, "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const bulkRejectMut = (trpc as any).autonomy.bulkReject.useMutation({
     onSuccess: (result: { rejected: number }) => {
-      toast(`${result.rejected} actions cleared`, "success");
+      toast(`${result.rejected} actions cleared.`, "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
@@ -193,7 +193,7 @@ export default function ActionsPage() {
             Action queue
           </h1>
           <p className="text-sm text-[#8B8074] mt-1">
-            Review AI-proposed campaigns and actions — approve to execute, reject to dismiss
+            Ideas Allo has lined up for you. Approve the ones you like, pass on the rest.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -207,14 +207,14 @@ export default function ActionsPage() {
                 className="flex items-center gap-1.5 px-4 py-2 border border-[#EDE7DB] text-[#8B8074] text-sm rounded-lg hover:bg-[#EDE7DB]/40 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Clear All ({pendingActions.length})
+                Clear all ({pendingActions.length})
               </button>
               <button
                 onClick={() => bulkApproveMut.mutate({ actionIds: pendingActions.map((a: any) => a.id) })}
                 className="flex items-center gap-1.5 px-4 py-2 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors"
               >
                 <Zap className="w-3.5 h-3.5" />
-                Approve All ({pendingActions.length})
+                Approve all ({pendingActions.length})
               </button>
             </>
           )}

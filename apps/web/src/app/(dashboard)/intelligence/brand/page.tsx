@@ -62,12 +62,12 @@ export default function BrandProfilePage() {
       setJobId(null);
       const reason = jobStatus.failedReason ?? "Unknown error";
       const friendlyMsg = reason.includes("429")
-        ? "AI API quota exceeded. Please check your billing settings."
+        ? "allo has hit its AI usage limit for now. Take a look at your billing settings."
         : reason.includes("API key") || reason.includes("apiKey")
-          ? "AI API key is missing or invalid. Check your ANTHROPIC_API_KEY or OPENAI_API_KEY."
+          ? "allo can't find a valid AI key. Check your ANTHROPIC_API_KEY or OPENAI_API_KEY."
           : reason.includes("All AI models failed")
-            ? "All AI models failed. Please check your API keys in environment variables."
-            : `Analysis failed: ${reason}`;
+            ? "None of the AI models would respond. Check your API keys in your environment variables."
+            : `Something went wrong: ${reason}`;
       setError(friendlyMsg);
       toast(friendlyMsg, "error");
       return;
@@ -79,7 +79,7 @@ export default function BrandProfilePage() {
       setJobId(null);
       setError(null);
       prevAnalyzedAt.current = profile.analyzedAt;
-      toast("Brand analysis complete!", "success");
+      toast("All done — allo has your brand down.", "success");
       return;
     }
 
@@ -87,18 +87,18 @@ export default function BrandProfilePage() {
     if (Date.now() - analyzeStartedAt.current > 90000) {
       setAnalyzing(false);
       setJobId(null);
-      setError("Analysis is taking too long. It may still complete in the background — try refreshing in a minute.");
-      toast("Analysis timed out", "error");
+      setError("This is taking longer than usual. It may still finish in the background — try refreshing in a minute.");
+      toast("This is taking a while — try again in a minute.", "error");
     }
   }, [profile?.analyzedAt, jobStatus, analyzing, toast]);
 
   const utils = trpc.useUtils();
   const updateIntensityMut = (trpc.ai.updateCreativeIntensity as any).useMutation({
     onSuccess: () => {
-      toast("Creative intensity updated!", "success");
+      toast("Creative intensity updated.", "success");
       (utils.ai as any).brandProfile.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
   }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
 
   const analyzeMut = trpc.ai.analyzeBrand.useMutation({
@@ -108,11 +108,11 @@ export default function BrandProfilePage() {
       setJobId(data.jobId ?? null);
       analyzeStartedAt.current = Date.now();
       prevAnalyzedAt.current = profile?.analyzedAt ?? null;
-      toast("Brand analysis started — this takes ~15 seconds", "info");
+      toast("On it — give allo about 15 seconds.", "info");
     },
     onError: (err) => {
-      setError(err.message || "Failed to start analysis");
-      toast(err.message || "Failed to start analysis", "error");
+      setError(err.message || "allo couldn't get started. Give it another try.");
+      toast(err.message || "allo couldn't get started. Give it another try.", "error");
     },
   });
 
@@ -171,18 +171,18 @@ export default function BrandProfilePage() {
   // Mutations
   const updateMetadataMut = (trpc.stores as any).updateMetadata.useMutation({
     onSuccess: () => {
-      toast("Store details saved!", "success");
+      toast("Store details saved.", "success");
       (utils.stores as any).getMetadata.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to save", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const updateBrandSettingsMut = (trpc.ai as any).updateBrandSettings.useMutation({
     onSuccess: () => {
-      toast("Brand settings saved!", "success");
+      toast("Brand settings saved.", "success");
       (utils.ai as any).getBrandSettings.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to save", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   function handleSaveBrandSettings() {
@@ -269,11 +269,11 @@ export default function BrandProfilePage() {
 
   const updateVoiceMut = (trpc.ai as any).updateBrandVoice.useMutation({
     onSuccess: () => {
-      toast("Brand voice updated!", "success");
+      toast("Brand voice updated.", "success");
       (utils.ai as any).brandProfile.invalidate({ storeId });
       setEditingTone(false);
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const handleSaveVoice = () => {
@@ -288,11 +288,11 @@ export default function BrandProfilePage() {
 
   const updateVisualMut = (trpc.ai as any).updateBrandVisualProfile.useMutation({
     onSuccess: () => {
-      toast("Visual profile updated!", "success");
+      toast("Visual style updated.", "success");
       (utils.ai as any).getBrandVisualProfile.invalidate({ storeId });
       setEditingVisual(false);
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const handleSaveVisual = () => {
@@ -374,7 +374,7 @@ export default function BrandProfilePage() {
           <div>
             <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">Brand voice</h1>
             <p className="text-[13px] text-muted-foreground font-sans mt-1">
-              AI-extracted brand personality from your store data
+              The personality allo picked up from your store, so everything it writes sounds like you.
             </p>
           </div>
         </div>
@@ -384,7 +384,7 @@ export default function BrandProfilePage() {
           onClick={handleAnalyze}
           disabled={!storeId || isAnalyzing}
           title={!storeId ? "Connect a store first" : ""}
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
           {!storeId ? "Connect Store First" : isAnalyzing ? "Analyzing..." : "Re-analyze"}
@@ -397,9 +397,9 @@ export default function BrandProfilePage() {
         <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-terracotta flex items-center gap-3 px-4 py-3">
           <RefreshCw className="w-4 h-4 text-terracotta animate-spin flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground">Analyzing brand voice...</p>
+            <p className="text-[13px] font-bold text-foreground">Reading your brand...</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              AI is reading your product catalog and extracting brand personality. This typically takes 10-20 seconds.
+              allo is going through your products to learn how your brand sounds and looks. This usually takes 10-20 seconds.
             </p>
           </div>
         </motion.div>
@@ -410,12 +410,12 @@ export default function BrandProfilePage() {
         <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[#C44A4A] flex items-center gap-3 px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-[#C44A4A] flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground">Analysis failed</p>
+            <p className="text-[13px] font-bold text-foreground">That didn&apos;t go through</p>
             <p className="text-[11px] text-[#C44A4A] mt-0.5">{error}</p>
           </div>
           <button
             onClick={() => setError(null)}
-            className="ml-auto text-[11px] text-[#C44A4A]/60 hover:text-[#C44A4A] font-mono"
+            className="ml-auto text-[11px] text-[#C44A4A]/60 hover:text-[#C44A4A] font-sans"
           >
             Dismiss
           </button>
@@ -432,7 +432,7 @@ export default function BrandProfilePage() {
         <motion.div className="space-y-6" variants={containerVariants} initial="hidden" animate="visible">
           {/* Brand overview */}
           <motion.div variants={itemVariants} className="glass-card-static p-6">
-            <h2 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">{profile.brandName}</h2>
+            <h2 className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-serif mb-1">{profile.brandName}</h2>
             <p className="text-[13px] text-muted-foreground">{profile.brandDescription}</p>
             <p className="text-[10px] text-muted-foreground/50 mt-3">
               Last analyzed: {new Date(profile.analyzedAt).toLocaleString()}
@@ -445,12 +445,12 @@ export default function BrandProfilePage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                  <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">TONE</h2>
+                  <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Tone</h2>
                 </div>
                 {!editingTone ? (
                   <button
                     onClick={() => setEditingTone(true)}
-                    className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-[10px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Edit
                   </button>
@@ -458,14 +458,14 @@ export default function BrandProfilePage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => { setEditingTone(false); if (tone) setToneEdits(tone); }}
-                      className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-[10px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSaveVoice}
                       disabled={updateVoiceMut.isPending}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                      className="flex items-center gap-1 px-2.5 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
                     >
                       <Save className="w-3 h-3" />
                       {updateVoiceMut.isPending ? "Saving..." : "Save"}
@@ -481,7 +481,7 @@ export default function BrandProfilePage() {
                     const pct = idx >= 0 ? ((idx + 1) / dim.options.length) * 100 : 50;
                     return (
                       <div key={dim.key}>
-                        <div className="flex justify-between text-[11px] font-mono mb-1">
+                        <div className="flex justify-between text-[11px] font-sans mb-1">
                           <span className="text-muted-foreground uppercase">{dim.label}</span>
                           <span className="text-foreground font-bold">{value}</span>
                         </div>
@@ -492,8 +492,8 @@ export default function BrandProfilePage() {
                           />
                         </div>
                         <div className="flex justify-between mt-0.5">
-                          <span className="text-[9px] text-muted-foreground/60 font-mono">{dim.left.label}</span>
-                          <span className="text-[9px] text-muted-foreground/60 font-mono">{dim.right.label}</span>
+                          <span className="text-[9px] text-muted-foreground/60 font-sans">{dim.left.label}</span>
+                          <span className="text-[9px] text-muted-foreground/60 font-sans">{dim.right.label}</span>
                         </div>
                       </div>
                     );
@@ -508,13 +508,13 @@ export default function BrandProfilePage() {
                     return (
                       <div key={dim.key}>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-bold text-foreground font-mono">{dim.label}</span>
-                          <span className="text-[10px] text-[var(--color-accent)] font-mono font-medium">
+                          <span className="text-[11px] font-bold text-foreground font-sans">{dim.label}</span>
+                          <span className="text-[10px] text-[var(--color-accent)] font-sans font-medium">
                             {dim.options[currentIdx >= 0 ? currentIdx : 1]}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[9px] text-muted-foreground font-mono w-16 text-right shrink-0">{dim.left.label}</span>
+                          <span className="text-[9px] text-muted-foreground font-sans w-16 text-right shrink-0">{dim.left.label}</span>
                           <input
                             type="range"
                             min={0}
@@ -526,7 +526,7 @@ export default function BrandProfilePage() {
                             }}
                             className="flex-1 h-1.5 accent-[var(--terracotta)] cursor-pointer"
                           />
-                          <span className="text-[9px] text-muted-foreground font-mono w-16 shrink-0">{dim.right.label}</span>
+                          <span className="text-[9px] text-muted-foreground font-sans w-16 shrink-0">{dim.right.label}</span>
                         </div>
                         <div className="flex justify-between mt-1">
                           <span className="text-[9px] text-muted-foreground/50 italic max-w-[45%]">&ldquo;{dim.left.example}&rdquo;</span>
@@ -536,15 +536,15 @@ export default function BrandProfilePage() {
                     );
                   })}
                   <div>
-                    <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-1.5">BANNED WORDS</span>
+                    <span className="text-[11px] text-muted-foreground font-sans uppercase block mb-1.5">BANNED WORDS</span>
                     <input
                       type="text"
                       value={bannedWordsEdit}
                       onChange={(e) => setBannedWordsEdit(e.target.value)}
                       placeholder="e.g. cheap, discount, limited time"
-                      className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                      className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                     />
-                    <p className="text-[9px] text-muted-foreground/50 mt-1">Comma-separated. AI will avoid these words in all generated content.</p>
+                    <p className="text-[9px] text-muted-foreground/50 mt-1">Separate with commas. allo will keep these words out of everything it writes.</p>
                   </div>
                 </div>
               )}
@@ -554,24 +554,24 @@ export default function BrandProfilePage() {
             <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Palette className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL STYLE</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Visual style</h2>
               </div>
               {visual && (
                 <div className="space-y-4">
                   <div>
-                    <span className="text-[11px] text-muted-foreground font-mono">AESTHETIC</span>
+                    <span className="text-[11px] text-muted-foreground font-sans">AESTHETIC</span>
                     <p className="text-[13px] font-bold text-foreground mt-0.5">
                       {typeof visual["aesthetic"] === "string" ? visual["aesthetic"] : ""}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-muted-foreground font-mono">FONT STYLE</span>
+                    <span className="text-[11px] text-muted-foreground font-sans">FONT STYLE</span>
                     <p className="text-[13px] font-bold text-foreground mt-0.5">
                       {typeof visual["fontStyle"] === "string" ? visual["fontStyle"] : ""}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-muted-foreground font-mono mb-2 block">COLORS</span>
+                    <span className="text-[11px] text-muted-foreground font-sans mb-2 block">COLORS</span>
                     <div className="flex gap-2">
                       {(Array.isArray(visual["suggestedColors"]) ? visual["suggestedColors"] : []).map((color, i) => (
                         <div key={i} className="flex items-center gap-1.5">
@@ -593,10 +593,10 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Sliders className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">CREATIVE INTENSITY</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Creative intensity</h2>
             </div>
             <p className="text-[11px] text-muted-foreground mb-4">
-              Controls the visual richness of AI-generated emails
+              How much visual flair allo brings to the emails it writes.
             </p>
             <div className="grid grid-cols-3 gap-3">
               {([
@@ -628,35 +628,35 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Type className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VOCABULARY</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Vocabulary</h2>
             </div>
             {vocabulary && (
               <div className="grid grid-cols-3 gap-6">
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono block mb-2">PREFERRED WORDS</span>
+                  <span className="text-[11px] text-muted-foreground font-sans block mb-2">PREFERRED WORDS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["preferredWords"] ?? []).map((word, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-sans rounded">
                         {word}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono block mb-2">CTA PATTERNS</span>
+                  <span className="text-[11px] text-muted-foreground font-sans block mb-2">CTA PATTERNS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["ctaPatterns"] ?? []).map((cta, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-sans rounded">
                         {cta}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono block mb-2">BRAND TERMS</span>
+                  <span className="text-[11px] text-muted-foreground font-sans block mb-2">BRAND TERMS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["brandTerms"] ?? []).map((term, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-mono rounded">
+                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-sans rounded">
                         {term}
                       </span>
                     ))}
@@ -671,7 +671,7 @@ export default function BrandProfilePage() {
             <motion.div variants={itemVariants} className="glass-card-static p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Quote className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SAMPLE COPY</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Sample copy</h2>
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
@@ -688,12 +688,12 @@ export default function BrandProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Palette className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">VISUAL DESIGN</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Visual design</h2>
               </div>
               {!editingVisual ? (
                 <button
                   onClick={() => setEditingVisual(true)}
-                  className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-[10px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Edit
                 </button>
@@ -701,14 +701,14 @@ export default function BrandProfilePage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { setEditingVisual(false); if (visualProfile) { setAestheticEdit(visualProfile.aestheticClassification ?? "clean_minimal"); setColorTokens((visualProfile.brandDesignTokens as Record<string, string>) ?? {}); setHeadingFont(visualProfile.fontFamily ?? ""); setBodyFont(visualProfile.bodyFontFamily ?? ""); } }}
-                    className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-[10px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSaveVisual}
                     disabled={updateVisualMut.isPending}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                    className="flex items-center gap-1 px-2.5 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
                   >
                     <Save className="w-3 h-3" />
                     {updateVisualMut.isPending ? "Saving..." : "Save"}
@@ -720,19 +720,19 @@ export default function BrandProfilePage() {
             {!editingVisual ? (
               <div className="space-y-4">
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono">AESTHETIC</span>
+                  <span className="text-[11px] text-muted-foreground font-sans">AESTHETIC</span>
                   <p className="text-[13px] font-bold text-foreground mt-0.5">
                     {AESTHETIC_OPTIONS.find((a) => a.value === (visualProfile?.aestheticClassification ?? "clean_minimal"))?.label ?? visualProfile?.aestheticClassification ?? "Not set"}
                   </p>
                 </div>
                 {Object.keys(colorTokens).length > 0 && (
                   <div>
-                    <span className="text-[11px] text-muted-foreground font-mono mb-2 block">BRAND COLORS</span>
+                    <span className="text-[11px] text-muted-foreground font-sans mb-2 block">BRAND COLORS</span>
                     <div className="flex gap-2 flex-wrap">
                       {COLOR_TOKEN_LABELS.map(({ key, label }) => colorTokens[key] ? (
                         <div key={key} className="flex items-center gap-1.5">
                           <div className="w-6 h-6 rounded-full border border-white/20" style={{ backgroundColor: colorTokens[key] }} />
-                          <span className="text-[10px] text-muted-foreground font-mono">{label}</span>
+                          <span className="text-[10px] text-muted-foreground font-sans">{label}</span>
                         </div>
                       ) : null)}
                     </div>
@@ -749,7 +749,7 @@ export default function BrandProfilePage() {
               <div className="space-y-5">
                 {/* Aesthetic */}
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-2">AESTHETIC</span>
+                  <span className="text-[11px] text-muted-foreground font-sans uppercase block mb-2">AESTHETIC</span>
                   <div className="grid grid-cols-2 gap-2">
                     {AESTHETIC_OPTIONS.map((opt) => (
                       <button
@@ -761,7 +761,7 @@ export default function BrandProfilePage() {
                             : "border-white/20 bg-white/20 hover:border-white/40"
                         }`}
                       >
-                        <span className="text-[11px] font-bold text-foreground font-mono">{opt.label}</span>
+                        <span className="text-[11px] font-bold text-foreground font-sans">{opt.label}</span>
                         <span className="text-[9px] text-muted-foreground block mt-0.5">{opt.desc}</span>
                       </button>
                     ))}
@@ -770,11 +770,11 @@ export default function BrandProfilePage() {
 
                 {/* Colors */}
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-2">BRAND COLORS</span>
+                  <span className="text-[11px] text-muted-foreground font-sans uppercase block mb-2">BRAND COLORS</span>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {COLOR_TOKEN_LABELS.map(({ key, label }) => (
                       <div key={key}>
-                        <label className="text-[10px] text-muted-foreground font-mono mb-1 block">{label}</label>
+                        <label className="text-[10px] text-muted-foreground font-sans mb-1 block">{label}</label>
                         <div className="flex items-center gap-2">
                           <input type="color" value={colorTokens[key] || "#000000"} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="w-7 h-7 rounded border border-white/20 cursor-pointer" />
                           <input type="text" value={colorTokens[key] || ""} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-2 py-1 text-[10px] font-mono rounded border border-white/20 bg-white/20 text-foreground" />
@@ -786,15 +786,15 @@ export default function BrandProfilePage() {
 
                 {/* Typography */}
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-mono uppercase block mb-2">TYPOGRAPHY</span>
+                  <span className="text-[11px] text-muted-foreground font-sans uppercase block mb-2">TYPOGRAPHY</span>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-muted-foreground font-mono mb-1 block">Heading Font</label>
-                      <input type="text" value={headingFont} onChange={(e) => setHeadingFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-mono rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Playfair Display" />
+                      <label className="text-[10px] text-muted-foreground font-sans mb-1 block">Heading Font</label>
+                      <input type="text" value={headingFont} onChange={(e) => setHeadingFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-sans rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Playfair Display" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground font-mono mb-1 block">Body Font</label>
-                      <input type="text" value={bodyFont} onChange={(e) => setBodyFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-mono rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Inter" />
+                      <label className="text-[10px] text-muted-foreground font-sans mb-1 block">Body Font</label>
+                      <input type="text" value={bodyFont} onChange={(e) => setBodyFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-sans rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Inter" />
                     </div>
                   </div>
                 </div>
@@ -807,8 +807,8 @@ export default function BrandProfilePage() {
           {/* ================================================================ */}
 
           <motion.div variants={itemVariants} className="pt-4 border-t border-white/10">
-            <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-mono mb-1">EMAIL SETTINGS</h2>
-            <p className="text-[11px] text-muted-foreground font-sans mb-6">Hard parameters applied to every generated email</p>
+            <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-serif mb-1">Email settings</h2>
+            <p className="text-[11px] text-muted-foreground font-sans mb-6">The fixed details allo applies to every email it sends.</p>
           </motion.div>
 
           {/* Logo & Header */}
@@ -816,12 +816,12 @@ export default function BrandProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Image className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">LOGO & HEADER</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Logo & header</h2>
               </div>
               <button
                 onClick={handleSaveBrandSettings}
                 disabled={updateBrandSettingsMut.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-[10px] font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
               >
                 <Save className="w-3 h-3" />
                 {updateBrandSettingsMut.isPending ? "Saving..." : "Save"}
@@ -829,14 +829,14 @@ export default function BrandProfilePage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">LOGO URL</label>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">LOGO URL</label>
                 <div className="flex gap-3 items-start">
                   <input
                     type="url"
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
                     placeholder="https://cdn.shopify.com/your-logo.png"
-                    className="flex-1 px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="flex-1 px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                   {logoUrl && (
                     <div className="w-16 h-16 border border-white/20 rounded-lg overflow-hidden bg-white flex-shrink-0">
@@ -846,13 +846,13 @@ export default function BrandProfilePage() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">LOGO POSITION</label>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">LOGO POSITION</label>
                 <div className="flex gap-2">
                   {(["left", "center", "right"] as const).map((pos) => (
                     <button
                       key={pos}
                       onClick={() => setLogoPosition(pos)}
-                      className={`px-4 py-2 border rounded-lg text-[11px] font-mono transition-all ${
+                      className={`px-4 py-2 border rounded-lg text-[11px] font-sans transition-all ${
                         logoPosition === pos
                           ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30 font-bold"
                           : "border-white/20 bg-white/20 hover:border-white/40"
@@ -864,7 +864,7 @@ export default function BrandProfilePage() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">HEADER BACKGROUND</label>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">HEADER BACKGROUND</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -887,17 +887,17 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <MapPin className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">FOOTER DEFAULTS</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Footer defaults</h2>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-[11px] text-muted-foreground font-mono block mb-1.5">CUSTOM FOOTER TEXT</label>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">CUSTOM FOOTER TEXT</label>
                 <textarea
                   value={footerText}
                   onChange={(e) => setFooterText(e.target.value)}
                   placeholder="e.g. All rights reserved. Terms & conditions apply."
                   rows={2}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
                 />
               </div>
               <div className="flex gap-6">
@@ -910,7 +910,7 @@ export default function BrandProfilePage() {
                   >
                     <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
                   </button>
-                  <span className="text-[11px] font-mono text-foreground">Show store address</span>
+                  <span className="text-[11px] font-sans text-foreground">Show store address</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <button
@@ -921,7 +921,7 @@ export default function BrandProfilePage() {
                   >
                     <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
                   </button>
-                  <span className="text-[11px] font-mono text-foreground">Show social links</span>
+                  <span className="text-[11px] font-sans text-foreground">Show social links</span>
                 </label>
               </div>
             </div>
@@ -932,12 +932,12 @@ export default function BrandProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Share2 className="w-4 h-4 text-muted-foreground" />
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">SOCIAL LINKS</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Social links</h2>
               </div>
               <button
                 onClick={handleSaveStoreDetails}
                 disabled={updateMetadataMut.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-[10px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-[10px] font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
               >
                 <Save className="w-3 h-3" />
                 {updateMetadataMut.isPending ? "Saving..." : "Save"}
@@ -946,13 +946,13 @@ export default function BrandProfilePage() {
             <div className="grid grid-cols-2 gap-3">
               {["instagram", "facebook", "twitter", "tiktok", "pinterest", "youtube"].map((platform) => (
                 <div key={platform}>
-                  <label className="text-[10px] text-muted-foreground font-mono block mb-1 uppercase">{platform}</label>
+                  <label className="text-[10px] text-muted-foreground font-sans block mb-1 uppercase">{platform}</label>
                   <input
                     type="url"
                     value={socialLinks[platform] ?? ""}
                     onChange={(e) => setSocialLinks((prev) => ({ ...prev, [platform]: e.target.value }))}
                     placeholder={`https://${platform}.com/yourstore`}
-                    className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                 </div>
               ))}
@@ -963,30 +963,30 @@ export default function BrandProfilePage() {
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-4">
               <Store className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-mono">STORE DETAILS</h2>
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Store details</h2>
             </div>
-            <p className="text-[10px] text-muted-foreground mb-4">Auto-populated from Shopify. Edit to override.</p>
+            <p className="text-[10px] text-muted-foreground mb-4">Pulled in from Shopify — edit anything you&apos;d like to change.</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] text-muted-foreground font-mono block mb-1">STORE NAME</label>
+                <label className="text-[10px] text-muted-foreground font-sans block mb-1">STORE NAME</label>
                 <input
                   type="text"
                   value={storeDetails.storeName}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeName: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-muted-foreground font-mono block mb-1">EMAIL</label>
+                <label className="text-[10px] text-muted-foreground font-sans block mb-1">EMAIL</label>
                 <input
                   type="email"
                   value={storeDetails.storeEmail}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeEmail: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-muted-foreground font-mono block mb-1">PHONE</label>
+                <label className="text-[10px] text-muted-foreground font-sans block mb-1">PHONE</label>
                 <input
                   type="tel"
                   value={storeDetails.storePhone}
@@ -995,7 +995,7 @@ export default function BrandProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-[10px] text-muted-foreground font-mono block mb-1">ADDRESS</label>
+                <label className="text-[10px] text-muted-foreground font-sans block mb-1">ADDRESS</label>
                 <input
                   type="text"
                   value={
@@ -1017,7 +1017,7 @@ export default function BrandProfilePage() {
                     }));
                   }}
                   placeholder="123 Main St, City, State, ZIP, Country"
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
             </div>
@@ -1026,9 +1026,9 @@ export default function BrandProfilePage() {
       ) : (
         <motion.div variants={itemVariants} className="text-center py-20 glass-card-static">
           <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-[13px] text-muted-foreground">No brand profile yet</p>
+          <p className="text-[13px] text-muted-foreground">No brand profile yet.</p>
           <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
-            Brand analysis runs automatically after Shopify sync, or click &quot;Re-analyze&quot; above to get started.
+            allo builds this on its own after your Shopify sync — or hit &quot;Re-analyze&quot; above to start now.
           </p>
         </motion.div>
       )}

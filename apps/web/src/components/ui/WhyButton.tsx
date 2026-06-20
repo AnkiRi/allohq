@@ -57,7 +57,7 @@ export function WhyButton({ context, storeId }: WhyButtonProps) {
       <button
         ref={buttonRef}
         onClick={handleClick}
-        className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[9px] font-mono font-bold text-gray-400 hover:text-gray-600 bg-black/[0.04] hover:bg-black/[0.08] transition-all duration-200 cursor-pointer flex-shrink-0"
+        className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[9px] font-sans font-bold text-gray-400 hover:text-gray-600 bg-black/[0.04] hover:bg-black/[0.08] transition-all duration-200 cursor-pointer flex-shrink-0"
         title="Why?"
       >
         ?
@@ -84,22 +84,22 @@ export function WhyButton({ context, storeId }: WhyButtonProps) {
                 <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
                 <span
                   className="text-[11px] text-gray-400"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  style={{ fontFamily: "'Inter', sans-serif" }}
                 >
-                  Analyzing...
+                  Let me explain...
                 </span>
               </div>
             ) : explainMutation.isError ? (
               <p
                 className="text-[11px] text-[var(--color-urgent)] leading-relaxed"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ fontFamily: "'Inter', sans-serif" }}
               >
-                Could not generate explanation. Try again.
+                I couldn&apos;t pull that together just now. Mind trying again?
               </p>
             ) : explanation ? (
               <p
                 className="text-[11px] text-foreground/80 leading-relaxed"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ fontFamily: "'Inter', sans-serif" }}
               >
                 {explanation}
               </p>

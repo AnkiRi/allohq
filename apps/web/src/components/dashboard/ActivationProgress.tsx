@@ -19,10 +19,10 @@ import { trpc } from "@/lib/trpc";
 // ---------------------------------------------------------------------------
 
 const STEP_DISPLAY: Record<string, { icon: typeof Sparkles; label: string }> = {
-  create_automations: { icon: Zap, label: "Creating automations from your preferences" },
-  scan_opportunities: { icon: Brain, label: "Scanning for campaign opportunities" },
-  generate_briefing: { icon: Sparkles, label: "Generating your first daily briefing" },
-  finalize: { icon: Check, label: "Finalizing your AI retention system" },
+  create_automations: { icon: Zap, label: "Setting up automations to match your preferences" },
+  scan_opportunities: { icon: Brain, label: "Looking for campaign opportunities" },
+  generate_briefing: { icon: Sparkles, label: "Writing your first daily briefing" },
+  finalize: { icon: Check, label: "Putting the finishing touches on everything" },
 };
 
 // ---------------------------------------------------------------------------
@@ -94,17 +94,17 @@ export function ActivationProgress({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-[#2C2C2C]">
-              {allDone ? "Your AI retention team is live!" : "Allo is setting up your retention system..."}
+              {allDone ? "allo is ready and working for you" : "allo is getting everything set up..."}
             </h2>
             {!allDone && (
-              <p className="text-[11px] text-[#8B8074] mt-0.5">This takes about 30 seconds</p>
+              <p className="text-[11px] text-[#8B8074] mt-0.5">This only takes about 30 seconds</p>
             )}
           </div>
         </div>
         {allDone && onDismiss && (
           <button
             onClick={() => { setDismissed(true); onDismiss(); }}
-            className="text-[11px] font-mono text-[#8B8074] hover:text-[#2C2C2C] transition-colors"
+            className="text-[11px] font-sans text-[#8B8074] hover:text-[#2C2C2C] transition-colors"
           >
             Dismiss
           </button>
@@ -138,7 +138,7 @@ export function ActivationProgress({
                   <div className="w-5 h-5 rounded-full border border-[#EDE7DB] flex-shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <span className={`text-[13px] font-mono ${step.status === "done" ? "text-[#2C2C2C]" : step.status === "running" ? "text-[#B89466]" : "text-[#8B8074]"}`}>
+                  <span className={`text-[13px] font-sans ${step.status === "done" ? "text-[#2C2C2C]" : step.status === "running" ? "text-[#B89466]" : "text-[#8B8074]"}`}>
                     {label}
                   </span>
                   {step.status === "done" && step.detail && (
@@ -163,7 +163,7 @@ export function ActivationProgress({
           {segments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {segments.map((seg: any) => (
-                <span key={seg.name} className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/[0.04] text-[#5C5549]">
+                <span key={seg.name} className="text-[11px] font-sans px-2 py-0.5 rounded-full bg-black/[0.04] text-[#5C5549]">
                   {seg.name}: {seg.count}
                 </span>
               ))}
@@ -171,7 +171,7 @@ export function ActivationProgress({
           )}
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-[12px] font-mono text-[#8B8074]">
+            <div className="flex items-center gap-4 text-[12px] font-sans text-[#8B8074]">
               {ctx.automationCount > 0 && (
                 <span>{ctx.automationCount} automations created</span>
               )}
@@ -182,7 +182,7 @@ export function ActivationProgress({
             {ctx.pendingActions > 0 && (
               <Link
                 href="/actions"
-                className="flex items-center gap-1 text-[12px] font-mono text-[#1F7A4F] hover:text-[#1F7A4F]/80 transition-colors"
+                className="flex items-center gap-1 text-[12px] font-sans text-[#1F7A4F] hover:text-[#1F7A4F]/80 transition-colors"
               >
                 {ctx.pendingActions} actions need your approval
                 <ChevronRight className="w-3.5 h-3.5" />

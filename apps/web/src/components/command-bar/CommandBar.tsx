@@ -25,7 +25,7 @@ type ResultState = {
 
 const EXAMPLES: Record<string, string[]> = {
   automations: [
-    "Create a win-back flow for inactive customers who spent over $500",
+    "Create a win-back flow for inactive customers who spent over ₹500",
     "Build a welcome series with email, SMS, and WhatsApp",
     "Set up an abandoned cart automation with 20% discount",
   ],
@@ -40,7 +40,7 @@ const EXAMPLES: Record<string, string[]> = {
     "Build a promotional email with visual-heavy design",
   ],
   segments: [
-    "Find customers who spent over $200 but haven't ordered in 30 days",
+    "Find customers who spent over ₹200 but haven't ordered in 30 days",
     "Show me my most valuable customers",
     "Create a segment of new customers from the last 7 days",
   ],
@@ -74,7 +74,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
     onError: (err: { message?: string }) => {
       setIsProcessing(false);
       setProcessingStep("");
-      toast(err.message ?? "Failed to execute instruction", "error");
+      toast(err.message ?? "I couldn't quite get that done. Mind trying again?", "error");
     },
   }) as { mutate: (input: { instruction: string; pageContext: string; storeId: string }) => void; isPending: boolean };
 
@@ -85,12 +85,12 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
     setResult(null);
 
     // Simulate progressive steps
-    setProcessingStep("Understanding instruction...");
+    setProcessingStep("Making sure I've got this right...");
     setTimeout(() => {
-      if (isProcessing) setProcessingStep("Generating content...");
+      if (isProcessing) setProcessingStep("Writing it up...");
     }, 2000);
     setTimeout(() => {
-      if (isProcessing) setProcessingStep("Creating resources...");
+      if (isProcessing) setProcessingStep("Putting it all together...");
     }, 5000);
 
     executeMut.mutate({
@@ -144,9 +144,9 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSubmit();
             }}
-            placeholder="Tell AlloHQ what to do..."
+            placeholder="Tell allo what you'd like to do..."
             disabled={isProcessing}
-            className="flex-1 ml-3 text-[13px] font-mono text-foreground placeholder:text-muted-foreground bg-transparent outline-none disabled:opacity-50"
+            className="flex-1 ml-3 text-[13px] font-sans text-foreground placeholder:text-muted-foreground bg-transparent outline-none disabled:opacity-50"
           />
           <span className="text-[10px] text-muted-foreground/50 font-mono ml-2">
             {isProcessing ? "" : "\u2318K"}
@@ -163,7 +163,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                   setInstruction(ex);
                   inputRef.current?.focus();
                 }}
-                className="text-[11px] font-mono text-muted-foreground px-2.5 py-1 bg-muted rounded-lg hover:bg-muted hover:text-muted-foreground transition-all text-left"
+                className="text-[11px] font-sans text-muted-foreground px-2.5 py-1 bg-muted rounded-lg hover:bg-muted hover:text-muted-foreground transition-all text-left"
               >
                 {ex}
               </button>
@@ -177,8 +177,8 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
         <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-muted border border-border rounded-xl">
           <Loader2 className="w-4 h-4 text-foreground animate-spin flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground font-mono">{processingStep}</p>
-            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">This may take up to a minute for complex instructions</p>
+            <p className="text-[13px] font-bold text-foreground font-sans">{processingStep}</p>
+            <p className="text-[11px] text-muted-foreground font-sans mt-0.5">Bigger asks can take up to a minute — hang tight.</p>
           </div>
         </div>
       )}
@@ -200,7 +200,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                 <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
               )}
               <div>
-                <p className={`text-[13px] font-bold font-mono ${result.success ? "text-green-900" : "text-red-900"}`}>
+                <p className={`text-[13px] font-bold font-sans ${result.success ? "text-green-900" : "text-red-900"}`}>
                   {result.summary}
                 </p>
                 {result.success && (
@@ -208,7 +208,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.automationId && (
                       <button
                         onClick={() => handleNavigate(`/automations/${result.created.automationId}`)}
-                        className="text-[11px] font-mono px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
                       >
                         View & Edit
                       </button>
@@ -216,7 +216,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.campaignId && (
                       <button
                         onClick={() => handleNavigate(`/campaigns`)}
-                        className="text-[11px] font-mono px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
                       >
                         View Campaign
                       </button>
@@ -224,7 +224,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.templateIds && result.created.templateIds.length > 0 && !result.created.automationId && !result.created.campaignId && (
                       <button
                         onClick={() => handleNavigate(`/templates/${result.created.templateIds![0]}/edit`)}
-                        className="text-[11px] font-mono px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
                       >
                         View Template
                       </button>
@@ -232,7 +232,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.segmentId && (
                       <button
                         onClick={() => handleNavigate(`/segments`)}
-                        className="text-[11px] font-mono px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
                       >
                         View Segment
                       </button>

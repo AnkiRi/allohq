@@ -130,7 +130,7 @@ export default function NewFormPage() {
       <div className="space-y-1">
         <Link
           href="/forms"
-          className="inline-flex items-center gap-2 text-[11px] text-muted-foreground font-mono hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-2 text-[11px] text-muted-foreground font-sans hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Forms
@@ -142,27 +142,27 @@ export default function NewFormPage() {
 
       {/* Form Name */}
       <div className="space-y-2">
-        <label className="text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+        <label className="text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
           Form Name
         </label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g., Newsletter Signup"
-          className="w-full px-4 py-2.5 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+          placeholder="e.g., Newsletter signup"
+          className="w-full px-4 py-2.5 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
         />
       </div>
 
       {/* Fields */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+          <label className="text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
             Fields
           </label>
           <button
             onClick={addField}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold text-foreground bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-sans font-bold text-foreground bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
           >
             <Plus className="w-3 h-3" />
             Add Field
@@ -182,12 +182,12 @@ export default function NewFormPage() {
                   value={field.label}
                   onChange={(e) => updateField(i, { label: e.target.value, name: e.target.value.toLowerCase().replace(/\s+/g, "_") })}
                   placeholder="Label"
-                  className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-mono focus:outline-none focus:border-foreground/30"
+                  className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 />
                 <select
                   value={field.type}
                   onChange={(e) => updateField(i, { type: e.target.value as FormField["type"] })}
-                  className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-mono focus:outline-none focus:border-foreground/30"
+                  className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 >
                   {Object.entries(fieldTypeLabels).map(([val, label]) => (
                     <option key={val} value={val}>{label}</option>
@@ -198,9 +198,9 @@ export default function NewFormPage() {
                   value={field.placeholder ?? ""}
                   onChange={(e) => updateField(i, { placeholder: e.target.value })}
                   placeholder="Placeholder text"
-                  className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-mono focus:outline-none focus:border-foreground/30"
+                  className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 />
-                <label className="flex items-center gap-2 px-3 py-2 text-[12px] font-mono">
+                <label className="flex items-center gap-2 px-3 py-2 text-[12px] font-sans">
                   <input
                     type="checkbox"
                     checked={field.required}
@@ -223,7 +223,7 @@ export default function NewFormPage() {
 
       {/* Styling */}
       <div className="space-y-3">
-        <label className="text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+        <label className="text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
           Styling
         </label>
         <div className="grid grid-cols-2 gap-3 p-4 bg-card border border-border rounded-lg">
@@ -236,12 +236,12 @@ export default function NewFormPage() {
             ["borderRadius", "Border Radius"],
           ] as const).map(([key, label]) => (
             <div key={key} className="space-y-1">
-              <span className="text-[10px] font-mono text-muted-foreground">{label}</span>
+              <span className="text-[10px] font-sans text-muted-foreground">{label}</span>
               <input
                 type={key.includes("Color") || key === "backgroundColor" ? "color" : "text"}
                 value={styling[key]}
                 onChange={(e) => setStyling({ ...styling, [key]: e.target.value })}
-                className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono focus:outline-none focus:border-foreground/30"
+                className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
               />
             </div>
           ))}
@@ -250,7 +250,7 @@ export default function NewFormPage() {
 
       {/* Incentive */}
       <div className="space-y-3">
-        <label className="flex items-center gap-2 text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px] cursor-pointer">
+        <label className="flex items-center gap-2 text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px] cursor-pointer">
           <input
             type="checkbox"
             checked={incentiveEnabled}
@@ -262,11 +262,11 @@ export default function NewFormPage() {
         {incentiveEnabled && (
           <div className="grid grid-cols-3 gap-3 p-4 bg-card border border-border rounded-lg">
             <div className="space-y-1">
-              <span className="text-[10px] font-mono text-muted-foreground">Type</span>
+              <span className="text-[10px] font-sans text-muted-foreground">Type</span>
               <select
                 value={incentive.type}
                 onChange={(e) => setIncentive({ ...incentive, type: e.target.value as "discount" | "freeShipping" })}
-                className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono"
+                className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
               >
                 <option value="discount">Discount</option>
                 <option value="freeShipping">Free Shipping</option>
@@ -275,23 +275,23 @@ export default function NewFormPage() {
             {incentive.type === "discount" && (
               <>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-muted-foreground">Discount Type</span>
+                  <span className="text-[10px] font-sans text-muted-foreground">Discount Type</span>
                   <select
                     value={incentive.discountType}
                     onChange={(e) => setIncentive({ ...incentive, discountType: e.target.value as "percentage" | "fixed_amount" })}
-                    className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono"
+                    className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
                   >
                     <option value="percentage">Percentage</option>
                     <option value="fixed_amount">Fixed Amount</option>
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-muted-foreground">Value</span>
+                  <span className="text-[10px] font-sans text-muted-foreground">Value</span>
                   <input
                     type="number"
                     value={incentive.discountValue}
                     onChange={(e) => setIncentive({ ...incentive, discountValue: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono"
+                    className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
                   />
                 </div>
               </>
@@ -302,7 +302,7 @@ export default function NewFormPage() {
 
       {/* Popup Settings */}
       <div className="space-y-3">
-        <label className="flex items-center gap-2 text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px] cursor-pointer">
+        <label className="flex items-center gap-2 text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px] cursor-pointer">
           <input
             type="checkbox"
             checked={createPopup}
@@ -315,21 +315,21 @@ export default function NewFormPage() {
           <div className="space-y-3 p-4 bg-card border border-border rounded-lg">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <span className="text-[10px] font-mono text-muted-foreground">Popup Name</span>
+                <span className="text-[10px] font-sans text-muted-foreground">Popup Name</span>
                 <input
                   type="text"
                   value={popupName}
                   onChange={(e) => setPopupName(e.target.value)}
                   placeholder={`${name || "Form"} Popup`}
-                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono focus:outline-none focus:border-foreground/30"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] font-mono text-muted-foreground">Trigger</span>
+                <span className="text-[10px] font-sans text-muted-foreground">Trigger</span>
                 <select
                   value={popupTrigger}
                   onChange={(e) => setPopupTrigger(e.target.value as typeof popupTrigger)}
-                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
                 >
                   <option value="exit_intent">Exit Intent</option>
                   <option value="scroll">Scroll Depth</option>
@@ -340,20 +340,20 @@ export default function NewFormPage() {
             </div>
             {popupTrigger === "timer" && (
               <div className="space-y-1">
-                <span className="text-[10px] font-mono text-muted-foreground">
+                <span className="text-[10px] font-sans text-muted-foreground">
                   Delay (seconds)
                 </span>
                 <input
                   type="number"
                   value={popupDelay / 1000}
                   onChange={(e) => setPopupDelay(Number(e.target.value) * 1000)}
-                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
                 />
               </div>
             )}
             {popupTrigger === "scroll" && (
               <div className="space-y-1">
-                <span className="text-[10px] font-mono text-muted-foreground">
+                <span className="text-[10px] font-sans text-muted-foreground">
                   Scroll Depth (%)
                 </span>
                 <input
@@ -362,7 +362,7 @@ export default function NewFormPage() {
                   max={100}
                   value={popupScroll}
                   onChange={(e) => setPopupScroll(Number(e.target.value))}
-                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
                 />
               </div>
             )}
@@ -375,18 +375,18 @@ export default function NewFormPage() {
         <button
           onClick={handleSubmit}
           disabled={!name.trim() || !storeId || isPending}
-          className="flex items-center gap-2 px-6 py-2.5 bg-foreground text-background rounded-lg text-[12px] font-mono font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="flex items-center gap-2 px-6 py-2.5 bg-foreground text-background rounded-lg text-[12px] font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {isPending ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <Plus className="w-3.5 h-3.5" />
           )}
-          {isPending ? "Creating..." : "Create Form"}
+          {isPending ? "Creating..." : "Create form"}
         </button>
         <Link
           href="/forms"
-          className="px-4 py-2.5 border border-border rounded-lg text-[12px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+          className="px-4 py-2.5 border border-border rounded-lg text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
         >
           Cancel
         </Link>

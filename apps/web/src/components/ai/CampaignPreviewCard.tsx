@@ -42,18 +42,18 @@ export function CampaignPreviewCard({
       <div className="px-4 py-3 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2 mb-1">
           <Mail className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-accent)]">
-            Campaign Preview
+          <span className="font-sans text-[10px] uppercase tracking-wider text-[var(--color-accent)]">
+            Here&apos;s your campaign
           </span>
         </div>
-        <div className="font-mono text-[13px] font-semibold text-foreground">
+        <div className="font-sans text-[13px] font-semibold text-foreground">
           {campaignName}
         </div>
       </div>
 
       {/* Subject line */}
       <div className="px-4 py-2.5 border-b border-border/50 bg-card">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
+        <div className="font-sans text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
           Subject
         </div>
         <div className="text-[13px] font-sans text-foreground font-medium">
@@ -86,7 +86,7 @@ export function CampaignPreviewCard({
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Users className="w-3.5 h-3.5" />
             <span className="font-mono text-[11px]">
-              {estimatedRecipients.toLocaleString()} recipient{estimatedRecipients !== 1 ? "s" : ""}
+              {estimatedRecipients.toLocaleString("en-IN")} recipient{estimatedRecipients !== 1 ? "s" : ""}
             </span>
           </div>
         )}
@@ -97,23 +97,23 @@ export function CampaignPreviewCard({
             onClick={() => onEdit(draftCampaignId)}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-              "border border-border text-[11px] font-mono font-medium",
+              "border border-border text-[11px] font-sans font-medium",
               "text-foreground hover:bg-muted transition-colors",
             )}
           >
             <Pencil className="w-3 h-3" />
-            Edit First
+            Tweak it first
           </button>
 
           {approved ? (
             <div
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-[var(--color-success)] text-white text-[11px] font-mono font-medium",
+                "bg-[var(--color-success)] text-white text-[11px] font-sans font-medium",
               )}
             >
               <CheckCircle2 className="w-3 h-3" />
-              Sending
+              On its way
             </div>
           ) : (
             <button
@@ -121,7 +121,7 @@ export function CampaignPreviewCard({
               disabled={approving}
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-[var(--color-accent)] text-white text-[11px] font-mono font-medium",
+                "bg-[var(--color-accent)] text-white text-[11px] font-sans font-medium",
                 "hover:opacity-90 transition-opacity",
                 approving && "opacity-60 cursor-not-allowed",
               )}
@@ -131,7 +131,7 @@ export function CampaignPreviewCard({
               ) : (
                 <Send className="w-3 h-3" />
               )}
-              {approving ? "Approving..." : "Approve & Send"}
+              {approving ? "Sending..." : "Send it"}
             </button>
           )}
         </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import "./landing.css";
 import { LandingMotion } from "./LandingMotion";
 import { ApplyForm } from "./ApplyForm";
+import { ThemeToggle } from "./ThemeToggle";
 
 export default async function HomePage() {
   const headersList = await headers();
@@ -23,235 +24,285 @@ export default async function HomePage() {
   return <LandingPage />;
 }
 
+/**
+ * Pre-paint theme resolver. Runs synchronously in <head> order before the
+ * landing renders, so an explicit override (localStorage "allo-theme") is
+ * applied with no flash. With no stored choice it leaves the attribute unset
+ * and the CSS `prefers-color-scheme` media query handles the default.
+ * Scoped entirely to the landing's `data-allo-theme` attribute on <html> —
+ * never touches the app's next-themes `.dark` class.
+ */
+const THEME_INIT = `
+(function(){
+  try {
+    var t = localStorage.getItem("allo-theme");
+    if (t === "light" || t === "dark") {
+      document.documentElement.setAttribute("data-allo-theme", t);
+    }
+  } catch (e) {}
+})();
+`;
+
 function LandingPage() {
   const agentUrl =
     process.env.NODE_ENV === "production"
       ? "https://agent.allohq.ai"
       : "http://localhost:3000";
 
+  const signUp = `${agentUrl}/sign-up`;
+  const signIn = `${agentUrl}/sign-in`;
+
   return (
-    <div className="allo-landing aurora-light">
-      <header>
-        <div className="shell">
-          <nav className="nav">
-            <span className="brand">allo</span>
-            <div className="links">
-              <Link href="#briefing">Product</Link>
-              <Link href="#how">Customers</Link>
-              <Link href={`${agentUrl}/sign-in`} className="sign-in">
-                Sign in
-              </Link>
-            </div>
+    <div className="allo-terminal">
+      {/* No-FOUC: resolve explicit theme override synchronously before paint */}
+      <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
+
+      {/* Fonts: mono for data/commands, grotesk for prose */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossOrigin="anonymous"
+      />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      />
+
+      {/* NAV — single line, 64px */}
+      <header className="nav">
+        <div
+          className="shell"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+          }}
+        >
+          <span className="nav-brand">
+            <span className="blip" aria-hidden="true" />
+            allo
+          </span>
+          <nav className="nav-links">
+            <Link href="#brief" className="hide-sm">
+              briefing
+            </Link>
+            <Link href="#notices" className="hide-sm">
+              how it notices
+            </Link>
+            <Link href="#how">how it works</Link>
+            <Link href={signIn}>sign in</Link>
+            <Link href={signUp} className="nav-cta">
+              start free
+            </Link>
+            <ThemeToggle />
           </nav>
-
-          <section className="hero">
-            <div className="hero-text">
-              <p className="eyebrow">customer concierge · for e-commerce</p>
-              <h1>
-                One marketer<br />
-                for every<br />
-                <em className="with-mark">customer.</em>
-              </h1>
-              <p className="lede">
-                allo connects to your store, learns your brand, and attends to
-                every customer one by one — across email, WhatsApp, and SMS.
-              </p>
-              <p className="for-instance">
-                Drafts before sunrise. Approvals over coffee.
-              </p>
-              <div className="cta-row">
-                <Link href={`${agentUrl}/sign-up`} className="cta-primary">
-                  Start free <span className="arrow">→</span>
-                </Link>
-                <Link href="#how" className="cta-secondary">
-                  See how it works
-                </Link>
-              </div>
-            </div>
-
-            <aside className="hero-visual" aria-hidden="true">
-              <div className="aurora-orb aurora-orb-a" />
-              <div className="aurora-orb aurora-orb-b" />
-
-              <div className="hero-activity">
-                <header className="ha-head">
-                  <span className="ha-dot" />
-                  <span className="ha-label">allo · live</span>
-                  <span className="ha-stamp" data-now>—</span>
-                </header>
-
-                <div className="ha-kpi">
-                  <div className="ha-kpi-row">
-                    <span
-                      className="ha-kpi-val"
-                      data-counter
-                      data-target="48213"
-                      data-prefix="$"
-                    >
-                      $0
-                    </span>
-                    <span className="ha-kpi-delta">↗ +28%</span>
-                  </div>
-                  <div className="ha-kpi-label">revenue · last 30 days</div>
-                  <svg className="ha-spark" viewBox="0 0 240 28" preserveAspectRatio="none" aria-hidden="true">
-                    <defs>
-                      <linearGradient id="sparkGrad" x1="0" x2="1" y1="0" y2="0">
-                        <stop offset="0%" stopColor="#5C9D7E" />
-                        <stop offset="100%" stopColor="#1F7A4F" />
-                      </linearGradient>
-                    </defs>
-                    <path
-                      className="ha-spark-path"
-                      d="M0,22 C20,21 30,18 50,17 C70,16 80,14 100,13 C120,12 140,8 160,7 C180,6 200,3 240,1"
-                      fill="none"
-                      stroke="url(#sparkGrad)"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
-
-                <div className="ha-divider" />
-
-                <div className="ha-items">
-                  <div className="ha-item">
-                    <div className="ha-text">
-                      Drafted a win-back note to <em>Priya Sharma</em>
-                    </div>
-                    <div className="ha-meta">whatsapp · variant a · 3s ago</div>
-                  </div>
-                  <div className="ha-item">
-                    <div className="ha-text">
-                      Refreshed RFM scores for <em>287 customers</em>
-                    </div>
-                    <div className="ha-meta">overnight batch · 12s ago</div>
-                  </div>
-                  <div className="ha-item">
-                    <div className="ha-text">
-                      Held back <em>12 sends</em> · fatigue threshold reached
-                    </div>
-                    <div className="ha-meta">governor · 24s ago</div>
-                  </div>
-                  <div className="ha-item">
-                    <div className="ha-text">
-                      Welcomed <em>4 new customers</em>
-                    </div>
-                    <div className="ha-meta">welcome series · 38s ago</div>
-                  </div>
-                </div>
-
-                <div className="ha-divider" />
-
-                <div className="ha-draft">
-                  <div className="ha-draft-head">
-                    <span className="ha-draft-channel">
-                      <span className="ha-draft-channel-dot" />
-                      now drafting · whatsapp
-                    </span>
-                    <span className="ha-draft-to" data-typewriter-to>to priya</span>
-                  </div>
-                  <div className="ha-draft-bubble">
-                    <span data-typewriter />
-                    <span className="ha-draft-cursor">▍</span>
-                  </div>
-                </div>
-              </div>
-            </aside>
-          </section>
-
-          <div className="founding">
-            <div className="founding-meta">
-              <p className="founding-eyebrow">now onboarding · founding cohort</p>
-              <h3 className="founding-headline">
-                Five founding partners.<br />
-                <em>Shape allo with us.</em>
-              </h3>
-              <p className="founding-sub">
-                White-glove onboarding. Weekly calls with the founders.
-                Founding-partner pricing forever.
-              </p>
-            </div>
-
-            <div className="founding-spots">
-              <div className="founding-spots-row" aria-label="3 of 8 spots filled">
-                <span className="spot filled" />
-                <span className="spot filled" />
-                <span className="spot filled" />
-                <span className="spot is-next" />
-                <span className="spot" />
-                <span className="spot" />
-                <span className="spot" />
-                <span className="spot" />
-              </div>
-              <div className="founding-spots-meta">
-                <span>
-                  <strong>3</strong> of 8 onboarded · 5 spots left
-                </span>
-                <Link href="#apply" className="founding-cta">
-                  Apply <span className="arrow">→</span>
-                </Link>
-              </div>
-            </div>
-          </div>
         </div>
       </header>
 
-      {/* Briefing section */}
-      <section className="section-briefing" id="briefing">
+      {/* HERO — command prompt + streamed reasoning */}
+      <section className="hero">
         <div className="shell">
-          <div className="head">
-            <p className="eyebrow">every morning</p>
+          <div className="hero-grid">
+            <div className="hero-lead">
+              <h1>
+                One marketer for{" "}
+                <span className="accent">every customer.</span>
+              </h1>
+              <p className="hero-sub">
+                allo connects to your store, learns your brand, and attends to
+                every customer — across email, WhatsApp, and SMS.
+              </p>
+              <p className="hero-flourish mono">
+                // drafts before sunrise · approvals over coffee
+              </p>
+              <div className="hero-cta">
+                <Link href={signUp} className="btn-primary">
+                  Start free <span aria-hidden="true">→</span>
+                </Link>
+                <Link href="#how" className="btn-ghost">
+                  See how it works
+                </Link>
+                <span className="kbd-hint" aria-hidden="true">
+                  <kbd>⌘</kbd>
+                  <kbd>K</kbd> to run
+                </span>
+              </div>
+            </div>
+
+            {/* the operator console */}
+            <div className="console" aria-label="allo operator console">
+              <div className="console-bar">
+                <span className="lamp" aria-hidden="true" />
+                <span className="lamp" aria-hidden="true" />
+                <span className="lamp live" aria-hidden="true" />
+                <span className="title mono">allo — operator</span>
+                <span className="clock mono" data-clock>
+                  00:00:00
+                </span>
+              </div>
+              <div className="console-body">
+                <div className="cmd-line">
+                  <span className="prompt">allo ❯</span>
+                  <span
+                    className="typed"
+                    data-typed
+                    data-full="win back my lapsed buyers before diwali"
+                  >
+                    win back my lapsed buyers before diwali
+                  </span>
+                  <span className="caret" aria-hidden="true" />
+                </div>
+
+                <div className="stream" aria-label="reasoning output">
+                  <div className="row">
+                    <span className="tick">✓</span>
+                    <span>
+                      scanned <b>4,892</b> customers · matched <b>187</b> lapsed
+                    </span>
+                  </div>
+                  <div className="row">
+                    <span className="tick">✓</span>
+                    <span>
+                      cohort: last spring&apos;s <b>linen-drop</b> buyers ·{" "}
+                      <b>₹4.2L</b> past revenue
+                    </span>
+                  </div>
+                  <div className="row">
+                    <span className="tick">✓</span>
+                    <span>
+                      held back <b>12</b> · fatigue threshold reached
+                    </span>
+                  </div>
+                  <div className="row">
+                    <span className="tick">✓</span>
+                    <span>
+                      drafted <b>3-variant</b> WhatsApp win-back
+                    </span>
+                  </div>
+                </div>
+
+                <p className="stream-final">
+                  <span className="ok">→ ready</span> Expected recovery{" "}
+                  <span
+                    className="accent mono"
+                    style={{ fontSize: "0.9rem" }}
+                  >
+                    ₹1.2L
+                  </span>
+                  . 3 drafts queued for your approval.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* STATUS STRIP — full-width readout band */}
+      <div className="statusbar">
+        <div className="shell">
+          <div className="statusbar-inner">
+            <span className="stat">
+              <span className="live-dot" aria-hidden="true" />
+              <span className="val accent">live</span>
+            </span>
+            <span className="stat">
+              <span className="label">customers</span>
+              <span className="val">4,892</span>
+            </span>
+            <span className="stat">
+              <span className="label">revenue · 30d</span>
+              <span className="val">₹48,213</span>
+              <span className="val accent">↗ +28%</span>
+            </span>
+            <span className="stat">
+              <span className="label">at risk</span>
+              <span className="val">187</span>
+              <span className="label">−12%</span>
+            </span>
+            <span className="stat">
+              <span className="label">channels</span>
+              <span className="val">email · whatsapp · sms</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* BRIEFING — the overnight brief, rendered as a console pane */}
+      <section className="block" id="brief">
+        <div className="shell">
+          <div className="block-head">
             <h2>
-              A one-page brief.<br />
-              <em>Everything allo did overnight.</em>
+              Everything allo did <span className="accent">overnight.</span>
             </h2>
             <p>
-              What&apos;s at risk, what&apos;s queued for your approval, what
-              to act on. A daily artifact you actually want to read —
-              printable, shareable, on your phone before the first coffee.
+              A one-page brief of what&apos;s at risk, what&apos;s queued for
+              approval, and what to act on — on your phone before the first
+              coffee.
             </p>
           </div>
 
-          <div className="briefing-card">
-            <div className="briefing-card-inner">
-              <div>
-                <div className="meta">
-                  <span data-today>Today&apos;s briefing</span>
-                </div>
-                <div className="lead">
-                  Good morning, Ashley.<br />
-                  <em>187 customers haven&apos;t visited in a while.</em>
-                </div>
-                <p className="body-copy">
-                  Last spring&apos;s seasonal cohort — the ones who bought
-                  during the March linen drop. ₹4.2L of past revenue, mostly
-                  bought once. I&apos;ve drafted a 3-variant WhatsApp
-                  win-back — expected recovery ₹1.2L.
+          <div className="brief-pane">
+            <div className="brief-statusline mono">
+              <span className="live-dot" aria-hidden="true" />
+              <span className="accent">briefing</span>
+              <span className="sep">·</span>
+              <span>
+                generated <span data-clock>00:00:00</span>
+              </span>
+              <span className="sep">·</span>
+              <span>4,892 customers</span>
+              <span className="sep">·</span>
+              <span>₹48,213 / 30d</span>
+            </div>
+
+            <div className="brief-grid">
+              <div className="brief-msg">
+                <div className="stamp mono">to: ashley · re: overnight run</div>
+                <p className="greeting">
+                  Good morning, Ashley.{" "}
+                  <span className="accent">
+                    187 customers haven&apos;t visited in a while.
+                  </span>
                 </p>
-                <div className="cta-row">
-                  <button className="btn-primary" type="button">
+                <p>
+                  Last spring&apos;s linen-drop cohort — ₹4.2L of past revenue,
+                  mostly one-time buyers. I&apos;ve drafted a 3-variant WhatsApp
+                  win-back —{" "}
+                  <span className="recovery">expected recovery ₹1.2L</span>.
+                </p>
+                <div className="brief-actions">
+                  <button type="button" className="btn-sm">
                     Review draft
                   </button>
-                  <Link href="#" className="btn-link">
-                    Read full briefing →
+                  <Link href="#" className="link-mono">
+                    read full briefing →
                   </Link>
                 </div>
               </div>
-              <div className="kpis">
-                <div className="kpi-row">
-                  <span className="kpi-label">Revenue · 30d</span>
-                  <span className="kpi-value">$48,213</span>
-                  <span className="kpi-delta up">+28%</span>
+
+              <div className="brief-kpis">
+                <div className="kpi">
+                  <span className="kpi-label">revenue · 30d</span>
+                  <span className="kpi-line">
+                    <span className="kpi-val">₹48,213</span>
+                    <span className="kpi-delta up">+28%</span>
+                  </span>
                 </div>
-                <div className="kpi-row">
-                  <span className="kpi-label">Customers</span>
-                  <span className="kpi-value">4,892</span>
-                  <span className="kpi-delta">—</span>
+                <div className="kpi">
+                  <span className="kpi-label">customers</span>
+                  <span className="kpi-line">
+                    <span className="kpi-val">4,892</span>
+                    <span className="kpi-delta">—</span>
+                  </span>
                 </div>
-                <div className="kpi-row">
-                  <span className="kpi-label">At risk</span>
-                  <span className="kpi-value">187</span>
-                  <span className="kpi-delta down">−12%</span>
+                <div className="kpi">
+                  <span className="kpi-label">at risk</span>
+                  <span className="kpi-line">
+                    <span className="kpi-val">187</span>
+                    <span className="kpi-delta down">−12%</span>
+                  </span>
                 </div>
               </div>
             </div>
@@ -259,149 +310,157 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* Evidence — three customer-level proofs, 3 'moment' cards */}
-      <section className="section-evidence">
+      {/* NOTICES — how allo notices, 3 log entries */}
+      <section className="block" id="notices" style={{ paddingTop: 0 }}>
         <div className="shell">
-          <div className="head">
-            <p className="eyebrow">one marketer for every customer</p>
-            <h2>How <em>allo notices.</em></h2>
+          <div className="block-head">
+            <h2>
+              How allo <span className="accent">notices.</span>
+            </h2>
           </div>
-          <div className="moments">
-            <article className="moment">
-              <div className="moment-meta">
-                <span className="num">01</span>
-                <span className="dot" />
-                <span>memory</span>
-                <span className="stamp">held back</span>
-              </div>
-              <p className="moment-body">
-                Priya bought a linen tunic in March.{" "}
-                <em>allo</em> won&apos;t pitch her wool in October.
+          <div className="notices">
+            <article className="notice">
+              <span className="idx mono">[01]</span>
+              <p className="body">
+                Priya bought a linen tunic in March. <em>allo</em> won&apos;t
+                pitch her wool in October.
               </p>
-              <div className="moment-tag">noticed · kept her on the list</div>
+              <span className="tag mono">
+                memory
+                <span className="verdict">kept on the list</span>
+              </span>
             </article>
-            <article className="moment">
-              <div className="moment-meta">
-                <span className="num">02</span>
-                <span className="dot" />
-                <span>pre-emptive</span>
-                <span className="stamp">06:14 am</span>
-              </div>
-              <p className="moment-body">
-                Reema&apos;s order shipped late last month.{" "}
-                <em>allo</em> writes the apology before she does.
+            <article className="notice">
+              <span className="idx mono">[02]</span>
+              <p className="body">
+                Reema&apos;s order shipped late. <em>allo</em> writes the apology
+                before she does.
               </p>
-              <div className="moment-tag">noticed · drafted for your sign-off</div>
+              <span className="tag mono">
+                pre-emptive
+                <span className="verdict">drafted for sign-off</span>
+              </span>
             </article>
-            <article className="moment">
-              <div className="moment-meta">
-                <span className="num">03</span>
-                <span className="dot" />
-                <span>timing</span>
-                <span className="stamp">00:14 am</span>
-              </div>
-              <p className="moment-body">
-                Karan reads email at midnight, not 9am.{" "}
-                <em>allo</em> writes him at midnight.
+            <article className="notice">
+              <span className="idx mono">[03]</span>
+              <p className="body">
+                Karan reads email at midnight, not 9am. <em>allo</em> writes him
+                at midnight.
               </p>
-              <div className="moment-tag">noticed · delivered on his clock</div>
+              <span className="tag mono">
+                timing
+                <span className="verdict">sent on his clock</span>
+              </span>
             </article>
           </div>
         </div>
       </section>
 
-      {/* Founder quotes — dark emerald crossfade carousel */}
-      <section className="section-quotes">
+      {/* HOW IT WORKS — connect / learn / attend */}
+      <section className="block" id="how" style={{ paddingTop: 0 }}>
         <div className="shell">
-          <div className="quote-stack" data-quote-stack>
-            <figure className="pull-quote is-active" data-quote="0">
-              <span className="quote-mark" aria-hidden="true">&ldquo;</span>
-              <blockquote>
-                At Zymrat, the moment I stopped writing every email myself
-                was the moment retention died. allo would have given me back
-                my Sundays.
-              </blockquote>
-              <figcaption>
-                <span className="attr-name">Ujjawal Asthana</span>
-                <span className="attr-role">ex-founder · Zymrat</span>
-              </figcaption>
-            </figure>
-            <figure className="pull-quote" data-quote="1">
-              <span className="quote-mark" aria-hidden="true">&ldquo;</span>
-              <blockquote>
-                Most retention tools assume you already have a team. allo
-                assumes you don&apos;t — and that&apos;s exactly what every
-                DTC brand under ten people needs.
-              </blockquote>
-              <figcaption>
-                <span className="attr-name">Raviraj R</span>
-                <span className="attr-role">CRM &amp; Growth Lead · HealthifyMe</span>
-              </figcaption>
-            </figure>
+          <div className="block-head">
+            <h2>
+              Connect. Learn. <span className="accent">Attend.</span>
+            </h2>
+            <p>
+              One operator that reads your store, writes in your voice, and
+              decides what to say to each customer — drafting for approval or
+              shipping on its own.
+            </p>
           </div>
-          <div className="quote-dots" data-quote-dots>
-            <button
-              className="quote-dot is-active"
-              data-go="0"
-              aria-label="Show first quote"
-            />
-            <button
-              className="quote-dot"
-              data-go="1"
-              aria-label="Show second quote"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="section-how" id="how">
-        <div className="shell">
-          <div className="head">
-            <p className="eyebrow">how it works</p>
-            <h2>Three steps. <em>Live by lunch.</em></h2>
-          </div>
-          <div className="grid">
-            <article className="step">
-              <span className="num">01</span>
+          <div className="pipe">
+            <div className="pipe-step">
+              <div className="cmd mono">$ allo connect</div>
               <h3>Connect</h3>
               <p>
-                One click into Shopify. allo reads your customer and order
-                data and sets up your retention system in minutes.
+                One click into Shopify. allo reads your customer and order data
+                and stands up your retention system in minutes.
               </p>
-              <span className="accent" />
-            </article>
-            <article className="step">
-              <span className="num">02</span>
+            </div>
+            <div className="pipe-step">
+              <div className="cmd mono">$ allo learn</div>
               <h3>Learn</h3>
               <p>
-                allo studies your existing emails, product pages, and past
-                campaigns. Within a day, it writes in your voice — warm,
-                concise, you.
+                It studies your emails and past campaigns, then writes in your
+                voice — warm, concise, you.
               </p>
-              <span className="accent" />
-            </article>
-            <article className="step">
-              <span className="num">03</span>
+            </div>
+            <div className="pipe-step">
+              <div className="cmd mono">$ allo attend</div>
               <h3>Attend</h3>
               <p>
-                For each customer, allo decides what to say, when, and on
-                which channel — then drafts the message and queues it for
-                your approval, or ships autonomously.
+                For each customer it decides what to say, when, and which channel
+                — drafts for your approval, or ships autonomously.
               </p>
-              <span className="accent" />
-            </article>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Apply form — 3 questions, mailto submit */}
-      <section className="section-apply" id="apply">
+      {/* FOUNDER QUOTE */}
+      <section className="quote-block">
         <div className="shell">
-          <div className="head">
-            <p className="eyebrow">founding cohort · application</p>
+          <figure className="quote-pane">
+            <div className="qhead mono">// founder · field note</div>
+            <blockquote>
+              At Zymrat, the moment I stopped writing every email myself was the
+              moment retention died.{" "}
+              <span className="accent">
+                allo would have given me back my Sundays.
+              </span>
+            </blockquote>
+            <figcaption className="mono">
+              <b>Ujjawal Asthana</b> · ex-founder, Zymrat
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      {/* FOUNDING COHORT — meter + apply */}
+      <section>
+        <div className="shell">
+          <div className="cohort">
+            <div>
+              <h2>
+                Five founding partners.{" "}
+                <span className="accent">Shape allo with us.</span>
+              </h2>
+              <p>
+                Build the operator alongside us. Founding partners get direct
+                input on what allo learns next.
+              </p>
+            </div>
+            <div className="cohort-meter">
+              <div className="meter-bar" aria-label="3 of 8 spots onboarded">
+                <span className="cell on" />
+                <span className="cell on" />
+                <span className="cell on" />
+                <span className="cell next" />
+                <span className="cell" />
+                <span className="cell" />
+                <span className="cell" />
+                <span className="cell" />
+              </div>
+              <div className="meter-foot mono">
+                <span>
+                  <b>3</b> of 8 onboarded · 5 spots left
+                </span>
+                <Link href="#apply" className="apply">
+                  apply →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* APPLY — three questions, mailto submit */}
+      <section className="apply-block" id="apply">
+        <div className="shell">
+          <div className="block-head">
             <h2>
-              Three questions.<br />
-              <em>We read every one.</em>
+              Three questions. <span className="accent">We read every one.</span>
             </h2>
             <p>If you&apos;re a fit, we&apos;ll write back within 48 hours.</p>
           </div>
@@ -409,44 +468,37 @@ function LandingPage() {
         </div>
       </section>
 
-      <section className="section-cta" id="cta">
+      {/* FINAL CTA — command prompt redux */}
+      <section className="final">
         <div className="shell">
+          <p className="prompt-line mono">
+            <span className="accent">allo ❯</span> deploy on my store
+          </p>
           <h2>
-            Try allo with your store.<br />
-            <em>Free for 14 days.</em>
+            Try allo with your store.{" "}
+            <span className="accent">Free for 14 days.</span>
           </h2>
           <p>
-            Connect Shopify in one click. allo writes your first campaign
-            before you finish your coffee.
+            Connect Shopify in one click. allo writes your first campaign before
+            you finish your coffee.
           </p>
           <div className="cta-row">
-            <Link href={`${agentUrl}/sign-up`} className="btn-pill">
-              Start free
+            <Link href={signUp} className="btn-primary">
+              Start free <span aria-hidden="true">→</span>
             </Link>
-            <Link href="#" className="btn-link">
-              Book a 15-minute walkthrough
+            <Link href="#how" className="btn-ghost">
+              See how it works
             </Link>
           </div>
         </div>
       </section>
 
-      <footer className="footer-taste">
+      {/* FOOTER */}
+      <footer className="footer">
         <div className="shell">
-          <div className="row">
-            <div className="col">
-              hand-built in bangalore
-              <span className="meta">© 2026 AlloHQ</span>
-            </div>
-            <div className="col">
-              made for founders<br />who write their own emails
-            </div>
-            <div className="col links">
-              <Link href="#">Product</Link>
-              <Link href="#">Pricing</Link>
-              <Link href="#">Customers</Link>
-              <Link href="#">Brand</Link>
-              <Link href="#">Privacy</Link>
-            </div>
+          <div className="footer-inner">
+            <span className="brand">hand-built in bangalore</span>
+            <span>© 2026 allo</span>
           </div>
         </div>
       </footer>

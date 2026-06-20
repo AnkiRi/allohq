@@ -35,7 +35,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     case "text":
       return (
         <div
-          className="text-[13px] font-mono text-foreground leading-relaxed"
+          className="text-[13px] font-sans text-foreground leading-relaxed"
           style={{ textAlign: block.props.align || "left", fontSize: block.props.fontSize }}
           dangerouslySetInnerHTML={{ __html: block.props.html }}
         />
@@ -56,7 +56,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
         </div>
       ) : (
         <div className="h-24 bg-muted rounded-lg border border-dashed border-muted-foreground/50 flex items-center justify-center">
-          <span className="text-[11px] font-mono text-muted-foreground">Image placeholder</span>
+          <span className="text-[11px] font-sans text-muted-foreground">Image placeholder</span>
         </div>
       );
 
@@ -64,7 +64,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
       return (
         <div style={{ textAlign: block.props.align || "center" }}>
           <span
-            className="inline-block px-6 py-2 text-[13px] font-mono font-medium rounded"
+            className="inline-block px-6 py-2 text-[13px] font-sans font-medium rounded"
             style={{
               backgroundColor: block.props.bgColor || "#000000",
               color: block.props.textColor || "#FFFFFF",
@@ -107,20 +107,20 @@ function BlockPreview({ block }: { block: EmailBlock }) {
             <img src={block.props.imageUrl} alt={block.props.title || ""} className="w-12 h-12 object-cover rounded" />
           ) : (
             <div className="w-12 h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] font-mono text-muted-foreground">IMG</span>
+              <span className="text-[10px] font-sans text-muted-foreground">IMG</span>
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-mono text-foreground font-bold truncate">
+            <p className="text-[11px] font-sans text-foreground font-bold truncate">
               {block.props.title || block.props.productId || "Product"}
             </p>
             {block.props.showPrice !== false && block.props.price != null && (
-              <p className="text-[10px] font-mono text-muted-foreground">${Number(block.props.price).toFixed(2)}</p>
+              <p className="text-[10px] font-mono text-muted-foreground">₹{Number(block.props.price).toFixed(2)}</p>
             )}
             {block.props.showDescription !== false && block.props.description && (
-              <p className="text-[10px] font-mono text-muted-foreground truncate">{block.props.description}</p>
+              <p className="text-[10px] font-sans text-muted-foreground truncate">{block.props.description}</p>
             )}
-            <span className="inline-block mt-1 px-2 py-0.5 bg-secondary text-secondary-foreground text-[10px] font-mono rounded">
+            <span className="inline-block mt-1 px-2 py-0.5 bg-secondary text-secondary-foreground text-[10px] font-sans rounded">
               {block.props.buttonText || "Shop Now"}
             </span>
           </div>
@@ -130,7 +130,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     case "product_grid":
       return (
         <div className="p-3 bg-muted rounded-lg border border-dashed border-muted-foreground/50">
-          <p className="text-[11px] font-mono text-muted-foreground text-center">
+          <p className="text-[11px] font-sans text-muted-foreground text-center">
             Product Grid ({(block.props.productIds ?? []).length} products, {block.props.columns || 2} columns)
           </p>
         </div>
@@ -144,7 +144,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
               key={i}
               className="flex-1 min-h-[40px] bg-muted rounded border border-dashed border-muted-foreground/50 flex items-center justify-center"
             >
-              <span className="text-[10px] font-mono text-muted-foreground">
+              <span className="text-[10px] font-sans text-muted-foreground">
                 Col {i + 1} ({col.length} blocks)
               </span>
             </div>
@@ -161,7 +161,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
           {block.props.logoSrc ? (
             <img src={block.props.logoSrc} alt={block.props.logoAlt || "Logo"} className="h-8" />
           ) : (
-            <span className="text-[11px] font-mono text-muted-foreground">Header / Logo</span>
+            <span className="text-[11px] font-sans text-muted-foreground">Header / Logo</span>
           )}
         </div>
       );
@@ -169,11 +169,11 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     case "footer":
       return (
         <div className="text-center p-3 bg-muted rounded-lg">
-          <p className="text-[11px] font-mono text-muted-foreground line-clamp-2">
+          <p className="text-[11px] font-sans text-muted-foreground line-clamp-2">
             {block.props.text}
           </p>
           {block.props.unsubscribeText && (
-            <p className="text-[10px] font-mono text-muted-foreground underline mt-1">
+            <p className="text-[10px] font-sans text-muted-foreground underline mt-1">
               {block.props.unsubscribeText}
             </p>
           )}
@@ -183,7 +183,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     case "social":
       return (
         <div className="flex items-center justify-center gap-2 p-2">
-          <span className="text-[11px] font-mono text-muted-foreground">
+          <span className="text-[11px] font-sans text-muted-foreground">
             Social links ({block.props.links.length})
           </span>
         </div>
@@ -202,10 +202,10 @@ function BlockPreview({ block }: { block: EmailBlock }) {
             backgroundPosition: "center",
           }}
         >
-          <p className="text-[16px] font-mono font-bold">{(heroProps.heading as string) || "Hero Heading"}</p>
-          {heroProps.subtext ? <p className="text-[11px] font-mono mt-1 opacity-80">{String(heroProps.subtext)}</p> : null}
+          <p className="text-[16px] font-sans font-bold">{(heroProps.heading as string) || "Hero Heading"}</p>
+          {heroProps.subtext ? <p className="text-[11px] font-sans mt-1 opacity-80">{String(heroProps.subtext)}</p> : null}
           {heroProps.buttonText ? (
-            <span className="inline-block mt-2 px-4 py-1.5 text-[10px] font-mono font-bold rounded" style={{ backgroundColor: (heroProps.textColor as string) || "#fff", color: (heroProps.bgColor as string) || "#000" }}>
+            <span className="inline-block mt-2 px-4 py-1.5 text-[10px] font-sans font-bold rounded" style={{ backgroundColor: (heroProps.textColor as string) || "#fff", color: (heroProps.bgColor as string) || "#000" }}>
               {String(heroProps.buttonText)}
             </span>
           ) : null}
@@ -221,7 +221,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
           {items.map((item, i) => (
             <div key={i} className="text-center">
               <span className="text-lg">{item.icon}</span>
-              <p className="text-[10px] font-mono text-foreground mt-0.5">{item.label}</p>
+              <p className="text-[10px] font-sans text-foreground mt-0.5">{item.label}</p>
             </div>
           ))}
         </div>
@@ -238,8 +238,8 @@ function BlockPreview({ block }: { block: EmailBlock }) {
             color: (cdProps.textColor as string) || "#fff",
           }}
         >
-          <p className="text-[10px] font-mono uppercase tracking-wider opacity-80">{(cdProps.label as string) || "Ends in"}</p>
-          <p className="text-[18px] font-mono font-bold mt-1">⏰ Timer</p>
+          <p className="text-[10px] font-sans uppercase tracking-wider opacity-80">{(cdProps.label as string) || "Ends in"}</p>
+          <p className="text-[18px] font-sans font-bold mt-1">⏰ Timer</p>
         </div>
       );
     }
@@ -250,8 +250,8 @@ function BlockPreview({ block }: { block: EmailBlock }) {
       return (
         <div className="p-3 bg-muted rounded-lg border-l-4 border-secondary">
           <p className="text-amber-500 text-sm">{"★".repeat(Math.min(stars, 5))}</p>
-          <p className="text-[11px] font-mono text-foreground italic mt-1">&quot;{(tProps.quote as string) || "Customer quote"}&quot;</p>
-          <p className="text-[10px] font-mono text-muted-foreground mt-1">— {(tProps.author as string) || "Customer"}</p>
+          <p className="text-[11px] font-sans text-foreground italic mt-1">&quot;{(tProps.quote as string) || "Customer quote"}&quot;</p>
+          <p className="text-[10px] font-sans text-muted-foreground mt-1">— {(tProps.author as string) || "Customer"}</p>
         </div>
       );
     }
@@ -259,7 +259,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
     default:
       return (
         <div className="p-3 bg-muted rounded-lg">
-          <p className="text-[11px] font-mono text-muted-foreground">Unknown block</p>
+          <p className="text-[11px] font-sans text-muted-foreground">Unknown block</p>
         </div>
       );
   }
@@ -332,7 +332,7 @@ function SortableBlock({
 
       {/* Block type label */}
       <div className="px-3 py-1.5 border-b border-border">
-        <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">
+        <span className="text-[10px] font-sans font-semibold text-muted-foreground uppercase tracking-wider">
           {block.type}
         </span>
       </div>
@@ -366,7 +366,7 @@ function CanvasDropZone({ children, isEmpty }: { children: React.ReactNode; isEm
     >
       {isEmpty ? (
         <div className="flex items-center justify-center h-full min-h-[200px]">
-          <p className="text-[13px] font-mono text-muted-foreground">
+          <p className="text-[13px] font-sans text-muted-foreground">
             Drag blocks here to start building
           </p>
         </div>
@@ -512,7 +512,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
           {/* Toolbar */}
           <div className="flex items-center justify-between px-6 py-3 bg-card border-b border-border">
             <div className="flex items-center gap-2">
-              <h2 className="text-[10px] font-bold font-mono text-foreground tracking-[1px] uppercase">
+              <h2 className="text-[10px] font-bold font-serif text-foreground tracking-[1px] uppercase">
                 Canvas
               </h2>
               <span className="text-[11px] font-mono text-muted-foreground">
@@ -523,7 +523,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPreviewOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-muted-foreground hover:text-foreground hover:border-border transition-colors"
               >
                 <Eye className="w-3.5 h-3.5" />
                 Preview
@@ -532,7 +532,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
                 onClick={handleSave}
                 disabled={saving}
                 className={cn(
-                  "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-mono transition-all disabled:opacity-70",
+                  "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-sans transition-all disabled:opacity-70",
                   saveStatus === "success"
                     ? "bg-green-600 text-white"
                     : saveStatus === "error"
@@ -594,7 +594,7 @@ export function EmailCanvas({ initialBlocks = [], onSave, templateId: _templateI
       {/* Drag overlay */}
       <DragOverlay>
         {activeDragId && activeDragId.startsWith("palette-") ? (
-          <div className="px-4 py-2 bg-card border border-border rounded-lg shadow-lg text-[13px] font-mono text-foreground">
+          <div className="px-4 py-2 bg-card border border-border rounded-lg shadow-lg text-[13px] font-sans text-foreground">
             {activeDragId.replace("palette-", "")}
           </div>
         ) : null}

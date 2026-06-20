@@ -177,7 +177,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2 mb-2">
             <User className="w-4 h-4 text-[hsl(var(--accent))]" />
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
               Customer
             </span>
           </div>
@@ -190,12 +190,12 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
           )}
           <div className="flex flex-wrap gap-1 mt-2">
             {ctx.customer.segment && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-foreground/5">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-sans bg-foreground/5">
                 {ctx.customer.segment}
               </span>
             )}
             {ctx.state?.vipLevel && ctx.state.vipLevel !== "standard" && (
-              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-mono font-bold", VIP_COLORS[ctx.state.vipLevel] ?? "bg-foreground/5")}>
+              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-sans font-bold", VIP_COLORS[ctx.state.vipLevel] ?? "bg-foreground/5")}>
                 {ctx.state.vipLevel.toUpperCase()}
               </span>
             )}
@@ -208,28 +208,28 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2 mb-2">
             <Shield className="w-4 h-4 text-[hsl(var(--accent))]" />
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
               State
             </span>
           </div>
           <div className="space-y-1.5">
             <div className="flex justify-between text-[11px]">
-              <span className="text-muted-foreground font-mono">Lifecycle</span>
-              <span className="font-mono">{ctx.state.lifecycleStage}</span>
+              <span className="text-muted-foreground font-sans">Lifecycle</span>
+              <span className="font-sans">{ctx.state.lifecycleStage}</span>
             </div>
             <div className="flex justify-between text-[11px]">
-              <span className="text-muted-foreground font-mono">Churn Risk</span>
+              <span className="text-muted-foreground font-sans">Churn Risk</span>
               <span className={cn("font-mono font-bold", ctx.state.churnRisk > 0.5 ? "text-red-500" : ctx.state.churnRisk > 0.3 ? "text-amber-500" : "text-emerald-500")}>
                 {(ctx.state.churnRisk * 100).toFixed(0)}%
               </span>
             </div>
             <div className="flex justify-between text-[11px]">
-              <span className="text-muted-foreground font-mono">Trust Score</span>
+              <span className="text-muted-foreground font-sans">Trust Score</span>
               <span className="font-mono">{(ctx.state.trustScore * 100).toFixed(0)}%</span>
             </div>
             <div className="flex justify-between text-[11px]">
-              <span className="text-muted-foreground font-mono">Support</span>
-              <span className={cn("font-mono", ctx.state.supportState !== "clear" && "text-amber-500")}>
+              <span className="text-muted-foreground font-sans">Support</span>
+              <span className={cn("font-sans", ctx.state.supportState !== "clear" && "text-amber-500")}>
                 {ctx.state.supportState}
               </span>
             </div>
@@ -242,25 +242,25 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown className="w-4 h-4 text-[hsl(var(--accent))]" />
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
               Value
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-muted-foreground font-mono">Spent</div>
-              <div className="text-sm font-bold">${ctx.customer.totalSpent.toFixed(0)}</div>
+              <div className="text-[10px] text-muted-foreground font-sans">Spent</div>
+              <div className="text-sm font-bold">₹{ctx.customer.totalSpent.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
             </div>
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-muted-foreground font-mono">Orders</div>
+              <div className="text-[10px] text-muted-foreground font-sans">Orders</div>
               <div className="text-sm font-bold">{ctx.customer.orderCount}</div>
             </div>
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-muted-foreground font-mono">LTV</div>
-              <div className="text-sm font-bold">${ctx.customer.ltv.toFixed(0)}</div>
+              <div className="text-[10px] text-muted-foreground font-sans">LTV</div>
+              <div className="text-sm font-bold">₹{ctx.customer.ltv.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
             </div>
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-muted-foreground font-mono">Convos</div>
+              <div className="text-[10px] text-muted-foreground font-sans">Convos</div>
               <div className="text-sm font-bold">{ctx.supportHistory.totalConversations}</div>
             </div>
           </div>
@@ -272,7 +272,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2 mb-2">
             <ShoppingBag className="w-4 h-4 text-[hsl(var(--accent))]" />
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
               Recent Orders
             </span>
           </div>
@@ -282,14 +282,14 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
                 <span className="font-mono text-muted-foreground">#{order.orderNumber}</span>
                 <div className="flex items-center gap-2">
                   <span className={cn(
-                    "px-1 py-0.5 rounded text-[9px] font-mono",
+                    "px-1 py-0.5 rounded text-[9px] font-sans",
                     order.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
                     order.status === "fulfilled" ? "bg-blue-500/10 text-blue-500" :
                     "bg-foreground/5 text-muted-foreground"
                   )}>
                     {order.status}
                   </span>
-                  <span className="font-mono font-bold">${order.totalPrice.toFixed(0)}</span>
+                  <span className="font-mono font-bold">₹{order.totalPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                 </div>
               </div>
             ))}
@@ -302,7 +302,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-amber-500">
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-amber-500">
               AI Brief
             </span>
           </div>
@@ -402,7 +402,7 @@ export function ConversationManager() {
             {channelIcon(detail.channel)}
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{customerName(detail.customer)}</div>
-              <div className="text-[10px] font-mono text-muted-foreground">
+              <div className="text-[10px] font-sans text-muted-foreground">
                 {detail.channel} · {detail.status}
                 {detail.assignedTo && ` · ${detail.assignedTo}`}
                 {detail.sentiment && ` · ${detail.sentiment}`}
@@ -413,7 +413,7 @@ export function ConversationManager() {
                 <button
                   onClick={() => resolveMut.mutate({ conversationId: selectedId })}
                   disabled={resolveMut.isPending}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 flex items-center gap-1"
+                  className="text-[10px] font-sans px-2 py-1 rounded bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 flex items-center gap-1"
                 >
                   <CheckCircle className="w-3 h-3" /> Resolve
                 </button>
@@ -421,14 +421,14 @@ export function ConversationManager() {
               {detail.assignedTo ? (
                 <button
                   onClick={() => releaseMut.mutate({ conversationId: selectedId })}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-foreground/5 hover:bg-foreground/10 flex items-center gap-1"
+                  className="text-[10px] font-sans px-2 py-1 rounded bg-foreground/5 hover:bg-foreground/10 flex items-center gap-1"
                 >
                   <UserX className="w-3 h-3" /> Release
                 </button>
               ) : (
                 <button
                   onClick={() => claimMut.mutate({ conversationId: selectedId })}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-[hsl(var(--accent-bg))] text-[hsl(var(--accent))] hover:opacity-80 flex items-center gap-1"
+                  className="text-[10px] font-sans px-2 py-1 rounded bg-[hsl(var(--accent-bg))] text-[hsl(var(--accent))] hover:opacity-80 flex items-center gap-1"
                 >
                   <UserCheck className="w-3 h-3" /> Claim
                 </button>
@@ -440,8 +440,8 @@ export function ConversationManager() {
           {detail.status === "escalated" && (
             <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/10 flex items-center gap-2">
               <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-              <span className="text-[11px] font-mono text-red-500">
-                Escalated — Needs merchant attention
+              <span className="text-[11px] font-sans text-red-500">
+                Escalated — this one needs your attention
               </span>
             </div>
           )}
@@ -461,7 +461,7 @@ export function ConversationManager() {
                 {msg.content}
                 <div
                   className={cn(
-                    "text-[10px] font-mono mt-1",
+                    "text-[10px] font-sans mt-1",
                     msg.role === "customer" ? "text-background/40" : "text-muted-foreground"
                   )}
                 >
@@ -484,7 +484,7 @@ export function ConversationManager() {
                     replyMut.mutate({ conversationId: selectedId, message: replyText.trim() });
                   }
                 }}
-                placeholder="Type a reply..."
+                placeholder="Write a reply..."
                 className="flex-1 text-sm px-3 py-2 rounded-lg border border-border bg-background outline-none focus:border-[hsl(var(--accent))]"
               />
               <button
@@ -525,7 +525,7 @@ export function ConversationManager() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."
-            className="w-full text-[11px] font-mono pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background outline-none focus:border-[hsl(var(--accent))]"
+            className="w-full text-[11px] font-sans pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background outline-none focus:border-[hsl(var(--accent))]"
           />
         </div>
 
@@ -536,7 +536,7 @@ export function ConversationManager() {
               key={f.value}
               onClick={() => setStatusFilter(f.value)}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[10px] font-mono transition-colors",
+                "px-2.5 py-1 rounded-md text-[10px] font-sans transition-colors",
                 statusFilter === f.value
                   ? "bg-foreground text-background"
                   : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"
@@ -553,8 +553,8 @@ export function ConversationManager() {
 
       <div className="flex-1 overflow-y-auto">
         {!filteredConversations?.length && (
-          <div className="text-center py-8 text-muted-foreground text-xs font-mono">
-            {searchQuery ? "No conversations match your search." : "No conversations."}
+          <div className="text-center py-8 text-muted-foreground text-xs font-sans">
+            {searchQuery ? "Nothing matches that search yet." : "No conversations yet."}
           </div>
         )}
         {filteredConversations?.map((conv) => (
@@ -582,7 +582,7 @@ export function ConversationManager() {
               </div>
             )}
             {conv.status === "escalated" && conv.aiBrief && (
-              <div className="mt-1 pl-5 text-[10px] font-mono text-amber-500 truncate flex items-center gap-1">
+              <div className="mt-1 pl-5 text-[10px] font-sans text-amber-500 truncate flex items-center gap-1">
                 <Sparkles className="w-3 h-3 flex-shrink-0" />
                 {conv.aiBrief.slice(0, 80)}...
               </div>
@@ -590,7 +590,7 @@ export function ConversationManager() {
             <div className="flex items-center gap-2 mt-1 pl-5">
               <span
                 className={cn(
-                  "text-[10px] font-mono px-1.5 py-0.5 rounded",
+                  "text-[10px] font-sans px-1.5 py-0.5 rounded",
                   conv.status === "escalated"
                     ? "bg-red-500/10 text-red-500"
                     : conv.status === "active"
@@ -604,7 +604,7 @@ export function ConversationManager() {
               </span>
               {conv.sentiment && (
                 <span className={cn(
-                  "text-[10px] font-mono px-1.5 py-0.5 rounded",
+                  "text-[10px] font-sans px-1.5 py-0.5 rounded",
                   conv.sentiment === "negative" ? "bg-red-500/10 text-red-500" :
                   conv.sentiment === "positive" ? "bg-emerald-500/10 text-emerald-500" :
                   "bg-foreground/5 text-muted-foreground"
@@ -613,7 +613,7 @@ export function ConversationManager() {
                 </span>
               )}
               {conv.assignedTo && (
-                <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-0.5">
+                <span className="text-[10px] font-sans text-muted-foreground flex items-center gap-0.5">
                   <User className="w-3 h-3" /> {conv.assignedTo}
                 </span>
               )}

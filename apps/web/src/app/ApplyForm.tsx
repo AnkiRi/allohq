@@ -3,6 +3,7 @@
 export function ApplyForm() {
   return (
     <form
+      className="apply-form"
       onSubmit={(e) => {
         e.preventDefault();
         const q1 = (document.getElementById("apply-q1") as HTMLInputElement)?.value || "";
@@ -46,8 +47,8 @@ export function ApplyForm() {
         />
       </div>
       <div className="actions">
-        <button type="submit" className="submit">
-          Send →
+        <button type="submit" className="btn-primary">
+          Send <span aria-hidden="true">→</span>
         </button>
         <span className="reassurance">
           We won&apos;t add you to a newsletter.

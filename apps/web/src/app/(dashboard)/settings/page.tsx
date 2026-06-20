@@ -46,13 +46,13 @@ function formatTokens(n: number): string {
 }
 
 function getCostComparison(cost: number): string {
-  if (cost === 0) return "No spend yet — your AI budget is untouched";
-  if (cost < 0.01) return "Barely a rounding error";
-  if (cost < 0.10) return "Less than a gumball";
-  if (cost < 1.00) return "Less than the cost of a coffee";
-  if (cost < 5.00) return "About the cost of a fancy latte";
+  if (cost === 0) return "Nothing spent yet — allo is just getting started";
+  if (cost < 0.01) return "Less than a rounding error";
+  if (cost < 0.10) return "Less than a small piece of candy";
+  if (cost < 1.00) return "Less than a cup of coffee";
+  if (cost < 5.00) return "About the price of a coffee";
   if (cost < 20.00) return "Less than a nice lunch";
-  return "Serious AI power at work";
+  return "allo has been hard at work for you";
 }
 
 function TokenUsageSection() {
@@ -72,14 +72,14 @@ function TokenUsageSection() {
     <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
       <div className="flex items-center gap-3 mb-2">
         <Activity className="w-4 h-4 text-muted-foreground" />
-        <h2 className="section-header accent-bar-left text-[13px]">TOKEN USAGE</h2>
+        <h2 className="section-header accent-bar-left text-[13px]">AI usage</h2>
       </div>
 
       {/* Human-readable summary */}
       {usage && (
         <div className="mb-5">
           <p className="text-[20px] tracking-[-0.5px] font-bold text-foreground">
-            You've spent ${usage.totalCost.toFixed(4)} on AI this period
+            allo cost you ${usage.totalCost.toFixed(4)} this period
           </p>
           <p className="text-[12px] text-muted-foreground font-sans mt-1">
             {getCostComparison(usage.totalCost)}
@@ -93,7 +93,7 @@ function TokenUsageSection() {
           <button
             key={p.value}
             onClick={() => setPeriod(p.value)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-mono transition-colors ${
+            className={`px-3 py-1.5 rounded-full text-[11px] font-sans transition-colors ${
               period === p.value
                 ? "bg-foreground text-background"
                 : "bg-muted text-muted-foreground hover:text-foreground"
@@ -115,13 +115,13 @@ function TokenUsageSection() {
           {/* Summary bar */}
           <div className="grid grid-cols-4 gap-3 mb-5">
             {[
-              { label: "Total Cost", value: `$${usage.totalCost.toFixed(4)}` },
-              { label: "API Calls", value: String(usage.totalCalls) },
-              { label: "Input Tokens", value: formatTokens(usage.totalInputTokens) },
-              { label: "Output Tokens", value: formatTokens(usage.totalOutputTokens) },
+              { label: "Total cost", value: `$${usage.totalCost.toFixed(4)}` },
+              { label: "Requests", value: String(usage.totalCalls) },
+              { label: "Input tokens", value: formatTokens(usage.totalInputTokens) },
+              { label: "Output tokens", value: formatTokens(usage.totalOutputTokens) },
             ].map((stat) => (
               <div key={stat.label} className="rounded-xl bg-white/30 border border-white/20 p-3">
-                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="font-sans text-[10px] uppercase tracking-wider text-muted-foreground">
                   {stat.label}
                 </div>
                 <div className="font-mono text-[16px] font-bold text-foreground mt-0.5">
@@ -134,7 +134,7 @@ function TokenUsageSection() {
           {/* Per-model breakdown */}
           {usage.byModel.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">By Model</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">By model</p>
               {usage.byModel.map((m) => (
                 <div
                   key={m.model}
@@ -145,7 +145,7 @@ function TokenUsageSection() {
                       {MODEL_LABELS[m.model] ?? m.model}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {m.calls} calls · {formatTokens(m.inputTokens)} in · {formatTokens(m.outputTokens)} out
+                      {m.calls} requests · {formatTokens(m.inputTokens)} in · {formatTokens(m.outputTokens)} out
                     </p>
                   </div>
                   <span className="text-[13px] font-bold font-mono text-foreground">
@@ -157,7 +157,7 @@ function TokenUsageSection() {
           ) : (
             <div className="text-center py-4">
               <p className="text-[11px] text-muted-foreground">
-                No token usage in this period
+                Nothing yet for this period — allo hasn&apos;t needed to spend here.
               </p>
             </div>
           )}
@@ -205,18 +205,18 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
   };
 
   const createMut = (trpc.knowledge as any).create.useMutation({
-    onSuccess: () => { toast("Article created!", "success"); resetForm(); refetch(); },
-    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+    onSuccess: () => { toast("Article saved — allo can use it now.", "success"); resetForm(); refetch(); },
+    onError: (err: { message?: string }) => toast(err.message || "Something went wrong. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const updateMut = (trpc.knowledge as any).update.useMutation({
-    onSuccess: () => { toast("Article updated!", "success"); resetForm(); refetch(); },
-    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+    onSuccess: () => { toast("Article updated.", "success"); resetForm(); refetch(); },
+    onError: (err: { message?: string }) => toast(err.message || "Something went wrong. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const deleteMut = (trpc.knowledge as any).delete.useMutation({
-    onSuccess: () => { toast("Article deleted!", "success"); refetch(); },
-    onError: (err: { message?: string }) => toast(err.message || "Failed", "error"),
+    onSuccess: () => { toast("Article removed.", "success"); refetch(); },
+    onError: (err: { message?: string }) => toast(err.message || "Something went wrong. Please try again.", "error"),
   }) as { mutate: (input: { id: string }) => void; isPending: boolean };
 
   function resetForm() {
@@ -248,23 +248,23 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
     <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
       <div className="flex items-center gap-3 mb-4">
         <BookOpen className="w-4 h-4 text-muted-foreground" />
-        <h2 className="section-header accent-bar-left text-[13px]">KNOWLEDGE BASE</h2>
+        <h2 className="section-header accent-bar-left text-[13px]">Knowledge base</h2>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
-          className="ml-auto text-[10px] font-mono px-2 py-1 rounded bg-[hsl(var(--accent-bg))] text-[hsl(var(--accent))] hover:opacity-80 flex items-center gap-1"
+          className="ml-auto text-[10px] font-sans px-2 py-1 rounded bg-[hsl(var(--accent-bg))] text-[hsl(var(--accent))] hover:opacity-80 flex items-center gap-1"
         >
-          <Plus className="w-3 h-3" /> Add Article
+          <Plus className="w-3 h-3" /> Add article
         </button>
       </div>
       <p className="text-[11px] text-muted-foreground mb-4">
-        Add policies, FAQs, and product info that the AI support agent uses to answer customer questions.
+        Add your policies, FAQs, and product details so allo can answer customer questions the way you would.
       </p>
 
       {/* Category filter */}
       <div className="flex gap-1 mb-4 flex-wrap">
         <button
           onClick={() => setFilterCategory(undefined)}
-          className={`px-2 py-1 rounded text-[10px] font-mono ${!filterCategory ? "bg-foreground text-background" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"}`}
+          className={`px-2 py-1 rounded text-[10px] font-sans ${!filterCategory ? "bg-foreground text-background" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"}`}
         >
           All
         </button>
@@ -272,7 +272,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
           <button
             key={cat.value}
             onClick={() => setFilterCategory(cat.value)}
-            className={`px-2 py-1 rounded text-[10px] font-mono ${filterCategory === cat.value ? "bg-foreground text-background" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"}`}
+            className={`px-2 py-1 rounded text-[10px] font-sans ${filterCategory === cat.value ? "bg-foreground text-background" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"}`}
           >
             {cat.label}
           </button>
@@ -283,7 +283,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
       {showForm && (
         <div className="mb-4 p-4 rounded-lg border border-border bg-foreground/3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-bold">{editId ? "Edit Article" : "New Article"}</span>
+            <span className="text-[11px] font-sans font-bold">{editId ? "Edit article" : "New article"}</span>
             <button onClick={resetForm} className="p-1 hover:bg-foreground/5 rounded">
               <X className="w-3.5 h-3.5" />
             </button>
@@ -291,7 +291,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
           <select
             value={formCategory}
             onChange={(e) => setFormCategory(e.target.value)}
-            className="w-full text-[11px] font-mono px-3 py-1.5 rounded border border-border bg-background outline-none"
+            className="w-full text-[11px] font-sans px-3 py-1.5 rounded border border-border bg-background outline-none"
           >
             {KB_CATEGORIES.map((cat) => (
               <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -301,20 +301,20 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
             type="text"
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
-            placeholder="Article title..."
-            className="w-full text-[11px] font-mono px-3 py-1.5 rounded border border-border bg-background outline-none"
+            placeholder="Give this article a title..."
+            className="w-full text-[11px] font-sans px-3 py-1.5 rounded border border-border bg-background outline-none"
           />
           <textarea
             value={formContent}
             onChange={(e) => setFormContent(e.target.value)}
             placeholder="Article content — policies, FAQs, product details..."
             rows={4}
-            className="w-full text-[11px] font-mono px-3 py-1.5 rounded border border-border bg-background outline-none resize-y"
+            className="w-full text-[11px] font-sans px-3 py-1.5 rounded border border-border bg-background outline-none resize-y"
           />
           <button
             onClick={handleSubmit}
             disabled={!formTitle.trim() || !formContent.trim() || createMut.isPending || updateMut.isPending}
-            className="text-[10px] font-mono px-3 py-1.5 rounded bg-foreground text-background disabled:opacity-40"
+            className="text-[10px] font-sans px-3 py-1.5 rounded bg-foreground text-background disabled:opacity-40"
           >
             {editId ? "Update" : "Create"}
           </button>
@@ -323,8 +323,8 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
 
       {/* Articles list */}
       {!articles?.length && !showForm && (
-        <div className="text-center py-6 text-muted-foreground text-[11px] font-mono">
-          No knowledge articles yet. Add policies and FAQs for your AI agent.
+        <div className="text-center py-6 text-muted-foreground text-[11px] font-sans">
+          No articles yet. Add a few policies and FAQs so allo can answer customers well.
         </div>
       )}
       <div className="space-y-2">
@@ -333,7 +333,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-foreground/5 text-muted-foreground">
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-sans bg-foreground/5 text-muted-foreground">
                     {article.category}
                   </span>
                   <span className="text-[12px] font-semibold truncate">{article.title}</span>
@@ -374,10 +374,10 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
 
   const updateConfig = (trpc.stores as any).updateMessagingConfig.useMutation({
     onSuccess: () => {
-      toast("Messaging provider updated!", "success");
+      toast("Messaging provider updated.", "success");
       (utils.stores as any).getMessagingConfig.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   if (!storeId) return null;
@@ -386,10 +386,10 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
     <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
       <div className="flex items-center gap-3 mb-6">
         <MessageSquare className="w-4 h-4 text-muted-foreground" />
-        <h2 className="section-header accent-bar-left text-[13px]">MESSAGING PROVIDERS</h2>
+        <h2 className="section-header accent-bar-left text-[13px]">Messaging providers</h2>
       </div>
       <p className="text-[11px] text-muted-foreground mb-5">
-        Choose which provider handles each messaging channel for this store. Defaults to Twilio if not set.
+        Pick who delivers each channel for this store. If you leave it on Default, allo uses Twilio.
       </p>
 
       {isLoading ? (
@@ -404,7 +404,7 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
             const current = config?.[ch.key] ?? null;
             return (
               <div key={ch.key}>
-                <label className="block text-[11px] text-muted-foreground font-mono mb-2">
+                <label className="block text-[11px] text-muted-foreground font-sans mb-2">
                   {ch.label} <span className="text-muted-foreground/50">— {ch.desc}</span>
                 </label>
                 <div className="grid grid-cols-3 gap-3">
@@ -424,7 +424,7 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
                       </div>
                     )}
                     <p className="text-[11px] font-bold text-foreground">Default</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Use global setting</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Let allo choose</p>
                   </button>
                   {PROVIDERS.map((prov) => {
                     const isSelected = current === prov.value;
@@ -466,7 +466,7 @@ function NotificationPreferencesSection() {
   const upsert = trpc.notifications.upsertPreferences.useMutation({
     onSuccess: () => {
       utils.notifications.getPreferences.invalidate();
-      toast("Notification preferences saved", "success");
+      toast("Your notification preferences are saved.", "success");
     },
     onError: (err) => toast(err.message, "error"),
   });
@@ -476,18 +476,18 @@ function NotificationPreferencesSection() {
   };
 
   const channels = [
-    { key: "emailDigest", label: "Daily Email Digest", desc: "Summary of activity sent once per day" },
-    { key: "emailRealtime", label: "Real-time Email", desc: "Immediate email for each event" },
-    { key: "inApp", label: "In-App Notifications", desc: "Notifications inside the dashboard" },
+    { key: "emailDigest", label: "Daily email digest", desc: "One email a day with everything that happened" },
+    { key: "emailRealtime", label: "Real-time email", desc: "An email the moment something happens" },
+    { key: "inApp", label: "In-app notifications", desc: "Updates right here in your dashboard" },
   ] as const;
 
   const events = [
-    { key: "onActionRequired", label: "Action Required", desc: "Agent needs your approval" },
-    { key: "onCampaignSent", label: "Campaign Sent", desc: "A campaign finished sending" },
-    { key: "onEscalation", label: "Escalations", desc: "Conversation escalated to human" },
-    { key: "onChurnAlert", label: "Churn Alerts", desc: "Customer churn risk spike detected" },
-    { key: "onRevenueGoal", label: "Revenue Milestones", desc: "Revenue goal reached" },
-    { key: "onWeeklyReport", label: "Weekly Report", desc: "Weekly performance summary" },
+    { key: "onActionRequired", label: "Needs your approval", desc: "allo wants your sign-off before acting" },
+    { key: "onCampaignSent", label: "Campaign sent", desc: "A campaign finished going out" },
+    { key: "onEscalation", label: "Escalations", desc: "A conversation needs a human" },
+    { key: "onChurnAlert", label: "Churn alerts", desc: "A customer looks at risk of leaving" },
+    { key: "onRevenueGoal", label: "Revenue milestones", desc: "You hit a revenue goal" },
+    { key: "onWeeklyReport", label: "Weekly report", desc: "Your performance recap for the week" },
   ] as const;
 
   if (isLoading) {
@@ -495,7 +495,7 @@ function NotificationPreferencesSection() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-4">
           <Bell className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">NOTIFICATIONS</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">Notifications</h2>
         </div>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="h-10 glass-skeleton rounded-lg" />)}
@@ -524,7 +524,7 @@ function NotificationPreferencesSection() {
     <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
       <div className="flex items-center gap-3 mb-6">
         <Bell className="w-4 h-4 text-muted-foreground" />
-        <h2 className="section-header accent-bar-left text-[13px]">NOTIFICATIONS</h2>
+        <h2 className="section-header accent-bar-left text-[13px]">Notifications</h2>
       </div>
 
       {/* Channels */}
@@ -582,7 +582,7 @@ function NotificationPreferencesSection() {
             <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
           ))}
         </select>
-        <span className="text-[10px] text-muted-foreground font-mono">to</span>
+        <span className="text-[10px] text-muted-foreground font-sans">to</span>
         <select
           value={p.quietHoursEnd ?? ""}
           onChange={(e) => upsert.mutate({ quietHoursEnd: e.target.value === "" ? null : Number(e.target.value) })}
@@ -596,7 +596,7 @@ function NotificationPreferencesSection() {
         <select
           value={p.timezone}
           onChange={(e) => upsert.mutate({ timezone: e.target.value })}
-          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
+          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-sans text-foreground"
         >
           {["UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Asia/Kolkata", "Australia/Sydney"].map((tz) => (
             <option key={tz} value={tz}>{tz.replace("_", " ")}</option>
@@ -604,7 +604,7 @@ function NotificationPreferencesSection() {
         </select>
       </div>
       <p className="text-[10px] text-muted-foreground mt-2">
-        No notifications during quiet hours (does not affect critical escalations)
+        allo stays quiet during these hours. Urgent escalations still come through.
       </p>
     </motion.div>
   );
@@ -627,7 +627,7 @@ function SuppressionStatsSection() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Activity className="w-4 h-4 text-[var(--color-success)]" />
-          <h2 className="section-header accent-bar-left text-[13px]">MESSAGE PROTECTION</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">Message protection</h2>
         </div>
         <div className="flex gap-1">
           {[7, 30, 90].map((d) => (
@@ -647,30 +647,30 @@ function SuppressionStatsSection() {
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="rounded-lg bg-[var(--color-success)]/8 border border-[var(--color-success)]/15 p-3 text-center">
           <div className="text-[22px] font-bold font-mono text-[var(--color-success)]">{suppressed}</div>
-          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Messages Prevented</div>
+          <div className="text-[10px] font-sans text-muted-foreground mt-0.5">Messages held back</div>
         </div>
         <div className="rounded-lg bg-muted/50 border border-border p-3 text-center">
           <div className="text-[22px] font-bold font-mono text-foreground">{sent}</div>
-          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Messages Sent</div>
+          <div className="text-[10px] font-sans text-muted-foreground mt-0.5">Messages sent</div>
         </div>
         <div className="rounded-lg bg-muted/50 border border-border p-3 text-center">
           <div className="text-[22px] font-bold font-mono text-foreground">{pct}%</div>
-          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Protection Rate</div>
+          <div className="text-[10px] font-sans text-muted-foreground mt-0.5">Protection rate</div>
         </div>
       </div>
 
       {suppressed > 0 && (
         <p className="text-[11px] text-[var(--color-success)] mb-3">
-          Allo prevented {suppressed} messages that would have annoyed your customers
+          allo held back {suppressed} messages that would have worn out your customers
         </p>
       )}
 
       {data?.byReason && data.byReason.length > 0 && (
         <div className="space-y-1.5">
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Suppression Reasons</div>
+          <div className="text-[10px] font-sans text-muted-foreground uppercase tracking-wider mb-2">Why messages were held back</div>
           {data.byReason.map((r) => (
             <div key={r.reason} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-              <span className="text-[11px] font-mono text-foreground">{r.reason}</span>
+              <span className="text-[11px] font-sans text-foreground">{r.reason}</span>
               <span className="text-[11px] font-mono text-muted-foreground">{r.count}</span>
             </div>
           ))}
@@ -679,7 +679,7 @@ function SuppressionStatsSection() {
 
       {suppressed === 0 && sent === 0 && (
         <p className="text-[11px] text-muted-foreground font-sans">
-          No messages sent yet. Once campaigns start sending, you'll see protection stats here.
+          No messages yet. Once your campaigns start going out, you&apos;ll see how allo protects your customers here.
         </p>
       )}
     </motion.div>
@@ -700,10 +700,10 @@ export default function SettingsPage() {
 
   const updateIntensityMut = (trpc.ai.updateCreativeIntensity as any).useMutation({
     onSuccess: () => {
-      toast("Creative intensity updated!", "success");
+      toast("Creative intensity updated.", "success");
       (utils.ai as any).brandProfileStatus.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
   }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
 
   // AI model settings
@@ -713,10 +713,10 @@ export default function SettingsPage() {
   };
   const setDefaultModel = (trpc.ai.setDefaultModel as any).useMutation({
     onSuccess: () => {
-      toast("Default model updated!", "success");
+      toast("Default model updated.", "success");
       (utils.ai as any).getSettings.invalidate();
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
   }) as { mutate: (input: { model: string | null }) => void; isPending: boolean };
 
   return (
@@ -732,7 +732,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
-          Manage your workspace and account settings
+          Tune how allo works for you and your store
         </p>
       </motion.div>
 
@@ -740,13 +740,13 @@ export default function SettingsPage() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <User className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">PROFILE</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">Profile</h2>
         </div>
         <div className="flex items-center gap-4">
           {user?.imageUrl ? (
             <img src={user.imageUrl} alt="" className="w-14 h-14 rounded-full" />
           ) : (
-            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-[18px] tracking-[-0.5px] font-bold text-secondary-foreground font-mono">
+            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-[18px] tracking-[-0.5px] font-bold text-secondary-foreground font-sans">
               {(user?.firstName?.[0] || user?.emailAddresses[0]?.emailAddress?.[0] || "U").toUpperCase()}
             </div>
           )}
@@ -768,7 +768,7 @@ export default function SettingsPage() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Store className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">CONNECTED STORES</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">Connected stores</h2>
         </div>
         {isLoading ? (
           <div className="space-y-3">
@@ -796,7 +796,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-green-50 text-green-600">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-sans bg-green-50 text-green-600">
                   Active
                 </span>
               </div>
@@ -804,7 +804,7 @@ export default function SettingsPage() {
           </div>
         ) : (
           <p className="text-[13px] text-muted-foreground">
-            No stores connected. Go to Integrations to connect a store.
+            No store connected yet. Head to Integrations and allo will start learning yours.
           </p>
         )}
       </motion.div>
@@ -819,17 +819,17 @@ export default function SettingsPage() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Sparkles className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">AI PREFERENCES</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">AI preferences</h2>
         </div>
         {brandStatus?.exists ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-[11px] text-muted-foreground font-mono mb-3">CREATIVE INTENSITY</label>
+              <label className="block text-[11px] text-muted-foreground font-sans mb-3">Creative intensity</label>
               <div className="grid grid-cols-3 gap-3">
                 {([
-                  { value: "text_heavy", label: "Text Heavy", desc: "Copy-focused, minimal visuals" },
-                  { value: "balanced", label: "Balanced", desc: "Mix of visuals and copy" },
-                  { value: "visual_heavy", label: "Visual Heavy", desc: "Maximum visual impact" },
+                  { value: "text_heavy", label: "Text heavy", desc: "Words first, visuals kept light" },
+                  { value: "balanced", label: "Balanced", desc: "An even mix of words and visuals" },
+                  { value: "visual_heavy", label: "Visual heavy", desc: "Visuals first, for maximum impact" },
                 ] as const).map((opt) => {
                   const current = brandStatus?.creativeIntensity ?? "balanced";
                   return (
@@ -855,7 +855,7 @@ export default function SettingsPage() {
           <div className="text-center py-6">
             <Sparkles className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
             <p className="text-[11px] text-muted-foreground">
-              Run brand analysis first to unlock AI preferences
+              Let allo study your brand first, then these preferences open up.
             </p>
           </div>
         )}
@@ -865,10 +865,10 @@ export default function SettingsPage() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Cpu className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">DEFAULT AI MODEL</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">Default AI model</h2>
         </div>
         <p className="text-[11px] text-muted-foreground mb-4">
-          Choose which model is used by default for all AI content generation
+          Pick the model allo reaches for when it writes and creates for you
         </p>
         {models && models.length > 0 ? (
           <div className="grid grid-cols-3 gap-3">
@@ -895,9 +895,9 @@ export default function SettingsPage() {
                   )}
                   <div className="flex items-center gap-2 mb-2">
                     <p className="text-[11px] font-bold text-foreground">{model.label}</p>
-                    <span className="text-[9px] font-mono text-muted-foreground">{model.provider}</span>
+                    <span className="text-[9px] font-sans text-muted-foreground">{model.provider}</span>
                   </div>
-                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${tier.bg} ${tier.text} mb-2`}>
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-sans font-bold ${tier.bg} ${tier.text} mb-2`}>
                     {tier.label}
                   </span>
                   <p className="text-[10px] text-muted-foreground mb-3">{model.description}</p>
@@ -918,7 +918,7 @@ export default function SettingsPage() {
         )}
         {aiSettings?.defaultModel === null && models && (
           <p className="text-[10px] text-muted-foreground/50 mt-3">
-            No default selected — AI will use Claude Sonnet 4.5
+            No default chosen — allo will use Claude Sonnet 4.5
           </p>
         )}
       </motion.div>
@@ -936,14 +936,14 @@ export default function SettingsPage() {
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 opacity-80">
         <div className="flex items-center gap-3 mb-4">
           <CreditCard className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">BILLING</h2>
+          <h2 className="section-header accent-bar-left text-[13px]">Billing</h2>
         </div>
         <div className="py-6">
           <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
-            Subscription management and payment methods are coming in our next update.
+            Subscriptions and payment methods are on the way in our next update.
           </p>
           <p className="text-[11px] mt-3" style={{ color: "var(--terracotta)" }}>
-            We&apos;ll notify you when this is available
+            We&apos;ll let you know the moment it&apos;s ready
           </p>
         </div>
       </motion.div>

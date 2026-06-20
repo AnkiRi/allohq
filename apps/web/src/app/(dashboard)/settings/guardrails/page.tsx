@@ -20,7 +20,7 @@ const RULE_TYPES = [
   { value: "max_sends_per_week", label: "Max Sends/Week", fields: [{ key: "max", label: "Maximum sends", type: "number" as const }, { key: "channel", label: "Channel", type: "text" as const }] },
   { value: "blocked_words", label: "Blocked Words", fields: [{ key: "words", label: "Words (comma-separated)", type: "text" as const }] },
   { value: "quiet_hours", label: "Quiet Hours", fields: [{ key: "startHour", label: "Start hour (0-23)", type: "number" as const }, { key: "endHour", label: "End hour (0-23)", type: "number" as const }] },
-  { value: "spending_cap", label: "Monthly Spending Cap", fields: [{ key: "maxMonthly", label: "Max monthly ($)", type: "number" as const }] },
+  { value: "spending_cap", label: "Monthly Spending Cap", fields: [{ key: "maxMonthly", label: "Max monthly (₹)", type: "number" as const }] },
 ];
 
 export default function GuardrailsPage() {
@@ -37,24 +37,24 @@ export default function GuardrailsPage() {
 
   const createMut = (trpc as any).guardrails.create.useMutation({
     onSuccess: () => {
-      toast("Guardrail added!", "success");
+      toast("Limit added. allo will respect it from now on.", "success");
       (utils as any).guardrails.list.invalidate({ storeId });
       setShowForm(false);
       setNewRule({ ruleType: "", values: {} });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to create", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "Couldn't add that. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const updateMut = (trpc as any).guardrails.update.useMutation({
     onSuccess: () => {
-      toast("Guardrail updated!", "success");
+      toast("Limit updated.", "success");
       (utils as any).guardrails.list.invalidate({ storeId });
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const deleteMut = (trpc as any).guardrails.delete.useMutation({
     onSuccess: () => {
-      toast("Guardrail removed", "success");
+      toast("Limit removed.", "success");
       (utils as any).guardrails.list.invalidate({ storeId });
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
@@ -91,7 +91,7 @@ export default function GuardrailsPage() {
       case "max_sends_per_week": return `Max ${value.max} per week${value.channel ? ` (${value.channel})` : ""}`;
       case "blocked_words": return `${(value.words as string[])?.length ?? 0} blocked words`;
       case "quiet_hours": return `${value.startHour}:00 - ${value.endHour}:00`;
-      case "spending_cap": return `$${value.maxMonthly}/month`;
+      case "spending_cap": return `₹${value.maxMonthly}/month`;
       default: return JSON.stringify(value);
     }
   };
@@ -106,19 +106,19 @@ export default function GuardrailsPage() {
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            GUARDRAILS
+            Guardrails
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            Set boundaries for what Allo can and cannot do
+            Set the limits allo always stays within
           </p>
         </div>
         {storeId && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-mono bg-foreground text-background hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-sans bg-foreground text-background hover:opacity-90 transition-opacity"
           >
             <Plus className="w-3 h-3" />
-            Add Rule
+            Add limit
           </button>
         )}
       </motion.div>
@@ -126,17 +126,17 @@ export default function GuardrailsPage() {
       {/* New rule form */}
       {showForm && (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-          <h3 className="text-[12px] font-mono font-bold text-foreground mb-4">New Guardrail</h3>
+          <h3 className="text-[12px] font-serif font-bold text-foreground mb-4">New limit</h3>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1.5">Rule Type</label>
+              <label className="block text-[10px] font-sans text-muted-foreground mb-1.5">Type of limit</label>
               <select
                 value={newRule.ruleType}
                 onChange={(e) => setNewRule({ ruleType: e.target.value, values: {} })}
-                className="w-full p-2 rounded-lg bg-white/20 border border-white/20 text-[11px] font-mono text-foreground"
+                className="w-full p-2 rounded-lg bg-white/20 border border-white/20 text-[11px] font-sans text-foreground"
               >
-                <option value="">Select a rule type...</option>
+                <option value="">Choose a type of limit...</option>
                 {RULE_TYPES.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
@@ -145,7 +145,7 @@ export default function GuardrailsPage() {
 
             {selectedRuleType?.fields.map((field) => (
               <div key={field.key}>
-                <label className="block text-[10px] font-mono text-muted-foreground mb-1.5">{field.label}</label>
+                <label className="block text-[10px] font-sans text-muted-foreground mb-1.5">{field.label}</label>
                 <input
                   type={field.type}
                   value={newRule.values[field.key] ?? ""}
@@ -153,7 +153,7 @@ export default function GuardrailsPage() {
                     ...prev,
                     values: { ...prev.values, [field.key]: e.target.value },
                   }))}
-                  className="w-full p-2 rounded-lg bg-white/20 border border-white/20 text-[11px] font-mono text-foreground"
+                  className="w-full p-2 rounded-lg bg-white/20 border border-white/20 text-[11px] font-sans text-foreground"
                   placeholder={field.label}
                 />
               </div>
@@ -163,13 +163,13 @@ export default function GuardrailsPage() {
               <button
                 onClick={handleCreate}
                 disabled={!newRule.ruleType || createMut.isPending}
-                className="px-4 py-2 rounded-lg text-[11px] font-mono bg-foreground text-background hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-[11px] font-sans bg-foreground text-background hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {createMut.isPending ? "Adding..." : "Add Guardrail"}
+                {createMut.isPending ? "Adding..." : "Add limit"}
               </button>
               <button
                 onClick={() => { setShowForm(false); setNewRule({ ruleType: "", values: {} }); }}
-                className="px-4 py-2 rounded-lg text-[11px] font-mono bg-white/20 text-foreground hover:bg-white/30 transition-colors"
+                className="px-4 py-2 rounded-lg text-[11px] font-sans bg-white/20 text-foreground hover:bg-white/30 transition-colors"
               >
                 Cancel
               </button>
@@ -182,7 +182,7 @@ export default function GuardrailsPage() {
       {!storeId ? (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground">Connect a store first</p>
+          <p className="text-[11px] text-muted-foreground">Connect a store and you can set limits for allo here.</p>
         </motion.div>
       ) : isLoading ? (
         <div className="space-y-3">
@@ -241,7 +241,7 @@ export default function GuardrailsPage() {
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
           <p className="text-[11px] text-muted-foreground">
-            No guardrails configured. Add rules to set boundaries for AI actions.
+            No limits set yet — allo will ask before doing anything risky. Add a limit to set firm boundaries.
           </p>
         </motion.div>
       )}

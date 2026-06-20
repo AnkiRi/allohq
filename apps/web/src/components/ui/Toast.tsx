@@ -78,7 +78,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-3 px-4 py-3 bg-card border ${borderColor} rounded-xl shadow-lg font-mono text-[13px] text-foreground transition-all duration-200 ${
+      className={`pointer-events-auto flex items-center gap-3 px-4 py-3 bg-card border ${borderColor} rounded-xl shadow-lg font-sans text-[13px] text-foreground transition-all duration-200 ${
         visible ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
       }`}
     >

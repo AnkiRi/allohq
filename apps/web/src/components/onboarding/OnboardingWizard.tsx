@@ -30,9 +30,9 @@ import { trpc } from "@/lib/trpc";
 // ---------------------------------------------------------------------------
 
 const PHASES = [
-  { label: "Learning Your Store", steps: [0, 1] },
-  { label: "Setting Up Your AI Team", steps: [2, 3, 4, 5] },
-  { label: "Here's What Allo Found", steps: [6, 7] },
+  { label: "Getting to know your store", steps: [0, 1] },
+  { label: "Setting allo up", steps: [2, 3, 4, 5] },
+  { label: "What allo found", steps: [6, 7] },
 ] as const;
 
 const AESTHETIC_OPTIONS = [
@@ -103,16 +103,16 @@ const AESTHETIC_OPTIONS = [
 ] as const;
 
 const AUTONOMY_CATEGORIES = [
-  { key: "cart_recovery", label: "Cart Recovery", desc: "Recover abandoned carts automatically" },
-  { key: "win_back", label: "Win Back", desc: "Re-engage customers at risk of churning" },
-  { key: "post_purchase", label: "Post Purchase", desc: "Follow up after orders" },
-  { key: "vip", label: "VIP", desc: "Reward your best customers" },
+  { key: "cart_recovery", label: "Cart recovery", desc: "Win back shoppers who left items behind" },
+  { key: "win_back", label: "Win back", desc: "Reconnect with customers who are drifting away" },
+  { key: "post_purchase", label: "Post purchase", desc: "Follow up warmly after an order" },
+  { key: "vip", label: "VIP", desc: "Look after your best customers" },
 ] as const;
 
 const TIER_OPTIONS = [
-  { value: "autopilot", label: "Autopilot", desc: "Allo acts automatically" },
-  { value: "copilot", label: "Co-pilot", desc: "Allo suggests, you approve" },
-  { value: "advisor", label: "Advisor", desc: "Allo only advises" },
+  { value: "autopilot", label: "Autopilot", desc: "allo acts on its own" },
+  { value: "copilot", label: "Co-pilot", desc: "allo suggests, you approve" },
+  { value: "advisor", label: "Advisor", desc: "allo only advises" },
 ] as const;
 
 const COLOR_TOKENS = [
@@ -368,8 +368,8 @@ function BackgroundAnalysisStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Allo is learning your store</h2>
-        <p className="text-sm text-[#8B8074]">We&apos;re syncing your data and building intelligence. This usually takes 1-3 minutes.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">allo is getting to know your store</h2>
+        <p className="text-sm text-[#8B8074]">We&apos;re bringing in your data and learning the details. This usually takes a minute or two.</p>
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
         {syncRows.map((row) => (
@@ -391,7 +391,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
-        <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">AI Analysis {analysisDone ? "(complete)" : "(runs in background)"}</p>
+        <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">What allo is learning {analysisDone ? "(done)" : "(in the background)"}</p>
         {analysisRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
@@ -406,7 +406,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       {syncDone && !analysisDone && (
-        <p className="text-xs text-[#8B8074]">Almost there — waiting for AI analysis to complete...</p>
+        <p className="text-xs text-[#8B8074]">Almost there — allo is just finishing up...</p>
       )}
       <div className="flex justify-end">
         <button onClick={onContinue} disabled={!canContinue || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -452,8 +452,8 @@ function ModelSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Choose Your AI Model</h2>
-        <p className="text-sm text-[#8B8074]">This model powers email generation, customer analysis, and autonomous actions.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Choose the model allo runs on</h2>
+        <p className="text-sm text-[#8B8074]">This is the brain behind allo&apos;s emails, customer analysis, and the actions it takes for you.</p>
       </div>
       <div className="grid gap-3">
         {models
@@ -483,7 +483,7 @@ function ModelSelectionStep({
                 </div>
                 <p className="text-xs text-[#8B8074]">{model.description}</p>
                 <p className="text-[10px] text-[#A09888] mt-1">
-                  ${model.inputCostPerMillion}/M input · ${model.outputCostPerMillion}/M output
+                  ₹{model.inputCostPerMillion}/M input · ₹{model.outputCostPerMillion}/M output
                 </p>
               </button>
             );
@@ -620,7 +620,7 @@ function BrandReviewStep({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-[#8B8074]" />
-        <span className="ml-3 text-sm text-[#8B8074]">Loading brand analysis...</span>
+        <span className="ml-3 text-sm text-[#8B8074]">Loading what allo found...</span>
       </div>
     );
   }
@@ -635,23 +635,23 @@ function BrandReviewStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Review Your Brand</h2>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Review your brand</h2>
         <p className="text-sm text-[#8B8074]">
-          Allo analyzed your store and extracted your brand identity. Review and adjust anything.
+          Here&apos;s the brand identity allo picked up from your store. Adjust anything that doesn&apos;t feel right.
         </p>
       </div>
 
       {/* Brand Document Upload */}
       <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
-        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand Guidelines</h3>
+        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand guidelines</h3>
         <p className="text-sm text-[#8B8074] mb-4">
-          Have brand guidelines? Paste them here and we&apos;ll use them as the primary source for your brand voice.
-          This overrides our auto-detected analysis.
+          Already have brand guidelines? Paste them here and allo will follow them as the source of truth for your voice —
+          ahead of anything it picked up on its own.
         </p>
         <textarea
           value={brandDocument}
           onChange={(e) => setBrandDocument(e.target.value)}
-          placeholder="Paste your brand tone of voice, personality, guidelines, or any brand document here..."
+          placeholder="Paste your tone of voice, personality, guidelines, or any brand document here..."
           className="w-full h-40 p-4 border border-[#E8E4DE] rounded-lg text-sm bg-white resize-y focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
         />
         {brandDocument.trim() && (
@@ -661,11 +661,11 @@ function BrandReviewStep({
               disabled={isAnalyzing}
               className="px-4 py-2 bg-[#2D2A26] text-white rounded-lg text-sm font-medium hover:bg-[#3D3A36] disabled:opacity-50 flex items-center gap-2"
             >
-              {isAnalyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing your brand voice...</> : "Re-analyze from Document"}
+              {isAnalyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Reading your brand voice...</> : "Re-read from document"}
             </button>
             {analysisDone && (
               <span className="flex items-center gap-1.5 text-sm text-[#1F7A4F] font-medium">
-                <Check className="w-4 h-4" /> Brand voice updated — review the changes below
+                <Check className="w-4 h-4" /> Your brand voice is updated — take a look below
               </span>
             )}
           </div>
@@ -677,7 +677,7 @@ function BrandReviewStep({
         <div className="glass-card-static rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-[#1F7A4F]" />
-            <span className="text-xs font-medium uppercase tracking-wide text-[#1F7A4F]">What Allo Found</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-[#1F7A4F]">What allo found</span>
           </div>
           <p className="text-sm text-[#2C2C2C] font-medium mb-1">
             {bp.brandName || "Your Store"}
@@ -875,8 +875,8 @@ function AutonomyStep({ storeId, onSave, onBack }: { storeId: string; onSave: { 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Autonomy Configuration</h2>
-        <p className="text-sm text-[#8B8074]">Choose how much control Allo has for each action type.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">How much should allo do on its own?</h2>
+        <p className="text-sm text-[#8B8074]">Set this for each kind of action. You can change it anytime.</p>
       </div>
       <div className="space-y-3">
         {AUTONOMY_CATEGORIES.map(({ key, label, desc }) => (
@@ -922,8 +922,8 @@ function GuardrailsStep({ storeId, onSave, onBack }: { storeId: string; onSave: 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Safety Guardrails</h2>
-        <p className="text-sm text-[#8B8074]">Set limits on what Allo can do automatically. You can always change these later.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Set allo&apos;s limits</h2>
+        <p className="text-sm text-[#8B8074]">These are the boundaries allo always stays within. You can change them anytime.</p>
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-5">
         <div>
@@ -977,8 +977,8 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Store Intelligence Report</h2>
-        <p className="text-sm text-[#8B8074]">Here&apos;s what Allo discovered about your store.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">What allo learned about your store</h2>
+        <p className="text-sm text-[#8B8074]">Here&apos;s a first look at what allo found.</p>
       </div>
       {report && (
         <div className="space-y-4">
@@ -994,8 +994,8 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
           <div className="glass-card-static rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3"><BarChart3 className="w-4 h-4 text-[#8B8074]" /><span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">Revenue Insights</span></div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Stat label="Total Revenue" value={`$${(report.revenueInsights.totalRevenue / 100).toLocaleString()}`} />
-              <Stat label="Avg Order Value" value={`$${(report.revenueInsights.avgOrderValue / 100).toFixed(2)}`} />
+              <Stat label="Total Revenue" value={`₹${(report.revenueInsights.totalRevenue / 100).toLocaleString("en-IN")}`} />
+              <Stat label="Avg Order Value" value={`₹${(report.revenueInsights.avgOrderValue / 100).toFixed(2)}`} />
               <Stat label="Repeat Purchase Rate" value={`${(report.revenueInsights.repeatPurchaseRate * 100).toFixed(1)}%`} />
             </div>
           </div>
@@ -1017,7 +1017,7 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
         ) : <div />}
         <button onClick={onAcknowledge} disabled={isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40">
           {isAdvancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-          Got it, show me what Allo can do
+          Got it — show me what allo can do
         </button>
       </div>
     </div>
@@ -1044,11 +1044,10 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         <div className="w-16 h-16 rounded-2xl bg-[#1F7A4F]/10 flex items-center justify-center mx-auto mb-4">
           <Sparkles className="w-8 h-8 text-[#1F7A4F]" />
         </div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">You&apos;re all set!</h2>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">You&apos;re all set</h2>
         <p className="text-sm text-[#8B8074] max-w-md mx-auto leading-relaxed">
-          When you continue, Allo will start building your retention system — creating automations,
-          scanning for campaign opportunities, and generating your first briefing. You&apos;ll see
-          everything happening live in the AI panel.
+          When you continue, allo gets to work — setting up your automations, looking for campaign
+          opportunities, and writing your first briefing. You can watch it all happen live in the allo panel.
         </p>
       </div>
 
@@ -1056,9 +1055,9 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         <div className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">What happens next</div>
         <div className="space-y-3">
           {[
-            { icon: Zap, text: "Automations created based on your autonomy preferences" },
-            { icon: Sparkles, text: "Campaign opportunities identified from your customer data" },
-            { icon: Boxes, text: "First merchant briefing generated with insights" },
+            { icon: Zap, text: "allo sets up automations to match the autonomy you chose" },
+            { icon: Sparkles, text: "allo spots campaign opportunities in your customer data" },
+            { icon: Boxes, text: "allo writes your first briefing, full of insights" },
           ].map(({ icon: Icon, text }, i) => (
             <div key={i} className="flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center flex-shrink-0">
@@ -1076,7 +1075,7 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         ) : <div />}
         <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-6 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40">
           {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-          Launch Allo
+          Launch allo
         </button>
       </div>
     </div>

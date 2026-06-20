@@ -19,10 +19,10 @@ export default function EditAutomationPage() {
 
   const updateMut = (trpc.automations.update as any).useMutation({
     onSuccess: () => {
-      toast("Workflow saved!", "success");
+      toast("Saved.", "success");
       router.push(`/automations/${automationId}`);
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to save", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "We couldn't save that. Mind trying again?", "error"),
   }) as { mutateAsync: (input: Record<string, unknown>) => Promise<unknown>; isPending: boolean };
 
   if (isLoading) {
@@ -35,8 +35,8 @@ export default function EditAutomationPage() {
 
   if (!data) {
     return (
-      <div className="text-[13px] text-muted-foreground font-mono py-20 text-center">
-        Automation not found
+      <div className="text-[13px] text-muted-foreground font-sans py-20 text-center">
+        We couldn't find this automation.
       </div>
     );
   }

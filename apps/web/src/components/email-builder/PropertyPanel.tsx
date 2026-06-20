@@ -8,7 +8,7 @@ import type { EmailBlock } from "@allohq/email-builder";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[11px] font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+    <label className="block text-[11px] font-sans font-semibold text-muted-foreground uppercase tracking-wider mb-1">
       {children}
     </label>
   );
@@ -31,7 +31,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
+      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
     />
   );
 }
@@ -117,7 +117,7 @@ function SelectInput({
     <select
       value={value || options[0]?.value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
+      className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -145,7 +145,7 @@ function Checkbox({
         onChange={(e) => onChange(e.target.checked)}
         className="w-4 h-4 rounded border-border text-foreground focus:ring-muted-foreground"
       />
-      <span className="text-[13px] font-mono text-foreground">{label}</span>
+      <span className="text-[13px] font-sans text-foreground">{label}</span>
     </label>
   );
 }
@@ -435,7 +435,7 @@ export function PropertyPanel({ selectedBlock, onUpdate }: PropertyPanelProps) {
   if (!selectedBlock) {
     return (
       <aside className="w-72 bg-card border-l border-border flex flex-col items-center justify-center">
-        <p className="text-[13px] font-mono text-muted-foreground">Select a block to edit</p>
+        <p className="text-[13px] font-sans text-muted-foreground">Select a block to edit</p>
       </aside>
     );
   }
@@ -460,7 +460,7 @@ export function PropertyPanel({ selectedBlock, onUpdate }: PropertyPanelProps) {
         return <FooterProps block={selectedBlock} onUpdate={onUpdate} />;
       default:
         return (
-          <p className="text-[13px] font-mono text-muted-foreground">
+          <p className="text-[13px] font-sans text-muted-foreground">
             No properties for this block type.
           </p>
         );
@@ -470,7 +470,7 @@ export function PropertyPanel({ selectedBlock, onUpdate }: PropertyPanelProps) {
   return (
     <aside className="w-72 bg-card border-l border-border flex flex-col overflow-y-auto">
       <div className="px-4 py-4 border-b border-border">
-        <h2 className="text-[10px] font-bold text-foreground font-mono tracking-[1px] uppercase">
+        <h2 className="text-[10px] font-bold text-foreground font-serif tracking-[1px] uppercase">
           {selectedBlock.type} Properties
         </h2>
       </div>

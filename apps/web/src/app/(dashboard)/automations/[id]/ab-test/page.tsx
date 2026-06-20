@@ -290,26 +290,26 @@ export default function ABTestPage() {
   const createMut = (trpc.automations.createABTest as any).useMutation({
     onSuccess: () => {
       (utils.automations as any).listABTests.invalidate({ automationId });
-      toast("A/B test created!", "success");
+      toast("Your test is ready.", "success");
       resetForm();
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to create test", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "We couldn't create that test. Mind trying again?", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const updateMut = (trpc.automations.updateABTest as any).useMutation({
     onSuccess: () => {
       (utils.automations as any).listABTests.invalidate({ automationId });
-      toast("A/B test updated", "success");
+      toast("Test updated.", "success");
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update test", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "We couldn't update that test. Mind trying again?", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const deleteMut = (trpc.automations.deleteABTest as any).useMutation({
     onSuccess: () => {
       (utils.automations as any).listABTests.invalidate({ automationId });
-      toast("A/B test deleted", "info");
+      toast("Test deleted.", "info");
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to delete test", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "We couldn't delete that test. Mind trying again?", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   function resetForm() {
@@ -354,7 +354,7 @@ export default function ABTestPage() {
 
   function handleCreate() {
     if (!automation?.storeId || !name.trim() || !variantAValue.trim() || !variantBValue.trim()) {
-      toast("Please fill in all fields", "error");
+      toast("Just need a few more details before we start.", "error");
       return;
     }
     createMut.mutate({
@@ -384,7 +384,7 @@ export default function ABTestPage() {
   function handleApplyWinner(test: ABTestRecord) {
     // Apply the winning variant config to the automation
     // This is a placeholder - in production it would update the automation's trigger/node config
-    toast(`Winner (Variant ${test.winner?.toUpperCase()}) applied to automation`, "success");
+    toast(`Variant ${test.winner?.toUpperCase()} is now the one you're sending.`, "success");
   }
 
   function getOpenRate(r: { sent: number; opened: number }) {
@@ -418,7 +418,7 @@ export default function ABTestPage() {
           <div>
             <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif flex items-center gap-2">
               <FlaskConical className="w-4 h-4" />
-              A/B TESTS
+              A/B tests
             </h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {automation?.name ?? "..."} &mdash; {abTests?.length ?? 0} test{(abTests?.length ?? 0) !== 1 ? "s" : ""}
@@ -427,7 +427,7 @@ export default function ABTestPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           New Test
@@ -443,7 +443,7 @@ export default function ABTestPage() {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Plus className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-[13px] font-bold text-foreground font-mono">NEW AB TEST</h2>
+              <h2 className="text-[13px] font-bold text-foreground font-serif">New A/B test</h2>
             </div>
             <button onClick={resetForm} className="p-1.5 rounded hover:bg-muted transition-colors">
               <X className="w-4 h-4 text-muted-foreground" />
@@ -452,7 +452,7 @@ export default function ABTestPage() {
           <div className="p-6 space-y-5">
             {/* Test Name */}
             <div>
-              <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
+              <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
                 Test Name
               </label>
               <input
@@ -460,13 +460,13 @@ export default function ABTestPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Welcome email subject test"
-                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
             </div>
 
             {/* Variable */}
             <div>
-              <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
+              <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
                 Variable to Test
               </label>
               <select
@@ -477,7 +477,7 @@ export default function ABTestPage() {
                   setVariantBValue("");
                   setSelectedSuggestionIdx(null);
                 }}
-                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               >
                 {VARIABLE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -488,9 +488,9 @@ export default function ABTestPage() {
             {/* AI Recommendations */}
             {currentSuggestions.length > 0 && (
               <div>
-                <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] flex items-center gap-1.5 mb-2">
+                <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] flex items-center gap-1.5 mb-2">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  Recommended Variations
+                  allo's suggestions
                 </label>
                 <div className="space-y-2">
                   {currentSuggestions.map((s, idx) => (
@@ -505,7 +505,7 @@ export default function ABTestPage() {
                       }`}
                     >
                       <p className="text-[11px] font-bold text-foreground mb-1">{s.label}</p>
-                      <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
+                      <div className="flex items-center gap-3 text-[10px] font-sans text-muted-foreground">
                         <span className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-blue-700 dark:text-blue-300 truncate max-w-[45%]">
                           A: {s.a}
                         </span>
@@ -518,7 +518,7 @@ export default function ABTestPage() {
                   ))}
                 </div>
                 <p className="text-[10px] text-muted-foreground/60 mt-1.5">
-                  Click to apply, then customize if needed
+                  Pick one to start, then tweak it however you like.
                 </p>
               </div>
             )}
@@ -527,7 +527,7 @@ export default function ABTestPage() {
             <div className="grid grid-cols-2 gap-4">
               {/* Variant A */}
               <div className="p-4 rounded-lg border border-border bg-muted/30">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
+                <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
                   Variant A
                 </label>
                 {variable === "subject_line" && (
@@ -536,7 +536,7 @@ export default function ABTestPage() {
                     value={variantAValue}
                     onChange={(e) => setVariantAValue(e.target.value)}
                     placeholder="Enter subject line A"
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   />
                 )}
                 {variable === "send_time" && (
@@ -544,7 +544,7 @@ export default function ABTestPage() {
                     type="time"
                     value={variantAValue}
                     onChange={(e) => setVariantAValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   />
                 )}
                 {variable === "discount_level" && (
@@ -556,16 +556,16 @@ export default function ABTestPage() {
                       placeholder="10"
                       min={0}
                       max={100}
-                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                     />
-                    <span className="text-[13px] font-mono text-muted-foreground">%</span>
+                    <span className="text-[13px] font-sans text-muted-foreground">%</span>
                   </div>
                 )}
                 {variable === "channel" && (
                   <select
                     value={variantAValue}
                     onChange={(e) => setVariantAValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   >
                     <option value="">Select channel</option>
                     {CHANNEL_OPTIONS.map((ch) => (
@@ -579,14 +579,14 @@ export default function ABTestPage() {
                     onChange={(e) => setVariantAValue(e.target.value)}
                     placeholder="Enter content for variant A"
                     rows={4}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
                   />
                 )}
               </div>
 
               {/* Variant B */}
               <div className="p-4 rounded-lg border border-border bg-muted/30">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
+                <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
                   Variant B
                 </label>
                 {variable === "subject_line" && (
@@ -595,7 +595,7 @@ export default function ABTestPage() {
                     value={variantBValue}
                     onChange={(e) => setVariantBValue(e.target.value)}
                     placeholder="Enter subject line B"
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   />
                 )}
                 {variable === "send_time" && (
@@ -603,7 +603,7 @@ export default function ABTestPage() {
                     type="time"
                     value={variantBValue}
                     onChange={(e) => setVariantBValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   />
                 )}
                 {variable === "discount_level" && (
@@ -615,16 +615,16 @@ export default function ABTestPage() {
                       placeholder="20"
                       min={0}
                       max={100}
-                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                     />
-                    <span className="text-[13px] font-mono text-muted-foreground">%</span>
+                    <span className="text-[13px] font-sans text-muted-foreground">%</span>
                   </div>
                 )}
                 {variable === "channel" && (
                   <select
                     value={variantBValue}
                     onChange={(e) => setVariantBValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   >
                     <option value="">Select channel</option>
                     {CHANNEL_OPTIONS.map((ch) => (
@@ -638,7 +638,7 @@ export default function ABTestPage() {
                     onChange={(e) => setVariantBValue(e.target.value)}
                     placeholder="Enter content for variant B"
                     rows={4}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
                   />
                 )}
               </div>
@@ -646,7 +646,7 @@ export default function ABTestPage() {
 
             {/* Split Ratio */}
             <div>
-              <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
+              <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
                 Split Ratio
               </label>
               <div className="flex items-center gap-4">
@@ -672,7 +672,7 @@ export default function ABTestPage() {
 
             {/* Min Sample Size */}
             <div>
-              <label className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
+              <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] block mb-1.5">
                 Minimum Sample Size
               </label>
               <input
@@ -680,10 +680,10 @@ export default function ABTestPage() {
                 value={minSampleSize}
                 onChange={(e) => setMinSampleSize(Math.max(50, Number(e.target.value) || 50))}
                 min={50}
-                className="w-48 px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-48 px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Total sends before evaluating statistical significance (min 50)
+                How many sends to gather before we call a winner (at least 50).
               </p>
             </div>
 
@@ -692,7 +692,7 @@ export default function ABTestPage() {
               <button
                 onClick={handleCreate}
                 disabled={createMut.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
               >
                 {createMut.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -703,7 +703,7 @@ export default function ABTestPage() {
               </button>
               <button
                 onClick={resetForm}
-                className="px-4 py-2 border border-border rounded-lg text-xs font-mono text-foreground hover:bg-muted transition-all"
+                className="px-4 py-2 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
               >
                 Cancel
               </button>
@@ -724,7 +724,7 @@ export default function ABTestPage() {
       {/* Draft Tests */}
       {draftTests.length > 0 && (
         <motion.div variants={itemVariants}>
-          <h2 className="text-[11px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
+          <h2 className="text-[11px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
             Draft Tests
           </h2>
           <div className="space-y-3">
@@ -735,13 +735,13 @@ export default function ABTestPage() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <h3 className="text-[13px] font-bold font-mono text-foreground">{test.name}</h3>
-                    <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                    <h3 className="text-[13px] font-bold font-serif text-foreground">{test.name}</h3>
+                    <span className="text-[10px] font-sans text-muted-foreground uppercase">
                       {test.variable.replace(/_/g, " ")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/15 text-muted-foreground border border-white/10">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-white/15 text-muted-foreground border border-white/10">
                       draft
                     </span>
                   </div>
@@ -749,14 +749,14 @@ export default function ABTestPage() {
 
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="p-3 rounded-lg border border-border bg-muted/30">
-                    <div className="text-[10px] font-mono font-bold text-muted-foreground mb-1">VARIANT A ({Math.round(test.splitRatio * 100)}%)</div>
-                    <div className="text-[12px] font-mono text-foreground truncate">
+                    <div className="text-[10px] font-sans font-bold text-muted-foreground mb-1">VARIANT A ({Math.round(test.splitRatio * 100)}%)</div>
+                    <div className="text-[12px] font-sans text-foreground truncate">
                       {String((test.variantA as any)?.value ?? "")}
                     </div>
                   </div>
                   <div className="p-3 rounded-lg border border-border bg-muted/30">
-                    <div className="text-[10px] font-mono font-bold text-muted-foreground mb-1">VARIANT B ({Math.round((1 - test.splitRatio) * 100)}%)</div>
-                    <div className="text-[12px] font-mono text-foreground truncate">
+                    <div className="text-[10px] font-sans font-bold text-muted-foreground mb-1">VARIANT B ({Math.round((1 - test.splitRatio) * 100)}%)</div>
+                    <div className="text-[12px] font-sans text-foreground truncate">
                       {String((test.variantB as any)?.value ?? "")}
                     </div>
                   </div>
@@ -766,7 +766,7 @@ export default function ABTestPage() {
                   <button
                     onClick={() => handleStartTest(test.id)}
                     disabled={updateMut.isPending}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
                   >
                     <Play className="w-3 h-3" />
                     Start Test
@@ -774,7 +774,7 @@ export default function ABTestPage() {
                   <button
                     onClick={() => handleDeleteTest(test.id)}
                     disabled={deleteMut.isPending}
-                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-mono text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
                   >
                     <Trash2 className="w-3 h-3" />
                     Delete
@@ -789,7 +789,7 @@ export default function ABTestPage() {
       {/* Running Tests */}
       {runningTests.length > 0 && (
         <motion.div variants={itemVariants}>
-          <h2 className="text-[11px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
+          <h2 className="text-[11px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
             Running Tests
           </h2>
           <div className="space-y-3">
@@ -806,13 +806,13 @@ export default function ABTestPage() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h3 className="text-[13px] font-bold font-mono text-foreground">{test.name}</h3>
-                      <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                      <h3 className="text-[13px] font-bold font-serif text-foreground">{test.name}</h3>
+                      <span className="text-[10px] font-sans text-muted-foreground uppercase">
                         {test.variable.replace(/_/g, " ")}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-blue-50 text-blue-700 border border-blue-200">
                         running
                       </span>
                       {test.confidence != null && (
@@ -844,47 +844,47 @@ export default function ABTestPage() {
                   {/* Results comparison */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="p-3 rounded-lg border border-border bg-muted/30">
-                      <div className="text-[10px] font-mono font-bold text-muted-foreground mb-2">
+                      <div className="text-[10px] font-sans font-bold text-muted-foreground mb-2">
                         VARIANT A &mdash; {String((test.variantA as any)?.value ?? "").slice(0, 30)}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <div className="text-[14px] font-bold font-mono text-foreground">{getOpenRate(a)}%</div>
-                          <div className="text-[9px] font-mono text-muted-foreground uppercase">Open</div>
+                          <div className="text-[9px] font-sans text-muted-foreground uppercase">Open</div>
                         </div>
                         <div>
                           <div className="text-[14px] font-bold font-mono text-foreground">{getClickRate(a)}%</div>
-                          <div className="text-[9px] font-mono text-muted-foreground uppercase">Click</div>
+                          <div className="text-[9px] font-sans text-muted-foreground uppercase">Click</div>
                         </div>
                         <div>
                           <div className="text-[14px] font-bold font-mono text-foreground">{getConvRate(a)}%</div>
-                          <div className="text-[9px] font-mono text-muted-foreground uppercase">Conv</div>
+                          <div className="text-[9px] font-sans text-muted-foreground uppercase">Conv</div>
                         </div>
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                        {a.sent} sent &middot; ${a.revenue.toFixed(2)} rev
+                        {a.sent} sent &middot; ₹{a.revenue.toFixed(2)} rev
                       </div>
                     </div>
                     <div className="p-3 rounded-lg border border-border bg-muted/30">
-                      <div className="text-[10px] font-mono font-bold text-muted-foreground mb-2">
+                      <div className="text-[10px] font-sans font-bold text-muted-foreground mb-2">
                         VARIANT B &mdash; {String((test.variantB as any)?.value ?? "").slice(0, 30)}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <div className="text-[14px] font-bold font-mono text-foreground">{getOpenRate(b)}%</div>
-                          <div className="text-[9px] font-mono text-muted-foreground uppercase">Open</div>
+                          <div className="text-[9px] font-sans text-muted-foreground uppercase">Open</div>
                         </div>
                         <div>
                           <div className="text-[14px] font-bold font-mono text-foreground">{getClickRate(b)}%</div>
-                          <div className="text-[9px] font-mono text-muted-foreground uppercase">Click</div>
+                          <div className="text-[9px] font-sans text-muted-foreground uppercase">Click</div>
                         </div>
                         <div>
                           <div className="text-[14px] font-bold font-mono text-foreground">{getConvRate(b)}%</div>
-                          <div className="text-[9px] font-mono text-muted-foreground uppercase">Conv</div>
+                          <div className="text-[9px] font-sans text-muted-foreground uppercase">Conv</div>
                         </div>
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                        {b.sent} sent &middot; ${b.revenue.toFixed(2)} rev
+                        {b.sent} sent &middot; ₹{b.revenue.toFixed(2)} rev
                       </div>
                     </div>
                   </div>
@@ -894,7 +894,7 @@ export default function ABTestPage() {
                     <div className="mb-3">
                       <div className="flex items-center gap-2 mb-1">
                         <BarChart3 className="w-3 h-3 text-muted-foreground" />
-                        <span className="text-[10px] font-mono text-muted-foreground uppercase">Statistical Confidence</span>
+                        <span className="text-[10px] font-sans text-muted-foreground uppercase">Statistical Confidence</span>
                       </div>
                       <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                         <div
@@ -921,7 +921,7 @@ export default function ABTestPage() {
                   <button
                     onClick={() => handleCancelTest(test.id)}
                     disabled={updateMut.isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-mono text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
                   >
                     <XCircle className="w-3 h-3" />
                     Cancel Test
@@ -936,7 +936,7 @@ export default function ABTestPage() {
       {/* Concluded Tests */}
       {concludedTests.length > 0 && (
         <motion.div variants={itemVariants}>
-          <h2 className="text-[11px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
+          <h2 className="text-[11px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
             Concluded Tests
           </h2>
           <div className="space-y-3">
@@ -951,17 +951,17 @@ export default function ABTestPage() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h3 className="text-[13px] font-bold font-mono text-foreground">{test.name}</h3>
-                      <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                      <h3 className="text-[13px] font-bold font-serif text-foreground">{test.name}</h3>
+                      <span className="text-[10px] font-sans text-muted-foreground uppercase">
                         {test.variable.replace(/_/g, " ")}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-green-50 text-green-700 border border-green-200">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-green-50 text-green-700 border border-green-200">
                         concluded
                       </span>
                       {test.winner && (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-[10px] font-mono font-bold flex items-center gap-1">
+                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-[10px] font-sans font-bold flex items-center gap-1">
                           <Trophy className="w-3 h-3" />
                           Winner: {test.winner.toUpperCase()}
                         </span>
@@ -988,30 +988,30 @@ export default function ABTestPage() {
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-[10px] font-mono font-bold text-muted-foreground">
+                            <span className="text-[10px] font-sans font-bold text-muted-foreground">
                               VARIANT {variant.toUpperCase()}
                             </span>
                             {isWinner && <Trophy className="w-3 h-3 text-green-600" />}
                           </div>
-                          <div className="text-[11px] font-mono text-foreground mb-2 truncate">
+                          <div className="text-[11px] font-sans text-foreground mb-2 truncate">
                             {String((variantData as any)?.value ?? "")}
                           </div>
                           <div className="grid grid-cols-3 gap-2">
                             <div>
                               <div className="text-[14px] font-bold font-mono text-foreground">{getOpenRate(r)}%</div>
-                              <div className="text-[9px] font-mono text-muted-foreground uppercase">Open</div>
+                              <div className="text-[9px] font-sans text-muted-foreground uppercase">Open</div>
                             </div>
                             <div>
                               <div className="text-[14px] font-bold font-mono text-foreground">{getClickRate(r)}%</div>
-                              <div className="text-[9px] font-mono text-muted-foreground uppercase">Click</div>
+                              <div className="text-[9px] font-sans text-muted-foreground uppercase">Click</div>
                             </div>
                             <div>
                               <div className="text-[14px] font-bold font-mono text-foreground">{getConvRate(r)}%</div>
-                              <div className="text-[9px] font-mono text-muted-foreground uppercase">Conv</div>
+                              <div className="text-[9px] font-sans text-muted-foreground uppercase">Conv</div>
                             </div>
                           </div>
                           <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                            {r.sent} sent &middot; ${r.revenue.toFixed(2)} rev
+                            {r.sent} sent &middot; ₹{r.revenue.toFixed(2)} rev
                           </div>
                         </div>
                       );
@@ -1022,7 +1022,7 @@ export default function ABTestPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleApplyWinner(test)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 transition-all"
+                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
                       >
                         <CheckCircle className="w-3 h-3" />
                         Apply Winner
@@ -1030,7 +1030,7 @@ export default function ABTestPage() {
                       <button
                         onClick={() => handleDeleteTest(test.id)}
                         disabled={deleteMut.isPending}
-                        className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-mono text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
                       >
                         <Trash2 className="w-3 h-3" />
                         Delete
@@ -1047,7 +1047,7 @@ export default function ABTestPage() {
       {/* Cancelled Tests */}
       {cancelledTests.length > 0 && (
         <motion.div variants={itemVariants}>
-          <h2 className="text-[11px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
+          <h2 className="text-[11px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] mb-3">
             Cancelled Tests
           </h2>
           <div className="space-y-3">
@@ -1058,19 +1058,19 @@ export default function ABTestPage() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-[13px] font-bold font-mono text-foreground">{test.name}</h3>
-                    <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                    <h3 className="text-[13px] font-bold font-serif text-foreground">{test.name}</h3>
+                    <span className="text-[10px] font-sans text-muted-foreground uppercase">
                       {test.variable.replace(/_/g, " ")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-gray-50 text-gray-600 border border-gray-200">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-gray-50 text-gray-600 border border-gray-200">
                       cancelled
                     </span>
                     <button
                       onClick={() => handleDeleteTest(test.id)}
                       disabled={deleteMut.isPending}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-muted-foreground hover:text-red-500 transition-all"
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-sans text-muted-foreground hover:text-red-500 transition-all"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -1086,13 +1086,13 @@ export default function ABTestPage() {
       {!isLoading && (!abTests || abTests.length === 0) && !showForm && (
         <motion.div variants={itemVariants} className="text-center py-16">
           <FlaskConical className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-[13px] font-bold text-foreground font-mono mb-1">No A/B tests yet</h3>
+          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">No tests yet</h3>
           <p className="text-[11px] text-muted-foreground font-sans mb-4">
-            Create your first A/B test to optimize this automation&apos;s performance.
+            Try two versions against each other and let the results tell you what works.
           </p>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
             New Test

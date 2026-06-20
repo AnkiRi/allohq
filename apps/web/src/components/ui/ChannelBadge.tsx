@@ -14,7 +14,7 @@ export function ChannelBadge({ channel }: { channel: string }) {
   if (!config) return null;
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded ${config.bg} ${config.text}`}
+      className={`inline-flex items-center gap-1 text-[10px] font-sans px-1.5 py-0.5 rounded ${config.bg} ${config.text}`}
     >
       {channel}
     </span>

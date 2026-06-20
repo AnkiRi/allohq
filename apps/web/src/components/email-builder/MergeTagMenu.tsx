@@ -68,7 +68,7 @@ export function MergeTagMenu({ onInsert }: MergeTagMenuProps) {
       <button
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-mono transition-colors",
+          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-sans transition-colors",
           open
             ? "border-primary/50 bg-muted text-foreground"
             : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border"
@@ -94,7 +94,7 @@ export function MergeTagMenu({ onInsert }: MergeTagMenuProps) {
                   }}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted transition-colors"
                 >
-                  <span className="text-[13px] font-mono text-foreground">{label}</span>
+                  <span className="text-[13px] font-sans text-foreground">{label}</span>
                   <code className="text-[11px] font-mono text-muted-foreground">{tag}</code>
                 </button>
               ))}

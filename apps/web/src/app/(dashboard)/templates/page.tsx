@@ -58,29 +58,29 @@ export default function TemplatesPage() {
   const utils = trpc.useUtils();
 
   const duplicateMut = trpc.templates.duplicate.useMutation({
-    onSuccess: () => { utils.templates.list.invalidate(); toast("Template duplicated", "success"); },
-    onError: () => toast("Failed to duplicate", "error"),
+    onSuccess: () => { utils.templates.list.invalidate(); toast("Copied — here's your duplicate.", "success"); },
+    onError: () => toast("We couldn't duplicate that. Mind trying again?", "error"),
   });
   const deleteMut = trpc.templates.delete.useMutation({
-    onSuccess: () => { utils.templates.list.invalidate(); toast("Template deleted", "success"); },
-    onError: () => toast("Failed to delete", "error"),
+    onSuccess: () => { utils.templates.list.invalidate(); toast("Template deleted.", "success"); },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
   const bulkDeleteMut = (trpc as any).templates.bulkDelete.useMutation({
     onSuccess: (result: { deleted: number }) => {
       utils.templates.list.invalidate();
-      toast(`${result.deleted} templates deleted`, "success");
+      toast(`${result.deleted} templates deleted.`, "success");
       setSelectedIds(new Set());
     },
-    onError: () => toast("Failed to delete templates", "error"),
+    onError: () => toast("We couldn't delete those. Mind trying again?", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
   const deleteByCategoryMut = (trpc as any).templates.deleteByCategory.useMutation({
     onSuccess: (result: { deleted: number }) => {
       utils.templates.list.invalidate();
-      toast(`${result.deleted} templates removed`, "success");
+      toast(`${result.deleted} templates removed.`, "success");
       setShowRemoveMenu(false);
       setConfirmRemoveAll(false);
     },
-    onError: () => toast("Failed to remove templates", "error"),
+    onError: () => toast("We couldn't remove those. Mind trying again?", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const categories = [
@@ -163,14 +163,14 @@ export default function TemplatesPage() {
             Templates
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            Email templates for campaigns and automations
+            The emails behind your campaigns and automations
           </p>
         </div>
         <div className="flex items-center gap-2">
           {/* Channel templates link */}
           <Link
             href="/templates/channel"
-            className="flex items-center gap-2 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-mono hover:bg-muted/50 transition-all"
+            className="flex items-center gap-2 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-sans hover:bg-muted/50 transition-all"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             SMS / WhatsApp / RCS
@@ -179,7 +179,7 @@ export default function TemplatesPage() {
           <div className="relative">
             <button
               onClick={() => setShowRemoveMenu(!showRemoveMenu)}
-              className="flex items-center gap-1.5 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-mono hover:bg-muted/50 transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-sans hover:bg-muted/50 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Remove
@@ -211,7 +211,7 @@ export default function TemplatesPage() {
                     className="w-full text-left px-3 py-2 text-xs bg-red-50 text-red-700 font-medium"
                   >
                     <AlertTriangle className="w-3 h-3 inline mr-1" />
-                    Confirm — delete all {templates?.length || 0} templates
+                    Yes, delete all {templates?.length || 0} — this can't be undone
                   </button>
                 )}
               </div>
@@ -219,7 +219,7 @@ export default function TemplatesPage() {
           </div>
           <Link
             href="/templates/new"
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
             New Template
@@ -245,7 +245,7 @@ export default function TemplatesPage() {
           <button
             key={cat.label}
             onClick={() => setCategoryFilter(cat.value)}
-            className={`px-3 py-1.5 text-xs font-mono rounded-lg transition-all ${
+            className={`px-3 py-1.5 text-xs font-sans rounded-lg transition-all ${
               categoryFilter === cat.value
                 ? "bg-secondary text-secondary-foreground"
                 : "bg-white/20 border border-white/20 text-muted-foreground hover:bg-white/30"
@@ -303,7 +303,7 @@ export default function TemplatesPage() {
             <motion.div key={group.category} variants={itemVariants}>
               {/* Group header */}
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-[13px] font-bold text-foreground/70 font-mono tracking-wide">
+                <h2 className="text-[13px] font-bold text-foreground/70 font-serif tracking-wide">
                   {group.label}
                 </h2>
                 <span className="text-[11px] text-muted-foreground/60 font-mono">
@@ -350,7 +350,7 @@ export default function TemplatesPage() {
 
                       <div className="p-4 space-y-3">
                         {/* Title */}
-                        <h3 className="text-[13px] font-bold text-foreground font-mono leading-snug line-clamp-2">
+                        <h3 className="text-[13px] font-bold text-foreground font-serif leading-snug line-clamp-2">
                           {template.name}
                         </h3>
 
@@ -362,16 +362,16 @@ export default function TemplatesPage() {
                         {/* Badges */}
                         <div className="flex items-center gap-2 flex-wrap">
                           {template.category === "ai_generated" && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-sans bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
                               <Sparkles className="w-2.5 h-2.5" />
                               AI
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 text-[10px] font-mono rounded-md ${getCategoryBadgeStyle(template.category)}`}>
+                          <span className={`px-2 py-0.5 text-[10px] font-sans rounded-md ${getCategoryBadgeStyle(template.category)}`}>
                             {formatCategoryLabel(template.category)}
                           </span>
                           {isDuplicate && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-mono bg-amber-100 text-amber-700 border border-amber-200 rounded-md">
+                            <span className="px-1.5 py-0.5 text-[10px] font-sans bg-amber-100 text-amber-700 border border-amber-200 rounded-md">
                               Duplicate
                             </span>
                           )}
@@ -382,14 +382,14 @@ export default function TemplatesPage() {
                           <div className="flex items-center gap-3">
                             <Link
                               href={`/templates/${template.id}/edit`}
-                              className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                             >
                               <Pencil className="w-3 h-3" />
                               Edit
                             </Link>
                             <Link
                               href={`/templates/${template.id}/edit`}
-                              className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                             >
                               <Eye className="w-3 h-3" />
                               Preview
@@ -423,19 +423,19 @@ export default function TemplatesPage() {
       ) : searchQuery ? (
         <div className="glass-card-static rounded-xl p-12 text-center">
           <Search className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-foreground">No matches</h3>
+          <h3 className="text-lg font-semibold text-foreground">Nothing matched</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            No templates match &ldquo;{searchQuery}&rdquo;. Try a different search.
+            Nothing matches &ldquo;{searchQuery}&rdquo; — try another search.
           </p>
         </div>
       ) : (
         <SmartEmptyState
           icon={FileText}
           title="No templates yet"
-          description="Allo can generate beautiful email templates matching your brand."
+          description="allo can write beautiful emails that sound just like your brand."
           actions={[
-            { label: "Generate Welcome Email", primary: true },
-            { label: "Generate Win-Back Email" },
+            { label: "Write a welcome email", primary: true },
+            { label: "Write a win-back email" },
           ]}
         />
       )}

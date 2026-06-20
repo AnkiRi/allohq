@@ -15,9 +15,9 @@ const itemVariants = {
 };
 
 const TIERS = [
-  { value: "autopilot", label: "Autopilot", icon: Zap, desc: "AI executes automatically when confident" },
-  { value: "copilot", label: "Copilot", icon: Eye, desc: "AI drafts, you approve before execution" },
-  { value: "advisor", label: "Advisor", icon: Bot, desc: "AI suggests, you decide everything" },
+  { value: "autopilot", label: "Autopilot", icon: Zap, desc: "allo acts on its own when it's confident" },
+  { value: "copilot", label: "Copilot", icon: Eye, desc: "allo drafts, you approve before it goes out" },
+  { value: "advisor", label: "Advisor", icon: Bot, desc: "allo suggests, you make every call" },
 ] as const;
 
 const CATEGORIES = [
@@ -45,15 +45,15 @@ export default function AutonomySettingsPage() {
   const utils = trpc.useUtils();
   const updateMut = (trpc as any).autonomy.updateConfig.useMutation({
     onSuccess: () => {
-      toast("Autonomy setting updated!", "success");
+      toast("Autonomy updated.", "success");
       (utils as any).autonomy.getConfig.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "Failed to update", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const initMut = (trpc as any).autonomy.initializeDefaults.useMutation({
     onSuccess: () => {
-      toast("Default settings applied!", "success");
+      toast("Recommended settings applied.", "success");
       (utils as any).autonomy.getConfig.invalidate({ storeId });
     },
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
@@ -69,17 +69,17 @@ export default function AutonomySettingsPage() {
     >
       <motion.div variants={itemVariants}>
         <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          AUTONOMY SETTINGS
+          Autonomy
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
-          Control how much independence Allo has for each type of action
+          Decide how much allo can do on its own for each kind of action
         </p>
       </motion.div>
 
       {!storeId ? (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <Shield className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground">Connect a store first</p>
+          <p className="text-[11px] text-muted-foreground">Connect a store and allo can start helping here.</p>
         </motion.div>
       ) : isLoading ? (
         <div className="space-y-3">
@@ -92,14 +92,14 @@ export default function AutonomySettingsPage() {
           {(!configs || configs.length === 0) && (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
               <p className="text-[11px] text-muted-foreground mb-3">
-                No autonomy settings configured yet
+                You haven&apos;t set autonomy yet — allo will ask before doing anything until you do.
               </p>
               <button
                 onClick={() => initMut.mutate({ storeId })}
                 disabled={initMut.isPending}
-                className="px-4 py-2 rounded-lg text-[11px] font-mono bg-foreground text-background hover:opacity-90 transition-opacity"
+                className="px-4 py-2 rounded-lg text-[11px] font-sans bg-foreground text-background hover:opacity-90 transition-opacity"
               >
-                Apply Recommended Defaults
+                Use allo&apos;s recommendations
               </button>
             </motion.div>
           )}
@@ -107,7 +107,7 @@ export default function AutonomySettingsPage() {
           <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <Shield className="w-4 h-4 text-muted-foreground" />
-              <h2 className="section-header accent-bar-left text-[13px]">AUTONOMY MATRIX</h2>
+              <h2 className="section-header accent-bar-left text-[13px]">Autonomy by action</h2>
             </div>
 
             {/* Header row */}
@@ -142,7 +142,7 @@ export default function AutonomySettingsPage() {
                           updateMut.mutate({ storeId, category: cat.value, tier: t.value })
                         }
                         disabled={updateMut.isPending}
-                        className={`h-8 rounded-lg transition-all text-[10px] font-mono ${
+                        className={`h-8 rounded-lg transition-all text-[10px] font-sans ${
                           current === t.value
                             ? "bg-foreground text-background shadow-sm"
                             : "bg-white/20 text-muted-foreground hover:bg-white/40"

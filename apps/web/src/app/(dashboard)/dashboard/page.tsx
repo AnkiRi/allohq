@@ -66,12 +66,12 @@ function ConnectStorePrompt() {
   const handleConnect = () => {
     const d = domain.trim();
     if (!d) {
-      setError("Please enter your shop domain");
+      setError("Enter your store name to continue.");
       return;
     }
     const fullDomain = d.includes(".myshopify.com") ? d : `${d}.myshopify.com`;
     if (!/^[a-zA-Z0-9-]+\.myshopify\.com$/.test(fullDomain)) {
-      setError("Invalid domain format");
+      setError("That doesn't look like a valid store address.");
       return;
     }
     setConnecting(true);
@@ -89,10 +89,10 @@ function ConnectStorePrompt() {
         <div className="w-16 h-16 rounded-2xl bg-[var(--color-success)]/10 flex items-center justify-center mx-auto mb-5">
           <Store className="w-8 h-8 text-[var(--color-success)]" />
         </div>
-        <h1 className="text-2xl font-semibold text-foreground font-serif mb-2">Connect Your Store</h1>
+        <h1 className="text-2xl font-semibold text-foreground font-serif mb-2">Connect your store</h1>
         <p className="text-sm text-muted-foreground font-sans mb-6 leading-relaxed">
-          Connect your Shopify store to get started. Allo will analyze your brand,
-          segment your customers, and set up AI-powered retention.
+          Connect your Shopify store and Allo gets to work — learning your brand,
+          grouping your customers, and setting up retention that runs on its own.
         </p>
         <div className="max-w-sm mx-auto space-y-3">
           <div className="flex items-center">
@@ -115,7 +115,7 @@ function ConnectStorePrompt() {
             className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-foreground text-background text-sm font-medium rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
           >
             {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Store className="w-4 h-4" />}
-            {connecting ? "Connecting..." : "Connect Store"}
+            {connecting ? "Connecting…" : "Connect store"}
           </button>
         </div>
       </div>
@@ -171,11 +171,11 @@ function formatRelativeTime(dateStr: string): string {
 // ---------------------------------------------------------------------------
 function formatActionType(type: string): string {
   const map: Record<string, string> = {
-    campaign_send: "Preparing campaign",
+    campaign_send: "Getting a campaign ready",
     campaign_queued: "Campaign queued",
-    automation_draft: "Drafted automation",
-    content_generation: "Generated content",
-    segment_refresh: "Refreshing segments",
+    automation_draft: "Drafted an automation",
+    content_generation: "Wrote some content",
+    segment_refresh: "Refreshing your segments",
   };
   if (map[type]) return map[type];
   return type
@@ -315,8 +315,8 @@ export default function DashboardPage() {
       attentionItems.push({
         level: "urgent",
         text: `${hibernating.customerCount} hibernating customers`,
-        detail: `${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(hibernating.totalRevenue)} in past revenue at risk`,
-        action: "Launch Win-Back",
+        detail: `${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(hibernating.totalRevenue)} in past revenue you could win back`,
+        action: "Launch win-back",
         href: "/automations",
       });
     }
@@ -324,9 +324,9 @@ export default function DashboardPage() {
   if (customerStats && customerStats.marketingRate === 0) {
     attentionItems.push({
       level: "moderate",
-      text: "Marketing opt-in rate is 0%",
-      detail: "Set up a lead capture form to start collecting opt-ins",
-      action: "Create Form",
+      text: "No one's opted in to marketing yet",
+      detail: "Add a sign-up form so you can start reaching customers",
+      action: "Create form",
       href: "/forms",
     });
   }
@@ -337,7 +337,7 @@ export default function DashboardPage() {
         level: "positive",
         text: `${readyNotLive.length} automation${readyNotLive.length > 1 ? "s" : ""} ready to go live`,
         detail: readyNotLive.map((p) => p.name).join(", "),
-        action: "Review & Activate",
+        action: "Review & activate",
         href: "/automations",
       });
     }
@@ -357,7 +357,7 @@ export default function DashboardPage() {
     const activatedAt = store?.activatedAt ? new Date(store.activatedAt) : null;
     const isRecentlyActivated = activatedAt && (Date.now() - activatedAt.getTime()) < 5 * 60 * 1000;
     if (isRecentlyActivated) {
-      parts.push("Welcome! Allo has set up your retention system. Check the AI panel to see what was created and what needs your review.");
+      parts.push("Welcome! Allo finished setting up your retention. Open the AI panel to see what it built and what's waiting on you.");
       return parts;
     }
 
@@ -378,7 +378,7 @@ export default function DashboardPage() {
       if (hibernating && totalCust > 0) {
         const pct = Math.round((hibernating.customerCount / totalCust) * 100);
         if (pct > 20) {
-          parts.push(`${hibernating.customerCount} customers (${pct}% of your base) are hibernating. This is your biggest opportunity \u2014 a win-back campaign targeting these customers could recover significant revenue.`);
+          parts.push(`${hibernating.customerCount} customers (${pct}% of your base) haven't bought in a while. This is your biggest opportunity right now \u2014 a win-back campaign could bring a lot of them back.`);
         }
       }
     }
@@ -386,7 +386,7 @@ export default function DashboardPage() {
     if (automationCount > 0) {
       const active = programs?.filter((p) => p.status === "active").length ?? 0;
       const ready = programs?.filter((p) => p.status === "ready").length ?? 0;
-      parts.push(`Allo has set up your retention system. **${automationCount} automations** created — ${active} running on autopilot${ready > 0 ? `, ${ready} ready for your review` : ""}.${aiCost > 0 ? ` AI cost so far: $${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)}.` : ""}`);
+      parts.push(`Allo built out your retention. **${automationCount} automations** ready — ${active} running on their own${ready > 0 ? `, ${ready} waiting for your review` : ""}.${aiCost > 0 ? ` AI cost so far: $${aiCost < 0.01 ? "<0.01" : aiCost.toFixed(2)}.` : ""}`);
     }
 
     return parts;
@@ -419,10 +419,10 @@ export default function DashboardPage() {
     if (urgentItem) return urgentItem.text + " — " + urgentItem.detail;
     if (automationCount > 0) {
       const active = programs?.filter((p) => p.status === "active").length ?? 0;
-      return `Your agent handled ${automationCount} automations${active > 0 ? ` — ${active} running on autopilot` : ""}${aiAttributedRevenue > 0 ? ` and drove $${aiAttributedRevenue.toLocaleString()} in attributed revenue` : ""}.`;
+      return `Your agent handled ${automationCount} automations${active > 0 ? ` — ${active} running on autopilot` : ""}${aiAttributedRevenue > 0 ? ` and drove ₹${aiAttributedRevenue.toLocaleString("en-IN")} in attributed revenue` : ""}.`;
     }
-    if (hasSyncedData) return `Allo is monitoring ${stats?.totalCustomers?.toLocaleString() ?? 0} customers across ${segmentDist?.length ?? 0} segments.`;
-    return "Your retention system is getting set up. Check back soon for insights.";
+    if (hasSyncedData) return `Allo is keeping an eye on ${stats?.totalCustomers?.toLocaleString() ?? 0} customers across ${segmentDist?.length ?? 0} segments.`;
+    return "Allo is still setting things up. Check back shortly for your first insights.";
   })();
 
   const now = new Date();
@@ -439,8 +439,7 @@ export default function DashboardPage() {
       {/* 1. GREETING — concept-a style */}
       <motion.div variants={itemVariants}>
         <h1
-          className="text-[28px] font-bold tracking-[-0.03em] text-foreground"
-          style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          className="text-[28px] font-bold tracking-[-0.03em] text-foreground font-serif"
         >
           {greeting}, {firstName}
         </h1>
@@ -486,12 +485,12 @@ export default function DashboardPage() {
             {
               label: "Allo Revenue",
               value: Math.round(alloRevenue),
-              prefix: "$",
+              prefix: "₹",
               ...revenueDelta,
               spark: revenueSparkVals,
               color: "#B89466",
               href: "/analytics",
-              subtitle: alloRevenueToday > 0 ? `$${alloRevenueToday.toLocaleString()} today` : alloRevenueWeek > 0 ? `$${alloRevenueWeek.toLocaleString()} this week` : undefined,
+              subtitle: alloRevenueToday > 0 ? `₹${alloRevenueToday.toLocaleString("en-IN")} today` : alloRevenueWeek > 0 ? `₹${alloRevenueWeek.toLocaleString("en-IN")} this week` : undefined,
             },
             {
               label: "Customers",
@@ -535,8 +534,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="inline-flex items-center gap-1.5">
                 <span
-                  className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#9ca3af] dark:text-[#6B6358]"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-[10px] font-sans uppercase tracking-[0.1em] text-[#9ca3af] dark:text-[#6B6358]"
                 >
                   {kpi.label}
                 </span>
@@ -594,8 +592,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span
-                  className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-[11px] font-sans uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
                 >
                   Daily Briefing
                 </span>
@@ -633,7 +630,7 @@ export default function DashboardPage() {
                     </div>
                     <Link
                       href={item.href}
-                      className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-lg bg-[#2c2418] text-[#faf8f5] hover:bg-[#2c2418]/90 dark:bg-[#E8E2D8] dark:text-[#1A1815] dark:hover:bg-[#E8E2D8]/90 transition-colors flex-shrink-0 mt-1"
+                      className="text-[10px] font-sans font-semibold px-3 py-1.5 rounded-lg bg-[#2c2418] text-[#faf8f5] hover:bg-[#2c2418]/90 dark:bg-[#E8E2D8] dark:text-[#1A1815] dark:hover:bg-[#E8E2D8]/90 transition-colors flex-shrink-0 mt-1"
                     >
                       {item.action}
                     </Link>
@@ -672,7 +669,7 @@ export default function DashboardPage() {
                   <div key={`briefing-section-${si}`} className="border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] pt-3 mt-2">
                     <div className="flex items-center gap-2 mb-2">
                       <SectionIcon className="w-3.5 h-3.5" style={{ color: sectionColor }} />
-                      <span className="text-[10px] font-mono uppercase tracking-[0.1em] font-bold" style={{ color: sectionColor }}>
+                      <span className="text-[10px] font-sans uppercase tracking-[0.1em] font-bold" style={{ color: sectionColor }}>
                         {section.heading}
                       </span>
                     </div>
@@ -693,14 +690,14 @@ export default function DashboardPage() {
                 <div className="border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] pt-3 mt-2">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="w-3.5 h-3.5 text-[#B89466]" />
-                    <span className="text-[10px] font-mono uppercase tracking-[0.1em] font-bold text-[#B89466]">
+                    <span className="text-[10px] font-sans uppercase tracking-[0.1em] font-bold text-[#B89466]">
                       Allo Revenue
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-[11px] font-mono text-muted-foreground">
-                    <span>Today: <strong className="text-foreground">${revenueAttribution.today.revenue.toLocaleString()}</strong></span>
-                    <span>Week: <strong className="text-foreground">${revenueAttribution.week.revenue.toLocaleString()}</strong></span>
-                    <span>Month: <strong className="text-foreground">${revenueAttribution.month.revenue.toLocaleString()}</strong></span>
+                    <span>Today: <strong className="text-foreground">₹{revenueAttribution.today.revenue.toLocaleString("en-IN")}</strong></span>
+                    <span>Week: <strong className="text-foreground">₹{revenueAttribution.week.revenue.toLocaleString("en-IN")}</strong></span>
+                    <span>Month: <strong className="text-foreground">₹{revenueAttribution.month.revenue.toLocaleString("en-IN")}</strong></span>
                   </div>
                 </div>
               )}
@@ -712,7 +709,7 @@ export default function DashboardPage() {
                     <Info className="w-3.5 h-3.5 text-[#B89466]" />
                   </div>
                   <p className="text-[12px] text-foreground/80 leading-relaxed">
-                    Welcome! As your store data syncs, Allo will generate personalized briefings with insights and recommendations.
+                    Welcome! As your store data comes in, Allo will start writing you a daily briefing — what's happening and what to do about it.
                   </p>
                 </div>
               )}
@@ -735,7 +732,7 @@ export default function DashboardPage() {
               if (automationCount > 0) {
                 fallbackItems.push({
                   id: "fallback-automations",
-                  action: `Generated ${automationCount} automations`,
+                  action: `Built ${automationCount} automations for you`,
                   detail: (programs?.filter((p) => p.status !== "recommended").map((p) => p.name).slice(0, 2).join(", ") ?? "") + (automationCount > 2 ? ` +${automationCount - 2} more` : ""),
                   time: "Recently",
                   status: "executed",
@@ -744,7 +741,7 @@ export default function DashboardPage() {
               if (hasBrand) {
                 fallbackItems.push({
                   id: "fallback-brand",
-                  action: `Analyzed brand voice for ${brandProfile?.brandName ?? "your store"}`,
+                  action: `Learned the brand voice for ${brandProfile?.brandName ?? "your store"}`,
                   detail: `Tone: ${Object.keys(brandProfile?.toneAttributes ?? {}).slice(0, 3).join(" · ")}`,
                   time: "Recently",
                   status: "executed",
@@ -753,7 +750,7 @@ export default function DashboardPage() {
               if (hasSyncedData) {
                 fallbackItems.push({
                   id: "fallback-segments",
-                  action: `Segmented ${stats?.totalCustomers ?? 0} customers into ${segmentDist?.length ?? 0} groups`,
+                  action: `Sorted ${stats?.totalCustomers ?? 0} customers into ${segmentDist?.length ?? 0} groups`,
                   detail: "",
                   time: "Recently",
                   status: "executed",
@@ -773,15 +770,14 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <Activity className="w-3.5 h-3.5 text-[#9ca3af] dark:text-[#6B6358]" />
                     <h2
-                      className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      className="text-[11px] font-sans uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
                     >
                       Agent Activity
                     </h2>
                   </div>
                   <div className="flex items-center gap-2">
                     <PulseDot color="bg-[#1F7A4F]" />
-                    <span className="text-[10px] font-mono text-muted-foreground">Live</span>
+                    <span className="text-[10px] font-sans text-muted-foreground">Live</span>
                   </div>
                 </div>
                 <div className="space-y-0">
@@ -821,7 +817,7 @@ export default function DashboardPage() {
                     </span>
                     <Link
                       href="/actions"
-                      className="text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity"
+                      className="text-[10px] font-sans text-[var(--color-accent)] hover:opacity-80 transition-opacity"
                     >
                       View all <ChevronRight className="w-2.5 h-2.5 inline" />
                     </Link>
@@ -831,7 +827,7 @@ export default function DashboardPage() {
                   <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-[rgba(200,180,150,0.08)] flex items-center justify-end">
                     <Link
                       href="/actions"
-                      className="text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity"
+                      className="text-[10px] font-sans text-[var(--color-accent)] hover:opacity-80 transition-opacity"
                     >
                       View all <ChevronRight className="w-2.5 h-2.5 inline" />
                     </Link>
@@ -852,12 +848,11 @@ export default function DashboardPage() {
           >
             <div className="flex items-center justify-between mb-4">
               <h2
-                className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="text-[11px] font-sans uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
               >
                 Automations
               </h2>
-              <Link href="/automations" className="text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity">
+              <Link href="/automations" className="text-[10px] font-sans text-[var(--color-accent)] hover:opacity-80 transition-opacity">
                 View all <ChevronRight className="w-2.5 h-2.5 inline" />
               </Link>
             </div>
@@ -880,12 +875,12 @@ export default function DashboardPage() {
                           "border border-muted-foreground"
                         }`} />
                       )}
-                      <span className="text-[12px] font-mono text-foreground truncate">{p.name}</span>
+                      <span className="text-[12px] font-sans text-foreground truncate">{p.name}</span>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[10px] font-mono text-muted-foreground capitalize">{p.status}</span>
+                      <span className="text-[10px] font-sans text-muted-foreground capitalize">{p.status}</span>
                       {p.status === "ready" && (
-                        <span className="text-[10px] font-mono text-[var(--color-accent)]">
+                        <span className="text-[10px] font-sans text-[var(--color-accent)]">
                           Go Live <ChevronRight className="w-2.5 h-2.5 inline" />
                         </span>
                       )}
@@ -902,7 +897,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="py-6 text-center">
-                <p className="text-[12px] text-muted-foreground font-sans">Allo is setting up automations...</p>
+                <p className="text-[12px] text-muted-foreground font-sans">Allo is putting your automations together…</p>
               </div>
             )}
           </motion.div>
@@ -915,12 +910,11 @@ export default function DashboardPage() {
           >
             <div className="flex items-center justify-between mb-4">
               <h2
-                className="text-[11px] font-mono uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="text-[11px] font-sans uppercase tracking-[0.12em] font-bold text-[#9ca3af] dark:text-[#6B6358]"
               >
                 Customer Segments
               </h2>
-              <Link href="/segments" className="text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-opacity">
+              <Link href="/segments" className="text-[10px] font-sans text-[var(--color-accent)] hover:opacity-80 transition-opacity">
                 Details <ChevronRight className="w-2.5 h-2.5 inline" />
               </Link>
             </div>
@@ -935,7 +929,7 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${style.dot}`} />
-                          <span className="text-[12px] font-mono text-foreground">{s.segment}</span>
+                          <span className="text-[12px] font-sans text-foreground">{s.segment}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-mono text-muted-foreground">{s.customerCount}</span>
@@ -957,12 +951,12 @@ export default function DashboardPage() {
                 {customerStats && (
                   <div className="pt-3 mt-1 border-t border-black/[0.04] dark:border-[rgba(200,180,150,0.08)] flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
                     <span>Opt-in: <strong className="text-foreground">{customerStats.marketingRate.toFixed(0)}%</strong></span>
-                    <span>AOV: <strong className="text-foreground">${customerStats.avgOrderValue.toFixed(0)}</strong></span>
+                    <span>AOV: <strong className="text-foreground">₹{customerStats.avgOrderValue.toFixed(0)}</strong></span>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-[12px] text-muted-foreground font-sans py-4">Run RFM analysis to see segments.</p>
+              <p className="text-[12px] text-muted-foreground font-sans py-4">Segments will show up here once Allo has analyzed your customers.</p>
             )}
           </motion.div>
         </div>

@@ -62,14 +62,14 @@ export default function ShopifyDetailPage() {
       <div className="space-y-6">
         <Link
           href="/integrations"
-          className="inline-flex items-center gap-2 text-[13px] text-muted-foreground font-mono hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-2 text-[13px] text-muted-foreground font-sans hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Integrations
         </Link>
-        <div className="flex items-center gap-2 py-20 justify-center text-[13px] text-muted-foreground font-mono">
+        <div className="flex items-center gap-2 py-20 justify-center text-[13px] text-muted-foreground font-sans">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Loading store...
+          Loading your store...
         </div>
       </div>
     );
@@ -80,7 +80,7 @@ export default function ShopifyDetailPage() {
       <div className="space-y-6">
         <Link
           href="/integrations"
-          className="inline-flex items-center gap-2 text-[13px] text-muted-foreground font-mono hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-2 text-[13px] text-muted-foreground font-sans hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Integrations
@@ -88,13 +88,13 @@ export default function ShopifyDetailPage() {
         <div className="flex flex-col items-center justify-center py-20">
           <Package className="w-10 h-10 text-muted-foreground/50 mb-4" />
           <p className="text-[13px] text-muted-foreground">
-            No Shopify store connected
+            No Shopify store connected yet
           </p>
           <Link
             href="/integrations"
-            className="mt-4 px-4 py-2 bg-secondary text-secondary-foreground text-[11px] font-mono rounded-lg hover:bg-secondary/90 transition-colors"
+            className="mt-4 px-4 py-2 bg-secondary text-secondary-foreground text-[11px] font-sans rounded-lg hover:bg-secondary/90 transition-colors"
           >
-            Connect Store
+            Connect store
           </Link>
         </div>
       </div>
@@ -110,7 +110,7 @@ export default function ShopifyDetailPage() {
         <div className="space-y-1">
           <Link
             href="/integrations"
-            className="inline-flex items-center gap-2 text-[11px] text-muted-foreground font-mono hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-2 text-[11px] text-muted-foreground font-sans hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Integrations
@@ -124,7 +124,7 @@ export default function ShopifyDetailPage() {
           <button
             onClick={() => triggerSync.mutate({ storeId: store.id })}
             disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-primary/50 disabled:opacity-50 transition-all"
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-primary/50 disabled:opacity-50 transition-all"
           >
             {syncing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -133,11 +133,11 @@ export default function ShopifyDetailPage() {
             ) : (
               <RefreshCw className="w-3.5 h-3.5" />
             )}
-            {syncing ? "Syncing..." : syncDone ? "Sync Complete!" : "Sync Now"}
+            {syncing ? "Syncing..." : syncDone ? "All synced!" : "Sync now"}
           </button>
           <button
             onClick={() => setDisconnecting(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-red-200 rounded-lg text-[11px] font-mono text-red-600 hover:border-red-400 transition-all"
+            className="flex items-center gap-2 px-4 py-2 border border-red-200 rounded-lg text-[11px] font-sans text-red-600 hover:border-red-400 transition-all"
           >
             <Unplug className="w-3.5 h-3.5" />
             Disconnect
@@ -151,10 +151,10 @@ export default function ShopifyDetailPage() {
           <Loader2 className="w-5 h-5 text-foreground animate-spin flex-shrink-0" />
           <div className="flex-1">
             <p className="text-[13px] font-bold text-foreground">
-              Syncing store data...
+              allo is syncing your store...
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Importing products, customers, and orders from {store.shopDomain}
+              Bringing in products, customers, and orders from {store.shopDomain}
             </p>
           </div>
           <div className="flex gap-4">
@@ -167,7 +167,7 @@ export default function ShopifyDetailPage() {
                 <div className="text-[18px] tracking-[-0.5px] font-mono font-bold text-foreground tabular-nums">
                   {item.value.toLocaleString()}
                 </div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                <div className="text-[10px] font-sans text-muted-foreground uppercase">
                   {item.label}
                 </div>
               </div>
@@ -182,10 +182,10 @@ export default function ShopifyDetailPage() {
           <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
           <div className="flex-1">
             <p className="text-[13px] font-bold text-green-700">
-              Sync complete!
+              All synced!
             </p>
             <p className="text-[11px] text-green-600 mt-0.5">
-              All data imported successfully from {store.shopDomain}
+              allo has everything from {store.shopDomain}
             </p>
           </div>
           <div className="flex gap-4">
@@ -198,7 +198,7 @@ export default function ShopifyDetailPage() {
                 <div className="text-[18px] tracking-[-0.5px] font-mono font-bold text-green-700 tabular-nums">
                   {item.value.toLocaleString()}
                 </div>
-                <div className="text-[10px] font-mono text-green-600 uppercase">
+                <div className="text-[10px] font-sans text-green-600 uppercase">
                   {item.label}
                 </div>
               </div>
@@ -218,16 +218,16 @@ export default function ShopifyDetailPage() {
               <span className="text-[13px] font-medium text-foreground font-mono">
                 {store.shopDomain}
               </span>
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-green-50 text-green-600">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans bg-green-50 text-green-600">
                 <Check className="w-3 h-3" />
                 Active
               </span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground font-mono">
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground font-sans">
               <Clock className="w-3 h-3" />
               {store.lastSyncAt
                 ? `Last synced ${new Date(store.lastSyncAt).toLocaleString()}`
-                : "Never synced"}
+                : "Not synced yet"}
             </div>
           </div>
         </div>
@@ -263,7 +263,7 @@ export default function ShopifyDetailPage() {
             }`}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px]">
+              <span className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px]">
                 {stat.label}
               </span>
               <stat.icon className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
@@ -279,24 +279,24 @@ export default function ShopifyDetailPage() {
       {disconnecting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-card rounded-xl p-6 w-full max-w-sm shadow-xl">
-            <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">
-              Disconnect Store?
+            <h3 className="text-[13px] font-bold text-foreground font-serif mb-2">
+              Disconnect this store?
             </h3>
             <p className="text-[11px] text-muted-foreground mb-5">
-              This will stop syncing data from {store.shopDomain}. Your existing
-              data will be preserved.
+              allo will stop syncing from {store.shopDomain}. Everything it&apos;s
+              already learned stays put.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setDisconnecting(false)}
-                className="flex-1 py-2 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-primary/50 transition-all"
+                className="flex-1 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-primary/50 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={() => disconnect.mutate({ storeId: store.id })}
                 disabled={disconnect.isPending}
-                className="flex-1 py-2 bg-red-600 text-white rounded-lg text-[11px] font-mono hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg text-[11px] font-sans hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
               </button>

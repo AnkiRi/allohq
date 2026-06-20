@@ -43,7 +43,7 @@ export default function EditTemplatePage() {
   };
   const updateMut = trpc.templates.update.useMutation();
   const regenerateMut = (trpc.ai as any).regenerateEmail.useMutation({
-    onError: (err: { message?: string }) => toast(err.message || "Regeneration failed", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That rewrite didn't go through. Mind trying again?", "error"),
   }) as {
     mutateAsync: (input: any) => Promise<{ blocks: EmailBlock[]; subject: string; previewText: string; reasoning: string; model: string }>;
     isPending: boolean;
@@ -83,12 +83,12 @@ export default function EditTemplatePage() {
       blocks: blocks as any,
     });
     setCanvasBlocks(blocks);
-    toast("Template saved!", "success");
+    toast("Your template is saved.", "success");
   }
 
   async function handleRegenerate() {
     if (!storeId) {
-      toast("Connect a store first to use AI regeneration", "error");
+      toast("Connect a store first so allo can rewrite this.", "error");
       return;
     }
     try {
@@ -103,7 +103,7 @@ export default function EditTemplatePage() {
       });
       setPendingBlocks(result.blocks);
       setPendingSubject(result.subject);
-      toast(`Regenerated with ${result.model}. Accept or reject the changes.`, "info");
+      toast(`allo rewrote this with ${result.model}. Keep it or set it aside.`, "info");
     } catch {
       // Error handled by mutation onError
     }
@@ -119,19 +119,19 @@ export default function EditTemplatePage() {
     setPendingBlocks(null);
     setPendingSubject(null);
     setFeedback("");
-    toast("Regenerated blocks accepted!", "success");
+    toast("Done — the new version is in.", "success");
   }
 
   function handleRejectRegeneration() {
     setPendingBlocks(null);
     setPendingSubject(null);
-    toast("Changes rejected", "info");
+    toast("No worries — kept your original.", "info");
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-[13px] text-muted-foreground font-mono">Loading template...</div>
+        <div className="text-[13px] text-muted-foreground font-sans">Loading your template…</div>
       </div>
     );
   }
@@ -139,7 +139,7 @@ export default function EditTemplatePage() {
   if (!template) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-[13px] text-muted-foreground font-mono">Template not found</div>
+        <div className="text-[13px] text-muted-foreground font-sans">We couldn't find this template.</div>
       </div>
     );
   }
@@ -154,12 +154,12 @@ export default function EditTemplatePage() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-mono bg-transparent border-none outline-none"
+            className="text-[18px] tracking-[-0.5px] font-bold text-foreground font-sans bg-transparent border-none outline-none"
           />
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="text-[13px] text-muted-foreground font-mono bg-transparent border border-border rounded-lg px-3 py-1.5 outline-none focus:border-muted-foreground w-64"
+            className="text-[13px] text-muted-foreground font-sans bg-transparent border border-border rounded-lg px-3 py-1.5 outline-none focus:border-muted-foreground w-64"
             placeholder="Subject line..."
           />
         </div>
@@ -173,8 +173,8 @@ export default function EditTemplatePage() {
         >
           <div className="flex items-center gap-2">
             <Wand2 className="w-4 h-4 text-muted-foreground" />
-            <span className="text-[12px] font-bold font-mono text-foreground">AI_CONTROLS</span>
-            <span className="text-[10px] font-mono text-muted-foreground">— Regenerate with AI</span>
+            <span className="text-[12px] font-bold font-sans text-foreground">Rewrite with allo</span>
+            <span className="text-[10px] font-sans text-muted-foreground">— give it a fresh take</span>
           </div>
           {aiPanelOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
         </button>
@@ -184,16 +184,16 @@ export default function EditTemplatePage() {
             {/* Accept/Reject bar if regeneration pending */}
             {pendingBlocks && (
               <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <span className="text-[11px] font-mono text-amber-800 flex-1">New version ready — review below then accept or reject</span>
+                <span className="text-[11px] font-sans text-amber-800 flex-1">Here's a fresh take — take a look, then keep it or set it aside.</span>
                 <button
                   onClick={handleAcceptRegeneration}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-[11px] font-mono hover:bg-green-700 transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-[11px] font-sans hover:bg-green-700 transition-colors"
                 >
                   <Check className="w-3 h-3" /> Accept
                 </button>
                 <button
                   onClick={handleRejectRegeneration}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-[11px] font-mono hover:bg-red-700 transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-[11px] font-sans hover:bg-red-700 transition-colors"
                 >
                   <X className="w-3 h-3" /> Reject
                 </button>
@@ -203,11 +203,11 @@ export default function EditTemplatePage() {
             <div className="grid grid-cols-4 gap-4">
               {/* Model */}
               <div>
-                <label className="text-[10px] font-mono text-muted-foreground block mb-1">MODEL</label>
+                <label className="text-[10px] font-sans text-muted-foreground block mb-1">MODEL</label>
                 <select
                   value={aiModel}
                   onChange={(e) => setAiModel(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground focus:outline-none"
+                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground focus:outline-none"
                 >
                   {AI_MODELS.map((m) => (
                     <option key={m.id} value={m.id}>{m.label}</option>
@@ -217,11 +217,11 @@ export default function EditTemplatePage() {
 
               {/* Creative Balance */}
               <div>
-                <label className="text-[10px] font-mono text-muted-foreground block mb-1">CREATIVE BALANCE</label>
+                <label className="text-[10px] font-sans text-muted-foreground block mb-1">CREATIVE BALANCE</label>
                 <select
                   value={creativeIntensity}
                   onChange={(e) => setCreativeIntensity(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground focus:outline-none"
+                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground focus:outline-none"
                 >
                   <option value="text_heavy">Text Heavy</option>
                   <option value="balanced">Balanced</option>
@@ -231,11 +231,11 @@ export default function EditTemplatePage() {
 
               {/* Tone */}
               <div>
-                <label className="text-[10px] font-mono text-muted-foreground block mb-1">TONE</label>
+                <label className="text-[10px] font-sans text-muted-foreground block mb-1">TONE</label>
                 <select
                   value={toneOverride}
                   onChange={(e) => setToneOverride(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground focus:outline-none"
+                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground focus:outline-none"
                 >
                   <option value="">Brand Default</option>
                   {TONE_OPTIONS.map((t) => (
@@ -246,11 +246,11 @@ export default function EditTemplatePage() {
 
               {/* Layout */}
               <div>
-                <label className="text-[10px] font-mono text-muted-foreground block mb-1">LAYOUT</label>
+                <label className="text-[10px] font-sans text-muted-foreground block mb-1">LAYOUT</label>
                 <select
                   value={layoutTemplate}
                   onChange={(e) => setLayoutTemplate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground focus:outline-none"
+                  className="w-full px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground focus:outline-none"
                 >
                   <option value="">Auto</option>
                   {layouts?.map((l) => (
@@ -266,17 +266,17 @@ export default function EditTemplatePage() {
                 type="text"
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Tell AI what to change... e.g. 'make the hero more bold, add 20% discount'"
+                placeholder="Tell allo what to change… e.g. 'make the hero bolder, add a 20% discount'"
                 onKeyDown={(e) => e.key === "Enter" && !regenerateMut.isPending && handleRegenerate()}
-                className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
               />
               <button
                 onClick={handleRegenerate}
                 disabled={regenerateMut.isPending || !storeId}
-                className="flex items-center gap-1.5 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
               >
                 <RotateCcw className={`w-3.5 h-3.5 ${regenerateMut.isPending ? "animate-spin" : ""}`} />
-                {regenerateMut.isPending ? "Regenerating..." : "Regenerate"}
+                {regenerateMut.isPending ? "Rewriting…" : "Rewrite"}
               </button>
             </div>
           </div>
@@ -292,7 +292,7 @@ export default function EditTemplatePage() {
         />
       ) : (
         <div className="flex items-center justify-center h-64 border border-border rounded-xl bg-card">
-          <div className="text-[13px] text-muted-foreground font-mono">Loading email blocks...</div>
+          <div className="text-[13px] text-muted-foreground font-sans">Loading your email…</div>
         </div>
       )}
     </div>

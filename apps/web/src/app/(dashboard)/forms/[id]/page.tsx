@@ -99,7 +99,7 @@ export default function FormDetailPage() {
         <div className="space-y-1">
           <Link
             href="/forms"
-            className="inline-flex items-center gap-2 text-[11px] text-muted-foreground font-mono hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-2 text-[11px] text-muted-foreground font-sans hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Forms
@@ -109,7 +109,7 @@ export default function FormDetailPage() {
           </h1>
           <div className="flex items-center gap-2">
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-bold uppercase ${
                 form.status === "active"
                   ? "bg-green-50 text-green-600 border border-green-200"
                   : "bg-muted text-muted-foreground border border-border"
@@ -117,7 +117,7 @@ export default function FormDetailPage() {
             >
               {form.status}
             </span>
-            <span className="text-[11px] text-muted-foreground font-mono">
+            <span className="text-[11px] text-muted-foreground font-sans">
               {fields.length} fields
             </span>
           </div>
@@ -126,7 +126,7 @@ export default function FormDetailPage() {
           {form.status !== "active" && (
             <button
               onClick={() => updateMut.mutate({ formId, status: "active" as const })}
-              className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[11px] font-mono font-bold hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[11px] font-sans font-bold hover:opacity-90 transition-opacity"
             >
               Activate
             </button>
@@ -134,7 +134,7 @@ export default function FormDetailPage() {
           {form.status === "active" && (
             <button
               onClick={() => updateMut.mutate({ formId, status: "draft" as const })}
-              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-mono text-foreground hover:border-foreground/30 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-foreground/30 transition-colors"
             >
               Deactivate
             </button>
@@ -154,7 +154,7 @@ export default function FormDetailPage() {
             className="p-4 bg-card border border-border rounded-xl"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">
+              <span className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px]">
                 {stat.label}
               </span>
               <stat.icon className="w-4 h-4 text-muted-foreground/50" />
@@ -169,7 +169,7 @@ export default function FormDetailPage() {
       {/* Popups */}
       {form.popups && form.popups.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+          <h2 className="text-[11px] font-serif font-bold text-muted-foreground uppercase tracking-[1px]">
             Popups
           </h2>
           <div className="grid gap-2">
@@ -181,15 +181,15 @@ export default function FormDetailPage() {
                 <div className="flex items-center gap-3">
                   <Eye className="w-4 h-4 text-muted-foreground" />
                   <div>
-                    <span className="text-[13px] font-mono font-medium text-foreground">
+                    <span className="text-[13px] font-sans font-medium text-foreground">
                       {popup.name}
                     </span>
-                    <span className="ml-2 text-[10px] font-mono text-muted-foreground">
+                    <span className="ml-2 text-[10px] font-sans text-muted-foreground">
                       {triggerLabel(popup.trigger)}
                     </span>
                   </div>
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase ${
+                    className={`px-2 py-0.5 rounded-full text-[9px] font-sans font-bold uppercase ${
                       popup.status === "active"
                         ? "bg-green-50 text-green-600 border border-green-200"
                         : "bg-muted text-muted-foreground border border-border"
@@ -200,7 +200,7 @@ export default function FormDetailPage() {
                 </div>
                 <button
                   onClick={() => {
-                    if (confirm("Delete this popup?")) {
+                    if (confirm("Delete this popup? This can't be undone.")) {
                       deletePopupMut.mutate({ popupId: popup.id });
                     }
                   }}
@@ -220,7 +220,7 @@ export default function FormDetailPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-[11px] font-mono font-bold uppercase tracking-[1px] border-b-2 transition-colors ${
+            className={`px-4 py-2 text-[11px] font-sans font-bold uppercase tracking-[1px] border-b-2 transition-colors ${
               tab === t
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -242,7 +242,7 @@ export default function FormDetailPage() {
             <div className="flex flex-col items-center justify-center py-12 border border-dashed border-border rounded-xl">
               <MousePointerClick className="w-8 h-8 text-muted-foreground/50 mb-3" />
               <p className="text-[13px] text-muted-foreground">
-                No submissions yet
+                No sign-ups yet — they&apos;ll show up here as people opt in.
               </p>
             </div>
           ) : (
@@ -250,19 +250,19 @@ export default function FormDetailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
                       Date
                     </th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
                       Customer
                     </th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
                       Source
                     </th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
                       Data
                     </th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
                       Consent
                     </th>
                   </tr>
@@ -286,7 +286,7 @@ export default function FormDetailPage() {
                             </span>
                           </div>
                         ) : (
-                          <span className="text-[12px] font-mono text-muted-foreground">
+                          <span className="text-[12px] font-sans text-muted-foreground">
                             Anonymous
                           </span>
                         )}
@@ -331,11 +331,11 @@ export default function FormDetailPage() {
       {tab === "embed" && (
         <div className="space-y-4">
           <p className="text-[13px] text-muted-foreground">
-            Paste this code into your Shopify theme&apos;s &lt;head&gt; section to enable popups.
+            Drop this code into your Shopify theme&apos;s &lt;head&gt; section and your popups go live.
           </p>
           <div className="relative">
             <pre className="p-4 bg-card border border-border rounded-lg text-[11px] font-mono text-foreground overflow-x-auto whitespace-pre-wrap">
-              {embedData?.script ?? "No active popups. Activate a popup first."}
+              {embedData?.script ?? "No popups are live yet. Activate one to get your embed code."}
             </pre>
             {embedData?.script && (
               <button

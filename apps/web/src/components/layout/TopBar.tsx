@@ -83,11 +83,11 @@ export function TopBar() {
     if (!latestAgentRun?.createdAt) return null;
     const diff = Date.now() - new Date(latestAgentRun.createdAt).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Last activity just now";
-    if (mins < 60) return `Last activity ${mins}m ago`;
+    if (mins < 1) return "Active just now";
+    if (mins < 60) return `Active ${mins}m ago`;
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `Last activity ${hours}h ago`;
-    return `Last activity ${Math.floor(hours / 24)}d ago`;
+    if (hours < 24) return `Active ${hours}h ago`;
+    return `Active ${Math.floor(hours / 24)}d ago`;
   })();
 
   return (
@@ -110,7 +110,7 @@ export function TopBar() {
             >
               <ArrowLeft className="w-3.5 h-3.5" />
             </Link>
-            <span className="text-[11px] font-mono tracking-[0.5px] uppercase text-muted-foreground">
+            <span className="text-[11px] font-sans tracking-[0.5px] uppercase text-muted-foreground">
               Home
             </span>
           </div>
@@ -127,7 +127,7 @@ export function TopBar() {
                 <span key={i} className="flex items-center gap-1">
                   {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/40" />}
                   <span
-                    className={`text-[11px] font-mono tracking-[0.5px] uppercase ${
+                    className={`text-[11px] font-sans tracking-[0.5px] uppercase ${
                       i === breadcrumb.length - 1
                         ? "text-muted-foreground"
                         : "text-muted-foreground/50"
@@ -147,11 +147,11 @@ export function TopBar() {
         {onboardingDone && (
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1F7A4F]/8 border border-[#1F7A4F]/15">
             <PulseDot color="bg-[#1F7A4F]" />
-            <span className="text-[11px] font-mono text-[#1F7A4F]/85">
-              Agent monitoring {totalCustomers.toLocaleString()} customers
+            <span className="text-[11px] font-sans text-[#1F7A4F]/85">
+              allo is watching over {totalCustomers.toLocaleString("en-IN")} customers
             </span>
             {lastActivityText && (
-              <span className="text-[10px] font-mono text-[#1F7A4F]/55">
+              <span className="text-[10px] font-sans text-[#1F7A4F]/55">
                 {lastActivityText}
               </span>
             )}
@@ -164,11 +164,11 @@ export function TopBar() {
             <DollarSign className="w-3.5 h-3.5 text-[#8a6f3a]" />
             <AnimatedCounter
               value={Math.round(aiRevenue)}
-              prefix="$"
+              prefix="₹"
               className="text-[12px] font-mono font-bold text-[#8a6f3a] tabular-nums"
               duration={0.8}
             />
-            <span className="text-[10px] font-mono text-[#8a6f3a]/55">AI revenue this month</span>
+            <span className="text-[10px] font-sans text-[#8a6f3a]/55">AI revenue this month</span>
           </div>
         )}
 

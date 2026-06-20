@@ -1,1430 +1,916 @@
-/* ============================================================
- * Allo landing page — LIGHT variant, fully merged taste pass.
- *
- * Drop-in for apps/web/src/app/landing.css.
- * Self-contained: assumes Fraunces / Inter / JetBrains Mono are
- * already loaded by your layout.tsx.
- * Does NOT touch globals.css — every rule is scoped under .allo-landing.
- * ============================================================ */
+/* =====================================================================
+   allo — landing page (unified TERMINAL design)
+   One operator-console composition, two themes:
+     LIGHT  — paper #F8FAF8, emerald accent #0B7A4E
+     DARK   — near-black #0A0C10, amber accent #FFB000
+   Every color is a CSS custom property, so one markup renders both themes.
+   Theming model (self-contained, does NOT touch the app's next-themes .dark):
+     • LIGHT tokens are the base (declared on .allo-terminal).
+     • @media (prefers-color-scheme: dark) applies DARK tokens — but ONLY when
+       no explicit override is set (html:not([data-allo-theme]) and
+       html[data-allo-theme="dark"]). An explicit data-allo-theme="light"
+       keeps the light base, beating system preference.
+     • html[data-allo-theme="dark"] always forces dark (even on a light OS).
+   The landing scopes the attribute selector to <html> via [data-allo-theme]
+   so it never collides with the dashboard's `.dark` class.
+   ===================================================================== */
 
-.allo-landing {
-  --aurora-indigo:    #1F7A4F;
-  --aurora-indigo-h:  #2A9261;
-  --aurora-violet:    #5C9D7E;
-  --aurora-warm:      #B89466;
-  --aurora-ink:       #0B0911;
-  --aurora-bone:      #F5F2EC;
-  --aurora-fg-light:  #1A1422;
-  --ease:             cubic-bezier(0.16, 1, 0.3, 1);
-  --font-sans:        "Inter", system-ui, -apple-system, sans-serif;
-  --font-serif:       "Fraunces", Georgia, serif;
-  --font-mono:        "JetBrains Mono", ui-monospace, monospace;
-  --aurora-noise:     url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+.allo-terminal {
+  /* ---- LIGHT theme (base) — from terminal-light.css ----------------- */
+  --t-bg: #f8faf8;          /* light paper surface */
+  --t-bg-raised: #eef2ee;   /* pane fill, one step up */
+  --t-bg-inset: #e7ece7;    /* command-line well / inset band */
+  --t-ink: #0c120e;         /* near-black ink text */
+  --t-dim: #4a554d;         /* mono-data slate (>=4.5:1 on paper) */
+  --t-faint: #6b756e;       /* fainter slate for meta */
+  --t-accent: #0b7a4e;      /* the ONE locked accent (emerald) */
+  --t-accent-soft: rgba(11, 122, 78, 0.10);
+  --t-accent-line: rgba(11, 122, 78, 0.32);
+  --t-accent-ink: #f8faf8;  /* text that sits ON the accent (button fill) */
+  --t-rule: rgba(0, 0, 0, 0.10);
+  --t-rule-strong: rgba(0, 0, 0, 0.14);
+  --t-lamp: #c3ccc5;        /* dead console lamps */
+  --t-nav-bg: rgba(248, 250, 248, 0.82);
+  --t-selection-ink: #f8faf8;
 
+  --t-radius: 8px;
+  --t-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  background: var(--t-bg);
+  color: var(--t-ink);
   min-height: 100vh;
   font-family: var(--font-sans);
-  letter-spacing: -0.01em;
-  color: var(--aurora-fg-light);
-  background: var(--aurora-bone);
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-.allo-landing *, .allo-landing *::before, .allo-landing *::after { box-sizing: border-box; }
-.allo-landing img { display: block; max-width: 100%; }
-.allo-landing button { font-family: inherit; cursor: pointer; }
-.allo-landing a { color: inherit; text-decoration: none; }
-
-/* ── Full-bleed aurora atmosphere ──────────────────────── */
-.allo-landing.aurora-light { position: relative; isolation: isolate; }
-.allo-landing.aurora-light::before {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 110% 90% at 95% -10%, rgba(31, 122, 79, 0.20)  0%, transparent 55%),
-    radial-gradient(ellipse 90%  70% at 5%  105%, rgba(92, 157, 126, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 60%  60% at 110% 60%, rgba(184, 148, 102, 0.10) 0%, transparent 50%);
-}
-.allo-landing.aurora-light::after {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-image: var(--aurora-noise); opacity: 0.12; mix-blend-mode: multiply;
-}
-.allo-landing.aurora-light > * { position: relative; z-index: 1; }
-
-.allo-landing .shell { max-width: 1180px; margin: 0 auto; padding: 0 32px; }
-@media (max-width: 640px) { .allo-landing .shell { padding: 0 22px; } }
-
-/* ── Nav ──────────────────────────────────────────────── */
-.allo-landing .nav {
-  position: relative;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 22px 0;
-}
-.allo-landing .nav .brand {
-  font-family: var(--font-sans);
-  font-weight: 500; font-size: 17px;
-  letter-spacing: -0.025em;
-  color: var(--aurora-fg-light);
-}
-.allo-landing .nav .links {
-  display: flex; align-items: center; gap: 28px;
-  font-family: var(--font-sans); font-size: 13px;
-  color: rgba(26, 20, 34, 0.45);
-}
-.allo-landing .nav .links a { transition: color 200ms var(--ease); }
-.allo-landing .nav .links a:hover { color: rgba(26, 20, 34, 0.92); }
-.allo-landing .nav .links .sign-in { color: rgba(26, 20, 34, 0.78); }
-@media (max-width: 640px) {
-  .allo-landing .nav .links a:not(.sign-in) { display: none; }
-}
-
-/* ── Hero ─────────────────────────────────────────────── */
-.allo-landing .hero {
-  position: relative;
-  padding: 64px 0 48px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 1fr);
-  gap: 48px;
-  align-items: center;
-}
-.allo-landing .hero-text { max-width: 600px; }
-
-@media (min-width: 961px) and (max-width: 1180px) {
-  .allo-landing .hero {
-    grid-template-columns: minmax(0, 1fr) 380px;
-    gap: 32px;
-    padding: 56px 0 40px;
-  }
-  .allo-landing .hero-text { max-width: 460px; }
-  .allo-landing .hero h1 { font-size: clamp(36px, 4.8vw, 52px); }
-}
-
-@media (max-width: 960px) {
-  .allo-landing .hero {
-    grid-template-columns: 1fr;
-    padding: 56px 0 36px;
-    gap: 24px;
-    justify-items: center;
-    text-align: center;
-  }
-  .allo-landing .hero-text {
-    max-width: 580px;
-    margin: 0 auto;
-  }
-  .allo-landing .hero .lede { margin-left: auto; margin-right: auto; }
-  .allo-landing .hero .cta-row { justify-content: center; }
-
-  .allo-landing .hero-visual {
-    min-height: auto;
-    width: 100%;
-    overflow: hidden;
-  }
-  .allo-landing .aurora-orb { display: none; }
-  .allo-landing .hero-activity {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-}
-
-.allo-landing .hero .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-  margin: 0 0 24px;
-}
-.allo-landing .hero h1 {
-  font-family: var(--font-sans);
-  font-weight: 500;
-  font-size: clamp(40px, 6.5vw, 72px);
-  letter-spacing: -0.045em;
-  line-height: 1.02;
-  color: var(--aurora-fg-light);
-  margin: 0;
-  text-wrap: balance;
-}
-.allo-landing .hero h1 em {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-weight: 400;
-  color: rgba(26, 20, 34, 0.55);
-}
-
-/* Highlight swash behind "customer." — marker-pen paint-on */
-.allo-landing .hero h1 em.with-mark {
-  position: relative;
-  display: inline;
-  background-image: linear-gradient(180deg,
-    transparent 62%,
-    rgba(31, 122, 79, 0.22) 62%,
-    rgba(31, 122, 79, 0.22) 88%,
-    transparent 88%);
-  background-size: 0% 100%;
-  background-repeat: no-repeat;
-  background-position: left center;
-  padding: 0 4px;
-  margin: 0 -4px;
-  animation: mark-paint 1100ms cubic-bezier(0.16, 1, 0.3, 1) 900ms forwards;
-}
-@keyframes mark-paint { to { background-size: 100% 100%; } }
-
-.allo-landing .hero p.lede {
-  margin: 26px 0 0;
-  max-width: 440px;
-  font-size: 15px; line-height: 1.65;
-  letter-spacing: -0.005em;
-  color: rgba(26, 20, 34, 0.62);
-}
-
-/* "For instance" — the one specific detail */
-.allo-landing .hero .for-instance {
-  margin: 14px 0 0;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
-  color: rgba(26, 20, 34, 0.55);
-  max-width: 420px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* faint grid wash so the surface reads as a console, not a blank page */
+  background-image:
+    linear-gradient(var(--t-rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--t-rule) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center top;
 }
 
-.allo-landing .hero .cta-row {
-  margin-top: 36px;
-  display: flex; align-items: center; gap: 22px;
-  font-family: var(--font-sans);
-  font-size: 13px; font-weight: 500;
-}
-.allo-landing .hero .cta-primary {
-  color: var(--aurora-fg-light);
-  display: inline-flex; align-items: center; gap: 6px;
-  border-bottom: 1px solid rgba(26, 20, 34, 0.35);
-  padding-bottom: 2px;
-  transition: border-color 200ms var(--ease);
-}
-.allo-landing .hero .cta-primary:hover { border-color: var(--aurora-fg-light); }
-.allo-landing .hero .cta-primary .arrow {
-  display: inline-block;
-  transition: transform 250ms var(--ease);
-}
-.allo-landing .hero .cta-primary:hover .arrow { transform: translateX(3px); }
-.allo-landing .hero .cta-secondary {
-  color: rgba(26, 20, 34, 0.5);
-  transition: color 200ms var(--ease);
-}
-.allo-landing .hero .cta-secondary:hover { color: var(--aurora-fg-light); }
+/* The DARK token set is applied in two ways below, both keyed entirely off the
+   <html data-allo-theme> attribute (set pre-paint by the inline script / the
+   toggle) plus the OS preference — no post-hydration JS marker is needed, so
+   there is never a wrong-token flash. */
 
-/* ── Hero visual — dual orbs + activity card ─────────── */
-.allo-landing .hero-visual {
-  position: relative;
-  min-height: 460px;
-  display: flex; align-items: center; justify-content: center;
-}
-.allo-landing .aurora-orb {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  filter: blur(64px);
-  will-change: transform;
-}
-.allo-landing .aurora-orb-a {
-  width: 460px; height: 460px;
-  top: -60px; right: -60px;
-  background:
-    radial-gradient(circle at 35% 35%, rgba(31, 122, 79, 0.26), transparent 55%),
-    radial-gradient(circle at 65% 65%, rgba(92, 157, 126, 0.18), transparent 55%);
-  opacity: 0.55;
-  animation: orb-drift-a 14s ease-in-out infinite;
-}
-.allo-landing .aurora-orb-b {
-  width: 360px; height: 360px;
-  bottom: -40px; left: -60px;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(184, 148, 102, 0.24), transparent 60%),
-    radial-gradient(circle at 30% 30%, rgba(255, 215, 130, 0.14), transparent 60%);
-  opacity: 0.44;
-  animation: orb-drift-b 18s ease-in-out infinite;
-}
-@keyframes orb-drift-a {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%      { transform: translate(-24px, -18px) scale(1.08); }
-  66%      { transform: translate(18px, 16px) scale(0.94); }
-}
-@keyframes orb-drift-b {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  40%      { transform: translate(28px, -22px) scale(1.10); }
-  75%      { transform: translate(-16px, 12px) scale(0.92); }
-}
-
-.allo-landing .hero-activity {
-  position: relative;
-  z-index: 1;
-  width: 380px;
-  padding: 18px 20px 16px;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(26, 20, 34, 0.08);
-  border-radius: 18px;
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-          backdrop-filter: blur(24px) saturate(150%);
-  box-shadow:
-    0 28px 70px rgba(26, 20, 34, 0.10),
-    0 2px 8px rgba(26, 20, 34, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  display: flex; flex-direction: column; gap: 14px;
-}
-
-.allo-landing .ha-head {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.18em;
-  color: rgba(26, 20, 34, 0.5);
-}
-.allo-landing .ha-dot {
-  position: relative; display: inline-block;
-  width: 7px; height: 7px; border-radius: 9999px;
-  background: #5C8F4A;
-}
-.allo-landing .ha-dot::before {
-  content: ""; position: absolute; inset: 0;
-  border-radius: 9999px; background: #5C8F4A;
-  opacity: 0.5;
-  animation: ha-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-@keyframes ha-ping {
-  75%, 100% { transform: scale(2.4); opacity: 0; }
-}
-.allo-landing .ha-label { color: rgba(26, 20, 34, 0.85); }
-.allo-landing .ha-stamp { margin-left: auto; color: rgba(26, 20, 34, 0.35); font-variant-numeric: tabular-nums; }
-
-.allo-landing .ha-kpi { display: flex; flex-direction: column; gap: 4px; }
-.allo-landing .ha-kpi-row { display: flex; align-items: baseline; gap: 10px; }
-.allo-landing .ha-kpi-val {
-  font-family: var(--font-mono);
-  font-size: 28px; font-weight: 700;
-  letter-spacing: -0.025em;
-  color: rgba(26, 20, 34, 0.95);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.allo-landing .ha-kpi-delta {
-  font-family: var(--font-mono);
-  font-size: 11px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px;
-  background: rgba(92, 143, 74, 0.12);
-  color: #5C8F4A;
-}
-.allo-landing .ha-kpi-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.14em;
-  color: rgba(26, 20, 34, 0.4);
-}
-.allo-landing .ha-spark { width: 100%; height: 22px; margin-top: 4px; }
-.allo-landing .ha-spark-path {
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-  animation: spark-draw 2200ms cubic-bezier(0.16, 1, 0.3, 1) 200ms forwards;
-}
-@keyframes spark-draw { to { stroke-dashoffset: 0; } }
-
-.allo-landing .ha-divider {
-  height: 1px;
-  background: linear-gradient(90deg,
-    transparent 0%, rgba(26, 20, 34, 0.08) 20%,
-    rgba(26, 20, 34, 0.08) 80%, transparent 100%);
-}
-
-.allo-landing .ha-items { position: relative; min-height: 56px; }
-.allo-landing .ha-item {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; gap: 4px;
-  opacity: 0; transform: translateY(8px);
-}
-.allo-landing .ha-text {
-  font-family: var(--font-sans);
-  font-size: 14px; line-height: 1.4;
-  color: rgba(26, 20, 34, 0.92);
-  letter-spacing: -0.005em;
-}
-.allo-landing .ha-text em {
-  font-family: var(--font-serif);
-  font-style: italic; font-weight: 400;
-  color: var(--aurora-indigo);
-}
-.allo-landing .ha-meta {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.14em;
-  color: rgba(26, 20, 34, 0.4);
-}
-
-@keyframes ha-cycle {
-  0%   { opacity: 0; transform: translateY(8px); }
-  4%   { opacity: 1; transform: translateY(0); }
-  22%  { opacity: 1; transform: translateY(0); }
-  25%  { opacity: 0; transform: translateY(-8px); }
-  100% { opacity: 0; transform: translateY(-8px); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .allo-landing .ha-item { animation: ha-cycle 12s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
-  .allo-landing .ha-item:nth-child(1) { animation-delay: 0s; }
-  .allo-landing .ha-item:nth-child(2) { animation-delay: 3s; }
-  .allo-landing .ha-item:nth-child(3) { animation-delay: 6s; }
-  .allo-landing .ha-item:nth-child(4) { animation-delay: 9s; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .allo-landing .ha-item:first-child { opacity: 1; transform: translateY(0); }
-}
-
-.allo-landing .ha-draft { display: flex; flex-direction: column; gap: 8px; }
-.allo-landing .ha-draft-head {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.14em;
-  color: rgba(26, 20, 34, 0.4);
-}
-.allo-landing .ha-draft-channel {
-  display: inline-flex; align-items: center; gap: 6px;
-  color: rgba(26, 20, 34, 0.55);
-}
-.allo-landing .ha-draft-channel-dot {
-  width: 6px; height: 6px; border-radius: 9999px;
-  background: #25D366;
-  box-shadow: 0 0 6px rgba(37, 211, 102, 0.6);
-}
-.allo-landing .ha-draft-to {
-  margin-left: auto;
-  color: rgba(26, 20, 34, 0.45);
-  font-variant-numeric: tabular-nums;
-}
-.allo-landing .ha-draft-bubble {
-  position: relative;
-  padding: 10px 14px;
-  background: linear-gradient(180deg, rgba(220, 248, 198, 0.6), rgba(212, 237, 200, 0.5));
-  border: 1px solid rgba(37, 211, 102, 0.18);
-  border-radius: 12px 12px 12px 4px;
-  font-family: var(--font-sans);
-  font-size: 13px; line-height: 1.5;
-  color: rgba(26, 20, 34, 0.92);
-  letter-spacing: -0.005em;
-  min-height: 52px;
-}
-.allo-landing .ha-draft-cursor {
-  display: inline-block;
-  margin-left: 1px;
-  color: var(--aurora-indigo);
-  font-weight: 700;
-  animation: cursor-blink 0.9s steps(2) infinite;
-}
-@keyframes cursor-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-/* ── Founding partners ────────────────────────────────── */
-.allo-landing .founding {
-  border-top: 1px solid rgba(26, 20, 34, 0.10);
-  padding: 24px 0 28px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 48px;
-  align-items: center;
-}
-@media (max-width: 960px) {
-  .allo-landing .founding {
-    grid-template-columns: 1fr;
-    gap: 18px;
-    padding: 20px 0 24px;
-    justify-items: center;
-    text-align: center;
-  }
-  .allo-landing .founding-headline { font-size: 20px; }
-  .allo-landing .founding-sub { margin-left: auto; margin-right: auto; }
-  .allo-landing .founding-spots { align-items: center; }
-  .allo-landing .founding-spots-meta { justify-content: center; }
-}
-.allo-landing .founding-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-  margin: 0 0 10px;
-  padding-left: 0.22em;
-}
-.allo-landing .founding-headline {
-  font-family: var(--font-serif);
-  font-weight: 500; font-size: 22px;
-  letter-spacing: -0.025em; line-height: 1.15;
-  color: var(--aurora-fg-light);
-  margin: 0;
-}
-.allo-landing .founding-headline em {
-  font-style: italic; color: rgba(26, 20, 34, 0.55);
-}
-.allo-landing .founding-sub {
-  margin: 12px 0 0;
-  font-family: var(--font-sans);
-  font-size: 13px; line-height: 1.6;
-  color: rgba(26, 20, 34, 0.62);
-  max-width: 360px;
-}
-.allo-landing .founding-spots { display: flex; flex-direction: column; gap: 14px; }
-.allo-landing .founding-spots-row { display: flex; gap: 10px; }
-.allo-landing .spot {
-  width: 28px; height: 28px;
-  border-radius: 9999px;
-  border: 1px dashed rgba(26, 20, 34, 0.22);
-  background: transparent;
-  position: relative;
-  transition: border-color 200ms var(--ease), transform 200ms var(--ease);
-}
-.allo-landing .spot.filled {
-  background: linear-gradient(135deg, var(--aurora-indigo) 0%, var(--aurora-violet) 100%);
-  border: 0;
-  box-shadow: 0 4px 12px rgba(31, 122, 79, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-.allo-landing .spot.is-next { border-color: var(--aurora-indigo); }
-@media (prefers-reduced-motion: no-preference) {
-  .allo-landing .spot.is-next {
-    animation: spot-pulse 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+/* 1) System default: OS is dark AND the visitor has set no explicit override.
+      (Explicit dark on a light OS is handled by block 2 below.) */
+@media (prefers-color-scheme: dark) {
+  html:not([data-allo-theme]) .allo-terminal {
+    --t-bg: #0a0c10;
+    --t-bg-raised: #0e1116;
+    --t-bg-inset: #070a0d;
+    --t-ink: #e6e8eb;
+    --t-dim: #8b9097;
+    --t-faint: #5b626b;
+    --t-accent: #ffb000;
+    --t-accent-soft: rgba(255, 176, 0, 0.14);
+    --t-accent-line: rgba(255, 176, 0, 0.34);
+    --t-accent-ink: #0a0c10;
+    --t-rule: rgba(255, 255, 255, 0.06);
+    --t-rule-strong: rgba(255, 255, 255, 0.11);
+    --t-lamp: #2a2f37;
+    --t-nav-bg: rgba(10, 12, 16, 0.82);
+    --t-selection-ink: #0a0c10;
   }
 }
-@keyframes spot-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(31, 122, 79, 0); transform: scale(1); }
-  50%      { box-shadow: 0 0 0 6px rgba(31, 122, 79, 0.08); transform: scale(1.06); }
-}
-.allo-landing .founding-spots-meta {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  font-family: var(--font-mono);
-  font-size: 11px; color: rgba(26, 20, 34, 0.45);
-  text-transform: uppercase; letter-spacing: 0.14em;
-}
-.allo-landing .founding-spots-meta strong { color: var(--aurora-fg-light); font-weight: 700; }
-.allo-landing .founding-cta {
-  font-family: var(--font-sans);
-  font-size: 13px; font-weight: 500;
-  color: var(--aurora-fg-light);
-  display: inline-flex; align-items: center; gap: 4px;
-  border-bottom: 1px solid rgba(26, 20, 34, 0.35);
-  padding-bottom: 2px;
-  text-transform: none; letter-spacing: -0.005em;
-  transition: border-color 200ms var(--ease);
-}
-.allo-landing .founding-cta:hover { border-color: var(--aurora-fg-light); }
-.allo-landing .founding-cta .arrow {
-  display: inline-block;
-  transition: transform 250ms var(--ease);
-}
-.allo-landing .founding-cta:hover .arrow { transform: translateX(3px); }
 
-/* ── Briefing section ─────────────────────────────────── */
-.allo-landing .section-briefing {
-  padding: 100px 0;
-  background: #F0EBE0;
-  position: relative;
-  border-top: 1px solid rgba(26, 20, 34, 0.05);
-}
-.allo-landing .section-briefing::before {
-  content: ""; position: absolute; inset: 0;
-  background: radial-gradient(ellipse 60% 50% at 50% -10%, rgba(31, 122, 79, 0.06) 0%, transparent 60%);
-  pointer-events: none;
-}
-.allo-landing .section-briefing > .shell { position: relative; }
-.allo-landing .section-briefing .head {
-  max-width: 560px;
-  margin: 0 auto 48px;
-  text-align: center;
-}
-.allo-landing .section-briefing .head .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-  margin: 0 0 14px;
-  padding-left: 0.22em;
-}
-.allo-landing .section-briefing .head h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: clamp(32px, 4.4vw, 44px);
-  letter-spacing: -0.025em; line-height: 1.1;
-  color: var(--aurora-fg-light);
-  margin: 0;
-}
-.allo-landing .section-briefing .head h2 em {
-  font-style: italic; color: rgba(26, 20, 34, 0.55);
-}
-.allo-landing .section-briefing .head p {
-  margin: 16px auto 0;
-  max-width: 480px;
-  font-family: var(--font-sans);
-  font-size: 14px; line-height: 1.65;
-  color: rgba(26, 20, 34, 0.62);
+/* 2) Explicit dark override always wins, even on a light OS. */
+html[data-allo-theme="dark"] .allo-terminal {
+  --t-bg: #0a0c10;
+  --t-bg-raised: #0e1116;
+  --t-bg-inset: #070a0d;
+  --t-ink: #e6e8eb;
+  --t-dim: #8b9097;
+  --t-faint: #5b626b;
+  --t-accent: #ffb000;
+  --t-accent-soft: rgba(255, 176, 0, 0.14);
+  --t-accent-line: rgba(255, 176, 0, 0.34);
+  --t-accent-ink: #0a0c10;
+  --t-rule: rgba(255, 255, 255, 0.06);
+  --t-rule-strong: rgba(255, 255, 255, 0.11);
+  --t-lamp: #2a2f37;
+  --t-nav-bg: rgba(10, 12, 16, 0.82);
+  --t-selection-ink: #0a0c10;
 }
 
-.allo-landing .briefing-card {
-  max-width: 880px; margin: 0 auto;
-  border: 1px solid rgba(26, 20, 34, 0.08);
-  border-radius: 22px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.6);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-          backdrop-filter: blur(20px) saturate(140%);
-  position: relative;
-  box-shadow: 0 24px 60px rgba(26, 20, 34, 0.06);
-}
-.allo-landing .briefing-card::before {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 110% 90% at 95% -10%, rgba(31, 122, 79, 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 90% 70% at 5% 105%, rgba(92, 157, 126, 0.13) 0%, transparent 55%);
-}
-.allo-landing .briefing-card::after {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-image: var(--aurora-noise);
-  opacity: 0.08;
-  mix-blend-mode: multiply;
-}
-.allo-landing .briefing-card-inner {
-  position: relative; z-index: 1;
-  padding: 32px 36px;
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 36px;
-  align-items: center;
-}
-@media (max-width: 720px) {
-  .allo-landing .briefing-card-inner { grid-template-columns: 1fr; gap: 22px; padding: 26px 24px; }
-}
-.allo-landing .briefing-card .meta {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-}
-.allo-landing .briefing-card .lead {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: 30px;
-  letter-spacing: -0.025em; line-height: 1.15;
-  color: var(--aurora-fg-light);
-  margin: 10px 0 0;
-}
-.allo-landing .briefing-card .lead em { font-style: italic; color: rgba(26, 20, 34, 0.58); }
-.allo-landing .briefing-card .body-copy {
-  margin: 14px 0 0;
-  max-width: 460px;
-  font-family: var(--font-sans);
-  font-size: 13px; line-height: 1.65;
-  color: rgba(26, 20, 34, 0.65);
-}
-.allo-landing .briefing-card .cta-row {
-  margin-top: 22px;
-  display: flex; gap: 14px; align-items: center;
-}
-.allo-landing .briefing-card .btn-primary {
-  padding: 9px 16px; border-radius: 10px;
-  background: var(--aurora-indigo);
-  color: #fff; border: 0;
-  font-family: var(--font-sans);
-  font-size: 12px; font-weight: 600;
-  cursor: pointer;
-  transition: background 150ms var(--ease);
-}
-.allo-landing .briefing-card .btn-primary:hover { background: var(--aurora-indigo-h); }
-.allo-landing .briefing-card .btn-link {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: rgba(26, 20, 34, 0.55);
-  border-bottom: 1px solid rgba(26, 20, 34, 0.18);
-  padding-bottom: 1px;
-  transition: color 200ms, border-color 200ms;
-}
-.allo-landing .briefing-card .btn-link:hover {
-  color: var(--aurora-fg-light);
-  border-color: var(--aurora-fg-light);
+/* 3) Explicit light override: nothing to do — the base tokens on
+      .allo-terminal are already light, and because the media-query block in (1)
+      is gated on html:not([data-allo-theme]), an explicit light override on a
+      dark OS correctly falls through to the light base. */
+
+.allo-terminal *,
+.allo-terminal *::before,
+.allo-terminal *::after {
+  box-sizing: border-box;
 }
 
-.allo-landing .briefing-card .kpis { display: flex; flex-direction: column; }
-.allo-landing .briefing-card .kpi-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 14px; align-items: baseline;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(26, 20, 34, 0.08);
-}
-.allo-landing .briefing-card .kpi-row:last-child { border-bottom: 0; }
-.allo-landing .briefing-card .kpi-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.14em;
-  color: rgba(26, 20, 34, 0.45);
-}
-.allo-landing .briefing-card .kpi-value {
-  font-family: var(--font-mono);
-  font-size: 22px; font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--aurora-fg-light);
-  font-variant-numeric: tabular-nums;
-}
-.allo-landing .briefing-card .kpi-delta {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: rgba(26, 20, 34, 0.45);
-}
-.allo-landing .briefing-card .kpi-delta.up   { color: #5C8F4A; }
-.allo-landing .briefing-card .kpi-delta.down { color: #C4704D; }
-
-/* ── Founder quotes — dark emerald crossfade carousel ── */
-.allo-landing .section-quotes {
-  padding: 120px 0 110px;
-  background: #0D2419;
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-.allo-landing .section-quotes::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 90% 70% at 85% -5%, rgba(31, 122, 79, 0.55) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 60% at 5% 100%, rgba(92, 157, 126, 0.28) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 45% at 105% 95%, rgba(184, 148, 102, 0.22) 0%, transparent 55%);
-}
-.allo-landing .section-quotes::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background-image: var(--aurora-noise);
-  opacity: 0.22; mix-blend-mode: overlay;
-}
-.allo-landing .section-quotes .shell { position: relative; z-index: 1; }
-
-.allo-landing .quote-stack {
-  position: relative;
-  max-width: 760px; margin: 0 auto;
-  min-height: 260px;
-  padding: 20px 0;
-}
-@media (max-width: 720px) {
-  .allo-landing .quote-stack { min-height: 320px; padding: 12px 0; }
+.allo-terminal ::selection {
+  background: var(--t-accent);
+  color: var(--t-selection-ink);
 }
 
-.allo-landing .pull-quote {
-  position: absolute; inset: 0;
-  margin: 0;
-  display: flex; flex-direction: column; justify-content: center; gap: 22px;
-  opacity: 0; transform: translateY(10px);
-  transition: opacity 800ms cubic-bezier(0.16, 1, 0.3, 1),
-              transform 800ms cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
-}
-.allo-landing .pull-quote.is-active {
-  opacity: 1; transform: translateY(0);
-  pointer-events: auto;
-}
-.allo-landing .pull-quote .quote-mark {
-  position: absolute;
-  top: -34px; left: -14px;
-  font-family: var(--font-serif);
-  font-style: italic; font-weight: 500;
-  font-size: 160px; line-height: 1;
-  color: var(--aurora-warm);
-  opacity: 0.32;
-  letter-spacing: -0.05em;
-  user-select: none;
-}
-.allo-landing .pull-quote blockquote {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-style: italic; font-weight: 400;
-  font-size: clamp(22px, 2.9vw, 34px);
-  line-height: 1.45;
-  letter-spacing: -0.015em;
-  color: rgba(245, 242, 236, 0.96);
-  text-wrap: pretty;
-}
-.allo-landing .pull-quote figcaption {
-  display: flex; flex-direction: column; gap: 3px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(245, 242, 236, 0.10);
-}
-.allo-landing .pull-quote .attr-name {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 16px;
-  color: rgba(245, 242, 236, 0.92);
-  letter-spacing: -0.01em;
-}
-.allo-landing .pull-quote .attr-name::before {
-  content: "— ";
-  color: var(--aurora-warm);
-  font-style: normal;
-  margin-right: 2px;
-}
-.allo-landing .pull-quote .attr-role {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.18em;
-  color: rgba(245, 242, 236, 0.5);
-}
-
-.allo-landing .quote-dots {
-  display: flex; justify-content: center; gap: 10px;
-  margin-top: 40px;
-}
-.allo-landing .quote-dot {
-  width: 22px; height: 3px;
-  border-radius: 9999px;
-  background: rgba(245, 242, 236, 0.16);
-  border: 0; padding: 0;
-  cursor: pointer;
-  transition: background 280ms var(--ease), width 280ms var(--ease);
-}
-.allo-landing .quote-dot.is-active {
-  background: var(--aurora-warm);
-  width: 36px;
-}
-.allo-landing .quote-dot:hover { background: rgba(245, 242, 236, 0.32); }
-.allo-landing .quote-dot.is-active:hover { background: var(--aurora-warm); }
-
-/* ── How it works ─────────────────────────────────────── */
-.allo-landing .section-how {
-  padding: 100px 0;
-  background: #F0EBE0;
-  border-top: 1px solid rgba(26, 20, 34, 0.06);
-}
-.allo-landing .section-how .head { max-width: 560px; margin: 0 0 56px; }
-.allo-landing .section-how .head .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-  margin: 0 0 14px;
-}
-.allo-landing .section-how .head h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: clamp(28px, 4vw, 38px);
-  letter-spacing: -0.025em; line-height: 1.1;
-  color: var(--aurora-fg-light);
-  margin: 0;
-}
-.allo-landing .section-how .grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 40px;
-}
-@media (max-width: 720px) {
-  .allo-landing .section-how .grid { grid-template-columns: 1fr; gap: 32px; }
-}
-.allo-landing .section-how .step .num {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--aurora-indigo);
-  letter-spacing: 0.1em; font-weight: 600;
-}
-.allo-landing .section-how .step h3 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: 22px;
-  letter-spacing: -0.02em;
-  color: var(--aurora-fg-light);
-  margin: 12px 0 10px;
-}
-.allo-landing .section-how .step p {
-  font-family: var(--font-sans);
-  font-size: 13px; line-height: 1.65;
-  color: rgba(26, 20, 34, 0.62);
-  margin: 0;
-}
-.allo-landing .section-how .step .accent {
-  display: inline-block;
-  width: 22px; height: 1px;
-  background: linear-gradient(90deg, var(--aurora-indigo), transparent);
-  margin-top: 18px;
-}
-
-/* ── Apply form — 3 questions, italic-serif inputs ───── */
-.allo-landing .section-apply {
-  padding: 90px 0 110px;
-  background: #F0EBE0;
-  border-top: 1px solid rgba(26, 20, 34, 0.06);
-}
-.allo-landing .section-apply .head {
-  max-width: 560px; margin: 0 auto 36px;
-  text-align: center;
-}
-.allo-landing .section-apply .head .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-  margin: 0 0 14px;
-  padding-left: 0.22em;
-}
-.allo-landing .section-apply .head h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: clamp(28px, 4vw, 36px);
-  letter-spacing: -0.025em; line-height: 1.15;
-  margin: 0;
-}
-.allo-landing .section-apply .head h2 em { font-style: italic; color: rgba(26, 20, 34, 0.55); }
-.allo-landing .section-apply .head p {
-  margin: 14px auto 0;
-  max-width: 460px;
-  font-family: var(--font-sans);
-  font-size: 13px; line-height: 1.6;
-  color: rgba(26, 20, 34, 0.62);
-}
-.allo-landing .section-apply form {
-  max-width: 560px; margin: 0 auto;
-  display: flex; flex-direction: column; gap: 22px;
-}
-.allo-landing .section-apply .field { display: flex; flex-direction: column; gap: 6px; }
-.allo-landing .section-apply label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.18em;
-  color: rgba(26, 20, 34, 0.5);
-}
-.allo-landing .section-apply input,
-.allo-landing .section-apply textarea {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 16px;
-  color: var(--aurora-fg-light);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid rgba(26, 20, 34, 0.25);
-  padding: 8px 0 10px;
-  outline: none;
-  transition: border-color 200ms var(--ease);
+.allo-terminal .shell {
   width: 100%;
-  resize: none;
-}
-.allo-landing .section-apply input:focus,
-.allo-landing .section-apply textarea:focus {
-  border-bottom-color: var(--aurora-indigo);
-}
-.allo-landing .section-apply input::placeholder,
-.allo-landing .section-apply textarea::placeholder {
-  color: rgba(26, 20, 34, 0.32);
-}
-.allo-landing .section-apply .actions {
-  display: flex; align-items: center; gap: 18px;
-  margin-top: 14px;
-}
-.allo-landing .section-apply .submit {
-  padding: 11px 22px;
-  border-radius: 9999px;
-  background: var(--aurora-fg-light);
-  color: var(--aurora-bone);
-  border: 0; cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px; font-weight: 600;
-  letter-spacing: -0.005em;
-  transition: background 150ms var(--ease), transform 150ms var(--ease);
-}
-.allo-landing .section-apply .submit:hover {
-  background: var(--aurora-indigo); transform: translateY(-1px);
-}
-.allo-landing .section-apply .reassurance {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 13px;
-  color: rgba(26, 20, 34, 0.55);
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-inline: 28px;
 }
 
-/* ── Final CTA ────────────────────────────────────────── */
-.allo-landing .section-cta {
-  position: relative;
-  padding: 120px 0 110px;
-  text-align: center;
-  background: var(--aurora-bone);
-  isolation: isolate;
-  overflow: hidden;
+.allo-terminal a {
+  color: inherit;
+  text-decoration: none;
 }
-.allo-landing .section-cta::before {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(31, 122, 79, 0.20) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 50% at 15% 90%,  rgba(92, 157, 126, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 50% at 85% 90%,  rgba(181, 122, 92, 0.12) 0%, transparent 55%);
+
+.allo-terminal .mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "liga" 0;
 }
-.allo-landing .section-cta::after {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-image: var(--aurora-noise);
-  opacity: 0.10;
-  mix-blend-mode: multiply;
+
+.allo-terminal .accent { color: var(--t-accent); }
+
+/* shared focus ring for keyboard users (both themes) */
+.allo-terminal a:focus-visible,
+.allo-terminal button:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
-.allo-landing .section-cta > .shell { position: relative; z-index: 2; }
-.allo-landing .section-cta h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: clamp(36px, 5vw, 56px);
-  letter-spacing: -0.03em; line-height: 1.05;
-  color: var(--aurora-fg-light);
-  margin: 0 auto;
-  max-width: 700px;
+
+/* =====================================================================
+   NAV — one line, 64px
+   ===================================================================== */
+.allo-terminal .nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--t-rule);
+  background: var(--t-nav-bg);
+  backdrop-filter: blur(8px);
+}
+.allo-terminal .nav-brand {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.allo-terminal .nav-brand .blip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 8px var(--t-accent);
+}
+.allo-terminal .nav-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-dim);
+}
+.allo-terminal .nav-links a {
+  transition: color 160ms ease;
+}
+.allo-terminal .nav-links a:hover {
+  color: var(--t-ink);
+}
+.allo-terminal .nav-cta {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-accent);
+  border: 1px solid var(--t-accent-line);
+  border-radius: var(--t-radius);
+  padding: 7px 14px;
+  transition: background 160ms ease, transform 160ms var(--t-ease);
+}
+.allo-terminal .nav-cta:hover { background: var(--t-accent-soft); }
+.allo-terminal .nav-cta:active { transform: scale(0.97); }
+
+/* theme toggle — sun/moon */
+.allo-terminal .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--t-rule-strong);
+  border-radius: var(--t-radius);
+  background: transparent;
+  color: var(--t-dim);
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, transform 160ms var(--t-ease);
+}
+.allo-terminal .theme-toggle:hover { color: var(--t-ink); border-color: var(--t-dim); }
+.allo-terminal .theme-toggle:active { transform: scale(0.97); }
+.allo-terminal .theme-toggle svg { width: 16px; height: 16px; display: block; }
+/* Icon shows the theme you'd switch TO: light base => moon; dark => sun.
+   Driven purely off the resolved theme (OS pref + explicit override),
+   mirroring the token rules so the icon never disagrees with the surface. */
+.allo-terminal .theme-toggle .icon-sun { display: none; }
+.allo-terminal .theme-toggle .icon-moon { display: block; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-allo-theme]) .allo-terminal .theme-toggle .icon-sun { display: block; }
+  html:not([data-allo-theme]) .allo-terminal .theme-toggle .icon-moon { display: none; }
+}
+html[data-allo-theme="light"] .allo-terminal .theme-toggle .icon-sun { display: none; }
+html[data-allo-theme="light"] .allo-terminal .theme-toggle .icon-moon { display: block; }
+html[data-allo-theme="dark"] .allo-terminal .theme-toggle .icon-sun { display: block; }
+html[data-allo-theme="dark"] .allo-terminal .theme-toggle .icon-moon { display: none; }
+
+/* =====================================================================
+   HERO — command prompt + streamed reasoning
+   ===================================================================== */
+.allo-terminal .hero {
+  padding-top: 4.5rem;
+  padding-bottom: 5rem;
+}
+.allo-terminal .hero-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 56px;
+  align-items: start;
+}
+.allo-terminal .hero-lead h1 {
+  font-size: clamp(2.4rem, 5.2vw, 3.9rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  margin: 0 0 1.1rem;
   text-wrap: balance;
 }
-.allo-landing .section-cta h2 em { font-style: italic; color: rgba(26, 20, 34, 0.55); }
-.allo-landing .section-cta p {
-  margin: 22px auto 0;
-  max-width: 460px;
-  font-family: var(--font-sans);
-  font-size: 15px; line-height: 1.6;
-  color: rgba(26, 20, 34, 0.62);
+.allo-terminal .hero-lead h1 .accent { color: var(--t-accent); }
+.allo-terminal .hero-sub {
+  color: var(--t-dim);
+  font-size: 1.12rem;
+  max-width: 34ch;
+  margin: 0 0 0.8rem;
 }
-.allo-landing .section-cta .cta-row {
-  margin: 34px auto 0;
-  display: inline-flex; align-items: center; gap: 22px;
+.allo-terminal .hero-flourish {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--t-faint);
+  margin: 0 0 1.9rem;
 }
-.allo-landing .section-cta .btn-pill {
-  padding: 12px 22px;
-  border-radius: 9999px;
-  background: var(--aurora-fg-light);
-  color: var(--aurora-bone);
-  border: 0; cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 14px; font-weight: 600;
-  letter-spacing: -0.005em;
-  transition: transform 150ms var(--ease), background 150ms var(--ease);
-}
-.allo-landing .section-cta .btn-pill:hover {
-  background: var(--aurora-indigo);
-  transform: translateY(-1px);
-}
-.allo-landing .section-cta .btn-link {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: rgba(26, 20, 34, 0.55);
-  border-bottom: 1px solid rgba(26, 20, 34, 0.18);
-  padding-bottom: 2px;
-}
-.allo-landing .section-cta .btn-link:hover { color: var(--aurora-fg-light); }
-
-/* ── Footer ───────────────────────────────────────────── */
-.allo-landing .footer-taste {
-  padding: 28px 0 32px;
-  background: var(--aurora-bone);
-  border-top: 1px solid rgba(26, 20, 34, 0.08);
-}
-.allo-landing .footer-taste .row {
+.allo-terminal .hero-cta {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
+  gap: 14px;
   flex-wrap: wrap;
+  align-items: center;
 }
-.allo-landing .footer-taste .col {
-  display: flex; flex-direction: column; gap: 6px;
-  font-family: var(--font-serif);
-  font-style: italic;
+.allo-terminal .btn-primary {
+  font-family: var(--font-mono);
   font-size: 14px;
-  color: rgba(26, 20, 34, 0.65);
-  letter-spacing: -0.005em;
+  font-weight: 600;
+  color: var(--t-accent-ink);
+  background: var(--t-accent);
+  border: 1px solid var(--t-accent);
+  border-radius: var(--t-radius);
+  padding: 12px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  transition: filter 160ms ease, transform 160ms var(--t-ease);
 }
-.allo-landing .footer-taste .col .meta {
+.allo-terminal .btn-primary:hover { filter: brightness(1.08); }
+.allo-terminal .btn-primary:active { transform: scale(0.97); }
+.allo-terminal .btn-ghost {
   font-family: var(--font-mono);
-  font-style: normal;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  color: rgba(26, 20, 34, 0.35);
+  font-size: 14px;
+  color: var(--t-ink);
+  border: 1px solid var(--t-rule-strong);
+  border-radius: var(--t-radius);
+  padding: 12px 18px;
+  transition: border-color 160ms ease, transform 160ms var(--t-ease);
 }
-.allo-landing .footer-taste .col.links {
-  display: flex; flex-direction: row; gap: 18px; flex-wrap: wrap;
-  align-self: center;
+.allo-terminal .btn-ghost:hover { border-color: var(--t-dim); }
+.allo-terminal .btn-ghost:active { transform: scale(0.97); }
+.allo-terminal .kbd-hint {
   font-family: var(--font-mono);
-  font-style: normal;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  color: rgba(26, 20, 34, 0.4);
-}
-
-/* ── Mobile compaction (≤640px) ────────────────────────── */
-@media (max-width: 640px) {
-  .allo-landing .shell { padding: 0 20px; }
-  .allo-landing .nav { padding: 18px 0; }
-  .allo-landing .hero { padding: 44px 0 28px; gap: 22px; }
-  .allo-landing .hero .eyebrow { margin: 0 0 16px; letter-spacing: 0.18em; }
-  .allo-landing .hero h1 {
-    font-size: clamp(34px, 9.5vw, 44px);
-    letter-spacing: -0.035em;
-    line-height: 1.05;
-  }
-  .allo-landing .hero .lede {
-    margin: 18px 0 0;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-  .allo-landing .hero .cta-row {
-    margin-top: 26px;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-  }
-  .allo-landing .hero .cta-primary {
-    padding: 12px 18px;
-    border: 1px solid var(--aurora-fg-light);
-    border-radius: 9999px;
-    background: var(--aurora-fg-light);
-    color: var(--aurora-bone);
-    font-size: 14px;
-    width: 100%;
-    max-width: 280px;
-    justify-content: center;
-  }
-  .allo-landing .hero .cta-primary:hover {
-    border-color: var(--aurora-fg-light);
-    background: var(--aurora-indigo);
-  }
-
-  .allo-landing .founding { padding: 22px 0 24px; gap: 18px; }
-  .allo-landing .founding-headline { font-size: 19px; }
-  .allo-landing .founding-spots-row { gap: 7px; }
-  .allo-landing .spot { width: 22px; height: 22px; }
-  .allo-landing .founding-spots-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .allo-landing .section-briefing { padding: 44px 0; }
-  .allo-landing .section-briefing .head { margin: 0 auto 22px; }
-  .allo-landing .section-briefing .head h2 { font-size: clamp(24px, 7vw, 32px); }
-  .allo-landing .section-briefing .head p { font-size: 13px; margin-top: 10px; }
-  .allo-landing .briefing-card { border-radius: 14px; }
-  .allo-landing .briefing-card-inner { padding: 18px 16px; gap: 14px; }
-  .allo-landing .briefing-card .lead { font-size: 20px; line-height: 1.2; }
-  .allo-landing .briefing-card .body-copy { font-size: 12px; line-height: 1.5; margin-top: 8px; }
-  .allo-landing .briefing-card .cta-row {
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-    margin-top: 14px;
-  }
-  .allo-landing .briefing-card .btn-primary { padding: 8px 14px; font-size: 11px; }
-  .allo-landing .briefing-card .btn-link { font-size: 11px; }
-  .allo-landing .briefing-card .kpi-row { padding: 8px 0; }
-  .allo-landing .briefing-card .kpi-value { font-size: 16px; }
-  .allo-landing .briefing-card .kpi-label { font-size: 9px; }
-
-  .allo-landing .section-how { padding: 56px 0; }
-  .allo-landing .section-how .head { margin: 0 0 32px; }
-  .allo-landing .section-how .head h2 { font-size: clamp(24px, 6vw, 30px); }
-  .allo-landing .section-how .step h3 { font-size: 19px; margin: 8px 0 8px; }
-  .allo-landing .section-how .step p  { font-size: 13px; }
-
-  .allo-landing .section-apply { padding: 60px 0 70px; }
-  .allo-landing .section-apply input,
-  .allo-landing .section-apply textarea { font-size: 15px; }
-
-  .allo-landing .section-quotes { padding: 80px 0 80px; }
-
-  .allo-landing .section-cta { padding: 72px 0 64px; }
-  .allo-landing .section-cta h2 { font-size: clamp(28px, 8vw, 40px); }
-  .allo-landing .section-cta p  { font-size: 14px; margin-top: 16px; }
-  .allo-landing .section-cta .cta-row {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-    margin-top: 26px;
-    width: 100%;
-  }
-  .allo-landing .section-cta .btn-pill { width: 100%; max-width: 320px; padding: 13px 22px; }
-
-  .allo-landing .footer-taste { padding: 22px 0 24px; }
-  .allo-landing .footer-taste .row {
-    flex-direction: column;
-    gap: 14px;
-  }
-}
-
-@media (max-width: 380px) {
-  .allo-landing .shell { padding: 0 16px; }
-  .allo-landing .hero h1 { font-size: 32px; }
-  .allo-landing .briefing-card-inner { padding: 18px 16px; }
-  .allo-landing .founding-spots-row { gap: 6px; }
-  .allo-landing .spot { width: 19px; height: 19px; }
-}
-
-/* ── Entrance — restrained ────────────────────────────── */
-@keyframes landing-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .allo-landing .nav,
-  .allo-landing .hero-text > *,
-  .allo-landing .hero-visual,
-  .allo-landing .founding {
-    animation: landing-enter 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .allo-landing .nav                { animation-delay:   0ms; }
-  .allo-landing .hero-text .eyebrow { animation-delay:  90ms; }
-  .allo-landing .hero-text h1       { animation-delay: 180ms; }
-  .allo-landing .hero-text .lede    { animation-delay: 320ms; }
-  .allo-landing .hero-text .cta-row { animation-delay: 460ms; }
-  .allo-landing .hero-visual        { animation-delay: 600ms; }
-  .allo-landing .founding           { animation-delay: 760ms; }
-}
-
-
-/* ============================================================
- * Taste pass v2 — nuclear-centered eyebrows, evidence section,
- * how-it-works cards with stagger entry, form left-align overrides.
- * ========================================================== */
-
-/* Nuclear-center the short eyebrows */
-.allo-landing .section-briefing .head,
-.allo-landing .section-briefing .head .eyebrow,
-.allo-landing .section-apply .head,
-.allo-landing .section-apply .head .eyebrow,
-.allo-landing .section-evidence .head,
-.allo-landing .section-evidence .head .eyebrow {
-  text-align: center !important;
-}
-.allo-landing .section-briefing .head .eyebrow,
-.allo-landing .section-apply .head .eyebrow,
-.allo-landing .section-evidence .head .eyebrow {
-  display: block !important;
-  width: -moz-fit-content !important;
-  width: fit-content !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-
-/* How it works — step cards with stagger entry on scroll-in */
-.allo-landing .section-how .head h2 em {
-  font-style: italic;
-  color: rgba(26, 20, 34, 0.55);
-}
-.allo-landing .section-how .step {
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(26, 20, 34, 0.08);
-  border-radius: 14px;
-  padding: 22px 22px 20px;
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-          backdrop-filter: blur(14px) saturate(140%);
-  box-shadow:
-    0 10px 28px rgba(26, 20, 34, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1),
-              transform 600ms cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 240ms var(--ease);
-  position: relative;
-}
-.allo-landing .section-how .step::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 22px; right: 22px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(31, 122, 79, 0.30) 50%, transparent 100%);
-}
-.allo-landing .section-how .step.is-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-.allo-landing .section-how .step:nth-child(2) { transition-delay: 180ms; }
-.allo-landing .section-how .step:nth-child(3) { transition-delay: 360ms; }
-.allo-landing .section-how .step.is-visible:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 18px 40px rgba(26, 20, 34, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-.allo-landing .section-how .step .accent { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .allo-landing .section-how .step { opacity: 1; transform: none; }
-}
-
-/* Apply form — stacked vertical, force-left-aligned (override leakage) */
-.allo-landing .section-apply form {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 22px !important;
-  max-width: 560px;
-  margin: 0 auto;
-  text-align: left !important;
-}
-.allo-landing .section-apply .field {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  gap: 6px !important;
-  text-align: left !important;
-}
-.allo-landing .section-apply label { text-align: left !important; }
-.allo-landing .section-apply input,
-.allo-landing .section-apply textarea {
-  text-align: left !important;
-  direction: ltr !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  display: block !important;
-  margin: 0 !important;
-  box-sizing: border-box !important;
-}
-.allo-landing .section-apply .actions {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 18px !important;
-  text-align: left !important;
-  margin-top: 8px !important;
-}
-.allo-landing .section-apply { padding: 64px 0 80px; }
-.allo-landing .section-apply .head { margin-bottom: 28px; }
-
-/* Evidence section — 3 'moment' cards in a row, no motion */
-.allo-landing .section-evidence {
-  padding: 100px 0;
-  background: var(--aurora-bone);
-  border-top: 1px solid rgba(26, 20, 34, 0.05);
-  position: relative;
-}
-.allo-landing .section-evidence::before {
-  content: "";
-  position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(31, 122, 79, 0.04) 0%, transparent 60%);
-}
-.allo-landing .section-evidence > .shell { position: relative; }
-.allo-landing .section-evidence .head {
-  max-width: 560px;
-  margin: 0 auto 56px;
-}
-.allo-landing .section-evidence .head .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.22em;
-  color: var(--aurora-indigo);
-  margin: 0 0 14px;
-}
-.allo-landing .section-evidence .head h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: clamp(28px, 4vw, 38px);
-  letter-spacing: -0.025em; line-height: 1.15;
-  color: var(--aurora-fg-light);
-  margin: 0;
-}
-.allo-landing .section-evidence .head h2 em {
-  font-style: italic; color: rgba(26, 20, 34, 0.55);
-}
-
-.allo-landing .moments {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  max-width: 1080px;
-  margin: 0 auto;
-}
-@media (max-width: 840px) {
-  .allo-landing .moments {
-    grid-template-columns: 1fr;
-    max-width: 520px;
-    gap: 14px;
-  }
-}
-.allo-landing .moment {
-  position: relative;
-  padding: 22px 22px 18px;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(26, 20, 34, 0.08);
-  border-radius: 14px;
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-          backdrop-filter: blur(14px) saturate(140%);
-  box-shadow:
-    0 14px 36px rgba(26, 20, 34, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  display: flex; flex-direction: column; gap: 14px;
-  transition: transform 240ms var(--ease), box-shadow 240ms var(--ease);
-}
-.allo-landing .moment:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 22px 50px rgba(26, 20, 34, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-.allo-landing .moment::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 22px; right: 22px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(31, 122, 79, 0.35) 50%, transparent 100%);
-}
-.allo-landing .moment-meta {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: rgba(26, 20, 34, 0.5);
-}
-.allo-landing .moment-meta .num {
-  color: var(--aurora-indigo);
-  font-weight: 700;
-  margin-right: 2px;
-}
-.allo-landing .moment-meta .dot {
-  position: relative;
-  width: 5px; height: 5px;
-  border-radius: 9999px;
-  background: var(--aurora-indigo);
-}
-.allo-landing .moment-meta .stamp {
-  margin-left: auto;
-  color: rgba(26, 20, 34, 0.4);
-  font-variant-numeric: tabular-nums;
-  text-transform: none;
-  letter-spacing: 0.05em;
-}
-.allo-landing .moment-body {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-weight: 400;
-  font-size: clamp(17px, 1.6vw, 20px);
-  line-height: 1.45;
-  letter-spacing: -0.01em;
-  color: var(--aurora-fg-light);
-  text-wrap: pretty;
-  flex: 1;
-}
-.allo-landing .moment-body em {
-  font-style: italic;
-  color: var(--aurora-indigo);
-  font-weight: 500;
-}
-.allo-landing .moment-tag {
+  font-size: 12px;
+  color: var(--t-faint);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(26, 20, 34, 0.06);
+}
+.allo-terminal kbd {
   font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--aurora-indigo);
+  font-size: 11px;
+  color: var(--t-dim);
+  background: var(--t-bg-raised);
+  border: 1px solid var(--t-rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 6px;
 }
-.allo-landing .moment-tag::before {
-  content: "\2714";
-  color: var(--aurora-indigo);
-  font-size: 10px;
-  margin-right: 2px;
+
+/* the console pane (right of hero) */
+.allo-terminal .console {
+  background: var(--t-bg-raised);
+  border: 1px solid var(--t-rule-strong);
+  border-radius: var(--t-radius);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
-@media (max-width: 640px) {
-  .allo-landing .section-evidence { padding: 64px 0; }
-  .allo-landing .section-evidence .head { margin: 0 auto 32px; }
-  .allo-landing .moment { padding: 18px 18px 16px; gap: 12px; }
-  .allo-landing .moment-body { font-size: 17px; }
+html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
+@media (prefers-color-scheme: dark) {
+  html:not([data-allo-theme]) .allo-terminal .console { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
+}
+.allo-terminal .console-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--t-rule);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--t-faint);
+}
+.allo-terminal .console-bar .lamp {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--t-lamp);
+}
+.allo-terminal .console-bar .lamp.live { background: var(--t-accent); box-shadow: 0 0 7px var(--t-accent); }
+.allo-terminal .console-bar .title { margin-left: 6px; }
+.allo-terminal .console-bar .clock { margin-left: auto; }
+
+.allo-terminal .console-body {
+  padding: 18px 18px 20px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.allo-terminal .cmd-line {
+  display: flex;
+  gap: 8px;
+  color: var(--t-ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.allo-terminal .cmd-line .prompt { color: var(--t-accent); flex: none; }
+.allo-terminal .cmd-line .typed { color: var(--t-ink); }
+.allo-terminal .caret {
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  background: var(--t-accent);
+  transform: translateY(2px);
+  margin-left: 1px;
+}
+.allo-terminal[data-rd-ready] .caret { animation: t-blink 1.05s steps(1) infinite; }
+@keyframes t-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+.allo-terminal .stream {
+  margin-top: 14px;
+  display: grid;
+  gap: 7px;
+  color: var(--t-dim);
+}
+.allo-terminal .stream .row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.allo-terminal .stream .tick { color: var(--t-accent); flex: none; }
+.allo-terminal .stream .row b { color: var(--t-ink); font-weight: 600; }
+/* staggered reveal of streamed lines (enhanced; visible by default) */
+.allo-terminal[data-rd-ready] .stream .row {
+  opacity: 0;
+  transform: translateY(5px);
+  animation: t-streamin 360ms var(--t-ease) forwards;
+}
+.allo-terminal[data-rd-ready] .stream .row:nth-child(1) { animation-delay: 900ms; }
+.allo-terminal[data-rd-ready] .stream .row:nth-child(2) { animation-delay: 1040ms; }
+.allo-terminal[data-rd-ready] .stream .row:nth-child(3) { animation-delay: 1180ms; }
+.allo-terminal[data-rd-ready] .stream .row:nth-child(4) { animation-delay: 1320ms; }
+@keyframes t-streamin { to { opacity: 1; transform: none; } }
+
+.allo-terminal .stream-final {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px dashed var(--t-rule-strong);
+  color: var(--t-ink);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.allo-terminal .stream-final .ok {
+  font-family: var(--font-mono);
+  color: var(--t-accent);
+  font-size: 12px;
+}
+
+/* =====================================================================
+   STATUS STRIP — full-width readout band
+   ===================================================================== */
+.allo-terminal .statusbar {
+  border-top: 1px solid var(--t-rule);
+  border-bottom: 1px solid var(--t-rule);
+  background: var(--t-bg-inset);
+}
+.allo-terminal .statusbar-inner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--t-dim);
+  padding-block: 14px;
+}
+.allo-terminal .stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-inline: 22px;
+  border-right: 1px solid var(--t-rule);
+}
+.allo-terminal .stat:first-child { padding-left: 0; }
+.allo-terminal .stat:last-child { border-right: 0; }
+.allo-terminal .stat .label { color: var(--t-faint); }
+.allo-terminal .stat .val { color: var(--t-ink); }
+.allo-terminal .stat .val.accent { color: var(--t-accent); }
+.allo-terminal .stat .live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-accent);
+  align-self: center;
+}
+.allo-terminal[data-rd-ready] .stat .live-dot { animation: t-pulse 2.4s ease-in-out infinite; }
+@keyframes t-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--t-accent); }
+  50% { opacity: 0.45; box-shadow: 0 0 0 var(--t-accent); }
+}
+
+/* =====================================================================
+   BRIEFING — the overnight brief, rendered as a console pane
+   ===================================================================== */
+.allo-terminal section.block { padding-block: 5.5rem; }
+.allo-terminal .block-head { max-width: 60ch; margin-bottom: 2.2rem; }
+.allo-terminal .block-head h2 {
+  font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+  margin: 0 0 0.7rem;
+  text-wrap: balance;
+}
+.allo-terminal .block-head h2 .accent { color: var(--t-accent); }
+.allo-terminal .block-head p {
+  color: var(--t-dim);
+  max-width: 62ch;
+  margin: 0;
+}
+
+.allo-terminal .brief-pane {
+  background: var(--t-bg-raised);
+  border: 1px solid var(--t-rule-strong);
+  border-radius: var(--t-radius);
+  overflow: hidden;
+}
+.allo-terminal .brief-statusline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--t-rule);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--t-dim);
+  background: var(--t-bg-inset);
+}
+.allo-terminal .brief-statusline .live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-accent); box-shadow: 0 0 6px var(--t-accent);
+}
+.allo-terminal .brief-statusline .sep { color: var(--t-faint); }
+.allo-terminal .brief-statusline .accent { color: var(--t-accent); }
+
+.allo-terminal .brief-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+}
+.allo-terminal .brief-msg {
+  padding: 30px 32px;
+  border-right: 1px solid var(--t-rule);
+}
+.allo-terminal .brief-msg .stamp {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--t-faint);
+  margin-bottom: 16px;
+}
+.allo-terminal .brief-msg .greeting {
+  font-size: 1.55rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.9rem;
+  text-wrap: balance;
+}
+.allo-terminal .brief-msg .greeting .accent { color: var(--t-accent); }
+.allo-terminal .brief-msg p {
+  color: var(--t-dim);
+  font-size: 0.98rem;
+  max-width: 52ch;
+  margin: 0 0 1.5rem;
+}
+.allo-terminal .brief-msg p .recovery {
+  color: var(--t-ink);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.allo-terminal .brief-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.allo-terminal .btn-sm {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-accent-ink);
+  background: var(--t-accent);
+  border: 1px solid var(--t-accent);
+  border-radius: var(--t-radius);
+  padding: 9px 16px;
+  transition: filter 160ms ease, transform 160ms var(--t-ease);
+}
+.allo-terminal .btn-sm:hover { filter: brightness(1.08); }
+.allo-terminal .btn-sm:active { transform: scale(0.97); }
+.allo-terminal .link-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-dim);
+  transition: color 160ms ease;
+}
+.allo-terminal .link-mono:hover { color: var(--t-accent); }
+
+.allo-terminal .brief-kpis {
+  padding: 22px 28px;
+  display: grid;
+  align-content: center;
+  gap: 0;
+}
+.allo-terminal .kpi {
+  padding-block: 16px;
+  border-bottom: 1px solid var(--t-rule);
+}
+.allo-terminal .kpi:last-child { border-bottom: 0; }
+.allo-terminal .kpi .kpi-label {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--t-faint);
+  display: block;
+  margin-bottom: 5px;
+}
+.allo-terminal .kpi .kpi-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.allo-terminal .kpi .kpi-val {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--t-ink);
+  letter-spacing: -0.01em;
+}
+.allo-terminal .kpi .kpi-delta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--t-faint);
+}
+.allo-terminal .kpi .kpi-delta.up { color: var(--t-accent); }
+.allo-terminal .kpi .kpi-delta.down { color: var(--t-dim); }
+
+/* =====================================================================
+   NOTICES — "How allo notices" 3 moments (numbered log entries)
+   ===================================================================== */
+.allo-terminal .notices {
+  border-top: 1px solid var(--t-rule);
+}
+.allo-terminal .notice {
+  display: grid;
+  grid-template-columns: 56px 1fr 200px;
+  gap: 28px;
+  align-items: start;
+  padding-block: 30px;
+  border-bottom: 1px solid var(--t-rule);
+}
+.allo-terminal .notice .idx {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-accent);
+  padding-top: 3px;
+}
+.allo-terminal .notice .body {
+  font-size: 1.22rem;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  max-width: 46ch;
+  margin: 0;
+}
+.allo-terminal .notice .body em {
+  font-style: normal;
+  color: var(--t-accent);
+  font-weight: 600;
+}
+.allo-terminal .notice .tag {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--t-dim);
+  text-align: right;
+}
+.allo-terminal .notice .tag .verdict {
+  display: block;
+  color: var(--t-faint);
+  margin-top: 4px;
+}
+
+/* =====================================================================
+   HOW IT WORKS — connect / learn / attend (piped steps)
+   ===================================================================== */
+.allo-terminal .pipe {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--t-rule);
+  border: 1px solid var(--t-rule);
+  border-radius: var(--t-radius);
+  overflow: hidden;
+}
+.allo-terminal .pipe-step {
+  background: var(--t-bg);
+  padding: 26px 24px 30px;
+  position: relative;
+}
+.allo-terminal .pipe-step .cmd {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-accent);
+  margin-bottom: 14px;
+}
+.allo-terminal .pipe-step h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.6rem;
+}
+.allo-terminal .pipe-step p {
+  color: var(--t-dim);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 36ch;
+}
+
+/* =====================================================================
+   QUOTE — founder, full-width
+   ===================================================================== */
+.allo-terminal .quote-block { padding-block: 5.5rem; }
+.allo-terminal .quote-pane {
+  border: 1px solid var(--t-rule-strong);
+  border-radius: var(--t-radius);
+  background: var(--t-bg-raised);
+  padding: 40px 44px;
+}
+.allo-terminal .quote-pane .qhead {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--t-faint);
+  margin-bottom: 22px;
+}
+.allo-terminal .quote-pane blockquote {
+  margin: 0 0 24px;
+  font-size: clamp(1.4rem, 2.8vw, 2.05rem);
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+  max-width: 30ch;
+  text-wrap: balance;
+}
+.allo-terminal .quote-pane blockquote .accent { color: var(--t-accent); }
+.allo-terminal .quote-pane figcaption {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-dim);
+}
+.allo-terminal .quote-pane figcaption b { color: var(--t-ink); font-weight: 600; }
+
+/* =====================================================================
+   FOUNDING COHORT — meter + apply
+   ===================================================================== */
+.allo-terminal .cohort {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  border-top: 1px solid var(--t-rule);
+  border-bottom: 1px solid var(--t-rule);
+  padding-block: 4rem;
+}
+.allo-terminal .cohort h2 {
+  font-size: clamp(1.7rem, 3.2vw, 2.3rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+  margin: 0 0 0.7rem;
+  text-wrap: balance;
+}
+.allo-terminal .cohort h2 .accent { color: var(--t-accent); }
+.allo-terminal .cohort p { color: var(--t-dim); margin: 0; max-width: 44ch; }
+.allo-terminal .cohort-meter { width: 100%; }
+.allo-terminal .meter-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.allo-terminal .meter-bar .cell {
+  flex: 1;
+  height: 30px;
+  border-radius: 4px;
+  border: 1px solid var(--t-rule-strong);
+  background: var(--t-bg-raised);
+}
+.allo-terminal .meter-bar .cell.on {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  box-shadow: 0 0 8px var(--t-accent-soft);
+}
+.allo-terminal .meter-bar .cell.next { border-color: var(--t-accent-line); }
+.allo-terminal .meter-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-dim);
+}
+.allo-terminal .meter-foot b { color: var(--t-ink); }
+.allo-terminal .meter-foot .apply {
+  color: var(--t-accent);
+  border: 1px solid var(--t-accent-line);
+  border-radius: var(--t-radius);
+  padding: 7px 16px;
+  transition: background 160ms ease, transform 160ms var(--t-ease);
+}
+.allo-terminal .meter-foot .apply:hover { background: var(--t-accent-soft); }
+.allo-terminal .meter-foot .apply:active { transform: scale(0.97); }
+
+/* =====================================================================
+   APPLY FORM — three questions, mailto submit
+   ===================================================================== */
+.allo-terminal .apply-block { padding-block: 5.5rem; }
+.allo-terminal .apply-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 620px;
+}
+.allo-terminal .apply-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.allo-terminal .apply-form label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--t-faint);
+}
+.allo-terminal .apply-form input {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--t-ink);
+  background: var(--t-bg-raised);
+  border: 1px solid var(--t-rule-strong);
+  border-radius: var(--t-radius);
+  padding: 11px 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 160ms ease;
+}
+.allo-terminal .apply-form input::placeholder { color: var(--t-faint); }
+.allo-terminal .apply-form input:focus { border-color: var(--t-accent); }
+.allo-terminal .apply-form .actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.allo-terminal .apply-form .reassurance {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--t-faint);
+}
+
+/* =====================================================================
+   FINAL CTA — command prompt redux
+   ===================================================================== */
+.allo-terminal .final {
+  padding-block: 6rem;
+  text-align: center;
+}
+.allo-terminal .final .prompt-line {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--t-faint);
+  margin-bottom: 22px;
+}
+.allo-terminal .final .prompt-line .accent { color: var(--t-accent); }
+.allo-terminal .final h2 {
+  font-size: clamp(2rem, 4.4vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  margin: 0 auto 0.9rem;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+.allo-terminal .final h2 .accent { color: var(--t-accent); }
+.allo-terminal .final p {
+  color: var(--t-dim);
+  max-width: 52ch;
+  margin: 0 auto 2rem;
+}
+.allo-terminal .final .cta-row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* =====================================================================
+   FOOTER
+   ===================================================================== */
+.allo-terminal .footer {
+  border-top: 1px solid var(--t-rule);
+  padding-block: 26px;
+}
+.allo-terminal .footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--t-faint);
+}
+.allo-terminal .footer-inner .brand { color: var(--t-dim); }
+
+/* =====================================================================
+   RESPONSIVE — explicit collapse for every multi-col block
+   ===================================================================== */
+@media (max-width: 960px) {
+  .allo-terminal .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  .allo-terminal .brief-grid { grid-template-columns: 1fr; }
+  .allo-terminal .brief-msg { border-right: 0; border-bottom: 1px solid var(--t-rule); }
+  .allo-terminal .pipe { grid-template-columns: 1fr; }
+  .allo-terminal .cohort { grid-template-columns: 1fr; gap: 32px; }
+}
+@media (max-width: 768px) {
+  .allo-terminal .shell { padding-inline: 20px; }
+  .allo-terminal .nav-links { gap: 14px; }
+  .allo-terminal .nav-links .hide-sm { display: none; }
+  .allo-terminal .hero { padding-top: 3rem; padding-bottom: 3.5rem; }
+  .allo-terminal section.block,
+  .allo-terminal .quote-block,
+  .allo-terminal .apply-block { padding-block: 4rem; }
+  .allo-terminal .statusbar-inner { gap: 10px 0; }
+  .allo-terminal .stat {
+    padding-inline: 14px 14px;
+    border-right: 1px solid var(--t-rule);
+  }
+  .allo-terminal .stat:first-child { padding-left: 0; }
+  .allo-terminal .notice {
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    row-gap: 12px;
+  }
+  .allo-terminal .notice .tag { grid-column: 2; text-align: left; }
+  .allo-terminal .notice .body { font-size: 1.08rem; }
+  .allo-terminal .console-body { font-size: 12.5px; }
+  .allo-terminal .quote-pane { padding: 28px 24px; }
+}
+
+/* =====================================================================
+   REDUCED MOTION — degrade fully in BOTH themes: static command +
+   response, no caret/typing/pulse. Content never gated.
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .allo-terminal .caret { animation: none !important; }
+  .allo-terminal .stream .row { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .allo-terminal .stat .live-dot { animation: none !important; }
+  .allo-terminal * { transition-duration: 0.001ms !important; }
 }

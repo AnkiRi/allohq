@@ -92,7 +92,7 @@ function DraggableBlockItem({ def }: { def: BlockDef }) {
       {...listeners}
       {...attributes}
       className={cn(
-        "flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-mono",
+        "flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-sans",
         "text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
         "cursor-grab active:cursor-grabbing",
         isDragging && "opacity-40"
@@ -112,7 +112,7 @@ export function BlockPalette() {
   return (
     <aside className="w-60 bg-card border-r border-border flex flex-col overflow-y-auto">
       <div className="px-4 py-4 border-b border-border">
-        <h2 className="text-[10px] font-bold text-foreground font-mono tracking-[1px] uppercase">
+        <h2 className="text-[10px] font-bold text-foreground font-serif tracking-[1px] uppercase">
           Blocks
         </h2>
       </div>
@@ -120,7 +120,7 @@ export function BlockPalette() {
       <div className="flex-1 px-2 py-3 space-y-4">
         {GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="px-3 mb-1 text-[10px] font-mono font-semibold text-muted-foreground tracking-wider uppercase">
+            <p className="px-3 mb-1 text-[10px] font-sans font-semibold text-muted-foreground tracking-wider uppercase">
               {group.label}
             </p>
             <div className="space-y-0.5">

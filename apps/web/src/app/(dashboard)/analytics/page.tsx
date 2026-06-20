@@ -120,7 +120,7 @@ export default function AnalyticsPage() {
             Analytics
           </h1>
           <p className="text-[13px] text-muted-foreground mt-1">
-            Performance metrics and revenue attribution
+            How your retention is performing, and where the revenue is coming from.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
           {/* Export */}
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-[10px] font-mono font-bold text-foreground hover:border-foreground/30 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-[10px] font-sans font-bold text-foreground hover:border-foreground/30 transition-colors"
           >
             <Download className="w-3 h-3" />
             CSV
@@ -160,12 +160,12 @@ export default function AnalyticsPage() {
       >
         {[
           {
-            label: "ATTRIBUTED REVENUE",
-            value: `$${totalChannelRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+            label: "Attributed revenue",
+            value: `₹${totalChannelRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
             icon: DollarSign,
           },
           {
-            label: "MESSAGES SENT",
+            label: "Messages sent",
             value: totalMessages.toLocaleString(),
             icon: Mail,
           },
@@ -175,8 +175,8 @@ export default function AnalyticsPage() {
             icon: Zap,
           },
           {
-            label: "AI REVENUE",
-            value: roiData ? `$${roiData.aiAttributedRevenue.toLocaleString()}` : "—",
+            label: "AI revenue",
+            value: roiData ? `₹${roiData.aiAttributedRevenue.toLocaleString("en-IN")}` : "—",
             icon: TrendingUp,
           },
         ].map((stat) => (
@@ -186,7 +186,7 @@ export default function AnalyticsPage() {
             className="p-4 bg-card border border-border rounded-xl"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px]">
+              <span className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px]">
                 {stat.label}
               </span>
               <stat.icon className="w-4 h-4 text-muted-foreground/50" />
@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
         <motion.div variants={itemVariants} initial="hidden" animate="visible" className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+            <h2 className="text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
               Revenue Timeline
             </h2>
           </div>
@@ -216,10 +216,10 @@ export default function AnalyticsPage() {
                   key={i}
                   className="flex-1 bg-foreground/20 hover:bg-foreground/40 rounded-t transition-colors group relative"
                   style={{ height: `${(point.value / maxVal) * 100}%`, minHeight: "2px" }}
-                  title={`${point.date}: $${point.value.toLocaleString()}`}
+                  title={`${point.date}: ₹${point.value.toLocaleString("en-IN")}`}
                 >
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block bg-foreground text-background text-[9px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap">
-                    ${point.value.toLocaleString()}
+                    ₹{point.value.toLocaleString("en-IN")}
                   </div>
                 </div>
               ));
@@ -245,7 +245,7 @@ export default function AnalyticsPage() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`px-4 py-2 text-[11px] font-mono font-bold uppercase tracking-[1px] border-b-2 transition-colors ${
+            className={`px-4 py-2 text-[11px] font-sans font-bold uppercase tracking-[1px] border-b-2 transition-colors ${
               tab === key
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -265,9 +265,9 @@ export default function AnalyticsPage() {
             {!attributionData || attributionData.length === 0 ? (
               <SmartEmptyState
                 icon={BarChart3}
-                title="No analytics data yet"
-                description="Once your first campaign sends, Allo will track revenue attribution, channel performance, and customer health automatically."
-                actions={[{ label: "View Pending Actions", href: "/actions", primary: true }]}
+                title="Nothing to show just yet"
+                description="As soon as your first campaign goes out, Allo starts tracking where revenue comes from, how each channel does, and how your customers are holding up."
+                actions={[{ label: "See what's waiting", href: "/actions", primary: true }]}
               />
             ) : (
               <div className="border border-border rounded-xl overflow-hidden">
@@ -275,7 +275,7 @@ export default function AnalyticsPage() {
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
                       {["Source", "Type", "Channel", "Revenue", "Orders"].map((h) => (
-                        <th key={h} className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
+                        <th key={h} className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
                           {h}
                         </th>
                       ))}
@@ -284,12 +284,12 @@ export default function AnalyticsPage() {
                   <tbody>
                     {(attributionData as any[]).map((row: any, i: number) => (
                       <motion.tr key={i} variants={itemVariants} className="border-b border-border last:border-0 hover:bg-muted/30">
-                        <td className="px-4 py-3 text-[12px] font-mono font-medium text-foreground">{row.sourceName}</td>
+                        <td className="px-4 py-3 text-[12px] font-sans font-medium text-foreground">{row.sourceName}</td>
                         <td className="px-4 py-3">
-                          <span className="px-2 py-0.5 rounded text-[9px] font-mono bg-muted border border-border uppercase">{row.sourceType}</span>
+                          <span className="px-2 py-0.5 rounded text-[9px] font-sans bg-muted border border-border uppercase">{row.sourceType}</span>
                         </td>
-                        <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{row.channel}</td>
-                        <td className="px-4 py-3 text-[12px] font-mono font-bold text-foreground tabular-nums">${row.revenue.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-[12px] font-sans text-muted-foreground">{row.channel}</td>
+                        <td className="px-4 py-3 text-[12px] font-mono font-bold text-foreground tabular-nums">₹{row.revenue.toLocaleString("en-IN")}</td>
                         <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground tabular-nums">{row.orderCount}</td>
                       </motion.tr>
                     ))}
@@ -306,7 +306,7 @@ export default function AnalyticsPage() {
             {channelLoading ? (
               <Loading />
             ) : !channelData || channelData.length === 0 ? (
-              <EmptyState icon={Mail} text="No channel data yet" />
+              <EmptyState icon={Mail} text="No channel data yet — it'll fill in once you've sent some messages." />
             ) : (
               <div className="grid gap-4">
                 {(channelData as any[]).map((ch: any) => {
@@ -316,10 +316,10 @@ export default function AnalyticsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <Icon className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-[13px] font-mono font-bold text-foreground uppercase">{ch.channel}</span>
+                          <span className="text-[13px] font-sans font-bold text-foreground uppercase">{ch.channel}</span>
                         </div>
                         <span className="text-[18px] font-mono font-bold text-foreground tabular-nums">
-                          ${ch.revenue.toLocaleString()}
+                          ₹{ch.revenue.toLocaleString("en-IN")}
                         </span>
                       </div>
                       <div className="grid grid-cols-4 gap-4">
@@ -330,7 +330,7 @@ export default function AnalyticsPage() {
                           { label: "Conv. Rate", value: `${ch.conversionRate}%` },
                         ].map((s) => (
                           <div key={s.label}>
-                            <div className="text-[10px] font-mono text-muted-foreground uppercase">{s.label}</div>
+                            <div className="text-[10px] font-sans text-muted-foreground uppercase">{s.label}</div>
                             <div className="text-[15px] font-mono font-bold text-foreground tabular-nums">{s.value}</div>
                           </div>
                         ))}
@@ -349,7 +349,7 @@ export default function AnalyticsPage() {
             {aiLoading ? (
               <Loading />
             ) : !aiData ? (
-              <EmptyState icon={Zap} text="No campaign data yet" />
+              <EmptyState icon={Zap} text="No campaigns to compare yet — send a few and we'll show AI against manual here." />
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {([
@@ -357,18 +357,18 @@ export default function AnalyticsPage() {
                   { data: aiData.manual, label: "Manual", color: "text-foreground", bg: "bg-muted", border: "border-border" },
                 ] as const).map((group) => (
                   <motion.div key={group.label} variants={itemVariants} className={`p-5 ${group.bg} border ${group.border} rounded-xl`}>
-                    <h3 className={`text-[13px] font-mono font-bold ${group.color} mb-4`}>{group.label}</h3>
+                    <h3 className={`text-[13px] font-sans font-bold ${group.color} mb-4`}>{group.label}</h3>
                     <div className="space-y-3">
                       {[
                         { label: "Campaigns", value: String(group.data.campaignCount) },
                         { label: "Recipients", value: group.data.totalRecipients.toLocaleString() },
                         { label: "Open Rate", value: `${group.data.avgOpenRate}%` },
                         { label: "Click Rate", value: `${group.data.avgClickRate}%` },
-                        { label: "Revenue", value: `$${group.data.totalRevenue.toLocaleString()}` },
-                        { label: "Avg Rev/Campaign", value: `$${group.data.avgRevenuePerCampaign.toLocaleString()}` },
+                        { label: "Revenue", value: `₹${group.data.totalRevenue.toLocaleString("en-IN")}` },
+                        { label: "Avg Rev/Campaign", value: `₹${group.data.avgRevenuePerCampaign.toLocaleString("en-IN")}` },
                       ].map((s) => (
                         <div key={s.label} className="flex items-center justify-between">
-                          <span className="text-[11px] font-mono text-muted-foreground">{s.label}</span>
+                          <span className="text-[11px] font-sans text-muted-foreground">{s.label}</span>
                           <span className="text-[13px] font-mono font-bold text-foreground tabular-nums">{s.value}</span>
                         </div>
                       ))}
@@ -386,14 +386,14 @@ export default function AnalyticsPage() {
             {cohortLoading ? (
               <Loading />
             ) : !cohortData || cohortData.length === 0 ? (
-              <EmptyState icon={Users} text="No cohort data yet" />
+              <EmptyState icon={Users} text="No cohort data yet — this builds up as customers return over time." />
             ) : (
               <div className="border border-border rounded-xl overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">Cohort</th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">Size</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">Cohort</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">Size</th>
                       {Array.from({ length: 7 }, (_, i) => (
                         <th key={i} className="px-3 py-2.5 text-center text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-[1px]">
                           M{i}
@@ -438,23 +438,23 @@ export default function AnalyticsPage() {
             {roiLoading ? (
               <Loading />
             ) : !roiData ? (
-              <EmptyState icon={DollarSign} text="No ROI data yet" />
+              <EmptyState icon={DollarSign} text="No ROI to show yet — once campaigns start earning, you'll see the return here." />
             ) : (
               <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
                 {[
                   { label: "AI Token Cost", value: `$${roiData.aiTokenCost.toFixed(4)}`, sub: `${period} day period` },
-                  { label: "AI Attributed Revenue", value: `$${roiData.aiAttributedRevenue.toLocaleString()}`, sub: "Campaigns + Automations" },
+                  { label: "AI Attributed Revenue", value: `₹${roiData.aiAttributedRevenue.toLocaleString("en-IN")}`, sub: "Campaigns + Automations" },
                   { label: "Return on Investment", value: `${roiData.roi}x`, sub: "(Revenue - Cost) / Cost" },
                   { label: "Activity", value: `${roiData.campaignsSent} campaigns, ${roiData.automationsSent} automations`, sub: `${period} day period` },
                 ].map((card) => (
                   <div key={card.label} className="p-5 bg-card border border-border rounded-xl">
-                    <div className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-2">
+                    <div className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] mb-2">
                       {card.label}
                     </div>
                     <div className="text-[22px] font-bold text-foreground font-mono tabular-nums">
                       {card.value}
                     </div>
-                    <div className="text-[10px] font-mono text-muted-foreground mt-1">
+                    <div className="text-[10px] font-sans text-muted-foreground mt-1">
                       {card.sub}
                     </div>
                   </div>
@@ -470,7 +470,7 @@ export default function AnalyticsPage() {
             {forecastLoading ? (
               <Loading />
             ) : !forecastData ? (
-              <EmptyState icon={TrendingUp} text="No forecast data yet. Forecasts are generated daily." />
+              <EmptyState icon={TrendingUp} text="No forecast yet — Allo puts a fresh one together each day. Check back soon." />
             ) : (
               <>
                 <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
@@ -480,11 +480,11 @@ export default function AnalyticsPage() {
                     { label: "90-Day Forecast", value: forecastData.forecast90d, trend: forecastData.trend90d },
                   ].map((fc) => (
                     <div key={fc.label} className="p-5 bg-card border border-border rounded-xl">
-                      <div className="text-[10px] font-mono text-muted-foreground uppercase font-bold tracking-[1px] mb-2">
+                      <div className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] mb-2">
                         {fc.label}
                       </div>
                       <div className="text-[24px] font-bold text-foreground font-mono tabular-nums">
-                        ${(fc.value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        ₹{(fc.value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </div>
                       {fc.trend != null && (
                         <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-emerald-600" : "text-red-500"}`}>

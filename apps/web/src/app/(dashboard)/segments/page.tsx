@@ -79,16 +79,16 @@ export default function SegmentsPage() {
             {activeTab === "rfm"
               ? mergedSegments.length > 0 && largestSegment
                 ? `${mergedSegments.length} segments — largest: ${largestSegment.name} (${largestSegment.liveCount} customers)`
-                : "RFM-based customer segmentation"
+                : "How allo groups your customers by how they shop."
               : baskets && baskets.length > 0
                 ? `${baskets.length} basket patterns discovered`
-                : "Basket intelligence — product combo patterns"
+                : "The products your customers tend to buy together."
             }
           </p>
         </div>
         <Link
           href="/segments/new"
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-mono hover:bg-secondary/90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           Create Segment
@@ -99,7 +99,7 @@ export default function SegmentsPage() {
       <motion.div variants={itemVariants} className="flex gap-1 bg-muted/50 rounded-lg p-1 w-fit">
         <button
           onClick={() => setActiveTab("rfm")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-mono font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-sans font-semibold transition-all ${
             activeTab === "rfm"
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -110,7 +110,7 @@ export default function SegmentsPage() {
         </button>
         <button
           onClick={() => setActiveTab("baskets")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-mono font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-sans font-semibold transition-all ${
             activeTab === "baskets"
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -133,7 +133,7 @@ export default function SegmentsPage() {
           {totalCustomers > 0 && (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground">DISTRIBUTION</h2>
+                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">How your customers break down</h2>
               </div>
               <div className="flex rounded-lg overflow-hidden h-10">
                 {mergedSegments
@@ -154,12 +154,12 @@ export default function SegmentsPage() {
                         }}
                       >
                         {pct > 8 && (
-                          <span className="text-[10px] font-mono font-bold text-white truncate px-1">
+                          <span className="text-[10px] font-sans font-bold text-white truncate px-1">
                             {s.name}
                           </span>
                         )}
                         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block z-10">
-                          <div className="bg-secondary text-secondary-foreground text-[11px] font-mono p-2 rounded shadow-lg whitespace-nowrap">
+                          <div className="bg-secondary text-secondary-foreground text-[11px] font-sans p-2 rounded shadow-lg whitespace-nowrap">
                             {s.name}: {s.liveCount} ({pct.toFixed(1)}%)
                           </div>
                         </div>
@@ -167,7 +167,7 @@ export default function SegmentsPage() {
                     );
                   })}
               </div>
-              <div className="mt-3 text-[11px] text-muted-foreground font-mono">
+              <div className="mt-3 text-[11px] text-muted-foreground font-sans">
                 {totalCustomers.toLocaleString()} total customers across{" "}
                 {mergedSegments.filter((s: any) => s.liveCount > 0).length} segments
               </div>
@@ -186,21 +186,21 @@ export default function SegmentsPage() {
                     {largestSegment.name === "Hibernating" ? (
                       <>
                         {largestPct}% of your customers ({largestSegment.liveCount.toLocaleString()}) are{" "}
-                        <span className="font-semibold">{largestSegment.name}</span>. Consider a
-                        re-engagement campaign to win them back.
+                        <span className="font-semibold">{largestSegment.name}</span> — they haven&apos;t
+                        bought in a while. A warm campaign is usually what brings them back.
                       </>
                     ) : (
                       <>
-                        Your largest segment is{" "}
-                        <span className="font-semibold">{largestSegment.name}</span> with{" "}
-                        {largestSegment.liveCount.toLocaleString()} customers generating $
-                        {(largestSegment.liveRevenue / 1000).toFixed(1)}K in revenue.
+                        Your biggest group right now is{" "}
+                        <span className="font-semibold">{largestSegment.name}</span> —{" "}
+                        {largestSegment.liveCount.toLocaleString()} customers who&apos;ve brought in ₹
+                        {(largestSegment.liveRevenue / 1000).toFixed(1)}K so far.
                       </>
                     )}
                   </p>
                   <Link
                     href="/campaigns/new"
-                    className="inline-flex items-center gap-1.5 mt-2 text-[12px] font-mono font-semibold text-terracotta hover:text-terracotta/80 transition-colors"
+                    className="inline-flex items-center gap-1.5 mt-2 text-[12px] font-sans font-semibold text-terracotta hover:text-terracotta/80 transition-colors"
                   >
                     Generate Campaign
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -228,7 +228,7 @@ export default function SegmentsPage() {
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="text-[13px] font-bold text-foreground font-mono">{seg.name}</h3>
+                          <h3 className="text-[13px] font-bold text-foreground font-sans">{seg.name}</h3>
                           <p className="text-[11px] text-muted-foreground mt-1">{seg.description}</p>
                         </div>
                         <ArrowUpRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-terracotta transition-colors" />
@@ -237,24 +237,24 @@ export default function SegmentsPage() {
                         <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">
                           {seg.liveCount.toLocaleString()}
                         </span>
-                        <span className="text-[11px] text-muted-foreground font-mono">customers</span>
+                        <span className="text-[11px] text-muted-foreground font-sans">customers</span>
                       </div>
                       <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
                         <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-mono">REVENUE</div>
+                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">REVENUE</div>
                           <div className="text-[13px] font-bold font-mono text-foreground">
-                            ${(seg.liveRevenue / 1000).toFixed(1)}K
+                            ₹{(seg.liveRevenue / 1000).toFixed(1)}K
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-mono">AVG ORDER</div>
+                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">AVG ORDER</div>
                           <div className="text-[13px] font-bold font-mono text-foreground">
-                            ${seg.avgOrder.toFixed(2)}
+                            ₹{seg.avgOrder.toFixed(2)}
                           </div>
                         </div>
                       </div>
                       <div className="mt-4">
-                        <div className="flex justify-between text-[10px] text-muted-foreground font-mono mb-1">
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-sans mb-1">
                           <span>RFM {seg.rfmMin}</span>
                           <span>{seg.rfmMax}</span>
                         </div>
@@ -271,13 +271,13 @@ export default function SegmentsPage() {
                       <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                         <Link
                           href={`/customers?segment=${encodeURIComponent(seg.name)}`}
-                          className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                          className="text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                         >
                           View Customers
                         </Link>
                         <Link
                           href="/campaigns/new"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-terracotta text-white text-[11px] font-mono font-semibold hover:bg-terracotta/90 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-terracotta text-white text-[11px] font-sans font-semibold hover:bg-terracotta/90 transition-colors"
                         >
                           Send Campaign
                         </Link>
@@ -291,16 +291,16 @@ export default function SegmentsPage() {
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h3 className="text-[13px] font-bold text-foreground font-mono">{seg.name}</h3>
+                          <h3 className="text-[13px] font-bold text-foreground font-sans">{seg.name}</h3>
                           <p className="text-[11px] text-muted-foreground mt-1">{seg.description}</p>
                         </div>
                       </div>
                       <div className="flex items-baseline gap-3 mb-3">
                         <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">0</span>
-                        <span className="text-[11px] text-muted-foreground font-mono">customers</span>
+                        <span className="text-[11px] text-muted-foreground font-sans">customers</span>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        No customers match this segment yet
+                        No one here yet.
                       </p>
                     </motion.div>
                   )
@@ -311,13 +311,13 @@ export default function SegmentsPage() {
           {!isLoading && mergedSegments.length === 0 && (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-16 text-center">
               <Users className="w-10 h-10 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">NO SEGMENTS YET</h3>
+              <h3 className="text-[13px] font-bold text-foreground font-serif mb-2">No segments yet</h3>
               <p className="text-[11px] text-muted-foreground font-sans max-w-sm mx-auto mb-6">
-                Connect a store and run RFM analysis to automatically segment your customers
+                Connect your store and allo will group your customers as it gets to know them.
               </p>
               <Link
                 href="/settings"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-terracotta text-white rounded-lg text-[11px] font-mono font-semibold hover:bg-terracotta/90 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-terracotta text-white rounded-lg text-[11px] font-sans font-semibold hover:bg-terracotta/90 transition-colors"
               >
                 Connect Store
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -350,8 +350,8 @@ export default function SegmentsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] text-foreground font-sans leading-relaxed">
-                      Discovered <span className="font-semibold">{baskets.length} product combinations</span> that
-                      customers frequently buy together. The top pattern appears in{" "}
+                      allo found <span className="font-semibold">{baskets.length} product combinations</span> your
+                      customers tend to buy together. The most common one shows up in{" "}
                       <span className="font-semibold">{baskets[0].frequency} orders</span> across{" "}
                       <span className="font-semibold">{baskets[0].customerCount} customers</span>.
                     </p>
@@ -374,7 +374,7 @@ export default function SegmentsPage() {
                     >
                       {/* Name and description */}
                       <div className="mb-4">
-                        <h3 className="text-[13px] font-bold text-foreground font-mono">{basket.name}</h3>
+                        <h3 className="text-[13px] font-bold text-foreground font-sans">{basket.name}</h3>
                         <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
                           {basket.description}
                         </p>
@@ -385,7 +385,7 @@ export default function SegmentsPage() {
                         {titles.map((title: string, idx: number) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center px-2 py-1 bg-muted rounded-md text-[10px] font-mono text-foreground"
+                            className="inline-flex items-center px-2 py-1 bg-muted rounded-md text-[10px] font-sans text-foreground"
                           >
                             {title.length > 25 ? title.slice(0, 22) + "..." : title}
                           </span>
@@ -395,28 +395,28 @@ export default function SegmentsPage() {
                       {/* Stats */}
                       <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
                         <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-mono">ORDERS</div>
+                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">ORDERS</div>
                           <div className="text-[16px] font-bold font-mono text-foreground tabular-nums">
                             {basket.frequency}
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-mono">CUSTOMERS</div>
+                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">CUSTOMERS</div>
                           <div className="text-[16px] font-bold font-mono text-foreground tabular-nums">
                             {basket.customerCount}
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-mono">AVG ORDER</div>
+                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">AVG ORDER</div>
                           <div className="text-[16px] font-bold font-mono text-foreground tabular-nums">
-                            ${avgVal.toFixed(0)}
+                            ₹{avgVal.toFixed(0)}
                           </div>
                         </div>
                       </div>
 
                       {/* Confidence bar */}
                       <div className="mt-4">
-                        <div className="flex justify-between text-[10px] text-muted-foreground font-mono mb-1">
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-sans mb-1">
                           <span>Confidence</span>
                           <span>{(conf * 100).toFixed(1)}%</span>
                         </div>
@@ -432,7 +432,7 @@ export default function SegmentsPage() {
                       <div className="flex items-center justify-end mt-4 pt-4 border-t border-border">
                         <Link
                           href="/campaigns/new"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-terracotta text-white text-[11px] font-mono font-semibold hover:bg-terracotta/90 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-terracotta text-white text-[11px] font-sans font-semibold hover:bg-terracotta/90 transition-colors"
                         >
                           Create Bundle Campaign
                           <ArrowUpRight className="w-3.5 h-3.5" />
@@ -446,10 +446,10 @@ export default function SegmentsPage() {
           ) : (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-16 text-center">
               <ShoppingCart className="w-10 h-10 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">NO BASKET PATTERNS YET</h3>
+              <h3 className="text-[13px] font-bold text-foreground font-serif mb-2">No basket patterns yet</h3>
               <p className="text-[11px] text-muted-foreground font-sans max-w-sm mx-auto mb-6">
-                Basket intelligence discovers product combinations your customers frequently buy together.
-                Patterns are detected automatically once you have enough multi-item orders.
+                allo spots the products your customers like to buy together. Patterns show up here once
+                you have enough multi-item orders.
               </p>
             </motion.div>
           )}

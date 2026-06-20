@@ -85,7 +85,7 @@ export default function CustomersPage() {
             Customers
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            {stats ? `${stats.totalCustomers.toLocaleString()} customers — ${stats.marketingRate.toFixed(0)}% marketing opt-in` : "Customer intelligence & segmentation"}
+            {stats ? `${stats.totalCustomers.toLocaleString("en-IN")} customers — ${stats.marketingRate.toFixed(0)}% marketing opt-in` : "Everyone who's shopped with you, and where they stand."}
           </p>
         </div>
       </motion.div>
@@ -93,16 +93,16 @@ export default function CustomersPage() {
       {/* Stats row */}
       <motion.div variants={itemVariants} className="grid grid-cols-4 gap-4">
         {[
-          { label: "TOTAL", value: stats?.totalCustomers?.toLocaleString() ?? "—" },
+          { label: "TOTAL", value: stats?.totalCustomers?.toLocaleString("en-IN") ?? "—" },
           { label: "MARKETING OPT-IN", value: marketingValue, isMarketing: true },
-          { label: "TOTAL REVENUE", value: stats ? `$${(stats.totalRevenue / 1000).toFixed(1)}K` : "—" },
-          { label: "AVG ORDER", value: stats ? `$${stats.avgOrderValue.toFixed(2)}` : "—" },
+          { label: "TOTAL REVENUE", value: stats ? `₹${(stats.totalRevenue / 1000).toFixed(1)}K` : "—" },
+          { label: "AVG ORDER", value: stats ? `₹${stats.avgOrderValue.toFixed(2)}` : "—" },
         ].map((s, i) => (
           <div
             key={i}
             className="glass-card rounded-xl p-5 transition-all duration-200 group"
           >
-            <div className="section-header text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-2">
+            <div className="section-header text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-2">
               {s.label}
             </div>
             <div className="text-[28px] tabular-nums font-bold font-mono flex items-center gap-2">
@@ -128,7 +128,7 @@ export default function CustomersPage() {
             placeholder="Search by name or email..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2.5 border border-white/30 bg-white/30 rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all backdrop-blur-sm"
+            className="w-full pl-10 pr-4 py-2.5 border border-white/30 bg-white/30 rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all backdrop-blur-sm"
           />
         </div>
         <div className="flex gap-1.5 overflow-x-auto">
@@ -136,7 +136,7 @@ export default function CustomersPage() {
             <button
               key={s}
               onClick={() => { setSegment(s); setPage(1); }}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg text-[11px] font-mono transition-all ${
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-[11px] font-sans transition-all ${
                 segment === s
                   ? "bg-secondary text-secondary-foreground"
                   : "glass-card border-white/20 bg-white/20 text-muted-foreground hover:border-primary/50"
@@ -153,11 +153,11 @@ export default function CustomersPage() {
         <table className="w-full min-w-[640px]">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Customer</th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Segment</th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Orders</th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">Total Spent</th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">RFM</th>
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Customer</th>
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Segment</th>
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Orders</th>
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Total Spent</th>
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">RFM</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -173,12 +173,12 @@ export default function CustomersPage() {
               <tr>
                 <td colSpan={5} className="px-5 py-16 text-center">
                   <Users className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-[13px] text-muted-foreground">No customers found</p>
+                  <p className="text-[13px] text-muted-foreground">No customers here yet.</p>
                   <p className="text-[11px] text-muted-foreground/50 mt-1">
-                    Connect a store to sync customers
+                    Connect your store and allo will bring your customers in.
                   </p>
                   <p className="text-[12px] text-muted-foreground/70 font-sans mt-4">
-                    Connect a store and sync data to see your customers
+                    Once your data syncs, everyone who&apos;s shopped with you shows up here.
                   </p>
                 </td>
               </tr>
@@ -192,20 +192,20 @@ export default function CustomersPage() {
                   >
                     <td className="px-5 py-4">
                       <Link href={`/customers/${customer.id}`} className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold text-muted-foreground font-mono">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold text-muted-foreground font-sans">
                           {(customer.firstName?.[0] ?? customer.email[0] ?? "?").toUpperCase()}
                         </div>
                         <div>
                           <div className="text-[13px] font-medium text-foreground">
                             {customer.firstName} {customer.lastName}
                           </div>
-                          <div className="text-[11px] text-muted-foreground font-mono">{customer.email}</div>
+                          <div className="text-[11px] text-muted-foreground font-sans">{customer.email}</div>
                         </div>
                       </Link>
                     </td>
                     <td className="px-5 py-4">
                       <Link href={`/customers/${customer.id}`}>
-                        <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-mono ${getSegmentBadgeClass(customer.rfmScore?.segment)}`}>
+                        <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-sans ${getSegmentBadgeClass(customer.rfmScore?.segment)}`}>
                           {customer.rfmScore?.segment ?? "—"}
                         </span>
                       </Link>
@@ -217,7 +217,7 @@ export default function CustomersPage() {
                     </td>
                     <td className="px-5 py-4 text-right text-[13px] font-mono font-bold text-foreground">
                       <Link href={`/customers/${customer.id}`} className="block">
-                        ${(customer.rfmScore?.totalSpent ?? 0).toFixed(2)}
+                        ₹{(customer.rfmScore?.totalSpent ?? 0).toFixed(2)}
                       </Link>
                     </td>
                     <td className="px-5 py-4 text-right">
@@ -237,7 +237,7 @@ export default function CustomersPage() {
         {/* Pagination */}
         {data && data.pages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-border">
-            <span className="text-[11px] text-muted-foreground font-mono">
+            <span className="text-[11px] text-muted-foreground font-sans">
               {data.total} customers · Page {data.page} of {data.pages}
             </span>
             <div className="flex gap-1">

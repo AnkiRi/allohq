@@ -38,7 +38,7 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
       <div className="relative w-full max-w-lg mx-4 bg-card rounded-xl border border-border shadow-xl flex flex-col max-h-[80vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="text-[10px] font-bold font-mono text-foreground tracking-[1px] uppercase">
+          <h3 className="text-[10px] font-bold font-serif text-foreground tracking-[1px] uppercase">
             Select Product
           </h3>
           <button
@@ -59,7 +59,7 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products..."
               autoFocus
-              className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
+              className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground transition"
             />
           </div>
         </div>
@@ -74,13 +74,13 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
 
           {!isLoading && query.length === 0 && (
             <div className="flex items-center justify-center py-12">
-              <p className="text-[13px] font-mono text-muted-foreground">Type to search products</p>
+              <p className="text-[13px] font-sans text-muted-foreground">Type to search products</p>
             </div>
           )}
 
           {!isLoading && query.length > 0 && results?.length === 0 && (
             <div className="flex items-center justify-center py-12">
-              <p className="text-[13px] font-mono text-muted-foreground">No products found</p>
+              <p className="text-[13px] font-sans text-muted-foreground">No products found</p>
             </div>
           )}
 
@@ -106,15 +106,15 @@ export function ProductPicker({ open, onClose, storeId, onSelect }: ProductPicke
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center">
-                        <span className="text-[10px] font-mono text-muted-foreground">IMG</span>
+                        <span className="text-[10px] font-sans text-muted-foreground">IMG</span>
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-mono font-medium text-foreground truncate">
+                      <p className="text-[13px] font-sans font-medium text-foreground truncate">
                         {product.title}
                       </p>
                       <p className="text-[11px] font-mono text-muted-foreground">
-                        ${(product.price / 100).toFixed(2)}
+                        ₹{(product.price / 100).toFixed(2)}
                       </p>
                     </div>
                   </button>

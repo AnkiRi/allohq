@@ -57,7 +57,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
             fontSize={13}
             fontFamily="monospace"
           >
-            ${data[0]!.value.toLocaleString()}
+            ₹{data[0]!.value.toLocaleString()}
           </text>
           <text
             x={300}
@@ -174,8 +174,8 @@ function CohortDetailPanel({ month }: { month: string }) {
 
   if (!data) {
     return (
-      <div className="p-6 text-[11px] text-muted-foreground font-mono">
-        No detail data available for this cohort.
+      <div className="p-6 text-[11px] text-muted-foreground font-sans">
+        Nothing more to show for this cohort yet.
       </div>
     );
   }
@@ -193,7 +193,7 @@ function CohortDetailPanel({ month }: { month: string }) {
       <div className="grid grid-cols-3 gap-6 p-6">
         {/* Column 1 — Top Customers */}
         <div>
-          <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-3">
+          <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-3">
             TOP CUSTOMERS
           </div>
           <div className="space-y-3">
@@ -202,11 +202,11 @@ function CohortDetailPanel({ month }: { month: string }) {
                 <div>
                   <div className="text-[13px] text-foreground font-sans">{tc.name}</div>
                   <div className="text-[11px] text-muted-foreground font-mono">
-                    ${tc.revenue.toLocaleString()} &middot; {tc.orders} orders
+                    ₹{tc.revenue.toLocaleString()} &middot; {tc.orders} orders
                   </div>
                 </div>
                 <span
-                  className="shrink-0 px-2 py-0.5 rounded text-[9px] font-mono font-bold text-white"
+                  className="shrink-0 px-2 py-0.5 rounded text-[9px] font-sans font-bold text-white"
                   style={{ backgroundColor: SEGMENT_COLORS[tc.segment] ?? "#999" }}
                 >
                   {tc.segment}
@@ -218,7 +218,7 @@ function CohortDetailPanel({ month }: { month: string }) {
 
         {/* Column 2 — Segment Distribution */}
         <div>
-          <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-3">
+          <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-3">
             SEGMENTS
           </div>
           {/* Stacked horizontal bar */}
@@ -252,20 +252,20 @@ function CohortDetailPanel({ month }: { month: string }) {
 
         {/* Column 3 — Purchase Behavior */}
         <div>
-          <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-3">
+          <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-3">
             PURCHASE STATS
           </div>
           <div className="space-y-3">
             {[
               { label: "Avg Orders", value: purchaseStats.avgOrders.toFixed(1) },
-              { label: "Avg Order Value", value: `$${purchaseStats.avgOrderValue.toFixed(0)}` },
+              { label: "Avg Order Value", value: `₹${purchaseStats.avgOrderValue.toFixed(0)}` },
               { label: "Repeat Rate", value: `${(purchaseStats.repeatRate * 100).toFixed(0)}%` },
             ].map((stat) => (
               <div
                 key={stat.label}
                 className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
               >
-                <span className="text-[11px] text-muted-foreground font-mono">{stat.label}</span>
+                <span className="text-[11px] text-muted-foreground font-sans">{stat.label}</span>
                 <span className="text-[13px] font-bold text-foreground font-mono">{stat.value}</span>
               </div>
             ))}
@@ -281,7 +281,7 @@ function CohortDetailPanel({ month }: { month: string }) {
 /* ------------------------------------------------------------------ */
 
 function formatCurrency(n: number): string {
-  return "$" + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return "₹" + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
 function getNextMonths(count: number): string[] {
@@ -345,15 +345,15 @@ export default function CohortAnalysisPage() {
       <motion.div variants={itemVariants} className="glass-card-static p-6">
         <Link
           href="/intelligence"
-          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono hover:text-foreground transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-sans hover:text-foreground transition-colors mb-4"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> BACK TO INTELLIGENCE
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to intelligence
         </Link>
         <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          COHORT ANALYSIS
+          Cohort analysis
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
-          Customers grouped by first purchase month
+          Your customers grouped by the month they first bought from you.
         </p>
       </motion.div>
 
@@ -385,7 +385,7 @@ export default function CohortAnalysisPage() {
         ].map((kpi) => (
           <div key={kpi.label} className="glass-card p-4 group">
             <kpi.icon className="w-4 h-4 text-muted-foreground/50 mb-2 group-hover:text-foreground transition-colors" />
-            <div className="text-[10px] text-muted-foreground font-mono uppercase font-bold tracking-[1px] mb-1">
+            <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-1">
               {kpi.label}
             </div>
             {kpi.value === null ? (
@@ -411,22 +411,22 @@ export default function CohortAnalysisPage() {
             <Sparkles className="w-5 h-5 text-[var(--warm-gold)] shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-[13px] text-foreground/90 font-sans leading-relaxed">
-                Your <span className="font-bold">{bestCohort.month}</span> cohort is performing{" "}
-                <span className="font-mono font-bold">{retentionMultiplier.toFixed(1)}x</span> above
-                baseline. {bestCohort.customers} customers generated{" "}
+                Your <span className="font-bold">{bestCohort.month}</span> cohort is your strongest —
+                spending <span className="font-mono font-bold">{retentionMultiplier.toFixed(1)}x</span> the
+                usual. Those {bestCohort.customers} customers have brought in{" "}
                 <span className="font-mono font-bold">{formatCurrency(bestCohort.revenue)}</span>.
-                Consider targeting similar profiles in acquisition campaigns.
+                Worth going after more shoppers like them.
               </p>
               <div className="flex items-center gap-4 mt-3">
                 <Link
                   href="/segments"
-                  className="text-[11px] font-mono text-[#1F7A4F] hover:underline"
+                  className="text-[11px] font-sans text-[#1F7A4F] hover:underline"
                 >
                   View Segments &rarr;
                 </Link>
                 <Link
                   href="/campaigns"
-                  className="text-[11px] font-mono text-[#1F7A4F] hover:underline"
+                  className="text-[11px] font-sans text-[#1F7A4F] hover:underline"
                 >
                   Create Campaign &rarr;
                 </Link>
@@ -442,12 +442,12 @@ export default function CohortAnalysisPage() {
       {cohorts && cohorts.length > 0 && (
         <motion.div variants={itemVariants} className="glass-card-static p-6">
           <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-6">
-            COHORT_REVENUE_OVER_TIME
+            Revenue by cohort over time
           </h2>
           <CohortAreaChart data={chartData} />
           {bestCohort && (
             <p className="text-[11px] text-muted-foreground mt-4 text-center">
-              {bestCohort.month} cohort: {bestCohort.customers} customers generated{" "}
+              {bestCohort.month}: {bestCohort.customers} customers have brought in{" "}
               {formatCurrency(bestCohort.revenue)}
             </p>
           )}
@@ -460,7 +460,7 @@ export default function CohortAnalysisPage() {
       <motion.div variants={itemVariants} className="glass-card-static overflow-hidden">
         <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
           <div className="w-px h-5 bg-secondary" />
-          <h2 className="text-[13px] font-bold text-foreground font-mono">COHORT OVERVIEW</h2>
+          <h2 className="text-[13px] font-bold text-foreground font-serif">Cohort overview</h2>
         </div>
 
         {isLoading ? (
@@ -476,22 +476,22 @@ export default function CohortAnalysisPage() {
                 <tr className="border-b border-border">
                   {/* Expand toggle column */}
                   <th className="w-8 px-2 py-3" />
-                  <th className="text-left px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase sticky left-0 bg-transparent">
+                  <th className="text-left px-4 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase sticky left-0 bg-transparent">
                     Cohort
                   </th>
-                  <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+                  <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                     Size
                   </th>
-                  <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+                  <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                     Revenue
                   </th>
-                  <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+                  <th className="text-right px-4 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                     Avg Rev
                   </th>
                   {sortedMonths.map((month) => (
                     <th
                       key={month}
-                      className="text-center px-3 py-3 text-[10px] font-mono text-muted-foreground uppercase"
+                      className="text-center px-3 py-3 text-[10px] font-sans text-muted-foreground uppercase"
                     >
                       {month.slice(2)}
                     </th>
@@ -556,7 +556,7 @@ export default function CohortAnalysisPage() {
                                 <div
                                   className="mx-auto w-full min-w-[44px] py-1.5 rounded"
                                   style={{ backgroundColor: bgColor }}
-                                  title={`This cohort spent ${multiplier}x their first-month revenue`}
+                                  title={`This cohort has spent ${multiplier}x their first-month revenue`}
                                 >
                                   <div className="text-[10px] font-mono font-bold text-foreground">
                                     {pct.toFixed(0)}%
@@ -595,11 +595,11 @@ export default function CohortAnalysisPage() {
                     <td className="w-8 px-2 py-3" />
                     <td
                       colSpan={4 + sortedMonths.length}
-                      className="px-4 py-3 text-[12px] font-mono text-muted-foreground italic"
+                      className="px-4 py-3 text-[12px] font-sans text-muted-foreground italic"
                     >
                       {i === 0
-                        ? `\u{1F4C5} New cohort will appear when customers make first purchases in ${monthName}`
-                        : `\u{1F4C5} ${monthName} cohort \u2014 upcoming`}
+                        ? `\u{1F4C5} A new cohort opens up here once customers start buying in ${monthName}`
+                        : `\u{1F4C5} ${monthName} \u2014 still to come`}
                     </td>
                   </tr>
                 ))}
@@ -612,11 +612,11 @@ export default function CohortAnalysisPage() {
             <div className="glass-card-static inline-flex p-4 rounded-full mb-4">
               <Users className="w-10 h-10 text-muted-foreground/50" />
             </div>
-            <h3 className="text-[13px] font-bold text-foreground font-mono mb-2">
-              NO COHORT DATA
+            <h3 className="text-[13px] font-bold text-foreground font-serif mb-2">
+              No cohorts yet
             </h3>
             <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-              Sync orders and run RFM analysis to generate cohort data
+              Sync your orders and run an analysis — allo will build your cohorts from there.
             </p>
           </div>
         )}

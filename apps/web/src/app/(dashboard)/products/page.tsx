@@ -40,7 +40,7 @@ export default function ProductsPage() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
+          className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
         />
       </div>
 
@@ -49,22 +49,22 @@ export default function ProductsPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Product
               </th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Vendor
               </th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Type
               </th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Price
               </th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Status
               </th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Variants
               </th>
             </tr>
@@ -116,18 +116,18 @@ export default function ProductsPage() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-[13px] font-mono text-muted-foreground">
+                  <td className="px-5 py-4 text-[13px] font-sans text-muted-foreground">
                     {product.vendor ?? "\u2014"}
                   </td>
-                  <td className="px-5 py-4 text-[13px] font-mono text-muted-foreground">
+                  <td className="px-5 py-4 text-[13px] font-sans text-muted-foreground">
                     {product.productType ?? "\u2014"}
                   </td>
                   <td className="px-5 py-4 text-right text-[13px] font-mono font-bold text-foreground">
-                    ${product.price.toFixed(2)}
+                    ₹{product.price.toFixed(2)}
                   </td>
                   <td className="px-5 py-4">
                     <span
-                      className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-mono ${
+                      className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-sans ${
                         product.status === "active"
                           ? "bg-green-50 text-green-700"
                           : product.status === "draft"

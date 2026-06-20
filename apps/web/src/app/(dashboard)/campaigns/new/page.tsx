@@ -60,9 +60,9 @@ export default function NewCampaignPage() {
 
     if (sendNow) {
       await sendMut.mutateAsync({ id: campaign.id });
-      toast("Campaign created and sent!", "success");
+      toast("Created and on its way.", "success");
     } else {
-      toast("Campaign created!", "success");
+      toast("Your campaign is ready.", "success");
     }
 
     router.push(`/campaigns/${campaign.id}`);
@@ -83,7 +83,7 @@ export default function NewCampaignPage() {
           <div key={s.key} className="flex items-center gap-2">
             <button
               onClick={() => i <= currentIdx && setStep(s.key)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-all ${
                 s.key === step
                   ? "bg-secondary text-secondary-foreground"
                   : i < currentIdx
@@ -104,17 +104,17 @@ export default function NewCampaignPage() {
         <div className="flex items-center gap-3 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl">
           <Palette className="w-4 h-4 text-purple-600 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-bold text-purple-900">Set up your brand voice first</p>
+            <p className="text-[13px] font-bold text-purple-900">Let's set up your brand voice first</p>
             <p className="text-[11px] text-purple-600 mt-0.5">
-              Brand analysis is required before creating campaigns. This helps AI create on-brand content.
+              Once allo knows how your brand sounds, everything it writes will feel like you.
             </p>
           </div>
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-mono hover:bg-purple-700 transition-all whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-sans hover:bg-purple-700 transition-all whitespace-nowrap"
           >
             <Palette className="w-3.5 h-3.5" />
-            Set Up Brand
+            Set up brand
           </Link>
         </div>
       )}
@@ -123,20 +123,20 @@ export default function NewCampaignPage() {
       <div className="border border-border rounded-xl bg-card p-6">
         {step === "details" && (
           <div className="space-y-4">
-            <h2 className="text-[13px] font-bold text-foreground font-mono">Campaign Details</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-serif">Campaign Details</h2>
             <div>
-              <label className="block text-[11px] text-muted-foreground font-mono mb-1">Campaign Name</label>
+              <label className="block text-[11px] text-muted-foreground font-sans mb-1">Campaign Name</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full border border-border rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-muted-foreground"
+                className="w-full border border-border rounded-lg px-3 py-2 text-[13px] font-sans outline-none focus:border-muted-foreground"
                 placeholder="e.g., Summer Sale 2026"
               />
             </div>
             <button
               onClick={() => setStep("template")}
               disabled={!name}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               Next <ArrowRight className="w-3 h-3" />
             </button>
@@ -145,7 +145,7 @@ export default function NewCampaignPage() {
 
         {step === "template" && (
           <div className="space-y-4">
-            <h2 className="text-[13px] font-bold text-foreground font-mono">Select Template</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-serif">Select Template</h2>
             {templatesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
@@ -178,7 +178,7 @@ export default function NewCampaignPage() {
             <button
               onClick={() => setStep("audience")}
               disabled={!templateId}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               Next <ArrowRight className="w-3 h-3" />
             </button>
@@ -187,7 +187,7 @@ export default function NewCampaignPage() {
 
         {step === "audience" && (
           <div className="space-y-4">
-            <h2 className="text-[13px] font-bold text-foreground font-mono">Select Audience</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-serif">Select Audience</h2>
             {segmentsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
@@ -201,7 +201,7 @@ export default function NewCampaignPage() {
                 }`}
               >
                 <p className="text-[11px] font-bold text-foreground">All Subscribers</p>
-                <p className="text-[10px] text-muted-foreground">Send to all marketing-opted-in customers</p>
+                <p className="text-[10px] text-muted-foreground">Everyone who's opted in to hear from you</p>
               </button>
               {segments?.map((seg) => (
                 <button
@@ -222,7 +222,7 @@ export default function NewCampaignPage() {
             )}
             <button
               onClick={() => setStep("schedule")}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all"
             >
               Next <ArrowRight className="w-3 h-3" />
             </button>
@@ -231,7 +231,7 @@ export default function NewCampaignPage() {
 
         {step === "schedule" && (
           <div className="space-y-4">
-            <h2 className="text-[13px] font-bold text-foreground font-mono">When to Send</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-serif">When to Send</h2>
             <div className="space-y-2">
               <button
                 onClick={() => setSendNow(true)}
@@ -240,7 +240,7 @@ export default function NewCampaignPage() {
                 }`}
               >
                 <p className="text-[11px] font-bold text-foreground">Send Now</p>
-                <p className="text-[10px] text-muted-foreground">Send immediately after creation</p>
+                <p className="text-[10px] text-muted-foreground">Goes out the moment you're done</p>
               </button>
               <button
                 onClick={() => setSendNow(false)}
@@ -263,9 +263,9 @@ export default function NewCampaignPage() {
             <button
               onClick={handleCreate}
               disabled={createMut.isPending || sendMut.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
-              {createMut.isPending || sendMut.isPending ? "Creating..." : sendNow ? "Create & Send" : "Create & Schedule"}
+              {createMut.isPending || sendMut.isPending ? "Creating…" : sendNow ? "Create & Send" : "Create & Schedule"}
             </button>
           </div>
         )}
