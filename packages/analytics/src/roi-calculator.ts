@@ -78,8 +78,13 @@ export async function calculateRoi(
   });
 
   aiTokenCost = Math.round(aiTokenCost * 10000) / 10000;
-  const roi = aiTokenCost > 0
-    ? Math.round(((totalAiRevenue - aiTokenCost) / aiTokenCost) * 100) / 100
+  // ROI must compare like-for-like currency: token cost is in USD, attributed
+  // revenue is in ₹. Convert the cost to ₹ for the ratio (the returned
+  // aiTokenCost stays in USD for display).
+  const USD_TO_INR = 83;
+  const aiTokenCostInr = aiTokenCost * USD_TO_INR;
+  const roi = aiTokenCostInr > 0
+    ? Math.round(((totalAiRevenue - aiTokenCostInr) / aiTokenCostInr) * 100) / 100
     : 0;
 
   return {

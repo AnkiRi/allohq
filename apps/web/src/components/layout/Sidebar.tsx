@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Users,
   Layers,
-  FileText,
   Mail,
   Sparkles,
   BarChart3,
@@ -40,7 +39,6 @@ const primaryNav = [
 const secondaryNav = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Segments", href: "/segments", icon: Layers },
-  { name: "Templates", href: "/templates", icon: FileText },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Forms", href: "/forms", icon: MousePointerClick },

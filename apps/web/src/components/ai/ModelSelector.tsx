@@ -13,7 +13,7 @@ interface ModelSelectorProps {
 }
 
 const MODEL_LABELS: Record<AIModelId, { label: string; short: string; provider: string }> = {
-  "claude-sonnet-4-6": { label: "Claude Sonnet 4.6", short: "Claude 4.6", provider: "Anthropic" },
+  "claude-sonnet-4-6": { label: "Claude Sonnet 4.6", short: "Sonnet 4.6", provider: "Anthropic" },
   "gpt-4o": { label: "GPT-4o", short: "GPT-4o", provider: "OpenAI" },
   "gpt-4o-mini": { label: "GPT-4o Mini", short: "GPT-4o Mini", provider: "OpenAI" },
 };

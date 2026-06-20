@@ -34,7 +34,7 @@ const TOKEN_PERIODS = [
 ] as const;
 
 const MODEL_LABELS: Record<string, string> = {
-  "claude-sonnet-4-6": "Claude Sonnet 4.5",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6",
   "gpt-4o": "GPT-4o",
   "gpt-4o-mini": "GPT-4o Mini",
 };
@@ -918,7 +918,7 @@ export default function SettingsPage() {
         )}
         {aiSettings?.defaultModel === null && models && (
           <p className="text-[10px] text-muted-foreground/50 mt-3">
-            No default chosen — allo will use Claude Sonnet 4.5
+            No default chosen — allo will use Claude Sonnet 4.6
           </p>
         )}
       </motion.div>

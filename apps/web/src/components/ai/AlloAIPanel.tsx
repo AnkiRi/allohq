@@ -31,7 +31,6 @@ import {
   MessageSquare,
   Check,
   PartyPopper,
-  Brain,
   ShoppingCart,
   TrendingDown,
   Package,
@@ -48,6 +47,10 @@ import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
 import { CampaignPreviewCard } from "./CampaignPreviewCard";
 import { StreamOutput, StreamRow } from "@/components/console";
+import {
+  useActivationChecklist,
+  type ChecklistStep,
+} from "@/components/dashboard/useActivationChecklist";
 
 // ---------------------------------------------------------------------------
 // Context — lets TopBar & Cmd+K open/focus the panel
@@ -887,111 +890,71 @@ type ActivationData = {
   context?: { pendingActions: number };
 };
 
-function ActivationStatusIcon({ status }: { status: string }) {
-  if (status === "done" || status === "active" || status === "ready") {
-    return (
-      <div className="w-5 h-5 rounded-full bg-[var(--color-success)]/15 flex items-center justify-center flex-shrink-0">
-        <Check className="w-3 h-3 text-[var(--color-success)]" />
-      </div>
-    );
-  }
-  if (status === "running" || status === "generating") {
-    return <Loader2 className="w-5 h-5 animate-spin text-[var(--color-warning)] flex-shrink-0" />;
-  }
-  // pending / queued
-  return <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" />;
+// Operator-voice checklist row, terminal stream styling.
+function ActivationChecklistRow({ step }: { step: ChecklistStep }) {
+  const tick = step.status === "done" ? "ok" : step.status === "generating" ? "step" : "hold";
+  return (
+    <StreamRow tick={tick}>
+      <span className="inline-flex items-center gap-2 flex-wrap">
+        <span className={cn(
+          step.status === "done" ? "text-foreground" :
+          step.status === "generating" ? "text-[hsl(var(--accent))]" :
+          "text-muted-foreground"
+        )}>
+          {step.label}
+          {step.status === "generating" && <span className="animate-pulse">…</span>}
+        </span>
+        {step.status === "done" && step.detail && (
+          <span className="text-[11px] text-muted-foreground/70">— {step.detail}</span>
+        )}
+      </span>
+    </StreamRow>
+  );
 }
 
-const ACTIVATION_LOG_MESSAGES: Record<string, string[]> = {
-  generating: [
-    "Mapping out when this should trigger",
-    "Building the email sequence with the right timing",
-    "Writing subject lines and body copy",
-    "Setting up variants to test",
-    "Choosing who this should reach",
-  ],
-  analysis: [
-    "Looking through your product catalog",
-    "Working out customer lifetime value",
-    "Spotting who's at risk of slipping away",
-    "Grouping your customers into segments",
-    "Learning your brand voice from your store",
-  ],
-};
-
 function ActivationProgressPanel({ activation }: { activation: ActivationData }) {
-  const steps = activation.steps ?? [];
+  // Real backend details blended into the client-driven checklist.
   const items = activation.automationProgress?.items ?? [];
-  const total = activation.automationProgress?.total ?? 0;
-  const generating = activation.automationProgress?.generating ?? 0;
-  const doneCount = steps.filter((s) => s.status === "done").length + (total - generating);
-  const totalTasks = steps.length + total;
+  const automationCount = items.length;
+  const details: Partial<Record<string, string>> = {};
+  if (automationCount > 0) details.winback = `${automationCount} drafted`;
 
-  // Elapsed timer
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Backend reports it's finished → let the feed finish early. Otherwise the
+  // capped client timer paces it so it ALWAYS advances and lands in ~40s.
+  const backendComplete = !!(
+    !activation.isActivating &&
+    activation.overallProgress >= 100 &&
+    (activation.automationProgress?.generating ?? 0) === 0
+  );
 
-  // Activity log — accumulates messages over time
-  const [logEntries, setLogEntries] = useState<{ time: number; text: string }[]>([]);
-  const logRef = useRef<HTMLDivElement>(null);
-  const lastLogTimeRef = useRef(0);
-
-  useEffect(() => {
-    // Add a new log entry every 3-5 seconds
-    if (elapsed - lastLogTimeRef.current < 3) return;
-    lastLogTimeRef.current = elapsed;
-
-    const generatingItem = items.find((i) => i.status === "generating");
-    const runningStep = steps.find((s) => s.status === "running");
-
-    let pool: string[];
-    if (generatingItem) {
-      const name = generatingItem.name.replace(" Automation", "");
-      pool = [
-        ...(ACTIVATION_LOG_MESSAGES.generating ?? []).map((m) => `${name}: ${m}`),
-        `${name}: Finding the best times to send`,
-        `${name}: Matching the tone to your brand`,
-      ];
-    } else if (runningStep) {
-      pool = ACTIVATION_LOG_MESSAGES.analysis ?? [];
-    } else {
-      pool = ["Putting the finishing touches on things...", "Double-checking everything looks right..."];
-    }
-
-    const usedTexts = new Set(logEntries.map((e) => e.text));
-    const available = pool.filter((m) => !usedTexts.has(m));
-    const msg = available.length > 0
-      ? available[Math.floor(Math.random() * available.length)]!
-      : pool[Math.floor(Math.random() * pool.length)]!;
-
-    setLogEntries((prev) => [...prev.slice(-15), { time: elapsed, text: msg }]);
-  }, [elapsed, items, steps]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-scroll log
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [logEntries]);
-
-  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const { steps, doneCount, total, progress, complete } = useActivationChecklist({
+    backendComplete,
+    details,
+  });
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-[var(--color-warning)]/10 flex items-center justify-center">
-          <Brain className="w-4 h-4 text-[var(--color-warning)] animate-pulse" />
+        <div className="w-8 h-8 rounded-xl bg-[hsl(var(--accent-bg))] flex items-center justify-center shrink-0">
+          {complete ? (
+            <Check className="w-4 h-4 text-[hsl(var(--accent))]" />
+          ) : (
+            <Loader2 className="w-4 h-4 text-[hsl(var(--accent))] animate-spin" />
+          )}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="text-[14px] font-serif font-semibold text-foreground">
-            Setting things up for you
+            {complete ? "All set" : "Setting things up for you"}
           </div>
-          <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
-            <span>{doneCount} of {totalTasks} done</span>
-            <span className="text-muted-foreground/40">•</span>
-            <span>{fmtTime(elapsed)} elapsed</span>
+          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+            <span>{doneCount} of {total} done</span>
+            {!complete && (
+              <>
+                <span className="text-muted-foreground/40">·</span>
+                <span>about {Math.max(5, Math.ceil((total - doneCount) * 4))}s left</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -999,98 +962,19 @@ function ActivationProgressPanel({ activation }: { activation: ActivationData })
       {/* Progress bar */}
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
         <motion.div
-          className="h-full bg-[var(--color-warning)] rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${activation.overallProgress}%` }}
+          className="h-full bg-[hsl(var(--accent))] rounded-full"
+          initial={false}
+          animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         />
       </div>
 
-      {/* Automations + Analysis in compact view */}
-      <div className="space-y-1">
-        {items.map((item) => (
-          <motion.div
-            key={item.id}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2.5 py-1"
-          >
-            <ActivationStatusIcon status={item.status} />
-            <span className={cn(
-              "text-[12px] font-sans flex-1 truncate",
-              (item.status === "active" || item.status === "ready") ? "text-foreground" :
-              item.status === "generating" ? "text-[var(--color-warning)]" :
-              "text-muted-foreground"
-            )}>
-              {item.name.replace(" Automation", "")}
-            </span>
-            <span className={cn(
-              "text-[10px] font-sans capitalize flex-shrink-0",
-              item.status === "active" ? "text-[var(--color-success)]" :
-              item.status === "ready" ? "text-[var(--color-accent)]" :
-              item.status === "generating" ? "text-[var(--color-warning)]" :
-              "text-muted-foreground"
-            )}>
-              {item.status === "active" ? "Active" :
-               item.status === "ready" ? "Ready" :
-               item.status}
-            </span>
-          </motion.div>
-        ))}
+      {/* Checklist — terminal stream */}
+      <StreamOutput aria-label="setup progress">
         {steps.map((step) => (
-          <div key={step.key} className="flex items-center gap-2.5 py-1">
-            <ActivationStatusIcon status={step.status} />
-            <span className={cn(
-              "text-[12px] font-sans truncate",
-              step.status === "done" ? "text-foreground" :
-              step.status === "running" ? "text-[var(--color-warning)]" :
-              "text-muted-foreground"
-            )}>
-              {step.label}
-            </span>
-          </div>
+          <ActivationChecklistRow key={step.key} step={step} />
         ))}
-      </div>
-
-      {/* Live activity log */}
-      {logEntries.length > 0 && (
-        <div>
-          <div className="text-[10px] font-sans uppercase tracking-wider text-muted-foreground/60 mb-1.5">
-            Live activity
-          </div>
-          <div
-            ref={logRef}
-            className="max-h-[180px] overflow-y-auto space-y-0.5 border-l-2 border-[var(--color-warning)]/20 pl-3"
-          >
-            {logEntries.map((entry, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-start gap-2 py-0.5"
-              >
-                <span className="text-[9px] font-mono text-muted-foreground/40 w-8 flex-shrink-0 pt-px">
-                  {fmtTime(entry.time)}
-                </span>
-                <span className={cn(
-                  "text-[11px] font-sans",
-                  i === logEntries.length - 1
-                    ? "text-[var(--color-warning)]"
-                    : "text-muted-foreground/60"
-                )}>
-                  {entry.text}
-                </span>
-              </motion.div>
-            ))}
-            {/* Blinking cursor on latest */}
-            <div className="flex items-center gap-2 py-0.5">
-              <span className="text-[9px] font-mono text-muted-foreground/40 w-8 flex-shrink-0">{fmtTime(elapsed)}</span>
-              <span className="w-1.5 h-3 bg-[var(--color-warning)] animate-[warm-pulse_1s_ease-in-out_infinite]" />
-            </div>
-          </div>
-        </div>
-      )}
+      </StreamOutput>
     </div>
   );
 }
