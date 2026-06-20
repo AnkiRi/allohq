@@ -67,7 +67,7 @@ export function ConsoleFrame({
             className={cn(
               "w-2 h-2 rounded-full",
               live
-                ? "bg-[hsl(var(--accent))] animate-pulse"
+                ? "bg-[hsl(var(--accent))] animate-pulse motion-reduce:animate-none"
                 : "bg-muted-foreground/40",
             )}
           />

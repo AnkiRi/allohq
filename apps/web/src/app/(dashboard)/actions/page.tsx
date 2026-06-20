@@ -9,7 +9,6 @@ import {
   StreamRow,
   DecisionCard,
   MetricReadout,
-  formatINR,
 } from "@/components/console";
 import type { OpTagKind, DecisionReasonLine } from "@/components/console";
 
@@ -89,14 +88,29 @@ function expiresIn(expiresAt: string | null | undefined): string | null {
   return `expires in ${Math.floor(hours / 24)}d`;
 }
 
+// The one-line decision in allo's warm voice — what allo wants to do.
+// When there's no campaign name, the first reasoning sentence becomes the
+// headline; buildReasoning() then knows to skip it so it never appears twice.
+function decisionLine(action: Action): string {
+  if (action.campaignName) return action.campaignName;
+  const r = firstLine(action.reasoning, 110);
+  if (r) return r;
+  return "allo lined up something worth doing";
+}
+
 // Build the mono reasoning stream for a decision: what it found, what it held
-// back & why, what it drafted — pulled from real fields, warm voice.
+// back & why, what it drafted — pulled from real fields, warm voice. Never
+// repeats the headline (see decisionLine): when the headline IS the first
+// reasoning sentence, the stream starts from the rest.
 function buildReasoning(action: Action): DecisionReasonLine[] {
   const lines: DecisionReasonLine[] = [];
 
-  // what it found
-  const found = firstLine(action.reasoning);
-  if (found) lines.push({ tick: "ok", text: found });
+  // The headline already carries the first sentence when there's no campaign
+  // name; only surface it here when the headline is the campaign name instead.
+  if (action.campaignName) {
+    const found = firstLine(action.reasoning);
+    if (found) lines.push({ tick: "ok", text: found });
+  }
 
   // who it's for / what it scanned
   const audience = action.targetSegment?.count;
@@ -112,7 +126,7 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
     });
   }
 
-  // any deeper reasoning it drafted
+  // any deeper reasoning it drafted (the sentences after the first)
   const rest = restLines(action.reasoning);
   if (rest) lines.push({ tick: "ok", text: rest });
 
@@ -142,14 +156,6 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
   });
 
   return lines;
-}
-
-// The one-line decision in allo's warm voice — what allo wants to do.
-function decisionLine(action: Action): string {
-  if (action.campaignName) return action.campaignName;
-  const r = firstLine(action.reasoning, 110);
-  if (r) return r;
-  return "allo lined up something worth doing";
 }
 
 // ---------------------------------------------------------------------------
@@ -245,39 +251,27 @@ export default function ActionsPage() {
 
       {/* Console frame — status line + queue summary */}
       <ConsoleFrame title="allo — decisions">
-        {/* Status line — mono readouts */}
+        {/* Status line — mono readouts. The frame's status bar already carries
+            the live lamp, so we don't repeat a second pulsing dot here. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
-          <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
-            <span
-              aria-hidden="true"
-              className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))] animate-pulse"
-            />
-            <span className="text-[hsl(var(--accent))]">live</span>
-          </span>
           <MetricReadout label="decisions waiting" value={pending.length} />
           {totalImpact > 0 && (
             <MetricReadout label="est. impact" value={totalImpact} money />
           )}
         </div>
 
-        {/* Operator summary stream */}
+        {/* Operator summary stream — the readouts above hold the numbers, so
+            this carries what allo did and how to act, not a restated count. */}
         <StreamOutput aria-label="what's in the queue">
           {isLoading ? (
             <StreamRow tick="step">reading the queue…</StreamRow>
           ) : pending.length > 0 ? (
             <>
               <StreamRow tick="ok">
-                <b>{pending.length}</b> decision{pending.length === 1 ? "" : "s"}{" "}
-                waiting on you
-                {totalImpact > 0 ? (
-                  <>
-                    {" "}
-                    · <b>{formatINR(totalImpact)}</b> of estimated impact
-                  </>
-                ) : null}
+                allo thought these through and held the rest back
               </StreamRow>
               <StreamRow tick="step">
-                approve to put it live, pass to let it go ·{" "}
+                approve to put one live, pass to let it go ·{" "}
                 <span className="text-[hsl(var(--accent))]">ready</span>
               </StreamRow>
             </>
@@ -309,13 +303,19 @@ export default function ActionsPage() {
         )}
       </ConsoleFrame>
 
-      {/* The decisions */}
+      {/* The decisions — the primary task; the frame above is just the lay of
+          the land. A quiet mono label marks where acting begins. */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
       ) : pending.length > 0 ? (
         <div className="space-y-3">
+          <p className="font-mono text-[11px] text-muted-foreground tracking-tight px-0.5">
+            {pending.length === 1
+              ? "one decision, yours to make"
+              : `${pending.length} decisions, top of the queue first`}
+          </p>
           {pending.map((action) => (
             <DecisionCard
               key={action.id}

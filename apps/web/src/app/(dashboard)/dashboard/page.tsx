@@ -5,7 +5,7 @@ import {
   Store,
   Loader2,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useUser } from "@clerk/nextjs";
 import { useToast } from "@/components/ui/Toast";
@@ -30,6 +30,7 @@ function ConnectStorePrompt() {
   const [domain, setDomain] = useState("");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
+  const reduce = useReducedMotion();
 
   const handleConnect = () => {
     const d = domain.trim();
@@ -49,9 +50,9 @@ function ConnectStorePrompt() {
   return (
     <motion.div
       className="flex items-center justify-center min-h-[60vh]"
-      initial={{ opacity: 0, y: 20 }}
+      initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
       <ConsoleFrame title="allo — connect" className="max-w-md w-full">
         <div className="text-center">
@@ -417,41 +418,38 @@ export default function DashboardPage() {
 
   // --- State 3: Operator console ---
   return (
-    <div className="space-y-6 w-full max-w-4xl mx-auto">
-      {/* Heading — prose, no motion */}
-      <div>
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
-          {greeting}, {firstName}
-        </h1>
-        <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          Tell allo what you want done — it scans, reasons, and queues the work
-          for your okay.
-        </p>
+    <div className="w-full max-w-4xl mx-auto">
+      {/* The ask: heading + command line read as one prompt unit */}
+      <div className="space-y-4">
+        {/* Heading — prose, no motion */}
+        <div>
+          <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
+            {greeting}, {firstName}
+          </h1>
+          <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
+            Tell allo what you want done — it scans, reasons, and queues the work
+            for your okay.
+          </p>
+        </div>
+
+        {/* 1. Command line */}
+        <CommandLine
+          placeholder={[
+            "win back my lapsed buyers before diwali",
+            "who's slipping away?",
+            "draft a Diwali win-back",
+            "reward my best customers",
+          ]}
+          onSubmit={handleCommand}
+        />
       </div>
 
-      {/* 1. Command line */}
-      <CommandLine
-        placeholder={[
-          "win back my lapsed buyers before diwali",
-          "who's slipping away?",
-          "draft a Diwali win-back",
-          "reward my best customers",
-        ]}
-        onSubmit={handleCommand}
-      />
-
+      {/* The response: console + decisions, given room to breathe */}
       {/* 2 + 3. Reasoning stream + status line, in the console frame */}
-      <ConsoleFrame title="allo — operator">
-        {/* Status line — mono readouts */}
+      <ConsoleFrame title="allo — operator" className="mt-8">
+        {/* Status line — mono readouts; the live lamp rides the first readout */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
-          <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
-            <span
-              aria-hidden="true"
-              className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))] animate-pulse"
-            />
-            <span className="text-[hsl(var(--accent))]">live</span>
-          </span>
-          <MetricReadout label="customers" value={totalCustomers} />
+          <MetricReadout label="customers" value={totalCustomers} live />
           <MetricReadout label="revenue · 30d" value={revenue30d} money />
           <MetricReadout label="at risk" value={atRisk} />
           <MetricReadout label="AI cost" value={aiCostLabel} />
@@ -531,7 +529,7 @@ export default function DashboardPage() {
       </ConsoleFrame>
 
       {/* 4. Pending decisions */}
-      <div>
+      <div className="mt-8">
         <h2 className="font-mono text-[12px] text-muted-foreground mb-3 lowercase tracking-tight">
           decisions waiting on you
           {pendingActions.length > 0 ? ` · ${pendingActions.length}` : ""}

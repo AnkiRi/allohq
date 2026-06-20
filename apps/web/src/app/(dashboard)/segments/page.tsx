@@ -63,11 +63,6 @@ export default function SegmentsPage() {
           populatedSegments[0],
         )
       : null;
-  const largestPct =
-    totalCustomers > 0 && largestSegment
-      ? ((largestSegment.liveCount / totalCustomers) * 100).toFixed(0)
-      : "0";
-
   // Biggest at-risk cohort — the opportunity allo would point to.
   const atRiskSegments = populatedSegments.filter((s: any) =>
     AT_RISK_SEGMENTS.has(s.name),
@@ -145,18 +140,16 @@ export default function SegmentsPage() {
       {/* RFM Segments tab */}
       {activeTab === "rfm" && (
         <ConsoleFrame title="allo — segment view">
-          {/* Status line — mono readouts */}
+          {/* Status line — pure counts. The "largest" and "watch" framing lives
+              in the warm-voice stream just below, so it isn't said twice. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
             <MetricReadout label="customers" value={totalCustomers} live />
             <MetricReadout label="segments" value={populatedSegments.length} />
-            {largestSegment && (
+            {atRiskSegments.length > 0 && (
               <MetricReadout
-                label="largest"
-                value={`${largestSegment.name.toLowerCase()} · ${largestPct}%`}
+                label="watch"
+                value={atRiskSegments.length}
               />
-            )}
-            {opportunity && (
-              <MetricReadout label="watch" value={opportunity.name.toLowerCase()} />
             )}
           </div>
 
@@ -223,8 +216,15 @@ export default function SegmentsPage() {
                       <div className="flex items-center gap-3">
                         {/* Name + count column */}
                         <div className="w-44 flex-shrink-0 min-w-0">
-                          <div className="font-mono text-[12.5px] text-foreground lowercase truncate">
-                            {seg.name}
+                          <div className="font-mono text-[12.5px] text-foreground lowercase truncate flex items-center gap-1.5">
+                            <span className="truncate">{seg.name}</span>
+                            {/* Non-color cue: at-risk cohorts are also labelled,
+                                so "watch" never rests on bar opacity alone. */}
+                            {watch && (
+                              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.5px] text-[hsl(var(--accent))] border border-[hsl(var(--accent))]/40 rounded px-1 leading-[1.4]">
+                                watch
+                              </span>
+                            )}
                           </div>
                           <div className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
                             {seg.liveCount.toLocaleString("en-IN")} ·{" "}
@@ -232,12 +232,14 @@ export default function SegmentsPage() {
                           </div>
                         </div>
 
-                        {/* Terminal-style bar */}
+                        {/* Terminal-style bar. At-risk cohorts read as a hollow
+                            (outlined) fill so the distinction survives without
+                            relying on a subtle opacity difference. */}
                         <div className="flex-1 h-2 rounded-sm bg-muted/40 overflow-hidden">
                           <div
                             className={`h-full rounded-sm ${
                               watch
-                                ? "bg-[hsl(var(--accent))]/40"
+                                ? "bg-[hsl(var(--accent))]/30 border border-[hsl(var(--accent))]/60"
                                 : "bg-[hsl(var(--accent))]"
                             }`}
                             style={{ width: `${barPct}%` }}
@@ -257,7 +259,7 @@ export default function SegmentsPage() {
 
               {/* Empty (zero-count) segments, listed in operator shorthand */}
               {mergedSegments.some((s: any) => s.liveCount === 0) && (
-                <div className="pt-3 mt-2 border-t border-border font-mono text-[11px] text-muted-foreground/70">
+                <div className="pt-3 mt-2 border-t border-border font-mono text-[11px] text-muted-foreground">
                   empty:{" "}
                   {mergedSegments
                     .filter((s: any) => s.liveCount === 0)
@@ -268,11 +270,11 @@ export default function SegmentsPage() {
             </div>
           ) : (
             <div className="py-12 text-center">
-              <Users className="w-9 h-9 text-muted-foreground/50 mx-auto mb-3" />
+              <Users className="w-9 h-9 text-muted-foreground/60 mx-auto mb-3" />
               <p className="text-[13px] text-foreground font-sans">
                 No segments yet.
               </p>
-              <p className="text-[12px] text-muted-foreground/70 font-sans mt-1 max-w-sm mx-auto">
+              <p className="text-[12px] text-muted-foreground font-sans mt-1 max-w-sm mx-auto">
                 Connect your store and allo will group your customers as it gets
                 to know them.
               </p>
@@ -376,11 +378,11 @@ export default function SegmentsPage() {
             </>
           ) : (
             <div className="py-12 text-center">
-              <ShoppingCart className="w-9 h-9 text-muted-foreground/50 mx-auto mb-3" />
+              <ShoppingCart className="w-9 h-9 text-muted-foreground/60 mx-auto mb-3" />
               <p className="text-[13px] text-foreground font-sans">
                 No basket patterns yet.
               </p>
-              <p className="text-[12px] text-muted-foreground/70 font-sans mt-1 max-w-sm mx-auto">
+              <p className="text-[12px] text-muted-foreground font-sans mt-1 max-w-sm mx-auto">
                 allo spots the products your customers like to buy together.
                 Patterns show up once you have enough multi-item orders.
               </p>

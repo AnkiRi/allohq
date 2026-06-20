@@ -180,13 +180,16 @@ export default function OutcomesPage() {
           control-group measurement instrumenting · figures representative
         </p>
 
-        {/* Side-by-side cohorts — treatment vs held-out control, co-equal */}
+        {/* Side-by-side cohorts. The held-out control is the load-bearing
+            pixel of the whole screen, so it carries the accent and the
+            anchoring caption; treatment stays neutral so it can't out-shout
+            the baseline we measure everything against. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* TREATMENT */}
+          {/* TREATMENT — neutral, supporting */}
           <Reveal delay={0.05}>
             <div className="rounded-xl border border-border bg-background/40 p-4 h-full">
               <div className="flex items-center gap-1.5 mb-3">
-                <span className="font-mono text-[11px] text-[hsl(var(--accent))] lowercase">
+                <span className="font-mono text-[11px] text-muted-foreground lowercase">
                   treatment
                 </span>
               </div>
@@ -209,16 +212,17 @@ export default function OutcomesPage() {
             </div>
           </Reveal>
 
-          {/* HELD-OUT CONTROL — co-equal, unmissable */}
+          {/* HELD-OUT CONTROL — the most important pixel on the screen. Accent
+              border + tint + accent label make it the baseline you can't miss. */}
           <Reveal delay={0.12}>
-            <div className="rounded-xl border-2 border-[hsl(var(--accent))]/45 bg-[hsl(var(--accent))]/[0.04] p-4 h-full">
+            <div className="rounded-xl border-2 border-[hsl(var(--accent))]/55 bg-[hsl(var(--accent))]/[0.05] p-4 h-full">
               <div className="flex items-center gap-1.5 mb-3">
-                <span className="font-mono text-[11px] text-foreground lowercase font-semibold">
+                <span className="font-mono text-[11px] text-[hsl(var(--accent))] lowercase font-semibold">
                   held-out control
                 </span>
               </div>
-              <p className="font-sans text-[11.5px] text-muted-foreground leading-relaxed mb-3">
-                received nothing
+              <p className="font-sans text-[11.5px] text-foreground leading-relaxed mb-3">
+                received nothing — this is the baseline
               </p>
               <div className="space-y-1.5">
                 <MetricReadout label="cohort" value={COHORT.controlCustomers} />
@@ -234,9 +238,11 @@ export default function OutcomesPage() {
           </Reveal>
         </div>
 
-        {/* The lift — the gap, stated plainly */}
+        {/* The lift — the gap, stated plainly. Kept on a neutral surface so it
+            reads as arithmetic, not a second hero; the one accent moment is the
+            incremental total the fee is calculated on. */}
         <Reveal delay={0.2}>
-          <div className="mt-3 rounded-xl border border-[hsl(var(--accent))]/40 bg-[hsl(var(--accent))]/[0.06] p-4">
+          <div className="mt-3 rounded-xl border border-border bg-background/40 p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <span className="font-mono text-[11px] text-muted-foreground lowercase">
                 lift / customer · treatment − control
@@ -244,10 +250,10 @@ export default function OutcomesPage() {
               <span className="font-mono text-[13px] text-foreground tabular-nums">
                 {moneyExact(COHORT.treatmentRevPerCustomer)} −{" "}
                 {moneyExact(COHORT.controlRevPerCustomer)} ={" "}
-                <b className="text-[hsl(var(--accent))] font-semibold">
+                <b className="text-foreground font-semibold">
                   {moneyExact(liftPerCustomer)}
                 </b>{" "}
-                <span className="text-[hsl(var(--accent))]">
+                <span className="text-muted-foreground">
                   (↗ +{liftPct.toFixed(0)}%)
                 </span>
               </span>
@@ -256,7 +262,7 @@ export default function OutcomesPage() {
               <span className="font-mono text-[11px] text-muted-foreground lowercase">
                 incremental revenue · lift × {COHORT.treatmentCustomers.toLocaleString("en-IN")} treated
               </span>
-              <span className="font-mono text-[18px] text-foreground tabular-nums font-semibold">
+              <span className="font-mono text-[18px] text-[hsl(var(--accent))] tabular-nums font-semibold">
                 {moneyExact(incrementalRevenue)}
               </span>
             </div>
@@ -328,7 +334,8 @@ export default function OutcomesPage() {
         </div>
 
         <p className="font-mono text-[10.5px] text-muted-foreground mt-3">
-          base fixed · performance scales only with proven lift vs control
+          base fixed · performance scales only with proven lift vs control ·
+          figures representative while control measurement is wired up
         </p>
       </ConsoleFrame>
 

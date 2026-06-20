@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -95,12 +96,34 @@ function rfmScoreClass(score: number | undefined | null): string {
   return "text-muted-foreground";
 }
 
+// Wrapped in Suspense: useSearchParams (for /customers?segment= deep links from
+// the segments page) requires a boundary to avoid a static-render bailout.
 export default function CustomersPage() {
+  return (
+    <Suspense>
+      <CustomersConsole />
+    </Suspense>
+  );
+}
+
+function CustomersConsole() {
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [segment, setSegment] = useState("All");
   const [page, setPage] = useState(1);
   // Last command echoed back into the console, for the operator's record.
   const [lastCommand, setLastCommand] = useState<string | null>(null);
+
+  // Deep-link from the segments page (/customers?segment=<name>): apply the
+  // incoming segment filter once it resolves to a known cohort.
+  useEffect(() => {
+    const incoming = searchParams.get("segment");
+    if (incoming && SEGMENTS.includes(incoming)) {
+      setSegment(incoming);
+      setSearch("");
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const { data: stats } = trpc.customers.stats.useQuery();
   const { data, isLoading } = trpc.customers.list.useQuery({
@@ -160,11 +183,30 @@ export default function CustomersPage() {
 
       {/* The base, framed in the console */}
       <ConsoleFrame title="allo — customer base">
-        {/* Status line — mono readouts */}
+        {/* Status line — mono readouts. Who-of-the-base first, money second,
+            split by a hairline so the two groups read as distinct. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
           <MetricReadout label="customers" value={totalInBase} live />
-          <MetricReadout label="at risk" value={atRiskCount} />
+          {/* "at risk" is the one number worth acting on — accent it when real */}
+          <span className="inline-flex items-center gap-1.5 font-mono text-[12px] whitespace-nowrap">
+            <span className="text-muted-foreground">at risk</span>
+            <span
+              className={`tabular-nums font-medium ${
+                atRiskCount > 0
+                  ? "text-[hsl(var(--accent))]"
+                  : "text-foreground"
+              }`}
+            >
+              {atRiskCount.toLocaleString("en-IN")}
+            </span>
+          </span>
           <MetricReadout label="opt-in" value={marketingRate} />
+          {stats && (
+            <span
+              aria-hidden="true"
+              className="hidden sm:inline-block w-px h-3.5 bg-border"
+            />
+          )}
           {stats && (
             <MetricReadout label="revenue" value={stats.totalRevenue} money />
           )}
@@ -172,6 +214,15 @@ export default function CustomersPage() {
             <MetricReadout label="avg order" value={stats.avgOrderValue} money />
           )}
         </div>
+
+        {/* Command echo — confirms allo understood the last typed goal. Its own
+            line so it never collides with or gets clipped by the filter state. */}
+        {lastCommand && (
+          <div className="font-mono text-[11.5px] text-muted-foreground mb-2 truncate">
+            <span className="text-[hsl(var(--accent))]">allo ›</span>{" "}
+            {lastCommand}
+          </div>
+        )}
 
         {/* Active filter line — what allo is showing right now (operator voice) */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -185,11 +236,6 @@ export default function CustomersPage() {
           {data && (
             <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
               · {data.total.toLocaleString("en-IN")} found
-            </span>
-          )}
-          {lastCommand && (
-            <span className="font-mono text-[11px] text-muted-foreground/70 ml-auto truncate max-w-[40%]">
-              ↳ allo › {lastCommand}
             </span>
           )}
         </div>
@@ -249,11 +295,11 @@ export default function CustomersPage() {
               ) : data?.customers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-16 text-center">
-                    <Users className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+                    <Users className="w-8 h-8 text-muted-foreground/60 mx-auto mb-3" />
                     <p className="text-[13px] text-foreground font-sans">
                       No one here to show.
                     </p>
-                    <p className="text-[12px] text-muted-foreground/70 font-sans mt-1">
+                    <p className="text-[12px] text-muted-foreground font-sans mt-1">
                       Try a different cohort, or clear the search to see everyone.
                     </p>
                   </td>
@@ -265,7 +311,7 @@ export default function CustomersPage() {
                     <tr
                       key={customer.id}
                       className={`transition-colors group relative hover:bg-background/40${
-                        inactive ? " opacity-50" : ""
+                        inactive ? " opacity-60" : ""
                       }`}
                     >
                       <td className="px-5 py-4">
