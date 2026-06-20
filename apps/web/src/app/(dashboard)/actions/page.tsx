@@ -1,461 +1,349 @@
 "use client";
 
-import { useState } from "react";
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Zap,
-  ChevronDown,
-  AlertTriangle,
-  TrendingUp,
-  Eye,
-  Filter,
-  Pencil,
-  X,
-  Trash2,
-  ArrowRight,
-  Info,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import {
+  ConsoleFrame,
+  StreamOutput,
+  StreamRow,
+  DecisionCard,
+  MetricReadout,
+  formatINR,
+} from "@/components/console";
+import type { OpTagKind, DecisionReasonLine } from "@/components/console";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
-};
-const itemVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
+// ---------------------------------------------------------------------------
+// Action shape (autonomy.listActions) — surfaced in operator language.
+// ---------------------------------------------------------------------------
 
-const STATUS_OPTIONS = [
-  { value: undefined, label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "executed", label: "Executed" },
-  { value: "auto_executed", label: "Auto-Executed" },
-  { value: "rejected", label: "Rejected" },
-  { value: "expired", label: "Expired" },
-] as const;
-
-function getUrgencyColor(score: number): string {
-  if (score >= 80) return "text-red-600 bg-red-50";
-  if (score >= 50) return "text-amber-600 bg-amber-50";
-  return "text-emerald-600 bg-emerald-50";
+interface Action {
+  id: string;
+  type?: string | null;
+  category?: string | null;
+  status: string;
+  reasoning?: string | null;
+  campaignName?: string | null;
+  confidenceScore?: number | null;
+  urgencyScore?: number | null;
+  estimatedRevenue?: number | null;
+  expiresAt?: string | null;
+  archetype?: string | null;
+  targetSegment?: { count?: number | null } | null;
 }
 
-function getConfidenceBadge(score: number): { label: string; color: string } {
-  if (score >= 80) return { label: "High", color: "bg-emerald-100 text-emerald-700" };
-  if (score >= 50) return { label: "Medium", color: "bg-amber-100 text-amber-700" };
-  return { label: "Low", color: "bg-red-100 text-red-700" };
+// ---------------------------------------------------------------------------
+// Helpers — derive tags / reasoning / readouts from an action.
+// ---------------------------------------------------------------------------
+
+// Map an autonomy action's category/type/archetype to operator tag(s).
+function actionToTags(action: Action): OpTagKind[] {
+  const hay =
+    `${action.category ?? ""} ${action.type ?? ""} ${action.archetype ?? ""}`.toLowerCase();
+  const tags: OpTagKind[] = [];
+  if (/win.?back|lapsed|hibernat|lost|churn|recover|reorder|repurchase/.test(hay))
+    tags.push("win-back");
+  if (/welcome|onboard|first|new/.test(hay)) tags.push("welcome");
+  if (/vip|champion|loyal|reward|best/.test(hay)) tags.push("vip");
+  if (/apolog|late|pre.?empt|issue|delay|ship/.test(hay)) tags.push("pre-empt");
+  if (/fatigue|suppress|hold|cap|frequen/.test(hay)) tags.push("fatigue");
+  if (/time|timing|send.?time|schedul|clock/.test(hay)) tags.push("timing");
+  if (tags.length === 0) tags.push("memory");
+  return tags.slice(0, 2);
 }
 
-function formatRevenue(value: number | null | undefined): string {
-  if (!value) return "--";
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
+// First sentence of a reasoning blob, trimmed.
+function firstLine(text: string | null | undefined, max = 140): string {
+  if (!text) return "";
+  const t = text.trim();
+  const sentence = t.split(/(?<=[.!?])\s/)[0] ?? t;
+  return sentence.length > max ? sentence.slice(0, max) + "…" : sentence;
 }
 
-function timeUntilExpiry(expiresAt: string | null | undefined): string | null {
+// Remainder of a reasoning blob after the first sentence.
+function restLines(text: string | null | undefined, max = 160): string {
+  if (!text) return "";
+  const t = text.trim();
+  const parts = t.split(/(?<=[.!?])\s/);
+  const rest = parts.slice(1).join(" ").trim();
+  if (!rest) return "";
+  return rest.length > max ? rest.slice(0, max) + "…" : rest;
+}
+
+// Confidence as a warm mono readout label.
+function confidenceLabel(score: number | null | undefined): string {
+  const s = score ?? 0;
+  if (s >= 80) return `confident · ${s}%`;
+  if (s >= 50) return `fairly sure · ${s}%`;
+  return `a hunch · ${s}%`;
+}
+
+// "expires in …" in warm voice, or null if no expiry.
+function expiresIn(expiresAt: string | null | undefined): string | null {
   if (!expiresAt) return null;
   const diff = new Date(expiresAt).getTime() - Date.now();
-  if (diff <= 0) return "Expired";
+  if (diff <= 0) return "the moment has passed";
   const hours = Math.floor(diff / 3600000);
-  if (hours < 24) return `${hours}h left`;
-  return `${Math.floor(hours / 24)}d left`;
+  if (hours < 1) return "expires within the hour";
+  if (hours < 24) return `expires in ${hours}h`;
+  return `expires in ${Math.floor(hours / 24)}d`;
 }
 
-const TYPE_OPTIONS = [
-  { value: undefined, label: "All Types" },
-  { value: "campaign", label: "Campaign" },
-  { value: "automation", label: "Automation" },
-  { value: "discount", label: "Discount" },
-] as const;
+// Build the mono reasoning stream for a decision: what it found, what it held
+// back & why, what it drafted — pulled from real fields, warm voice.
+function buildReasoning(action: Action): DecisionReasonLine[] {
+  const lines: DecisionReasonLine[] = [];
 
-function getStatusBanner(status: string | undefined): { text: string; color: string } | null {
-  switch (status) {
-    case "pending":
-      return { text: "Approve an action to put it live, or reject it to let it go. Allo handles the rest.", color: "bg-blue-50 text-blue-700 border-blue-200" };
-    case "approved":
-    case "executed":
-      return { text: "These are live. You'll find the results over in Campaigns or Automations.", color: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-    case "rejected":
-      return { text: "These were set aside and won't run.", color: "bg-gray-50 text-gray-600 border-gray-200" };
-    case "auto_executed":
-      return { text: "Allo ran these on its own, based on the autonomy settings you chose.", color: "bg-blue-50 text-blue-700 border-blue-200" };
-    case "expired":
-      return { text: "These timed out before anyone got to them — the moment for each has passed.", color: "bg-amber-50 text-amber-700 border-amber-200" };
-    default:
-      return null;
+  // what it found
+  const found = firstLine(action.reasoning);
+  if (found) lines.push({ tick: "ok", text: found });
+
+  // who it's for / what it scanned
+  const audience = action.targetSegment?.count;
+  if (audience && audience > 0) {
+    lines.push({
+      tick: "ok",
+      text: (
+        <>
+          for <b>{audience.toLocaleString("en-IN")}</b> customers
+          {action.archetype ? <> · {action.archetype}</> : null}
+        </>
+      ),
+    });
   }
+
+  // any deeper reasoning it drafted
+  const rest = restLines(action.reasoning);
+  if (rest) lines.push({ tick: "ok", text: rest });
+
+  // what it drafted / staged
+  if (action.campaignName) {
+    lines.push({
+      tick: "ok",
+      text: (
+        <>
+          drafted <b>{action.campaignName}</b>, ready for your okay
+        </>
+      ),
+    });
+  }
+
+  // confidence + timing as a single mono data line
+  const conf = confidenceLabel(action.confidenceScore);
+  const exp = expiresIn(action.expiresAt);
+  lines.push({
+    tick: "hold",
+    text: (
+      <>
+        {conf}
+        {exp ? <> · {exp}</> : null}
+      </>
+    ),
+  });
+
+  return lines;
 }
 
-function getEmptyState(status: string | undefined): { title: string; description: string } {
-  switch (status) {
-    case "pending":
-      return { title: "You're all caught up", description: "Nothing needs you right now. Allo will surface new ideas as the moment's right." };
-    case "approved":
-    case "executed":
-      return { title: "Nothing live yet", description: "Approve a pending action and it'll show up here." };
-    case "rejected":
-      return { title: "Nothing set aside", description: "Anything you pass on will land here." };
-    case "auto_executed":
-      return { title: "Allo hasn't run anything on its own yet", description: "Once it's confident enough, Allo will act without waiting — and you'll see it here." };
-    case "expired":
-      return { title: "Nothing's expired", description: "Ideas that time out before anyone acts on them show up here." };
-    default:
-      return { title: "Nothing here yet", description: "As Allo gets to know your store, it'll line up ideas for you here." };
-  }
+// The one-line decision in allo's warm voice — what allo wants to do.
+function decisionLine(action: Action): string {
+  if (action.campaignName) return action.campaignName;
+  const r = firstLine(action.reasoning, 110);
+  if (r) return r;
+  return "allo lined up something worth doing";
 }
+
+// ---------------------------------------------------------------------------
+// Decision Queue — allo's queue of decisions, in the operator console.
+// ---------------------------------------------------------------------------
 
 export default function ActionsPage() {
   const { toast } = useToast();
-  const router = useRouter();
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
-  const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const { data, isLoading } = (trpc as any).autonomy.listActions.useQuery(
-    { storeId, status: statusFilter, limit: 50 },
-    { enabled: !!storeId },
-  ) as { data: { actions: any[]; total: number } | undefined; isLoading: boolean };
+    { storeId, status: "pending", limit: 50 },
+    { enabled: !!storeId, refetchInterval: 15000 },
+  ) as { data: { actions: Action[]; total: number } | undefined; isLoading: boolean };
 
   const utils = trpc.useUtils();
+  const invalidate = () =>
+    (utils as any).autonomy.listActions.invalidate({ storeId });
 
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
     onSuccess: (result: { executedType?: string }) => {
-      const msg = result.executedType === "campaign"
-        ? "Done — your campaign is ready in the Campaigns tab."
-        : result.executedType === "automation"
-        ? "Done — that automation is now live."
-        : "Approved.";
+      const msg =
+        result.executedType === "campaign"
+          ? "Done — your campaign's ready in Campaigns."
+          : result.executedType === "automation"
+          ? "Done — that automation is live."
+          : "Approved — allo's on it.";
       toast(msg, "success");
-      (utils as any).autonomy.listActions.invalidate({ storeId });
+      invalidate();
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't go through. Give it another try.", "error"),
+    onError: (err: { message?: string }) =>
+      toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const rejectMut = (trpc as any).autonomy.rejectAction.useMutation({
     onSuccess: () => {
       toast("Passed on it.", "success");
-      (utils as any).autonomy.listActions.invalidate({ storeId });
+      invalidate();
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't go through. Give it another try.", "error"),
-  }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
-
-  const dismissMut = (trpc as any).autonomy.rejectAction.useMutation({
-    onSuccess: () => {
-      toast("Set aside.", "success");
-      (utils as any).autonomy.listActions.invalidate({ storeId });
-    },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't go through. Give it another try.", "error"),
+    onError: (err: { message?: string }) =>
+      toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const bulkApproveMut = (trpc as any).autonomy.bulkApprove.useMutation({
     onSuccess: (result: { approved: number }) => {
-      toast(`${result.approved} actions approved and live.`, "success");
-      (utils as any).autonomy.listActions.invalidate({ storeId });
+      toast(`${result.approved} approved and live.`, "success");
+      invalidate();
     },
+    onError: (err: { message?: string }) =>
+      toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const bulkRejectMut = (trpc as any).autonomy.bulkReject.useMutation({
     onSuccess: (result: { rejected: number }) => {
-      toast(`${result.rejected} actions cleared.`, "success");
-      (utils as any).autonomy.listActions.invalidate({ storeId });
+      toast(`${result.rejected} cleared.`, "success");
+      invalidate();
     },
+    onError: (err: { message?: string }) =>
+      toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
-  const allActions = data?.actions ?? [];
-  const actions = typeFilter
-    ? allActions.filter((a: any) => a.category === typeFilter || a.type?.includes(typeFilter))
-    : allActions;
-  const pendingActions = actions.filter((a: any) => a.status === "pending");
+  const pending = (data?.actions ?? []).filter((a) => a.status === "pending");
+  const busy = approveMut.isPending || rejectMut.isPending;
+  const bulkBusy = bulkApproveMut.isPending || bulkRejectMut.isPending;
 
-  const banner = getStatusBanner(statusFilter);
-  const empty = getEmptyState(statusFilter);
+  // Status line — total est. ₹ impact across the queue.
+  const totalImpact = pending.reduce(
+    (sum, a) => sum + (a.estimatedRevenue ?? 0),
+    0,
+  );
+
+  const handleBulkApprove = () =>
+    bulkApproveMut.mutate({ actionIds: pending.map((a) => a.id) });
+  const handleBulkReject = () =>
+    bulkRejectMut.mutate({
+      actionIds: pending.map((a) => a.id),
+      reason: "Cleared by operator",
+    });
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="max-w-5xl mx-auto space-y-6"
-    >
-      {/* Header */}
-      <motion.div variants={itemVariants} className="flex items-center justify-between">
-        <div>
-          <h1 className="section-header accent-bar-left text-[22px] font-semibold text-foreground font-serif">
-            Action queue
-          </h1>
-          <p className="text-sm text-[#8B8074] mt-1">
-            Ideas Allo has lined up for you. Approve the ones you like, pass on the rest.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {pendingActions.length > 1 && (
-            <>
-              <button
-                onClick={() => bulkRejectMut.mutate({
-                  actionIds: pendingActions.map((a: any) => a.id),
-                  reason: "Cleared by merchant",
-                })}
-                className="flex items-center gap-1.5 px-4 py-2 border border-[#EDE7DB] text-[#8B8074] text-sm rounded-lg hover:bg-[#EDE7DB]/40 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Clear all ({pendingActions.length})
-              </button>
-              <button
-                onClick={() => bulkApproveMut.mutate({ actionIds: pendingActions.map((a: any) => a.id) })}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                Approve all ({pendingActions.length})
-              </button>
-            </>
+    <div className="space-y-6 w-full max-w-4xl mx-auto">
+      {/* Heading — serif prose, no motion */}
+      <div>
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
+          Decision queue
+        </h1>
+        <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
+          What allo wants to do next — its thinking laid out, yours to approve or
+          pass.
+        </p>
+      </div>
+
+      {/* Console frame — status line + queue summary */}
+      <ConsoleFrame title="allo — decisions">
+        {/* Status line — mono readouts */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
+          <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
+            <span
+              aria-hidden="true"
+              className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))] animate-pulse"
+            />
+            <span className="text-[hsl(var(--accent))]">live</span>
+          </span>
+          <MetricReadout label="decisions waiting" value={pending.length} />
+          {totalImpact > 0 && (
+            <MetricReadout label="est. impact" value={totalImpact} money />
           )}
         </div>
-      </motion.div>
 
-      {/* Filters */}
-      <motion.div variants={itemVariants} className="flex items-center gap-2">
-        <Filter className="w-4 h-4 text-[#8B8074]" />
-        {STATUS_OPTIONS.map((opt) => (
-          <button
-            key={opt.label}
-            onClick={() => setStatusFilter(opt.value)}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-              statusFilter === opt.value
-                ? "bg-[#2C2C2C] text-white"
-                : "bg-[#EDE7DB]/60 text-[#5C5549] hover:bg-[#EDE7DB]"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-        <span className="ml-2 text-xs text-[#8B8074]">|</span>
-        {TYPE_OPTIONS.map((opt) => (
-          <button
-            key={opt.label}
-            onClick={() => setTypeFilter(opt.value)}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-              typeFilter === opt.value
-                ? "bg-[#2C2C2C] text-white"
-                : "bg-[#EDE7DB]/60 text-[#5C5549] hover:bg-[#EDE7DB]"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-        <span className="ml-auto text-xs text-[#8B8074]">
-          {data?.total ?? 0} total
-        </span>
-      </motion.div>
+        {/* Operator summary stream */}
+        <StreamOutput aria-label="what's in the queue">
+          {isLoading ? (
+            <StreamRow tick="step">reading the queue…</StreamRow>
+          ) : pending.length > 0 ? (
+            <>
+              <StreamRow tick="ok">
+                <b>{pending.length}</b> decision{pending.length === 1 ? "" : "s"}{" "}
+                waiting on you
+                {totalImpact > 0 ? (
+                  <>
+                    {" "}
+                    · <b>{formatINR(totalImpact)}</b> of estimated impact
+                  </>
+                ) : null}
+              </StreamRow>
+              <StreamRow tick="step">
+                approve to put it live, pass to let it go ·{" "}
+                <span className="text-[hsl(var(--accent))]">ready</span>
+              </StreamRow>
+            </>
+          ) : (
+            <StreamRow tick="hold">the queue is clear</StreamRow>
+          )}
+        </StreamOutput>
 
-      {/* Contextual banner */}
-      {banner && (
-        <motion.div
-          variants={itemVariants}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-xs ${banner.color}`}
-        >
-          <Info className="w-3.5 h-3.5 flex-shrink-0" />
-          {banner.text}
-        </motion.div>
-      )}
+        {/* Operator action — approve / clear all, in mono */}
+        {pending.length > 1 && (
+          <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border">
+            <button
+              type="button"
+              onClick={handleBulkApprove}
+              disabled={bulkBusy}
+              className="font-mono text-[12px] rounded-lg px-3 py-1.5 bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] hover:opacity-90 transition-colors disabled:opacity-50"
+            >
+              approve all ({pending.length})
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkReject}
+              disabled={bulkBusy}
+              className="font-mono text-[12px] rounded-lg px-3 py-1.5 border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              pass on all
+            </button>
+          </div>
+        )}
+      </ConsoleFrame>
 
-      {/* Loading */}
-      {isLoading && (
-        <motion.div variants={itemVariants} className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="glass-skeleton h-40 rounded-xl" />
+      {/* The decisions */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : pending.length > 0 ? (
+        <div className="space-y-3">
+          {pending.map((action) => (
+            <DecisionCard
+              key={action.id}
+              tags={actionToTags(action)}
+              impact={action.estimatedRevenue ?? null}
+              decision={decisionLine(action)}
+              reasoning={buildReasoning(action)}
+              busy={busy}
+              onApprove={() => approveMut.mutate({ actionId: action.id })}
+              onPass={() =>
+                rejectMut.mutate({
+                  actionId: action.id,
+                  reason: "Passed from decision queue",
+                })
+              }
+            />
           ))}
-        </motion.div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card p-6">
+          <p className="font-sans text-[14px] text-foreground">
+            You&apos;re all caught up.
+          </p>
+          <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            allo will surface new ideas as the moment&apos;s right.
+          </p>
+        </div>
       )}
-
-      {/* Empty state */}
-      {!isLoading && actions.length === 0 && (
-        <motion.div
-          variants={itemVariants}
-          className="glass-card-static rounded-xl p-12 text-center"
-        >
-          <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-[#2C2C2C]">{empty.title}</h3>
-          <p className="text-sm text-[#8B8074] mt-1">{empty.description}</p>
-        </motion.div>
-      )}
-
-      {/* Action cards */}
-      {actions.map((action: any) => {
-        const confidence = getConfidenceBadge(action.confidenceScore ?? 0);
-        const urgencyColor = getUrgencyColor(action.urgencyScore ?? 0);
-        const expiry = timeUntilExpiry(action.expiresAt);
-        const isExpanded = expandedId === action.id;
-        const isExecuted = action.status === "approved" || action.status === "executed" || action.status === "auto_executed";
-
-        return (
-          <motion.div
-            key={action.id}
-            variants={itemVariants}
-            className="glass-card-static rounded-xl overflow-hidden"
-          >
-            {/* Card header */}
-            <div className="p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
-                      {action.category?.replace(/_/g, " ")}
-                    </span>
-                    {action.archetype && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">
-                        {action.archetype}
-                      </span>
-                    )}
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${confidence.color}`}>
-                      {confidence.label} confidence
-                    </span>
-                    {action.type && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-[#EDE7DB]/60 text-[#5C5549]">
-                        {action.type === "campaign_send" ? "Campaign" : action.type === "automation_draft" ? "Automation" : action.type}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-base font-semibold text-[#2C2C2C]">
-                    {action.campaignName || action.reasoning?.substring(0, 80) || action.type}
-                  </h3>
-                  {action.reasoning && action.campaignName && (
-                    <p className="text-sm text-[#5C5549] mt-1 line-clamp-2">
-                      {action.reasoning}
-                    </p>
-                  )}
-                </div>
-
-                {/* Metrics column */}
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  {action.estimatedRevenue != null && (
-                    <div className="flex items-center gap-1 text-sm">
-                      <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="font-medium text-[#2C2C2C]">
-                        {formatRevenue(action.estimatedRevenue)}
-                      </span>
-                    </div>
-                  )}
-                  {action.targetSegment && (
-                    <span className="text-xs text-[#8B8074]">
-                      {action.targetSegment.count?.toLocaleString()} customers
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${urgencyColor}`}>
-                      <AlertTriangle className="w-3 h-3 inline mr-0.5" />
-                      {action.urgencyScore}
-                    </span>
-                    {expiry && (
-                      <span className="text-xs text-[#8B8074] flex items-center gap-0.5">
-                        <Clock className="w-3 h-3" />
-                        {expiry}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Preview toggle + Actions */}
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#EDE7DB]/60">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setExpandedId(isExpanded ? null : action.id)}
-                    className="flex items-center gap-1 text-xs text-[#8B8074] hover:text-[#5C5549] transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    {isExpanded ? "Hide preview" : "Show preview"}
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                  </button>
-
-                  {/* Link to result for executed actions */}
-                  {isExecuted && action.type === "campaign_send" && (
-                    <button
-                      onClick={() => router.push("/campaigns")}
-                      className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 transition-colors"
-                    >
-                      View in Campaigns
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  )}
-                  {isExecuted && action.type === "automation_draft" && (
-                    <button
-                      onClick={() => router.push("/automations")}
-                      className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 transition-colors"
-                    >
-                      View in Automations
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {action.status === "pending" && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => dismissMut.mutate({ actionId: action.id, reason: "Dismissed" })}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-[#EDE7DB] text-[#8B8074] hover:bg-[#EDE7DB]/40 transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Dismiss
-                    </button>
-                    {action.campaignId && (
-                      <button
-                        onClick={() => router.push(`/campaigns/${action.campaignId}/edit`)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-[#EDE7DB] text-[#5C5549] hover:bg-[#EDE7DB]/40 transition-colors"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                        Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={() => rejectMut.mutate({ actionId: action.id, reason: "Rejected by merchant" })}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                      Reject
-                    </button>
-                    <button
-                      onClick={() => approveMut.mutate({ actionId: action.id })}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      Approve
-                    </button>
-                  </div>
-                )}
-                {action.status !== "pending" && (
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    action.status === "approved" || action.status === "executed" ? "bg-emerald-50 text-emerald-600" :
-                    action.status === "rejected" ? "bg-red-50 text-red-600" :
-                    action.status === "auto_executed" ? "bg-blue-50 text-blue-600" :
-                    "bg-gray-100 text-gray-500"
-                  }`}>
-                    {action.status === "auto_executed" ? "Auto-executed" : action.status}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Expanded preview */}
-            {isExpanded && action.htmlPreview && (
-              <div className="border-t border-[#EDE7DB]/60 p-4 bg-white/40">
-                <div
-                  className="rounded-lg border border-[#EDE7DB] overflow-hidden max-h-[400px] overflow-y-auto"
-                  dangerouslySetInnerHTML={{ __html: action.htmlPreview }}
-                />
-              </div>
-            )}
-          </motion.div>
-        );
-      })}
-    </motion.div>
+    </div>
   );
 }

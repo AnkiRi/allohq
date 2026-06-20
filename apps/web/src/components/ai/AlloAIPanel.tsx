@@ -47,6 +47,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
 import { CampaignPreviewCard } from "./CampaignPreviewCard";
+import { StreamOutput, StreamRow } from "@/components/console";
 
 // ---------------------------------------------------------------------------
 // Context — lets TopBar & Cmd+K open/focus the panel
@@ -133,11 +134,11 @@ function derivePageContext(pathname: string): string {
 // ---------------------------------------------------------------------------
 
 const PLACEHOLDERS = [
-  "Ask allo anything...",
-  "What should I focus on today?",
-  "Help me create a campaign for...",
-  "Who's at risk of slipping away?",
-  "How did last week go?",
+  "ask allo anything",
+  "what should I focus on today?",
+  "win back my lapsed buyers before diwali",
+  "who's at risk of slipping away?",
+  "how did last week go?",
 ];
 
 function useRotatingPlaceholder(enabled: boolean) {
@@ -609,14 +610,15 @@ function RecoveryOpportunityCards({
   );
 }
 
+// Reasoning steps, phrased as a terminal stream in allo's warm, plain voice.
 const AGENT_STEPS = [
-  { icon: "🔍", text: "Looking through your store data..." },
-  { icon: "📊", text: "Reading your customer segments..." },
-  { icon: "🧠", text: "Thinking through the best approach..." },
-  { icon: "🛠", text: "Pulling together what I need..." },
-  { icon: "✍️", text: "Writing this up for you..." },
-  { icon: "🔄", text: "Making sense of the results..." },
-  { icon: "📝", text: "Putting your answer together..." },
+  "scanning your store data",
+  "reading your customer segments",
+  "thinking through the best approach",
+  "pulling together what I need",
+  "drafting this up for you",
+  "making sense of the results",
+  "putting your answer together",
 ];
 
 function AgentActivityIndicator() {
@@ -650,40 +652,53 @@ function AgentActivityIndicator() {
   return (
     <div className="flex gap-2.5">
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Sparkles className="w-3 h-3 text-[var(--color-warning)] animate-spin" style={{ animationDuration: "3s" }} />
+        <Sparkles className="w-3 h-3 text-[hsl(var(--accent))]" />
       </div>
-      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-warning)]/30 pl-3">
-        {/* Completed steps */}
-        <div className="space-y-1 mb-1.5">
+      <div className="flex-1 min-w-0 border-l-2 border-[hsl(var(--accent))]/20 pl-3">
+        {/* Reasoning as a terminal stream — done rows + the live step */}
+        <StreamOutput aria-label="allo reasoning">
           {completedSteps.map((idx) => {
             const step = AGENT_STEPS[idx];
             if (!step) return null;
             return (
-              <div key={idx} className="flex items-center gap-2 text-[11px] font-sans text-muted-foreground/60">
-                <Check className="w-3 h-3 text-[var(--color-success)]" />
-                <span>{step.text.replace("...", "")}</span>
-              </div>
+              <StreamRow key={idx} tick="ok">
+                {step}
+              </StreamRow>
             );
           })}
-        </div>
-
-        {/* Current step */}
-        <div className="flex items-center gap-2 py-0.5">
-          <div className="flex gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.3s]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.6s]" />
-          </div>
-          <span className="text-[12px] font-sans text-[var(--color-warning)]">
-            {currentStep.text}
-          </span>
-        </div>
+          <StreamRow tick="step">
+            {currentStep}
+            <span className="console-live-caret ml-1 inline-block w-[2px] h-[1em] align-[-0.1em] bg-[hsl(var(--accent))]" />
+          </StreamRow>
+        </StreamOutput>
 
         {/* Timer */}
-        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1">
+        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1.5">
           {elapsed}s elapsed
         </div>
       </div>
+
+      {/* Scoped caret keyframes — does not touch globals.css */}
+      <style jsx>{`
+        .console-live-caret {
+          animation: console-live-caret 1s step-end infinite;
+        }
+        @keyframes console-live-caret {
+          0%,
+          50% {
+            opacity: 1;
+          }
+          50.01%,
+          100% {
+            opacity: 0;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .console-live-caret {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -1224,7 +1239,30 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const pageContext = derivePageContext(pathname);
   const isDashboard = pathname === "/dashboard";
 
-  const [panelState, setPanelState] = useState<PanelState>("open");
+  // Default COLLAPSED: the page/console is the primary, full-width surface.
+  // allo is summoned on demand (floating button · ⌘K · Home command line).
+  // Restore a stored pref if present, but default to collapsed (never auto-dock).
+  const [panelState, setPanelState] = useState<PanelState>("collapsed");
+
+  // Hydrate stored open/collapsed pref after mount. Anything other than an
+  // explicit "open" stays collapsed — we never surprise the operator with a dock.
+  const panelPrefHydrated = useRef(false);
+  useEffect(() => {
+    if (panelPrefHydrated.current) return;
+    panelPrefHydrated.current = true;
+    if (typeof window === "undefined") return;
+    const saved = sessionStorage.getItem("allo-panel-state");
+    if (saved === "open" || saved === "expanded" || saved === "fullscreen") {
+      setPanelState(saved as PanelState);
+    }
+  }, []);
+
+  // Persist the open/collapsed pref so a summoned console survives soft nav,
+  // but the persisted default is always "collapsed".
+  useEffect(() => {
+    if (typeof window === "undefined" || embedded) return;
+    sessionStorage.setItem("allo-panel-state", panelState);
+  }, [panelState, embedded]);
   const [panelWidth, setPanelWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
   const { collapsed: sidebarCollapsed, toggleCollapsed: toggleSidebar } = useMobileSidebar();
@@ -1276,8 +1314,9 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // On dashboard, panel defaults open but can be collapsed
-  // In embedded mode, always open — no collapsing
+  // Panel is collapsed by default and summoned on demand. The console/page is
+  // the primary surface and gets full width whenever the panel is collapsed.
+  // In embedded mode, always open — no collapsing.
   const effectiveState = embedded ? "open" : panelState;
 
   // Get storeId
@@ -1976,8 +2015,12 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               >
                 <MessageSquare className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-serif font-bold text-foreground truncate">
-                    {currentChatTitle || "allo"}
+                  <div className="text-[12px] truncate">
+                    {currentChatTitle ? (
+                      <span className="font-serif font-bold text-foreground">{currentChatTitle}</span>
+                    ) : (
+                      <span className="font-mono font-semibold text-foreground">allo — operator</span>
+                    )}
                   </div>
                   {storeId && (
                     <div className="text-[10px] font-sans text-muted-foreground truncate">
@@ -2141,15 +2184,18 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         {showActivationView && isActivationInProgress && activationData ? (
           <>
             <ActivationProgressPanel activation={activationData} />
-            {/* Disabled input during activation */}
+            {/* Disabled command line during activation */}
             <div className="px-5 py-4 border-t border-border">
-              <div className="relative">
+              <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 opacity-60">
+                <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
+                  allo ›
+                </span>
                 <input
                   disabled
                   value=""
                   readOnly
-                  placeholder="allo is setting things up..."
-                  className="w-full pl-4 pr-10 py-3 rounded-[20px] bg-muted/80 border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50"
+                  placeholder="allo is setting things up"
+                  className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </div>
@@ -2241,9 +2287,21 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input area */}
+            {/* Command line — the `allo ›` console input. Stays controlled so
+                ⌘K / the Home command line can prefill via setInput, and the ref
+                keeps focus working. Reskinned to the console's terminal language. */}
             <div className="px-5 py-4 border-t border-border">
-              <div className="relative">
+              <div
+                className={cn(
+                  "group flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 transition-colors",
+                  "border-border focus-within:border-[hsl(var(--accent))] hover:border-muted-foreground/40 focus-within:hover:border-[hsl(var(--accent))]",
+                  (isProcessing || !storeId || !dataReady || agentBusy) && "opacity-60",
+                )}
+                onClick={() => inputRef.current?.focus()}
+              >
+                <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
+                  allo ›
+                </span>
                 <input
                   ref={inputRef}
                   value={input}
@@ -2251,14 +2309,16 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) handleSubmit();
                   }}
-                  placeholder={!storeId ? "Connect a store and we'll get started..." : agentBusy ? "allo is setting things up..." : !dataReady ? "Getting your store ready..." : placeholder}
+                  placeholder={!storeId ? "connect a store and we'll get started" : agentBusy ? "allo is setting things up" : !dataReady ? "getting your store ready" : placeholder}
                   disabled={isProcessing || !storeId || !dataReady || agentBusy}
-                  className="w-full pl-4 pr-10 py-3 rounded-[20px] bg-muted/80 border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_1px_var(--color-accent)] transition-all disabled:opacity-50"
+                  aria-label="Tell allo what to do"
+                  className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSubmit}
                   disabled={isProcessing || !input.trim() || !storeId || !dataReady || agentBusy}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[var(--color-accent)] hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30"
+                  className="p-1 rounded-md text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30 shrink-0"
+                  title="Send"
                 >
                   {isProcessing ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2272,17 +2332,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         )}
       </aside>
 
-      {/* Floating button when collapsed — hidden in embedded mode */}
+      {/* Summon affordance when collapsed — a calm console cue, not a docked chat.
+          The console/page stays full-width; allo is summoned here, via ⌘K, or
+          the Home command line. Hidden in embedded mode. */}
       {!embedded && effectiveState === "collapsed" && (
         <button
           onClick={() => {
             setPanelState("open");
             setTimeout(() => inputRef.current?.focus(), 200);
           }}
-          className="fixed bottom-6 right-6 w-12 h-12 rounded-[14px] bg-[var(--color-accent)] text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-[60]"
-          title="Open allo"
+          className="group fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent))]/30 bg-card px-3.5 py-2.5 shadow-lg hover:border-[hsl(var(--accent))] transition-colors z-[60]"
+          title="Summon allo (⌘K)"
         >
-          <Sparkles className="w-5 h-5" />
+          <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
+            allo ›
+          </span>
+          <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground/70 border border-border rounded px-1.5 py-0.5 select-none">
+            ⌘K
+          </kbd>
         </button>
       )}
     </>

@@ -11,9 +11,10 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["'Inter'", "system-ui", "sans-serif"],
-        mono: ["'JetBrains Mono'", "monospace"],
-        serif: ["'Fraunces'", "Georgia", "serif"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        // Display/headings use Space Grotesk (NOT a serif) — matches the landing.
+        serif: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains)", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",

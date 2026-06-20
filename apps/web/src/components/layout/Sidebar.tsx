@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Brain,
+  Target,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -31,6 +32,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const primaryNav = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
   { name: "Actions", href: "/actions", icon: ListChecks, showBadge: true },
+  { name: "Outcomes", href: "/outcomes", icon: Target },
   { name: "Performance", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ] as const;

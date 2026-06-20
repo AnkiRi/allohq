@@ -2,28 +2,25 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, Plus, Sparkles, ShoppingCart, Layers } from "lucide-react";
-import { motion } from "framer-motion";
+import { Users, ArrowUpRight, Plus, ShoppingCart, Layers } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-
-// ---------------------------------------------------------------------------
-// Motion variants
-// ---------------------------------------------------------------------------
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05 },
-  },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
+import {
+  ConsoleFrame,
+  StreamOutput,
+  StreamRow,
+  MetricReadout,
+  formatINR,
+} from "@/components/console";
 
 type Tab = "rfm" | "baskets";
+
+// Segments that read as "needs attention" in operator language.
+const AT_RISK_SEGMENTS = new Set([
+  "At Risk",
+  "Hibernating",
+  "Lost",
+  "Can't Lose Them",
+]);
 
 export default function SegmentsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("rfm");
@@ -41,7 +38,7 @@ export default function SegmentsPage() {
 
   const isLoading = segmentsLoading || distLoading;
 
-  // Merge segment definitions with distribution data
+  // Merge segment definitions with distribution data.
   const mergedSegments = (segments ?? []).map((seg: any) => {
     const dist = (distribution ?? []).find((d: any) => d.segment === seg.name);
     return {
@@ -52,409 +49,345 @@ export default function SegmentsPage() {
     };
   });
 
-  const totalCustomers = mergedSegments.reduce((sum: number, s: any) => sum + s.liveCount, 0);
+  const totalCustomers = mergedSegments.reduce(
+    (sum: number, s: any) => sum + s.liveCount,
+    0,
+  );
+  const populatedSegments = mergedSegments.filter((s: any) => s.liveCount > 0);
 
-  // Find the largest segment for the insight card
-  const largestSegment = mergedSegments.length > 0
-    ? mergedSegments.reduce((max: any, s: any) => (s.liveCount > max.liveCount ? s : max), mergedSegments[0])
-    : null;
-  const largestPct = totalCustomers > 0 && largestSegment
-    ? ((largestSegment.liveCount / totalCustomers) * 100).toFixed(0)
-    : "0";
+  // Largest segment — for the warm-voice opportunity line.
+  const largestSegment =
+    populatedSegments.length > 0
+      ? populatedSegments.reduce(
+          (max: any, s: any) => (s.liveCount > max.liveCount ? s : max),
+          populatedSegments[0],
+        )
+      : null;
+  const largestPct =
+    totalCustomers > 0 && largestSegment
+      ? ((largestSegment.liveCount / totalCustomers) * 100).toFixed(0)
+      : "0";
+
+  // Biggest at-risk cohort — the opportunity allo would point to.
+  const atRiskSegments = populatedSegments.filter((s: any) =>
+    AT_RISK_SEGMENTS.has(s.name),
+  );
+  const biggestRisk =
+    atRiskSegments.length > 0
+      ? atRiskSegments.reduce(
+          (max: any, s: any) => (s.liveCount > max.liveCount ? s : max),
+          atRiskSegments[0],
+        )
+      : null;
+
+  // The single segment to frame as "your biggest opportunity".
+  const opportunity = biggestRisk ?? largestSegment;
+
+  // Max count, so terminal bars scale to the largest populated segment.
+  const maxCount = populatedSegments.reduce(
+    (m: number, s: any) => Math.max(m, s.liveCount),
+    0,
+  );
 
   return (
-    <motion.div
-      className="space-y-6"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      {/* Header */}
-      <motion.div variants={itemVariants} className="flex items-center justify-between">
+    <div className="space-y-6 w-full max-w-4xl mx-auto">
+      {/* Heading — prose, no motion */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-            Segments
+          <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
+            The base
           </h1>
-          <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            {activeTab === "rfm"
-              ? mergedSegments.length > 0 && largestSegment
-                ? `${mergedSegments.length} segments — largest: ${largestSegment.name} (${largestSegment.liveCount} customers)`
-                : "How allo groups your customers by how they shop."
-              : baskets && baskets.length > 0
-                ? `${baskets.length} basket patterns discovered`
-                : "The products your customers tend to buy together."
-            }
+          <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
+            How allo reads your customers — grouped by how they shop, and what
+            they tend to buy together.
           </p>
         </div>
         <Link
           href="/segments/new"
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 transition-all"
+          className="flex-shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card text-foreground font-mono text-[12px] hover:border-muted-foreground/40 transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
-          Create Segment
+          new segment
         </Link>
-      </motion.div>
+      </div>
 
-      {/* Tab switcher */}
-      <motion.div variants={itemVariants} className="flex gap-1 bg-muted/50 rounded-lg p-1 w-fit">
+      {/* Tab switcher — operator chips */}
+      <div className="flex gap-1 bg-card border border-border rounded-lg p-1 w-fit">
         <button
           onClick={() => setActiveTab("rfm")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-sans font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[12px] lowercase transition-colors ${
             activeTab === "rfm"
-              ? "bg-background text-foreground shadow-sm"
+              ? "bg-background text-foreground"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          RFM Segments
+          rfm segments
         </button>
         <button
           onClick={() => setActiveTab("baskets")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-sans font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[12px] lowercase transition-colors ${
             activeTab === "baskets"
-              ? "bg-background text-foreground shadow-sm"
+              ? "bg-background text-foreground"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <ShoppingCart className="w-3.5 h-3.5" />
-          Basket Patterns
+          basket patterns
           {baskets && baskets.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 bg-terracotta/10 text-terracotta text-[10px] rounded-full">
+            <span className="ml-1 font-mono text-[10px] text-[hsl(var(--accent))] tabular-nums">
               {baskets.length}
             </span>
           )}
         </button>
-      </motion.div>
+      </div>
 
       {/* RFM Segments tab */}
       {activeTab === "rfm" && (
-        <>
-          {/* Segment overview bar */}
+        <ConsoleFrame title="allo — segment view">
+          {/* Status line — mono readouts */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
+            <MetricReadout label="customers" value={totalCustomers} live />
+            <MetricReadout label="segments" value={populatedSegments.length} />
+            {largestSegment && (
+              <MetricReadout
+                label="largest"
+                value={`${largestSegment.name.toLowerCase()} · ${largestPct}%`}
+              />
+            )}
+            {opportunity && (
+              <MetricReadout label="watch" value={opportunity.name.toLowerCase()} />
+            )}
+          </div>
+
+          {/* Warm-voice stream — N customers across M segments · opportunity */}
           {totalCustomers > 0 && (
-            <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">How your customers break down</h2>
-              </div>
-              <div className="flex rounded-lg overflow-hidden h-10">
-                {mergedSegments
-                  .filter((s: any) => s.liveCount > 0)
-                  .map((s: any, i: number) => {
-                    const pct = (s.liveCount / totalCustomers) * 100;
-                    const shades = [
-                      "#111", "#333", "#555", "#777", "#999", "#AAA", "#CCC", "#DDD",
-                    ];
-                    return (
-                      <div
-                        key={s.id}
-                        className="relative group flex items-center justify-center"
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: shades[i % shades.length],
-                          minWidth: pct > 0 ? "2px" : "0",
-                        }}
-                      >
-                        {pct > 8 && (
-                          <span className="text-[10px] font-sans font-bold text-white truncate px-1">
-                            {s.name}
-                          </span>
-                        )}
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block z-10">
-                          <div className="bg-secondary text-secondary-foreground text-[11px] font-sans p-2 rounded shadow-lg whitespace-nowrap">
-                            {s.name}: {s.liveCount} ({pct.toFixed(1)}%)
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-              <div className="mt-3 text-[11px] text-muted-foreground font-sans">
-                {totalCustomers.toLocaleString()} total customers across{" "}
-                {mergedSegments.filter((s: any) => s.liveCount > 0).length} segments
-              </div>
-            </motion.div>
+            <StreamOutput
+              aria-label="how allo reads your base"
+              className="mb-5"
+            >
+              <StreamRow tick="ok">
+                <b>{totalCustomers.toLocaleString("en-IN")}</b> customers across{" "}
+                <b>{populatedSegments.length}</b> segments
+              </StreamRow>
+              {opportunity && (
+                <StreamRow tick={biggestRisk ? "hold" : "ok"}>
+                  {biggestRisk ? (
+                    <>
+                      your biggest opportunity is{" "}
+                      <b>{opportunity.name}</b> —{" "}
+                      <b>{opportunity.liveCount.toLocaleString("en-IN")}</b>{" "}
+                      customers worth{" "}
+                      <b>{formatINR(opportunity.liveRevenue)}</b> are slipping;
+                      a warm note usually brings them back
+                    </>
+                  ) : (
+                    <>
+                      your biggest group is <b>{opportunity.name}</b> —{" "}
+                      <b>{opportunity.liveCount.toLocaleString("en-IN")}</b>{" "}
+                      customers who&apos;ve brought in{" "}
+                      <b>{formatINR(opportunity.liveRevenue)}</b> so far
+                    </>
+                  )}
+                </StreamRow>
+              )}
+            </StreamOutput>
           )}
 
-          {/* Segment comparison insight */}
-          {totalCustomers > 0 && largestSegment && largestSegment.liveCount > 0 && (
-            <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-terracotta/12 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Sparkles className="w-4 h-4 text-terracotta" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-foreground font-sans leading-relaxed">
-                    {largestSegment.name === "Hibernating" ? (
-                      <>
-                        {largestPct}% of your customers ({largestSegment.liveCount.toLocaleString()}) are{" "}
-                        <span className="font-semibold">{largestSegment.name}</span> — they haven&apos;t
-                        bought in a while. A warm campaign is usually what brings them back.
-                      </>
-                    ) : (
-                      <>
-                        Your biggest group right now is{" "}
-                        <span className="font-semibold">{largestSegment.name}</span> —{" "}
-                        {largestSegment.liveCount.toLocaleString()} customers who&apos;ve brought in ₹
-                        {(largestSegment.liveRevenue / 1000).toFixed(1)}K so far.
-                      </>
-                    )}
-                  </p>
-                  <Link
-                    href="/campaigns/new"
-                    className="inline-flex items-center gap-1.5 mt-2 text-[12px] font-sans font-semibold text-terracotta hover:text-terracotta/80 transition-colors"
-                  >
-                    Generate Campaign
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Segment cards */}
-          <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
-            {isLoading
-              ? Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="glass-card-static rounded-xl p-6">
-                    <div className="glass-skeleton h-4 mb-3 w-32" />
-                    <div className="glass-skeleton h-8 w-20" />
-                  </div>
-                ))
-              : mergedSegments.map((seg: any) =>
-                  seg.liveCount > 0 ? (
-                    <motion.div
+          {/* Segment distribution — mono readouts + terminal-style bars */}
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-9 bg-muted/40 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : populatedSegments.length > 0 ? (
+            <div className="space-y-1">
+              {populatedSegments
+                .slice()
+                .sort((a: any, b: any) => b.liveCount - a.liveCount)
+                .map((seg: any) => {
+                  const pct =
+                    totalCustomers > 0
+                      ? (seg.liveCount / totalCustomers) * 100
+                      : 0;
+                  const barPct =
+                    maxCount > 0 ? (seg.liveCount / maxCount) * 100 : 0;
+                  const watch = AT_RISK_SEGMENTS.has(seg.name);
+                  return (
+                    <Link
                       key={seg.id}
-                      variants={itemVariants}
-                      className="glass-card rounded-xl p-6 group"
+                      href={`/customers?segment=${encodeURIComponent(seg.name)}`}
+                      className="group block rounded-lg px-3 py-2.5 hover:bg-background/40 transition-colors"
                     >
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <h3 className="text-[13px] font-bold text-foreground font-sans">{seg.name}</h3>
-                          <p className="text-[11px] text-muted-foreground mt-1">{seg.description}</p>
-                        </div>
-                        <ArrowUpRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-terracotta transition-colors" />
-                      </div>
-                      <div className="flex items-baseline gap-3 mb-4">
-                        <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">
-                          {seg.liveCount.toLocaleString()}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground font-sans">customers</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
-                        <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">REVENUE</div>
-                          <div className="text-[13px] font-bold font-mono text-foreground">
-                            ₹{(seg.liveRevenue / 1000).toFixed(1)}K
+                      <div className="flex items-center gap-3">
+                        {/* Name + count column */}
+                        <div className="w-44 flex-shrink-0 min-w-0">
+                          <div className="font-mono text-[12.5px] text-foreground lowercase truncate">
+                            {seg.name}
+                          </div>
+                          <div className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
+                            {seg.liveCount.toLocaleString("en-IN")} ·{" "}
+                            {pct.toFixed(0)}%
                           </div>
                         </div>
-                        <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">AVG ORDER</div>
-                          <div className="text-[13px] font-bold font-mono text-foreground">
-                            ₹{seg.avgOrder.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <div className="flex justify-between text-[10px] text-muted-foreground font-sans mb-1">
-                          <span>RFM {seg.rfmMin}</span>
-                          <span>{seg.rfmMax}</span>
-                        </div>
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+
+                        {/* Terminal-style bar */}
+                        <div className="flex-1 h-2 rounded-sm bg-muted/40 overflow-hidden">
                           <div
-                            className="h-full progress-gradient rounded-full"
-                            style={{
-                              marginLeft: `${(seg.rfmMin / 15) * 100}%`,
-                              width: `${((seg.rfmMax - seg.rfmMin) / 15) * 100}%`,
-                            }}
+                            className={`h-full rounded-sm ${
+                              watch
+                                ? "bg-[hsl(var(--accent))]/40"
+                                : "bg-[hsl(var(--accent))]"
+                            }`}
+                            style={{ width: `${barPct}%` }}
                           />
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                        <Link
-                          href={`/customers?segment=${encodeURIComponent(seg.name)}`}
-                          className="text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          View Customers
-                        </Link>
-                        <Link
-                          href="/campaigns/new"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-terracotta text-white text-[11px] font-sans font-semibold hover:bg-terracotta/90 transition-colors"
-                        >
-                          Send Campaign
-                        </Link>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key={seg.id}
-                      variants={itemVariants}
-                      className="glass-card-static rounded-xl p-5 opacity-60"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="text-[13px] font-bold text-foreground font-sans">{seg.name}</h3>
-                          <p className="text-[11px] text-muted-foreground mt-1">{seg.description}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-baseline gap-3 mb-3">
-                        <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">0</span>
-                        <span className="text-[11px] text-muted-foreground font-sans">customers</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        No one here yet.
-                      </p>
-                    </motion.div>
-                  )
-                )}
-          </motion.div>
 
-          {/* Empty state */}
-          {!isLoading && mergedSegments.length === 0 && (
-            <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-16 text-center">
-              <Users className="w-10 h-10 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-[13px] font-bold text-foreground font-serif mb-2">No segments yet</h3>
-              <p className="text-[11px] text-muted-foreground font-sans max-w-sm mx-auto mb-6">
-                Connect your store and allo will group your customers as it gets to know them.
+                        {/* Revenue readout */}
+                        <div className="w-28 flex-shrink-0 text-right font-mono text-[11.5px] tabular-nums text-foreground">
+                          {formatINR(seg.liveRevenue)}
+                        </div>
+
+                        <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-[hsl(var(--accent))] transition-colors flex-shrink-0" />
+                      </div>
+                    </Link>
+                  );
+                })}
+
+              {/* Empty (zero-count) segments, listed in operator shorthand */}
+              {mergedSegments.some((s: any) => s.liveCount === 0) && (
+                <div className="pt-3 mt-2 border-t border-border font-mono text-[11px] text-muted-foreground/70">
+                  empty:{" "}
+                  {mergedSegments
+                    .filter((s: any) => s.liveCount === 0)
+                    .map((s: any) => s.name.toLowerCase())
+                    .join(" · ")}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <Users className="w-9 h-9 text-muted-foreground/50 mx-auto mb-3" />
+              <p className="text-[13px] text-foreground font-sans">
+                No segments yet.
               </p>
-              <Link
-                href="/settings"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-terracotta text-white rounded-lg text-[11px] font-sans font-semibold hover:bg-terracotta/90 transition-colors"
-              >
-                Connect Store
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </Link>
-            </motion.div>
+              <p className="text-[12px] text-muted-foreground/70 font-sans mt-1 max-w-sm mx-auto">
+                Connect your store and allo will group your customers as it gets
+                to know them.
+              </p>
+            </div>
           )}
-        </>
+        </ConsoleFrame>
       )}
 
       {/* Basket Patterns tab */}
       {activeTab === "baskets" && (
-        <>
+        <ConsoleFrame title="allo — basket patterns">
           {basketsLoading ? (
-            <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="glass-card-static rounded-xl p-6">
-                  <div className="glass-skeleton h-4 mb-3 w-40" />
-                  <div className="glass-skeleton h-3 mb-2 w-full" />
-                  <div className="glass-skeleton h-8 w-24 mt-4" />
-                </div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-9 bg-muted/40 rounded animate-pulse" />
               ))}
-            </motion.div>
+            </div>
           ) : baskets && baskets.length > 0 ? (
             <>
-              {/* Summary insight */}
-              <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-5">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-terracotta/12 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <ShoppingCart className="w-4 h-4 text-terracotta" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-foreground font-sans leading-relaxed">
-                      allo found <span className="font-semibold">{baskets.length} product combinations</span> your
-                      customers tend to buy together. The most common one shows up in{" "}
-                      <span className="font-semibold">{baskets[0].frequency} orders</span> across{" "}
-                      <span className="font-semibold">{baskets[0].customerCount} customers</span>.
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
+              {/* Status line */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
+                <MetricReadout label="patterns" value={baskets.length} live />
+                <MetricReadout label="top frequency" value={baskets[0].frequency} />
+                <MetricReadout
+                  label="top customers"
+                  value={baskets[0].customerCount}
+                />
+              </div>
 
-              {/* Basket archetype cards */}
-              <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
+              {/* Warm-voice stream */}
+              <StreamOutput aria-label="what allo found in baskets" className="mb-5">
+                <StreamRow tick="ok">
+                  found <b>{baskets.length}</b> product combinations your
+                  customers tend to buy together
+                </StreamRow>
+                <StreamRow tick="ok">
+                  the most common shows up in{" "}
+                  <b>{baskets[0].frequency}</b> orders across{" "}
+                  <b>{baskets[0].customerCount}</b> customers
+                </StreamRow>
+              </StreamOutput>
+
+              {/* Basket archetype rows */}
+              <div className="space-y-1">
                 {baskets.map((basket: any) => {
                   const titles = (basket.productTitles ?? []) as string[];
                   const avgVal = Number(basket.avgOrderValue) || 0;
                   const conf = Number(basket.confidence) || 0;
-
                   return (
-                    <motion.div
+                    <div
                       key={basket.id}
-                      variants={itemVariants}
-                      className="glass-card rounded-xl p-6 group"
+                      className="rounded-lg px-3 py-3 hover:bg-background/40 transition-colors"
                     >
-                      {/* Name and description */}
-                      <div className="mb-4">
-                        <h3 className="text-[13px] font-bold text-foreground font-sans">{basket.name}</h3>
-                        <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
-                          {basket.description}
-                        </p>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <div className="font-mono text-[12.5px] text-foreground lowercase truncate">
+                            {basket.name}
+                          </div>
+                          <p className="text-[12px] text-muted-foreground font-sans mt-0.5 line-clamp-2">
+                            {basket.description}
+                          </p>
+                        </div>
+                        <Link
+                          href="/campaigns/new"
+                          className="flex-shrink-0 inline-flex items-center gap-1.5 font-mono text-[11px] text-[hsl(var(--accent))] hover:underline"
+                        >
+                          bundle
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                        </Link>
                       </div>
 
                       {/* Product pills */}
-                      <div className="flex flex-wrap gap-1.5 mb-4">
+                      <div className="flex flex-wrap gap-1.5 mb-2">
                         {titles.map((title: string, idx: number) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center px-2 py-1 bg-muted rounded-md text-[10px] font-sans text-foreground"
+                            className="inline-flex items-center px-2 py-0.5 bg-muted rounded-md font-mono text-[10px] text-foreground"
                           >
-                            {title.length > 25 ? title.slice(0, 22) + "..." : title}
+                            {title.length > 25 ? title.slice(0, 22) + "…" : title}
                           </span>
                         ))}
                       </div>
 
-                      {/* Stats */}
-                      <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
-                        <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">ORDERS</div>
-                          <div className="text-[16px] font-bold font-mono text-foreground tabular-nums">
-                            {basket.frequency}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">CUSTOMERS</div>
-                          <div className="text-[16px] font-bold font-mono text-foreground tabular-nums">
-                            {basket.customerCount}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold tracking-[1px] text-muted-foreground font-sans">AVG ORDER</div>
-                          <div className="text-[16px] font-bold font-mono text-foreground tabular-nums">
-                            ₹{avgVal.toFixed(0)}
-                          </div>
-                        </div>
+                      {/* Mono readouts */}
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+                        <MetricReadout label="orders" value={basket.frequency} />
+                        <MetricReadout
+                          label="customers"
+                          value={basket.customerCount}
+                        />
+                        <MetricReadout label="avg order" value={avgVal} money />
+                        <MetricReadout
+                          label="confidence"
+                          value={`${(conf * 100).toFixed(0)}%`}
+                        />
                       </div>
-
-                      {/* Confidence bar */}
-                      <div className="mt-4">
-                        <div className="flex justify-between text-[10px] text-muted-foreground font-sans mb-1">
-                          <span>Confidence</span>
-                          <span>{(conf * 100).toFixed(1)}%</span>
-                        </div>
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full progress-gradient rounded-full"
-                            style={{ width: `${conf * 100}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Action */}
-                      <div className="flex items-center justify-end mt-4 pt-4 border-t border-border">
-                        <Link
-                          href="/campaigns/new"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-terracotta text-white text-[11px] font-sans font-semibold hover:bg-terracotta/90 transition-colors"
-                        >
-                          Create Bundle Campaign
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
-              </motion.div>
+              </div>
             </>
           ) : (
-            <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-16 text-center">
-              <ShoppingCart className="w-10 h-10 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-[13px] font-bold text-foreground font-serif mb-2">No basket patterns yet</h3>
-              <p className="text-[11px] text-muted-foreground font-sans max-w-sm mx-auto mb-6">
-                allo spots the products your customers like to buy together. Patterns show up here once
-                you have enough multi-item orders.
+            <div className="py-12 text-center">
+              <ShoppingCart className="w-9 h-9 text-muted-foreground/50 mx-auto mb-3" />
+              <p className="text-[13px] text-foreground font-sans">
+                No basket patterns yet.
               </p>
-            </motion.div>
+              <p className="text-[12px] text-muted-foreground/70 font-sans mt-1 max-w-sm mx-auto">
+                allo spots the products your customers like to buy together.
+                Patterns show up once you have enough multi-item orders.
+              </p>
+            </div>
           )}
-        </>
+        </ConsoleFrame>
       )}
-    </motion.div>
+    </div>
   );
 }

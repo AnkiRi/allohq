@@ -39,7 +39,8 @@ export function ThemeScript() {
     var stored = localStorage.getItem('${STORAGE_KEY}');
     var theme = stored === 'dark' || stored === 'light' ? stored : null;
     if (!theme) {
-      theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      // Terminal default is DARK; light is the opt-in variant.
+      theme = 'dark';
     }
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -53,19 +54,17 @@ export function ThemeScript() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  // Terminal default is DARK; light is the opt-in variant.
+  const [theme, setThemeState] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage / system preference
+  // Initialize from localStorage, otherwise fall back to the dark default
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
     if (stored === "dark" || stored === "light") {
       setThemeState(stored);
     } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      setThemeState(prefersDark ? "dark" : "light");
+      setThemeState("dark");
     }
     setMounted(true);
   }, []);
@@ -81,19 +80,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme, mounted]);
-
-  // Listen for system preference changes (only if no explicit preference stored)
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        setThemeState(e.matches ? "dark" : "light");
-      }
-    };
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
