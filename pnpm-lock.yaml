@@ -277,7 +277,7 @@ importers:
         version: 10.4.24(postcss@8.5.6)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@1.21.7)
+        version: 9.39.2(jiti@2.6.1)
       postcss:
         specifier: ^8.4.49
         version: 8.5.6
@@ -602,6 +602,9 @@ importers:
       '@allohq/email-builder':
         specifier: workspace:*
         version: link:../email-builder
+      '@allohq/emails':
+        specifier: workspace:^
+        version: link:../emails
       '@anthropic-ai/sdk':
         specifier: ^0.78.0
         version: 0.78.0(zod@3.25.76)
@@ -697,6 +700,31 @@ importers:
       '@types/mjml':
         specifier: ^4.7.4
         version: 4.7.4
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/emails:
+    dependencies:
+      '@allohq/email-builder':
+        specifier: workspace:*
+        version: link:../email-builder
+      '@react-email/components':
+        specifier: ^1.0.12
+        version: 1.0.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@react-email/render':
+        specifier: ^2.0.9
+        version: 2.0.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@allohq/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -885,7 +913,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@2.6.1)
+        version: 9.39.2(jiti@1.21.7)
       react:
         specifier: ^19.0.0
         version: 19.2.4

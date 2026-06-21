@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
-import { renderToHtml } from "@allohq/email-builder/src/server";
+import { renderBrandedEmail, loadBrandKit } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { checkAllRules } from "@allohq/communication-governor";
@@ -159,6 +159,10 @@ export const sendWorker = new Worker<SendJobData>(
       showSocialLinks: brandProfile.showSocialLinks,
       showAddress: brandProfile.showAddress,
     } : undefined;
+    void brandSettings;
+
+    // Derive the store's BrandKit once — every email renders in this brand's look.
+    const brandKit = await loadBrandKit(campaign.storeId);
 
     // Render and send each email
     let sentCount = 0;
@@ -311,12 +315,15 @@ export const sendWorker = new Worker<SendJobData>(
         }
       }
 
-      const html = renderToHtml(blocks, {
+      const html = await renderBrandedEmail({
+        storeId: campaign.storeId,
+        brandKit,
+        blocks,
+        subject: effectiveSubject,
         variables,
         products: productsMap,
         dynamicProducts,
         previewMode: false,
-        brandSettings,
         tracking: {
           utmSource: "allo",
           utmMedium: "email",

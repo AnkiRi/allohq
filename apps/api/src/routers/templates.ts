@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { renderToHtml } from "@allohq/email-builder/src/server";
+import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
 
 export const templatesRouter = router({
@@ -408,10 +408,16 @@ export const templatesRouter = router({
       z.object({
         blocks: z.any(),
         variables: z.record(z.string()).optional(),
+        storeId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const blocks = (input.blocks ?? []) as any[];
+
+      // Resolve a store to derive the brand kit (defaults to the workspace's first store).
+      const store = input.storeId
+        ? await ctx.prisma.store.findFirst({ where: { id: input.storeId, workspaceId: ctx.workspaceId } })
+        : await ctx.prisma.store.findFirst({ where: { workspaceId: ctx.workspaceId } });
 
       // Collect product IDs from product blocks
       const productIds = blocks
@@ -450,7 +456,9 @@ export const templatesRouter = router({
         }
       }
 
-      const html = renderToHtml(blocks, {
+      const html = await renderBrandedEmail({
+        storeId: store?.id ?? "",
+        blocks,
         variables: input.variables ?? {},
         products,
         previewMode: true,

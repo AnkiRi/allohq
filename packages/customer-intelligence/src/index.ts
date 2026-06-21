@@ -25,6 +25,8 @@ export type { StoreData, BrandVoiceResult } from "./brand";
 // AI Content Generation
 export { generateEmail } from "./content";
 export type { GenerateEmailInput, GenerateEmailOutput, CreativeIntensity, BrandSettings } from "./content";
+export { renderBrandedEmail, loadBrandKit } from "./content";
+export type { RenderBrandedEmailInput } from "./content";
 export { generateWhatsApp } from "./content";
 export type { GenerateWhatsAppInput, GenerateWhatsAppOutput } from "./content";
 export { generateSms } from "./content";

@@ -11,6 +11,10 @@ coverage
 out/
 build
 dist/
+# @allohq/emails ships a built dist (compiled React Email components +
+# .d.ts) so node consumers don't typecheck its .tsx source.
+!packages/emails/dist/
+!packages/emails/dist/**
 
 # Production
 *.tsbuildinfo

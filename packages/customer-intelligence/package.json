@@ -10,6 +10,7 @@
   "dependencies": {
     "@allohq/database": "workspace:*",
     "@allohq/email-builder": "workspace:*",
+    "@allohq/emails": "workspace:^",
     "@anthropic-ai/sdk": "^0.78.0",
     "openai": "^4.73.0",
     "replicate": "^1.0.1"
