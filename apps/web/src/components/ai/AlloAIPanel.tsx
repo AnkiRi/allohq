@@ -298,7 +298,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
   if (insights.metrics.revenueThisMonth > 0) {
     const trend = insights.metrics.revenueTrend;
     const trendText = trend > 0 ? `up ${trend}%` : trend < 0 ? `down ${Math.abs(trend)}%` : "steady";
-    parts.push(`Revenue this month: ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs last month)`);
+    parts.push(`Revenue (last 30 days): ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs prior 30 days)`);
   }
 
   // Customers

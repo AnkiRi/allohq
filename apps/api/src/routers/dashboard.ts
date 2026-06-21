@@ -101,7 +101,9 @@ export const dashboardRouter = router({
     const storeIds = stores.map((s) => s.id);
 
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // F1: single revenue figure across the app — trailing 30-day window
+    // (was calendar-month, which contradicted the 30d figure on other screens).
+    const last30dStart = new Date(now.getTime() - 30 * 86400000);
 
     const [totalCustomers, totalRevenue, revenueThisMonth, recentOrders] =
       await Promise.all([
@@ -115,7 +117,7 @@ export const dashboardRouter = router({
         ctx.prisma.order.aggregate({
           where: {
             storeId: { in: storeIds },
-            createdAt: { gte: startOfMonth },
+            createdAt: { gte: last30dStart },
           },
           _sum: { totalPrice: true },
         }),

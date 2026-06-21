@@ -168,7 +168,7 @@ export function TopBar() {
               className="text-[12px] font-mono font-bold text-[#8a6f3a] tabular-nums"
               duration={0.8}
             />
-            <span className="text-[10px] font-sans text-[#8a6f3a]/55">AI revenue this month</span>
+            <span className="text-[10px] font-sans text-[#8a6f3a]/55">AI revenue · 30d</span>
           </div>
         )}
 
