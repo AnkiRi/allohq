@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
+import { predictConsequence } from "../lib/predictions";
+import { getStoreCalibration } from "../lib/calibration";
 import {
   getAllAutonomyConfigs,
   setAutonomyTier,
@@ -60,7 +62,7 @@ export const autonomyRouter = router({
         offset: z.number().min(0).optional(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       // Expire stale actions first
       await expireStaleActions(input.storeId);
       const result = await listPendingActions(input.storeId, {
@@ -70,10 +72,38 @@ export const autonomyRouter = router({
         offset: input.offset,
       });
 
+      // Track C: derive store-level calibration ONCE from real control data
+      // (Track B). It flips each prediction from "estimate" to "calibrated"
+      // only when there are enough measured control outcomes behind it.
+      const calibration = await getStoreCalibration(ctx.prisma, input.storeId);
+
       // Enrich each action by unpacking the payload JSON
       const enrichedActions = result.actions.map((action) => {
         const payload = (action.payload ?? {}) as Record<string, unknown>;
+        const targetSegment =
+          (payload.targetSegment as { name: string; count: number }) ?? null;
+        const channel = (payload.channel as string) ?? null;
+
+        // Track C: COMMIT to a predicted consequence before acting. Inputs are
+        // generalizable features (cohort/channel/category/typical-rate), so the
+        // same call could later be served by a cross-brand trained model.
+        const prediction = predictConsequence({
+          cohortSize: targetSegment?.count ?? 0,
+          estimatedRevenue: action.estimatedRevenue ?? 0,
+          confidenceScore: action.confidenceScore ?? 0,
+          channel,
+          category: action.category ?? action.type,
+          calibration: calibration
+            ? {
+                accuracyRatio: calibration.accuracyRatio,
+                liftPct: calibration.liftPct,
+                sampleSize: calibration.sampleSize,
+              }
+            : null,
+        });
+
         return {
+          prediction,
           id: action.id,
           type: action.type,
           category: action.category,
@@ -88,10 +118,10 @@ export const autonomyRouter = router({
           htmlPreview: (payload.htmlPreview as string) ?? null,
           thumbnails: (payload.thumbnails as string[]) ?? [],
           archetype: (payload.archetype as string) ?? null,
-          targetSegment: (payload.targetSegment as { name: string; count: number }) ?? null,
+          targetSegment,
           campaignName: (payload.campaignName as string) ?? null,
           subjectLine: (payload.subjectLine as string) ?? null,
-          channel: (payload.channel as string) ?? null,
+          channel,
           products: (payload.products as Array<{ name: string; imageUrl: string; price: number }>) ?? [],
         };
       });

@@ -459,6 +459,108 @@ export const analyticsRouter = router({
       };
     }),
 
+  /**
+   * Prediction accuracy — Track C's track record, measured against Track B.
+   *
+   * Compares what allo FORECAST (estimatedRevenue committed on executed actions)
+   * against what ACTUALLY happened (measured incremental revenue vs a held-out
+   * control). Returns an overall accuracy figure plus a few predicted-vs-actual
+   * rows shown plainly.
+   *
+   * HONESTY: `hasCalibration` is true only when there are enough measured
+   * control outcomes to back the comparison (same discipline as the Outcomes
+   * disclaimer). Until then the predictions are estimates and this section says
+   * so. The seeded closed Vana experiment is what makes this real today.
+   */
+  predictionAccuracy: workspaceProcedure
+    .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
+    .query(async ({ ctx, input }) => {
+      const MIN_CONTROL_WITH_OUTCOME = 30;
+      const since = new Date(Date.now() - input.days * 86_400_000);
+
+      // ACTUAL: measured incremental revenue vs held-out control (Track B).
+      const rows = await ctx.prisma.$queryRaw<
+        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number }>
+      >`
+        SELECT "treatmentArm" AS arm,
+               COUNT(*)::bigint AS n,
+               COUNT(
+                 CASE WHEN COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL
+                      THEN 1 END
+               )::bigint AS "withOutcome",
+               COALESCE(
+                 AVG(COALESCE("outcomeMargin", "outcomeRevenue"))
+                   FILTER (WHERE COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL),
+                 0
+               )::float AS mean
+        FROM "message_logs"
+        WHERE "storeId" = ${input.storeId}
+          AND "treatmentArm" IS NOT NULL
+          AND "createdAt" >= ${since}
+        GROUP BY "treatmentArm"
+      `;
+
+      const control = rows.find((r) => r.arm === "CONTROL");
+      const treatment = rows.find((r) => r.arm === "TREATMENT");
+      const controlMean = control?.mean ?? 0;
+      const treatmentMean = treatment?.mean ?? 0;
+      const treatmentCount = Number(treatment?.n ?? 0);
+      const controlWithOutcome = Number(control?.withOutcome ?? 0);
+
+      const liftPerCustomer = treatmentMean - controlMean;
+      const actualIncremental = Math.max(0, liftPerCustomer * treatmentCount);
+
+      // PREDICTED: ₹ allo committed on the actions executed in the window.
+      const executed = await ctx.prisma.actionQueue.findMany({
+        where: { storeId: input.storeId, status: "executed", createdAt: { gte: since } },
+        select: { id: true, type: true, estimatedRevenue: true, createdAt: true, payload: true },
+        orderBy: { createdAt: "desc" },
+      });
+      const predictedTotal = executed.reduce(
+        (sum, a) => sum + (a.estimatedRevenue ?? 0),
+        0,
+      );
+
+      const hasCalibration = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
+
+      // Overall accuracy: "forecasts ran within X% of actual". Distance of the
+      // actual/predicted ratio from 1, expressed as a percentage gap.
+      const ratio = predictedTotal > 0 ? actualIncremental / predictedTotal : null;
+      const withinPct =
+        ratio != null ? Math.round(Math.abs(1 - ratio) * 100) : null;
+      const accuracyPct = withinPct != null ? Math.max(0, 100 - withinPct) : null;
+
+      // A few predicted-vs-actual rows, shown plainly. Distribute the measured
+      // total across executed actions by their share of the forecast, so each
+      // row's "actual" is the actual that forecast is accountable for.
+      const rowsOut = executed.slice(0, 5).map((a) => {
+        const predicted = a.estimatedRevenue ?? 0;
+        const share = predictedTotal > 0 ? predicted / predictedTotal : 0;
+        const actual = hasCalibration ? Math.round(actualIncremental * share) : null;
+        const payload = (a.payload ?? {}) as Record<string, unknown>;
+        return {
+          id: a.id,
+          label:
+            (payload.campaignName as string) ??
+            (a.type ? a.type.replace(/_/g, " ") : "decision"),
+          predicted: Math.round(predicted),
+          actual,
+        };
+      });
+
+      return {
+        hasCalibration,
+        windowDays: input.days,
+        sampleSize: controlWithOutcome,
+        executedCount: executed.length,
+        predictedTotal: Math.round(predictedTotal),
+        actualTotal: Math.round(actualIncremental),
+        accuracyPct, // e.g. 91 → "within 9% of actual"
+        withinPct, // the gap itself
+        rows: rowsOut,
+      };
+    }),
+
   /** Cross-store benchmarks: anonymous aggregate metrics for comparison */
   benchmarks: workspaceProcedure
     .input(z.object({ storeId: z.string() }))

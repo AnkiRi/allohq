@@ -17,6 +17,18 @@ export interface DecisionReasonLine {
   text: React.ReactNode;
 }
 
+// Track C — the consequence allo COMMITS to before acting. Upside is named, the
+// downside/risk is named too (never hidden — naming it is what makes this
+// judgment, not hype), and the basis is stated plainly: "estimate" until real
+// control data backs it, "calibrated" once it does.
+export interface DecisionPrediction {
+  upsideRevenue: number;
+  liftPct: number;
+  downsideRiskPct: number;
+  confidence: "low" | "medium" | "high";
+  basis: "estimate" | "calibrated";
+}
+
 export interface DecisionCardProps {
   /** The decision in one sans line, allo's warm voice. */
   decision: React.ReactNode;
@@ -26,6 +38,8 @@ export interface DecisionCardProps {
   tags?: OpTagKind[];
   /** Estimated impact in ₹ (en-IN). Omitted if undefined/null. */
   impact?: number | null;
+  /** Track C — the predicted consequence allo commits to before acting. */
+  prediction?: DecisionPrediction | null;
   /** Inline approve / pass. */
   onApprove?: () => void;
   onPass?: () => void;
@@ -39,6 +53,7 @@ export function DecisionCard({
   reasoning,
   tags,
   impact,
+  prediction,
   onApprove,
   onPass,
   busy = false,
@@ -79,6 +94,48 @@ export function DecisionCard({
             </StreamRow>
           ))}
         </StreamOutput>
+      )}
+
+      {/* Track C — the predicted consequence allo commits to. Upside, NAMED
+          downside, confidence, and the honest basis (estimate vs calibrated). */}
+      {prediction && (
+        <div className="mt-3 rounded-lg border border-border bg-background/40 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-muted-foreground lowercase">
+              predicted consequence
+            </span>
+            <span
+              className={cn(
+                "lowercase tracking-tight px-1.5 py-0.5 rounded",
+                prediction.basis === "calibrated"
+                  ? "text-[hsl(var(--accent))] bg-[hsl(var(--accent))]/10"
+                  : "text-muted-foreground border border-border",
+              )}
+            >
+              {prediction.basis === "calibrated"
+                ? "calibrated · control-backed"
+                : "estimate · not yet control-backed"}
+            </span>
+          </div>
+          <div className="space-y-0.5 text-muted-foreground">
+            <div>
+              <span className="text-[hsl(var(--accent))]">↗ upside</span>{" "}
+              expected recovery{" "}
+              <b className="text-foreground">{formatINR(prediction.upsideRevenue)}</b>{" "}
+              · ~<b className="text-foreground">{prediction.liftPct}%</b>{" "}
+              incremental lift vs control
+            </div>
+            <div>
+              <span className="text-foreground/70">↘ risk</span> ~
+              <b className="text-foreground">{prediction.downsideRiskPct}%</b>{" "}
+              unsubscribe / annoyance risk
+            </div>
+            <div>
+              <span className="text-muted-foreground">· confidence</span>{" "}
+              <b className="text-foreground">{prediction.confidence}</b>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Inline actions */}

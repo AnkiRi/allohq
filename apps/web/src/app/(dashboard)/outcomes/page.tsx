@@ -443,6 +443,127 @@ export default function OutcomesPage() {
             : "AI cost & revenue are live · cohort lift representative while control-group measurement is wired up"}
         </p>
       </ConsoleFrame>
+
+      {/* 4. Forecast accuracy — Track C's track record against the control ----- */}
+      <ForecastAccuracy storeId={storeId} windowDays={COHORT.windowDays} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ForecastAccuracy — Track C on the Outcomes screen. allo commits to a
+// predicted recovery BEFORE acting; here we show how those forecasts held up
+// against what the held-out control actually measured.
+//
+// HONESTY: until there are enough measured control outcomes, predictions are
+// ESTIMATES and we say so plainly — same discipline as the control disclaimer
+// above. Only once control data backs them do we call it a calibrated track
+// record and show the within-X% accuracy figure.
+// ---------------------------------------------------------------------------
+function ForecastAccuracy({
+  storeId,
+  windowDays,
+}: {
+  storeId: string;
+  windowDays: number;
+}) {
+  const { data } = (trpc.analytics.predictionAccuracy as any).useQuery(
+    { storeId, days: windowDays },
+    { enabled: !!storeId },
+  ) as {
+    data:
+      | {
+          hasCalibration: boolean;
+          windowDays: number;
+          sampleSize: number;
+          executedCount: number;
+          predictedTotal: number;
+          actualTotal: number;
+          accuracyPct: number | null;
+          withinPct: number | null;
+          rows: Array<{
+            id: string;
+            label: string;
+            predicted: number;
+            actual: number | null;
+          }>;
+        }
+      | undefined;
+  };
+
+  const calibrated = !!data?.hasCalibration;
+
+  return (
+    <ConsoleFrame title="allo — forecast accuracy" live={false} clock={false}>
+      <p className="font-sans text-[13px] text-foreground leading-relaxed mb-1">
+        Before acting, allo commits to a predicted recovery. This is how those
+        forecasts held up against what the held-out control actually measured.
+      </p>
+
+      {/* The headline accuracy line — only real once control-backed. */}
+      <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
+        {calibrated && data?.withinPct != null
+          ? `recovery forecasts ran within ${data.withinPct}% of actual over the last ${data.windowDays}d · ${data.sampleSize} measured outcomes`
+          : "forecasts are estimates · not yet control-backed — figures shown are what allo committed to, actual fills in as control outcomes land"}
+      </p>
+
+      {/* Predicted vs actual rows, stated plainly. */}
+      {data && data.rows.length > 0 ? (
+        <div className="rounded-xl border border-border bg-background/40 p-4 font-mono text-[12.5px]">
+          <div className="flex items-baseline justify-between gap-4 pb-2 mb-2 border-b border-border text-[10.5px] text-muted-foreground lowercase">
+            <span>decision</span>
+            <span className="tabular-nums">predicted → actual</span>
+          </div>
+          {data.rows.map((row) => (
+            <div
+              key={row.id}
+              className="flex items-baseline justify-between gap-4 py-1"
+            >
+              <span className="text-muted-foreground lowercase truncate">
+                {row.label}
+              </span>
+              <span className="text-foreground tabular-nums shrink-0">
+                {moneyExact(row.predicted)}
+                <span className="text-muted-foreground">
+                  {" "}
+                  →{" "}
+                  {row.actual != null ? (
+                    <span className="text-[hsl(var(--accent))]">
+                      {moneyExact(row.actual)}
+                    </span>
+                  ) : (
+                    "pending"
+                  )}
+                </span>
+              </span>
+            </div>
+          ))}
+          <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
+            <span className="text-foreground lowercase font-semibold">
+              total · {data.executedCount} executed
+            </span>
+            <span className="text-foreground tabular-nums">
+              {moneyExact(data.predictedTotal)}
+              <span className="text-muted-foreground">
+                {" "}
+                →{" "}
+                {calibrated ? (
+                  <span className="text-[hsl(var(--accent))] font-semibold">
+                    {moneyExact(data.actualTotal)}
+                  </span>
+                ) : (
+                  "pending"
+                )}
+              </span>
+            </span>
+          </div>
+        </div>
+      ) : (
+        <p className="font-sans text-[12.5px] text-muted-foreground leading-relaxed">
+          No executed decisions in this window yet — once allo acts, each
+          forecast lands here next to what control actually measured.
+        </p>
+      )}
+    </ConsoleFrame>
   );
 }

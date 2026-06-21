@@ -10,7 +10,11 @@ import {
   DecisionCard,
   MetricReadout,
 } from "@/components/console";
-import type { OpTagKind, DecisionReasonLine } from "@/components/console";
+import type {
+  OpTagKind,
+  DecisionReasonLine,
+  DecisionPrediction,
+} from "@/components/console";
 
 // ---------------------------------------------------------------------------
 // Action shape (autonomy.listActions) — surfaced in operator language.
@@ -29,6 +33,7 @@ interface Action {
   expiresAt?: string | null;
   archetype?: string | null;
   targetSegment?: { count?: number | null } | null;
+  prediction?: DecisionPrediction | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +326,7 @@ export default function ActionsPage() {
               key={action.id}
               tags={actionToTags(action)}
               impact={action.estimatedRevenue ?? null}
+              prediction={action.prediction ?? null}
               decision={decisionLine(action)}
               reasoning={buildReasoning(action)}
               busy={busy}
