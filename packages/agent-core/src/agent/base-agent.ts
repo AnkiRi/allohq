@@ -262,6 +262,7 @@ async function executeToolCall(
     await prisma.agentAction.create({
       data: {
         storeId: toolContext.storeId,
+        customerId: toolContext.customerId ?? null,
         agentType,
         actionType: toolName,
         input: input as any,
@@ -278,6 +279,7 @@ async function executeToolCall(
     await prisma.agentAction.create({
       data: {
         storeId: toolContext.storeId,
+        customerId: toolContext.customerId ?? null,
         agentType,
         actionType: toolName,
         input: input as any,

@@ -11,6 +11,7 @@ import {
   getActiveTestForStore,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
+import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 
@@ -78,6 +79,20 @@ export const sendWorker = new Worker<SendJobData>(
     await prisma.campaign.update({
       where: { id: campaignId },
       data: { recipientCount: customers.length },
+    });
+
+    // Causal-data moat: get (or create) a holdout experiment for this cohort.
+    // A deterministic fraction (splitRatio) of recipients is assigned to CONTROL
+    // and WITHHELD (no send) so we can measure the incremental lift of sending.
+    const cohortLabel = campaign.segment
+      ? `campaign-segment:${campaign.segmentId}`
+      : `campaign-allmarketing:${campaign.storeId}`;
+    const experiment = await getOrCreateExperiment(campaign.storeId, {
+      label: cohortLabel,
+      source: "campaign",
+      campaignId,
+      segmentId: campaign.segmentId ?? null,
+      segmentName: campaign.segment?.name ?? null,
     });
 
     // Fetch products referenced in template blocks for rendering
@@ -149,7 +164,32 @@ export const sendWorker = new Worker<SendJobData>(
     let sentCount = 0;
     let failCount = 0;
     let suppressedCount = 0;
+    let controlCount = 0;
     for (const customer of customers) {
+      // Causal-data moat: deterministic control-group assignment.
+      // CONTROL ⇒ withhold the send and record a "withheld" MessageLog row so
+      // the counterfactual baseline accumulates (audit trail for outcome pricing).
+      const arm = assignArm(experiment, customer.id);
+      if (arm === "CONTROL") {
+        controlCount++;
+        await prisma.messageLog.create({
+          data: {
+            workspaceId: campaign.store.workspaceId,
+            storeId: campaign.storeId,
+            customerId: customer.id,
+            channel: "email",
+            to: customer.email,
+            subject: campaign.template.subject,
+            campaignId,
+            status: "withheld",
+            treatmentArm: "CONTROL",
+            experimentId: experiment.id,
+            metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
+          },
+        });
+        continue;
+      }
+
       // A/B test variant assignment for subject line
       let effectiveSubject = campaign.template.subject;
       let abTestId: string | undefined;
@@ -187,6 +227,8 @@ export const sendWorker = new Worker<SendJobData>(
             subject: effectiveSubject,
             campaignId,
             status: "suppressed",
+            treatmentArm: "TREATMENT",
+            experimentId: experiment.id,
             error: `Suppressed: ${governorCheck.reason}`,
             metadata: { suppressed: true, rule: governorCheck.rule },
           },
@@ -237,6 +279,8 @@ export const sendWorker = new Worker<SendJobData>(
           templateId: campaign.templateId,
           campaignId,
           status: "queued",
+          treatmentArm: "TREATMENT",
+          experimentId: experiment.id,
           messageFeatures,
           metadata: abTestId ? { abTestId, abVariant } : undefined,
         },
@@ -363,7 +407,7 @@ export const sendWorker = new Worker<SendJobData>(
       },
     });
 
-    console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients (${failCount} failed, ${suppressedCount} suppressed)`);
+    console.log(`Campaign ${campaign.name} sent to ${sentCount} recipients (${failCount} failed, ${suppressedCount} suppressed, ${controlCount} withheld as CONTROL via experiment ${experiment.id})`);
 
     // Run performance learner to close the feedback loop
     try {

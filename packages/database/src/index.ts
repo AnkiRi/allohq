@@ -13,3 +13,10 @@ export const prisma =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export * from "@prisma/client";
+
+// Causal-data moat: DecisionRecord substrate (backed by the decision_records view)
+export { getDecisionRecords } from "./decision-records";
+export type {
+  DecisionRecord,
+  GetDecisionRecordsOptions,
+} from "./decision-records";
