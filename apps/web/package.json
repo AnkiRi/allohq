@@ -14,6 +14,7 @@
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
     "@allohq/email-builder": "workspace:*",
+    "@allohq/emails": "workspace:*",
     "@allohq/ui": "workspace:*",
     "@clerk/nextjs": "^6.9.3",
     "@dnd-kit/core": "^6.3.1",

@@ -6,6 +6,7 @@ import { rfmRouter } from "./rfm";
 import { storesRouter } from "./stores";
 import { dashboardRouter } from "./dashboard";
 import { templatesRouter } from "./templates";
+import { emailsRouter } from "./emails";
 import { campaignsRouter } from "./campaigns";
 import { productsRouter } from "./products";
 import { aiRouter } from "./ai";
@@ -33,6 +34,7 @@ export const appRouter = router({
   stores: storesRouter,
   dashboard: dashboardRouter,
   templates: templatesRouter,
+  emails: emailsRouter,
   campaigns: campaignsRouter,
   products: productsRouter,
   ai: aiRouter,
