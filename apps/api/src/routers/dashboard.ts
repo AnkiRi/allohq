@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
-
-// Cost per million tokens for each model (mirrors AI_MODELS in customer-intelligence)
-const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-};
+// Single source of truth for model costs lives in the AI gateway.
+import { computeTokenCost } from "@allohq/customer-intelligence";
 
 function periodToDateFilter(period: string | undefined): { gte?: Date; lt?: Date } | undefined {
   if (!period || period === "all") return undefined;
@@ -177,10 +172,7 @@ export const dashboardRouter = router({
         const inputTokens = g._sum.inputTokens ?? 0;
         const outputTokens = g._sum.outputTokens ?? 0;
         const calls = g._count;
-        const costs = MODEL_COSTS[g.model] ?? { input: 0, output: 0 };
-        const cost =
-          (inputTokens / 1_000_000) * costs.input +
-          (outputTokens / 1_000_000) * costs.output;
+        const cost = computeTokenCost(g.model, inputTokens, outputTokens);
 
         totalInputTokens += inputTokens;
         totalOutputTokens += outputTokens;

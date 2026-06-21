@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 const MIN_CONVERSATIONS = 3;
@@ -111,16 +111,15 @@ async function synthesizeVoiceReport(storeId: string): Promise<boolean> {
     return `--- Conversation ${i + 1} (Customer: ${customerName}, Sentiment: ${sentiment}, Channel: ${conv.channel}) ---\n${messages}`;
   }).join("\n\n");
 
-  // Call Anthropic API for analysis
-  const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
-
-  const aiResponse = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 2000,
-    messages: [
-      {
-        role: "user",
-        content: `Analyze these ${conversations.length} customer support conversations from the past week and extract:
+  // Route through the AI gateway. This is a deterministic analysis task, so the
+  // policy routes it to the economy tier (degrading to Claude when OpenAI is
+  // unavailable) and the response cache applies at low temperature.
+  const aiResponse = await complete({
+    task: "analysis",
+    maxTokens: 2000,
+    temperature: 0.2,
+    jsonMode: true,
+    prompt: `Analyze these ${conversations.length} customer support conversations from the past week and extract:
 
 1. Common themes (what customers are asking about/complaining about)
 2. Sentiment per theme (-1 to 1, where -1 is very negative, 0 is neutral, 1 is very positive)
@@ -132,13 +131,10 @@ Return ONLY valid JSON (no markdown, no code fences):
 
 Conversations:
 ${transcripts}`,
-      },
-    ],
   });
 
   // Parse AI response
-  const responseText =
-    aiResponse.content[0]?.type === "text" ? aiResponse.content[0].text : "";
+  const responseText = aiResponse.content;
 
   let parsed: {
     themes: Array<{ theme: string; count: number; sentiment: number }>;
@@ -189,6 +185,23 @@ ${transcripts}`,
       summary: parsed.summary,
     },
   });
+
+  // Record real token usage against the workspace that owns this store.
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { workspaceId: true },
+  });
+  if (store) {
+    await prisma.tokenUsage.create({
+      data: {
+        workspaceId: store.workspaceId,
+        model: aiResponse.model,
+        inputTokens: aiResponse.inputTokens,
+        outputTokens: aiResponse.outputTokens,
+        purpose: "customer_voice",
+      },
+    });
+  }
 
   console.log(
     `[customer-voice] Store ${storeId}: synthesized ${conversations.length} conversations into ${parsed.themes.length} themes`

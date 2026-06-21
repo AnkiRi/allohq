@@ -69,6 +69,9 @@ importers:
       '@allohq/email-builder':
         specifier: workspace:*
         version: link:../../packages/email-builder
+      '@allohq/emails':
+        specifier: workspace:*
+        version: link:../../packages/emails
       '@allohq/forms-and-popups':
         specifier: workspace:*
         version: link:../../packages/forms-and-popups
@@ -148,6 +151,9 @@ importers:
       '@allohq/email-builder':
         specifier: workspace:*
         version: link:../../packages/email-builder
+      '@allohq/emails':
+        specifier: workspace:*
+        version: link:../../packages/emails
       '@allohq/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -277,7 +283,7 @@ importers:
         version: 10.4.24(postcss@8.5.6)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@2.6.1)
+        version: 9.39.2(jiti@1.21.7)
       postcss:
         specifier: ^8.4.49
         version: 8.5.6
@@ -464,6 +470,9 @@ importers:
 
   packages/analytics:
     dependencies:
+      '@allohq/customer-intelligence':
+        specifier: workspace:*
+        version: link:../customer-intelligence
       '@allohq/database':
         specifier: workspace:*
         version: link:../database
@@ -913,7 +922,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@1.21.7)
+        version: 9.39.2(jiti@2.6.1)
       react:
         specifier: ^19.0.0
         version: 19.2.4

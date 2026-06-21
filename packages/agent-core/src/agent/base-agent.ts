@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { prisma } from "@allohq/database";
+import { getProvider, DEFAULT_MODEL as GATEWAY_DEFAULT_MODEL } from "@allohq/customer-intelligence";
 import type { ToolDefinition, ToolContext, AgentResult, AgentType } from "../types";
 import { toAnthropicTools } from "../tools";
 
 const MAX_TOOL_ROUNDS = 5;
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+// Default agent model comes from the gateway policy (single source of truth).
+const DEFAULT_MODEL = GATEWAY_DEFAULT_MODEL;
 
 /**
  * Run the agent loop: send messages to the LLM, execute tool calls, repeat.
@@ -32,7 +34,9 @@ export async function runAgent(opts: {
     maxTokens = 4096,
   } = opts;
 
-  // Try Anthropic first, fall back to OpenAI
+  // Try Anthropic first (the working default tier), fall back to OpenAI.
+  // Provider availability is sourced from the gateway's adapter registry so the
+  // graceful-degrade rules stay in one place.
   try {
     return await runAnthropicAgent({
       systemPrompt, userMessage, tools, toolContext, agentType,
@@ -42,8 +46,8 @@ export async function runAgent(opts: {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Agent] Anthropic failed: ${msg}. Falling back to OpenAI...`);
 
-    if (!process.env["OPENAI_API_KEY"]) {
-      throw new Error(`Anthropic API failed (${msg}) and no OPENAI_API_KEY configured for fallback.`);
+    if (!getProvider("openai").isAvailable()) {
+      throw new Error(`Anthropic API failed (${msg}) and no OpenAI provider available for fallback.`);
     }
 
     return await runOpenAIAgent({

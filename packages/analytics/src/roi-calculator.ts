@@ -1,12 +1,6 @@
 import { prisma } from "@allohq/database";
+import { computeTokenCost } from "@allohq/customer-intelligence";
 import type { RoiMetrics } from "./types";
-
-// Cost per million tokens for each model
-const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-};
 
 /**
  * Calculate ROI: AI token cost vs AI-attributed revenue.
@@ -29,10 +23,7 @@ export async function calculateRoi(
   for (const usage of tokenUsage) {
     const inputTokens = usage._sum.inputTokens ?? 0;
     const outputTokens = usage._sum.outputTokens ?? 0;
-    const costs = MODEL_COSTS[usage.model] ?? { input: 0, output: 0 };
-    aiTokenCost +=
-      (inputTokens / 1_000_000) * costs.input +
-      (outputTokens / 1_000_000) * costs.output;
+    aiTokenCost += computeTokenCost(usage.model, inputTokens, outputTokens);
   }
 
   // Get revenue from AI-generated campaigns

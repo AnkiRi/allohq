@@ -1,6 +1,18 @@
-// AI Client
-export { complete, AI_MODELS } from "./ai";
-export type { AIModelId, AIProvider, AIModel, CompletionRequest, CompletionResult } from "./ai";
+// AI Gateway — single entry point for all model calls
+export { complete, AI_MODELS, DEFAULT_MODEL, MODEL_COSTS, computeTokenCost, getProvider } from "./ai";
+export type {
+  AIModelId,
+  AITask,
+  AIProvider,
+  AIModel,
+  ModelTier,
+  ModelCost,
+  LlmProvider,
+  ProviderRequest,
+  ProviderResult,
+  CompletionRequest,
+  CompletionResult,
+} from "./ai";
 
 // RFM
 export { scoreQuintile, getSegmentName, computeRfmRawData } from "./rfm";

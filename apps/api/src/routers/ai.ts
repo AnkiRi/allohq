@@ -395,32 +395,29 @@ export const aiRouter = router({
 
       const storeData = `Store: ${brandProfile?.brandName ?? store.shopDomain}. ${customerCount} customers. Month revenue: $${monthRevenue.toFixed(0)}. ${monthOrders} orders. AOV: $${avgOrderValue.toFixed(0)}. Segments: ${segmentSummary}`;
 
-      // Use Anthropic directly for a focused, fast explanation
-      const Anthropic = (await import("@anthropic-ai/sdk")).default;
-      const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+      // Route through the AI gateway. This is a focused reasoning task, so the
+      // policy keeps it on the frontier tier (Claude) while still degrading
+      // gracefully if that provider is unavailable.
+      const { complete } = await import("@allohq/customer-intelligence");
 
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 256,
-        system: "You are a marketing analyst. Explain concisely (2-3 sentences) why this recommendation was made, using data from the store. Be specific with numbers. Do not use markdown or bullet points — plain text only.",
-        messages: [
-          {
-            role: "user",
-            content: `Store data: ${storeData}\n\nExplain why: ${input.context}`,
-          },
-        ],
+      const result = await complete({
+        task: "reasoning",
+        maxTokens: 256,
+        temperature: 0.4,
+        system:
+          "You are a marketing analyst. Explain concisely (2-3 sentences) why this recommendation was made, using data from the store. Be specific with numbers. Do not use markdown or bullet points — plain text only.",
+        prompt: `Store data: ${storeData}\n\nExplain why: ${input.context}`,
       });
 
-      const textBlock = response.content.find((b) => b.type === "text");
-      const explanation = textBlock ? (textBlock as { type: "text"; text: string }).text : "Unable to generate explanation.";
+      const explanation = result.content || "Unable to generate explanation.";
 
-      // Record token usage
+      // Record real token usage against the model the gateway actually used.
       await ctx.prisma.tokenUsage.create({
         data: {
           workspaceId: ctx.workspaceId,
-          model: "claude-sonnet-4-6",
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
+          model: result.model,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
           purpose: "explain_why",
         },
       });
