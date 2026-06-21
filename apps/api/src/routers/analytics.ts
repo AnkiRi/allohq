@@ -342,6 +342,123 @@ export const analyticsRouter = router({
       };
     }),
 
+  /**
+   * Control lift — the Track B moat, on the wire.
+   *
+   * From the causal substrate (decision_records / message_logs, grouped by
+   * treatmentArm), computes the REAL incremental lift of allo's retention vs a
+   * held-out control cohort that received nothing:
+   *   - per customer we take the measured outcome (outcomeMargin if present,
+   *     else outcomeRevenue) and average within each arm,
+   *   - lift = treatment mean − control mean (per customer),
+   *   - incremental total = lift × treated count,
+   *   - fee = base monthly + performance % of the incremental margin vs control.
+   *
+   * `hasRealData` is true only when there are enough CONTROL rows WITH a measured
+   * outcome to be meaningful (>= MIN_CONTROL_WITH_OUTCOME). The web screen flips
+   * from representative figures to these REAL numbers off that flag.
+   */
+  controlLift: workspaceProcedure
+    .input(z.object({ storeId: z.string(), days: z.number().default(90) }))
+    .query(async ({ ctx, input }) => {
+      // Fee model — must match the representative figures on the web screen so
+      // the page reads as one honest model whichever state it's in.
+      const BASE_MONTHLY_FEE = 24_000; // ₹ / mo — running retention, the floor
+      const PERFORMANCE_RATE = 0.15; // 15% of proven incremental margin vs control
+      const MIN_CONTROL_WITH_OUTCOME = 30; // threshold for "meaningful"
+
+      const since = new Date(Date.now() - input.days * 86_400_000);
+
+      // Per-customer measured outcome by arm, over the window. Prefer margin;
+      // fall back to revenue. One row per arm with count + mean + members.
+      const rows = await ctx.prisma.$queryRaw<
+        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number }>
+      >`
+        SELECT "treatmentArm" AS arm,
+               COUNT(*)::bigint AS n,
+               COUNT(
+                 CASE WHEN COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL
+                      THEN 1 END
+               )::bigint AS "withOutcome",
+               COALESCE(
+                 AVG(COALESCE("outcomeMargin", "outcomeRevenue"))
+                   FILTER (WHERE COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL),
+                 0
+               )::float AS mean
+        FROM "message_logs"
+        WHERE "storeId" = ${input.storeId}
+          AND "treatmentArm" IS NOT NULL
+          AND "createdAt" >= ${since}
+        GROUP BY "treatmentArm"
+      `;
+
+      const control = rows.find((r) => r.arm === "CONTROL");
+      const treatment = rows.find((r) => r.arm === "TREATMENT");
+
+      const controlCount = Number(control?.n ?? 0);
+      const treatmentCount = Number(treatment?.n ?? 0);
+      const controlWithOutcome = Number(control?.withOutcome ?? 0);
+      const treatmentWithOutcome = Number(treatment?.withOutcome ?? 0);
+      const controlMean = control?.mean ?? 0;
+      const treatmentMean = treatment?.mean ?? 0;
+
+      // Whether the per-customer figures are margin (preferred) or revenue.
+      const marginUsed = await ctx.prisma.messageLog.count({
+        where: {
+          storeId: input.storeId,
+          treatmentArm: { not: null },
+          outcomeMargin: { not: null },
+          createdAt: { gte: since },
+        },
+      });
+      const basis: "margin" | "revenue" = marginUsed > 0 ? "margin" : "revenue";
+
+      const liftPerCustomer = treatmentMean - controlMean;
+      // Incremental total = per-customer lift applied across the treated cohort.
+      const incrementalTotal = liftPerCustomer * treatmentCount;
+
+      // Performance fee on the incremental margin vs control. If the per-customer
+      // basis is revenue (no costPrice data), approximate margin via the store's
+      // defaultContributionMargin so the fee stays grounded in margin.
+      const store = await ctx.prisma.store.findUnique({
+        where: { id: input.storeId },
+        select: { defaultContributionMargin: true },
+      });
+      const contributionMargin = store?.defaultContributionMargin ?? 0.6;
+      const incrementalMargin =
+        basis === "margin" ? incrementalTotal : incrementalTotal * contributionMargin;
+
+      const performanceFee = Math.max(0, incrementalMargin) * PERFORMANCE_RATE;
+      const totalFee = BASE_MONTHLY_FEE + performanceFee;
+
+      const hasRealData = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
+
+      return {
+        hasRealData,
+        windowDays: input.days,
+        basis, // "margin" | "revenue" — which figure the per-customer means are
+        // Raw counts
+        controlCount,
+        treatmentCount,
+        controlWithOutcome,
+        treatmentWithOutcome,
+        // Per-customer measured outcome (₹), by arm
+        controlMeanPerCustomer: Math.round(controlMean),
+        treatmentMeanPerCustomer: Math.round(treatmentMean),
+        // The lift
+        liftPerCustomer: Math.round(liftPerCustomer),
+        liftPct: controlMean > 0 ? (liftPerCustomer / controlMean) * 100 : 0,
+        incrementalTotal: Math.round(incrementalTotal),
+        incrementalMargin: Math.round(incrementalMargin),
+        // Fee math
+        baseMonthly: BASE_MONTHLY_FEE,
+        performanceRate: PERFORMANCE_RATE,
+        performanceFee: Math.round(performanceFee),
+        totalFee: Math.round(totalFee),
+        contributionMargin,
+      };
+    }),
+
   /** Cross-store benchmarks: anonymous aggregate metrics for comparison */
   benchmarks: workspaceProcedure
     .input(z.object({ storeId: z.string() }))

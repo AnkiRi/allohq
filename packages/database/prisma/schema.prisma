@@ -350,10 +350,14 @@ model Customer {
   lastName         String?
   acceptsMarketing Boolean  @default(false)
   tags             String[]
+  // Cross-brand identity layer (additive, nullable — unused in single-brand behavior).
+  // Links this per-store Customer to a shared cross-brand Identity. Nothing reads it yet.
+  identityId       String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   store                          Store                           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  identity                       Identity?                       @relation(fields: [identityId], references: [id])
   orders                         Order[]
   rfmScore                       RfmScore?
   lifetimeValue                  CustomerLifetimeValue?
@@ -370,7 +374,27 @@ model Customer {
 
   @@unique([storeId, externalId])
   @@index([email])
+  @@index([identityId])
   @@map("customers")
+}
+
+// ============================================================================
+// CROSS-BRAND IDENTITY LAYER (additive)
+// ============================================================================
+
+/// A single real person across stores/brands. One Identity per unique
+/// normalized phone or email. Additive and currently unused by single-brand
+/// behavior — it exists so the cross-brand customer future stays possible
+/// without a re-platform. Customers link to it via the nullable identityId FK.
+model Identity {
+  id              String   @id @default(cuid())
+  normalizedPhone String?  @unique
+  normalizedEmail String?  @unique
+  createdAt       DateTime @default(now())
+
+  customers Customer[]
+
+  @@map("identities")
 }
 
 model Order {

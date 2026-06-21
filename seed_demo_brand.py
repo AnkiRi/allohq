@@ -683,6 +683,130 @@ def main():
     conn.commit()
     print(f"  {len(aq_rows)} pending actions")
 
+    # -----------------------------------------------------------------------
+    # CONTROL-GROUP EXPERIMENT (Track B moat) — one CLOSED experiment over a
+    # matched cohort, with message_logs carrying treatmentArm CONTROL/TREATMENT
+    # and REALISTIC measured outcomes (outcome='purchased' for a believable
+    # share, outcomeRevenue + outcomeMargin set). Treatment mean > control mean
+    # by design (a believable positive lift), so analytics.controlLift returns
+    # REAL computed lift and the outcomes screen flips off the representative
+    # figures. Idempotent: clears any prior demo experiment for this store first.
+    # -----------------------------------------------------------------------
+    print("Building control-group experiment (Track B moat)...")
+
+    # Ensure the store has a contribution margin (used by the fee math fallback).
+    cur.execute(
+        'UPDATE stores SET "defaultContributionMargin" = %s WHERE id = %s',
+        (0.6, STORE_ID))
+
+    # Idempotent clear: drop message_logs tied to prior demo experiments + the
+    # experiments themselves for this store (additive; never touches the view).
+    cur.execute(
+        'DELETE FROM message_logs WHERE "experimentId" IN '
+        '(SELECT id FROM experiments WHERE "storeId" = %s)', (STORE_ID,))
+    cur.execute('DELETE FROM experiments WHERE "storeId" = %s', (STORE_ID,))
+
+    EXP_TREATMENT = 1840   # received allo's retention
+    EXP_CONTROL = 460      # held out — received nothing
+    EXP_WINDOW_DAYS = 90
+    # Per-customer measured outcome (revenue), realistic positive lift:
+    EXP_CONTROL_MEAN = 1690.0    # ₹ / control customer
+    EXP_TREATMENT_MEAN = 2140.0  # ₹ / treatment customer
+    # Believable share that actually purchased in each arm.
+    CONTROL_PURCHASE_RATE = 0.34
+    TREATMENT_PURCHASE_RATE = 0.41
+    CONTRIB_MARGIN = 0.6  # margin = revenue × contribution margin
+
+    exp_id = cuid()
+    cohort_def = psycopg2.extras.Json({
+        "label": "At-Risk + Loyal win-back · matched cohort",
+        "segments": ["At Risk", "Loyal Customers", "Potential Loyalists"],
+        "matchedOn": ["rfmSegment", "recencyBucket"],
+        "windowDays": EXP_WINDOW_DAYS,
+    })
+    exp_start = NOW - timedelta(days=EXP_WINDOW_DAYS)
+    exp_end = NOW - timedelta(days=1)
+    cur.execute(
+        '''INSERT INTO experiments (id, "storeId", "cohortDefinition", "splitRatio",
+               "assignmentSeed", "startAt", "endAt", status, "createdAt")
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (exp_id, STORE_ID, cohort_def,
+         round(EXP_CONTROL / (EXP_CONTROL + EXP_TREATMENT), 3),
+         "vana-winback-2026", exp_start, exp_end, "closed", exp_start))
+
+    # Pull a real cohort of customers to attach assignments to (deterministic).
+    cur.execute(
+        '''SELECT id FROM customers WHERE "storeId" = %s ORDER BY id LIMIT %s''',
+        (STORE_ID, EXP_TREATMENT + EXP_CONTROL))
+    cohort_ids = [r[0] for r in cur.fetchall()]
+    # If somehow short, just use what we have.
+    treat_ids = cohort_ids[:EXP_TREATMENT]
+    ctrl_ids = cohort_ids[EXP_TREATMENT:EXP_TREATMENT + EXP_CONTROL]
+
+    channels_exp = ["email", "whatsapp", "sms"]
+
+    def build_arm(custids, arm, purchase_rate, mean_rev):
+        """One message_log row per customer in the arm. A believable share
+        'purchased' with revenue drawn around the arm mean; the rest have no
+        measured outcome. AVG(outcome) over purchasers ≈ mean_rev by design."""
+        rows = []
+        purchasers = [c for c in custids if random.random() < purchase_rate]
+        # Force the AVG of purchasers to land on mean_rev: draw around it then
+        # the law of large numbers + a final corrector keeps it believable.
+        revs = [max(200.0, random.gauss(mean_rev, mean_rev * 0.28)) for _ in purchasers]
+        if revs:
+            # corrector: scale so the mean is exactly mean_rev
+            scale = mean_rev / (sum(revs) / len(revs))
+            revs = [round(r * scale, 2) for r in revs]
+        purchaser_set = {}
+        for cid, rev in zip(purchasers, revs):
+            purchaser_set[cid] = rev
+        for cid in custids:
+            sent = exp_start + timedelta(
+                days=random.randint(0, EXP_WINDOW_DAYS - 2),
+                hours=random.randint(0, 23))
+            ch = "withheld" if arm == "CONTROL" else random.choice(channels_exp)
+            if cid in purchaser_set:
+                rev = purchaser_set[cid]
+                # outcomeMargin left NULL so the per-customer figure (and the
+                # screen) reads as the believable revenue/customer; the fee math
+                # derives incremental margin via the store contribution margin.
+                margin = None
+                outcome = "purchased"
+                status = "delivered" if arm == "TREATMENT" else "suppressed"
+            else:
+                rev = None
+                margin = None
+                outcome = "ignored"
+                status = "delivered" if arm == "TREATMENT" else "suppressed"
+            # (id, workspaceId, storeId, customerId, channel, to, status,
+            #  experimentId, treatmentArm, outcome, outcomeRevenue, outcomeMargin,
+            #  outcomeTimestamp, sentAt, createdAt, updatedAt)
+            rows.append((
+                cuid(), WORKSPACE_ID, STORE_ID, cid, ch, "customer@example.com",
+                status, exp_id, arm, outcome, rev, margin,
+                sent if outcome == "purchased" else None, sent, sent, sent,
+            ))
+        return rows, len(purchaser_set)
+
+    treat_rows, treat_purch = build_arm(
+        treat_ids, "TREATMENT", TREATMENT_PURCHASE_RATE, EXP_TREATMENT_MEAN)
+    ctrl_rows, ctrl_purch = build_arm(
+        ctrl_ids, "CONTROL", CONTROL_PURCHASE_RATE, EXP_CONTROL_MEAN)
+
+    exp_ml_rows = treat_rows + ctrl_rows
+    psycopg2.extras.execute_values(
+        cur,
+        '''INSERT INTO message_logs (id, "workspaceId", "storeId", "customerId", channel,
+               "to", status, "experimentId", "treatmentArm", outcome, "outcomeRevenue",
+               "outcomeMargin", "outcomeTimestamp", "sentAt", "createdAt", "updatedAt")
+           VALUES %s''',
+        exp_ml_rows, page_size=1000)
+    conn.commit()
+    print(f"  experiment {exp_id} (closed)")
+    print(f"  treatment arm: {len(treat_rows)} rows, {treat_purch} purchased")
+    print(f"  control arm  : {len(ctrl_rows)} rows, {ctrl_purch} purchased")
+
     # =======================================================================
     # VERIFICATION — run the SAME aggregates the routers run
     # =======================================================================
@@ -772,6 +896,36 @@ def main():
         'SELECT count(*) FROM action_queue WHERE "storeId"=%s AND status=%s',
         (STORE_ID, "pending"))[0]
     print(f"\nautonomy.listActions pending   : {n_pending}  (target 4)")
+
+    # analytics.controlLift (Track B moat) — mirrors the tRPC query exactly.
+    print("\nanalytics.controlLift (control-group experiment):")
+    cur.execute(
+        '''SELECT "treatmentArm",
+                  COUNT(*) AS n,
+                  COUNT(COALESCE("outcomeMargin","outcomeRevenue")) AS with_outcome,
+                  COALESCE(AVG(COALESCE("outcomeMargin","outcomeRevenue")),0) AS mean
+           FROM message_logs
+           WHERE "storeId"=%s AND "treatmentArm" IS NOT NULL
+             AND "createdAt">=%s
+           GROUP BY "treatmentArm"''',
+        (STORE_ID, NOW - timedelta(days=90)))
+    arms = {a: (int(n), int(wo), float(m)) for a, n, wo, m in cur.fetchall()}
+    cn, cwo, cmean = arms.get("CONTROL", (0, 0, 0.0))
+    tn, two_, tmean = arms.get("TREATMENT", (0, 0, 0.0))
+    lift = tmean - cmean
+    incr = lift * tn
+    contrib = q1('SELECT COALESCE("defaultContributionMargin",0.6) FROM stores WHERE id=%s',
+                 (STORE_ID,))[0]
+    incr_margin = incr * float(contrib)
+    perf = max(0.0, incr_margin) * 0.15
+    total_fee = 24000 + perf
+    print(f"   control      : n={cn}  with_outcome={cwo}  mean=Rs {cmean:,.0f}  (target ~1,690)")
+    print(f"   treatment    : n={tn}  with_outcome={two_}  mean=Rs {tmean:,.0f}  (target ~2,140)")
+    print(f"   lift/customer: Rs {lift:,.0f}  ({(lift/cmean*100 if cmean else 0):.0f}%)")
+    print(f"   incremental  : Rs {incr:,.0f}  (lift x {tn} treated)")
+    print(f"   incr margin  : Rs {incr_margin:,.0f}  (x {float(contrib)} contribution margin)")
+    print(f"   perf fee 15% : Rs {perf:,.0f}  · total fee Rs {total_fee:,.0f}")
+    print(f"   hasRealData  : {cwo >= 30}  (control with outcome >= 30)")
 
     # store name / brand
     sname = q1('SELECT "storeName" FROM stores WHERE id=%s', (STORE_ID,))[0]

@@ -20,10 +20,13 @@ import {
 // unit economics.
 //
 // DATA HONESTY: AI cost / AI revenue / ROI are REAL (analytics.roi). The
-// treatment-vs-control per-customer figures + cohort split are REPRESENTATIVE
-// while live control-group measurement is being instrumented in the backend —
-// labelled inline. The lift, fee math and total all derive consistently from
-// those representative figures so the screen reads as one honest model.
+// treatment-vs-control comparison is REAL the moment there's a closed control
+// experiment with enough measured outcomes (analytics.controlLift.hasRealData):
+// then we show the real lift, real incremental revenue/margin and the real
+// base+performance fee, and DROP the "representative" disclaimer. Until then we
+// fall back to clearly-labelled representative figures so the screen still reads
+// as one honest model. The lift, fee math and total always derive consistently
+// from whichever set is live.
 // ---------------------------------------------------------------------------
 
 // --- Representative control-group model (clearly labelled in the UI) --------
@@ -102,18 +105,84 @@ export default function OutcomesPage() {
       | undefined;
   };
 
-  // --- Derived control comparison (representative figures) ----------------
-  const liftPerCustomer =
-    COHORT.treatmentRevPerCustomer - COHORT.controlRevPerCustomer;
-  const liftPct = COHORT.controlRevPerCustomer
-    ? (liftPerCustomer / COHORT.controlRevPerCustomer) * 100
-    : 0;
-  // Incremental ₹ = per-customer lift applied across the treated cohort.
-  const incrementalRevenue = liftPerCustomer * COHORT.treatmentCustomers;
+  // REAL data: control-group lift (Track B moat). hasRealData flips the screen
+  // from representative figures to the real treatment-vs-control comparison.
+  const { data: liftData } = (trpc.analytics.controlLift as any).useQuery(
+    { storeId: storeId ?? "", days: COHORT.windowDays },
+    { enabled: !!storeId && onboardingDone },
+  ) as {
+    data:
+      | {
+          hasRealData: boolean;
+          windowDays: number;
+          basis: "margin" | "revenue";
+          controlCount: number;
+          treatmentCount: number;
+          controlWithOutcome: number;
+          treatmentWithOutcome: number;
+          controlMeanPerCustomer: number;
+          treatmentMeanPerCustomer: number;
+          liftPerCustomer: number;
+          liftPct: number;
+          incrementalTotal: number;
+          incrementalMargin: number;
+          baseMonthly: number;
+          performanceRate: number;
+          performanceFee: number;
+          totalFee: number;
+          contributionMargin: number;
+        }
+      | undefined;
+  };
 
-  // --- Fee math -----------------------------------------------------------
-  const performanceFee = incrementalRevenue * FEE.performanceRate;
-  const totalFee = FEE.baseMonthly + performanceFee;
+  const isReal = !!liftData?.hasRealData;
+
+  // --- Unified model: real when measured, else representative -------------
+  // Every figure on the screen reads from this one object so the page stays one
+  // honest model in either state.
+  const model = isReal
+    ? {
+        treatmentCustomers: liftData!.treatmentCount,
+        controlCustomers: liftData!.controlCount,
+        treatmentRevPerCustomer: liftData!.treatmentMeanPerCustomer,
+        controlRevPerCustomer: liftData!.controlMeanPerCustomer,
+        windowDays: liftData!.windowDays,
+        liftPerCustomer: liftData!.liftPerCustomer,
+        liftPct: liftData!.liftPct,
+        incrementalRevenue: liftData!.incrementalTotal,
+        baseMonthly: liftData!.baseMonthly,
+        performanceRate: liftData!.performanceRate,
+        performanceFee: liftData!.performanceFee,
+        totalFee: liftData!.totalFee,
+      }
+    : (() => {
+        const liftPerCustomer =
+          COHORT.treatmentRevPerCustomer - COHORT.controlRevPerCustomer;
+        const incrementalRevenue = liftPerCustomer * COHORT.treatmentCustomers;
+        const performanceFee = incrementalRevenue * FEE.performanceRate;
+        return {
+          treatmentCustomers: COHORT.treatmentCustomers,
+          controlCustomers: COHORT.controlCustomers,
+          treatmentRevPerCustomer: COHORT.treatmentRevPerCustomer,
+          controlRevPerCustomer: COHORT.controlRevPerCustomer,
+          windowDays: COHORT.windowDays,
+          liftPerCustomer,
+          liftPct: COHORT.controlRevPerCustomer
+            ? (liftPerCustomer / COHORT.controlRevPerCustomer) * 100
+            : 0,
+          incrementalRevenue,
+          baseMonthly: FEE.baseMonthly,
+          performanceRate: FEE.performanceRate,
+          performanceFee,
+          totalFee: FEE.baseMonthly + performanceFee,
+        };
+      })();
+
+  const liftPerCustomer = model.liftPerCustomer;
+  const liftPct = model.liftPct;
+  const incrementalRevenue = model.incrementalRevenue;
+  const performanceFee = model.performanceFee;
+  const totalFee = model.totalFee;
 
   // --- Real AI cost (USD) -------------------------------------------------
   const aiCost = roiData?.aiTokenCost ?? 0;
@@ -177,7 +246,9 @@ export default function OutcomesPage() {
       <ConsoleFrame title="allo — incremental revenue vs control">
         {/* Caption: honesty about measurement state */}
         <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
-          control-group measurement instrumenting · figures representative
+          {isReal
+            ? `measured · held-out control vs treatment · ${model.windowDays}-day window`
+            : "control-group measurement instrumenting · figures representative"}
         </p>
 
         {/* Side-by-side cohorts. The held-out control is the load-bearing
@@ -199,12 +270,12 @@ export default function OutcomesPage() {
               <div className="space-y-1.5">
                 <MetricReadout
                   label="cohort"
-                  value={COHORT.treatmentCustomers}
+                  value={model.treatmentCustomers}
                 />
                 <div className="block">
                   <MetricReadout
                     label="₹ / customer"
-                    value={COHORT.treatmentRevPerCustomer}
+                    value={model.treatmentRevPerCustomer}
                     money
                   />
                 </div>
@@ -225,11 +296,11 @@ export default function OutcomesPage() {
                 received nothing — this is the baseline
               </p>
               <div className="space-y-1.5">
-                <MetricReadout label="cohort" value={COHORT.controlCustomers} />
+                <MetricReadout label="cohort" value={model.controlCustomers} />
                 <div className="block">
                   <MetricReadout
                     label="₹ / customer"
-                    value={COHORT.controlRevPerCustomer}
+                    value={model.controlRevPerCustomer}
                     money
                   />
                 </div>
@@ -248,8 +319,8 @@ export default function OutcomesPage() {
                 lift / customer · treatment − control
               </span>
               <span className="font-mono text-[13px] text-foreground tabular-nums">
-                {moneyExact(COHORT.treatmentRevPerCustomer)} −{" "}
-                {moneyExact(COHORT.controlRevPerCustomer)} ={" "}
+                {moneyExact(model.treatmentRevPerCustomer)} −{" "}
+                {moneyExact(model.controlRevPerCustomer)} ={" "}
                 <b className="text-foreground font-semibold">
                   {moneyExact(liftPerCustomer)}
                 </b>{" "}
@@ -260,7 +331,7 @@ export default function OutcomesPage() {
             </div>
             <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <span className="font-mono text-[11px] text-muted-foreground lowercase">
-                incremental revenue · lift × {COHORT.treatmentCustomers.toLocaleString("en-IN")} treated
+                incremental revenue · lift × {model.treatmentCustomers.toLocaleString("en-IN")} treated
               </span>
               <span className="font-mono text-[18px] text-[hsl(var(--accent))] tabular-nums font-semibold">
                 {moneyExact(incrementalRevenue)}
@@ -274,18 +345,18 @@ export default function OutcomesPage() {
           <StreamOutput aria-label="how the lift was measured">
             <StreamRow tick="hold">
               held out{" "}
-              <b>{COHORT.controlCustomers.toLocaleString("en-IN")}</b> customers
+              <b>{model.controlCustomers.toLocaleString("en-IN")}</b> customers
               as control — they heard nothing from us
             </StreamRow>
             <StreamRow tick="ok">
-              measured both cohorts over <b>{COHORT.windowDays} days</b>, same
+              measured both cohorts over <b>{model.windowDays} days</b>, same
               window, same store
             </StreamRow>
             <StreamRow tick="ok">
               treatment earned{" "}
-              <b>{moneyExact(COHORT.treatmentRevPerCustomer)}</b> / customer ·
+              <b>{moneyExact(model.treatmentRevPerCustomer)}</b> / customer ·
               control earned{" "}
-              <b>{moneyExact(COHORT.controlRevPerCustomer)}</b> / customer
+              <b>{moneyExact(model.controlRevPerCustomer)}</b> / customer
             </StreamRow>
             <StreamRow tick="ok">
               the gap is the lift — <b>{moneyExact(liftPerCustomer)}</b> each ·{" "}
@@ -310,13 +381,13 @@ export default function OutcomesPage() {
               base · running retention
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(FEE.baseMonthly)}
+              {moneyExact(model.baseMonthly)}
               <span className="text-muted-foreground"> / mo</span>
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              performance · {(FEE.performanceRate * 100).toFixed(0)}% of{" "}
+              performance · {(model.performanceRate * 100).toFixed(0)}% of{" "}
               {moneyExact(incrementalRevenue)} lift
             </span>
             <span className="text-foreground tabular-nums">
@@ -334,8 +405,8 @@ export default function OutcomesPage() {
         </div>
 
         <p className="font-mono text-[10.5px] text-muted-foreground mt-3">
-          base fixed · performance scales only with proven lift vs control ·
-          figures representative while control measurement is wired up
+          base fixed · performance scales only with proven lift vs control
+          {isReal ? "" : " · figures representative while control measurement is wired up"}
         </p>
       </ConsoleFrame>
 
@@ -367,8 +438,9 @@ export default function OutcomesPage() {
         </StreamOutput>
 
         <p className="font-mono text-[10.5px] text-muted-foreground mt-4">
-          AI cost &amp; revenue are live · cohort lift representative while
-          control-group measurement is wired up
+          {isReal
+            ? "AI cost & revenue are live · cohort lift measured against a held-out control"
+            : "AI cost & revenue are live · cohort lift representative while control-group measurement is wired up"}
         </p>
       </ConsoleFrame>
     </div>

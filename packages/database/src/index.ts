@@ -20,3 +20,7 @@ export type {
   DecisionRecord,
   GetDecisionRecordsOptions,
 } from "./decision-records";
+
+// Cross-brand Identity layer (additive): normalization helpers for keying
+// Customers to a shared Identity. Unused in single-brand behavior.
+export { normalizeEmail, normalizePhone } from "./identity";
