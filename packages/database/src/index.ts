@@ -24,3 +24,11 @@ export type {
 // Cross-brand Identity layer (additive): normalization helpers for keying
 // Customers to a shared Identity. Unused in single-brand behavior.
 export { normalizeEmail, normalizePhone } from "./identity";
+
+// Demo / sandbox mode constants (storeless visitor → seeded Vana, read-mostly)
+export {
+  DEMO_STORE_ID,
+  DEMO_WORKSPACE_ID,
+  DEMO_STORE_NAME,
+  DEMO_HEADER,
+} from "./demo";

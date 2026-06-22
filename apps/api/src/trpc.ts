@@ -1,5 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { prisma } from "@allohq/database";
+import { prisma, DEMO_WORKSPACE_ID, DEMO_HEADER } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
 import { checkRateLimit } from "./middleware/rate-limit";
 
@@ -17,6 +17,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
 
   let userId: string | null = null;
   let workspaceId: string | null = null;
+  let isDemo = false;
 
   if (token) {
     try {
@@ -73,6 +74,23 @@ export async function createContext(opts: { req?: any; res?: any }) {
       }
 
       workspaceId = user?.workspaceMembers[0]?.workspaceId || null;
+
+      // Demo/sandbox: a storeless visitor who opted into demo is routed
+      // READ-MOSTLY to the seeded Vana workspace. Only applies when they have
+      // NO store of their own — real-store users keep their own workspace.
+      const demoRequested = !!opts.req?.headers?.[DEMO_HEADER];
+      if (demoRequested && workspaceId && workspaceId !== DEMO_WORKSPACE_ID) {
+        const ownStore = await prisma.store.findFirst({
+          where: { workspaceId },
+          select: { id: true },
+        });
+        if (!ownStore) {
+          isDemo = true;
+          workspaceId = DEMO_WORKSPACE_ID;
+        }
+      } else if (demoRequested && workspaceId === DEMO_WORKSPACE_ID) {
+        isDemo = true; // seed owner exploring demo — still sandbox mutations
+      }
     } catch (error: any) {
       console.error("Auth error:", error?.message || error);
     }
@@ -82,6 +100,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
     prisma,
     userId,
     workspaceId,
+    isDemo,
   };
 }
 

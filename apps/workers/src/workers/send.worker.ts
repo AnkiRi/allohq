@@ -3,6 +3,7 @@ import { prisma } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
+import { DEMO_STORE_ID } from "@allohq/database";
 import { checkAllRules } from "@allohq/communication-governor";
 import {
   learnFromResults,
@@ -335,17 +336,22 @@ export const sendWorker = new Worker<SendJobData>(
 
       // Send via Resend with List-Unsubscribe headers (RFC 2369 + RFC 8058)
       const unsubscribeUrl = variables.unsubscribe_url;
-      const result = await sendEmail({
-        channel: "email",
-        to: customer.email,
-        subject: effectiveSubject,
-        html,
-        from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
-        headers: {
-          "List-Unsubscribe": `<${unsubscribeUrl}>`,
-          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
-      });
+      // Demo/sandbox safety: the seeded demo store NEVER hits a real provider —
+      // no Resend/Twilio call, no token/credit spend, fake "sent" result.
+      const result =
+        campaign.store?.id === DEMO_STORE_ID
+          ? ({ success: true, messageId: `demo-${messageLog.id}`, demo: true } as any)
+          : await sendEmail({
+              channel: "email",
+              to: customer.email,
+              subject: effectiveSubject,
+              html,
+              from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+              headers: {
+                "List-Unsubscribe": `<${unsubscribeUrl}>`,
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+              },
+            });
 
       // Update MessageLog with result
       if (result.status === "sent") {

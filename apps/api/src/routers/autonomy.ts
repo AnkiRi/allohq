@@ -145,6 +145,9 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Demo/sandbox: show the approved success state without firing anything
+      // real (no execute, no send enqueue, no mutation of the shared seed).
+      if (ctx.isDemo) return { success: true, executedType: "demo", demo: true };
       await approveAction(input.actionId, ctx.userId, input.note);
       try {
         const result = await executeApprovedAction(input.actionId);
@@ -163,6 +166,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (ctx.isDemo) return { success: true, demo: true };
       await rejectAction(input.actionId, ctx.userId, input.reason);
       return { success: true };
     }),
@@ -175,6 +179,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (ctx.isDemo) return { approved: input.actionIds.length, demo: true };
       const count = await bulkApprove(input.actionIds, ctx.userId);
       for (const id of input.actionIds) {
         try { await executeApprovedAction(id); } catch { /* best-effort */ }
@@ -191,6 +196,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (ctx.isDemo) return { rejected: input.actionIds.length, demo: true };
       const count = await bulkReject(input.actionIds, ctx.userId, input.reason);
       return { rejected: count };
     }),

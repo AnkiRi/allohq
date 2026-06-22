@@ -23,6 +23,7 @@ const corsMiddleware = cors({
     "http://localhost:3000",
     "http://localhost:3001",
   ],
+  allowedHeaders: ["Authorization", "Content-Type", "x-allo-demo"],
   credentials: true,
 });
 

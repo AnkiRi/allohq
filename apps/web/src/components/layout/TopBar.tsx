@@ -9,6 +9,7 @@ import { PulseDot } from "@/components/ui/PulseDot";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
 import { trpc } from "@/lib/trpc";
+import { useDemo } from "@/lib/useDemo";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Home",
@@ -45,6 +46,7 @@ function getBreadcrumb(pathname: string): string[] {
 export function TopBar() {
   const { toggle } = useMobileSidebar();
   const { theme, mounted, toggleTheme } = useTheme();
+  const demo = useDemo();
   const pathname = usePathname();
   const commandPalette = useCommandPalette();
   const isDashboard = pathname === "/dashboard";
@@ -143,6 +145,14 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Demo indicator — subtle, single pill, only when the demo flag is set */}
+        {demo && (
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted border border-border text-[10.5px] font-mono text-muted-foreground">
+            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))]" />
+            Demo store · Vana Naturals
+          </span>
+        )}
+
         {/* Agent Status Pill */}
         {onboardingDone && (
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1F7A4F]/8 border border-[#1F7A4F]/15">

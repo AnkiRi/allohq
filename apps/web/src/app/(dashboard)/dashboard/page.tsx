@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Store,
   Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useUser } from "@clerk/nextjs";
+import { useDemo, enterDemo } from "@/lib/useDemo";
 import { useToast } from "@/components/ui/Toast";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
@@ -27,10 +30,19 @@ import type { OpTagKind } from "@/components/console";
 // ---------------------------------------------------------------------------
 
 function ConnectStorePrompt() {
+  const router = useRouter();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
   const reduce = useReducedMotion();
+
+  // Primary path: enter the demo. Sets the session flag (which makes the tRPC
+  // client send `x-allo-demo: 1`, routing this storeless visitor read-mostly to
+  // the seeded Vana Naturals workspace) then plays the staged activation.
+  const handleEnterDemo = () => {
+    enterDemo();
+    router.push("/demo/welcome");
+  };
 
   const handleConnect = () => {
     const d = domain.trim();
@@ -54,51 +66,69 @@ function ConnectStorePrompt() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
-      <ConsoleFrame title="allo — connect" className="max-w-md w-full">
+      <ConsoleFrame title="allo — start" className="max-w-md w-full">
         <div className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-[hsl(var(--accent))]/10 flex items-center justify-center mx-auto mb-5">
             <Store className="w-7 h-7 text-[hsl(var(--accent))]" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground font-serif mb-2">
-            Connect your store
+            See allo run a real brand
           </h1>
           <p className="text-sm text-muted-foreground font-sans mb-6 leading-relaxed">
-            Connect your Shopify store and allo gets to work — learning your
-            brand, grouping your customers, and setting up retention that runs on
-            its own.
+            Walk the whole thing on a live demo store before you connect your
+            own — allo reads the brand, groups the customers, and drafts the
+            work, with nothing touching a real shop.
           </p>
-          <div className="max-w-sm mx-auto space-y-3">
-            <div className="flex items-center">
-              <input
-                type="text"
-                placeholder="your-store"
-                value={domain}
-                onChange={(e) => {
-                  setDomain(e.target.value);
-                  setError("");
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-                className="flex-1 px-4 py-2.5 text-sm font-mono rounded-l-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[hsl(var(--accent))] transition-colors"
-              />
-              <span className="px-3 py-2.5 text-sm font-mono text-muted-foreground bg-muted border border-l-0 border-border rounded-r-lg">
-                .myshopify.com
-              </span>
-            </div>
-            {error && (
-              <p className="text-xs text-[var(--color-urgent)] font-sans">{error}</p>
-            )}
-            <button
-              onClick={handleConnect}
-              disabled={connecting}
-              className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-foreground text-background text-sm font-medium rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
-            >
-              {connecting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Store className="w-4 h-4" />
+
+          {/* PRIMARY — explore the demo store */}
+          <button
+            onClick={handleEnterDemo}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[hsl(var(--accent))] text-background text-sm font-medium rounded-xl hover:opacity-90 transition-all"
+          >
+            Explore allo with a demo store — Vana Naturals
+            <ArrowRight className="w-4 h-4" />
+          </button>
+
+          {/* SECONDARY — connect your own Shopify store (de-emphasized) */}
+          <div className="mt-7 pt-6 border-t border-border max-w-sm mx-auto">
+            <p className="text-[12px] text-muted-foreground font-sans mb-3">
+              Or connect your own Shopify store
+            </p>
+            <div className="space-y-2.5">
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  placeholder="your-store"
+                  value={domain}
+                  onChange={(e) => {
+                    setDomain(e.target.value);
+                    setError("");
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+                  className="flex-1 min-w-0 px-3 py-2 text-[13px] font-mono rounded-l-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[hsl(var(--accent))] transition-colors"
+                />
+                <span className="px-2.5 py-2 text-[13px] font-mono text-muted-foreground bg-muted border border-l-0 border-border rounded-r-lg whitespace-nowrap">
+                  .myshopify.com
+                </span>
+              </div>
+              {error && (
+                <p className="text-xs text-[var(--color-urgent)] font-sans text-left">
+                  {error}
+                </p>
               )}
-              {connecting ? "Connecting…" : "Connect store"}
-            </button>
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-border text-foreground text-[13px] font-medium rounded-lg hover:bg-muted transition-all disabled:opacity-50"
+              >
+                {connecting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Store className="w-3.5 h-3.5" />
+                )}
+                {connecting ? "Connecting…" : "Connect store"}
+              </button>
+            </div>
           </div>
         </div>
       </ConsoleFrame>
@@ -143,6 +173,102 @@ function firstLine(text: string | null | undefined, max = 120): string {
 }
 
 // ---------------------------------------------------------------------------
+// DemoReasoning — staged reasoning stream for a typed goal in demo mode.
+//
+// In demo we never fire the live agent (trpc.ai.chat → a real LLM, real token
+// spend). Instead we surface a staged reasoning stream against the seeded Vana
+// figures already loaded on the page, using the same console primitives the
+// operator already sees. The rows reveal on a short client timer so it reads
+// like allo thinking, then lands on a "queued for your okay" line. Reduced
+// motion shows every row at once.
+// ---------------------------------------------------------------------------
+
+function DemoReasoning({
+  goal,
+  atRisk,
+  lapsed,
+  onDismiss,
+}: {
+  goal: string;
+  atRisk: number;
+  lapsed: { customerCount: number; totalRevenue: number } | null;
+  onDismiss: () => void;
+}) {
+  const reduce = useReducedMotion();
+
+  const lines: { tick: "ok" | "step" | "hold"; node: React.ReactNode }[] = [
+    { tick: "ok", node: <>read your goal — <b>{firstLine(goal, 80)}</b></> },
+    {
+      tick: "ok",
+      node: (
+        <>
+          matched <b>{(lapsed?.customerCount ?? atRisk).toLocaleString("en-IN")}</b>{" "}
+          customers who fit
+          {lapsed && lapsed.totalRevenue > 0 ? (
+            <> · <b>{formatINR(lapsed.totalRevenue)}</b> of past revenue in play</>
+          ) : null}
+        </>
+      ),
+    },
+    { tick: "ok", node: <>held back a <b>control group</b> so we can prove the lift</> },
+    { tick: "ok", node: <>drafting copy in <b>Vana Naturals</b> voice</> },
+    {
+      tick: "step",
+      node: (
+        <>
+          queued a decision for your okay —{" "}
+          <span className="text-[hsl(var(--accent))]">ready below</span>
+        </>
+      ),
+    },
+  ];
+  const total = lines.length;
+
+  // Reveal rows one at a time so it reads like allo thinking. Reduced motion
+  // shows every row at once. No network — purely a client timer.
+  const [visible, setVisible] = useState(reduce ? total : 1);
+  useEffect(() => {
+    if (reduce) {
+      setVisible(total);
+      return;
+    }
+    const id = setInterval(() => {
+      setVisible((n) => {
+        if (n >= total) {
+          clearInterval(id);
+          return n;
+        }
+        return n + 1;
+      });
+    }, 650);
+    return () => clearInterval(id);
+  }, [reduce, total]);
+
+  return (
+    <ConsoleFrame title="allo — reasoning" className="mt-8">
+      <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
+        <span className="font-mono text-[11px] text-muted-foreground">
+          staged · no live send
+        </span>
+        <button
+          onClick={onDismiss}
+          className="font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          clear
+        </button>
+      </div>
+      <StreamOutput aria-label="allo reasoning">
+        {lines.slice(0, visible).map((l, i) => (
+          <StreamRow key={i} tick={l.tick}>
+            {l.node}
+          </StreamRow>
+        ))}
+      </StreamOutput>
+    </ConsoleFrame>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Page — the operator console
 // ---------------------------------------------------------------------------
 
@@ -150,6 +276,7 @@ export default function DashboardPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const { openPanel, setInput: setAIInput } = useAlloAI();
+  const demo = useDemo();
   const rawFirst = user?.firstName || "there";
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1);
   const greeting = getGreeting();
@@ -355,8 +482,19 @@ export default function DashboardPage() {
       toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
-  // ---- Command line → existing AI panel goal flow (same path Cmd+K uses) ----
+  // Demo: the goal the operator typed, surfaced as a staged reasoning stream
+  // instead of firing the live agent (no LLM / token spend).
+  const [demoGoal, setDemoGoal] = useState<string | null>(null);
+
+  // ---- Command line → goal flow ----
   const handleCommand = (value: string) => {
+    if (demo) {
+      // Demo mode: do NOT open the live AI chat (which would call trpc.ai.chat
+      // → a real LLM). Surface the existing staged reasoning stream against the
+      // seeded Vana data right here on the console. No token spend.
+      setDemoGoal(value);
+      return;
+    }
     openPanel();
     // Prefill + focus the AI panel input so the operator's goal runs through the
     // existing chat/agent flow. Matches the CommandPalette prefill timing.
@@ -405,7 +543,11 @@ export default function DashboardPage() {
   }
 
   // --- State 1: No store (preserved) ---
-  if (!storeId) {
+  // In demo, the tRPC client sends `x-allo-demo: 1` and the API routes to the
+  // seeded Vana workspace, so storeId resolves — this prompt won't show. Guard
+  // explicitly so a storeless visitor only ever sees the demo entry CTA here,
+  // never a dead-end.
+  if (!storeId && !demo) {
     return <ConnectStorePrompt />;
   }
 
@@ -443,6 +585,17 @@ export default function DashboardPage() {
           onSubmit={handleCommand}
         />
       </div>
+
+      {/* Demo: staged reasoning for the typed goal — no live agent, no tokens */}
+      {demo && demoGoal && (
+        <DemoReasoning
+          key={demoGoal}
+          goal={demoGoal}
+          atRisk={atRisk}
+          lapsed={lapsed}
+          onDismiss={() => setDemoGoal(null)}
+        />
+      )}
 
       {/* The response: console + decisions, given room to breathe */}
       {/* 2 + 3. Reasoning stream + status line, in the console frame */}
