@@ -185,6 +185,7 @@ html[data-allo-theme="dark"] .allo-terminal {
 }
 .allo-terminal .nav-links a {
   transition: color 160ms ease;
+  white-space: nowrap;
 }
 .allo-terminal .nav-links a:hover {
   color: var(--t-ink);
@@ -196,6 +197,7 @@ html[data-allo-theme="dark"] .allo-terminal {
   border: 1px solid var(--t-accent-line);
   border-radius: var(--t-radius);
   padding: 7px 14px;
+  white-space: nowrap; /* "start free" must never wrap inside the button */
   transition: background 160ms ease, transform 160ms var(--t-ease);
 }
 .allo-terminal .nav-cta:hover { background: var(--t-accent-soft); }
@@ -353,6 +355,9 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
   font-family: var(--font-mono);
   font-size: 13.5px;
   line-height: 1.7;
+  /* FIX 2 — stable frame: reserve the TALLEST story's height so rotating
+     stories only swap text, never resize the console (zero layout shift). */
+  min-height: 264px;
 }
 .allo-terminal .cmd-line {
   display: flex;
@@ -901,6 +906,36 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
 /* =====================================================================
    RESPONSIVE — explicit collapse for every multi-col block
    ===================================================================== */
+/* FIX 1d — never allow horizontal page scroll. */
+.allo-terminal { overflow-x: hidden; }
+
+/* POSITIONING band — Klaviyo × Sierra. Quiet, confident, its own band. */
+.allo-terminal .positioning {
+  border-bottom: 1px solid var(--t-rule);
+  padding-block: 3.25rem;
+}
+.allo-terminal .pos-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--t-faint);
+  margin: 0 0 14px;
+}
+.allo-terminal .pos-line {
+  font-family: var(--font-sans);
+  font-size: clamp(1.1rem, 2.6vw, 1.6rem);
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--t-ink);
+  max-width: 50ch;
+  margin: 0;
+}
+.allo-terminal .pos-line .accent { color: var(--t-accent); }
+.allo-terminal .pos-dim { color: var(--t-dim); }
+@media (max-width: 768px) {
+  .allo-terminal .positioning { padding-block: 2.5rem; }
+}
+
 @media (max-width: 960px) {
   .allo-terminal .hero-grid { grid-template-columns: 1fr; gap: 40px; }
   .allo-terminal .brief-grid { grid-template-columns: 1fr; }
@@ -916,11 +951,17 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
   .allo-terminal section.block,
   .allo-terminal .quote-block,
   .allo-terminal .apply-block { padding-block: 4rem; }
-  .allo-terminal .statusbar-inner { gap: 10px 0; }
-  .allo-terminal .stat {
-    padding-inline: 14px 14px;
-    border-right: 1px solid var(--t-rule);
+  /* FIX 1c — status bar becomes ONE clean horizontally-scrollable row on
+     mobile (no orphaned fragments), instead of wrapping each item to its line. */
+  .allo-terminal .statusbar-inner {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 0;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
+  .allo-terminal .statusbar-inner::-webkit-scrollbar { display: none; }
+  .allo-terminal .stat { flex: none; padding-inline: 14px; }
   .allo-terminal .stat:first-child { padding-left: 0; }
   .allo-terminal .notice {
     grid-template-columns: 36px 1fr;
@@ -929,7 +970,7 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
   }
   .allo-terminal .notice .tag { grid-column: 2; text-align: left; }
   .allo-terminal .notice .body { font-size: 1.08rem; }
-  .allo-terminal .console-body { font-size: 12.5px; }
+  .allo-terminal .console-body { font-size: 12.5px; min-height: 300px; }
   .allo-terminal .quote-pane { padding: 28px 24px; }
 }
 

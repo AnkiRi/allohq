@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Hide the floating dev-indicator ("N" badge) — it overlapped landing content
+  // on mobile during dev walks. (Dev-only; never shown in production.)
+  devIndicators: false,
   webpack: (config) => {
     config.watchOptions = {
       ...config.watchOptions,

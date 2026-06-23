@@ -92,7 +92,7 @@ function LandingPage() {
             <Link href="#notices" className="hide-sm">
               how it notices
             </Link>
-            <Link href="#how">how it works</Link>
+            <Link href="#how" className="hide-sm">how it works</Link>
             <Link href={signIn}>sign in</Link>
             <Link href={signUp} className="nav-cta">
               start free
@@ -182,6 +182,21 @@ function LandingPage() {
           </div>
         </div>
       </div>
+
+      {/* POSITIONING — what allo is (Klaviyo × Sierra). Its OWN band, kept out
+          of the one-customer stories so those stay emotional, not investor-y. */}
+      <section className="positioning">
+        <div className="shell">
+          <p className="pos-eyebrow mono">what allo is</p>
+          <p className="pos-line">
+            <span className="accent">Klaviyo</span> built retention into a
+            category. <span className="accent">Sierra</span> proved outcome-priced
+            AI agents work at scale. allo is both — a retention operator that only
+            bills on proven lift.{" "}
+            <span className="pos-dim">Built for commerce, from India.</span>
+          </p>
+        </div>
+      </section>
 
       {/* BRIEFING — the overnight brief, rendered as a console pane */}
       <section className="block" id="brief">
