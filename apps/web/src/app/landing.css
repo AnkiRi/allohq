@@ -363,6 +363,16 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
 }
 .allo-terminal .cmd-line .prompt { color: var(--t-accent); flex: none; }
 .allo-terminal .cmd-line .typed { color: var(--t-ink); }
+/* Map the shared ReasoningReveal to the landing's theme tokens, so the SAME
+   component renders amber-on-near-black in dark and emerald-on-paper in light. */
+.allo-terminal .rr {
+  --rr-accent: var(--t-accent);
+  --rr-ink: var(--t-ink);
+  --rr-dim: var(--t-dim);
+  --rr-rule: var(--t-rule-strong);
+  --rr-mono: var(--font-mono);
+}
+
 .allo-terminal .caret {
   display: inline-block;
   width: 8px;

@@ -137,11 +137,10 @@ function derivePageContext(pathname: string): string {
 // ---------------------------------------------------------------------------
 
 const PLACEHOLDERS = [
-  "ask allo anything",
-  "what should I focus on today?",
-  "win back my lapsed buyers before diwali",
-  "who's at risk of slipping away?",
-  "how did last week go?",
+  "Tell allo what you want — e.g. win back my lapsed buyers before Diwali",
+  "What should I focus on today?",
+  "Who's slipping away?",
+  "How did last week go?",
 ];
 
 function useRotatingPlaceholder(enabled: boolean) {
@@ -2079,7 +2078,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   value=""
                   readOnly
                   placeholder="allo is setting things up"
-                  className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </div>
@@ -2193,10 +2192,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) handleSubmit();
                   }}
-                  placeholder={!storeId ? "connect a store and we'll get started" : agentBusy ? "allo is setting things up" : !dataReady ? "getting your store ready" : placeholder}
+                  placeholder={!storeId ? "Connect a store and we'll get started" : agentBusy ? "allo is setting things up" : !dataReady ? "Getting your store ready" : placeholder}
                   disabled={isProcessing || !storeId || !dataReady || agentBusy}
-                  aria-label="Tell allo what to do"
-                  className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
+                  aria-label="Tell allo what you want, in your own words"
+                  className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSubmit}

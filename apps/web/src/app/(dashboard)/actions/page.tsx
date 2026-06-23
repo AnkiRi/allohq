@@ -343,10 +343,11 @@ export default function ActionsPage() {
       ) : (
         <div className="rounded-xl border border-border bg-card p-6">
           <p className="font-sans text-[14px] text-foreground">
-            You&apos;re all caught up.
+            Nothing waiting on you.
           </p>
           <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-relaxed">
-            allo will surface new ideas as the moment&apos;s right.
+            Drafts before sunrise, approvals over coffee — allo will have the
+            next decision ready when it&apos;s worth your okay.
           </p>
         </div>
       )}

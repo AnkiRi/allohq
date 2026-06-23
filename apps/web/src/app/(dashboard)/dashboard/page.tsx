@@ -24,6 +24,12 @@ import {
   formatINR,
 } from "@/components/console";
 import type { OpTagKind } from "@/components/console";
+import {
+  ReasoningReveal,
+  ATTENTION_STORIES,
+  type ReasoningStory,
+  type ReasoningLine,
+} from "@/components/console/ReasoningReveal";
 
 // ---------------------------------------------------------------------------
 // Connect Store — inline Shopify OAuth (preserved, on the terminal surface)
@@ -202,22 +208,22 @@ function DemoReasoning({
       tick: "ok",
       node: (
         <>
-          matched <b>{(lapsed?.customerCount ?? atRisk).toLocaleString("en-IN")}</b>{" "}
-          customers who fit
+          allo noticed <b>{(lapsed?.customerCount ?? atRisk).toLocaleString("en-IN")}</b>{" "}
+          who fit
           {lapsed && lapsed.totalRevenue > 0 ? (
             <> · <b>{formatINR(lapsed.totalRevenue)}</b> of past revenue in play</>
           ) : null}
         </>
       ),
     },
-    { tick: "ok", node: <>held back a <b>control group</b> so we can prove the lift</> },
+    { tick: "hold", node: <>held back a few <b>as control</b> so we can prove the lift</> },
     { tick: "ok", node: <>drafting copy in <b>Vana Naturals</b> voice</> },
     {
       tick: "step",
       node: (
         <>
-          queued a decision for your okay —{" "}
-          <span className="text-[hsl(var(--accent))]">ready below</span>
+          <span className="text-[hsl(var(--accent))]">ready</span> · queued for
+          your okay below
         </>
       ),
     },
@@ -533,6 +539,65 @@ export default function DashboardPage() {
 
   const aiCostLabel = aiCost > 0 ? (aiCost < 0.01 ? "$<0.01" : `$${aiCost.toFixed(2)}`) : "$0.00";
 
+  // --- Home reasoning story — feeds the SHARED ReasoningReveal (same component
+  // the landing hero uses, so the two surfaces can't drift). Built from real
+  // page data: lead = the briefing headline / latest goal; lines = allo's recent
+  // reasoning in the landing's vocabulary (scanned N · held back M as control ·
+  // drafted X · ready · expected recovery ₹…). Falls back to ATTENTION_STORIES
+  // when there's no real reasoning yet (drafts before sunrise register).
+  const briefingHeadline = firstLine(
+    missionControl?.summary ?? latestBriefing?.content?.summary,
+    90,
+  );
+  const homeLead =
+    briefingHeadline ||
+    (lapsed && lapsed.customerCount > 0
+      ? "win back the buyers who've gone quiet"
+      : "");
+  const homeLines: ReasoningLine[] = [];
+  if (hasSyncedData) {
+    homeLines.push({
+      text:
+        `allo scanned ${totalCustomers.toLocaleString("en-IN")} customers` +
+        (segmentDist && segmentDist.length > 0
+          ? ` across ${segmentDist.length} segments`
+          : ""),
+    });
+  }
+  if (lapsed && lapsed.customerCount > 0) {
+    homeLines.push({
+      text: `allo noticed ${lapsed.customerCount.toLocaleString("en-IN")} who've gone quiet · ${formatINR(lapsed.totalRevenue)} of past revenue`,
+    });
+  }
+  if (heldBack > 0) {
+    homeLines.push({ text: `held back ${heldBack} as control`, beat: true });
+  }
+  if (hasBrand) {
+    homeLines.push({
+      text: `writing in ${brandProfile?.brandName ?? "your"} voice`,
+    });
+  }
+  if (automationCount > 0) {
+    homeLines.push({
+      text:
+        `built ${automationCount} automations · ${activeCount} running on their own` +
+        (readyCount > 0 ? ` · ${readyCount} ready for your okay` : ""),
+    });
+  }
+  if (draftedCount > 0) {
+    homeLines.push({
+      text:
+        pendingActions.length > 0
+          ? `drafted ${draftedCount} · ready · ${pendingActions.length} queued for your okay`
+          : `drafted ${draftedCount} · ready`,
+      arrow: true,
+    });
+  }
+  const homeStories: ReasoningStory[] =
+    homeLead && homeLines.length > 0
+      ? [{ lead: homeLead, lines: homeLines }]
+      : ATTENTION_STORIES;
+
   // --- Loading ---
   if (storesLoading) {
     return (
@@ -577,10 +642,10 @@ export default function DashboardPage() {
         {/* 1. Command line */}
         <CommandLine
           placeholder={[
-            "win back my lapsed buyers before diwali",
-            "who's slipping away?",
-            "draft a Diwali win-back",
-            "reward my best customers",
+            "Tell allo what you want — e.g. win back my lapsed buyers before Diwali",
+            "Who's slipping away?",
+            "Draft a Diwali win-back for me",
+            "Look after my best customers",
           ]}
           onSubmit={handleCommand}
         />
@@ -608,77 +673,18 @@ export default function DashboardPage() {
           <MetricReadout label="AI cost" value={aiCostLabel} />
         </div>
 
-        {/* Reasoning / activity stream — real data, warm voice */}
-        <StreamOutput aria-label="what allo has been doing">
-          {hasSyncedData ? (
-            <StreamRow tick="ok">
-              scanned <b>{totalCustomers.toLocaleString("en-IN")}</b> customers
-              {segmentDist && segmentDist.length > 0 ? (
-                <>
-                  {" "}
-                  across <b>{segmentDist.length}</b> segments
-                </>
-              ) : null}
-            </StreamRow>
-          ) : (
+        {/* Reasoning reveal — the ONE shared component the landing hero uses,
+            fed from this page's real data (falls back to ATTENTION_STORIES when
+            there's no real reasoning yet). Same reveal, so the two can't drift. */}
+        {hasSyncedData ? (
+          <ReasoningReveal stories={homeStories} />
+        ) : (
+          <StreamOutput aria-label="what allo has been doing">
             <StreamRow tick="step">
               pulling in your store data — this usually takes a minute
             </StreamRow>
-          )}
-
-          {lapsed && lapsed.customerCount > 0 && (
-            <StreamRow tick="ok">
-              flagged <b>{lapsed.customerCount.toLocaleString("en-IN")}</b> lapsed
-              · <b>{formatINR(lapsed.totalRevenue)}</b> of past revenue to win back
-            </StreamRow>
-          )}
-
-          {heldBack > 0 && (
-            <StreamRow tick="hold">
-              held back <b>{heldBack}</b> — they&apos;d already heard from us
-              recently
-            </StreamRow>
-          )}
-
-          {hasBrand && (
-            <StreamRow tick="ok">
-              writing in <b>{brandProfile?.brandName ?? "your"}</b> voice
-            </StreamRow>
-          )}
-
-          {automationCount > 0 && (
-            <StreamRow tick="ok">
-              built <b>{automationCount}</b> automations — <b>{activeCount}</b>{" "}
-              running on their own
-              {readyCount > 0 ? (
-                <>
-                  , <b>{readyCount}</b> ready for your okay
-                </>
-              ) : null}
-            </StreamRow>
-          )}
-
-          {draftedCount > 0 ? (
-            <StreamRow tick="ok">
-              drafted <b>{draftedCount}</b> · {pendingActions.length} queued for
-              your approval ·{" "}
-              <span className="text-[hsl(var(--accent))]">ready</span>
-            </StreamRow>
-          ) : (
-            <StreamRow tick="step">
-              looking for the next thing worth doing
-            </StreamRow>
-          )}
-
-          {(missionControl?.summary || latestBriefing?.content?.summary) && (
-            <StreamRow tick="ok">
-              {firstLine(
-                missionControl?.summary ?? latestBriefing?.content?.summary,
-                140,
-              )}
-            </StreamRow>
-          )}
-        </StreamOutput>
+          </StreamOutput>
+        )}
       </ConsoleFrame>
 
       {/* 4. Pending decisions */}
@@ -722,11 +728,11 @@ export default function DashboardPage() {
         ) : (
           <div className="rounded-xl border border-border bg-card p-5">
             <p className="font-sans text-[13.5px] text-foreground">
-              You&apos;re all caught up.
+              Nothing waiting on you.
             </p>
             <p className="font-sans text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
-              Nothing needs you right now — allo will surface the next thing the
-              moment it&apos;s worth doing.
+              Drafts before sunrise, approvals over coffee — allo will have the
+              next decision ready when it&apos;s worth your okay.
             </p>
           </div>
         )}

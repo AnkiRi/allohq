@@ -20,7 +20,7 @@ export interface CommandLineProps {
 }
 
 export function CommandLine({
-  placeholder = "win back my lapsed buyers before diwali",
+  placeholder = "Tell allo what you want — e.g. win back my lapsed buyers before Diwali",
   onSubmit,
   rotateMs = 3800,
   className,
@@ -82,14 +82,15 @@ export function CommandLine({
             }
           }}
           // Native placeholder kept empty; we render our own rotating one so it
-          // can animate. aria-label keeps it accessible.
-          aria-label="Tell allo what to do"
-          className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))]"
+          // can animate. aria-label keeps it accessible. Input is human
+          // (sans) — you talk to allo in plain language; allo THINKS in mono.
+          aria-label="Tell allo what you want, in your own words"
+          className="w-full bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))]"
         />
         {value.length === 0 && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 flex items-center font-mono text-sm text-muted-foreground"
+            className="pointer-events-none absolute inset-y-0 left-0 flex items-center font-sans text-sm text-muted-foreground"
           >
             {list[phIndex]}
             {showCaret && (
