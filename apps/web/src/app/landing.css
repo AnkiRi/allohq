@@ -387,17 +387,35 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
 }
 .allo-terminal .stream .tick { color: var(--t-accent); flex: none; }
 .allo-terminal .stream .row b { color: var(--t-ink); font-weight: 600; }
-/* staggered reveal of streamed lines (enhanced; visible by default) */
-.allo-terminal[data-rd-ready] .stream .row {
+/* Reasoning reveal — JS-SEQUENCED (after the goal finishes typing), not auto.
+   Rows + final are VISIBLE BY DEFAULT (no-JS / reduced-motion = complete static
+   hero). JS arms the hidden state via [data-rd-ready], then adds .is-in per line
+   in order. Reserved space (opacity/transform only) → no layout shift / jank. */
+.allo-terminal[data-rd-ready] .stream .row,
+.allo-terminal[data-rd-ready] .stream-final {
   opacity: 0;
   transform: translateY(5px);
-  animation: t-streamin 360ms var(--t-ease) forwards;
 }
-.allo-terminal[data-rd-ready] .stream .row:nth-child(1) { animation-delay: 900ms; }
-.allo-terminal[data-rd-ready] .stream .row:nth-child(2) { animation-delay: 1040ms; }
-.allo-terminal[data-rd-ready] .stream .row:nth-child(3) { animation-delay: 1180ms; }
-.allo-terminal[data-rd-ready] .stream .row:nth-child(4) { animation-delay: 1320ms; }
-@keyframes t-streamin { to { opacity: 1; transform: none; } }
+.allo-terminal[data-rd-ready] .stream .row.is-in,
+.allo-terminal[data-rd-ready] .stream-final.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 360ms var(--t-ease), transform 360ms var(--t-ease);
+}
+/* THE BEAT — "held back N as control" lands with one settling emerald emphasis
+   (the moat made visible). Half a beat of weight, not a flashing highlight. */
+.allo-terminal[data-rd-ready] .stream .row.beat.is-in b { color: var(--t-accent); }
+.allo-terminal[data-rd-ready] .stream .row.beat.is-in {
+  animation: t-beat 1100ms ease-out;
+}
+@keyframes t-beat {
+  0%   { text-shadow: 0 0 0 transparent; }
+  35%  { text-shadow: 0 0 12px var(--t-accent); }
+  100% { text-shadow: 0 0 0 transparent; }
+}
+/* Rest: once the sequence completes the caret settles and vanishes — nothing
+   on the page moves after this. */
+.allo-terminal[data-rd-done] .caret { animation: none; opacity: 0; }
 
 .allo-terminal .stream-final {
   margin-top: 14px;
@@ -449,7 +467,8 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
   background: var(--t-accent);
   align-self: center;
 }
-.allo-terminal[data-rd-ready] .stat .live-dot { animation: t-pulse 2.4s ease-in-out infinite; }
+/* Static — the reasoning-reveal is the ONLY motion on the landing. */
+.allo-terminal .stat .live-dot { box-shadow: 0 0 6px var(--t-accent); }
 @keyframes t-pulse {
   0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--t-accent); }
   50% { opacity: 0.45; box-shadow: 0 0 0 var(--t-accent); }

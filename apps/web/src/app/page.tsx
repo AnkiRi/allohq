@@ -148,9 +148,9 @@ function LandingPage() {
                   <span
                     className="typed"
                     data-typed
-                    data-full="win back my lapsed buyers before diwali"
+                    data-full="win back my lapsed buyers before Diwali"
                   >
-                    win back my lapsed buyers before diwali
+                    win back my lapsed buyers before Diwali
                   </span>
                   <span className="caret" aria-hidden="true" />
                 </div>
@@ -158,40 +158,27 @@ function LandingPage() {
                 <div className="stream" aria-label="reasoning output">
                   <div className="row">
                     <span className="tick">✓</span>
-                    <span>
-                      scanned <b>4,892</b> customers · matched <b>187</b> lapsed
-                    </span>
+                    <span>scanned <b>4,820</b> customers</span>
                   </div>
                   <div className="row">
                     <span className="tick">✓</span>
-                    <span>
-                      cohort: last spring&apos;s <b>linen-drop</b> buyers ·{" "}
-                      <b>₹4.2L</b> past revenue
-                    </span>
+                    <span>matched <b>187</b> lapsed · last spring&apos;s buyers</span>
+                  </div>
+                  <div className="row beat">
+                    <span className="tick">✓</span>
+                    <span>held back <b>22</b> as control</span>
                   </div>
                   <div className="row">
                     <span className="tick">✓</span>
-                    <span>
-                      held back <b>12</b> · fatigue threshold reached
-                    </span>
-                  </div>
-                  <div className="row">
-                    <span className="tick">✓</span>
-                    <span>
-                      drafted <b>3-variant</b> WhatsApp win-back
-                    </span>
+                    <span>drafted <b>3</b> win-back variants</span>
                   </div>
                 </div>
 
                 <p className="stream-final">
-                  <span className="ok">→ ready</span> Expected recovery{" "}
-                  <span
-                    className="accent mono"
-                    style={{ fontSize: "0.9rem" }}
-                  >
+                  <span className="ok">→ ready</span> · expected recovery{" "}
+                  <span className="accent mono" style={{ fontSize: "0.9rem" }}>
                     ₹1.2L
                   </span>
-                  . 3 drafts queued for your approval.
                 </p>
               </div>
             </div>
@@ -209,7 +196,7 @@ function LandingPage() {
             </span>
             <span className="stat">
               <span className="label">customers</span>
-              <span className="val">4,892</span>
+              <span className="val">4,820</span>
             </span>
             <span className="stat">
               <span className="label">revenue · 30d</span>
@@ -252,7 +239,7 @@ function LandingPage() {
                 generated <span data-clock>00:00:00</span>
               </span>
               <span className="sep">·</span>
-              <span>4,892 customers</span>
+              <span>4,820 customers</span>
               <span className="sep">·</span>
               <span>₹48,213 / 30d</span>
             </div>
@@ -293,7 +280,7 @@ function LandingPage() {
                 <div className="kpi">
                   <span className="kpi-label">customers</span>
                   <span className="kpi-line">
-                    <span className="kpi-val">4,892</span>
+                    <span className="kpi-val">4,820</span>
                     <span className="kpi-delta">—</span>
                   </span>
                 </div>

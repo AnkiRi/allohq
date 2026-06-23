@@ -3,17 +3,19 @@
 import { useEffect } from "react";
 
 /**
- * LandingMotion — terminal motion enhancer for the unified landing.
+ * LandingMotion — the landing's ONE signature motion: the hero terminal performs
+ * allo's reasoning once, then rests. Nothing else on the page moves.
  *
- * Content is fully visible without JS: the hero command is server-rendered as
- * plain text inside [data-typed], the streamed reasoning rows are in the DOM,
- * and the clock has static fallback text. This leaf only ENHANCES:
- *   - flips [data-rd-ready] so the CSS caret-blink + stream stagger play
- *   - re-types the hero command character-by-character (skipped if reduced)
- *   - ticks the live status clock(s)
+ * Progressive enhancement: the hero is server-rendered COMPLETE (full command +
+ * all reasoning lines + "ready · expected recovery ₹1.2L"), so with no JS or
+ * under prefers-reduced-motion it shows the finished, readable end-state. JS only
+ * ARMS the hidden state ([data-rd-ready]) and sequences the reveal.
  *
- * Everything degrades under prefers-reduced-motion: the command + response
- * show statically, no caret animation, no typing, no pulse.
+ * Sequence: type the goal char-by-char (~40–60ms, jittered) → ~500ms beat →
+ * reasoning lines land in order (~400ms apart), with a longer ~600ms beat and a
+ * settling emerald emphasis before "held back 22 as control" (the moat made
+ * visible) → then rests ([data-rd-done]; caret settles). No loop. Replays once
+ * if the hero is scrolled back into view.
  */
 export function LandingMotion() {
   useEffect(() => {
@@ -25,10 +27,8 @@ export function LandingMotion() {
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // Live clock(s) in status lines — purely informational tick.
-    const clocks = Array.from(
-      root.querySelectorAll<HTMLElement>("[data-clock]")
-    );
+    // Status clock: paint ONCE, static. No interval — the reasoning-reveal is the
+    // only thing that moves on the page.
     const fmt = () =>
       new Intl.DateTimeFormat("en-GB", {
         hour: "2-digit",
@@ -36,46 +36,82 @@ export function LandingMotion() {
         second: "2-digit",
         hour12: false,
       }).format(new Date());
-    const paintClock = () => clocks.forEach((c) => (c.textContent = fmt()));
-    paintClock();
-    const clockTimer = reduce ? null : window.setInterval(paintClock, 1000);
+    root
+      .querySelectorAll<HTMLElement>("[data-clock]")
+      .forEach((c) => { c.textContent = fmt(); });
+
+    const typedEl = root.querySelector<HTMLElement>("[data-typed]");
+    const full = typedEl?.dataset.full ?? typedEl?.textContent ?? "";
 
     if (reduce) {
-      // Static: ensure the full command is shown; do NOT set the ready flag so
-      // no caret blink / stream stagger / pulse animation fires.
-      root.querySelectorAll<HTMLElement>("[data-typed]").forEach((el) => {
-        el.textContent = el.dataset.full ?? el.textContent ?? "";
-      });
-      return () => {
-        if (clockTimer) window.clearInterval(clockTimer);
-      };
+      // Static end-state: show the full command; rows are visible by default
+      // (never armed), so the whole reasoning shows finished and still.
+      if (typedEl) typedEl.textContent = full;
+      return;
     }
 
-    root.setAttribute("data-rd-ready", "true");
+    const rows = Array.from(root.querySelectorAll<HTMLElement>(".stream .row"));
+    const finalEl = root.querySelector<HTMLElement>(".stream-final");
+    let timers: number[] = [];
+    const at = (fn: () => void, ms: number) => { timers.push(window.setTimeout(fn, ms)); };
+    const clearAll = () => { timers.forEach((t) => window.clearTimeout(t)); timers = []; };
 
-    // Type the hero command. Start empty, reveal the full string already in
-    // markup (so non-JS users still read it whole).
-    const typedEl = root.querySelector<HTMLElement>("[data-typed]");
-    let typeTimer: number | undefined;
-    if (typedEl) {
-      const full = typedEl.dataset.full ?? typedEl.textContent ?? "";
-      typedEl.textContent = "";
+    const runOnce = () => {
+      clearAll();
+      root.setAttribute("data-rd-ready", "true"); // arm: hide rows, blink caret
+      root.removeAttribute("data-rd-done");
+      rows.forEach((r) => r.classList.remove("is-in"));
+      finalEl?.classList.remove("is-in");
+      if (typedEl) typedEl.textContent = "";
+
       let i = 0;
-      const step = () => {
+      const type = () => {
         i += 1;
-        typedEl.textContent = full.slice(0, i);
+        if (typedEl) typedEl.textContent = full.slice(0, i);
         if (i < full.length) {
-          // slight irregular cadence reads like a real operator typing
-          typeTimer = window.setTimeout(step, 26 + Math.random() * 34);
+          at(type, 40 + Math.random() * 20); // ~40–60ms/char, human jitter
+        } else {
+          revealRows();
         }
       };
-      typeTimer = window.setTimeout(step, 420);
+
+      const revealRows = () => {
+        let t = 500; // beat after the goal finishes typing
+        rows.forEach((row, idx) => {
+          // longer beat before the control line; ~400ms between the rest
+          if (idx > 0) t += row.classList.contains("beat") ? 600 : 400;
+          at(() => row.classList.add("is-in"), t);
+        });
+        t += 400;
+        at(() => {
+          finalEl?.classList.add("is-in");
+          root.setAttribute("data-rd-done", "true"); // rest: caret settles, all still
+        }, t);
+      };
+
+      at(type, 420); // brief pause, then the goal types itself
+    };
+
+    runOnce();
+
+    // Optional: replay once when the hero is scrolled back into view.
+    const consoleEl = root.querySelector<HTMLElement>(".console") ?? root;
+    let wasOut = false;
+    let observer: IntersectionObserver | undefined;
+    if (typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) wasOut = true;
+            else if (wasOut) { wasOut = false; runOnce(); }
+          }
+        },
+        { threshold: 0.6 },
+      );
+      observer.observe(consoleEl);
     }
 
-    return () => {
-      if (clockTimer) window.clearInterval(clockTimer);
-      if (typeTimer) window.clearTimeout(typeTimer);
-    };
+    return () => { clearAll(); observer?.disconnect(); };
   }, []);
 
   return null;
