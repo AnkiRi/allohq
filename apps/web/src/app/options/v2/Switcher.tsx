@@ -81,11 +81,10 @@ export function PaletteSwitcher() {
     }
   };
 
+  // A discreet appearance toggle — small swatch dots, not a "pick your design"
+  // widget. No label/word; accessible via per-dot aria-label + title.
   return (
-    <div className="v2-pal" role="group" aria-label="Colour palette">
-      <span className="v2-pal__lead mono" aria-hidden="true">
-        palette
-      </span>
+    <div className="v2-pal" role="group" aria-label="Appearance">
       {PALS.map((p) => (
         <button
           key={p.id}
@@ -93,10 +92,11 @@ export function PaletteSwitcher() {
           className={`v2-pal__chip${pal === p.id ? " is-on" : ""}`}
           data-chip={p.id}
           aria-pressed={pal === p.id}
+          aria-label={`${p.label} appearance`}
+          title={p.label}
           onClick={() => choose(p.id)}
         >
           <span className="v2-pal__dot" aria-hidden="true" />
-          <span className="v2-pal__name">{p.label}</span>
         </button>
       ))}
     </div>
