@@ -6,6 +6,7 @@ import { Store, User, Bell, CreditCard, Sparkles, Cpu, Check, Activity, MessageS
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { AppearanceSetting } from "@/components/settings/AppearanceSetting";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -762,6 +763,11 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
+      </motion.div>
+
+      {/* Appearance — theme lives in Settings, persisted */}
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+        <AppearanceSetting />
       </motion.div>
 
       {/* Connected Stores */}

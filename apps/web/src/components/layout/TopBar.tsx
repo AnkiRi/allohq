@@ -1,10 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { useMobileSidebar } from "./MobileSidebarContext";
-import { useTheme } from "@/components/theme/ThemeProvider";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
@@ -45,7 +44,6 @@ function getBreadcrumb(pathname: string): string[] {
 
 export function TopBar() {
   const { toggle } = useMobileSidebar();
-  const { theme, mounted, toggleTheme } = useTheme();
   const demo = useDemo();
   const pathname = usePathname();
   const commandPalette = useCommandPalette();
@@ -194,20 +192,7 @@ export function TopBar() {
           </kbd>
         </button>
 
-        {/* Dark mode toggle */}
-        {mounted && (
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/8 transition-colors"
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? (
-              <Sun className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <Moon className="w-4 h-4 text-muted-foreground" />
-            )}
-          </button>
-        )}
+        {/* Theme moved to Settings → Appearance (not floating in the nav). */}
 
         {/* Bell */}
         <button className="relative p-2 rounded-lg hover:bg-black/3 dark:hover:bg-white/5 transition-colors">

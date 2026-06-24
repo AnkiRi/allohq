@@ -8,7 +8,15 @@ import {
   useCallback,
 } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "drenched" | "light" | "dark";
+
+/** The two dark palettes keep the `.dark` class so every `dark:` utility works. */
+const DARKISH: Theme[] = ["drenched", "dark"];
+export const THEMES: { id: Theme; label: string; hint: string }[] = [
+  { id: "drenched", label: "Drenched", hint: "Cobalt — allo's signature blue" },
+  { id: "light", label: "Light", hint: "Minimal, near-white" },
+  { id: "dark", label: "Dark", hint: "Near-black, emerald" },
+];
 
 interface ThemeContextType {
   theme: Theme;
@@ -18,7 +26,7 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "light",
+  theme: "drenched",
   mounted: false,
   toggleTheme: () => {},
   setTheme: () => {},
@@ -27,26 +35,26 @@ const ThemeContext = createContext<ThemeContextType>({
 export const useTheme = () => useContext(ThemeContext);
 
 const STORAGE_KEY = "allo-theme";
+const DEFAULT_THEME: Theme = "drenched";
+
+function isTheme(v: string | null): v is Theme {
+  return v === "drenched" || v === "light" || v === "dark";
+}
 
 /**
- * Inline script to prevent flash of wrong theme.
- * Rendered as a <script> in the <head> before paint.
+ * Inline script to prevent flash of wrong theme. Sets data-theme (and the
+ * `.dark` class for the two dark palettes) before paint. Default = drenched.
  */
 export function ThemeScript() {
   const script = `
 (function(){
   try {
     var stored = localStorage.getItem('${STORAGE_KEY}');
-    var theme = stored === 'dark' || stored === 'light' ? stored : null;
-    if (!theme) {
-      // Terminal default is DARK; light is the opt-in variant.
-      theme = 'dark';
-    }
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    var t = (stored === 'drenched' || stored === 'light' || stored === 'dark') ? stored : '${DEFAULT_THEME}';
+    var el = document.documentElement;
+    el.setAttribute('data-theme', t);
+    if (t === 'drenched' || t === 'dark') { el.classList.add('dark'); }
+    else { el.classList.remove('dark'); }
   } catch(e){}
 })();
 `;
@@ -54,26 +62,22 @@ export function ThemeScript() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Terminal default is DARK; light is the opt-in variant.
-  const [theme, setThemeState] = useState<Theme>("dark");
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage, otherwise fall back to the dark default
+  // Initialize from localStorage, otherwise the drenched default.
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === "dark" || stored === "light") {
-      setThemeState(stored);
-    } else {
-      setThemeState("dark");
-    }
+    const stored = localStorage.getItem(STORAGE_KEY);
+    setThemeState(isTheme(stored) ? stored : DEFAULT_THEME);
     setMounted(true);
   }, []);
 
-  // Apply class to documentElement whenever theme changes
+  // Apply data-theme + `.dark` class whenever theme changes.
   useEffect(() => {
     if (!mounted) return;
     const root = document.documentElement;
-    if (theme === "dark") {
+    root.setAttribute("data-theme", theme);
+    if (DARKISH.includes(theme)) {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
@@ -85,8 +89,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(t);
   }, []);
 
+  // Cycle drenched → light → dark → drenched (used by any quick toggle).
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "light" ? "dark" : "light"));
+    setThemeState((prev) =>
+      prev === "drenched" ? "light" : prev === "light" ? "dark" : "drenched",
+    );
   }, []);
 
   return (

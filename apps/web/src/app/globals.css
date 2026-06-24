@@ -2,115 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================================
+   allo app theme = V2 (canonical). Three user-selectable palettes,
+   keyed on html[data-theme]:
+     drenched  (DEFAULT)  cobalt + warm gold        — the blue hero look
+     light                minimal near-white + emerald
+     dark                 near-black green + emerald
+   The ThemeProvider also adds the `.dark` class for drenched AND dark, so
+   every existing `dark:` Tailwind variant and `.dark .foo` effect keeps
+   working; the per-palette token values come from data-theme. One token
+   system, no stale theme paths.
+   ===================================================================== */
+
 @layer base {
-  :root {
-    /* Terminal LIGHT — paper, emerald accent (matches landing light) */
-    --background: 120 17% 98%;        /* #F8FAF8 paper */
-    --foreground: 140 20% 6%;         /* #0C120E ink */
-    --card: 120 13% 94%;              /* #EEF2EE raised */
-    --card-foreground: 140 20% 6%;    /* #0C120E ink */
-    --popover: 120 13% 94%;           /* #EEF2EE raised */
-    --popover-foreground: 140 20% 6%;
-    --primary: 156 83% 26%;           /* #0B7A4E emerald accent */
-    --primary-foreground: 120 17% 98%;/* #F8FAF8 accent-ink */
-    --secondary: 120 12% 92%;         /* #E7ECE7 inset */
-    --secondary-foreground: 140 20% 6%;/* ink */
-    --muted: 120 13% 94%;             /* #EEF2EE raised */
-    --muted-foreground: 136 7% 31%;   /* #4A554D dim */
-    --accent: 156 83% 26%;            /* #0B7A4E emerald accent */
-    --accent-foreground: 120 17% 98%; /* #F8FAF8 accent-ink */
-    --destructive: 4 64% 48%;         /* #C8362C urgent red */
-    --destructive-foreground: 120 17% 98%;
-    --border: 120 3% 88%;            /* ≈ rgba(0,0,0,0.10) on paper */
-    --input: 120 3% 88%;
-    --ring: 156 83% 26%;              /* #0B7A4E accent */
+  /* ---- LIGHT (minimal near-white + emerald) — also the :root base ---- */
+  :root,
+  html[data-theme="light"] {
+    --background: 60 11% 98%;          /* #FAFAF9 */
+    --foreground: 222 13% 10%;         /* #16181C ink */
+    --card: 0 0% 100%;                 /* #FFFFFF surface */
+    --card-foreground: 222 13% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 13% 10%;
+    --primary: 159 80% 27%;            /* #0E7C5A emerald */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 60 7% 95%;            /* #F2F2F0 */
+    --secondary-foreground: 222 13% 10%;
+    --muted: 60 7% 95%;
+    --muted-foreground: 218 6% 36%;    /* #565A61 dim */
+    --accent: 159 80% 27%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 64% 48%;          /* #C8362C */
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 91%;                /* ≈ rgba(0,0,0,.09) */
+    --input: 0 0% 91%;
+    --ring: 159 80% 27%;
     --radius: 0.5rem;
 
-    /* Extended terminal palette */
-    --border-light: 120 12% 92%;      /* #E7ECE7 inset */
-    --sidebar: 120 17% 98%;           /* #F8FAF8 bg */
-    --sidebar-active: 156 83% 26%;    /* #0B7A4E accent */
-    --sidebar-active-text: 120 17% 98%;/* accent-ink */
-    --accent-bg: 120 12% 92%;         /* #E7ECE7 inset */
-    --nav-hover: 120 13% 94%;         /* #EEF2EE raised */
-    --progress: 156 83% 26%;          /* #0B7A4E accent */
-    --success: 156 83% 26%;           /* #0B7A4E — success == accent in light */
-    --success-bg: 120 12% 92%;        /* #E7ECE7 inset */
-    --ai-panel-bg: 120 13% 94%;       /* #EEF2EE raised */
+    --border-light: 60 7% 95%;
+    --sidebar: 60 11% 98%;
+    --sidebar-active: 159 80% 27%;
+    --sidebar-active-text: 0 0% 100%;
+    --accent-bg: 60 7% 95%;
+    --nav-hover: 60 7% 95%;
+    --progress: 159 80% 27%;
+    --success: 159 80% 27%;
+    --success-bg: 60 7% 95%;
+    --ai-panel-bg: 0 0% 100%;
 
-    /* Terminal semantic colors (hex/rgba) */
-    --color-accent: #0B7A4E;          /* emerald */
-    --color-accent-hover: #0F9763;
-    --color-info: #4A554D;            /* dim — neutral info */
-    --color-success: #0B7A4E;         /* emerald success */
-    --color-warning: #B8860B;         /* amber-ish warning that reads on paper */
-    --color-urgent: #C8362C;          /* red, 4.98:1 on paper */
+    --color-accent: #0E7C5A;
+    --color-accent-hover: #12936B;
+    --color-info: #565A61;
+    --color-success: #0E7C5A;
+    --color-warning: #B8860B;
+    --color-urgent: #C8362C;
 
-    /* Terminal border token (rgba — used by retoned utilities) */
-    --terminal-border: rgba(0, 0, 0, 0.10);
+    --terminal-border: rgba(0, 0, 0, 0.09);
 
-    /* Glassmorphism tokens — derived from terminal raised surface */
-    --glass-bg: rgba(238, 242, 238, 0.72);   /* raised */
-    --glass-bg-hover: rgba(238, 242, 238, 0.88);
-    --glass-border: rgba(0, 0, 0, 0.10);
+    --glass-bg: rgba(255, 255, 255, 0.72);
+    --glass-bg-hover: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(0, 0, 0, 0.09);
     --glass-blur: 12px;
-    --glass-shadow: 0 4px 24px rgba(12, 18, 14, 0.06);
-    --glass-shadow-hover: 0 8px 32px rgba(12, 18, 14, 0.10);
+    --glass-shadow: 0 4px 24px rgba(20, 22, 28, 0.06);
+    --glass-shadow-hover: 0 8px 32px rgba(20, 22, 28, 0.10);
 
-    /* Legacy brand aliases kept (components reference) — mapped to terminal */
     --terracotta: #C8362C;
-    --olive: #0B7A4E;
+    --olive: #0E7C5A;
     --warm-gold: #B8860B;
-    --canvas-bg: #F8FAF8;
-    --brand-emerald: #0B7A4E;
-    --brand-sage:    #0F9763;
-    --brand-warm:    #B8860B;
+    --canvas-bg: #FAFAF9;
+    --brand-emerald: #0E7C5A;
+    --brand-sage: #12936B;
+    --brand-warm: #B8860B;
   }
 
-  .dark {
-    /* Terminal DARK (default) — near-black, amber accent (matches landing) */
-    --background: 220 23% 5%;         /* #0A0C10 near-black */
-    --foreground: 216 11% 91%;        /* #E6E8EB ink */
-    --card: 218 22% 7%;               /* #0E1116 raised */
-    --card-foreground: 216 11% 91%;   /* #E6E8EB ink */
-    --popover: 218 22% 7%;            /* #0E1116 raised */
-    --popover-foreground: 216 11% 91%;
-    --primary: 41 100% 50%;           /* #FFB000 amber accent */
-    --primary-foreground: 220 23% 5%; /* #0A0C10 accent-ink */
-    --secondary: 210 30% 4%;          /* #070A0D inset */
-    --secondary-foreground: 216 11% 91%;/* ink */
-    --muted: 218 22% 7%;              /* #0E1116 raised */
-    --muted-foreground: 215 5% 57%;   /* #8B9097 dim */
-    --accent: 41 100% 50%;            /* #FFB000 amber accent */
-    --accent-foreground: 220 23% 5%;  /* #0A0C10 accent-ink */
-    --destructive: 0 100% 71%;        /* #FF6B6B urgent red, 7.05:1 on near-black */
-    --destructive-foreground: 220 23% 5%;
-    --border: 228 8% 13%;            /* ≈ rgba(255,255,255,0.08) on near-black */
-    --input: 228 8% 13%;
-    --ring: 41 100% 50%;             /* #FFB000 accent */
-    --border-light: 210 30% 4%;       /* #070A0D inset */
-    --sidebar: 220 23% 5%;            /* #0A0C10 bg */
-    --sidebar-active: 41 100% 50%;    /* #FFB000 accent */
-    --sidebar-active-text: 220 23% 5%;/* accent-ink */
-    --accent-bg: 210 30% 4%;          /* #070A0D inset */
-    --nav-hover: 218 22% 7%;          /* #0E1116 raised */
-    --progress: 41 100% 50%;          /* #FFB000 accent */
-    --success: 147 44% 49%;           /* #46B377 green, 7.4:1 on near-black */
-    --success-bg: 210 30% 4%;         /* #070A0D inset */
-    --ai-panel-bg: 218 22% 7%;        /* #0E1116 raised */
+  /* ---- DARK (near-black green + emerald) ---- */
+  html[data-theme="dark"] {
+    --background: 156 18% 6%;          /* #0B1210 */
+    --foreground: 140 14% 92%;         /* #E8EEE9 */
+    --card: 156 22% 8%;                /* #111A16 */
+    --card-foreground: 140 14% 92%;
+    --popover: 156 22% 8%;
+    --popover-foreground: 140 14% 92%;
+    --primary: 157 67% 42%;            /* #25B583 emerald */
+    --primary-foreground: 156 55% 6%;  /* #04140E */
+    --secondary: 152 24% 11%;          /* #16231D */
+    --secondary-foreground: 140 14% 92%;
+    --muted: 156 22% 8%;
+    --muted-foreground: 150 9% 62%;    /* #94A49B */
+    --accent: 157 67% 42%;
+    --accent-foreground: 156 55% 6%;
+    --destructive: 0 100% 71%;         /* #FF6B6B */
+    --destructive-foreground: 156 18% 6%;
+    --border: 156 12% 16%;
+    --input: 156 12% 16%;
+    --ring: 157 67% 42%;
 
-    --color-accent: #FFB000;          /* amber */
-    --color-accent-hover: #FFC233;
-    --color-info: #8B9097;            /* dim — neutral info */
-    --color-success: #46B377;         /* green success */
-    --color-warning: #FFB000;         /* amber */
-    --color-urgent: #FF6B6B;          /* red, 7.05:1 on near-black */
+    --border-light: 152 24% 11%;
+    --sidebar: 156 18% 6%;
+    --sidebar-active: 157 67% 42%;
+    --sidebar-active-text: 156 55% 6%;
+    --accent-bg: 152 24% 11%;
+    --nav-hover: 156 22% 8%;
+    --progress: 157 67% 42%;
+    --success: 157 67% 50%;
+    --success-bg: 152 24% 11%;
+    --ai-panel-bg: 156 22% 8%;
+
+    --color-accent: #25B583;
+    --color-accent-hover: #3ECB98;
+    --color-info: #94A49B;
+    --color-success: #46B377;
+    --color-warning: #E3B24F;
+    --color-urgent: #FF6B6B;
 
     --terminal-border: rgba(255, 255, 255, 0.08);
 
-    /* Glassmorphism — derived from terminal dark raised surface */
-    --glass-bg: rgba(14, 17, 22, 0.72);      /* raised */
-    --glass-bg-hover: rgba(20, 24, 30, 0.82);
+    --glass-bg: rgba(17, 26, 22, 0.72);
+    --glass-bg-hover: rgba(22, 35, 29, 0.82);
     --glass-border: rgba(255, 255, 255, 0.08);
     --glass-blur: 20px;
     --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
@@ -118,11 +126,69 @@
 
     --terracotta: #FF6B6B;
     --olive: #46B377;
-    --warm-gold: #FFB000;
-    --canvas-bg: #0A0C10;
-    --brand-emerald: #FFB000;
-    --brand-sage:    #FFC233;
-    --brand-warm:    #FFB000;
+    --warm-gold: #E3B24F;
+    --canvas-bg: #0B1210;
+    --brand-emerald: #25B583;
+    --brand-sage: #3ECB98;
+    --brand-warm: #E3B24F;
+  }
+
+  /* ---- DRENCHED (cobalt + warm gold) — DEFAULT, the blue hero look ---- */
+  html[data-theme="drenched"] {
+    --background: 231 49% 20%;         /* deep cobalt */
+    --foreground: 222 30% 97%;         /* bone */
+    --card: 231 45% 25%;
+    --card-foreground: 222 30% 97%;
+    --popover: 231 45% 25%;
+    --popover-foreground: 222 30% 97%;
+    --primary: 41 72% 60%;             /* warm gold */
+    --primary-foreground: 231 45% 15%;
+    --secondary: 232 50% 15%;
+    --secondary-foreground: 222 30% 97%;
+    --muted: 231 45% 25%;
+    --muted-foreground: 223 24% 83%;
+    --accent: 41 72% 60%;
+    --accent-foreground: 231 45% 15%;
+    --destructive: 0 85% 73%;
+    --destructive-foreground: 231 45% 12%;
+    --border: 228 30% 37%;
+    --input: 228 30% 37%;
+    --ring: 41 72% 60%;
+
+    --border-light: 231 42% 31%;
+    --sidebar: 232 52% 17%;
+    --sidebar-active: 41 72% 60%;
+    --sidebar-active-text: 231 45% 15%;
+    --accent-bg: 232 50% 16%;
+    --nav-hover: 231 45% 25%;
+    --progress: 41 72% 60%;
+    --success: 158 55% 62%;
+    --success-bg: 232 50% 16%;
+    --ai-panel-bg: 231 45% 25%;
+
+    --color-accent: #E3B24F;
+    --color-accent-hover: #EDC067;
+    --color-info: #AEB6D9;
+    --color-success: #56D7A6;
+    --color-warning: #E3B24F;
+    --color-urgent: #FF8585;
+
+    --terminal-border: rgba(225, 232, 255, 0.16);
+
+    --glass-bg: rgba(40, 52, 120, 0.55);
+    --glass-bg-hover: rgba(48, 62, 142, 0.66);
+    --glass-border: rgba(225, 232, 255, 0.16);
+    --glass-blur: 18px;
+    --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+    --glass-shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.55);
+
+    --terracotta: #FF8585;
+    --olive: #56D7A6;
+    --warm-gold: #E3B24F;
+    --canvas-bg: #1a2566;
+    --brand-emerald: #E3B24F;
+    --brand-sage: #EDC067;
+    --brand-warm: #E3B24F;
   }
 }
 
@@ -246,22 +312,16 @@
     animation: glass-shimmer 2s ease-in-out infinite;
   }
 
-  /* Sidebar glass — terminal raised surface */
+  /* Sidebar glass — adopts the active palette's raised surface */
   .glass-sidebar {
-    background: rgba(238, 242, 238, 0.7);
-    backdrop-filter: blur(16px) saturate(120%);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
   }
 
-  .dark .glass-sidebar {
-    background: rgba(14, 17, 22, 0.8);
-    backdrop-filter: blur(20px) saturate(120%);
-    -webkit-backdrop-filter: blur(20px) saturate(120%);
-  }
+  /* ── Refined-aurora utilities (token-driven, theme-aware) ──────────── */
 
-  /* ── Refined-aurora utilities (landing-aligned) ──────────── */
-
-  /* Briefing card — terminal raised surface (no aurora blobs) */
+  /* Briefing card — raised surface (no aurora blobs) */
   .aurora-card {
     position: relative;
     background: hsl(var(--card));
@@ -287,11 +347,11 @@
   }
   .aurora-card > * { position: relative; z-index: 1; }
 
-  /* Dark aurora hero — for the AI panel top strip and onboarding canvas */
+  /* Dark hero strip — adopts the active palette (cobalt/dark), accent glow */
   .aurora-hero-dark {
     position: relative;
-    background: #0A0C10;
-    color: #E6E8EB;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
     isolation: isolate;
     overflow: hidden;
   }
@@ -299,21 +359,14 @@
     content: "";
     position: absolute; inset: 0; z-index: 0; pointer-events: none;
     background:
-      radial-gradient(ellipse 110% 90% at 95% -10%, rgba(255, 176, 0, 0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 110% 90% at 95% -10%, hsl(var(--accent) / 0.10) 0%, transparent 55%),
       linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
     background-size: auto, 30px 30px, 30px 30px;
   }
-  .aurora-hero-dark::after {
-    content: "";
-    position: absolute; inset: 0; z-index: 0; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: 0.06;
-    mix-blend-mode: overlay;
-  }
   .aurora-hero-dark > * { position: relative; z-index: 1; }
 
-  /* Onboarding full background — terminal canvas with faint grid (no aurora) */
+  /* Onboarding full background — canvas with faint grid (no aurora) */
   .aurora-canvas-light {
     position: relative;
     background: hsl(var(--background));
@@ -368,8 +421,8 @@
 }
 
 @keyframes ai-thinking-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(196, 154, 60, 0); }
-  50% { box-shadow: 0 0 20px 4px rgba(196, 154, 60, 0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--accent) / 0); }
+  50% { box-shadow: 0 0 20px 4px hsl(var(--accent) / 0.15); }
 }
 
 @keyframes warm-pulse {
