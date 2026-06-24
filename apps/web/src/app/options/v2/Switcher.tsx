@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 /* ------------------------------------------------------------------ */
 /* The colour switcher — the headline deliverable.                    */
 /* Sets data-pal on the .opt-v2 root (drives every CSS custom-property */
-/* palette) and persists the choice to localStorage('allo-v2-pal').   */
+/* palette) and persists the choice to localStorage('allo-theme') —    */
+/* the SAME key the app's ThemeProvider reads, so the choice carries    */
+/* landing <-> app. The setter also mirrors data-theme + .dark on <html> */
+/* so the app's source of truth updates live, not just on next load.    */
 /* SSR default is drenched; a no-FOUC inline script in page.tsx sets   */
 /* the attribute before paint (honouring ?pal= then localStorage) so a */
 /* returning / linked visitor never flashes.                          */
@@ -19,7 +22,8 @@ const PALS = [
 
 type PalId = (typeof PALS)[number]["id"];
 
-const STORE_KEY = "allo-v2-pal";
+// Shared with the app's ThemeProvider so the theme choice carries across.
+const STORE_KEY = "allo-theme";
 
 function isPal(v: string | null): v is PalId {
   return v === "drenched" || v === "light" || v === "dark";
@@ -65,6 +69,11 @@ export function PaletteSwitcher() {
     setPal(id);
     const root = document.querySelector<HTMLElement>(".opt-v2");
     if (root) root.dataset.pal = id;
+    // Mirror the app's source of truth so the choice carries into the app
+    // (and survives a client-side navigation), matching ThemeProvider.
+    const html = document.documentElement;
+    html.setAttribute("data-theme", id);
+    html.classList.toggle("dark", id === "drenched" || id === "dark");
     try {
       localStorage.setItem(STORE_KEY, id);
     } catch {
