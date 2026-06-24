@@ -117,7 +117,7 @@ export function V2Landing({
           <div className="v2-wrap v2-nav__inner">
             <a className="v2-brand" href="#top">
               <span className="v2-blip" aria-hidden="true" />
-              allo
+              <span className="v2-brand__word">allo</span>
             </a>
             <nav className="v2-nav__links mono" aria-label="Primary">
               <a href="#brief">the brief</a>

@@ -244,6 +244,9 @@
   font-size: 20px;
   letter-spacing: -0.03em;
   margin-right: auto;
+  /* a slow, barely-there float — the wordmark feels alive, not static */
+  animation: v2-brand-float 5.6s ease-in-out infinite;
+  will-change: transform;
 }
 .opt-v2 .v2-blip {
   width: 8px;
@@ -251,7 +254,40 @@
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 0 var(--accent-soft);
+  /* soft steady glow so the dot reads as gently lit */
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
   animation: v2-blip 2.4s ease-out infinite;
+}
+/* very subtle life on the wordmark: a faint sheen travelling across "allo".
+   Motion only; reduced-motion renders it static and solid (see below). */
+.opt-v2 .v2-brand__word {
+  background: linear-gradient(
+    100deg,
+    var(--ink) 32%,
+    color-mix(in srgb, var(--ink) 80%, var(--accent)) 50%,
+    var(--ink) 68%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: v2-brand-sheen 7.5s linear infinite;
+}
+@keyframes v2-brand-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+@keyframes v2-brand-sheen {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .opt-v2 .v2-brand { animation: none; }
+  .opt-v2 .v2-brand__word {
+    animation: none;
+    background: none;
+    color: var(--ink);
+  }
 }
 @keyframes v2-blip {
   0% {
