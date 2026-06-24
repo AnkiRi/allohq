@@ -2225,13 +2225,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             setTimeout(() => inputRef.current?.focus(), 200);
           }}
           className="group fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent))]/30 bg-card px-3.5 py-2.5 shadow-lg hover:border-[hsl(var(--accent))] transition-colors z-[60]"
-          title="Summon allo (⌘K)"
+          title="Summon allo (⌘J)"
         >
           <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
             allo ›
           </span>
           <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground/70 border border-border rounded px-1.5 py-0.5 select-none">
-            ⌘K
+            ⌘J
           </kbd>
         </button>
       )}
@@ -2247,6 +2247,19 @@ const PanelRefContext = createContext<React.RefObject<AlloAIPanelHandle | null> 
 
 export function AlloAIPanelProvider({ children }: { children: React.ReactNode }) {
   const panelRef = useRef<AlloAIPanelHandle>(null);
+
+  // ⌘J / Ctrl+J summons allo (the AI panel). ⌘K belongs to the command palette;
+  // the panel uses ⌘J so the two shortcuts never collide.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === "J")) {
+        e.preventDefault();
+        panelRef.current?.open();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const value: AlloAIPanelContextType = {
     openPanel: () => panelRef.current?.open(),

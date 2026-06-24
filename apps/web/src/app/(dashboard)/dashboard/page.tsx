@@ -328,7 +328,10 @@ export default function DashboardPage() {
   const { data: stores, isLoading: storesLoading } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
   const store = stores?.[0];
-  const onboardingDone = !!store?.onboardingCompletedAt;
+  // Demo (Vana) is always pre-onboarded — skip the wizard and let the data
+  // queries (gated on onboardingDone) run, so the console fills instead of
+  // hanging on "loading" after entering the demo.
+  const onboardingDone = demo || !!store?.onboardingCompletedAt;
   const [justCompletedOnboarding, setJustCompletedOnboarding] = useState(false);
 
   const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
