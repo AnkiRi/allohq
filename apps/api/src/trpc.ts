@@ -96,11 +96,33 @@ export async function createContext(opts: { req?: any; res?: any }) {
     }
   }
 
+  // Anonymous demo guest — the public, no-login demo. A logged-OUT visitor
+  // carries the demo header but no Clerk token; resolve a synthetic guest scoped
+  // STRICTLY to the seeded Vana workspace (never any other), read-mostly: every
+  // mutation is sandboxed by `isDemo` across the routers and sends are skipped
+  // for the demo store. This is what lets the demo run without login WITHOUT
+  // opening the rest of the API to anonymous use. The per-user rate limit keys
+  // on this shared "demo-guest" id, so it doubles as a global cap on the demo.
+  if (!userId && !!opts.req?.headers?.[DEMO_HEADER]) {
+    userId = "demo-guest";
+    workspaceId = DEMO_WORKSPACE_ID;
+    isDemo = true;
+  }
+
+  // Best-effort client IP, for per-IP rate limiting of the demo's costly
+  // endpoints (e.g. the AI chat) so a public URL can't be abused.
+  const fwd = opts.req?.headers?.["x-forwarded-for"];
+  const clientIp =
+    (typeof fwd === "string" ? fwd.split(",")[0]?.trim() : undefined) ||
+    opts.req?.socket?.remoteAddress ||
+    null;
+
   return {
     prisma,
     userId,
     workspaceId,
     isDemo,
+    clientIp,
   };
 }
 
