@@ -239,9 +239,9 @@
 .opt-v2 .v2-brand {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   font-weight: 700;
-  font-size: 20px;
+  font-size: 24px;
   letter-spacing: -0.03em;
   margin-right: auto;
   /* a slow, barely-there float — the wordmark feels alive, not static */
@@ -249,8 +249,8 @@
   will-change: transform;
 }
 .opt-v2 .v2-blip {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 0 var(--accent-soft);
