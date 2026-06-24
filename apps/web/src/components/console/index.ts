@@ -14,6 +14,9 @@ export type {
   DecisionPrediction,
 } from "./DecisionCard";
 
+export { DecisionDetail } from "./DecisionDetail";
+export type { DecisionDetailData } from "./DecisionDetail";
+
 export { OpTag } from "./OpTag";
 export type { OpTagProps, OpTagKind } from "./OpTag";
 

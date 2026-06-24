@@ -40,6 +40,8 @@ export interface DecisionCardProps {
   impact?: number | null;
   /** Track C — the predicted consequence allo commits to before acting. */
   prediction?: DecisionPrediction | null;
+  /** Open the full draft / decision detail before deciding. */
+  onView?: () => void;
   /** Inline approve / pass. */
   onApprove?: () => void;
   onPass?: () => void;
@@ -54,6 +56,7 @@ export function DecisionCard({
   tags,
   impact,
   prediction,
+  onView,
   onApprove,
   onPass,
   busy = false,
@@ -139,8 +142,21 @@ export function DecisionCard({
       )}
 
       {/* Inline actions */}
-      {(onApprove || onPass) && (
+      {(onView || onApprove || onPass) && (
         <div className="flex items-center gap-2 mt-4">
+          {onView && (
+            <button
+              type="button"
+              onClick={onView}
+              className={cn(
+                "font-mono text-[12px] rounded-lg px-3 py-1.5 transition-colors",
+                "border border-border text-foreground",
+                "hover:bg-muted",
+              )}
+            >
+              view
+            </button>
+          )}
           {onApprove && (
             <button
               type="button"

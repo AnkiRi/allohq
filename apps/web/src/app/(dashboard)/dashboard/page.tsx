@@ -20,10 +20,11 @@ import {
   StreamOutput,
   StreamRow,
   DecisionCard,
+  DecisionDetail,
   MetricReadout,
   formatINR,
 } from "@/components/console";
-import type { OpTagKind } from "@/components/console";
+import type { OpTagKind, DecisionDetailData } from "@/components/console";
 import {
   ReasoningReveal,
   ATTENTION_STORIES,
@@ -176,6 +177,42 @@ function firstLine(text: string | null | undefined, max = 120): string {
   const t = text.trim();
   const sentence = t.split(/(?<=[.!?])\s/)[0] ?? t;
   return sentence.length > max ? sentence.slice(0, max) + "…" : sentence;
+}
+
+// Build the "view" detail for a real pending action: who it's for, the drafted
+// message (subject + rendered email preview), the predicted consequence, and
+// the reasoning — the actual thing, before you approve it.
+function actionToDetail(action: {
+  campaignName?: string | null;
+  reasoning?: string | null;
+  channel?: string | null;
+  subjectLine?: string | null;
+  htmlPreview?: string | null;
+  estimatedRevenue?: number | null;
+  targetSegment?: { name: string; count: number } | null;
+  category?: string | null;
+  type?: string | null;
+  prediction?: DecisionDetailData["prediction"];
+}): DecisionDetailData {
+  const reasoning = firstLine(action.reasoning, 240);
+  return {
+    title:
+      action.campaignName ||
+      firstLine(action.reasoning, 80) ||
+      "allo lined up an action for you",
+    tags: actionToTags(action),
+    channel: action.channel ?? null,
+    segment: action.targetSegment ?? null,
+    impact: action.estimatedRevenue ?? null,
+    subjectLine: action.subjectLine ?? null,
+    bodyHtml: action.htmlPreview ?? null,
+    reasoning: reasoning ? [{ tick: "ok", text: reasoning }] : undefined,
+    prediction: action.prediction ?? null,
+    disclaimer:
+      action.prediction?.basis === "estimate"
+        ? "Figures representative while control measurement is wired up."
+        : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +529,14 @@ export default function DashboardPage() {
   // instead of firing the live agent (no LLM / token spend).
   const [demoGoal, setDemoGoal] = useState<string | null>(null);
 
+  // The decision currently open in the "view" detail modal (real or demo), with
+  // its approve/pass handlers so the modal can act on it.
+  const [viewing, setViewing] = useState<{
+    data: DecisionDetailData;
+    onApprove?: () => void;
+    onPass?: () => void;
+  } | null>(null);
+
   // ---- Command line → goal flow ----
   const handleCommand = (value: string) => {
     if (demo) {
@@ -608,6 +653,48 @@ export default function DashboardPage() {
         ]
       : ATTENTION_STORIES;
 
+  // Demo: the typed goal resolves into a real, viewable drafted decision —
+  // rendered with the SAME DecisionCard the live app uses (seeded but tailored
+  // to the goal + Vana's figures, so it reads as allo's work, not a script).
+  const demoDecision: DecisionDetailData | null =
+    demo && demoGoal
+      ? (() => {
+          const count = lapsed?.customerCount ?? atRisk ?? 187;
+          const recovery =
+            lapsed && lapsed.totalRevenue > 0
+              ? Math.round(lapsed.totalRevenue * 0.28)
+              : 120000;
+          return {
+            title: `A win-back for ${count.toLocaleString("en-IN")} lapsed Vana buyers`,
+            tags: ["win-back"] as OpTagKind[],
+            channel: "whatsapp",
+            segment: { name: "lapsed · last spring's buyers", count },
+            impact: recovery,
+            subjectLine: "A little nudge from Vana Naturals",
+            bodyText:
+              "Hi {first_name},\n\nIt's been a few months since your last order, and we kept your spot. Your Triphala routine is ready whenever you are.\n\nHere's 15% to pick up where you left off: VANA15\n\nWarmly,\nThe Vana Naturals team",
+            reasoning: [
+              { tick: "ok", text: `read your goal: ${firstLine(demoGoal, 80)}` },
+              {
+                tick: "ok",
+                text: `matched ${count.toLocaleString("en-IN")} lapsed · last spring's buyers`,
+              },
+              { tick: "hold", text: "held back 22 as control so we can prove the lift" },
+              { tick: "ok", text: "drafted in Vana Naturals voice" },
+            ],
+            prediction: {
+              upsideRevenue: recovery,
+              liftPct: 14,
+              downsideRiskPct: 0.7,
+              confidence: "medium" as const,
+              basis: "estimate" as const,
+            },
+            disclaimer:
+              "Figures representative while control measurement is wired up.",
+          };
+        })()
+      : null;
+
   // --- Loading ---
   if (storesLoading) {
     return (
@@ -661,15 +748,52 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Demo: staged reasoning for the typed goal — no live agent, no tokens */}
+      {/* Demo: staged reasoning for the typed goal, then the actual drafted
+          decision it produced (real DecisionCard, view + approve), so the demo
+          clearly DOES something rather than fizzling under the input. */}
       {demo && demoGoal && (
-        <DemoReasoning
-          key={demoGoal}
-          goal={demoGoal}
-          atRisk={atRisk}
-          lapsed={lapsed}
-          onDismiss={() => setDemoGoal(null)}
-        />
+        <>
+          <DemoReasoning
+            key={demoGoal}
+            goal={demoGoal}
+            atRisk={atRisk}
+            lapsed={lapsed}
+            onDismiss={() => setDemoGoal(null)}
+          />
+          {demoDecision && (
+            <div className="mt-4">
+              <DecisionCard
+                tags={demoDecision.tags}
+                impact={demoDecision.impact}
+                decision={demoDecision.title}
+                reasoning={[{ tick: "ok", text: "drafted, ready for your okay" }]}
+                onView={() =>
+                  setViewing({
+                    data: demoDecision,
+                    onApprove: () => {
+                      toast(
+                        "In the demo, allo holds the send. Connect your store to ship it for real.",
+                        "success",
+                      );
+                      setViewing(null);
+                    },
+                    onPass: () => {
+                      setDemoGoal(null);
+                      setViewing(null);
+                    },
+                  })
+                }
+                onApprove={() =>
+                  toast(
+                    "In the demo, allo holds the send. Connect your store to ship it for real.",
+                    "success",
+                  )
+                }
+                onPass={() => setDemoGoal(null)}
+              />
+            </div>
+          )}
+        </>
       )}
 
       {/* The response: console + decisions, given room to breathe */}
@@ -724,6 +848,22 @@ export default function DashboardPage() {
                       : undefined
                   }
                   busy={approveMut.isPending || rejectMut.isPending}
+                  onView={() =>
+                    setViewing({
+                      data: actionToDetail(action),
+                      onApprove: () => {
+                        approveMut.mutate({ actionId: action.id });
+                        setViewing(null);
+                      },
+                      onPass: () => {
+                        rejectMut.mutate({
+                          actionId: action.id,
+                          reason: "Passed from dashboard",
+                        });
+                        setViewing(null);
+                      },
+                    })
+                  }
                   onApprove={() => approveMut.mutate({ actionId: action.id })}
                   onPass={() =>
                     rejectMut.mutate({
@@ -747,6 +887,18 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* View detail — opens the actual draft + predicted consequence before
+          you approve. Works for real pending actions and the demo decision. */}
+      {viewing && (
+        <DecisionDetail
+          data={viewing.data}
+          busy={approveMut.isPending || rejectMut.isPending}
+          onApprove={viewing.onApprove}
+          onPass={viewing.onPass}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }
