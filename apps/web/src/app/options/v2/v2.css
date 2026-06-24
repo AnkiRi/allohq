@@ -432,9 +432,15 @@
 .opt-v2 .v2-accent-word {
   color: var(--accent);
 }
-/* word-swap atoms */
+/* word-swap: both phrases live in ONE grid cell (stacked) and crossfade. The
+   cell always sizes to the longest phrase ("every customer."), so swapping can
+   never change the headline height — no reflow, no collapse. */
 .opt-v2 .v2-swap {
-  display: inline;
+  display: grid;
+}
+.opt-v2 .v2-swap__cell {
+  grid-area: 1 / 1;
+  min-width: 0;
 }
 .opt-v2 .v2-struck {
   color: var(--faint);

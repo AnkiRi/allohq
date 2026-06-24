@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 /* ------------------------------------------------------------------ */
@@ -45,55 +45,39 @@ function SwapTail() {
     };
   }, [kinetic]);
 
-  if (!kinetic) {
-    return (
-      <span className="v2-swap">
-        <span className="v2-struck" style={{ textDecoration: "line-through" }}>
-          everyone
-        </span>{" "}
-        <span className="v2-kept">every customer.</span>
-      </span>
-    );
-  }
-
+  // Both phrases are ALWAYS mounted, stacked in one CSS-grid cell, and we just
+  // crossfade between them. The cell sizes to the longer phrase ("every
+  // customer."), so swapping "everyone" → "every customer." can never change the
+  // headline's height — no reflow, no collapse (nothing ever unmounts). SSR /
+  // reduced-motion shows the resolved "every customer." (struck word hidden).
+  const swapped = !kinetic || phase >= 2; // resolved state
   return (
-    <span
-      className="v2-swap"
-      aria-label="everyone, struck through, replaced with every customer"
-    >
-      <AnimatePresence mode="wait" initial={false}>
-        {phase < 2 ? (
-          <motion.span
-            key="from"
-            className="v2-struck"
-            initial={false}
-            animate={{ opacity: phase === 1 ? 0.55 : 1 }}
-            exit={{ opacity: 0, filter: "blur(3px)" }}
-            transition={{ duration: 0.34, ease: EASE }}
-            style={{ display: "inline-block", position: "relative" }}
-          >
-            everyone
-            <motion.span
-              aria-hidden="true"
-              className="v2-strikeline"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: phase >= 1 ? 1 : 0 }}
-              transition={{ duration: 0.42, ease: EASE }}
-            />
-          </motion.span>
-        ) : (
-          <motion.span
-            key="to"
-            className="v2-kept"
-            initial={{ opacity: 0, y: "0.32em" }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: EASE }}
-            style={{ display: "inline-block" }}
-          >
-            every customer.
-          </motion.span>
-        )}
-      </AnimatePresence>
+    <span className="v2-swap" aria-label="every customer">
+      <motion.span
+        className="v2-swap__cell v2-struck"
+        aria-hidden="true"
+        initial={false}
+        animate={{ opacity: swapped ? 0 : phase === 1 ? 0.7 : 1 }}
+        transition={{ duration: 0.34, ease: EASE }}
+        style={{ position: "relative" }}
+      >
+        everyone
+        <motion.span
+          aria-hidden="true"
+          className="v2-strikeline"
+          initial={false}
+          animate={{ scaleX: kinetic && phase >= 1 ? 1 : 0 }}
+          transition={{ duration: 0.42, ease: EASE }}
+        />
+      </motion.span>
+      <motion.span
+        className="v2-swap__cell v2-kept"
+        initial={false}
+        animate={{ opacity: swapped ? 1 : 0, y: swapped ? 0 : "0.18em" }}
+        transition={{ duration: 0.5, ease: EASE }}
+      >
+        every customer.
+      </motion.span>
     </span>
   );
 }
