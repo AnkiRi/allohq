@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Store,
   Loader2,
-  ArrowRight,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useUser } from "@clerk/nextjs";
-import { useDemo, enterDemo } from "@/lib/useDemo";
+import { useDemo } from "@/lib/useDemo";
 import { useToast } from "@/components/ui/Toast";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
@@ -37,19 +35,10 @@ import {
 // ---------------------------------------------------------------------------
 
 function ConnectStorePrompt() {
-  const router = useRouter();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
   const reduce = useReducedMotion();
-
-  // Primary path: enter the demo. Sets the session flag (which makes the tRPC
-  // client send `x-allo-demo: 1`, routing this storeless visitor read-mostly to
-  // the seeded Vana Naturals workspace) then plays the staged activation.
-  const handleEnterDemo = () => {
-    enterDemo();
-    router.push("/demo/welcome");
-  };
 
   const handleConnect = () => {
     const d = domain.trim();
@@ -79,28 +68,16 @@ function ConnectStorePrompt() {
             <Store className="w-7 h-7 text-[hsl(var(--accent))]" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground font-serif mb-2">
-            See allo run a real brand
+            Connect your store
           </h1>
           <p className="text-sm text-muted-foreground font-sans mb-6 leading-relaxed">
-            Walk the whole thing on a live demo store before you connect your
-            own. allo reads the brand, groups the customers, and drafts the
-            work, with nothing touching a real shop.
+            Connect your Shopify store and allo reads your customers and orders,
+            learns your brand, and stands up your retention, all on your own
+            data.
           </p>
 
-          {/* PRIMARY — explore the demo store */}
-          <button
-            onClick={handleEnterDemo}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[hsl(var(--accent))] text-background text-sm font-medium rounded-xl hover:opacity-90 transition-all"
-          >
-            Explore allo with a demo store, Vana Naturals
-            <ArrowRight className="w-4 h-4" />
-          </button>
-
-          {/* SECONDARY — connect your own Shopify store (de-emphasized) */}
-          <div className="mt-7 pt-6 border-t border-border max-w-sm mx-auto">
-            <p className="text-[12px] text-muted-foreground font-sans mb-3">
-              Or connect your own Shopify store
-            </p>
+          {/* Connect your own Shopify store — the real path */}
+          <div className="max-w-sm mx-auto">
             <div className="space-y-2.5">
               <div className="flex items-center">
                 <input
@@ -126,12 +103,12 @@ function ConnectStorePrompt() {
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-border text-foreground text-[13px] font-medium rounded-lg hover:bg-muted transition-all disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] text-sm font-medium rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
               >
                 {connecting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Store className="w-3.5 h-3.5" />
+                  <Store className="w-4 h-4" />
                 )}
                 {connecting ? "Connecting…" : "Connect store"}
               </button>

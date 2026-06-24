@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 // ---------------------------------------------------------------------------
 // useDemo — reads the demo flag (localStorage["allo_demo"] === "1"), SSR-safe.
@@ -50,11 +51,15 @@ export function exitDemo(): void {
 }
 
 export function useDemo(): boolean {
+  // Demo is a logged-OUT experience. An authenticated user is ALWAYS real, so
+  // we only return true when signed out AND the flag is set. This prevents a
+  // stale flag from dragging demo chrome/routing into a real user's app, with
+  // no race (no flag-clearing needed).
+  const { isSignedIn } = useAuth();
   const [demo, setDemo] = useState(false);
 
   useEffect(() => {
     setDemo(isDemoActive());
-    // React to the flag being set in another tab / by another component.
     const onStorage = (e: StorageEvent) => {
       if (e.key === DEMO_FLAG_KEY) setDemo(isDemoActive());
     };
@@ -62,5 +67,5 @@ export function useDemo(): boolean {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  return demo;
+  return demo && isSignedIn === false;
 }

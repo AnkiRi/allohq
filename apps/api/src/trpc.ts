@@ -75,22 +75,10 @@ export async function createContext(opts: { req?: any; res?: any }) {
 
       workspaceId = user?.workspaceMembers[0]?.workspaceId || null;
 
-      // Demo/sandbox: a storeless visitor who opted into demo is routed
-      // READ-MOSTLY to the seeded Vana workspace. Only applies when they have
-      // NO store of their own — real-store users keep their own workspace.
-      const demoRequested = !!opts.req?.headers?.[DEMO_HEADER];
-      if (demoRequested && workspaceId && workspaceId !== DEMO_WORKSPACE_ID) {
-        const ownStore = await prisma.store.findFirst({
-          where: { workspaceId },
-          select: { id: true },
-        });
-        if (!ownStore) {
-          isDemo = true;
-          workspaceId = DEMO_WORKSPACE_ID;
-        }
-      } else if (demoRequested && workspaceId === DEMO_WORKSPACE_ID) {
-        isDemo = true; // seed owner exploring demo — still sandbox mutations
-      }
+      // NOTE: authenticated users are ALWAYS real — they resolve to their own
+      // workspace and are NEVER routed to the Vana demo, even if a stale demo
+      // header is present. The demo is strictly a logged-OUT experience
+      // (resolved below as the demo-guest). This is the clean demo/real split.
     } catch (error: any) {
       console.error("Auth error:", error?.message || error);
     }

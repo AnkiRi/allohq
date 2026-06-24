@@ -30,28 +30,28 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         httpBatchLink({
           url: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
           async headers() {
-            const extra: Record<string, string> = {};
-            // Demo mode: when the storeless visitor has entered the demo, send
-            // `x-allo-demo: 1` so the API routes them read-mostly to the seeded
-            // Vana Naturals workspace and sandboxes mutations. SSR-guarded —
-            // only read localStorage in the browser. Non-demo users never send
-            // this header, so the real-store path is unaffected.
+            // Auth status is the source of truth for demo vs real:
+            //  • signed IN  → send the Bearer token only. NEVER the demo header,
+            //    so an authenticated user is always real (never Vana), even with
+            //    a stale demo flag.
+            //  • signed OUT → if the demo flag is set, send `x-allo-demo: 1` so
+            //    the API serves the read-only Vana demo (resolved as demo-guest).
+            let token: string | null = null;
+            try {
+              token = await getTokenRef.current();
+            } catch (err) {
+              console.error("[trpc] Clerk getToken error:", err);
+            }
+            if (token) {
+              return { authorization: `Bearer ${token}` };
+            }
             if (
               typeof window !== "undefined" &&
               window.localStorage.getItem("allo_demo") === "1"
             ) {
-              extra["x-allo-demo"] = "1";
+              return { "x-allo-demo": "1" };
             }
-            try {
-              const token = await getTokenRef.current();
-              if (token) {
-                return { authorization: `Bearer ${token}`, ...extra };
-              }
-              console.warn("[trpc] No token from Clerk getToken()");
-            } catch (err) {
-              console.error("[trpc] Clerk getToken error:", err);
-            }
-            return extra;
+            return {};
           },
         }),
       ],
