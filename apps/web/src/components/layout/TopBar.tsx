@@ -8,7 +8,7 @@ import { PulseDot } from "@/components/ui/PulseDot";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
 import { trpc } from "@/lib/trpc";
-import { useDemo } from "@/lib/useDemo";
+import { useDemo, exitDemo } from "@/lib/useDemo";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Home",
@@ -143,11 +143,24 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Demo indicator — subtle, single pill, only when the demo flag is set */}
+        {/* Demo indicator + the way out: leaving the demo clears the flag so the
+            user is routed to their OWN workspace (real data), then lands on the
+            connect-store prompt. */}
         {demo && (
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted border border-border text-[10.5px] font-mono text-muted-foreground">
+          <span className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted border border-border text-[10.5px] font-mono text-muted-foreground">
             <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))]" />
             Demo store · Vana Naturals
+            <button
+              type="button"
+              onClick={() => {
+                exitDemo();
+                window.location.assign("/dashboard");
+              }}
+              className="text-[hsl(var(--accent))] hover:underline"
+              title="Leave the demo and connect your own store"
+            >
+              connect your store
+            </button>
           </span>
         )}
 

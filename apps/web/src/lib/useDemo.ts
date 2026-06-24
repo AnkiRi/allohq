@@ -34,6 +34,21 @@ export function enterDemo(): void {
   }
 }
 
+/**
+ * Leave the demo: clear the flag so the tRPC client stops sending `x-allo-demo`
+ * and the user is routed to their OWN workspace (real store data), never Vana.
+ * Call this before connecting a real store. A reload is the simplest way to make
+ * every query drop the header (same-tab setItem doesn't fire a 'storage' event).
+ */
+export function exitDemo(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(DEMO_FLAG_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function useDemo(): boolean {
   const [demo, setDemo] = useState(false);
 
