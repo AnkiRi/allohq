@@ -149,7 +149,7 @@ export const ATTENTION_STORIES: ReasoningStory[] = [
   {
     lead: "Priya bought a linen tunic in March",
     lines: [
-      { text: "allo noticed — linen, not wool" },
+      { text: "allo noticed: linen, not wool" },
       { text: "won't pitch her wool in October" },
       { text: "kept on the list · left alone", beat: true },
     ],

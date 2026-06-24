@@ -78,7 +78,7 @@ const LINES: Line[] = [
   {
     id: "control",
     k: "What the held-out 22 did anyway",
-    note: "the same buyers, untouched — scaled to the reached cohort",
+    note: "the same buyers, untouched, scaled to the reached cohort",
     value: 300000,
     sign: "minus",
     variant: "control",
@@ -159,7 +159,7 @@ export function BillStatement() {
           <span className="v2-bill__k">
             Proven lift
             <span className="v2-bill__note">
-              revenue that exists only because allo ran — measured, not claimed
+              revenue that exists only because allo ran, measured, not claimed
             </span>
           </span>
           <span className="v2-bill__amt v2-bill__amt--lift mono">
@@ -175,7 +175,7 @@ export function BillStatement() {
           <span className="v2-bill__k">
             Performance fee
             <span className="v2-bill__note">
-              a share of the proven lift above — and nothing on the part that
+              a share of the proven lift above, and nothing on the part that
               would have happened anyway
             </span>
           </span>

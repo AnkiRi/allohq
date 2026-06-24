@@ -33,7 +33,7 @@ export function ApplyForm() {
         <input
           id="apply-q2"
           type="text"
-          placeholder="ballpark is fine — 50, 500, 5,000"
+          placeholder="ballpark is fine: 50, 500, 5,000"
           autoComplete="off"
         />
       </div>
@@ -42,7 +42,7 @@ export function ApplyForm() {
         <input
           id="apply-q3"
           type="text"
-          placeholder="Klaviyo · Mailchimp · gut feel · nothing"
+          placeholder="your ESP · a spreadsheet · gut feel · nothing"
           autoComplete="off"
         />
       </div>

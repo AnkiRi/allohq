@@ -22,9 +22,9 @@ import {
 } from "./Clock";
 
 export const metadata: Metadata = {
-  title: "allo — one marketer for every customer",
+  title: "allo · one marketer for every customer",
   description:
-    "allo runs retention and first-line customer service for consumer brands — across email, WhatsApp and SMS, on your own accounts. It holds out a control on every campaign and only bills on the lift that control proves is real.",
+    "allo runs retention and first-line customer service for consumer brands, across email, WhatsApp and SMS, on your own accounts. It holds out a control on every campaign and only bills on the lift that control proves is real.",
 };
 
 /**
@@ -103,7 +103,7 @@ export function V2Landing({
       {showBanner && (
         <div className="v2-banner" role="note">
           <span className="v2-banner__label mono">
-            DESIGN OPTION · synthesis — best elements, three palettes
+            DESIGN OPTION · synthesis, best elements, three palettes
           </span>
           <Link className="v2-banner__back mono" href="/options">
             ← all options
@@ -147,7 +147,7 @@ export function V2Landing({
                 <KineticHeadline />
                 <p className="v2-hero__sub">
                   allo connects to your store, learns your brand, and attends to
-                  every customer one at a time &mdash; across email, WhatsApp and
+                  every customer one at a time, across email, WhatsApp and
                   SMS, on your own accounts.
                 </p>
                 <div className="v2-hero__cta">
@@ -191,7 +191,7 @@ export function V2Landing({
                   <span className="v2-lamp" aria-hidden="true" />
                   <span className="v2-lamp" aria-hidden="true" />
                   <span className="v2-lamp is-live" aria-hidden="true" />
-                  <span className="v2-console__title mono">allo — operator</span>
+                  <span className="v2-console__title mono">allo · operator</span>
                   <span className="v2-console__status mono" aria-hidden="true">
                     <span className="v2-live-dot" /> attending
                   </span>
@@ -221,12 +221,12 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   You wake up; allo already worked. One short note of what it did
-                  overnight &mdash; who&rsquo;s slipping, what it drafted in your
+                  overnight: who&rsquo;s slipping, what it drafted in your
                   voice, what it held back. Read it, approve a line, finish your
                   coffee.
                 </p>
                 <p className="v2-half__aside mono">
-                  // nothing ships over your head — every line waits for your nod
+                  // nothing ships over your head · every line waits for your nod
                 </p>
               </Rise>
             </div>
@@ -242,12 +242,12 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   A human marketer can attend to a handful, so the rest get a
-                  blast. allo attends to each one &mdash; the crowd sorts into who
+                  blast. allo attends to each one. The crowd sorts into who
                   they actually are, then narrows to the single person worth
                   reaching today.
                 </p>
                 <p className="v2-half__aside mono">
-                  // lapsed · loyal · at risk · new — every one a person, not a row
+                  // lapsed · loyal · at risk · new · every one a person, not a row
                 </p>
               </Rise>
               <Rise className="v2-half__art">
@@ -269,7 +269,7 @@ export function V2Landing({
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">proven, not claimed</p>
                 <h2 className="v2-section__h">
-                  It attends to each one &mdash; <em>and it can prove it.</em>
+                  It attends to each one. <em>And it can prove it.</em>
                 </h2>
                 <p className="v2-section__lede">
                   On every campaign allo holds a few back, matched on past spend
@@ -294,7 +294,7 @@ export function V2Landing({
                   One operator, attending all day. <em>Each move at its hour.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  One customer at a time &mdash; each decision posting at the
+                  One customer at a time, each decision posting at the
                   real hour it happens. Scroll the day forward.
                 </p>
               </Rise>
@@ -323,7 +323,7 @@ export function V2Landing({
                           </h3>
                           <p className="v2-event__detail">
                             allo segments overnight and writes the day&rsquo;s
-                            sends in your voice — queued, not sent.
+                            sends in your voice, queued, not sent.
                           </p>
                           <p className="v2-event__meta mono">
                             3 drafts queued · awaiting sign-off
@@ -346,7 +346,7 @@ export function V2Landing({
                           </h3>
                           <p className="v2-event__detail">
                             One page of what&rsquo;s queued. Approve, hold, or
-                            edit — nothing ships over your head.
+                            edit. Nothing ships over your head.
                           </p>
                           <p className="v2-event__meta mono">
                             2 approved · 1 held for a tweak
@@ -365,12 +365,12 @@ export function V2Landing({
                         <div className="v2-event__body">
                           <span className="v2-lampdot" aria-hidden="true" />
                           <h3 className="v2-event__act">
-                            <span className="v2-who">Priya</span> — linen, not
+                            <span className="v2-who">Priya</span>: linen, not
                             wool. Left alone.
                           </h3>
                           <p className="v2-event__detail">
                             She bought a linen tunic in March. allo won&rsquo;t
-                            pitch her October&rsquo;s woollens — kept on the
+                            pitch her October&rsquo;s woollens, kept on the
                             list, the 9am blast left alone.
                           </p>
                           <p className="v2-event__meta mono">
@@ -390,11 +390,11 @@ export function V2Landing({
                         <div className="v2-event__body">
                           <span className="v2-lampdot" aria-hidden="true" />
                           <h3 className="v2-event__act">
-                            <span className="v2-who">Reema</span> — Triphala
+                            <span className="v2-who">Reema</span>: Triphala
                             running low.
                           </h3>
                           <p className="v2-event__detail">
-                            A gentle reorder nudge, timed to her cycle — not a
+                            A gentle reorder nudge, timed to her cycle, not a
                             Tuesday blast. Queued for your sign-off.
                           </p>
                           <p className="v2-event__meta mono">
@@ -417,7 +417,7 @@ export function V2Landing({
                             The Diwali win-back goes out.
                           </h3>
                           <p className="v2-event__detail">
-                            187 lapsed buyers reached across their own channels —
+                            187 lapsed buyers reached across their own channels,
                             with{" "}
                             <span className="v2-noticed">22 held back</span> as a
                             control, so the lift is proven, not claimed.
@@ -468,7 +468,7 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   A base fee to run retention, charged either way. Then a
-                  performance fee read straight off the held-out control &mdash; a
+                  performance fee read straight off the held-out control, a
                   share of the proven lift. Never your gross. Never a take-rate we
                   picked.
                 </p>
@@ -488,7 +488,7 @@ export function V2Landing({
               <Rise className="v2-section__head">
                 <p className="v2-eyebrow mono">connect · learn · attend</p>
                 <h2 className="v2-section__h">
-                  It does the job — not <em>&ldquo;a tool to do the job.&rdquo;</em>
+                  It does the job, not <em>&ldquo;a tool to do the job.&rdquo;</em>
                 </h2>
                 <p className="v2-section__lede">
                   You type a goal in plain language. allo works the way a careful
@@ -502,7 +502,7 @@ export function V2Landing({
                   <p className="v2-step__p">
                     One click into Shopify and your own email, WhatsApp and SMS.
                     allo scans <strong>4,820</strong> customers and finds the{" "}
-                    <strong>187</strong> lapsed buyers worth reaching — about{" "}
+                    <strong>187</strong> lapsed buyers worth reaching, about{" "}
                     <strong>₹4.2L</strong> in past revenue.
                   </p>
                 </Rise>
@@ -512,7 +512,7 @@ export function V2Landing({
                   <p className="v2-step__p">
                     From the 187, allo holds back <strong>22</strong>, matched on
                     past spend, and leaves them untouched. Everything next is
-                    measured against them — proven, not assumed.
+                    measured against them, proven, not assumed.
                   </p>
                 </Rise>
                 <Rise className="v2-step" delay={0.16}>
@@ -576,11 +576,11 @@ export function V2Landing({
               <Rise>
                 <p className="v2-position__eyebrow mono">what allo is</p>
                 <p className="v2-position__line">
-                  <span className="v2-accent">Klaviyo</span> built retention into
-                  a category. <span className="v2-accent">Sierra</span> proved
-                  outcome-priced AI agents work at scale. allo is both —{" "}
-                  <em>a retention operator that only bills on proven lift.</em>{" "}
-                  Built for commerce, from India.
+                  Retention tools give you software and a bill. allo gives you an{" "}
+                  <span className="v2-accent">operator</span> that does the work,
+                  and only bills on the lift it proves against a control.{" "}
+                  <em>You pay for outcomes, not access.</em> Built for commerce,
+                  from India.
                 </p>
               </Rise>
             </div>
@@ -618,7 +618,7 @@ export function V2Landing({
                   </h2>
                   <p className="v2-section__lede">
                     We onboard slowly, on purpose. Each brand&rsquo;s control
-                    data starts the day they join — and because holdouts are
+                    data starts the day they join, and because holdouts are
                     irreversible, the proof can only be built forward.
                   </p>
                 </div>

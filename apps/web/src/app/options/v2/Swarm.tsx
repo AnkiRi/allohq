@@ -106,7 +106,7 @@ interface Mark {
 
 const FORMATIONS: Formation[] = ["crowd", "segments", "focus"];
 const FORMATION_LABEL: Record<Formation, string> = {
-  crowd: "4,820 customers — one undifferentiated crowd",
+  crowd: "4,820 customers, one undifferentiated crowd",
   segments: "the same people, sorted into who they actually are",
   focus: "and then, just one of them",
 };
@@ -441,7 +441,7 @@ export function SwarmField() {
 
       {hasPointer && !reduced && (
         <p className="v2-swarm__hint mono" aria-hidden="true">
-          stir the field — each one is a person
+          stir the field, each one is a person
         </p>
       )}
 

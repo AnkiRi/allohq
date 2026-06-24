@@ -83,10 +83,10 @@ export function MorningBrief() {
       </div>
 
       <div className="v2-mb__body">
-        <Salutation text="Good morning, Ujjawal —" />
+        <Salutation text="Good morning, Ujjawal." />
         <p className="v2-mb__opening">
           Quiet night. I scanned all <span className="v2-mb__fig">4,820</span> of
-          your customers. Here&rsquo;s what I lined up &mdash; nothing&rsquo;s
+          your customers. Here&rsquo;s what I lined up. Nothing&rsquo;s
           sent until you say so.
         </p>
 
@@ -94,7 +94,7 @@ export function MorningBrief() {
           <BriefLine index={0}>
             <p className="v2-mb__text">
               <span className="v2-mb__fig">187</span> lapsed buyers drafted for
-              win-back &mdash; expected recovery{" "}
+              win-back · expected recovery{" "}
               <span className="v2-mb__fig">₹1.2L</span>.
               <span className="v2-mb__sub">
                 Last spring&rsquo;s cohort · an estimate until the control proves
@@ -113,7 +113,7 @@ export function MorningBrief() {
 
           <BriefLine index={1}>
             <p className="v2-mb__text">
-              Reema&rsquo;s reorder nudge, timed to her cycle &mdash; not a
+              Reema&rsquo;s reorder nudge, timed to her cycle, not a
               Tuesday blast.
               <span className="v2-mb__sub">
                 Her Triphala runs low this week. Queued for your sign-off.
@@ -132,7 +132,7 @@ export function MorningBrief() {
           <BriefLine index={2}>
             <span className="v2-mb__item-inner is-control">
               <p className="v2-mb__text">
-                The 9am blast &mdash; left alone. I held back{" "}
+                The 9am blast, left alone. I held back{" "}
                 <span className="v2-mb__fig">22</span> as a control, so the lift
                 is proven, not claimed.
                 <span className="v2-mb__sub">
@@ -152,7 +152,7 @@ export function MorningBrief() {
 
         <p className="v2-mb__sign">
           That&rsquo;s the whole morning. Approve the lot, or tap into any line.
-          <span className="v2-mb__sig">&mdash; allo</span>
+          <span className="v2-mb__sig">· allo</span>
         </p>
       </div>
 

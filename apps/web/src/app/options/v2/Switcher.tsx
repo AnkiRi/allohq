@@ -91,7 +91,7 @@ export function PaletteSwitcher() {
           type="button"
           className={`v2-pal__chip${pal === p.id ? " is-on" : ""}`}
           aria-pressed={pal === p.id}
-          aria-label={`${p.label} — match allo to your light`}
+          aria-label={`${p.label}: match allo to your light`}
           title={p.label}
           onClick={() => choose(p.id)}
         >
