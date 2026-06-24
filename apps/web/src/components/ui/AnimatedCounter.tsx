@@ -9,12 +9,14 @@ export function AnimatedCounter({
   suffix = "",
   duration = 1.2,
   className = "",
+  style,
 }: {
   value: number;
   prefix?: string;
   suffix?: string;
   duration?: number;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const motionVal = useMotionValue(0);
   const rounded = useTransform(motionVal, (v) =>
@@ -28,5 +30,5 @@ export function AnimatedCounter({
     return () => { controls.stop(); unsub(); };
   }, [value, duration, motionVal, rounded]);
 
-  return <span className={className}>{display}</span>;
+  return <span className={className} style={style}>{display}</span>;
 }

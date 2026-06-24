@@ -17,10 +17,10 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
 };
 
-const TIER_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  premium: { bg: "bg-purple-50", text: "text-purple-700", label: "Premium" },
-  standard: { bg: "bg-blue-50", text: "text-blue-700", label: "Standard" },
-  economy: { bg: "bg-green-50", text: "text-green-700", label: "Economy" },
+const TIER_COLORS: Record<string, { color: string; label: string }> = {
+  premium: { color: "var(--color-accent)", label: "Premium" },
+  standard: { color: "var(--color-info)", label: "Standard" },
+  economy: { color: "var(--color-success)", label: "Economy" },
 };
 
 const TOKEN_PERIODS = [
@@ -351,9 +351,9 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
                 <button
                   onClick={() => deleteMut.mutate({ id: article.id })}
                   disabled={deleteMut.isPending}
-                  className="p-1.5 hover:bg-red-500/10 rounded"
+                  className="p-1.5 hover:bg-destructive/10 rounded"
                 >
-                  <Trash2 className="w-3 h-3 text-red-500/60" />
+                  <Trash2 className="w-3 h-3 text-destructive/60" />
                 </button>
               </div>
             </div>
@@ -787,7 +787,7 @@ export default function SettingsPage() {
             {stores.map((store: { id: string; shopDomain: string; platform: string; isActive: boolean; _count: { products: number; customers: number } }) => (
               <div
                 key={store.id}
-                className="flex items-center justify-between p-4 bg-white/20 border border-white/15 rounded-lg"
+                className="flex items-center justify-between p-4 bg-card/40 border border-border rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-[#96BF48] flex items-center justify-center">
@@ -802,7 +802,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-sans bg-green-50 text-green-600">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-sans" style={{ color: "var(--color-success)", backgroundColor: "color-mix(in srgb, var(--color-success) 12%, transparent)" }}>
                   Active
                 </span>
               </div>
@@ -903,7 +903,7 @@ export default function SettingsPage() {
                     <p className="text-[11px] font-bold text-foreground">{model.label}</p>
                     <span className="text-[9px] font-sans text-muted-foreground">{model.provider}</span>
                   </div>
-                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-sans font-bold ${tier.bg} ${tier.text} mb-2`}>
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-sans font-bold mb-2" style={{ color: tier.color, backgroundColor: `color-mix(in srgb, ${tier.color} 12%, transparent)` }}>
                     {tier.label}
                   </span>
                   <p className="text-[10px] text-muted-foreground mb-3">{model.description}</p>

@@ -60,27 +60,28 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
     return () => clearTimeout(timer);
   }, [onDismiss]);
 
+  const accent =
+    toast.type === "success"
+      ? "var(--color-success)"
+      : toast.type === "error"
+        ? "var(--color-urgent)"
+        : "var(--color-warning)";
+
   const icon =
     toast.type === "success" ? (
-      <Check className="w-4 h-4 text-green-600" />
+      <Check className="w-4 h-4" style={{ color: accent }} />
     ) : toast.type === "error" ? (
-      <X className="w-4 h-4 text-red-600" />
+      <X className="w-4 h-4" style={{ color: accent }} />
     ) : (
-      <AlertTriangle className="w-4 h-4 text-yellow-600" />
+      <AlertTriangle className="w-4 h-4" style={{ color: accent }} />
     );
-
-  const borderColor =
-    toast.type === "success"
-      ? "border-green-200"
-      : toast.type === "error"
-        ? "border-red-200"
-        : "border-yellow-200";
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-3 px-4 py-3 bg-card border ${borderColor} rounded-xl shadow-lg font-sans text-[13px] text-foreground transition-all duration-200 ${
+      className={`pointer-events-auto flex items-center gap-3 px-4 py-3 bg-card border rounded-xl shadow-lg font-sans text-[13px] text-foreground transition-all duration-200 ${
         visible ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
       }`}
+      style={{ borderColor: `color-mix(in srgb, ${accent} 35%, transparent)` }}
     >
       {icon}
       {toast.message}

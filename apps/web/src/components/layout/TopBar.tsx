@@ -153,13 +153,13 @@ export function TopBar() {
 
         {/* Agent Status Pill */}
         {onboardingDone && (
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1F7A4F]/8 border border-[#1F7A4F]/15">
-            <PulseDot color="bg-[#1F7A4F]" />
-            <span className="text-[11px] font-sans text-[#1F7A4F]/85">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/[0.08] border border-primary/15">
+            <PulseDot color="bg-primary" />
+            <span className="text-[11px] font-sans text-primary/85">
               allo is watching over {totalCustomers.toLocaleString("en-IN")} customers
             </span>
             {lastActivityText && (
-              <span className="text-[10px] font-sans text-[#1F7A4F]/55">
+              <span className="text-[10px] font-sans text-primary/60">
                 {lastActivityText}
               </span>
             )}
@@ -168,15 +168,16 @@ export function TopBar() {
 
         {/* Revenue Counter */}
         {aiRevenue > 0 && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#B89466]/10 border border-[#B89466]/22">
-            <DollarSign className="w-3.5 h-3.5 text-[#8a6f3a]" />
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border" style={{ backgroundColor: "color-mix(in srgb, var(--color-warning) 10%, transparent)", borderColor: "color-mix(in srgb, var(--color-warning) 22%, transparent)" }}>
+            <DollarSign className="w-3.5 h-3.5" style={{ color: "var(--color-warning)" }} />
             <AnimatedCounter
               value={Math.round(aiRevenue)}
               prefix="₹"
-              className="text-[12px] font-mono font-bold text-[#8a6f3a] tabular-nums"
+              className="text-[12px] font-mono font-bold tabular-nums"
+              style={{ color: "var(--color-warning)" }}
               duration={0.8}
             />
-            <span className="text-[10px] font-sans text-[#8a6f3a]/55">AI revenue · 30d</span>
+            <span className="text-[10px] font-sans" style={{ color: "color-mix(in srgb, var(--color-warning) 70%, transparent)" }}>AI revenue · 30d</span>
           </div>
         )}
 
