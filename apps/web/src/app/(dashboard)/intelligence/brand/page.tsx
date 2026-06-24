@@ -11,11 +11,14 @@ import { motion } from "framer-motion";
 const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } };
 const itemVariants = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } } };
 
-function getToneBarColor(value: string): string {
+function getToneBarColor(value: unknown): string {
+  // Coerce: tone values aren't always strings (some profiles store numbers),
+  // and value.toLowerCase() on a non-string was crashing the page.
+  const v = String(value ?? "").toLowerCase();
   const high = ["casual", "warm", "high", "enthusiastic", "playful"];
   const medium = ["semi-formal", "light", "moderate", "friendly"];
-  if (high.includes(value.toLowerCase())) return "var(--color-success)";
-  if (medium.includes(value.toLowerCase())) return "var(--color-warning)";
+  if (high.includes(v)) return "var(--color-success)";
+  if (medium.includes(v)) return "var(--color-warning)";
   return "var(--color-urgent)";
 }
 

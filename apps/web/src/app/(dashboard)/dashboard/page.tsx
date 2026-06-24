@@ -593,9 +593,19 @@ export default function DashboardPage() {
       arrow: true,
     });
   }
+  // Show allo's REAL activity as a SINGLE story (plays once, then rests — never
+  // the canned landing reel on a loop). Only fall back to ATTENTION_STORIES when
+  // there's genuinely no real activity yet (e.g. a brand-new store mid-sync).
   const homeStories: ReasoningStory[] =
-    homeLead && homeLines.length > 0
-      ? [{ lead: homeLead, lines: homeLines }]
+    homeLines.length > 0
+      ? [
+          {
+            lead:
+              homeLead ||
+              `where ${brandProfile?.brandName ?? "things"} stand right now`,
+            lines: homeLines,
+          },
+        ]
       : ATTENTION_STORIES;
 
   // --- Loading ---
