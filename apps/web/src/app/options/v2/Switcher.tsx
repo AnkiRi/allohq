@@ -1,23 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Sunrise, Sun, Moon } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* The colour switcher — the headline deliverable.                    */
-/* Sets data-pal on the .opt-v2 root (drives every CSS custom-property */
-/* palette) and persists the choice to localStorage('allo-theme') —    */
-/* the SAME key the app's ThemeProvider reads, so the choice carries    */
-/* landing <-> app. The setter also mirrors data-theme + .dark on <html> */
-/* so the app's source of truth updates live, not just on next load.    */
-/* SSR default is drenched; a no-FOUC inline script in page.tsx sets   */
-/* the attribute before paint (honouring ?pal= then localStorage) so a */
-/* returning / linked visitor never flashes.                          */
+/* "allo keeps your hours" — not a palette picker, a sun-cycle that    */
+/* sets the LIGHT allo is working in: Dawn (the blue hour, drafts      */
+/* before sunrise), Day (approvals over coffee), Night (the late       */
+/* shift). It reads as comfort/context, not a design choice.           */
+/* Persists to localStorage('allo-theme') — the SAME key the app's     */
+/* ThemeProvider reads — and mirrors data-theme + .dark on <html>, so  */
+/* the choice carries landing <-> app live. SSR default is Dawn        */
+/* (drenched); a no-FOUC inline script in page.tsx sets it pre-paint.  */
 /* ------------------------------------------------------------------ */
 
 const PALS = [
-  { id: "drenched", label: "Drenched" },
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
+  { id: "drenched", label: "Dawn", Icon: Sunrise },
+  { id: "light", label: "Day", Icon: Sun },
+  { id: "dark", label: "Night", Icon: Moon },
 ] as const;
 
 type PalId = (typeof PALS)[number]["id"];
@@ -81,22 +81,21 @@ export function PaletteSwitcher() {
     }
   };
 
-  // A discreet appearance toggle — small swatch dots, not a "pick your design"
-  // widget. No label/word; accessible via per-dot aria-label + title.
+  // A discreet sun-cycle — match allo to the light you're working in. Reads as
+  // comfort/context (dawn/day/night), not a "pick your design" widget.
   return (
-    <div className="v2-pal" role="group" aria-label="Appearance">
+    <div className="v2-pal" role="group" aria-label="Set allo to your hours">
       {PALS.map((p) => (
         <button
           key={p.id}
           type="button"
           className={`v2-pal__chip${pal === p.id ? " is-on" : ""}`}
-          data-chip={p.id}
           aria-pressed={pal === p.id}
-          aria-label={`${p.label} appearance`}
+          aria-label={`${p.label} — match allo to your light`}
           title={p.label}
           onClick={() => choose(p.id)}
         >
-          <span className="v2-pal__dot" aria-hidden="true" />
+          <p.Icon className="v2-pal__ico" strokeWidth={1.75} aria-hidden="true" />
         </button>
       ))}
     </div>
