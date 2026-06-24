@@ -9,6 +9,10 @@ import {
   StreamRow,
   MetricReadout,
 } from "@/components/console";
+import {
+  ReasoningReveal,
+  type ReasoningStory,
+} from "@/components/console/ReasoningReveal";
 
 // ---------------------------------------------------------------------------
 // Outcomes / Control — the business model on a screen, in operator language.
@@ -183,6 +187,39 @@ export default function OutcomesPage() {
   const incrementalRevenue = model.incrementalRevenue;
   const performanceFee = model.performanceFee;
   const totalFee = model.totalFee;
+
+  // --- Reasoning story: the decision behind the result, in allo's voice -----
+  // Predicted upside (the lift) → NAMED downside (control gives up revenue;
+  // some unsubscribe) → confidence (measured vs estimate). Feeds the SHARED
+  // ReasoningReveal so this surface can't drift from the home console / landing.
+  const outcomeStory: ReasoningStory[] = [
+    {
+      lead: isReal
+        ? "is the lift real, or would they have bought anyway?"
+        : "what would these buyers have done with no message?",
+      lines: [
+        {
+          text: `held back ${model.controlCustomers.toLocaleString("en-IN")} as control · sent them nothing`,
+          beat: true,
+        },
+        {
+          text: `measured both over ${model.windowDays} days · same window, same store`,
+        },
+        {
+          text: `predicted upside · +${moneyExact(liftPerCustomer)}/customer · ${moneyExact(incrementalRevenue)} incremental`,
+        },
+        {
+          text: "named downside · the held-out cohort earns allo nothing · a few may unsubscribe",
+        },
+        {
+          text: isReal
+            ? `confidence · measured against ${model.controlCustomers.toLocaleString("en-IN")} real control rows`
+            : "confidence · estimate · firms up as control rows accumulate",
+          arrow: true,
+        },
+      ],
+    },
+  ];
 
   // --- Real AI cost (USD) -------------------------------------------------
   const aiCost = roiData?.aiTokenCost ?? 0;
@@ -365,6 +402,15 @@ export default function OutcomesPage() {
             </StreamRow>
           </StreamOutput>
         </div>
+
+        {/* The reasoning behind the result — predicted upside, named downside,
+            confidence. Same shared component the home console + landing use. */}
+        <div className="mt-5 pt-4 border-t border-border">
+          <p className="font-mono text-[10.5px] text-muted-foreground mb-2">
+            how allo reasoned it
+          </p>
+          <ReasoningReveal stories={outcomeStory} />
+        </div>
       </ConsoleFrame>
 
       {/* 2. Fee = base + performance on proven lift -------------------------- */}
@@ -378,7 +424,7 @@ export default function OutcomesPage() {
         <div className="rounded-xl border border-border bg-background/40 p-4 font-mono text-[13px]">
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              base · running retention
+              base · keeps your retention running
             </span>
             <span className="text-foreground tabular-nums">
               {moneyExact(model.baseMonthly)}
@@ -387,8 +433,8 @@ export default function OutcomesPage() {
           </div>
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              performance · {(model.performanceRate * 100).toFixed(0)}% of{" "}
-              {moneyExact(incrementalRevenue)} lift
+              performance · {(model.performanceRate * 100).toFixed(0)}% of the{" "}
+              {moneyExact(incrementalRevenue)} lift proved vs control
             </span>
             <span className="text-foreground tabular-nums">
               + {moneyExact(performanceFee)}
@@ -396,7 +442,7 @@ export default function OutcomesPage() {
           </div>
           <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
             <span className="text-foreground lowercase font-semibold">
-              total
+              total · base + only what allo earned you
             </span>
             <span className="text-[hsl(var(--accent))] tabular-nums text-[16px] font-semibold">
               {moneyExact(totalFee)}

@@ -235,7 +235,10 @@ function CustomersConsole() {
           </span>
           {data && (
             <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
-              · {data.total.toLocaleString("en-IN")} found
+              ·{" "}
+              {segment === "All" && !search
+                ? `${data.total.toLocaleString("en-IN")} people`
+                : `${data.total.toLocaleString("en-IN")} customers like this`}
             </span>
           )}
         </div>
@@ -337,10 +340,17 @@ function CustomersConsole() {
                         </Link>
                       </td>
                       <td className="px-5 py-4">
-                        <Link href={`/customers/${customer.id}`}>
+                        <Link href={`/customers/${customer.id}`} className="flex items-center gap-1.5">
                           <span className="inline-block font-mono text-[11px] lowercase text-muted-foreground">
                             {customer.rfmScore?.segment ?? "—"}
                           </span>
+                          {/* Restraint, named — dormant rows are deliberately
+                              left alone, not just dimmed into the background. */}
+                          {inactive && (
+                            <span className="font-mono text-[9px] uppercase tracking-[0.5px] text-muted-foreground border border-border rounded px-1 leading-[1.4]">
+                              left alone
+                            </span>
+                          )}
                         </Link>
                       </td>
                       <td className="px-5 py-4 text-right text-[13px] font-mono tabular-nums text-foreground">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Users, Eye } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { formatINR } from "@/components/console";
 
 const FIELD_OPTIONS = [
   { value: "rfmSegment", label: "RFM Segment", type: "select" as const },
@@ -317,9 +318,9 @@ export default function NewSegmentPage() {
             <div className="flex items-center gap-3 mb-4">
               <Users className="w-5 h-5 text-muted-foreground" />
               <span className="text-[28px] tabular-nums font-bold font-mono text-foreground">
-                {previewQuery.data.count}
+                {previewQuery.data.count.toLocaleString("en-IN")}
               </span>
-              <span className="text-[13px] text-muted-foreground">customers fit so far</span>
+              <span className="text-[13px] text-muted-foreground">customers like this so far</span>
             </div>
             {previewQuery.data.sample.length > 0 && (
               <div className="border border-border rounded-lg overflow-hidden">
@@ -344,7 +345,7 @@ export default function NewSegmentPage() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right text-[13px] font-mono font-bold text-foreground">
-                          ₹{(c.totalSpent ?? 0).toFixed(2)}
+                          {formatINR(c.totalSpent ?? 0)}
                         </td>
                       </tr>
                     ))}
@@ -373,7 +374,7 @@ export default function NewSegmentPage() {
           disabled={!name.trim() || conditions.length === 0 || createSegment.isPending}
           className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
         >
-          {createSegment.isPending ? "Creating..." : "Create Segment"}
+          {createSegment.isPending ? "Gathering them…" : "Gather this segment"}
         </button>
       </div>
     </div>

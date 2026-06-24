@@ -143,8 +143,8 @@ export default function IntegrationsPage() {
               variants={itemVariants}
             >
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-[#96BF48] flex items-center justify-center">
-                  <ShoppingBag className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
+                  <ShoppingBag className="w-5 h-5 text-[hsl(var(--accent-foreground))]" />
                 </div>
                 <div>
                   <div className="text-[13px] font-medium text-foreground font-mono">
@@ -157,7 +157,7 @@ export default function IntegrationsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-[11px] font-sans text-green-600">
+                <span className="flex items-center gap-1.5 text-[11px] font-sans text-[var(--color-success)]">
                   <Check className="w-3.5 h-3.5" />
                   Connected
                 </span>
@@ -195,14 +195,14 @@ export default function IntegrationsPage() {
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     platform.id === "shopify"
-                      ? "bg-[#96BF48]"
+                      ? "bg-[var(--color-accent)]"
                       : "bg-muted"
                   }`}
                 >
                   <Store
                     className={`w-5 h-5 ${
                       platform.id === "shopify"
-                        ? "text-white"
+                        ? "text-[hsl(var(--accent-foreground))]"
                         : "text-muted-foreground"
                     }`}
                   />
@@ -352,7 +352,7 @@ export default function IntegrationsPage() {
                   </span>
                 </div>
                 {error && (
-                  <p className="text-[11px] text-red-500 mt-1.5">
+                  <p className="text-[11px] text-destructive mt-1.5">
                     {error}
                   </p>
                 )}

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Tag, ShoppingBag, BarChart2, Sparkles, MessageSquare, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { ReasoningReveal, type ReasoningStory } from "@/components/console/ReasoningReveal";
+import { formatINR } from "@/components/console";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -15,32 +17,115 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
 };
 
+// Segment → semantic V2 token class. Strong cohorts read in success; the ones
+// allo watches read in urgent; everyone else stays neutral. No hardcoded paint.
 function getSegmentBadgeColor(segment: string): string {
   const s = segment.toLowerCase();
-  if (s.includes("champion")) return "bg-olive/15 text-olive border-olive/20";
-  if (s.includes("loyal")) return "bg-warm-gold/15 text-warm-gold border-warm-gold/20";
-  if (s.includes("hibernat") || s.includes("lost")) return "bg-gray-400/15 text-gray-500 border-gray-400/20";
-  if (s.includes("risk")) return "bg-terracotta/15 text-terracotta border-terracotta/20";
-  if (s.includes("new") || s.includes("recent")) return "bg-sky-400/15 text-sky-600 border-sky-400/20";
-  if (s.includes("potential")) return "bg-warm-gold/15 text-warm-gold border-warm-gold/20";
+  if (s.includes("champion"))
+    return "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))] border-[hsl(var(--success)/0.25)]";
+  if (s.includes("loyal") || s.includes("potential"))
+    return "bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] text-[var(--color-warning)] border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]";
+  if (s.includes("hibernat") || s.includes("lost"))
+    return "bg-muted text-muted-foreground border-border";
+  if (s.includes("risk"))
+    return "bg-[hsl(var(--destructive)/0.14)] text-destructive border-[hsl(var(--destructive)/0.25)]";
+  if (s.includes("new") || s.includes("recent"))
+    return "bg-[hsl(var(--accent)/0.12)] text-[hsl(var(--accent))] border-[hsl(var(--accent)/0.25)]";
   return "bg-secondary text-secondary-foreground border-border";
 }
 
+// RFM dimension bar — strong reads success, mid reads warning, weak reads urgent.
 function getRfmBarColor(score: number): string {
-  if (score >= 4) return "bg-olive";
-  if (score === 3) return "bg-warm-gold";
-  return "bg-terracotta";
+  if (score >= 4) return "bg-[hsl(var(--success))]";
+  if (score === 3) return "bg-[var(--color-warning)]";
+  return "bg-destructive";
 }
 
-function getAiInsight(segment: string): string {
-  const s = segment.toLowerCase();
-  if (s.includes("hibernat") || s.includes("lost"))
-    return "This customer hasn't bought in a while. A warm, personal win-back offer is usually what brings people like them back.";
-  if (s.includes("champion"))
-    return "One of your best customers. A loyalty reward or early access to something new would mean a lot to them.";
-  if (s.includes("risk"))
-    return "This customer is starting to drift. A timely, personal note now is the best way to keep them around.";
-  return "A personal note from you is the gentlest nudge toward their next order.";
+// (getAiInsight removed — the per-customer worldview now flows through the
+// shared ReasoningReveal story below.)
+
+// What allo noticed about THIS person — a single compact reasoning story for the
+// shared ReasoningReveal. Always carries the worldview shape: what allo saw, the
+// move (or the deliberate restraint), predicted upside + NAMED downside, and a
+// confidence-tagged close. Estimates until control data backs them.
+function getCustomerStory(args: {
+  name: string;
+  segment: string | undefined;
+  daysSinceLastOrder: number | null;
+  orderCount: number;
+}): ReasoningStory {
+  const { name, segment, daysSinceLastOrder, orderCount } = args;
+  const who = name.trim() || "this customer";
+  const s = (segment ?? "").toLowerCase();
+  const seen =
+    daysSinceLastOrder !== null
+      ? `last order ${daysSinceLastOrder} days ago · ${orderCount} in all`
+      : `${orderCount} orders, none recent`;
+
+  if (s.includes("hibernat") || s.includes("lost")) {
+    return {
+      lead: `${who} has gone quiet`,
+      lines: [
+        { text: `allo noticed — ${seen}` },
+        { text: "a warm, personal win-back fits people like them" },
+        { text: "downside if mistimed: ~3% unsub · low" },
+        { text: "estimate · expected recovery worth a nudge", arrow: true },
+      ],
+    };
+  }
+  if (s.includes("risk")) {
+    return {
+      lead: `${who} is starting to drift`,
+      lines: [
+        { text: `allo noticed — ${seen}` },
+        { text: "a timely, light note now keeps them close" },
+        { text: "downside: annoyance if over-messaged · ~4%" },
+        { text: "estimate · medium confidence", arrow: true },
+      ],
+    };
+  }
+  if (s.includes("champion")) {
+    return {
+      lead: `${who} is one of your best`,
+      lines: [
+        { text: `allo noticed — ${seen}` },
+        { text: "early access or a thank-you reads well here" },
+        { text: "no discount — kept on the list · not messaged", beat: true },
+        { text: "estimate · protecting the relationship", arrow: true },
+      ],
+    };
+  }
+  if (s.includes("loyal") || s.includes("potential")) {
+    return {
+      lead: `${who} keeps coming back`,
+      lines: [
+        { text: `allo noticed — ${seen}` },
+        { text: "a small loyalty nudge can move them up a tier" },
+        { text: "downside: discount-training if overused · low" },
+        { text: "estimate · medium confidence", arrow: true },
+      ],
+    };
+  }
+  if (s.includes("new") || s.includes("recent")) {
+    return {
+      lead: `${who} just joined you`,
+      lines: [
+        { text: `allo noticed — ${seen}` },
+        { text: "a warm welcome beats a hard sell this early" },
+        { text: "downside: too soon to push · keep it light", beat: true },
+        { text: "estimate · low confidence yet", arrow: true },
+      ],
+    };
+  }
+  return {
+    lead: `${who}`,
+    lines: [
+      { text: `allo noticed — ${seen}` },
+      { text: "a personal note is the gentlest nudge to their next order" },
+      { text: "downside: minimal at this cadence" },
+      { text: "estimate · confidence builds with their history", arrow: true },
+    ],
+  };
 }
 
 function getLtvEmptyStateCta(segment: string | undefined): { label: string; description: string } {
@@ -92,6 +177,18 @@ export default function CustomerDetailPage() {
     ? Math.floor((Date.now() - new Date(rfm.lastOrderAt).getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
+  // What allo noticed about THIS person — fed to the shared ReasoningReveal.
+  const fullName = `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim();
+  const customerStory = getCustomerStory({
+    name: customer.firstName?.trim() || fullName || customer.email,
+    segment,
+    daysSinceLastOrder,
+    orderCount: rfm?.orderCount ?? customer.orders.length,
+  });
+  // Champions / new buyers are deliberately left alone — name that restraint.
+  const s = (segment ?? "").toLowerCase();
+  const leftAlone = s.includes("champion") || s.includes("new") || s.includes("recent");
+
   return (
     <motion.div
       className="space-y-6"
@@ -123,12 +220,18 @@ export default function CustomerDetailPage() {
                     {segment}
                   </span>
                 )}
+                {/* Restraint, named — when allo deliberately holds off messaging */}
+                {leftAlone && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono lowercase text-muted-foreground border border-border">
+                    kept on the list · not messaged
+                  </span>
+                )}
                 {rfm && (
                   <div className="flex items-center gap-1.5 ml-1">
                     <span className="text-[10px] font-mono text-muted-foreground">{rfm.totalScore}/15</span>
                     <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-olive transition-all"
+                        className="h-full rounded-full bg-[hsl(var(--accent))] transition-all"
                         style={{ width: `${(rfm.totalScore / 15) * 100}%` }}
                       />
                     </div>
@@ -159,6 +262,24 @@ export default function CustomerDetailPage() {
         </div>
       </motion.div>
 
+      {/* ── What allo noticed about THIS person ── leads the page, right after
+          who they are. The ONE shared reasoning-reveal: what allo saw, the move
+          (or the deliberate restraint), predicted upside + named downside +
+          confidence. Estimate until control data backs it. ── */}
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-4 h-4 text-[hsl(var(--accent))]" />
+          <h2 className="section-header text-[13px]">What allo noticed</h2>
+        </div>
+        <ReasoningReveal stories={[customerStory]} />
+        <Link
+          href="/campaigns/new"
+          className="inline-flex items-center gap-1.5 mt-5 px-4 py-2 rounded-lg bg-foreground text-background text-[12px] font-sans hover:opacity-90 transition-opacity"
+        >
+          <Sparkles className="w-3.5 h-3.5" /> Draft this for them
+        </Link>
+      </motion.div>
+
       {/* ── RFM + LTV ── */}
       <div className="grid grid-cols-2 gap-6">
         {/* RFM Card */}
@@ -180,7 +301,7 @@ export default function CustomerDetailPage() {
                 {[
                   { label: "RECENCY", score: rfm.recency, context: daysSinceLastOrder !== null ? `Last seen ${daysSinceLastOrder} days ago` : "Hasn't ordered yet" },
                   { label: "FREQUENCY", score: rfm.frequency, context: `${rfm.orderCount} total orders` },
-                  { label: "MONETARY", score: rfm.monetary, context: `₹${rfm.totalSpent.toFixed(0)} total spent` },
+                  { label: "MONETARY", score: rfm.monetary, context: `${formatINR(rfm.totalSpent)} total spent` },
                 ].map((dim) => (
                   <div key={dim.label}>
                     <div className="flex items-center justify-between mb-1.5">
@@ -209,13 +330,13 @@ export default function CustomerDetailPage() {
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans">TOTAL SPENT</div>
                   <div className="text-lg font-bold font-mono text-foreground">
-                    ₹{rfm.totalSpent.toFixed(2)}
+                    {formatINR(rfm.totalSpent)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans">AVG ORDER</div>
                   <div className="text-lg font-bold font-mono text-foreground">
-                    ₹{rfm.avgOrderValue.toFixed(2)}
+                    {formatINR(rfm.avgOrderValue)}
                   </div>
                 </div>
               </div>
@@ -234,13 +355,13 @@ export default function CustomerDetailPage() {
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans mb-1">HISTORICAL LTV</div>
                   <div className="text-[28px] tabular-nums font-bold font-mono text-foreground">
-                    ₹{ltv.historicalLtv.toFixed(0)}
+                    {formatINR(ltv.historicalLtv)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans mb-1">PREDICTED LTV</div>
                   <div className="text-[28px] tabular-nums font-bold font-mono text-foreground">
-                    ₹{ltv.predictedLtv.toFixed(0)}
+                    {formatINR(ltv.predictedLtv)}
                   </div>
                 </div>
               </div>
@@ -269,7 +390,7 @@ export default function CustomerDetailPage() {
                 <div className="text-[11px] text-muted-foreground font-sans mb-2">CHURN PROBABILITY</div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-terracotta rounded-full"
+                    className="h-full bg-destructive rounded-full"
                     style={{ width: `${ltv.churnProbability * 100}%` }}
                   />
                 </div>
@@ -314,7 +435,7 @@ export default function CustomerDetailPage() {
           {/* Segmented entry */}
           {rfm && (
             <div className="relative pb-5">
-              <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-olive border-2 border-background" />
+              <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-[hsl(var(--success))] border-2 border-background" />
               <div className="text-[12px] font-sans text-foreground">
                 Segmented as <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSegmentBadgeColor(rfm.segment)}`}>{rfm.segment}</span>
               </div>
@@ -327,9 +448,9 @@ export default function CustomerDetailPage() {
           {/* Order entries */}
           {customer.orders.map((order) => (
             <div key={order.id} className="relative pb-5">
-              <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-warm-gold border-2 border-background" />
+              <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-[var(--color-accent)] border-2 border-background" />
               <div className="text-[12px] font-mono text-foreground">
-                Order #{order.orderNumber} &mdash; ₹{order.totalPrice.toFixed(2)}
+                Order #{order.orderNumber} &mdash; {formatINR(order.totalPrice)}
               </div>
               <div className="text-[11px] font-sans text-muted-foreground mt-0.5">
                 {new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -347,30 +468,13 @@ export default function CustomerDetailPage() {
               </div>
               <Link
                 href="/campaigns/new"
-                className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-sans text-olive hover:text-foreground transition-colors"
+                className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-sans text-[hsl(var(--accent))] hover:text-foreground transition-colors"
               >
                 <Send className="w-3 h-3" /> Create a campaign
               </Link>
             </div>
           )}
         </div>
-      </motion.div>
-
-      {/* ── AI Insight Card ── */}
-      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-4 h-4 text-warm-gold" />
-          <h2 className="section-header text-[13px]">What allo notices</h2>
-        </div>
-        <p className="text-[13px] font-sans text-muted-foreground leading-relaxed mb-4">
-          {getAiInsight(segment ?? "")}
-        </p>
-        <Link
-          href="/campaigns/new"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-foreground text-background text-[12px] font-sans hover:opacity-90 transition-opacity"
-        >
-          <Sparkles className="w-3.5 h-3.5" /> Generate Campaign
-        </Link>
       </motion.div>
 
       {/* ── Tags ── */}
@@ -425,7 +529,7 @@ export default function CustomerDetailPage() {
                     </span>
                   </td>
                   <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground">
-                    ₹{order.totalPrice.toFixed(2)}
+                    {formatINR(order.totalPrice)}
                   </td>
                   <td className="px-6 py-3 text-right text-[11px] font-mono text-muted-foreground">
                     {new Date(order.createdAt).toLocaleDateString()}

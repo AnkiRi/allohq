@@ -114,7 +114,7 @@ export default function CampaignsPage() {
                         </span>
                       </div>
                       {campaign.attributedRevenue > 0 && (
-                        <div className="flex items-center gap-0.5 text-[11px] font-mono text-green-500">
+                        <div className="flex items-center gap-0.5 text-[11px] font-mono text-[hsl(var(--success))]">
                           <DollarSign className="w-3 h-3" />
                           <span className="font-bold">
                             {campaign.attributedRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}

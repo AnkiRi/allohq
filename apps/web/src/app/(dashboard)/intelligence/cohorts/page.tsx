@@ -45,8 +45,8 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
             width={80}
             height={140}
             rx={6}
-            fill="rgba(107, 122, 47, 0.15)"
-            stroke="#1F7A4F"
+            fill="hsl(var(--accent) / 0.15)"
+            stroke="var(--color-accent)"
             strokeWidth={2}
           />
           <text
@@ -105,13 +105,13 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
       `}</style>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full chart-reveal" preserveAspectRatio="xMidYMid meet">
         {/* Area fill */}
-        <path d={areaPath} fill="rgba(107, 122, 47, 0.15)" />
+        <path d={areaPath} fill="hsl(var(--accent) / 0.15)" />
 
         {/* Stroke line */}
         <polyline
           points={linePoints}
           fill="none"
-          stroke="#1F7A4F"
+          stroke="var(--color-accent)"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -119,7 +119,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
 
         {/* Data dots */}
         {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={3} fill="#1F7A4F" />
+          <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--color-accent)" />
         ))}
 
         {/* X-axis labels */}
@@ -145,15 +145,18 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
 /*  Segment color mapping                                              */
 /* ------------------------------------------------------------------ */
 
+// Segment swatches resolve per palette via V2 tokens (success / warning /
+// urgent / accent), so the legend wears the active theme rather than fixed hex.
 const SEGMENT_COLORS: Record<string, string> = {
-  Champions: "#1F7A4F",
-  "Loyal Customers": "#B89466",
-  "Potential Loyalists": "#1F7A4F",
-  "New Customers": "#8A7D6B",
-  "At Risk": "#1F7A4F",
-  Hibernating: "#999",
-  Unscored: "#ccc",
+  Champions: "var(--color-success)",
+  "Loyal Customers": "var(--color-warning)",
+  "Potential Loyalists": "var(--color-accent)",
+  "New Customers": "hsl(var(--muted-foreground))",
+  "At Risk": "var(--color-urgent)",
+  Hibernating: "hsl(var(--muted-foreground) / 0.6)",
+  Unscored: "hsl(var(--muted-foreground) / 0.35)",
 };
+const SEGMENT_FALLBACK = "hsl(var(--muted-foreground) / 0.6)";
 
 /* ------------------------------------------------------------------ */
 /*  CohortDetailPanel — expanded row detail                            */
@@ -206,8 +209,11 @@ function CohortDetailPanel({ month }: { month: string }) {
                   </div>
                 </div>
                 <span
-                  className="shrink-0 px-2 py-0.5 rounded text-[9px] font-sans font-bold text-white"
-                  style={{ backgroundColor: SEGMENT_COLORS[tc.segment] ?? "#999" }}
+                  className="shrink-0 px-2 py-0.5 rounded text-[9px] font-sans font-bold"
+                  style={{
+                    color: SEGMENT_COLORS[tc.segment] ?? SEGMENT_FALLBACK,
+                    backgroundColor: `color-mix(in srgb, ${SEGMENT_COLORS[tc.segment] ?? SEGMENT_FALLBACK} 16%, transparent)`,
+                  }}
                 >
                   {tc.segment}
                 </span>
@@ -228,7 +234,7 @@ function CohortDetailPanel({ month }: { month: string }) {
                 key={seg.segment}
                 style={{
                   width: `${seg.pct}%`,
-                  backgroundColor: SEGMENT_COLORS[seg.segment] ?? "#999",
+                  backgroundColor: SEGMENT_COLORS[seg.segment] ?? SEGMENT_FALLBACK,
                 }}
               />
             ))}
@@ -239,7 +245,7 @@ function CohortDetailPanel({ month }: { month: string }) {
               <div key={seg.segment} className="flex items-center gap-2 text-[11px]">
                 <span
                   className="block w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: SEGMENT_COLORS[seg.segment] ?? "#999" }}
+                  style={{ backgroundColor: SEGMENT_COLORS[seg.segment] ?? SEGMENT_FALLBACK }}
                 />
                 <span className="text-foreground font-sans">{seg.segment}</span>
                 <span className="text-muted-foreground font-mono ml-auto">
@@ -405,10 +411,10 @@ export default function CohortAnalysisPage() {
       {cohorts && cohorts.length > 0 && bestCohort && (
         <motion.div
           variants={itemVariants}
-          className="glass-card-static p-6 border-l-4 border-l-[var(--warm-gold)]"
+          className="glass-card-static p-6 border-l-4 border-l-[var(--color-accent)]"
         >
           <div className="flex gap-4">
-            <Sparkles className="w-5 h-5 text-[var(--warm-gold)] shrink-0 mt-0.5" />
+            <Sparkles className="w-5 h-5 text-[var(--color-accent)] shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-[13px] text-foreground/90 font-sans leading-relaxed">
                 Your <span className="font-bold">{bestCohort.month}</span> cohort is your strongest —
@@ -420,13 +426,13 @@ export default function CohortAnalysisPage() {
               <div className="flex items-center gap-4 mt-3">
                 <Link
                   href="/segments"
-                  className="text-[11px] font-sans text-[#1F7A4F] hover:underline"
+                  className="text-[11px] font-sans text-[var(--color-accent)] hover:underline"
                 >
                   View Segments &rarr;
                 </Link>
                 <Link
                   href="/campaigns"
-                  className="text-[11px] font-sans text-[#1F7A4F] hover:underline"
+                  className="text-[11px] font-sans text-[var(--color-accent)] hover:underline"
                 >
                   Create Campaign &rarr;
                 </Link>
@@ -540,14 +546,16 @@ export default function CohortAnalysisPage() {
                           const intensity = Math.min(pct / 100, 1);
                           const multiplier = (pct / 100).toFixed(1);
 
-                          // Heatmap color based on retention percentage
+                          // Heatmap color based on retention percentage —
+                          // V2 tokens (success / warning / urgent), per palette.
+                          const alpha = 0.15 + intensity * 0.6;
                           let bgColor: string;
                           if (pct > 100) {
-                            bgColor = `rgba(107, 122, 47, ${0.15 + intensity * 0.6})`;
+                            bgColor = `color-mix(in srgb, var(--color-success) ${alpha * 100}%, transparent)`;
                           } else if (pct >= 50) {
-                            bgColor = `rgba(184, 150, 62, ${0.15 + intensity * 0.6})`;
+                            bgColor = `color-mix(in srgb, var(--color-warning) ${alpha * 100}%, transparent)`;
                           } else {
-                            bgColor = `rgba(196, 112, 74, ${0.15 + intensity * 0.6})`;
+                            bgColor = `color-mix(in srgb, var(--color-urgent) ${alpha * 100}%, transparent)`;
                           }
 
                           return (
@@ -598,8 +606,8 @@ export default function CohortAnalysisPage() {
                       className="px-4 py-3 text-[12px] font-sans text-muted-foreground italic"
                     >
                       {i === 0
-                        ? `\u{1F4C5} A new cohort opens up here once customers start buying in ${monthName}`
-                        : `\u{1F4C5} ${monthName} \u2014 still to come`}
+                        ? `A new cohort opens here once buyers arrive in ${monthName}`
+                        : `${monthName} \u2014 still to come`}
                     </td>
                   </tr>
                 ))}

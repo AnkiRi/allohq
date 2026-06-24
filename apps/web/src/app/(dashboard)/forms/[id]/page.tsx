@@ -111,7 +111,7 @@ export default function FormDetailPage() {
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-bold uppercase ${
                 form.status === "active"
-                  ? "bg-green-50 text-green-600 border border-green-200"
+                  ? "bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]"
                   : "bg-muted text-muted-foreground border border-border"
               }`}
             >
@@ -191,7 +191,7 @@ export default function FormDetailPage() {
                   <span
                     className={`px-2 py-0.5 rounded-full text-[9px] font-sans font-bold uppercase ${
                       popup.status === "active"
-                        ? "bg-green-50 text-green-600 border border-green-200"
+                        ? "bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]"
                         : "bg-muted text-muted-foreground border border-border"
                     }`}
                   >
@@ -204,7 +204,7 @@ export default function FormDetailPage() {
                       deletePopupMut.mutate({ popupId: popup.id });
                     }
                   }}
-                  className="p-1.5 rounded text-muted-foreground hover:text-red-600 transition-colors"
+                  className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -307,7 +307,7 @@ export default function FormDetailPage() {
                                 val ? (
                                   <span
                                     key={ch}
-                                    className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-green-50 text-green-600 border border-green-200"
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]"
                                   >
                                     {ch}
                                   </span>
@@ -343,7 +343,7 @@ export default function FormDetailPage() {
                 className="absolute top-3 right-3 p-2 bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
               >
                 {copied ? (
-                  <Check className="w-3.5 h-3.5 text-green-600" />
+                  <Check className="w-3.5 h-3.5 text-[var(--color-success)]" />
                 ) : (
                   <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                 )}

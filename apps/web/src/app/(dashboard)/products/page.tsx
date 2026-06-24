@@ -83,10 +83,10 @@ export default function ProductsPage() {
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <Package className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-[13px] text-muted-foreground">
-                    No products found
+                    {search ? "Nothing matches that search." : "Nothing here yet — allo is just getting started."}
                   </p>
                   <p className="text-[11px] text-muted-foreground/50 mt-1">
-                    Sync your store to import products
+                    {search ? "Try a different title or vendor." : "Connect your store and your catalogue lands here."}
                   </p>
                 </td>
               </tr>
@@ -129,9 +129,9 @@ export default function ProductsPage() {
                     <span
                       className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-sans ${
                         product.status === "active"
-                          ? "bg-green-50 text-green-700"
+                          ? "bg-[hsl(var(--success))/0.12] text-[var(--color-success)]"
                           : product.status === "draft"
-                            ? "bg-yellow-50 text-yellow-700"
+                            ? "bg-[var(--color-warning)]/12 text-[var(--color-warning)]"
                             : "bg-muted text-muted-foreground"
                       }`}
                     >

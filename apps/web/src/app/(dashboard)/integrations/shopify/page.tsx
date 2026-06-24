@@ -129,15 +129,15 @@ export default function ShopifyDetailPage() {
             {syncing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : syncDone ? (
-              <Check className="w-3.5 h-3.5 text-green-600" />
+              <Check className="w-3.5 h-3.5 text-[var(--color-success)]" />
             ) : (
               <RefreshCw className="w-3.5 h-3.5" />
             )}
-            {syncing ? "Syncing..." : syncDone ? "All synced!" : "Sync now"}
+            {syncing ? "Syncing..." : syncDone ? "All synced" : "Sync now"}
           </button>
           <button
             onClick={() => setDisconnecting(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-red-200 rounded-lg text-[11px] font-sans text-red-600 hover:border-red-400 transition-all"
+            className="flex items-center gap-2 px-4 py-2 border border-destructive/30 rounded-lg text-[11px] font-sans text-destructive hover:border-destructive/60 transition-all"
           >
             <Unplug className="w-3.5 h-3.5" />
             Disconnect
@@ -178,13 +178,13 @@ export default function ShopifyDetailPage() {
 
       {/* Sync complete banner */}
       {syncDone && !syncing && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-          <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+        <div className="bg-[hsl(var(--success))/0.1] border border-[hsl(var(--success))/0.25] rounded-xl p-4 flex items-center gap-3">
+          <Check className="w-5 h-5 text-[var(--color-success)] flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-bold text-green-700">
-              All synced!
+            <p className="text-[13px] font-bold text-[var(--color-success)]">
+              All synced
             </p>
-            <p className="text-[11px] text-green-600 mt-0.5">
+            <p className="text-[11px] text-[var(--color-success)]/80 mt-0.5">
               allo has everything from {store.shopDomain}
             </p>
           </div>
@@ -195,10 +195,10 @@ export default function ShopifyDetailPage() {
               { label: "Orders", value: store._count.orders },
             ].map((item) => (
               <div key={item.label} className="text-center">
-                <div className="text-[18px] tracking-[-0.5px] font-mono font-bold text-green-700 tabular-nums">
+                <div className="text-[18px] tracking-[-0.5px] font-mono font-bold text-[var(--color-success)] tabular-nums">
                   {item.value.toLocaleString()}
                 </div>
-                <div className="text-[10px] font-sans text-green-600 uppercase">
+                <div className="text-[10px] font-sans text-[var(--color-success)]/80 uppercase">
                   {item.label}
                 </div>
               </div>
@@ -210,15 +210,15 @@ export default function ShopifyDetailPage() {
       {/* Status card */}
       <div className="bg-card border border-border rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-[#96BF48] flex items-center justify-center">
-            <Package className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
+            <Package className="w-5 h-5 text-[hsl(var(--accent-foreground))]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-medium text-foreground font-mono">
                 {store.shopDomain}
               </span>
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans bg-green-50 text-green-600">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans bg-[hsl(var(--success))/0.12] text-[var(--color-success)]">
                 <Check className="w-3 h-3" />
                 Active
               </span>
@@ -296,7 +296,7 @@ export default function ShopifyDetailPage() {
               <button
                 onClick={() => disconnect.mutate({ storeId: store.id })}
                 disabled={disconnect.isPending}
-                className="flex-1 py-2 bg-red-600 text-white rounded-lg text-[11px] font-sans hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 py-2 bg-destructive text-destructive-foreground rounded-lg text-[11px] font-sans hover:bg-destructive/90 disabled:opacity-50 transition-colors"
               >
                 {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
               </button>

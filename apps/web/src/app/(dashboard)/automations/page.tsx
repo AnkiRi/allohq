@@ -255,7 +255,7 @@ export default function AutomationsPage() {
                     <Link
                       href={`/automations/${automation.id}/ab-test`}
                       title="A/B Tests"
-                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-50 border border-pink-200 text-pink-700 hover:bg-pink-100 transition-colors text-[10px] font-sans font-bold"
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border text-muted-foreground hover:text-foreground hover:border-[var(--color-accent)]/50 transition-colors text-[10px] font-sans font-bold"
                     >
                       <FlaskConical className="w-3 h-3" />
                       A/B
@@ -378,7 +378,7 @@ export default function AutomationsPage() {
       ) : (
         <SmartEmptyState
           icon={Sparkles}
-          title="Nothing running yet"
+          title="Nothing yet — allo is just getting started."
           description="allo has a few automations in mind, picked from how your customers behave."
           actions={[{ label: "Take a look", href: "/automations", primary: true }]}
         />

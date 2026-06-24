@@ -71,13 +71,13 @@ export default function CampaignDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {campaign.status === "sent" && (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-sans font-bold">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))] border border-[hsl(var(--success)/0.25)] rounded-lg text-xs font-sans font-bold">
               <CheckCircle className="w-3.5 h-3.5" />
               Sent
             </span>
           )}
           {campaign.status === "sending" && (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-sans font-bold">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/25 rounded-lg text-xs font-sans font-bold">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               Sending…
             </span>

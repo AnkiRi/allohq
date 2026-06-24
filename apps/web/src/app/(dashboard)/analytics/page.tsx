@@ -265,8 +265,8 @@ export default function AnalyticsPage() {
             {!attributionData || attributionData.length === 0 ? (
               <SmartEmptyState
                 icon={BarChart3}
-                title="Nothing to show just yet"
-                description="As soon as your first campaign goes out, Allo starts tracking where revenue comes from, how each channel does, and how your customers are holding up."
+                title="Nothing to attribute yet"
+                description="The moment allo's first send goes out, this fills in — where the revenue came from, how each channel pulled its weight, and how your customers are holding up."
                 actions={[{ label: "See what's waiting", href: "/actions", primary: true }]}
               />
             ) : (
@@ -349,12 +349,12 @@ export default function AnalyticsPage() {
             {aiLoading ? (
               <Loading />
             ) : !aiData ? (
-              <EmptyState icon={Zap} text="No campaigns to compare yet — send a few and we'll show AI against manual here." />
+              <EmptyState icon={Zap} text="Nothing to compare yet — once a few sends go out, you'll see what allo wrote against what was written by hand." />
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {([
-                  { data: aiData.ai, label: "AI-Generated", color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
-                  { data: aiData.manual, label: "Manual", color: "text-foreground", bg: "bg-muted", border: "border-border" },
+                  { data: aiData.ai, label: "Written by allo", color: "text-[var(--color-accent)]", bg: "bg-[hsl(var(--accent))]/[0.06]", border: "border-[hsl(var(--accent))]/40" },
+                  { data: aiData.manual, label: "Written by hand", color: "text-foreground", bg: "bg-muted", border: "border-border" },
                 ] as const).map((group) => (
                   <motion.div key={group.label} variants={itemVariants} className={`p-5 ${group.bg} border ${group.border} rounded-xl`}>
                     <h3 className={`text-[13px] font-sans font-bold ${group.color} mb-4`}>{group.label}</h3>
@@ -413,10 +413,9 @@ export default function AnalyticsPage() {
                           return (
                             <td
                               key={i}
-                              className="px-3 py-3 text-center text-[11px] font-mono tabular-nums"
+                              className={`px-3 py-3 text-center text-[11px] font-mono tabular-nums ${rate > 0 ? "text-foreground" : "text-muted-foreground/50"}`}
                               style={{
-                                backgroundColor: rate > 0 ? `rgba(34, 197, 94, ${intensity * 0.3})` : undefined,
-                                color: rate > 0 ? "#166534" : "#9ca3af",
+                                backgroundColor: rate > 0 ? `hsl(var(--success) / ${intensity * 0.28})` : undefined,
                               }}
                             >
                               {rate > 0 ? `${rate}%` : "—"}
@@ -470,7 +469,7 @@ export default function AnalyticsPage() {
             {forecastLoading ? (
               <Loading />
             ) : !forecastData ? (
-              <EmptyState icon={TrendingUp} text="No forecast yet — Allo puts a fresh one together each day. Check back soon." />
+              <EmptyState icon={TrendingUp} text="No forecast yet — allo draws a fresh one each day before sunrise. Check back in the morning." />
             ) : (
               <>
                 <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
@@ -487,7 +486,7 @@ export default function AnalyticsPage() {
                         ₹{(fc.value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </div>
                       {fc.trend != null && (
-                        <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                        <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-[var(--color-success)]" : "text-destructive"}`}>
                           {fc.trend >= 0 ? "+" : ""}{fc.trend}% vs prior period
                         </div>
                       )}

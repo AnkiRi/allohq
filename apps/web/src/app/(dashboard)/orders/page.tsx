@@ -10,10 +10,10 @@ import {
 import { trpc } from "@/lib/trpc";
 
 const STATUS_COLORS: Record<string, string> = {
-  paid: "bg-green-50 text-green-700",
-  fulfilled: "bg-blue-50 text-blue-700",
-  pending: "bg-yellow-50 text-yellow-700",
-  cancelled: "bg-red-50 text-red-700",
+  paid: "bg-[hsl(var(--success))/0.12] text-[var(--color-success)]",
+  fulfilled: "bg-[hsl(var(--accent))/0.12] text-[hsl(var(--accent))]",
+  pending: "bg-[var(--color-warning)]/12 text-[var(--color-warning)]",
+  cancelled: "bg-destructive/12 text-destructive",
 };
 
 export default function OrdersPage() {
@@ -94,10 +94,10 @@ export default function OrdersPage() {
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <ShoppingCart className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-[13px] text-muted-foreground">
-                    No orders found
+                    {search ? "Nothing matches that search." : "No orders yet — allo is just getting started."}
                   </p>
                   <p className="text-[11px] text-muted-foreground/50 mt-1">
-                    Sync your store to import orders
+                    {search ? "Try a different order number or customer." : "Connect your store and orders land here."}
                   </p>
                 </td>
               </tr>

@@ -27,11 +27,11 @@ const itemVariants = {
 function statusBadge(status: string) {
   switch (status) {
     case "active":
-      return "bg-green-50 text-green-600 border border-green-200";
+      return "bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]";
     case "draft":
       return "bg-muted text-muted-foreground border border-border";
     case "archived":
-      return "bg-red-50 text-red-600 border border-red-200";
+      return "bg-destructive/12 text-destructive border border-destructive/25";
     default:
       return "bg-muted text-muted-foreground border border-border";
   }
@@ -177,7 +177,7 @@ export default function FormsPage() {
                     title={form.status === "active" ? "Deactivate" : "Activate"}
                   >
                     {form.status === "active" ? (
-                      <ToggleRight className="w-4 h-4 text-green-600" />
+                      <ToggleRight className="w-4 h-4 text-[var(--color-success)]" />
                     ) : (
                       <ToggleLeft className="w-4 h-4" />
                     )}
@@ -194,7 +194,7 @@ export default function FormsPage() {
                         deleteMut.mutate({ formId: form.id });
                       }
                     }}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                    className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

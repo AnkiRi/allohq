@@ -16,9 +16,9 @@ const itemVariants = {
 };
 
 function rfmBarColor(value: number): string {
-  if (value >= 3.5) return "var(--olive)";
-  if (value >= 2.5) return "var(--warm-gold)";
-  return "var(--terracotta)";
+  if (value >= 3.5) return "var(--color-success)";
+  if (value >= 2.5) return "var(--color-warning)";
+  return "var(--color-urgent)";
 }
 
 export default function IntelligencePage() {
@@ -169,20 +169,20 @@ export default function IntelligencePage() {
           <ul className="space-y-2 mb-5">
             {championsSegment && championsRevenuePct && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
-                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--olive)] shrink-0" />
+                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-success)] shrink-0" />
                 Your {championsSegment.count} Champions bring in {championsRevenuePct}% of your revenue (₹
                 {(championsSegment.revenue / 1000).toFixed(0)}K)
               </li>
             )}
             {avgLTV && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
-                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--warm-gold)] shrink-0" />
+                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] shrink-0" />
                 Average lifetime value is ₹{avgLTV} {Number(avgLTV) >= 200 ? "— above the industry norm" : Number(avgLTV) >= 100 ? "— right in line with the industry" : "— below the industry norm"}
               </li>
             )}
             {hibernatingSegment && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
-                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--terracotta)] shrink-0" />
+                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-urgent)] shrink-0" />
                 {hibernatingSegment.count} Hibernating customers are worth ₹
                 {(hibernatingSegment.revenue / 1000).toFixed(0)}K — plenty of room to win them back
               </li>
@@ -370,11 +370,11 @@ export default function IntelligencePage() {
               {rfmData.topCustomers.map((tc, i) => {
                 const rankColor =
                   i === 0
-                    ? "text-[var(--warm-gold)]"
+                    ? "text-[var(--color-warning)]"
                     : i === 1
-                    ? "text-[#A8A8A8]"
+                    ? "text-foreground/70"
                     : i === 2
-                    ? "text-[#CD7F32]"
+                    ? "text-[var(--color-warning)]/60"
                     : "text-muted-foreground";
                 const rankPrefix = i === 0 ? "\u2605 " : i === 1 ? "\u2605 " : i === 2 ? "\u2605 " : "";
                 return (

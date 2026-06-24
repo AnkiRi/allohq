@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Check, Loader2, Palette } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { ReasoningReveal, type ReasoningStory } from "@/components/console/ReasoningReveal";
 
 type Step = "details" | "template" | "audience" | "schedule";
 
@@ -47,6 +48,33 @@ export default function NewCampaignPage() {
   ];
 
   const currentIdx = steps.findIndex((s) => s.key === step);
+
+  // What allo is about to do — its reasoning, the predicted upside, the named
+  // downside, and confidence. An ESTIMATE until control data backs it (no run yet).
+  const selectedSegment = segmentId ? segments?.find((s) => s.id === segmentId) : undefined;
+  const selectedTemplate = templates?.find((t) => t.id === templateId);
+  const reach = selectedSegment?.customerCount;
+  const holdout = reach ? Math.max(1, Math.round(reach * 0.1)) : undefined;
+  const willMessage = reach && holdout ? reach - holdout : undefined;
+  const reviewStory: ReasoningStory = {
+    lead: name || "this campaign",
+    lines: [
+      selectedSegment
+        ? { text: `${reach!.toLocaleString("en-IN")} customers like this · ${selectedSegment.name}` }
+        : { text: "everyone who's opted in to hear from you" },
+      selectedTemplate ? { text: `writing in your voice · "${selectedTemplate.subject}"` } : { text: "writing in your voice" },
+      holdout
+        ? { text: `holding back ${holdout.toLocaleString("en-IN")} as control · left alone to measure lift`, beat: true }
+        : { text: "a slice held back as control · so lift is real, not guessed", beat: true },
+      { text: "estimate: upside before fees · projected unsub under 0.4% · confidence moderate" },
+      {
+        text: willMessage
+          ? `ready · ${willMessage.toLocaleString("en-IN")} will hear from you on your sign-off`
+          : "ready · goes out on your sign-off",
+        arrow: true,
+      },
+    ],
+  };
 
   async function handleCreate() {
     if (!storeId || !templateId) return;
@@ -101,17 +129,17 @@ export default function NewCampaignPage() {
 
       {/* Brand analysis gate */}
       {storeId && !hasBrandProfile && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl">
-          <Palette className="w-4 h-4 text-purple-600 flex-shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 bg-card border-l-4 border-l-[var(--color-accent)] border border-border rounded-xl">
+          <Palette className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[13px] font-bold text-purple-900">Let's set up your brand voice first</p>
-            <p className="text-[11px] text-purple-600 mt-0.5">
+            <p className="text-[13px] font-bold text-foreground">Let's set up your brand voice first</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               Once allo knows how your brand sounds, everything it writes will feel like you.
             </p>
           </div>
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-sans hover:bg-purple-700 transition-all whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans hover:opacity-90 transition-all whitespace-nowrap"
           >
             <Palette className="w-3.5 h-3.5" />
             Set up brand
@@ -231,6 +259,10 @@ export default function NewCampaignPage() {
 
         {step === "schedule" && (
           <div className="space-y-4">
+            {/* What allo will do — reasoning + named downside, before you commit */}
+            <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <ReasoningReveal stories={[reviewStory]} />
+            </div>
             <h2 className="text-[13px] font-bold text-foreground font-serif">When to Send</h2>
             <div className="space-y-2">
               <button

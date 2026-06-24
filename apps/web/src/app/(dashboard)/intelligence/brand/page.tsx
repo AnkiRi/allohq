@@ -14,9 +14,9 @@ const itemVariants = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 
 function getToneBarColor(value: string): string {
   const high = ["casual", "warm", "high", "enthusiastic", "playful"];
   const medium = ["semi-formal", "light", "moderate", "friendly"];
-  if (high.includes(value.toLowerCase())) return "var(--olive)";
-  if (medium.includes(value.toLowerCase())) return "var(--warm-gold)";
-  return "var(--terracotta)";
+  if (high.includes(value.toLowerCase())) return "var(--color-success)";
+  if (medium.includes(value.toLowerCase())) return "var(--color-warning)";
+  return "var(--color-urgent)";
 }
 
 export default function BrandProfilePage() {
@@ -394,8 +394,8 @@ export default function BrandProfilePage() {
 
       {/* Analyzing banner */}
       {analyzing && (
-        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-terracotta flex items-center gap-3 px-4 py-3">
-          <RefreshCw className="w-4 h-4 text-terracotta animate-spin flex-shrink-0" />
+        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[var(--color-accent)] flex items-center gap-3 px-4 py-3">
+          <RefreshCw className="w-4 h-4 text-[var(--color-accent)] animate-spin flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground">Reading your brand...</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -407,15 +407,15 @@ export default function BrandProfilePage() {
 
       {/* Error banner */}
       {error && !analyzing && (
-        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[#C44A4A] flex items-center gap-3 px-4 py-3">
-          <AlertTriangle className="w-4 h-4 text-[#C44A4A] flex-shrink-0" />
+        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[var(--color-urgent)] flex items-center gap-3 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-[var(--color-urgent)] flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground">That didn&apos;t go through</p>
-            <p className="text-[11px] text-[#C44A4A] mt-0.5">{error}</p>
+            <p className="text-[11px] text-[var(--color-urgent)] mt-0.5">{error}</p>
           </div>
           <button
             onClick={() => setError(null)}
-            className="ml-auto text-[11px] text-[#C44A4A]/60 hover:text-[#C44A4A] font-sans"
+            className="ml-auto text-[11px] text-[var(--color-urgent)]/60 hover:text-[var(--color-urgent)] font-sans"
           >
             Dismiss
           </button>
@@ -524,7 +524,7 @@ export default function BrandProfilePage() {
                               const val = dim.options[Number(e.target.value)];
                               if (val != null) setToneEdits((prev) => ({ ...prev, [dim.key]: val }));
                             }}
-                            className="flex-1 h-1.5 accent-[var(--terracotta)] cursor-pointer"
+                            className="flex-1 h-1.5 accent-[var(--color-accent)] cursor-pointer"
                           />
                           <span className="text-[9px] text-muted-foreground font-sans w-16 shrink-0">{dim.right.label}</span>
                         </div>
@@ -612,7 +612,7 @@ export default function BrandProfilePage() {
                     disabled={updateIntensityMut.isPending}
                     className={`text-left p-4 border rounded-xl transition-all ${
                       currentIntensity === opt.value
-                        ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
+                        ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-white/30"
                         : "border-white/20 bg-white/20 hover:border-white/40"
                     }`}
                   >
@@ -675,7 +675,7 @@ export default function BrandProfilePage() {
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
-                  <div key={i} className="p-3 bg-white/20 rounded-lg border-l-2 border-l-terracotta">
+                  <div key={i} className="p-3 bg-white/20 rounded-lg border-l-2 border-l-[var(--color-accent)]">
                     <p className="text-[11px] text-foreground leading-relaxed">{copy}</p>
                   </div>
                 ))}
@@ -757,7 +757,7 @@ export default function BrandProfilePage() {
                         onClick={() => setAestheticEdit(opt.value)}
                         className={`text-left px-3 py-2 border rounded-lg transition-all ${
                           aestheticEdit === opt.value
-                            ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
+                            ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-white/30"
                             : "border-white/20 bg-white/20 hover:border-white/40"
                         }`}
                       >
@@ -854,7 +854,7 @@ export default function BrandProfilePage() {
                       onClick={() => setLogoPosition(pos)}
                       className={`px-4 py-2 border rounded-lg text-[11px] font-sans transition-all ${
                         logoPosition === pos
-                          ? "border-terracotta shadow-[0_0_0_1px_var(--terracotta)] bg-white/30 font-bold"
+                          ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-white/30 font-bold"
                           : "border-white/20 bg-white/20 hover:border-white/40"
                       }`}
                     >

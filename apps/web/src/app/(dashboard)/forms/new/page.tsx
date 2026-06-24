@@ -212,7 +212,7 @@ export default function NewFormPage() {
               </div>
               <button
                 onClick={() => removeField(i)}
-                className="p-1.5 rounded text-muted-foreground hover:text-red-600 transition-colors mt-1"
+                className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors mt-1"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

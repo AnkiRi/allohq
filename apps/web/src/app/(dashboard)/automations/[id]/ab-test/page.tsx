@@ -489,7 +489,7 @@ export default function ABTestPage() {
             {currentSuggestions.length > 0 && (
               <div>
                 <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] flex items-center gap-1.5 mb-2">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
                   allo's suggestions
                 </label>
                 <div className="space-y-2">
@@ -506,11 +506,11 @@ export default function ABTestPage() {
                     >
                       <p className="text-[11px] font-bold text-foreground mb-1">{s.label}</p>
                       <div className="flex items-center gap-3 text-[10px] font-sans text-muted-foreground">
-                        <span className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-blue-700 dark:text-blue-300 truncate max-w-[45%]">
+                        <span className="px-1.5 py-0.5 bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/25 rounded text-[var(--color-accent)] truncate max-w-[45%]">
                           A: {s.a}
                         </span>
                         <span className="text-muted-foreground/40">vs</span>
-                        <span className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded text-purple-700 dark:text-purple-300 truncate max-w-[45%]">
+                        <span className="px-1.5 py-0.5 bg-muted border border-border rounded text-foreground truncate max-w-[45%]">
                           B: {s.b}
                         </span>
                       </div>
@@ -660,10 +660,10 @@ export default function ABTestPage() {
                   className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"
                 />
                 <div className="flex items-center gap-2 text-[11px] font-mono text-foreground min-w-[120px]">
-                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-700">
+                  <span className="px-2 py-0.5 bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/25 rounded text-[var(--color-accent)]">
                     A: {Math.round(splitRatio * 100)}%
                   </span>
-                  <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 rounded text-purple-700">
+                  <span className="px-2 py-0.5 bg-muted border border-border rounded text-foreground">
                     B: {Math.round((1 - splitRatio) * 100)}%
                   </span>
                 </div>
@@ -731,7 +731,7 @@ export default function ABTestPage() {
             {draftTests.map((test) => (
               <div
                 key={test.id}
-                className="border border-dashed border-white/40 rounded-xl bg-card p-5 hover:border-white/60 transition-all"
+                className="border border-dashed border-border rounded-xl bg-card p-5 hover:border-muted-foreground/40 transition-all"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div>
@@ -741,7 +741,7 @@ export default function ABTestPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-white/15 text-muted-foreground border border-white/10">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-muted text-muted-foreground border border-border">
                       draft
                     </span>
                   </div>
@@ -774,7 +774,7 @@ export default function ABTestPage() {
                   <button
                     onClick={() => handleDeleteTest(test.id)}
                     disabled={deleteMut.isPending}
-                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-all"
                   >
                     <Trash2 className="w-3 h-3" />
                     Delete
@@ -802,7 +802,7 @@ export default function ABTestPage() {
               return (
                 <div
                   key={test.id}
-                  className="border border-border rounded-xl bg-card p-5 border-l-4 border-l-blue-500"
+                  className="border border-border rounded-xl bg-card p-5 border-l-4 border-l-[var(--color-accent)]"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -812,7 +812,7 @@ export default function ABTestPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-blue-50 text-blue-700 border border-blue-200">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/25">
                         running
                       </span>
                       {test.confidence != null && (
@@ -835,7 +835,7 @@ export default function ABTestPage() {
                     </div>
                     <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                        className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
@@ -899,9 +899,9 @@ export default function ABTestPage() {
                       <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
-                            test.confidence >= 0.95 ? "bg-green-500" :
-                            test.confidence >= 0.8 ? "bg-amber-500" :
-                            "bg-red-400"
+                            test.confidence >= 0.95 ? "bg-[hsl(var(--success))]" :
+                            test.confidence >= 0.8 ? "bg-[var(--color-warning)]" :
+                            "bg-[var(--color-urgent)]"
                           }`}
                           style={{ width: `${test.confidence * 100}%` }}
                         />
@@ -909,7 +909,7 @@ export default function ABTestPage() {
                       <div className="flex justify-between mt-0.5">
                         <span className="text-[9px] font-mono text-muted-foreground">0%</span>
                         <span className={`text-[9px] font-mono ${
-                          test.confidence >= 0.95 ? "text-green-600 font-bold" : "text-muted-foreground"
+                          test.confidence >= 0.95 ? "text-[hsl(var(--success))] font-bold" : "text-muted-foreground"
                         }`}>
                           {(test.confidence * 100).toFixed(1)}%
                         </span>
@@ -921,7 +921,7 @@ export default function ABTestPage() {
                   <button
                     onClick={() => handleCancelTest(test.id)}
                     disabled={updateMut.isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-all"
                   >
                     <XCircle className="w-3 h-3" />
                     Cancel Test
@@ -947,7 +947,7 @@ export default function ABTestPage() {
               return (
                 <div
                   key={test.id}
-                  className="border border-border rounded-xl bg-card p-5 border-l-4 border-l-green-500"
+                  className="border border-border rounded-xl bg-card p-5 border-l-4 border-l-[hsl(var(--success))]"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -957,11 +957,11 @@ export default function ABTestPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-green-50 text-green-700 border border-green-200">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))] border border-[hsl(var(--success)/0.25)]">
                         concluded
                       </span>
                       {test.winner && (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-[10px] font-sans font-bold flex items-center gap-1">
+                        <span className="px-2 py-0.5 bg-[hsl(var(--success)/0.16)] text-[hsl(var(--success))] rounded text-[10px] font-sans font-bold flex items-center gap-1">
                           <Trophy className="w-3 h-3" />
                           Winner: {test.winner.toUpperCase()}
                         </span>
@@ -984,14 +984,14 @@ export default function ABTestPage() {
                         <div
                           key={variant}
                           className={`p-3 rounded-lg border ${
-                            isWinner ? "border-green-300 bg-green-50" : "border-border bg-muted/30"
+                            isWinner ? "border-[hsl(var(--success)/0.4)] bg-[hsl(var(--success)/0.08)]" : "border-border bg-muted/30"
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-[10px] font-sans font-bold text-muted-foreground">
                               VARIANT {variant.toUpperCase()}
                             </span>
-                            {isWinner && <Trophy className="w-3 h-3 text-green-600" />}
+                            {isWinner && <Trophy className="w-3 h-3 text-[hsl(var(--success))]" />}
                           </div>
                           <div className="text-[11px] font-sans text-foreground mb-2 truncate">
                             {String((variantData as any)?.value ?? "")}
@@ -1030,7 +1030,7 @@ export default function ABTestPage() {
                       <button
                         onClick={() => handleDeleteTest(test.id)}
                         disabled={deleteMut.isPending}
-                        className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-red-500 hover:border-red-300 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-all"
                       >
                         <Trash2 className="w-3 h-3" />
                         Delete
@@ -1064,13 +1064,13 @@ export default function ABTestPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-gray-50 text-gray-600 border border-gray-200">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-muted text-muted-foreground border border-border">
                       cancelled
                     </span>
                     <button
                       onClick={() => handleDeleteTest(test.id)}
                       disabled={deleteMut.isPending}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-sans text-muted-foreground hover:text-red-500 transition-all"
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-sans text-muted-foreground hover:text-destructive transition-all"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -1086,7 +1086,7 @@ export default function ABTestPage() {
       {!isLoading && (!abTests || abTests.length === 0) && !showForm && (
         <motion.div variants={itemVariants} className="text-center py-16">
           <FlaskConical className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">No tests yet</h3>
+          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">Nothing tested yet — allo is just getting started.</h3>
           <p className="text-[11px] text-muted-foreground font-sans mb-4">
             Try two versions against each other and let the results tell you what works.
           </p>
