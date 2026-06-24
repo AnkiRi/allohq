@@ -109,11 +109,21 @@ export function Sidebar() {
         {/* Logo */}
         <div className={cn("border-b border-white/15 dark:border-white/10", collapsed ? "px-3 py-5" : "px-6 py-5")}>
           {collapsed ? (
-            <h1 className="text-[16px] font-bold text-foreground font-serif tracking-[-0.5px] text-center">A</h1>
+            <div className="flex justify-center">
+              <span
+                className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--accent))]"
+                aria-hidden="true"
+                title="allo"
+              />
+            </div>
           ) : (
             <>
-              <h1 className="text-[18px] font-bold text-foreground font-serif tracking-[-0.5px]">
-                AlloHQ
+              <h1 className="flex items-center gap-2 text-[20px] font-bold text-foreground font-sans tracking-[-0.02em]">
+                <span
+                  className="w-2 h-2 rounded-full bg-[hsl(var(--accent))]"
+                  aria-hidden="true"
+                />
+                allo
               </h1>
               <p className="text-[9px] text-muted-foreground font-sans tracking-[1px] uppercase mt-0.5">
                 Your retention, handled

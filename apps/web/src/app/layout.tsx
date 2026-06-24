@@ -28,9 +28,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AlloHQ - E-Commerce Marketing Automation",
+  title: "allo · retention, handled",
   description:
-    "The most beautiful e-commerce marketing automation platform for DTC brands and Shopify stores",
+    "allo runs retention and first-line customer service for consumer brands, and only gets paid when it works.",
 };
 
 export default function RootLayout({

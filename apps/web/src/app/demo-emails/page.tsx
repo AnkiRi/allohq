@@ -5,7 +5,7 @@ import { ReplenishmentEmail } from "@/emails/ReplenishmentEmail";
 import { EmailViewer } from "./EmailViewer";
 
 export const metadata = {
-  title: "Vana Naturals — Email Showcase | Allo",
+  title: "Vana Naturals · Email Showcase | allo",
 };
 
 // Render emails to bulletproof HTML server-side, then hand to the client
@@ -61,7 +61,7 @@ export default async function DemoEmailsPage() {
               color: "#9fb8a8",
             }}
           >
-            Two best-in-class lifecycle emails produced by Allo for a plant-based
+            Two best-in-class lifecycle emails produced by allo for a plant-based
             wellness brand. Real React Email, bulletproof table HTML, one shared
             brand kit. Toggle each between desktop and mobile, light and dark.
           </p>
