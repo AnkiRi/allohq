@@ -162,7 +162,7 @@ export function EmailStudio({
         </p>
         <div className="flex items-baseline gap-3 flex-wrap">
           <h1 className="text-2xl font-serif font-semibold text-foreground tracking-tight">
-            allo wrote this — edit anything.
+            allo wrote this. Edit anything.
           </h1>
           <span className="text-[13px] font-sans text-muted-foreground">
             Generate-first, edit-freely. Prompt it, or click any block.

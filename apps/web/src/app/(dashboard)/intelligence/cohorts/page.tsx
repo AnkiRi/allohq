@@ -417,7 +417,7 @@ export default function CohortAnalysisPage() {
             <Sparkles className="w-5 h-5 text-[var(--color-accent)] shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-[13px] text-foreground/90 font-sans leading-relaxed">
-                Your <span className="font-bold">{bestCohort.month}</span> cohort is your strongest —
+                Your <span className="font-bold">{bestCohort.month}</span> cohort is your strongest,
                 spending <span className="font-mono font-bold">{retentionMultiplier.toFixed(1)}x</span> the
                 usual. Those {bestCohort.customers} customers have brought in{" "}
                 <span className="font-mono font-bold">{formatCurrency(bestCohort.revenue)}</span>.
@@ -575,7 +575,7 @@ export default function CohortAnalysisPage() {
                                 </div>
                               ) : (
                                 <div className="mx-auto w-full min-w-[44px] py-2 rounded text-[10px] font-mono text-muted-foreground/50">
-                                  &mdash;
+                                  ·
                                 </div>
                               )}
                             </td>
@@ -624,7 +624,7 @@ export default function CohortAnalysisPage() {
               No cohorts yet
             </h3>
             <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-              Sync your orders and run an analysis — allo will build your cohorts from there.
+              Sync your orders and run an analysis. allo will build your cohorts from there.
             </p>
           </div>
         )}

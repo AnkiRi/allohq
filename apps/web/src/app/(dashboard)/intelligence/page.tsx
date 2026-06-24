@@ -81,7 +81,7 @@ export default function IntelligencePage() {
             Intelligence
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
-            What allo has learned about your customers — who they are, and what they&apos;re worth.
+            What allo has learned about your customers: who they are, and what they&apos;re worth.
           </p>
         </div>
         <div className="flex gap-2">
@@ -177,14 +177,14 @@ export default function IntelligencePage() {
             {avgLTV && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] shrink-0" />
-                Average lifetime value is ₹{avgLTV} {Number(avgLTV) >= 200 ? "— above the industry norm" : Number(avgLTV) >= 100 ? "— right in line with the industry" : "— below the industry norm"}
+                Average lifetime value is ₹{avgLTV}{Number(avgLTV) >= 200 ? ", above the industry norm" : Number(avgLTV) >= 100 ? ", right in line with the industry" : ", below the industry norm"}
               </li>
             )}
             {hibernatingSegment && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-urgent)] shrink-0" />
                 {hibernatingSegment.count} Hibernating customers are worth ₹
-                {(hibernatingSegment.revenue / 1000).toFixed(0)}K — plenty of room to win them back
+                {(hibernatingSegment.revenue / 1000).toFixed(0)}K, plenty of room to win them back
               </li>
             )}
           </ul>
@@ -235,7 +235,7 @@ export default function IntelligencePage() {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground">Nothing to show yet — run an analysis to begin.</p>
+            <p className="text-[13px] text-muted-foreground">Nothing to show yet. Run an analysis to begin.</p>
           )}
         </div>
 
@@ -269,7 +269,7 @@ export default function IntelligencePage() {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground">Nothing to show yet — run an analysis to begin.</p>
+            <p className="text-[13px] text-muted-foreground">Nothing to show yet. Run an analysis to begin.</p>
           )}
         </div>
       </motion.div>

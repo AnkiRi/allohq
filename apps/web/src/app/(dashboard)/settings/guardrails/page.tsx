@@ -241,7 +241,7 @@ export default function GuardrailsPage() {
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
           <p className="text-[11px] text-muted-foreground">
-            No limits set yet — allo will ask before doing anything risky. Add a limit to set firm boundaries.
+            No limits set yet. allo will ask before doing anything risky. Add a limit to set firm boundaries.
           </p>
         </motion.div>
       )}

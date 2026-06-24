@@ -171,12 +171,12 @@ export default function AnalyticsPage() {
           },
           {
             label: "AI ROI",
-            value: roiData ? `${roiData.roi}x` : "—",
+            value: roiData ? `${roiData.roi}x` : "·",
             icon: Zap,
           },
           {
             label: "AI revenue",
-            value: roiData ? `₹${roiData.aiAttributedRevenue.toLocaleString("en-IN")}` : "—",
+            value: roiData ? `₹${roiData.aiAttributedRevenue.toLocaleString("en-IN")}` : "·",
             icon: TrendingUp,
           },
         ].map((stat) => (
@@ -266,7 +266,7 @@ export default function AnalyticsPage() {
               <SmartEmptyState
                 icon={BarChart3}
                 title="Nothing to attribute yet"
-                description="The moment allo's first send goes out, this fills in — where the revenue came from, how each channel pulled its weight, and how your customers are holding up."
+                description="The moment allo's first send goes out, this fills in: where the revenue came from, how each channel pulled its weight, and how your customers are holding up."
                 actions={[{ label: "See what's waiting", href: "/actions", primary: true }]}
               />
             ) : (
@@ -306,7 +306,7 @@ export default function AnalyticsPage() {
             {channelLoading ? (
               <Loading />
             ) : !channelData || channelData.length === 0 ? (
-              <EmptyState icon={Mail} text="No channel data yet — it'll fill in once you've sent some messages." />
+              <EmptyState icon={Mail} text="No channel data yet. It'll fill in once you've sent some messages." />
             ) : (
               <div className="grid gap-4">
                 {(channelData as any[]).map((ch: any) => {
@@ -349,7 +349,7 @@ export default function AnalyticsPage() {
             {aiLoading ? (
               <Loading />
             ) : !aiData ? (
-              <EmptyState icon={Zap} text="Nothing to compare yet — once a few sends go out, you'll see what allo wrote against what was written by hand." />
+              <EmptyState icon={Zap} text="Nothing to compare yet. Once a few sends go out, you'll see what allo wrote against what was written by hand." />
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {([
@@ -386,7 +386,7 @@ export default function AnalyticsPage() {
             {cohortLoading ? (
               <Loading />
             ) : !cohortData || cohortData.length === 0 ? (
-              <EmptyState icon={Users} text="No cohort data yet — this builds up as customers return over time." />
+              <EmptyState icon={Users} text="No cohort data yet. This builds up as customers return over time." />
             ) : (
               <div className="border border-border rounded-xl overflow-x-auto">
                 <table className="w-full">
@@ -418,7 +418,7 @@ export default function AnalyticsPage() {
                                 backgroundColor: rate > 0 ? `hsl(var(--success) / ${intensity * 0.28})` : undefined,
                               }}
                             >
-                              {rate > 0 ? `${rate}%` : "—"}
+                              {rate > 0 ? `${rate}%` : "·"}
                             </td>
                           );
                         })}
@@ -437,7 +437,7 @@ export default function AnalyticsPage() {
             {roiLoading ? (
               <Loading />
             ) : !roiData ? (
-              <EmptyState icon={DollarSign} text="No ROI to show yet — once campaigns start earning, you'll see the return here." />
+              <EmptyState icon={DollarSign} text="No ROI to show yet. Once campaigns start earning, you'll see the return here." />
             ) : (
               <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
                 {[
@@ -469,7 +469,7 @@ export default function AnalyticsPage() {
             {forecastLoading ? (
               <Loading />
             ) : !forecastData ? (
-              <EmptyState icon={TrendingUp} text="No forecast yet — allo draws a fresh one each day before sunrise. Check back in the morning." />
+              <EmptyState icon={TrendingUp} text="No forecast yet. allo draws a fresh one each day before sunrise. Check back in the morning." />
             ) : (
               <>
                 <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">

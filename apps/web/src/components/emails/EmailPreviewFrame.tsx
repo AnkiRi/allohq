@@ -75,7 +75,7 @@ export function EmailPreviewFrame({
         }}
       >
         <iframe
-          title={`Email preview — ${width} ${theme}`}
+          title={`Email preview · ${width} ${theme}`}
           srcDoc={srcDoc}
           style={{
             width: WIDTHS[width],

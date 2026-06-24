@@ -47,7 +47,7 @@ function formatTokens(n: number): string {
 }
 
 function getCostComparison(cost: number): string {
-  if (cost === 0) return "Nothing spent yet — allo is just getting started";
+  if (cost === 0) return "Nothing spent yet. allo is just getting started";
   if (cost < 0.01) return "Less than a rounding error";
   if (cost < 0.10) return "Less than a small piece of candy";
   if (cost < 1.00) return "Less than a cup of coffee";
@@ -158,7 +158,7 @@ function TokenUsageSection() {
           ) : (
             <div className="text-center py-4">
               <p className="text-[11px] text-muted-foreground">
-                Nothing yet for this period — allo hasn&apos;t needed to spend here.
+                Nothing yet for this period. allo hasn&apos;t needed to spend here.
               </p>
             </div>
           )}
@@ -206,7 +206,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
   };
 
   const createMut = (trpc.knowledge as any).create.useMutation({
-    onSuccess: () => { toast("Article saved — allo can use it now.", "success"); resetForm(); refetch(); },
+    onSuccess: () => { toast("Article saved. allo can use it now.", "success"); resetForm(); refetch(); },
     onError: (err: { message?: string }) => toast(err.message || "Something went wrong. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
@@ -308,7 +308,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
           <textarea
             value={formContent}
             onChange={(e) => setFormContent(e.target.value)}
-            placeholder="Article content — policies, FAQs, product details..."
+            placeholder="Article content: policies, FAQs, product details..."
             rows={4}
             className="w-full text-[11px] font-sans px-3 py-1.5 rounded border border-border bg-background outline-none resize-y"
           />
@@ -406,7 +406,7 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
             return (
               <div key={ch.key}>
                 <label className="block text-[11px] text-muted-foreground font-sans mb-2">
-                  {ch.label} <span className="text-muted-foreground/50">— {ch.desc}</span>
+                  {ch.label} <span className="text-muted-foreground/50">· {ch.desc}</span>
                 </label>
                 <div className="grid grid-cols-3 gap-3">
                   {/* Default (env/global) option */}
@@ -759,7 +759,7 @@ export default function SettingsPage() {
               {user?.emailAddresses[0]?.emailAddress || ""}
             </p>
             <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-              Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"}
+              Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "·"}
             </p>
           </div>
         </div>
@@ -924,7 +924,7 @@ export default function SettingsPage() {
         )}
         {aiSettings?.defaultModel === null && models && (
           <p className="text-[10px] text-muted-foreground/50 mt-3">
-            No default chosen — allo will use Claude Sonnet 4.6
+            No default chosen. allo will use Claude Sonnet 4.6
           </p>
         )}
       </motion.div>

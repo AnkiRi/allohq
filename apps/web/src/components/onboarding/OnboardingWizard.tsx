@@ -57,7 +57,7 @@ const AESTHETIC_OPTIONS = [
     label: "Luxury Editorial",
     desc: "Refined, editorial layouts with elegant serif headings",
     bestFor: "Jewelry, fashion, premium home goods",
-    exampleSubject: "The Spring Edit — Curated for You",
+    exampleSubject: "The Spring Edit: Curated for You",
     exampleCTA: "Discover the Collection",
   },
   {
@@ -81,7 +81,7 @@ const AESTHETIC_OPTIONS = [
     label: "Tech Modern",
     desc: "Dark mode option, clean lines, monospace accents",
     bestFor: "Electronics, SaaS, gadgets",
-    exampleSubject: "Upgrade your setup — new tech inside",
+    exampleSubject: "Upgrade your setup: new tech inside",
     exampleCTA: "View Specs",
   },
   {
@@ -97,7 +97,7 @@ const AESTHETIC_OPTIONS = [
     label: "Premium DTC",
     desc: "Modern sans-serif, product-forward, conversion-optimized",
     bestFor: "DTC brands, supplements, apparel",
-    exampleSubject: "Your favorites are back — don't wait",
+    exampleSubject: "Your favorites are back. Don't wait",
     exampleCTA: "Shop Now",
   },
 ] as const;
@@ -136,14 +136,14 @@ const TONE_DIMENSIONS = [
     key: "energy",
     label: "Energy",
     left: { value: "calm", label: "Calm", example: "Take your time exploring our thoughtfully curated range" },
-    right: { value: "intense", label: "High Energy", example: "Don't miss out! Limited stock — grab yours now!" },
+    right: { value: "intense", label: "High Energy", example: "Don't miss out! Limited stock, grab yours now!" },
     options: ["calm", "moderate", "high", "intense"],
   },
   {
     key: "warmth",
     label: "Warmth",
     left: { value: "professional", label: "Professional", example: "We recommend this product based on your preferences" },
-    right: { value: "intimate", label: "Warm", example: "We think you'll absolutely love this — picked just for you" },
+    right: { value: "intimate", label: "Warm", example: "We think you'll absolutely love this, picked just for you" },
     options: ["professional", "friendly", "warm", "intimate"],
   },
   {
@@ -163,7 +163,7 @@ function getSampleCopy(tone: Record<string, string>) {
 
   return {
     subject: isH
-      ? "Your favorites are back — don't wait!"
+      ? "Your favorites are back. Don't wait!"
       : isP
         ? "Guess what just dropped? (hint: you'll love it)"
         : isF
@@ -171,12 +171,12 @@ function getSampleCopy(tone: Record<string, string>) {
           : "Something new, just for you",
     cta: isH ? "Shop Now" : isW ? "Take a Look" : isF ? "View Collection" : "See What's New",
     body: isW
-      ? "We know how much you loved our bestseller — and we think this new addition is going to be your next favorite."
+      ? "We know how much you loved our bestseller, and we think this new addition is going to be your next favorite."
       : isP
         ? "Plot twist: we made something even better. Your move."
         : isF
           ? "We are delighted to introduce the newest addition to our range, designed with care and precision."
-          : "Here's something we think you'll enjoy — fresh off the line and ready for you.",
+          : "Here's something we think you'll enjoy, fresh off the line and ready for you.",
   };
 }
 
@@ -406,7 +406,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       {syncDone && !analysisDone && (
-        <p className="text-xs text-[#8B8074]">Almost there — allo is just finishing up...</p>
+        <p className="text-xs text-[#8B8074]">Almost there. allo is just finishing up...</p>
       )}
       <div className="flex justify-end">
         <button onClick={onContinue} disabled={!canContinue || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -645,7 +645,7 @@ function BrandReviewStep({
       <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand guidelines</h3>
         <p className="text-sm text-[#8B8074] mb-4">
-          Already have brand guidelines? Paste them here and allo will follow them as the source of truth for your voice —
+          Already have brand guidelines? Paste them here and allo will follow them as the source of truth for your voice,
           ahead of anything it picked up on its own.
         </p>
         <textarea
@@ -665,7 +665,7 @@ function BrandReviewStep({
             </button>
             {analysisDone && (
               <span className="flex items-center gap-1.5 text-sm text-[#1F7A4F] font-medium">
-                <Check className="w-4 h-4" /> Your brand voice is updated — take a look below
+                <Check className="w-4 h-4" /> Your brand voice is updated. Take a look below
               </span>
             )}
           </div>
@@ -1017,7 +1017,7 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
         ) : <div />}
         <button onClick={onAcknowledge} disabled={isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40">
           {isAdvancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-          Got it — show me what allo can do
+          Got it. Show me what allo can do
         </button>
       </div>
     </div>
@@ -1046,7 +1046,7 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         </div>
         <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">You&apos;re all set</h2>
         <p className="text-sm text-[#8B8074] max-w-md mx-auto leading-relaxed">
-          When you continue, allo gets to work — setting up your automations, looking for campaign
+          When you continue, allo gets to work: setting up your automations, looking for campaign
           opportunities, and writing your first briefing. You can watch it all happen live in the allo panel.
         </p>
       </div>

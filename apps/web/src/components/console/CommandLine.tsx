@@ -20,7 +20,7 @@ export interface CommandLineProps {
 }
 
 export function CommandLine({
-  placeholder = "Tell allo what you want — e.g. win back my lapsed buyers before Diwali",
+  placeholder = "Tell allo what you want, e.g. win back my lapsed buyers before Diwali",
   onSubmit,
   rotateMs = 3800,
   className,

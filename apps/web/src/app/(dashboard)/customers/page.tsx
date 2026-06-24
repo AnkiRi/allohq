@@ -155,7 +155,7 @@ function CustomersConsole() {
   };
 
   const totalInBase = stats?.totalCustomers ?? 0;
-  const marketingRate = stats ? `${stats.marketingRate.toFixed(0)}%` : "—";
+  const marketingRate = stats ? `${stats.marketingRate.toFixed(0)}%` : "·";
 
   return (
     <div className="space-y-6 w-full max-w-5xl mx-auto">
@@ -182,7 +182,7 @@ function CustomersConsole() {
       />
 
       {/* The base, framed in the console */}
-      <ConsoleFrame title="allo — customer base">
+      <ConsoleFrame title="allo · customer base">
         {/* Status line — mono readouts. Who-of-the-base first, money second,
             split by a hairline so the two groups read as distinct. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -342,7 +342,7 @@ function CustomersConsole() {
                       <td className="px-5 py-4">
                         <Link href={`/customers/${customer.id}`} className="flex items-center gap-1.5">
                           <span className="inline-block font-mono text-[11px] lowercase text-muted-foreground">
-                            {customer.rfmScore?.segment ?? "—"}
+                            {customer.rfmScore?.segment ?? "·"}
                           </span>
                           {/* Restraint, named — dormant rows are deliberately
                               left alone, not just dimmed into the background. */}
@@ -371,7 +371,7 @@ function CustomersConsole() {
                               customer.rfmScore?.totalScore,
                             )}`}
                           >
-                            {customer.rfmScore?.totalScore ?? "—"}
+                            {customer.rfmScore?.totalScore ?? "·"}
                           </span>
                         </Link>
                       </td>

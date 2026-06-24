@@ -242,7 +242,7 @@ export default function FormDetailPage() {
             <div className="flex flex-col items-center justify-center py-12 border border-dashed border-border rounded-xl">
               <MousePointerClick className="w-8 h-8 text-muted-foreground/50 mb-3" />
               <p className="text-[13px] text-muted-foreground">
-                No sign-ups yet — they&apos;ll show up here as people opt in.
+                No sign-ups yet. They&apos;ll show up here as people opt in.
               </p>
             </div>
           ) : (
@@ -315,7 +315,7 @@ export default function FormDetailPage() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-[11px] font-mono text-muted-foreground">—</span>
+                          <span className="text-[11px] font-mono text-muted-foreground">·</span>
                         )}
                       </td>
                     </motion.tr>

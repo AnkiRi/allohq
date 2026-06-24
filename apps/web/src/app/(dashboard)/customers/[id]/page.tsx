@@ -66,7 +66,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} has gone quiet`,
       lines: [
-        { text: `allo noticed — ${seen}` },
+        { text: `allo noticed: ${seen}` },
         { text: "a warm, personal win-back fits people like them" },
         { text: "downside if mistimed: ~3% unsub · low" },
         { text: "estimate · expected recovery worth a nudge", arrow: true },
@@ -77,7 +77,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} is starting to drift`,
       lines: [
-        { text: `allo noticed — ${seen}` },
+        { text: `allo noticed: ${seen}` },
         { text: "a timely, light note now keeps them close" },
         { text: "downside: annoyance if over-messaged · ~4%" },
         { text: "estimate · medium confidence", arrow: true },
@@ -88,9 +88,9 @@ function getCustomerStory(args: {
     return {
       lead: `${who} is one of your best`,
       lines: [
-        { text: `allo noticed — ${seen}` },
+        { text: `allo noticed: ${seen}` },
         { text: "early access or a thank-you reads well here" },
-        { text: "no discount — kept on the list · not messaged", beat: true },
+        { text: "no discount: kept on the list · not messaged", beat: true },
         { text: "estimate · protecting the relationship", arrow: true },
       ],
     };
@@ -99,7 +99,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} keeps coming back`,
       lines: [
-        { text: `allo noticed — ${seen}` },
+        { text: `allo noticed: ${seen}` },
         { text: "a small loyalty nudge can move them up a tier" },
         { text: "downside: discount-training if overused · low" },
         { text: "estimate · medium confidence", arrow: true },
@@ -110,7 +110,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} just joined you`,
       lines: [
-        { text: `allo noticed — ${seen}` },
+        { text: `allo noticed: ${seen}` },
         { text: "a warm welcome beats a hard sell this early" },
         { text: "downside: too soon to push · keep it light", beat: true },
         { text: "estimate · low confidence yet", arrow: true },
@@ -120,7 +120,7 @@ function getCustomerStory(args: {
   return {
     lead: `${who}`,
     lines: [
-      { text: `allo noticed — ${seen}` },
+      { text: `allo noticed: ${seen}` },
       { text: "a personal note is the gentlest nudge to their next order" },
       { text: "downside: minimal at this cadence" },
       { text: "estimate · confidence builds with their history", arrow: true },
@@ -342,7 +342,7 @@ export default function CustomerDetailPage() {
               </div>
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground font-sans">No RFM score yet — allo will add one as orders come in.</p>
+            <p className="text-[13px] text-muted-foreground font-sans">No RFM score yet. allo will add one as orders come in.</p>
           )}
         </motion.div>
 
@@ -450,7 +450,7 @@ export default function CustomerDetailPage() {
             <div key={order.id} className="relative pb-5">
               <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-[var(--color-accent)] border-2 border-background" />
               <div className="text-[12px] font-mono text-foreground">
-                Order #{order.orderNumber} &mdash; {formatINR(order.totalPrice)}
+                Order #{order.orderNumber} &middot; {formatINR(order.totalPrice)}
               </div>
               <div className="text-[11px] font-sans text-muted-foreground mt-0.5">
                 {new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}

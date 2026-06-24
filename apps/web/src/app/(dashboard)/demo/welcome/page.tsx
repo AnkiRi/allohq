@@ -93,12 +93,12 @@ export default function DemoWelcomePage() {
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
             {complete
-              ? "This is allo running a real D2C brand's retention. Have a look around — nothing here touches a live store."
-              : "Watching allo do exactly what it does on day one — read the brand, group the customers, draft the work."}
+              ? "This is allo running a real D2C brand's retention. Have a look around, nothing here touches a live store."
+              : "Watching allo do exactly what it does on day one: read the brand, group the customers, draft the work."}
           </p>
         </div>
 
-        <ConsoleFrame title="allo — activating · Vana Naturals">
+        <ConsoleFrame title="allo activating · Vana Naturals">
           {/* Header */}
           <div className="flex items-center gap-2.5 pb-4 mb-4 border-b border-border">
             <div className="w-8 h-8 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center shrink-0">
@@ -202,7 +202,7 @@ function ChecklistRow({ step }: { step: ChecklistStep }) {
           {step.status === "generating" && <span className="animate-pulse">…</span>}
         </span>
         {step.status === "done" && step.detail && (
-          <span className="text-[11px] text-muted-foreground/70">— {step.detail}</span>
+          <span className="text-[11px] text-muted-foreground/70">· {step.detail}</span>
         )}
       </span>
     </StreamRow>

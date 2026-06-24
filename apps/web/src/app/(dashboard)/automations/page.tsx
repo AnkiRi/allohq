@@ -180,7 +180,7 @@ export default function AutomationsPage() {
           <div>
             <p className="text-[13px] font-bold text-foreground">allo is writing your messages…</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-              Drafting email, SMS, WhatsApp, and RCS — usually 30 to 60 seconds per automation.
+              Drafting email, SMS, WhatsApp, and RCS, usually 30 to 60 seconds per automation.
             </p>
             <p className="text-[10px] text-warm-gold mt-1">
               You'll see each one update here as it's done.
@@ -378,7 +378,7 @@ export default function AutomationsPage() {
       ) : (
         <SmartEmptyState
           icon={Sparkles}
-          title="Nothing yet — allo is just getting started."
+          title="Nothing yet. allo is just getting started."
           description="allo has a few automations in mind, picked from how your customers behave."
           actions={[{ label: "Take a look", href: "/automations", primary: true }]}
         />

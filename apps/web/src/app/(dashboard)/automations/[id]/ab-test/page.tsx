@@ -58,11 +58,11 @@ const SUGGESTIONS: Record<ABTestVariable, Record<CategoryKey, VariantSuggestion[
   subject_line: {
     cart_abandonment: [
       { a: "You left something behind 🛒", b: "Still thinking it over, {{first_name}}?", label: "Emoji urgency vs personal tone" },
-      { a: "Your cart is waiting — complete your order", b: "Don't miss out! Items in your cart are selling fast", label: "Neutral reminder vs scarcity" },
+      { a: "Your cart is waiting, complete your order", b: "Don't miss out! Items in your cart are selling fast", label: "Neutral reminder vs scarcity" },
       { a: "Forgot something? Here's 10% off to finish up", b: "Your cart expires in 24 hours", label: "Discount incentive vs deadline pressure" },
     ],
     win_back: [
-      { a: "We miss you, {{first_name}}!", b: "It's been a while — here's what's new", label: "Emotional appeal vs curiosity" },
+      { a: "We miss you, {{first_name}}!", b: "It's been a while, here's what's new", label: "Emotional appeal vs curiosity" },
       { a: "Come back for 15% off your next order", b: "{{first_name}}, we saved something special for you", label: "Discount lead vs exclusivity" },
       { a: "Your favorites are back in stock", b: "See what you've been missing", label: "Product-specific vs general FOMO" },
     ],
@@ -74,17 +74,17 @@ const SUGGESTIONS: Record<ABTestVariable, Record<CategoryKey, VariantSuggestion[
     welcome_series: [
       { a: "Welcome to the family, {{first_name}}! 🎉", b: "You're in! Here's your exclusive welcome offer", label: "Warm welcome vs offer-first" },
       { a: "Here's what to expect from us", b: "Your first perk is inside 👀", label: "Setting expectations vs mystery/curiosity" },
-      { a: "Nice to meet you! Quick question...", b: "Welcome aboard — 15% off your first order inside", label: "Engagement-first vs discount-first" },
+      { a: "Nice to meet you! Quick question...", b: "Welcome aboard: 15% off your first order inside", label: "Engagement-first vs discount-first" },
     ],
     vip_reward: [
       { a: "You've unlocked VIP status, {{first_name}}!", b: "Exclusive: early access just for our top customers", label: "Achievement vs exclusivity" },
       { a: "A thank you gift from us 🎁", b: "VIP-only: 20% off everything this weekend", label: "Surprise gift vs clear discount" },
-      { a: "You're one of our best — here's proof", b: "Special reward inside (VIP eyes only)", label: "Recognition vs mystery reward" },
+      { a: "You're one of our best, here's proof", b: "Special reward inside (VIP eyes only)", label: "Recognition vs mystery reward" },
     ],
     cross_sell: [
-      { a: "Complete the look — items that go with your purchase", b: "Customers who bought this also loved...", label: "Direct suggestion vs social proof" },
+      { a: "Complete the look: items that go with your purchase", b: "Customers who bought this also loved...", label: "Direct suggestion vs social proof" },
       { a: "Pair it perfectly: curated picks for you", b: "Don't forget the essentials ✨", label: "Curated vs utility-focused" },
-      { a: "We think you'd love these too", b: "Before your order ships — add these for free shipping", label: "Soft recommendation vs shipping incentive" },
+      { a: "We think you'd love these too", b: "Before your order ships, add these for free shipping", label: "Soft recommendation vs shipping incentive" },
     ],
     promotional: [
       { a: "Flash sale: up to 40% off today only ⚡", b: "{{first_name}}, this deal won't last long", label: "Broad excitement vs personal urgency" },
@@ -93,7 +93,7 @@ const SUGGESTIONS: Record<ABTestVariable, Record<CategoryKey, VariantSuggestion[
     ],
     default: [
       { a: "{{first_name}}, you'll want to see this", b: "Something special, just for you ✨", label: "Name personalization vs curiosity" },
-      { a: "Don't miss this — open for a surprise", b: "Quick update from us (1 min read)", label: "Mystery vs low-commitment" },
+      { a: "Don't miss this: open for a surprise", b: "Quick update from us (1 min read)", label: "Mystery vs low-commitment" },
       { a: "Big news inside!", b: "A personal note for you, {{first_name}}", label: "Excitement vs intimacy" },
     ],
   },
@@ -130,7 +130,7 @@ const SUGGESTIONS: Record<ABTestVariable, Record<CategoryKey, VariantSuggestion[
   discount_level: {
     cart_abandonment: [
       { a: "10", b: "15", label: "Small nudge (10%) vs moderate incentive (15%)" },
-      { a: "5", b: "20", label: "Minimal (5%) vs strong pull (20%) — test price sensitivity" },
+      { a: "5", b: "20", label: "Minimal (5%) vs strong pull (20%): test price sensitivity" },
     ],
     win_back: [
       { a: "15", b: "25", label: "Standard (15%) vs aggressive (25%) re-engagement" },
@@ -150,7 +150,7 @@ const SUGGESTIONS: Record<ABTestVariable, Record<CategoryKey, VariantSuggestion[
     ],
     promotional: [
       { a: "20", b: "30", label: "Moderate sale (20%) vs big event (30%)" },
-      { a: "15", b: "40", label: "Conservative vs aggressive — test margin impact" },
+      { a: "15", b: "40", label: "Conservative vs aggressive: test margin impact" },
     ],
     default: [
       { a: "10", b: "20", label: "Standard (10%) vs strong (20%)" },
@@ -201,11 +201,11 @@ const SUGGESTIONS: Record<ABTestVariable, Record<CategoryKey, VariantSuggestion[
       { a: "Three reasons customers love us (social proof)", b: "Your welcome gift: exclusive first-order perk", label: "Social proof vs immediate reward" },
     ],
     vip_reward: [
-      { a: "Exclusive early access to new collection", b: "Mystery gift — click to reveal your reward", label: "Early access vs gamified surprise" },
+      { a: "Exclusive early access to new collection", b: "Mystery gift: click to reveal your reward", label: "Early access vs gamified surprise" },
       { a: "Personalized thank you with purchase history stats", b: "VIP-only flash sale (24h)", label: "Recognition vs exclusive deal" },
     ],
     cross_sell: [
-      { a: "Complete the set — styled outfit/bundle suggestions", b: "Top 3 items other customers bought together", label: "Curated bundle vs social proof" },
+      { a: "Complete the set: styled outfit/bundle suggestions", b: "Top 3 items other customers bought together", label: "Curated bundle vs social proof" },
     ],
     promotional: [
       { a: "Countdown timer + hero product image", b: "Grid of top deals with prices", label: "Single hero vs multi-product" },
@@ -421,7 +421,7 @@ export default function ABTestPage() {
               A/B tests
             </h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {automation?.name ?? "..."} &mdash; {abTests?.length ?? 0} test{(abTests?.length ?? 0) !== 1 ? "s" : ""}
+              {automation?.name ?? "..."} &middot; {abTests?.length ?? 0} test{(abTests?.length ?? 0) !== 1 ? "s" : ""}
             </p>
           </div>
         </div>
@@ -845,7 +845,7 @@ export default function ABTestPage() {
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="p-3 rounded-lg border border-border bg-muted/30">
                       <div className="text-[10px] font-sans font-bold text-muted-foreground mb-2">
-                        VARIANT A &mdash; {String((test.variantA as any)?.value ?? "").slice(0, 30)}
+                        VARIANT A &middot; {String((test.variantA as any)?.value ?? "").slice(0, 30)}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
@@ -867,7 +867,7 @@ export default function ABTestPage() {
                     </div>
                     <div className="p-3 rounded-lg border border-border bg-muted/30">
                       <div className="text-[10px] font-sans font-bold text-muted-foreground mb-2">
-                        VARIANT B &mdash; {String((test.variantB as any)?.value ?? "").slice(0, 30)}
+                        VARIANT B &middot; {String((test.variantB as any)?.value ?? "").slice(0, 30)}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
@@ -1086,7 +1086,7 @@ export default function ABTestPage() {
       {!isLoading && (!abTests || abTests.length === 0) && !showForm && (
         <motion.div variants={itemVariants} className="text-center py-16">
           <FlaskConical className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">Nothing tested yet — allo is just getting started.</h3>
+          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">Nothing tested yet. allo is just getting started.</h3>
           <p className="text-[11px] text-muted-foreground font-sans mb-4">
             Try two versions against each other and let the results tell you what works.
           </p>

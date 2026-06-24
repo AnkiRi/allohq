@@ -94,7 +94,7 @@ export default function OrdersPage() {
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <ShoppingCart className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-[13px] text-muted-foreground">
-                    {search ? "Nothing matches that search." : "No orders yet — allo is just getting started."}
+                    {search ? "Nothing matches that search." : "No orders yet. allo is just getting started."}
                   </p>
                   <p className="text-[11px] text-muted-foreground/50 mt-1">
                     {search ? "Try a different order number or customer." : "Connect your store and orders land here."}

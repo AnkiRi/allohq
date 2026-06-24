@@ -304,7 +304,7 @@ export function BlockEditor({
       default:
         return (
           <p className="text-[13px] font-sans text-muted-foreground">
-            This block has no inline properties — reorder or delete it from the list.
+            This block has no inline properties. Reorder or delete it from the list.
           </p>
         );
     }

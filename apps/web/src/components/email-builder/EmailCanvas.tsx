@@ -251,7 +251,7 @@ function BlockPreview({ block }: { block: EmailBlock }) {
         <div className="p-3 bg-muted rounded-lg border-l-4 border-secondary">
           <p className="text-amber-500 text-sm">{"★".repeat(Math.min(stars, 5))}</p>
           <p className="text-[11px] font-sans text-foreground italic mt-1">&quot;{(tProps.quote as string) || "Customer quote"}&quot;</p>
-          <p className="text-[10px] font-sans text-muted-foreground mt-1">— {(tProps.author as string) || "Customer"}</p>
+          <p className="text-[10px] font-sans text-muted-foreground mt-1">{(tProps.author as string) || "Customer"}</p>
         </div>
       );
     }

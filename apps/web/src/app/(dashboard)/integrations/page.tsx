@@ -19,7 +19,7 @@ const ecommercePlatforms = [
   {
     id: "shopify",
     name: "Shopify",
-    description: "Connect Shopify and allo will start learning your store — products, customers, and orders.",
+    description: "Connect Shopify and allo will start learning your store: products, customers, and orders.",
     status: "available" as const,
   },
   {

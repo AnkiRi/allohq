@@ -72,7 +72,7 @@ function ConnectStorePrompt() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
-      <ConsoleFrame title="allo — start" className="max-w-md w-full">
+      <ConsoleFrame title="allo · start" className="max-w-md w-full">
         <div className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-[hsl(var(--accent))]/10 flex items-center justify-center mx-auto mb-5">
             <Store className="w-7 h-7 text-[hsl(var(--accent))]" />
@@ -82,7 +82,7 @@ function ConnectStorePrompt() {
           </h1>
           <p className="text-sm text-muted-foreground font-sans mb-6 leading-relaxed">
             Walk the whole thing on a live demo store before you connect your
-            own — allo reads the brand, groups the customers, and drafts the
+            own. allo reads the brand, groups the customers, and drafts the
             work, with nothing touching a real shop.
           </p>
 
@@ -91,7 +91,7 @@ function ConnectStorePrompt() {
             onClick={handleEnterDemo}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[hsl(var(--accent))] text-background text-sm font-medium rounded-xl hover:opacity-90 transition-all"
           >
-            Explore allo with a demo store — Vana Naturals
+            Explore allo with a demo store, Vana Naturals
             <ArrowRight className="w-4 h-4" />
           </button>
 
@@ -203,7 +203,7 @@ function DemoReasoning({
   const reduce = useReducedMotion();
 
   const lines: { tick: "ok" | "step" | "hold"; node: React.ReactNode }[] = [
-    { tick: "ok", node: <>read your goal — <b>{firstLine(goal, 80)}</b></> },
+    { tick: "ok", node: <>read your goal: <b>{firstLine(goal, 80)}</b></> },
     {
       tick: "ok",
       node: (
@@ -251,7 +251,7 @@ function DemoReasoning({
   }, [reduce, total]);
 
   return (
-    <ConsoleFrame title="allo — reasoning" className="mt-8">
+    <ConsoleFrame title="allo · reasoning" className="mt-8">
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
         <span className="font-mono text-[11px] text-muted-foreground">
           staged · no live send
@@ -472,7 +472,7 @@ export default function DashboardPage() {
   // Approve / pass mutations (same as the actions queue)
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
     onSuccess: () => {
-      toast("Approved — allo's on it.", "success");
+      toast("Approved. allo's on it.", "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
     onError: (err: { message?: string }) =>
@@ -634,7 +634,7 @@ export default function DashboardPage() {
             {greeting}, {firstName}
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            Tell allo what you want done — it scans, reasons, and queues the work
+            Tell allo what you want done. It scans, reasons, and queues the work
             for your okay.
           </p>
         </div>
@@ -642,7 +642,7 @@ export default function DashboardPage() {
         {/* 1. Command line */}
         <CommandLine
           placeholder={[
-            "Tell allo what you want — e.g. win back my lapsed buyers before Diwali",
+            "Tell allo what you want: e.g. win back my lapsed buyers before Diwali",
             "Who's slipping away?",
             "Draft a Diwali win-back for me",
             "Look after my best customers",
@@ -664,7 +664,7 @@ export default function DashboardPage() {
 
       {/* The response: console + decisions, given room to breathe */}
       {/* 2 + 3. Reasoning stream + status line, in the console frame */}
-      <ConsoleFrame title="allo — operator" className="mt-8">
+      <ConsoleFrame title="allo · operator" className="mt-8">
         {/* Status line — mono readouts; the live lamp rides the first readout */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
           <MetricReadout label="customers" value={totalCustomers} live />
@@ -681,7 +681,7 @@ export default function DashboardPage() {
         ) : (
           <StreamOutput aria-label="what allo has been doing">
             <StreamRow tick="step">
-              pulling in your store data — this usually takes a minute
+              pulling in your store data, this usually takes a minute
             </StreamRow>
           </StreamOutput>
         )}
@@ -731,7 +731,7 @@ export default function DashboardPage() {
               Nothing waiting on you.
             </p>
             <p className="font-sans text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
-              Drafts before sunrise, approvals over coffee — allo will have the
+              Drafts before sunrise, approvals over coffee. allo will have the
               next decision ready when it&apos;s worth your okay.
             </p>
           </div>

@@ -58,7 +58,7 @@ export default function TemplatesPage() {
   const utils = trpc.useUtils();
 
   const duplicateMut = trpc.templates.duplicate.useMutation({
-    onSuccess: () => { utils.templates.list.invalidate(); toast("Copied — here's your duplicate.", "success"); },
+    onSuccess: () => { utils.templates.list.invalidate(); toast("Copied. Here's your duplicate.", "success"); },
     onError: () => toast("We couldn't duplicate that. Mind trying again?", "error"),
   });
   const deleteMut = trpc.templates.delete.useMutation({
@@ -211,7 +211,7 @@ export default function TemplatesPage() {
                     className="w-full text-left px-3 py-2 text-xs bg-red-50 text-red-700 font-medium"
                   >
                     <AlertTriangle className="w-3 h-3 inline mr-1" />
-                    Yes, delete all {templates?.length || 0} — this can't be undone
+                    Yes, delete all {templates?.length || 0}. This can't be undone
                   </button>
                 )}
               </div>
@@ -425,7 +425,7 @@ export default function TemplatesPage() {
           <Search className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-foreground">Nothing matched</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Nothing matches &ldquo;{searchQuery}&rdquo; — try another search.
+            Nothing matches &ldquo;{searchQuery}&rdquo;. Try another search.
           </p>
         </div>
       ) : (

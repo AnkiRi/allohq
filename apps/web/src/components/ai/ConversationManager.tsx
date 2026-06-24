@@ -441,7 +441,7 @@ export function ConversationManager() {
             <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-destructive/8 border border-destructive/15 flex items-center gap-2">
               <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
               <span className="text-[11px] font-sans text-destructive">
-                Escalated — this one needs your attention
+                Escalated. This one needs your attention
               </span>
             </div>
           )}
@@ -554,7 +554,7 @@ export function ConversationManager() {
       <div className="flex-1 overflow-y-auto">
         {!filteredConversations?.length && (
           <div className="text-center py-8 text-muted-foreground text-xs font-sans">
-            {searchQuery ? "Nothing matches that search." : "Quiet for now — allo is handling the front line. Anything that needs you lands here."}
+            {searchQuery ? "Nothing matches that search." : "Quiet for now. allo is handling the front line. Anything that needs you lands here."}
           </div>
         )}
         {filteredConversations?.map((conv) => (

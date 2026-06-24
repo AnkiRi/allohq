@@ -92,7 +92,7 @@ export default function AutonomySettingsPage() {
           {(!configs || configs.length === 0) && (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
               <p className="text-[11px] text-muted-foreground mb-3">
-                You haven&apos;t set autonomy yet — allo will ask before doing anything until you do.
+                You haven&apos;t set autonomy yet. allo will ask before doing anything until you do.
               </p>
               <button
                 onClick={() => initMut.mutate({ storeId })}

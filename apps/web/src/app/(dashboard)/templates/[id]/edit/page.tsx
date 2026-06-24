@@ -119,13 +119,13 @@ export default function EditTemplatePage() {
     setPendingBlocks(null);
     setPendingSubject(null);
     setFeedback("");
-    toast("Done — the new version is in.", "success");
+    toast("Done. The new version is in.", "success");
   }
 
   function handleRejectRegeneration() {
     setPendingBlocks(null);
     setPendingSubject(null);
-    toast("No worries — kept your original.", "info");
+    toast("No worries, kept your original.", "info");
   }
 
   if (isLoading) {
@@ -174,7 +174,7 @@ export default function EditTemplatePage() {
           <div className="flex items-center gap-2">
             <Wand2 className="w-4 h-4 text-muted-foreground" />
             <span className="text-[12px] font-bold font-sans text-foreground">Rewrite with allo</span>
-            <span className="text-[10px] font-sans text-muted-foreground">— give it a fresh take</span>
+            <span className="text-[10px] font-sans text-muted-foreground">· give it a fresh take</span>
           </div>
           {aiPanelOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
         </button>
@@ -184,7 +184,7 @@ export default function EditTemplatePage() {
             {/* Accept/Reject bar if regeneration pending */}
             {pendingBlocks && (
               <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <span className="text-[11px] font-sans text-amber-800 flex-1">Here's a fresh take — take a look, then keep it or set it aside.</span>
+                <span className="text-[11px] font-sans text-amber-800 flex-1">Here's a fresh take. Take a look, then keep it or set it aside.</span>
                 <button
                   onClick={handleAcceptRegeneration}
                   className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-[11px] font-sans hover:bg-green-700 transition-colors"

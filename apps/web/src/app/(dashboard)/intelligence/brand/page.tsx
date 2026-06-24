@@ -79,7 +79,7 @@ export default function BrandProfilePage() {
       setJobId(null);
       setError(null);
       prevAnalyzedAt.current = profile.analyzedAt;
-      toast("All done — allo has your brand down.", "success");
+      toast("All done. allo has your brand down.", "success");
       return;
     }
 
@@ -87,8 +87,8 @@ export default function BrandProfilePage() {
     if (Date.now() - analyzeStartedAt.current > 90000) {
       setAnalyzing(false);
       setJobId(null);
-      setError("This is taking longer than usual. It may still finish in the background — try refreshing in a minute.");
-      toast("This is taking a while — try again in a minute.", "error");
+      setError("This is taking longer than usual. It may still finish in the background. Try refreshing in a minute.");
+      toast("This is taking a while. Try again in a minute.", "error");
     }
   }, [profile?.analyzedAt, jobStatus, analyzing, toast]);
 
@@ -98,7 +98,7 @@ export default function BrandProfilePage() {
       toast("Creative intensity updated.", "success");
       (utils.ai as any).brandProfile.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save. Give it another try.", "error"),
   }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
 
   const analyzeMut = trpc.ai.analyzeBrand.useMutation({
@@ -108,7 +108,7 @@ export default function BrandProfilePage() {
       setJobId(data.jobId ?? null);
       analyzeStartedAt.current = Date.now();
       prevAnalyzedAt.current = profile?.analyzedAt ?? null;
-      toast("On it — give allo about 15 seconds.", "info");
+      toast("On it. allo needs about 15 seconds.", "info");
     },
     onError: (err) => {
       setError(err.message || "allo couldn't get started. Give it another try.");
@@ -174,7 +174,7 @@ export default function BrandProfilePage() {
       toast("Store details saved.", "success");
       (utils.stores as any).getMetadata.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save. Give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const updateBrandSettingsMut = (trpc.ai as any).updateBrandSettings.useMutation({
@@ -182,7 +182,7 @@ export default function BrandProfilePage() {
       toast("Brand settings saved.", "success");
       (utils.ai as any).getBrandSettings.invalidate({ storeId });
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save. Give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   function handleSaveBrandSettings() {
@@ -273,7 +273,7 @@ export default function BrandProfilePage() {
       (utils.ai as any).brandProfile.invalidate({ storeId });
       setEditingTone(false);
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save. Give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const handleSaveVoice = () => {
@@ -292,7 +292,7 @@ export default function BrandProfilePage() {
       (utils.ai as any).getBrandVisualProfile.invalidate({ storeId });
       setEditingVisual(false);
     },
-    onError: (err: { message?: string }) => toast(err.message || "That didn't save — give it another try.", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That didn't save. Give it another try.", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
   const handleSaveVisual = () => {
@@ -337,14 +337,14 @@ export default function BrandProfilePage() {
       key: "energy",
       label: "Energy",
       left: { label: "Calm", example: "Take your time exploring our curated range" },
-      right: { label: "High Energy", example: "Don't miss out! Limited stock — grab yours now!" },
+      right: { label: "High Energy", example: "Don't miss out! Limited stock, grab yours now!" },
       options: ["calm", "moderate", "high", "intense"],
     },
     {
       key: "warmth",
       label: "Warmth",
       left: { label: "Professional", example: "We recommend this product based on your preferences" },
-      right: { label: "Warm", example: "We think you'll love this — picked just for you" },
+      right: { label: "Warm", example: "We think you'll love this, picked just for you" },
       options: ["professional", "friendly", "warm", "intimate"],
     },
     {
@@ -965,7 +965,7 @@ export default function BrandProfilePage() {
               <Store className="w-4 h-4 text-muted-foreground" />
               <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Store details</h2>
             </div>
-            <p className="text-[10px] text-muted-foreground mb-4">Pulled in from Shopify — edit anything you&apos;d like to change.</p>
+            <p className="text-[10px] text-muted-foreground mb-4">Pulled in from Shopify. Edit anything you&apos;d like to change.</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] text-muted-foreground font-sans block mb-1">STORE NAME</label>
@@ -1028,7 +1028,7 @@ export default function BrandProfilePage() {
           <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
           <p className="text-[13px] text-muted-foreground">No brand profile yet.</p>
           <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
-            allo builds this on its own after your Shopify sync — or hit &quot;Re-analyze&quot; above to start now.
+            allo builds this on its own after your Shopify sync. Or hit &quot;Re-analyze&quot; above to start now.
           </p>
         </motion.div>
       )}

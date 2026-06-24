@@ -8,7 +8,7 @@ import {
 } from "./vana-seed";
 
 export const metadata = {
-  title: "Emails — allo wrote this, edit anything",
+  title: "Emails: allo wrote this, edit anything",
 };
 
 // Preview variables so the seed renders with real-looking values

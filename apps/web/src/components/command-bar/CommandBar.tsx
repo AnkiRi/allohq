@@ -178,7 +178,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
           <Loader2 className="w-4 h-4 text-foreground animate-spin flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground font-sans">{processingStep}</p>
-            <p className="text-[11px] text-muted-foreground font-sans mt-0.5">Bigger asks can take up to a minute — hang tight.</p>
+            <p className="text-[11px] text-muted-foreground font-sans mt-0.5">Bigger asks can take up to a minute. Hang tight.</p>
           </div>
         </div>
       )}

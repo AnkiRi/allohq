@@ -158,7 +158,7 @@ export default function FormsPage() {
                           key={popup.id}
                           className="px-2 py-1 rounded-md text-[10px] font-sans bg-muted border border-border"
                         >
-                          {popup.name} — {triggerLabel(popup.trigger)}
+                          {popup.name} · {triggerLabel(popup.trigger)}
                         </span>
                       ))}
                     </div>

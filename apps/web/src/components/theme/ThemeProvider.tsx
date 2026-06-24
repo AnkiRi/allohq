@@ -13,7 +13,7 @@ export type Theme = "drenched" | "light" | "dark";
 /** The two dark palettes keep the `.dark` class so every `dark:` utility works. */
 const DARKISH: Theme[] = ["drenched", "dark"];
 export const THEMES: { id: Theme; label: string; hint: string }[] = [
-  { id: "drenched", label: "Drenched", hint: "Cobalt — allo's signature blue" },
+  { id: "drenched", label: "Drenched", hint: "Cobalt, allo's signature blue" },
   { id: "light", label: "Light", hint: "Minimal, near-white" },
   { id: "dark", label: "Dark", hint: "Near-black, emerald" },
 ];

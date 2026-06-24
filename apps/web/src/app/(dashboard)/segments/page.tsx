@@ -93,7 +93,7 @@ export default function SegmentsPage() {
             The base
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            How allo reads your customers — grouped by how they shop, and what
+            How allo reads your customers, grouped by how they shop, and what
             they tend to buy together.
           </p>
         </div>
@@ -139,7 +139,7 @@ export default function SegmentsPage() {
 
       {/* RFM Segments tab */}
       {activeTab === "rfm" && (
-        <ConsoleFrame title="allo — segment view">
+        <ConsoleFrame title="allo · segment view">
           {/* Status line — pure counts. The "largest" and "watch" framing lives
               in the warm-voice stream just below, so it isn't said twice. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -168,7 +168,7 @@ export default function SegmentsPage() {
                   {biggestRisk ? (
                     <>
                       your biggest opportunity is{" "}
-                      <b>{opportunity.name}</b> —{" "}
+                      <b>{opportunity.name}</b>:{" "}
                       <b>{opportunity.liveCount.toLocaleString("en-IN")}</b>{" "}
                       customers worth{" "}
                       <b>{formatINR(opportunity.liveRevenue)}</b> are slipping;
@@ -176,7 +176,7 @@ export default function SegmentsPage() {
                     </>
                   ) : (
                     <>
-                      your biggest group is <b>{opportunity.name}</b> —{" "}
+                      your biggest group is <b>{opportunity.name}</b>:{" "}
                       <b>{opportunity.liveCount.toLocaleString("en-IN")}</b>{" "}
                       customers who&apos;ve brought in{" "}
                       <b>{formatINR(opportunity.liveRevenue)}</b> so far
@@ -285,7 +285,7 @@ export default function SegmentsPage() {
 
       {/* Basket Patterns tab */}
       {activeTab === "baskets" && (
-        <ConsoleFrame title="allo — basket patterns">
+        <ConsoleFrame title="allo · basket patterns">
           {basketsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (

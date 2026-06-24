@@ -44,7 +44,7 @@ export interface ConsoleFrameProps {
 }
 
 export function ConsoleFrame({
-  title = "allo — operator",
+  title = "allo · operator",
   live = true,
   clock = true,
   className,

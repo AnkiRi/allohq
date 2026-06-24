@@ -246,16 +246,16 @@ export default function OutcomesPage() {
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
             Once your store is connected and allo&apos;s been running, this is
-            where the proof lives — incremental revenue measured against a
+            where the proof lives: incremental revenue measured against a
             held-out control, and what that earns its keep.
           </p>
         </div>
-        <ConsoleFrame title="allo — outcomes" live={false}>
+        <ConsoleFrame title="allo · outcomes" live={false}>
           <p className="font-sans text-[13.5px] text-foreground">
             Nothing to prove yet.
           </p>
           <p className="font-sans text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
-            Connect your store and let allo run a cycle — we&apos;ll hold a
+            Connect your store and let allo run a cycle. We&apos;ll hold a
             cohort back as control and start measuring lift the moment there&apos;s
             something to measure.
           </p>
@@ -275,12 +275,12 @@ export default function OutcomesPage() {
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
           The only number that matters is the one you wouldn&apos;t have earned
           on your own. We hold a cohort back, send them nothing, and measure the
-          gap — that gap is what allo is for, and what allo gets paid on.
+          gap. That gap is what allo is for, and what allo gets paid on.
         </p>
       </div>
 
       {/* 1. The control comparison — the most important pixel ---------------- */}
-      <ConsoleFrame title="allo — incremental revenue vs control">
+      <ConsoleFrame title="allo · incremental revenue vs control">
         {/* Caption: honesty about measurement state */}
         <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
           {isReal
@@ -330,7 +330,7 @@ export default function OutcomesPage() {
                 </span>
               </div>
               <p className="font-sans text-[11.5px] text-foreground leading-relaxed mb-3">
-                received nothing — this is the baseline
+                received nothing: this is the baseline
               </p>
               <div className="space-y-1.5">
                 <MetricReadout label="cohort" value={model.controlCustomers} />
@@ -383,7 +383,7 @@ export default function OutcomesPage() {
             <StreamRow tick="hold">
               held out{" "}
               <b>{model.controlCustomers.toLocaleString("en-IN")}</b> customers
-              as control — they heard nothing from us
+              as control, they heard nothing from us
             </StreamRow>
             <StreamRow tick="ok">
               measured both cohorts over <b>{model.windowDays} days</b>, same
@@ -396,7 +396,7 @@ export default function OutcomesPage() {
               <b>{moneyExact(model.controlRevPerCustomer)}</b> / customer
             </StreamRow>
             <StreamRow tick="ok">
-              the gap is the lift — <b>{moneyExact(liftPerCustomer)}</b> each ·{" "}
+              the gap is the lift: <b>{moneyExact(liftPerCustomer)}</b> each ·{" "}
               <b>{moneyExact(incrementalRevenue)}</b> you wouldn&apos;t have
               earned otherwise
             </StreamRow>
@@ -414,10 +414,10 @@ export default function OutcomesPage() {
       </ConsoleFrame>
 
       {/* 2. Fee = base + performance on proven lift -------------------------- */}
-      <ConsoleFrame title="allo — what this earns" live={false} clock={false}>
+      <ConsoleFrame title="allo · what this earns" live={false} clock={false}>
         <p className="font-sans text-[13px] text-foreground leading-relaxed mb-4">
           A flat fee keeps your retention running. On top of that, allo takes a
-          small cut of the lift it proved against control — so we only win more
+          small cut of the lift it proved against control, so we only win more
           when you do.
         </p>
 
@@ -457,13 +457,13 @@ export default function OutcomesPage() {
       </ConsoleFrame>
 
       {/* 3. Real AI cost vs the lift — unit economics ----------------------- */}
-      <ConsoleFrame title="allo — unit economics" live={false} clock={false}>
+      <ConsoleFrame title="allo · unit economics" live={false} clock={false}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pb-4 mb-4 border-b border-border">
           <MetricReadout label="AI cost · window" value={aiCostLabel} />
           <MetricReadout label="AI revenue" value={aiRevenue} money />
           <MetricReadout
             label="ROI"
-            value={roi ? `${roi}x` : "—"}
+            value={roi ? `${roi}x` : "·"}
             accentSuffix={roi ? "↗" : undefined}
           />
         </div>
@@ -474,7 +474,7 @@ export default function OutcomesPage() {
           </StreamRow>
           <StreamRow tick="ok">
             against <b>{moneyExact(incrementalRevenue)}</b> of incremental
-            revenue vs control — the spend rounds to nothing next to the lift
+            revenue vs control. The spend rounds to nothing next to the lift
           </StreamRow>
           <StreamRow tick="ok">
             you pay <b>{moneyExact(totalFee)}</b> for{" "}
@@ -540,7 +540,7 @@ function ForecastAccuracy({
   const calibrated = !!data?.hasCalibration;
 
   return (
-    <ConsoleFrame title="allo — forecast accuracy" live={false} clock={false}>
+    <ConsoleFrame title="allo · forecast accuracy" live={false} clock={false}>
       <p className="font-sans text-[13px] text-foreground leading-relaxed mb-1">
         Before acting, allo commits to a predicted recovery. This is how those
         forecasts held up against what the held-out control actually measured.
@@ -550,7 +550,7 @@ function ForecastAccuracy({
       <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
         {calibrated && data?.withinPct != null
           ? `recovery forecasts ran within ${data.withinPct}% of actual over the last ${data.windowDays}d · ${data.sampleSize} measured outcomes`
-          : "forecasts are estimates · not yet control-backed — figures shown are what allo committed to, actual fills in as control outcomes land"}
+          : "forecasts are estimates · not yet control-backed · figures shown are what allo committed to, actual fills in as control outcomes land"}
       </p>
 
       {/* Predicted vs actual rows, stated plainly. */}
@@ -606,7 +606,7 @@ function ForecastAccuracy({
         </div>
       ) : (
         <p className="font-sans text-[12.5px] text-muted-foreground leading-relaxed">
-          No executed decisions in this window yet — once allo acts, each
+          No executed decisions in this window yet. Once allo acts, each
           forecast lands here next to what control actually measured.
         </p>
       )}

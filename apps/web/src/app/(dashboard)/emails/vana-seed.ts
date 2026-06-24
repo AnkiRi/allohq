@@ -63,7 +63,7 @@ export function buildVanaBrandKit(): BrandKit {
 
 export const VANA_SEED_SUBJECT = "We saved your spot, {{first_name}}";
 export const VANA_SEED_PREVIEW =
-  "A quiet hello — your evenings, remembered. No rush.";
+  "A quiet hello: your evenings, remembered. No rush.";
 
 export const VANA_SEED_BLOCKS: EmailBlock[] = [
   {
@@ -72,7 +72,7 @@ export const VANA_SEED_BLOCKS: EmailBlock[] = [
     props: {
       heading: "We saved your spot, {{first_name}}.",
       subtext:
-        "It has been a little while. No rush, no pressure — just a gentle note to say the door is still open whenever you are ready.",
+        "It has been a little while. No rush, no pressure, just a gentle note to say the door is still open whenever you are ready.",
       align: "left",
     },
   },
@@ -81,7 +81,7 @@ export const VANA_SEED_BLOCKS: EmailBlock[] = [
     type: "text",
     props: {
       html:
-        "The last time we packed a parcel for you was back in {{last_order_month}}, and we have thought of you since.\n\nYou came to us for Ashwagandha Calm — the one so many people reach for when the evenings feel a little too loud. We still make it the same slow way: roots sun-dried, milled in small batches, nothing added that does not belong.",
+        "The last time we packed a parcel for you was back in {{last_order_month}}, and we have thought of you since.\n\nYou came to us for Ashwagandha Calm, the one so many people reach for when the evenings feel a little too loud. We still make it the same slow way: roots sun-dried, milled in small batches, nothing added that does not belong.",
       align: "left",
     },
   },
@@ -150,7 +150,7 @@ export const VANA_SEED_BLOCKS: EmailBlock[] = [
     type: "text",
     props: {
       html:
-        "Whenever feels right. We will keep the kettle on.\n\n— The Vana team",
+        "Whenever feels right. We will keep the kettle on.\n\nThe Vana team",
       align: "left",
     },
   },

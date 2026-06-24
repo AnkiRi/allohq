@@ -83,7 +83,7 @@ export default function ProductsPage() {
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <Package className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-[13px] text-muted-foreground">
-                    {search ? "Nothing matches that search." : "Nothing here yet — allo is just getting started."}
+                    {search ? "Nothing matches that search." : "Nothing here yet. allo is just getting started."}
                   </p>
                   <p className="text-[11px] text-muted-foreground/50 mt-1">
                     {search ? "Try a different title or vendor." : "Connect your store and your catalogue lands here."}

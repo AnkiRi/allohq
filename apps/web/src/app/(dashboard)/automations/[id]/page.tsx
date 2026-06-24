@@ -281,7 +281,7 @@ export default function AutomationDetailPage() {
         ) : (
           <div className="p-16 text-center">
             <FileText className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground">Nothing written yet — allo is just getting started.</p>
+            <p className="text-[13px] text-muted-foreground">Nothing written yet. allo is just getting started.</p>
           </div>
         )}
       </div>
@@ -452,7 +452,7 @@ export default function AutomationDetailPage() {
           {/* Suppress reasons — allo's restraint, named */}
           {Object.keys(journeyStats.suppressReasons).length > 0 && (
             <div className="px-6 py-3 border-t border-border">
-              <div className="text-[10px] font-sans text-muted-foreground uppercase mb-2">Left alone — and why</div>
+              <div className="text-[10px] font-sans text-muted-foreground uppercase mb-2">Left alone, and why</div>
               <div className="flex gap-2">
                 {Object.entries(journeyStats.suppressReasons).map(([reason, count]) => (
                   <span key={reason} className="px-2 py-1 bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/25 rounded text-[11px] font-mono text-[var(--color-warning)]">

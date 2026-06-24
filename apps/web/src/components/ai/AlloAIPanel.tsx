@@ -137,7 +137,7 @@ function derivePageContext(pathname: string): string {
 // ---------------------------------------------------------------------------
 
 const PLACEHOLDERS = [
-  "Tell allo what you want — e.g. win back my lapsed buyers before Diwali",
+  "Tell allo what you want: e.g. win back my lapsed buyers before Diwali",
   "What should I focus on today?",
   "Who's slipping away?",
   "How did last week go?",
@@ -210,7 +210,7 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
       pills.push({ label: `${insights.segmentAlerts.atRiskCount} customers at churn risk`, instruction: "Show me at-risk customers and create a win-back campaign" });
     }
     if (!insights.storeState.hasCampaigns) {
-      pills.push({ label: "It's been quiet — let's reach out", instruction: "Create a promotional email campaign" });
+      pills.push({ label: "It's been quiet. Let's reach out", instruction: "Create a promotional email campaign" });
     }
     if (insights.segmentAlerts.championsCount > 0) {
       pills.push({ label: `Reward ${insights.segmentAlerts.championsCount} VIP customers`, instruction: "Create a VIP reward campaign for champion customers" });
@@ -259,7 +259,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-no-store",
       role: "assistant",
-      content: "Hi, I'm allo. Connect your Shopify store from the dashboard and I'll get to work — I'll be right here once you're set up.",
+      content: "Hi, I'm allo. Connect your Shopify store from the dashboard and I'll get to work. I'll be right here once you're set up.",
       timestamp: now,
     });
     return messages;
@@ -269,7 +269,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-syncing",
       role: "assistant",
-      content: "Your store is connected — I'm pulling in your data now. This usually takes a minute or two, and you'll see progress here as I get going.",
+      content: "Your store is connected. I'm pulling in your data now. This usually takes a minute or two, and you'll see progress here as I get going.",
       timestamp: now,
     });
     return messages;
@@ -279,7 +279,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-activating",
       role: "assistant",
-      content: "Your data is in. I'm setting things up now — building your first automations and looking for opportunities. You can follow along above.",
+      content: "Your data is in. I'm setting things up now, building your first automations and looking for opportunities. You can follow along above.",
       timestamp: now,
     });
     return messages;
@@ -430,7 +430,7 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-amber-500",
     accentBg: "bg-amber-500/10",
     accentBorder: "border-amber-500/20",
-    description: (count) => `${count} cart${count !== 1 ? "s" : ""} left behind. I've drafted recovery emails — ready when you are.`,
+    description: (count) => `${count} cart${count !== 1 ? "s" : ""} left behind. I've drafted recovery emails, ready when you are.`,
   },
   price_drop_alert: {
     icon: TrendingDown,
@@ -438,7 +438,7 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-blue-500",
     accentBg: "bg-blue-500/10",
     accentBorder: "border-blue-500/20",
-    description: (count) => `${count} product${count !== 1 ? "s" : ""} dropped in price — let's tell the customers who were watching.`,
+    description: (count) => `${count} product${count !== 1 ? "s" : ""} dropped in price. Let's tell the customers who were watching.`,
   },
   restock_alert: {
     icon: Package,
@@ -446,7 +446,7 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-emerald-500",
     accentBg: "bg-emerald-500/10",
     accentBorder: "border-emerald-500/20",
-    description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock — let's let waiting customers know.`,
+    description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock. Let's let waiting customers know.`,
   },
   repurchase_reminder: {
     icon: RefreshCw,
@@ -454,7 +454,7 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-purple-500",
     accentBg: "bg-purple-500/10",
     accentBorder: "border-purple-500/20",
-    description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a refill — a gentle nudge could bring them back.`,
+    description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a refill, a gentle nudge could bring them back.`,
   },
 };
 
@@ -904,7 +904,7 @@ function ActivationChecklistRow({ step }: { step: ChecklistStep }) {
           {step.status === "generating" && <span className="animate-pulse">…</span>}
         </span>
         {step.status === "done" && step.detail && (
-          <span className="text-[11px] text-muted-foreground/70">— {step.detail}</span>
+          <span className="text-[11px] text-muted-foreground/70">· {step.detail}</span>
         )}
       </span>
     </StreamRow>
@@ -1001,7 +1001,7 @@ function CompletionSummary({
         </div>
         <div>
           <div className="text-[14px] font-serif font-semibold text-foreground">
-            All set — I&apos;m up and running
+            All set. I&apos;m up and running
           </div>
           <div className="text-[11px] font-sans text-muted-foreground">
             Here&apos;s what I set up for you
@@ -1559,9 +1559,9 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const executeChatActionMut = (trpc.ai as any).executeChatAction.useMutation({
     onSuccess: (data: { success: boolean; status: string }) => {
       if (data.success && data.status === "sending") {
-        toast("Approved — your campaign is on its way.", "success");
+        toast("Approved. Your campaign is on its way.", "success");
       } else if (data.success && data.status === "cancelled") {
-        toast("No problem — I've called that one off.", "success");
+        toast("No problem. I've called that one off.", "success");
       }
     },
     onError: (err: { message?: string }) => {
@@ -1902,7 +1902,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                     {currentChatTitle ? (
                       <span className="font-serif font-bold text-foreground">{currentChatTitle}</span>
                     ) : (
-                      <span className="font-mono font-semibold text-foreground">allo — operator</span>
+                      <span className="font-mono font-semibold text-foreground">allo · operator</span>
                     )}
                   </div>
                   {storeId && (
@@ -1980,7 +1980,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       <div className="text-center py-6">
                         <MessageSquare className="w-4 h-4 text-muted-foreground/30 mx-auto mb-1.5" />
                         <p className="text-[11px] text-muted-foreground font-sans">
-                          {chatSearch.trim() ? "Nothing matches that yet" : "No conversations yet — say hi to get started"}
+                          {chatSearch.trim() ? "Nothing matches that yet" : "No conversations yet. Say hi to get started"}
                         </p>
                       </div>
                     );
@@ -2103,7 +2103,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 <RecoveryOpportunityCards
                   storeId={storeId}
                   onApproveAll={(type, actionIds) => {
-                    toast(`On it — sending ${actionIds.length} ${type.replace(/_/g, " ")} message${actionIds.length > 1 ? "s" : ""}.`, "success");
+                    toast(`On it. Sending ${actionIds.length} ${type.replace(/_/g, " ")} message${actionIds.length > 1 ? "s" : ""}.`, "success");
                   }}
                   onReview={(type) => {
                     const filterMap: Record<string, string> = {

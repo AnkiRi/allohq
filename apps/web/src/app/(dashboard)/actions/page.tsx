@@ -185,10 +185,10 @@ export default function ActionsPage() {
     onSuccess: (result: { executedType?: string }) => {
       const msg =
         result.executedType === "campaign"
-          ? "Done — your campaign's ready in Campaigns."
+          ? "Done. Your campaign's ready in Campaigns."
           : result.executedType === "automation"
-          ? "Done — that automation is live."
-          : "Approved — allo's on it.";
+          ? "Done. That automation is live."
+          : "Approved. allo's on it.";
       toast(msg, "success");
       invalidate();
     },
@@ -249,13 +249,13 @@ export default function ActionsPage() {
           Decision queue
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          What allo wants to do next — its thinking laid out, yours to approve or
+          What allo wants to do next, its thinking laid out, yours to approve or
           pass.
         </p>
       </div>
 
       {/* Console frame — status line + queue summary */}
-      <ConsoleFrame title="allo — decisions">
+      <ConsoleFrame title="allo · decisions">
         {/* Status line — mono readouts. The frame's status bar already carries
             the live lamp, so we don't repeat a second pulsing dot here. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -346,7 +346,7 @@ export default function ActionsPage() {
             Nothing waiting on you.
           </p>
           <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-relaxed">
-            Drafts before sunrise, approvals over coffee — allo will have the
+            Drafts before sunrise, approvals over coffee. allo will have the
             next decision ready when it&apos;s worth your okay.
           </p>
         </div>

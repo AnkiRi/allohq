@@ -98,7 +98,7 @@ export function ModelSelector({ value, onChange, compact }: ModelSelectorProps) 
                   </div>
                   <p className="text-[10px] font-sans text-muted-foreground mt-0.5">
                     {model.description}
-                    {!isAvailable && " — API key not configured"}
+                    {!isAvailable && ". API key not configured"}
                   </p>
                   {(model as any).inputCostPerMillion != null && (
                     <p className="text-[9px] font-mono text-muted-foreground/50 mt-0.5">
