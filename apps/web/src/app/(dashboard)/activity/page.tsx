@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ChevronRight, Radio } from "lucide-react";
+import Link from "next/link";
+import { Loader2, ChevronRight, Radio, ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 // ---------------------------------------------------------------------------
@@ -106,6 +107,17 @@ function ActivityEntry({ row }: { row: ActivityRow }) {
           <span className="block text-[13px] font-sans text-foreground leading-relaxed mt-0.5">
             {row.summary}
           </span>
+          {row.actionTaken === "queued_for_review" && (
+            // Cross-reference: a terminal run waiting on the user links to the
+            // decision surface where they act on it.
+            <Link
+              href="/actions"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-mono text-[hsl(var(--accent))] hover:underline"
+            >
+              review <ArrowRight className="w-3 h-3" />
+            </Link>
+          )}
         </span>
       </button>
       {open && hasDetail && (
