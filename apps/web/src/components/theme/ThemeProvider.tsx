@@ -75,7 +75,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  // Apply data-theme + `.dark` class whenever theme changes.
+  // Apply data-theme + `.dark` class whenever theme changes. Apply ONLY — do
+  // NOT persist here. Persisting the default on mount would pollute the shared
+  // 'allo-theme' key (e.g. the app's light default overwriting the landing's
+  // drenched). The key holds ONLY an explicit user choice (written below).
   useEffect(() => {
     if (!mounted) return;
     const root = document.documentElement;
@@ -85,18 +88,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme, mounted]);
 
+  const persist = (t: Theme) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, t);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Persist only on an explicit choice, so defaults never pollute the key.
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
+    persist(t);
   }, []);
 
   // Cycle drenched → light → dark → drenched (used by any quick toggle).
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) =>
-      prev === "drenched" ? "light" : prev === "light" ? "dark" : "drenched",
-    );
+    setThemeState((prev) => {
+      const next =
+        prev === "drenched" ? "light" : prev === "light" ? "dark" : "drenched";
+      persist(next);
+      return next;
+    });
   }, []);
 
   return (

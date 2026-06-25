@@ -83,8 +83,11 @@ export function V2Landing({
   initialPal?: PalId;
 }) {
   return (
-    <div className="opt-v2" data-pal={initialPal}>
-      {/* No-FOUC: resolve ?pal= / stored palette synchronously, before paint. */}
+    <div className="opt-v2" data-pal={initialPal} suppressHydrationWarning>
+      {/* No-FOUC: resolve ?pal= / stored palette synchronously, before paint.
+          The script mutates data-pal before hydration, so this element's
+          attributes legitimately differ server vs client — suppress the warning
+          (same pattern the root <html> uses for the app's data-theme). */}
       <script dangerouslySetInnerHTML={{ __html: PAL_INIT }} />
 
       {/* Fonts: Hanken Grotesk (display + body) · JetBrains Mono (data/console) */}
