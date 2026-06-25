@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { prisma, DEMO_HEADER, getDemoWorkspaceId } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
-import { checkRateLimit } from "./middleware/rate-limit";
+import { checkRateLimit, checkDemoLLMLimit } from "./middleware/rate-limit";
 import { verifyStoreAccess } from "./lib/storeAccess";
 
 /**
@@ -158,6 +158,14 @@ const DEMO_INTERACTIVE_MUTATIONS = new Set<string>([
   "autonomy.bulkReject",
 ]);
 
+// Public-demo LLM/compute paths that must be cost-capped (per-IP + global daily).
+const DEMO_LLM_PATHS = new Set<string>([
+  "ai.chat",
+  "ai.explain",
+  "ai.generateEmail",
+  "ai.regenerateEmail",
+]);
+
 /**
  * Workspace procedure - requires authentication + workspace access + rate limiting
  */
@@ -202,6 +210,20 @@ export const workspaceProcedure = protectedProcedure.use(async ({ ctx, next }) =
       message:
         "This is a live demo, so changes aren't saved. Sign up to run it for real.",
     });
+  }
+  // B2 cost cap: gate the public demo's LLM endpoints — per-IP minute window +
+  // a global daily ceiling (hard money bound). Graceful, not an error.
+  if (ctx.isDemo && DEMO_LLM_PATHS.has(path)) {
+    const cap = checkDemoLLMLimit(ctx.clientIp);
+    if (!cap.allowed) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message:
+          cap.reason === "global"
+            ? "allo's demo is resting for today, it's been a busy day. Come back tomorrow, or sign up to run it for real."
+            : "You're moving quickly, give the demo a moment and try again.",
+      });
+    }
   }
   return next();
 });
