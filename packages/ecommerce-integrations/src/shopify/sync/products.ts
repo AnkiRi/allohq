@@ -23,8 +23,12 @@ export async function syncAllProducts(
 
     const response = await client.get<ShopifyProduct>("products", params);
 
-    for (const product of response.data) {
-      try {
+    // Bounded parallel chunks instead of one product (+ its variants) at a time.
+    const PRODUCT_CONCURRENCY = 10;
+    for (let i = 0; i < response.data.length; i += PRODUCT_CONCURRENCY) {
+      const chunk = response.data.slice(i, i + PRODUCT_CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map(async (product) => {
         const upserted = await prisma.product.upsert({
           where: {
             storeId_externalId: {
@@ -93,10 +97,15 @@ export async function syncAllProducts(
         }
 
         imported++;
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Product ${product.id}: ${msg}`);
-      }
+        }),
+      );
+      results.forEach((r, j) => {
+        if (r.status === "rejected") {
+          const msg =
+            r.reason instanceof Error ? r.reason.message : String(r.reason);
+          errors.push(`Product ${chunk[j]?.id}: ${msg}`);
+        }
+      });
     }
 
     pageInfo = response.nextPageInfo;
