@@ -19,18 +19,18 @@ const itemVariants = {
 };
 
 const STATUS_BADGES: Record<string, { className: string; label: string }> = {
-  recommended: { className: "bg-white/20 text-muted-foreground border border-white/15", label: "Recommended" },
+  recommended: { className: "bg-muted text-muted-foreground border border-border", label: "Recommended" },
   generating: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Generating..." },
-  draft: { className: "bg-white/15 text-muted-foreground border border-white/10", label: "Draft" },
+  draft: { className: "bg-muted text-muted-foreground border border-border", label: "Draft" },
   ready: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Ready" },
   active: { className: "bg-[var(--color-success)] text-white", label: "Active" },
-  paused: { className: "bg-white/15 text-muted-foreground border border-white/10", label: "Paused" },
+  paused: { className: "bg-muted text-muted-foreground border border-border", label: "Paused" },
 };
 
 function getCardClasses(status: string): string {
   switch (status) {
     case "recommended":
-      return "glass-card-static rounded-xl border-dashed border-white/40 p-6 hover:border-white/60 transition-all";
+      return "glass-card-static rounded-xl border-dashed border-border p-6 hover:border-border transition-all";
     case "generating":
       return "glass-card-static rounded-xl border-l-4 border-l-[var(--color-warning)] animate-pulse p-6 transition-all";
     case "ready":
@@ -290,13 +290,13 @@ export default function AutomationsPage() {
                     <>
                       <Link
                         href={`/automations/${automation.id}`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                       >
                         View Details
                       </Link>
                       <Link
                         href={`/automations/${automation.id}/edit`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                       >
                         <Pencil className="w-3 h-3" />
                         Edit Flow
@@ -315,13 +315,13 @@ export default function AutomationsPage() {
                     <>
                       <Link
                         href={`/automations/${automation.id}`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                       >
                         View
                       </Link>
                       <Link
                         href={`/automations/${automation.id}/edit`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                       >
                         <Pencil className="w-3 h-3" />
                         Edit
@@ -329,7 +329,7 @@ export default function AutomationsPage() {
                       <button
                         onClick={() => pauseMut.mutate({ id: automation.id })}
                         disabled={pauseMut.isPending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 disabled:opacity-50 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted disabled:opacity-50 transition-all"
                       >
                         <Pause className="w-3 h-3" />
                         Pause
@@ -340,13 +340,13 @@ export default function AutomationsPage() {
                     <>
                       <Link
                         href={`/automations/${automation.id}`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                       >
                         View
                       </Link>
                       <Link
                         href={`/automations/${automation.id}/edit`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                       >
                         <Pencil className="w-3 h-3" />
                         Edit
@@ -364,7 +364,7 @@ export default function AutomationsPage() {
                   {automation.status === "draft" && (
                     <Link
                       href={`/automations/${automation.id}/edit`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 border border-white/30 rounded-lg text-xs font-sans text-foreground hover:bg-white/10 transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-sans text-foreground hover:bg-muted transition-all"
                     >
                       <Pencil className="w-3 h-3" />
                       Edit Flow

@@ -134,7 +134,7 @@ export default function GuardrailsPage() {
               <select
                 value={newRule.ruleType}
                 onChange={(e) => setNewRule({ ruleType: e.target.value, values: {} })}
-                className="w-full p-2 rounded-lg bg-white/20 border border-white/20 text-[11px] font-sans text-foreground"
+                className="w-full p-2 rounded-lg bg-muted border border-border text-[11px] font-sans text-foreground"
               >
                 <option value="">Choose a type of limit...</option>
                 {RULE_TYPES.map((r) => (
@@ -153,7 +153,7 @@ export default function GuardrailsPage() {
                     ...prev,
                     values: { ...prev.values, [field.key]: e.target.value },
                   }))}
-                  className="w-full p-2 rounded-lg bg-white/20 border border-white/20 text-[11px] font-sans text-foreground"
+                  className="w-full p-2 rounded-lg bg-muted border border-border text-[11px] font-sans text-foreground"
                   placeholder={field.label}
                 />
               </div>
@@ -169,7 +169,7 @@ export default function GuardrailsPage() {
               </button>
               <button
                 onClick={() => { setShowForm(false); setNewRule({ ruleType: "", values: {} }); }}
-                className="px-4 py-2 rounded-lg text-[11px] font-sans bg-white/20 text-foreground hover:bg-white/30 transition-colors"
+                className="px-4 py-2 rounded-lg text-[11px] font-sans bg-muted text-foreground hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
@@ -198,7 +198,7 @@ export default function GuardrailsPage() {
               className={`flex items-center justify-between p-4 rounded-xl transition-all ${
                 rule.isActive
                   ? "glass-card-static"
-                  : "bg-white/5 border border-white/10 opacity-60"
+                  : "bg-muted border border-border opacity-60"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -216,7 +216,7 @@ export default function GuardrailsPage() {
                 <button
                   onClick={() => updateMut.mutate({ id: rule.id, isActive: !rule.isActive })}
                   disabled={updateMut.isPending}
-                  className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                   title={rule.isActive ? "Disable" : "Enable"}
                 >
                   {rule.isActive ? (

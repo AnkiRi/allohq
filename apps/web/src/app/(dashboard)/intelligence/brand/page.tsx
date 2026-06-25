@@ -371,7 +371,7 @@ export default function BrandProfilePage() {
     >
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/intelligence" className="p-2 rounded-lg hover:bg-white/20 transition-colors">
+          <Link href="/intelligence" className="p-2 rounded-lg hover:bg-muted transition-colors">
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
@@ -488,7 +488,7 @@ export default function BrandProfilePage() {
                           <span className="text-muted-foreground uppercase">{dim.label}</span>
                           <span className="text-foreground font-bold">{value}</span>
                         </div>
-                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
                             style={{ backgroundColor: getToneBarColor(value), width: `${pct}%` }}
@@ -545,7 +545,7 @@ export default function BrandProfilePage() {
                       value={bannedWordsEdit}
                       onChange={(e) => setBannedWordsEdit(e.target.value)}
                       placeholder="e.g. cheap, discount, limited time"
-                      className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                      className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                     />
                     <p className="text-[9px] text-muted-foreground/50 mt-1">Separate with commas. allo will keep these words out of everything it writes.</p>
                   </div>
@@ -579,7 +579,7 @@ export default function BrandProfilePage() {
                       {(Array.isArray(visual["suggestedColors"]) ? visual["suggestedColors"] : []).map((color, i) => (
                         <div key={i} className="flex items-center gap-1.5">
                           <div
-                            className="w-7 h-7 rounded-full border border-white/20"
+                            className="w-7 h-7 rounded-full border border-border"
                             style={{ backgroundColor: color }}
                           />
                           <span className="text-[10px] text-muted-foreground font-mono">{color}</span>
@@ -615,8 +615,8 @@ export default function BrandProfilePage() {
                     disabled={updateIntensityMut.isPending}
                     className={`text-left p-4 border rounded-xl transition-all ${
                       currentIntensity === opt.value
-                        ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-white/30"
-                        : "border-white/20 bg-white/20 hover:border-white/40"
+                        ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-muted"
+                        : "border-border bg-muted hover:border-border"
                     }`}
                   >
                     <p className="text-[11px] font-bold text-foreground">{opt.label}</p>
@@ -639,7 +639,7 @@ export default function BrandProfilePage() {
                   <span className="text-[11px] text-muted-foreground font-sans block mb-2">PREFERRED WORDS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["preferredWords"] ?? []).map((word, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-sans rounded">
+                      <span key={i} className="px-2 py-0.5 bg-muted border border-border text-foreground text-[11px] font-sans rounded">
                         {word}
                       </span>
                     ))}
@@ -649,7 +649,7 @@ export default function BrandProfilePage() {
                   <span className="text-[11px] text-muted-foreground font-sans block mb-2">CTA PATTERNS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["ctaPatterns"] ?? []).map((cta, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-sans rounded">
+                      <span key={i} className="px-2 py-0.5 bg-muted border border-border text-foreground text-[11px] font-sans rounded">
                         {cta}
                       </span>
                     ))}
@@ -659,7 +659,7 @@ export default function BrandProfilePage() {
                   <span className="text-[11px] text-muted-foreground font-sans block mb-2">BRAND TERMS</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(vocabulary["brandTerms"] ?? []).map((term, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-white/30 border border-white/20 text-foreground text-[11px] font-sans rounded">
+                      <span key={i} className="px-2 py-0.5 bg-muted border border-border text-foreground text-[11px] font-sans rounded">
                         {term}
                       </span>
                     ))}
@@ -678,7 +678,7 @@ export default function BrandProfilePage() {
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
-                  <div key={i} className="p-3 bg-white/20 rounded-lg border-l-2 border-l-[var(--color-accent)]">
+                  <div key={i} className="p-3 bg-muted rounded-lg border-l-2 border-l-[var(--color-accent)]">
                     <p className="text-[11px] text-foreground leading-relaxed">{copy}</p>
                   </div>
                 ))}
@@ -734,7 +734,7 @@ export default function BrandProfilePage() {
                     <div className="flex gap-2 flex-wrap">
                       {COLOR_TOKEN_LABELS.map(({ key, label }) => colorTokens[key] ? (
                         <div key={key} className="flex items-center gap-1.5">
-                          <div className="w-6 h-6 rounded-full border border-white/20" style={{ backgroundColor: colorTokens[key] }} />
+                          <div className="w-6 h-6 rounded-full border border-border" style={{ backgroundColor: colorTokens[key] }} />
                           <span className="text-[10px] text-muted-foreground font-sans">{label}</span>
                         </div>
                       ) : null)}
@@ -760,8 +760,8 @@ export default function BrandProfilePage() {
                         onClick={() => setAestheticEdit(opt.value)}
                         className={`text-left px-3 py-2 border rounded-lg transition-all ${
                           aestheticEdit === opt.value
-                            ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-white/30"
-                            : "border-white/20 bg-white/20 hover:border-white/40"
+                            ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-muted"
+                            : "border-border bg-muted hover:border-border"
                         }`}
                       >
                         <span className="text-[11px] font-bold text-foreground font-sans">{opt.label}</span>
@@ -779,8 +779,8 @@ export default function BrandProfilePage() {
                       <div key={key}>
                         <label className="text-[10px] text-muted-foreground font-sans mb-1 block">{label}</label>
                         <div className="flex items-center gap-2">
-                          <input type="color" value={colorTokens[key] || "#000000"} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="w-7 h-7 rounded border border-white/20 cursor-pointer" />
-                          <input type="text" value={colorTokens[key] || ""} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-2 py-1 text-[10px] font-mono rounded border border-white/20 bg-white/20 text-foreground" />
+                          <input type="color" value={colorTokens[key] || "#000000"} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="w-7 h-7 rounded border border-border cursor-pointer" />
+                          <input type="text" value={colorTokens[key] || ""} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-2 py-1 text-[10px] font-mono rounded border border-border bg-muted text-foreground" />
                         </div>
                       </div>
                     ))}
@@ -793,11 +793,11 @@ export default function BrandProfilePage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-muted-foreground font-sans mb-1 block">Heading Font</label>
-                      <input type="text" value={headingFont} onChange={(e) => setHeadingFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-sans rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Playfair Display" />
+                      <input type="text" value={headingFont} onChange={(e) => setHeadingFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-sans rounded border border-border bg-muted text-foreground" placeholder="e.g. Playfair Display" />
                     </div>
                     <div>
                       <label className="text-[10px] text-muted-foreground font-sans mb-1 block">Body Font</label>
-                      <input type="text" value={bodyFont} onChange={(e) => setBodyFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-sans rounded border border-white/20 bg-white/20 text-foreground" placeholder="e.g. Inter" />
+                      <input type="text" value={bodyFont} onChange={(e) => setBodyFont(e.target.value)} className="w-full px-2 py-1.5 text-[11px] font-sans rounded border border-border bg-muted text-foreground" placeholder="e.g. Inter" />
                     </div>
                   </div>
                 </div>
@@ -809,7 +809,7 @@ export default function BrandProfilePage() {
           {/* BRAND SETTINGS — Email Header / Footer / Assets                  */}
           {/* ================================================================ */}
 
-          <motion.div variants={itemVariants} className="pt-4 border-t border-white/10">
+          <motion.div variants={itemVariants} className="pt-4 border-t border-border">
             <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-serif mb-1">Email settings</h2>
             <p className="text-[11px] text-muted-foreground font-sans mb-6">The fixed details allo applies to every email it sends.</p>
           </motion.div>
@@ -839,10 +839,10 @@ export default function BrandProfilePage() {
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
                     placeholder="https://cdn.shopify.com/your-logo.png"
-                    className="flex-1 px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                   {logoUrl && (
-                    <div className="w-16 h-16 border border-white/20 rounded-lg overflow-hidden bg-white flex-shrink-0">
+                    <div className="w-16 h-16 border border-border rounded-lg overflow-hidden bg-white flex-shrink-0">
                       <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     </div>
                   )}
@@ -857,8 +857,8 @@ export default function BrandProfilePage() {
                       onClick={() => setLogoPosition(pos)}
                       className={`px-4 py-2 border rounded-lg text-[11px] font-sans transition-all ${
                         logoPosition === pos
-                          ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-white/30 font-bold"
-                          : "border-white/20 bg-white/20 hover:border-white/40"
+                          ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-muted font-bold"
+                          : "border-border bg-muted hover:border-border"
                       }`}
                     >
                       {pos.charAt(0).toUpperCase() + pos.slice(1)}
@@ -873,13 +873,13 @@ export default function BrandProfilePage() {
                     type="color"
                     value={headerBgColor}
                     onChange={(e) => setHeaderBgColor(e.target.value)}
-                    className="w-8 h-8 rounded border border-white/20 cursor-pointer"
+                    className="w-8 h-8 rounded border border-border cursor-pointer"
                   />
                   <input
                     type="text"
                     value={headerBgColor}
                     onChange={(e) => setHeaderBgColor(e.target.value)}
-                    className="w-28 px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="w-28 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                 </div>
               </div>
@@ -900,7 +900,7 @@ export default function BrandProfilePage() {
                   onChange={(e) => setFooterText(e.target.value)}
                   placeholder="e.g. All rights reserved. Terms & conditions apply."
                   rows={2}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary resize-none"
                 />
               </div>
               <div className="flex gap-6">
@@ -908,7 +908,7 @@ export default function BrandProfilePage() {
                   <button
                     onClick={() => setShowAddress(!showAddress)}
                     className={`w-8 h-5 rounded-full transition-all flex items-center ${
-                      showAddress ? "bg-secondary justify-end" : "bg-white/20 border border-white/20 justify-start"
+                      showAddress ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
                     }`}
                   >
                     <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
@@ -919,7 +919,7 @@ export default function BrandProfilePage() {
                   <button
                     onClick={() => setShowSocialLinks(!showSocialLinks)}
                     className={`w-8 h-5 rounded-full transition-all flex items-center ${
-                      showSocialLinks ? "bg-secondary justify-end" : "bg-white/20 border border-white/20 justify-start"
+                      showSocialLinks ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
                     }`}
                   >
                     <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
@@ -955,7 +955,7 @@ export default function BrandProfilePage() {
                     value={socialLinks[platform] ?? ""}
                     onChange={(e) => setSocialLinks((prev) => ({ ...prev, [platform]: e.target.value }))}
                     placeholder={`https://${platform}.com/yourstore`}
-                    className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                 </div>
               ))}
@@ -976,7 +976,7 @@ export default function BrandProfilePage() {
                   type="text"
                   value={storeDetails.storeName}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeName: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -985,7 +985,7 @@ export default function BrandProfilePage() {
                   type="email"
                   value={storeDetails.storeEmail}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storeEmail: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -994,7 +994,7 @@ export default function BrandProfilePage() {
                   type="tel"
                   value={storeDetails.storePhone}
                   onChange={(e) => setStoreDetails((prev) => ({ ...prev, storePhone: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -1020,7 +1020,7 @@ export default function BrandProfilePage() {
                     }));
                   }}
                   placeholder="123 Main St, City, State, ZIP, Country"
-                  className="w-full px-3 py-2 bg-white/20 border border-white/20 rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-secondary"
                 />
               </div>
             </div>

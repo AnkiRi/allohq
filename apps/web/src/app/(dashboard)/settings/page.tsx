@@ -121,7 +121,7 @@ function TokenUsageSection() {
               { label: "Input tokens", value: formatTokens(usage.totalInputTokens) },
               { label: "Output tokens", value: formatTokens(usage.totalOutputTokens) },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-xl bg-white/30 border border-white/20 p-3">
+              <div key={stat.label} className="rounded-xl bg-muted border border-border p-3">
                 <div className="font-sans text-[10px] uppercase tracking-wider text-muted-foreground">
                   {stat.label}
                 </div>
@@ -139,7 +139,7 @@ function TokenUsageSection() {
               {usage.byModel.map((m) => (
                 <div
                   key={m.model}
-                  className="flex items-center justify-between p-3 bg-white/20 border border-white/15 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-muted border border-border rounded-lg"
                 >
                   <div>
                     <p className="text-[12px] font-bold text-foreground">
@@ -415,8 +415,8 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
                     disabled={updateConfig.isPending}
                     className={`relative text-left p-3 rounded-xl transition-all ${
                       current === null
-                        ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
-                        : "border border-white/20 bg-white/20 hover:border-white/40"
+                        ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-muted"
+                        : "border border-border bg-muted hover:border-border"
                     }`}
                   >
                     {current === null && (
@@ -436,8 +436,8 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
                         disabled={updateConfig.isPending}
                         className={`relative text-left p-3 rounded-xl transition-all ${
                           isSelected
-                            ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
-                            : "border border-white/20 bg-white/20 hover:border-white/40"
+                            ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-muted"
+                            : "border border-border bg-muted hover:border-border"
                         }`}
                       >
                         {isSelected && (
@@ -536,13 +536,13 @@ function NotificationPreferencesSection() {
             key={ch.key}
             onClick={() => toggle(ch.key, !p[ch.key])}
             disabled={upsert.isPending}
-            className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all"
+            className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:border-border transition-all"
           >
             <div className="text-left">
               <p className="text-[11px] font-bold text-foreground">{ch.label}</p>
               <p className="text-[10px] text-muted-foreground">{ch.desc}</p>
             </div>
-            <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ch.key] ? "bg-[var(--olive)]" : "bg-white/20"}`}>
+            <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ch.key] ? "bg-[var(--olive)]" : "bg-muted"}`}>
               <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ch.key] ? "translate-x-4" : "translate-x-0.5"}`} />
             </div>
           </button>
@@ -557,13 +557,13 @@ function NotificationPreferencesSection() {
             key={ev.key}
             onClick={() => toggle(ev.key, !p[ev.key])}
             disabled={upsert.isPending}
-            className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all"
+            className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:border-border transition-all"
           >
             <div className="text-left">
               <p className="text-[11px] font-bold text-foreground">{ev.label}</p>
               <p className="text-[10px] text-muted-foreground">{ev.desc}</p>
             </div>
-            <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ev.key] ? "bg-[var(--olive)]" : "bg-white/20"}`}>
+            <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ev.key] ? "bg-[var(--olive)]" : "bg-muted"}`}>
               <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ev.key] ? "translate-x-4" : "translate-x-0.5"}`} />
             </div>
           </button>
@@ -576,7 +576,7 @@ function NotificationPreferencesSection() {
         <select
           value={p.quietHoursStart ?? ""}
           onChange={(e) => upsert.mutate({ quietHoursStart: e.target.value === "" ? null : Number(e.target.value) })}
-          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
+          className="bg-muted border border-border rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
         >
           <option value="">Off</option>
           {Array.from({ length: 24 }, (_, i) => (
@@ -587,7 +587,7 @@ function NotificationPreferencesSection() {
         <select
           value={p.quietHoursEnd ?? ""}
           onChange={(e) => upsert.mutate({ quietHoursEnd: e.target.value === "" ? null : Number(e.target.value) })}
-          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
+          className="bg-muted border border-border rounded-lg px-3 py-2 text-[11px] font-mono text-foreground"
         >
           <option value="">Off</option>
           {Array.from({ length: 24 }, (_, i) => (
@@ -597,7 +597,7 @@ function NotificationPreferencesSection() {
         <select
           value={p.timezone}
           onChange={(e) => upsert.mutate({ timezone: e.target.value })}
-          className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-[11px] font-sans text-foreground"
+          className="bg-muted border border-border rounded-lg px-3 py-2 text-[11px] font-sans text-foreground"
         >
           {["UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Asia/Kolkata", "Australia/Sydney"].map((tz) => (
             <option key={tz} value={tz}>{tz.replace("_", " ")}</option>
@@ -845,8 +845,8 @@ export default function SettingsPage() {
                       disabled={updateIntensityMut.isPending}
                       className={`text-left p-4 rounded-xl transition-all ${
                         current === opt.value
-                          ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-white/30"
-                          : "border border-white/20 bg-white/20 hover:border-white/40"
+                          ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-muted"
+                          : "border border-border bg-muted hover:border-border"
                       }`}
                     >
                       <p className="text-[11px] font-bold text-foreground">{opt.label}</p>
@@ -890,7 +890,7 @@ export default function SettingsPage() {
                     isSelected
                       ? "glass-card-static shadow-[0_0_0_2px_var(--terracotta)]"
                       : model.available
-                        ? "glass-card-static border-white/20 hover:border-white/40"
+                        ? "glass-card-static border-border hover:border-border"
                         : "glass-card-static opacity-50 cursor-not-allowed"
                   }`}
                 >

@@ -268,7 +268,7 @@ function TabButton({ active, onClick, icon: Icon, label }: {
       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-sans transition-all ${
         active
           ? "bg-foreground text-background font-semibold"
-          : "bg-white/20 border border-white/20 text-muted-foreground hover:bg-white/30 hover:text-foreground"
+          : "bg-muted border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       <Icon className="w-3.5 h-3.5" />
@@ -284,7 +284,7 @@ function TabButton({ active, onClick, icon: Icon, label }: {
 function StudioCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-2xl border border-black/5 dark:border-[rgba(200,180,150,0.12)] p-6 bg-white/60 dark:bg-[rgba(40,36,30,0.7)] ${className}`}
+      className={`rounded-2xl border border-border dark:border-[rgba(200,180,150,0.12)] p-6 bg-card dark:bg-[rgba(40,36,30,0.7)] ${className}`}
       style={{ backdropFilter: "blur(20px)" }}
     >
       {children}
@@ -424,7 +424,7 @@ function SubjectLineScorer() {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Enter your subject line..."
-                className="w-full px-4 py-3 bg-white/30 border border-border rounded-xl text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans"
+                className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans"
                 maxLength={200}
               />
               <div className="flex items-center justify-between mt-1.5">
@@ -481,7 +481,7 @@ function SubjectLineScorer() {
                 return (
                   <div
                     key={i}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white/30 border border-black/[0.04] group hover:bg-white/50 transition-colors"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border group hover:bg-card transition-colors"
                   >
                     <span
                       className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md ${
@@ -493,7 +493,7 @@ function SubjectLineScorer() {
                     <span className="flex-1 text-[13px] font-sans text-foreground">{alt}</span>
                     <button
                       onClick={() => copyToClipboard(alt, i)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-white/40 text-muted-foreground hover:text-foreground transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
                       title="Copy"
                     >
                       {copiedIdx === i ? <Check className="w-3.5 h-3.5 text-[#6B7A2F]" /> : <Copy className="w-3.5 h-3.5" />}
@@ -576,7 +576,7 @@ function EmailPreviewGenerator() {
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="w-full flex items-center justify-between px-4 py-2.5 bg-white/30 border border-border rounded-xl text-[13px] font-sans text-foreground hover:bg-white/40 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-muted border border-border rounded-xl text-[13px] font-sans text-foreground hover:bg-muted transition-colors"
             >
               <span className={selectedTemplate ? "text-foreground" : "text-muted-foreground/50"}>
                 {selectedTemplate ? selectedName : "Select a template..."}
@@ -608,7 +608,7 @@ function EmailPreviewGenerator() {
           </div>
 
           {/* View mode toggle */}
-          <div className="flex items-center gap-1 p-1 bg-white/20 border border-white/20 rounded-xl">
+          <div className="flex items-center gap-1 p-1 bg-muted border border-border rounded-xl">
             <button
               onClick={() => setViewMode("desktop")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-sans transition-all ${
@@ -635,7 +635,7 @@ function EmailPreviewGenerator() {
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-sans border transition-all ${
               darkMode
                 ? "bg-gray-800 text-gray-200 border-gray-700"
-                : "bg-white/20 text-muted-foreground border-white/20 hover:bg-white/30"
+                : "bg-muted text-muted-foreground border-border hover:bg-muted"
             }`}
           >
             {darkMode ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
@@ -802,7 +802,7 @@ function CopyAssistant() {
                 className={`p-3 rounded-xl text-left transition-all border ${
                   tone === t.value
                     ? "bg-foreground/5 border-foreground/20 ring-1 ring-foreground/10"
-                    : "bg-white/20 border-white/20 hover:bg-white/30"
+                    : "bg-muted border-border hover:bg-muted"
                 }`}
               >
                 <span className={`block text-[12px] font-sans font-semibold ${
@@ -828,7 +828,7 @@ function CopyAssistant() {
                 {inputText && (
                   <button
                     onClick={() => copyText(inputText, "original")}
-                    className="p-1 rounded hover:bg-white/30 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {copiedField === "original" ? <Check className="w-3 h-3 text-[#6B7A2F]" /> : <Copy className="w-3 h-3" />}
                   </button>
@@ -843,7 +843,7 @@ function CopyAssistant() {
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Paste your marketing copy here..."
               rows={8}
-              className="w-full px-4 py-3 bg-white/30 border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
+              className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
             />
           </div>
 
@@ -857,7 +857,7 @@ function CopyAssistant() {
                 {improvedText && (
                   <button
                     onClick={() => copyText(improvedText, "improved")}
-                    className="p-1 rounded hover:bg-white/30 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {copiedField === "improved" ? <Check className="w-3 h-3 text-[#6B7A2F]" /> : <Copy className="w-3 h-3" />}
                   </button>
@@ -873,7 +873,7 @@ function CopyAssistant() {
               className={`w-full px-4 py-3 border rounded-xl text-[13px] leading-relaxed font-sans min-h-[200px] ${
                 improvedText
                   ? "bg-[#6B7A2F]/5 border-[#6B7A2F]/20 text-foreground"
-                  : "bg-white/10 border-border text-muted-foreground/50"
+                  : "bg-muted border-border text-muted-foreground/50"
               }`}
             >
               {improving ? (
@@ -1027,7 +1027,7 @@ function BrandVoiceCheck() {
             onChange={(e) => setText(e.target.value)}
             placeholder="Paste any marketing text to check against your brand voice..."
             rows={10}
-            className="w-full px-4 py-3 bg-white/30 border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
+            className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
           />
 
           <div className="flex items-center justify-between mt-3">

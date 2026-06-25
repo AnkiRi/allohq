@@ -134,7 +134,7 @@ function WhatsAppPreview({
       <div className="w-[260px] h-[460px] bg-[#e5ddd5] rounded-[32px] border-[3px] border-gray-300 overflow-hidden flex flex-col">
         {/* WhatsApp header bar */}
         <div className="h-10 bg-[#075e54] flex items-center px-3 gap-2">
-          <div className="w-6 h-6 rounded-full bg-white/20" />
+          <div className="w-6 h-6 rounded-full bg-muted" />
           <span className="text-[11px] text-white font-medium">Business</span>
         </div>
         {/* Messages area */}
@@ -317,14 +317,14 @@ function TemplateCard({
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={onEdit}
-              className="px-2 py-1 rounded-lg text-[11px] font-sans text-muted-foreground hover:text-foreground hover:bg-white/20 transition-colors"
+              className="px-2 py-1 rounded-lg text-[11px] font-sans text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               Edit
             </button>
             <button
               onClick={onDelete}
               disabled={isDeleting}
-              className="p-1.5 rounded-lg hover:bg-white/20 text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
             >
               {isDeleting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -364,7 +364,7 @@ function ButtonsEditor({
               updated[i] = { ...btn, type: e.target.value };
               onChange(updated);
             }}
-            className="px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-sans text-foreground"
+            className="px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground"
           >
             <option value="quick_reply">Quick Reply</option>
             <option value="url">URL</option>
@@ -379,7 +379,7 @@ function ButtonsEditor({
               onChange(updated);
             }}
             placeholder="Button text"
-            className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50"
+            className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50"
           />
           {btn.type === "url" && (
             <input
@@ -391,7 +391,7 @@ function ButtonsEditor({
                 onChange(updated);
               }}
               placeholder="https://..."
-              className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
+              className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
             />
           )}
           <button
@@ -439,7 +439,7 @@ function ActionsEditor({
               updated[i] = { ...action, type: e.target.value };
               onChange(updated);
             }}
-            className="px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-sans text-foreground"
+            className="px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground"
           >
             <option value="reply">Reply</option>
             <option value="url">Open URL</option>
@@ -454,7 +454,7 @@ function ActionsEditor({
               onChange(updated);
             }}
             placeholder="Action text"
-            className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50"
+            className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50"
           />
           {action.type === "url" && (
             <input
@@ -466,7 +466,7 @@ function ActionsEditor({
                 onChange(updated);
               }}
               placeholder="https://..."
-              className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
+              className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
             />
           )}
           <button
@@ -670,7 +670,7 @@ function TemplateEditor({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Welcome SMS, Order Confirmation"
-              className="w-full px-3 py-2.5 bg-white/20 border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+              className="w-full px-3 py-2.5 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
             />
           </div>
 
@@ -684,7 +684,7 @@ function TemplateEditor({
                 <select
                   value={headerType}
                   onChange={(e) => setHeaderType(e.target.value)}
-                  className="w-full px-3 py-2 bg-white/20 border border-border rounded-lg text-[12px] font-sans text-foreground"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground"
                 >
                   <option value="none">None</option>
                   <option value="text">Text</option>
@@ -698,7 +698,7 @@ function TemplateEditor({
                   value={headerContent}
                   onChange={(e) => setHeaderContent(e.target.value)}
                   placeholder="Header text..."
-                  className="w-full px-3 py-2 bg-white/20 border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
                 />
               )}
             </div>
@@ -715,7 +715,7 @@ function TemplateEditor({
                 value={cardTitle}
                 onChange={(e) => setCardTitle(e.target.value)}
                 placeholder="Rich card title..."
-                className="w-full px-3 py-2.5 bg-white/20 border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+                className="w-full px-3 py-2.5 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
               />
             </div>
           )}
@@ -738,7 +738,7 @@ function TemplateEditor({
               rows={6}
               maxLength={channel === "sms" ? 1600 : undefined}
               placeholder="Type your message here..."
-              className="w-full px-3 py-2.5 bg-white/20 border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors resize-none"
+              className="w-full px-3 py-2.5 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors resize-none"
             />
             {/* Content preview with highlighted variables */}
             {content && (
@@ -778,7 +778,7 @@ function TemplateEditor({
                 value={footerText}
                 onChange={(e) => setFooterText(e.target.value)}
                 placeholder="Footer text..."
-                className="w-full px-3 py-2 bg-white/20 border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
               />
             </div>
           )}
@@ -929,7 +929,7 @@ export default function ChannelTemplatesPage() {
       </div>
 
       {/* Channel Tabs */}
-      <div className="flex items-center gap-1 bg-white/10 border border-border rounded-lg p-1">
+      <div className="flex items-center gap-1 bg-muted border border-border rounded-lg p-1">
         {channelTabs.map((tab) => {
           const Icon = tab.icon;
           const count =
@@ -950,7 +950,7 @@ export default function ChannelTemplatesPage() {
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-sans transition-all flex-1 justify-center ${
                 activeChannel === tab.key
                   ? "bg-secondary text-secondary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />

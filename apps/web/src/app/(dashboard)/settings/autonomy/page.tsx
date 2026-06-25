@@ -129,7 +129,7 @@ export default function AutonomySettingsPage() {
                 return (
                   <div
                     key={cat.value}
-                    className="grid grid-cols-[1fr_repeat(3,120px)] gap-2 items-center p-3 bg-white/10 rounded-lg"
+                    className="grid grid-cols-[1fr_repeat(3,120px)] gap-2 items-center p-3 bg-muted rounded-lg"
                   >
                     <div>
                       <p className="text-[11px] font-bold text-foreground">{cat.label}</p>
@@ -145,7 +145,7 @@ export default function AutonomySettingsPage() {
                         className={`h-8 rounded-lg transition-all text-[10px] font-sans ${
                           current === t.value
                             ? "bg-foreground text-background shadow-sm"
-                            : "bg-white/20 text-muted-foreground hover:bg-white/40"
+                            : "bg-muted text-muted-foreground hover:bg-muted"
                         }`}
                       >
                         {current === t.value ? "Active" : "Select"}

@@ -235,7 +235,7 @@ export default function TemplatesPage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search templates by name or subject..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white/20 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+          className="w-full pl-10 pr-4 py-2.5 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
         />
       </div>
 
@@ -248,7 +248,7 @@ export default function TemplatesPage() {
             className={`px-3 py-1.5 text-xs font-sans rounded-lg transition-all ${
               categoryFilter === cat.value
                 ? "bg-secondary text-secondary-foreground"
-                : "bg-white/20 border border-white/20 text-muted-foreground hover:bg-white/30"
+                : "bg-muted border border-border text-muted-foreground hover:bg-muted"
             }`}
           >
             {cat.label}
@@ -334,7 +334,7 @@ export default function TemplatesPage() {
                       {/* Selection checkbox */}
                       <button
                         onClick={() => toggleSelect(template.id)}
-                        className="absolute top-3 left-3 z-10 w-5 h-5 rounded flex items-center justify-center bg-white/80 border border-border hover:bg-white transition-colors"
+                        className="absolute top-3 left-3 z-10 w-5 h-5 rounded flex items-center justify-center bg-card border border-border hover:bg-white transition-colors"
                       >
                         {isSelected ? (
                           <CheckSquare className="w-4 h-4 text-foreground" />
@@ -399,14 +399,14 @@ export default function TemplatesPage() {
                             <button
                               onClick={() => duplicateMut.mutate({ id: template.id })}
                               disabled={duplicateMut.isPending}
-                              className="p-1.5 rounded-lg hover:bg-white/20 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
                             >
                               {duplicateMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
                             <button
                               onClick={() => deleteMut.mutate({ id: template.id })}
                               disabled={deleteMut.isPending}
-                              className="p-1.5 rounded-lg hover:bg-white/20 text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
                             >
                               {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                             </button>
