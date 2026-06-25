@@ -60,12 +60,14 @@ type AlloAIPanelContextType = {
   openPanel: () => void;
   focusInput: () => void;
   setInput: (text: string) => void;
+  submit: (text: string) => void;
 };
 
 const AlloAIPanelContext = createContext<AlloAIPanelContextType>({
   openPanel: () => {},
   focusInput: () => {},
   setInput: () => {},
+  submit: () => {},
 });
 
 export const useAlloAI = () => useContext(AlloAIPanelContext);
@@ -1107,6 +1109,7 @@ export interface AlloAIPanelHandle {
   open: () => void;
   focusInput: () => void;
   setInput: (text: string) => void;
+  submit: (text: string) => void;
 }
 
 export interface AlloAIPanelProps {
@@ -1432,6 +1435,12 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       if (panelState === "collapsed") setPanelState("open");
       setInput(text);
       setTimeout(() => inputRef.current?.focus(), 100);
+    },
+    submit(text: string) {
+      // One-action shortcut from the Home field: open the conversation AND send,
+      // so a single Enter on Home carries the goal in and fires it (no 2nd Enter).
+      if (panelState === "collapsed") setPanelState("open");
+      sendMessage(text);
     },
   }));
 
@@ -2267,6 +2276,7 @@ export function AlloAIPanelProvider({ children }: { children: React.ReactNode })
     openPanel: () => panelRef.current?.open(),
     focusInput: () => panelRef.current?.focusInput(),
     setInput: (text: string) => panelRef.current?.setInput(text),
+    submit: (text: string) => panelRef.current?.submit(text),
   };
 
   return (

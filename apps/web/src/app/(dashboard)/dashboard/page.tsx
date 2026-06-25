@@ -295,7 +295,7 @@ function DemoReasoning({
 export default function DashboardPage() {
   const { user } = useUser();
   const { toast } = useToast();
-  const { openPanel, setInput: setAIInput } = useAlloAI();
+  const { openPanel, submit: submitAI } = useAlloAI();
   const demo = useDemo();
   const rawFirst = user?.firstName || "there";
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1);
@@ -519,17 +519,12 @@ export default function DashboardPage() {
 
   // ---- Command line → goal flow ----
   const handleCommand = (value: string) => {
-    if (demo) {
-      // Demo mode: do NOT open the live AI chat (which would call trpc.ai.chat
-      // → a real LLM). Surface the existing staged reasoning stream against the
-      // seeded Vana data right here on the console. No token spend.
-      setDemoGoal(value);
-      return;
-    }
+    // The Home field is a SHORTCUT into the one conversation: open it AND submit
+    // the goal in a single action — a single Enter carries the text in and fires
+    // it (no second Enter). Works for the demo (live chat: scoped, ephemeral,
+    // cost-capped) and real users alike — one input, one conversation.
     openPanel();
-    // Prefill + focus the AI panel input so the operator's goal runs through the
-    // existing chat/agent flow. Matches the CommandPalette prefill timing.
-    setTimeout(() => setAIInput(value), 150);
+    setTimeout(() => submitAI(value), 150);
   };
 
   // ---- Derived values ----
