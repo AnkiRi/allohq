@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import {
   scoreQuintile,
   getSegmentName,
@@ -68,7 +68,7 @@ async function computeCohorts(prisma: any, storeIds: string[]) {
 
 export const rfmRouter = router({
   /** Calculate RFM scores for all customers in a store */
-  calculate: workspaceProcedure
+  calculate: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Get all customers with their order data
@@ -221,7 +221,7 @@ export const rfmRouter = router({
   }),
 
   /** Calculate LTV for all customers */
-  calculateLtv: workspaceProcedure
+  calculateLtv: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const customers = await ctx.prisma.customer.findMany({

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { predictConsequence } from "../lib/predictions";
 import { getStoreCalibration } from "../lib/calibration";
 import {
@@ -21,14 +21,14 @@ import {
 
 export const autonomyRouter = router({
   /** Get all autonomy configs for a store */
-  getConfig: workspaceProcedure
+  getConfig: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
       return getAllAutonomyConfigs(input.storeId);
     }),
 
   /** Update autonomy tier for a category */
-  updateConfig: workspaceProcedure
+  updateConfig: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -44,7 +44,7 @@ export const autonomyRouter = router({
     }),
 
   /** Initialize default autonomy configs for a new store */
-  initializeDefaults: workspaceProcedure
+  initializeDefaults: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ input }) => {
       await initializeDefaults(input.storeId);
@@ -52,7 +52,7 @@ export const autonomyRouter = router({
     }),
 
   /** List actions in the queue with enriched payload data */
-  listActions: workspaceProcedure
+  listActions: storeProcedure
     .input(
       z.object({
         storeId: z.string(),

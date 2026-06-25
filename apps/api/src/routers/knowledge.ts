@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import {
   createArticle,
   updateArticle,
@@ -19,7 +19,7 @@ const categorySchema = z.enum([
 
 export const knowledgeRouter = router({
   /** List knowledge articles, optionally filtered by category */
-  list: workspaceProcedure
+  list: storeProcedure
     .input(z.object({
       storeId: z.string(),
       category: categorySchema.optional(),
@@ -29,7 +29,7 @@ export const knowledgeRouter = router({
     }),
 
   /** Create a knowledge article + embed for RAG */
-  create: workspaceProcedure
+  create: storeProcedure
     .input(z.object({
       storeId: z.string(),
       category: categorySchema,
@@ -68,7 +68,7 @@ export const knowledgeRouter = router({
     }),
 
   /** Semantic search across knowledge articles */
-  search: workspaceProcedure
+  search: storeProcedure
     .input(z.object({
       storeId: z.string(),
       query: z.string().min(1),

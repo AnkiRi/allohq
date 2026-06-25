@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 
 const fieldSchema = z.object({
@@ -31,7 +31,7 @@ const incentiveSchema = z.object({
 export const formsRouter = router({
   // ── Forms CRUD ──
 
-  listForms: workspaceProcedure
+  listForms: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.prisma.form.findMany({
@@ -56,7 +56,7 @@ export const formsRouter = router({
       });
     }),
 
-  createForm: workspaceProcedure
+  createForm: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -121,7 +121,7 @@ export const formsRouter = router({
 
   // ── Popups CRUD ──
 
-  listPopups: workspaceProcedure
+  listPopups: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.prisma.popup.findMany({
@@ -142,7 +142,7 @@ export const formsRouter = router({
       });
     }),
 
-  createPopup: workspaceProcedure
+  createPopup: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -276,7 +276,7 @@ export const formsRouter = router({
 
   // ── Embed Code ──
 
-  getEmbedCode: workspaceProcedure
+  getEmbedCode: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const popups = await ctx.prisma.popup.findMany({
@@ -305,7 +305,7 @@ export const formsRouter = router({
 
   // ── Public endpoint for widget to fetch popup config ──
 
-  getActivePopups: workspaceProcedure
+  getActivePopups: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const popups = await ctx.prisma.popup.findMany({

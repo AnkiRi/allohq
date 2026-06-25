@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, storeProcedure } from "../trpc";
 import {
   computeAttribution,
   compareAttributionModels,
@@ -13,7 +13,7 @@ import type { AttributionModel } from "@allohq/analytics";
 
 export const analyticsRouter = router({
   /** Revenue attribution by source (campaign/automation) */
-  attribution: workspaceProcedure
+  attribution: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -26,42 +26,42 @@ export const analyticsRouter = router({
     }),
 
   /** Compare all attribution models side-by-side */
-  attributionComparison: workspaceProcedure
+  attributionComparison: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ input }) => {
       return compareAttributionModels(input.storeId, input.days);
     }),
 
   /** Revenue breakdown per messaging channel */
-  channelBreakdown: workspaceProcedure
+  channelBreakdown: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ input }) => {
       return getChannelBreakdown(input.storeId, input.days);
     }),
 
   /** AI-generated vs manual campaign performance comparison */
-  aiPerformance: workspaceProcedure
+  aiPerformance: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ input }) => {
       return compareAiVsManual(input.storeId, input.days);
     }),
 
   /** Monthly customer cohort retention analysis */
-  cohorts: workspaceProcedure
+  cohorts: storeProcedure
     .input(z.object({ storeId: z.string(), maxPeriods: z.number().default(6) }))
     .query(async ({ input }) => {
       return getCohortAnalysis(input.storeId, input.maxPeriods);
     }),
 
   /** ROI: AI token cost vs AI-attributed revenue */
-  roi: workspaceProcedure
+  roi: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ ctx, input }) => {
       return calculateRoi(ctx.workspaceId, input.storeId, input.days);
     }),
 
   /** Revenue time series (reuses dashboard logic but scoped to store) */
-  revenueTimeline: workspaceProcedure
+  revenueTimeline: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -86,7 +86,7 @@ export const analyticsRouter = router({
     }),
 
   /** Revenue forecast — upcoming 7 days + historical accuracy */
-  forecast: workspaceProcedure
+  forecast: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const forecasts = await ctx.prisma.revenueForecast.findMany({
@@ -118,7 +118,7 @@ export const analyticsRouter = router({
     }),
 
   /** Export analytics data as CSV */
-  exportCsv: workspaceProcedure
+  exportCsv: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -151,7 +151,7 @@ export const analyticsRouter = router({
     }),
 
   /** Attributed revenue summary — supports period filtering */
-  attributedRevenue: workspaceProcedure
+  attributedRevenue: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -242,7 +242,7 @@ export const analyticsRouter = router({
     }),
 
   /** Churn intervention analytics: interventions sent, customers saved, revenue preserved */
-  churnInterventions: workspaceProcedure
+  churnInterventions: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - input.days * 86400000);
@@ -358,7 +358,7 @@ export const analyticsRouter = router({
    * outcome to be meaningful (>= MIN_CONTROL_WITH_OUTCOME). The web screen flips
    * from representative figures to these REAL numbers off that flag.
    */
-  controlLift: workspaceProcedure
+  controlLift: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(90) }))
     .query(async ({ ctx, input }) => {
       // Fee model — must match the representative figures on the web screen so
@@ -472,7 +472,7 @@ export const analyticsRouter = router({
    * disclaimer). Until then the predictions are estimates and this section says
    * so. The seeded closed Vana experiment is what makes this real today.
    */
-  predictionAccuracy: workspaceProcedure
+  predictionAccuracy: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ ctx, input }) => {
       const MIN_CONTROL_WITH_OUTCOME = 30;
@@ -562,7 +562,7 @@ export const analyticsRouter = router({
     }),
 
   /** Cross-store benchmarks: anonymous aggregate metrics for comparison */
-  benchmarks: workspaceProcedure
+  benchmarks: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findUnique({

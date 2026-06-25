@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 
 export const guardrailsRouter = router({
   /** List all guardrails for a store */
-  list: workspaceProcedure
+  list: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.prisma.guardrail.findMany({
@@ -13,7 +13,7 @@ export const guardrailsRouter = router({
     }),
 
   /** Create a new guardrail rule */
-  create: workspaceProcedure
+  create: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -64,7 +64,7 @@ export const guardrailsRouter = router({
     }),
 
   /** Validate a proposed action against all active guardrails */
-  validate: workspaceProcedure
+  validate: storeProcedure
     .input(
       z.object({
         storeId: z.string(),

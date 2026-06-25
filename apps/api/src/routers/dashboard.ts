@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 // Single source of truth for model costs lives in the AI gateway.
 import { computeTokenCost } from "@allohq/customer-intelligence";
 
@@ -351,7 +351,7 @@ export const dashboardRouter = router({
     }),
 
   /** Revenue attribution summary for dashboard KPI cards */
-  revenueAttribution: workspaceProcedure
+  revenueAttribution: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const now = new Date();
@@ -403,7 +403,7 @@ export const dashboardRouter = router({
     }),
 
   /** Customer Voice — latest weekly voice synthesis report */
-  customerVoice: workspaceProcedure
+  customerVoice: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const report = await ctx.prisma.customerVoiceReport.findFirst({

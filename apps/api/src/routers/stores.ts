@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { Queue } from "bullmq";
 
 const redisConnection = {
@@ -135,7 +135,7 @@ export const storesRouter = router({
   /**
    * Get agent working status for the AI panel status indicator.
    */
-  agentStatus: workspaceProcedure
+  agentStatus: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [automations, pendingActions] = await Promise.all([
@@ -161,7 +161,7 @@ export const storesRouter = router({
   /**
    * Get agent activity feed for the home page.
    */
-  agentActivity: workspaceProcedure
+  agentActivity: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const automations = await ctx.prisma.automation.findMany({

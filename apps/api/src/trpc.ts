@@ -1,7 +1,9 @@
 import { initTRPC, TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { prisma, DEMO_WORKSPACE_ID, DEMO_HEADER } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
 import { checkRateLimit } from "./middleware/rate-limit";
+import { verifyStoreAccess } from "./lib/storeAccess";
 
 /**
  * Context creation for tRPC
@@ -170,3 +172,18 @@ export const workspaceProcedure = protectedProcedure.use(async ({ ctx, next }) =
     },
   });
 });
+
+/**
+ * Store procedure — workspace access PLUS a cross-tenant guard: the `storeId` in
+ * the input MUST belong to ctx.workspaceId, or the call is rejected (FORBIDDEN).
+ * This is the class-fix for the storeId IDOR. Use it for EVERY resolver that
+ * takes a required storeId. The base declares `storeId`; a resolver's own
+ * `.input(...)` merges with it, and the `.use` below reads the PARSED input
+ * (no getRawInput — that consumes the body and breaks downstream parsing).
+ */
+export const storeProcedure = workspaceProcedure
+  .input(z.object({ storeId: z.string() }))
+  .use(async ({ ctx, input, next }) => {
+    await verifyStoreAccess(ctx, (input as { storeId: string }).storeId);
+    return next();
+  });
