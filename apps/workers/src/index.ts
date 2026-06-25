@@ -182,6 +182,17 @@ console.log(`  - copy-learner worker: ${copyLearnerWorker.name}`);
 console.log(`  - basket-analysis worker: ${basketAnalysisWorker.name}`);
 console.log(`  - product-segments worker: ${productSegmentsWorker.name}`);
 
+// Daily/weekly jobs are CLOCK-ALIGNED via cron patterns in the brand's timezone
+// (allo's market is Indian D2C — ₹/IST — so this makes "drafts before sunrise,
+// approvals over coffee" literally true). Overnight work is staggered so the
+// briefing (05:30) runs after the forecast/segments/affinity it summarizes, and
+// the revenue email lands at 07:00 = over coffee. Sub-daily jobs stay interval-
+// based. upsertJobScheduler with a stable id is idempotent across restarts, so
+// Railway redeploys re-assert the same schedule instead of drifting/accumulating.
+// (Per-store tz via store.timezone is a documented follow-up — the scheduler is
+// global; the worker already iterates all active stores.)
+const BRIEFING_TZ = "Asia/Kolkata";
+
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
 triggerCheckQueue.upsertJobScheduler(
@@ -226,7 +237,7 @@ opportunityScanQueue.upsertJobScheduler(
 const productCyclesQueue = new Queue(QUEUE_NAMES.PRODUCT_CYCLES, { connection: redisConnection });
 productCyclesQueue.upsertJobScheduler(
   "product-cycles-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "0 3 * * *", tz: BRIEFING_TZ },
   { name: "product-cycles", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up product cycles schedule:", err.message);
@@ -236,7 +247,7 @@ productCyclesQueue.upsertJobScheduler(
 const briefingQueue = new Queue(QUEUE_NAMES.MERCHANT_BRIEFING, { connection: redisConnection });
 briefingQueue.upsertJobScheduler(
   "daily-briefing-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "30 5 * * *", tz: BRIEFING_TZ },
   { name: "daily-briefing", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up daily briefing schedule:", err.message);
@@ -246,7 +257,7 @@ briefingQueue.upsertJobScheduler(
 const weeklyReportQueue = new Queue(QUEUE_NAMES.WEEKLY_REPORT, { connection: redisConnection });
 weeklyReportQueue.upsertJobScheduler(
   "weekly-report-schedule",
-  { every: 7 * 24 * 60 * 60 * 1000 },
+  { pattern: "0 6 * * 1", tz: BRIEFING_TZ },
   { name: "weekly-report", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up weekly report schedule:", err.message);
@@ -266,7 +277,7 @@ abTestQueue.upsertJobScheduler(
 const sendTimeQueue = new Queue(QUEUE_NAMES.SEND_TIME, { connection: redisConnection });
 sendTimeQueue.upsertJobScheduler(
   "send-time-optimization-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "0 2 * * *", tz: BRIEFING_TZ },
   { name: "send-time-optimization", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up send time optimization schedule:", err.message);
@@ -276,7 +287,7 @@ sendTimeQueue.upsertJobScheduler(
 const revenueForecastQueue = new Queue(QUEUE_NAMES.REVENUE_FORECAST, { connection: redisConnection });
 revenueForecastQueue.upsertJobScheduler(
   "revenue-forecast-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "0 4 * * *", tz: BRIEFING_TZ },
   { name: "revenue-forecast", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up revenue forecast schedule:", err.message);
@@ -286,7 +297,7 @@ revenueForecastQueue.upsertJobScheduler(
 const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, { connection: redisConnection });
 productRecommendationQueue.upsertJobScheduler(
   "product-recommendation-affinity-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "30 3 * * *", tz: BRIEFING_TZ },
   { name: "build-affinity", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up product recommendation schedule:", err.message);
@@ -325,7 +336,7 @@ outcomeAttributionQueue.upsertJobScheduler(
 // Schedule daily revenue summary (every 24 hours)
 outcomeAttributionQueue.upsertJobScheduler(
   "daily-revenue-summary-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "0 6 * * *", tz: BRIEFING_TZ },
   { name: "daily-revenue-summary", data: { type: "daily-summary" } }
 ).catch((err) => {
   console.error("Failed to set up daily revenue summary schedule:", err.message);
@@ -345,7 +356,7 @@ churnInterventionQueue.upsertJobScheduler(
 const benchmarkQueue = new Queue(QUEUE_NAMES.BENCHMARK_AGGREGATE, { connection: redisConnection });
 benchmarkQueue.upsertJobScheduler(
   "benchmark-aggregate-schedule",
-  { every: 7 * 24 * 60 * 60 * 1000 },
+  { pattern: "0 23 * * 0", tz: BRIEFING_TZ },
   { name: "benchmark-aggregate", data: { type: "weekly" } }
 ).catch((err) => {
   console.error("Failed to set up benchmark aggregate schedule:", err.message);
@@ -355,7 +366,7 @@ benchmarkQueue.upsertJobScheduler(
 const customerVoiceQueue = new Queue(QUEUE_NAMES.CUSTOMER_VOICE, { connection: redisConnection });
 customerVoiceQueue.upsertJobScheduler(
   "customer-voice-schedule",
-  { every: 7 * 24 * 60 * 60 * 1000 },
+  { pattern: "0 4 * * 1", tz: BRIEFING_TZ },
   { name: "customer-voice", data: { type: "weekly" } }
 ).catch((err) => {
   console.error("Failed to set up customer voice schedule:", err.message);
@@ -365,7 +376,7 @@ customerVoiceQueue.upsertJobScheduler(
 const dailyRevenueEmailQueue = new Queue(QUEUE_NAMES.DAILY_REVENUE_EMAIL, { connection: redisConnection });
 dailyRevenueEmailQueue.upsertJobScheduler(
   "daily-revenue-email-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "0 7 * * *", tz: BRIEFING_TZ },
   { name: "daily-revenue-email", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up daily revenue email schedule:", err.message);
@@ -375,7 +386,7 @@ dailyRevenueEmailQueue.upsertJobScheduler(
 const customerStateDecayQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 customerStateDecayQueue.upsertJobScheduler(
   "state-decay-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "30 2 * * *", tz: BRIEFING_TZ },
   { name: "state-decay", data: { type: "state_decay", customerId: "", storeId: "" } }
 ).catch((err) => {
   console.error("Failed to set up state decay schedule:", err.message);
@@ -405,7 +416,7 @@ browseAbandonmentQueue.upsertJobScheduler(
 const copyLearnerQueue = new Queue(QUEUE_NAMES.COPY_LEARNER, { connection: redisConnection });
 copyLearnerQueue.upsertJobScheduler(
   "copy-learner-schedule",
-  { every: 7 * 24 * 60 * 60 * 1000 },
+  { pattern: "0 22 * * 0", tz: BRIEFING_TZ },
   { name: "copy-learner", data: { type: "weekly" } }
 ).catch((err) => {
   console.error("Failed to set up copy learner schedule:", err.message);
@@ -415,7 +426,7 @@ copyLearnerQueue.upsertJobScheduler(
 const basketAnalysisQueue = new Queue(QUEUE_NAMES.BASKET_ANALYSIS, { connection: redisConnection });
 basketAnalysisQueue.upsertJobScheduler(
   "basket-analysis-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "15 3 * * *", tz: BRIEFING_TZ },
   { name: "basket-analysis", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up basket analysis schedule:", err.message);
@@ -425,7 +436,7 @@ basketAnalysisQueue.upsertJobScheduler(
 const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, { connection: redisConnection });
 productSegmentsQueue.upsertJobScheduler(
   "product-segments-schedule",
-  { every: 24 * 60 * 60 * 1000 },
+  { pattern: "45 3 * * *", tz: BRIEFING_TZ },
   { name: "product-segments", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up product segments schedule:", err.message);
