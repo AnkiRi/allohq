@@ -1272,8 +1272,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   );
   // Show activation view when: in progress, or just completed (until dismissed)
   const showActivationView = !activationDismissed && activationData && (isActivationInProgress || activationJustCompleted);
-  // Only disable chat when automations are actively being generated (not paused/ready)
-  const agentBusy = !!(activationData && activationData.automationProgress && activationData.automationProgress.generating > 0);
 
   // Fetch smart suggested actions (Fix 7)
   const { data: smartSuggestions } = (trpc as any).briefings.suggestedActions.useQuery(
@@ -2064,7 +2062,11 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         </div>
 
         {/* Content area — activation progress OR completion OR chat */}
-        {showActivationView && isActivationInProgress && activationData ? (
+        {/* Full setup view (which hard-disables the input) ONLY while the store's
+            data is still syncing. Once data is ready the chat is usable even if
+            automations are still generating in the background — those must not
+            lock the chat. */}
+        {showActivationView && isActivationInProgress && activationData && !dataReady ? (
           <>
             <ActivationProgressPanel activation={activationData} />
             {/* Disabled command line during activation */}
@@ -2178,7 +2180,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 className={cn(
                   "group flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 transition-colors",
                   "border-border focus-within:border-[hsl(var(--accent))] hover:border-muted-foreground/40 focus-within:hover:border-[hsl(var(--accent))]",
-                  (isProcessing || !storeId || !dataReady || agentBusy) && "opacity-60",
+                  (isProcessing || !storeId || !dataReady) && "opacity-60",
                 )}
                 onClick={() => inputRef.current?.focus()}
               >
@@ -2192,14 +2194,14 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) handleSubmit();
                   }}
-                  placeholder={!storeId ? "Connect a store and we'll get started" : agentBusy ? "allo is setting things up" : !dataReady ? "Getting your store ready" : placeholder}
-                  disabled={isProcessing || !storeId || !dataReady || agentBusy}
+                  placeholder={!storeId ? "Connect a store and we'll get started" : !dataReady ? "Getting your store ready" : placeholder}
+                  disabled={isProcessing || !storeId || !dataReady}
                   aria-label="Tell allo what you want, in your own words"
                   className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSubmit}
-                  disabled={isProcessing || !input.trim() || !storeId || !dataReady || agentBusy}
+                  disabled={isProcessing || !input.trim() || !storeId || !dataReady}
                   className="p-1 rounded-md text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30 shrink-0"
                   title="Send"
                 >
