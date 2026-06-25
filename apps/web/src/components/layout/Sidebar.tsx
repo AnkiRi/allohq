@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useUser, useClerk } from "@clerk/nextjs";
 import {
   LayoutDashboard,
+  Radio,
   Users,
   Layers,
   Mail,
@@ -31,6 +32,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const primaryNav = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Activity", href: "/activity", icon: Radio },
   { name: "Actions", href: "/actions", icon: ListChecks, showBadge: true },
   { name: "Outcomes", href: "/outcomes", icon: Target },
   { name: "Performance", href: "/analytics", icon: BarChart3 },
