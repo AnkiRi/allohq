@@ -33,7 +33,6 @@ export async function createContext(opts: { req?: any; res?: any }) {
         ],
       });
       userId = payload.sub;
-      console.log("[auth] Clerk userId:", userId);
 
       // Get user's workspace (for now, just get the first one)
       let user = await prisma.user.findUnique({
