@@ -3,7 +3,7 @@ import { prisma } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
-import { DEMO_STORE_ID } from "@allohq/database";
+import { DEMO_STORE_DOMAIN } from "@allohq/database";
 import { checkAllRules } from "@allohq/communication-governor";
 import {
   learnFromResults,
@@ -339,7 +339,7 @@ export const sendWorker = new Worker<SendJobData>(
       // Demo/sandbox safety: the seeded demo store NEVER hits a real provider —
       // no Resend/Twilio call, no token/credit spend, fake "sent" result.
       const result =
-        campaign.store?.id === DEMO_STORE_ID
+        campaign.store?.shopDomain === DEMO_STORE_DOMAIN
           ? ({ success: true, messageId: `demo-${messageLog.id}`, demo: true } as any)
           : await sendEmail({
               channel: "email",

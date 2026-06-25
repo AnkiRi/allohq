@@ -9,12 +9,16 @@
  * Run: tsx apps/api/tests/demo-mode.test.ts  (DATABASE_URL set)
  */
 import { appRouter } from "../src/routers/_app";
-import { prisma, DEMO_WORKSPACE_ID, DEMO_STORE_ID } from "@allohq/database";
+import { prisma, getDemoWorkspaceId, getDemoStoreId } from "@allohq/database";
 
 function assert(c: boolean, m: string) { if (!c) { console.error(`\n✗ FAIL: ${m}`); process.exit(1); } console.log(`  ✓ ${m}`); }
 
 async function main() {
   console.log("=== DEMO-MODE SANDBOX TEST ===\n");
+  // Resolve the Vana demo by its STABLE slug/domain (portable across dev/prod).
+  const DEMO_WORKSPACE_ID = await getDemoWorkspaceId(prisma);
+  const DEMO_STORE_ID = await getDemoStoreId(prisma);
+  assert(!!DEMO_WORKSPACE_ID && !!DEMO_STORE_ID, "Vana demo resolves by stable key (run seed-vana-demo.ts first)");
   const demoCtx = { prisma, userId: "demo-test-user", workspaceId: DEMO_WORKSPACE_ID, isDemo: true } as any;
   const caller = appRouter.createCaller(demoCtx);
 

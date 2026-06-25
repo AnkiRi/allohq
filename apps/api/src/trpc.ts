@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { prisma, DEMO_WORKSPACE_ID, DEMO_HEADER } from "@allohq/database";
+import { prisma, DEMO_HEADER, getDemoWorkspaceId } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
 import { checkRateLimit } from "./middleware/rate-limit";
 import { verifyStoreAccess } from "./lib/storeAccess";
@@ -95,7 +95,8 @@ export async function createContext(opts: { req?: any; res?: any }) {
   // on this shared "demo-guest" id, so it doubles as a global cap on the demo.
   if (!userId && !!opts.req?.headers?.[DEMO_HEADER]) {
     userId = "demo-guest";
-    workspaceId = DEMO_WORKSPACE_ID;
+    // Resolve Vana by its STABLE slug (portable across dev/prod), not a cuid.
+    workspaceId = await getDemoWorkspaceId(prisma);
     isDemo = true;
   }
 
