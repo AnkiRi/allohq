@@ -1311,46 +1311,51 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       // ---------------------------------------------------------------
       let chatId = input.chatId;
 
-      if (!chatId) {
-        // Create a new chat with title from first message
-        const chat = await ctx.prisma.aiChat.create({
-          data: {
-            workspaceId: ctx.workspaceId,
-            storeId: input.storeId,
-            title: input.message.slice(0, 60) + (input.message.length > 60 ? "..." : ""),
-          },
+      // Demo write-floor: a demo-guest chat is EPHEMERAL — never persist the chat,
+      // its messages, or agent memory to the shared Vana sandbox (so one visitor
+      // never sees another's). The reply still returns; the client holds history.
+      if (!ctx.isDemo) {
+        if (!chatId) {
+          // Create a new chat with title from first message
+          const chat = await ctx.prisma.aiChat.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              storeId: input.storeId,
+              title: input.message.slice(0, 60) + (input.message.length > 60 ? "..." : ""),
+            },
+          });
+          chatId = chat.id;
+        } else {
+          // Touch the updatedAt timestamp
+          await ctx.prisma.aiChat.update({
+            where: { id: chatId },
+            data: { updatedAt: new Date() },
+          }).catch(() => {});
+        }
+
+        // Save user message and assistant reply
+        await ctx.prisma.aiChatMessage.createMany({
+          data: [
+            {
+              chatId,
+              role: "user",
+              content: input.message,
+            },
+            {
+              chatId,
+              role: "assistant",
+              content: reply,
+              highlights: highlights.length > 0 ? highlights : undefined,
+              model: "claude-sonnet-4-6",
+            },
+          ],
         });
-        chatId = chat.id;
-      } else {
-        // Touch the updatedAt timestamp
-        await ctx.prisma.aiChat.update({
-          where: { id: chatId },
-          data: { updatedAt: new Date() },
-        }).catch(() => {});
+
+        // ---------------------------------------------------------------
+        // 8. Auto-write agent memory if something significant happened
+        // ---------------------------------------------------------------
+        writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(() => {});
       }
-
-      // Save user message and assistant reply
-      await ctx.prisma.aiChatMessage.createMany({
-        data: [
-          {
-            chatId,
-            role: "user",
-            content: input.message,
-          },
-          {
-            chatId,
-            role: "assistant",
-            content: reply,
-            highlights: highlights.length > 0 ? highlights : undefined,
-            model: "claude-sonnet-4-6",
-          },
-        ],
-      });
-
-      // ---------------------------------------------------------------
-      // 8. Auto-write agent memory if something significant happened
-      // ---------------------------------------------------------------
-      writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(() => {});
 
       // ---------------------------------------------------------------
       // 9. Extract campaign preview from tool call results

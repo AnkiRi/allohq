@@ -144,6 +144,20 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   });
 });
 
+// Demo-interactive mutations: the ONLY mutations a demo-guest may invoke. Each is
+// ephemeral (returns a preview / friendly success WITHOUT persisting to or sending
+// from the shared Vana sandbox). Everything else is blocked by the write-floor.
+const DEMO_INTERACTIVE_MUTATIONS = new Set<string>([
+  "ai.chat",
+  "ai.explain",
+  "ai.generateEmail",
+  "ai.regenerateEmail",
+  "autonomy.approveAction",
+  "autonomy.rejectAction",
+  "autonomy.bulkApprove",
+  "autonomy.bulkReject",
+]);
+
 /**
  * Workspace procedure - requires authentication + workspace access + rate limiting
  */
@@ -171,6 +185,25 @@ export const workspaceProcedure = protectedProcedure.use(async ({ ctx, next }) =
       workspaceId: ctx.workspaceId,
     },
   });
+}).use(async ({ ctx, type, path, next }) => {
+  // STRUCTURAL demo write-floor (B1): a demo-guest may not perform ANY mutation
+  // that persists to / sends from the shared sandbox. Enforced HERE so every
+  // mutation — including ones added later — inherits the block automatically
+  // (NOT a per-resolver isDemo checklist, which is how holes appear). A small
+  // allowlist keeps the demo interactive (chat / draft / approve); those paths
+  // are themselves ephemeral or no-op when isDemo.
+  if (
+    ctx.isDemo &&
+    type === "mutation" &&
+    !DEMO_INTERACTIVE_MUTATIONS.has(path)
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "This is a live demo, so changes aren't saved. Sign up to run it for real.",
+    });
+  }
+  return next();
 });
 
 /**
