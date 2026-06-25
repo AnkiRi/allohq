@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 
 export const guardrailsRouter = router({
   /** List all guardrails for a store */
@@ -44,6 +45,7 @@ export const guardrailsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "guardrail", input.id);
       const { id, ...data } = input;
       const updateData: Record<string, unknown> = {};
       if (data.ruleType !== undefined) updateData.ruleType = data.ruleType;
@@ -59,6 +61,7 @@ export const guardrailsRouter = router({
   delete: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "guardrail", input.id);
       await ctx.prisma.guardrail.delete({ where: { id: input.id } });
       return { success: true };
     }),

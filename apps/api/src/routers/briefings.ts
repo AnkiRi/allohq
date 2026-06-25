@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import { getMissionControlData, getBaseline, generateStoreReport } from "@allohq/merchant-copilot";
 
 export const briefingsRouter = router({
@@ -78,6 +79,7 @@ export const briefingsRouter = router({
   markRead: workspaceProcedure
     .input(z.object({ briefingId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "merchantBriefing", input.briefingId);
       return ctx.prisma.merchantBriefing.update({
         where: { id: input.briefingId },
         data: { readAt: new Date() },

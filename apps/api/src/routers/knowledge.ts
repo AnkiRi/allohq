@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import {
   createArticle,
   updateArticle,
@@ -53,7 +54,8 @@ export const knowledgeRouter = router({
       category: categorySchema.optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "knowledgeArticle", input.id);
       const { id, ...data } = input;
       await updateArticle(id, data);
       return { success: true };
@@ -62,7 +64,8 @@ export const knowledgeRouter = router({
   /** Delete a knowledge article + remove embedding */
   delete: workspaceProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "knowledgeArticle", input.id);
       await deleteArticle(input.id);
       return { success: true };
     }),

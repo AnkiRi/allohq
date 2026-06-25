@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 
 const fieldSchema = z.object({
@@ -47,6 +48,7 @@ export const formsRouter = router({
   getForm: workspaceProcedure
     .input(z.object({ formId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "form", input.formId);
       return ctx.prisma.form.findUnique({
         where: { id: input.formId },
         include: {
@@ -96,6 +98,7 @@ export const formsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "form", input.formId);
       const { formId, ...data } = input;
       return ctx.prisma.form.update({
         where: { id: formId },
@@ -115,6 +118,7 @@ export const formsRouter = router({
   deleteForm: workspaceProcedure
     .input(z.object({ formId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "form", input.formId);
       await ctx.prisma.form.delete({ where: { id: input.formId } });
       return { success: true };
     }),
@@ -136,6 +140,7 @@ export const formsRouter = router({
   getPopup: workspaceProcedure
     .input(z.object({ popupId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "popup", input.popupId);
       return ctx.prisma.popup.findUnique({
         where: { id: input.popupId },
         include: { form: true },
@@ -201,6 +206,7 @@ export const formsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "popup", input.popupId);
       const { popupId, ...data } = input;
       return ctx.prisma.popup.update({
         where: { id: popupId },
@@ -221,6 +227,7 @@ export const formsRouter = router({
   deletePopup: workspaceProcedure
     .input(z.object({ popupId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "popup", input.popupId);
       await ctx.prisma.popup.delete({ where: { id: input.popupId } });
       return { success: true };
     }),
@@ -236,6 +243,7 @@ export const formsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "form", input.formId);
       return ctx.prisma.formSubmission.findMany({
         where: { formId: input.formId },
         include: {
@@ -254,6 +262,7 @@ export const formsRouter = router({
   submissionStats: workspaceProcedure
     .input(z.object({ formId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "form", input.formId);
       const total = await ctx.prisma.formSubmission.count({
         where: { formId: input.formId },
       });

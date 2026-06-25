@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import { predictConsequence } from "../lib/predictions";
 import { getStoreCalibration } from "../lib/calibration";
 import {
@@ -132,7 +133,8 @@ export const autonomyRouter = router({
   /** Get a single action by ID */
   getActionById: workspaceProcedure
     .input(z.object({ actionId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
       return getActionById(input.actionId);
     }),
 
@@ -145,6 +147,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
       // Demo/sandbox: show the approved success state without firing anything
       // real (no execute, no send enqueue, no mutation of the shared seed).
       if (ctx.isDemo) return { success: true, executedType: "demo", demo: true };
@@ -166,6 +169,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
       if (ctx.isDemo) return { success: true, demo: true };
       await rejectAction(input.actionId, ctx.userId, input.reason);
       return { success: true };
