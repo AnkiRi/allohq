@@ -90,21 +90,21 @@ export const briefingsRouter = router({
   missionControl: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
-      return getMissionControlData(input.storeId);
+      return (await getMissionControlData(input.storeId)) ?? null;
     }),
 
   /** Get store baseline metrics */
   baseline: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
-      return getBaseline(input.storeId);
+      return (await getBaseline(input.storeId)) ?? null;
     }),
 
   /** Generate store intelligence report */
   storeReport: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
-      return generateStoreReport(input.storeId);
+      return (await generateStoreReport(input.storeId)) ?? null;
     }),
 
   /** Get notification preferences for briefings */

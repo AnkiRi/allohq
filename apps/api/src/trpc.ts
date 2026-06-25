@@ -169,7 +169,19 @@ const DEMO_LLM_PATHS = new Set<string>([
 /**
  * Workspace procedure - requires authentication + workspace access + rate limiting
  */
-export const workspaceProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+export const workspaceProcedure = protectedProcedure
+  .use(async ({ next }) => {
+    // tRPC/React Query reject `undefined` query data ("Query data cannot be
+    // undefined"). Coerce any undefined OK result to null STRUCTURALLY, so a
+    // "no data yet" resolver never crashes the client. Belt-and-suspenders over
+    // per-resolver `?? null` — covers every workspace/store resolver at once.
+    const result = await next();
+    if (result.ok && (result.data as unknown) === undefined) {
+      return { ...result, data: null };
+    }
+    return result;
+  })
+  .use(async ({ ctx, next }) => {
   // Rate limit: 100 requests per minute per user
   const { allowed, remaining } = checkRateLimit(ctx.userId, { maxRequests: 100, windowMs: 60_000 });
   if (!allowed) {
