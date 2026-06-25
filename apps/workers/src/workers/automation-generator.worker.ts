@@ -358,6 +358,31 @@ automationGeneratorWorker.on("completed", (job) => {
   console.log(`[automation-generator] Job ${job.id} completed`);
 });
 
-automationGeneratorWorker.on("failed", (job, err) => {
+automationGeneratorWorker.on("failed", async (job, err) => {
   console.error(`[automation-generator] Job ${job?.id} failed:`, err.message);
+  // Never leave the automation stuck in "generating" forever. The generation body
+  // (esp. the email-gen LLM call) can throw uncaught — typically OpenAI at quota —
+  // and the status was set to "generating" before it ran. Once retries are
+  // exhausted, mark it "failed" so the app stops waiting on it. This also lets
+  // activation resolve (a failed automation has generating=0, so isActivating /
+  // the setup view no longer hang). Root-cause fix (route generation to Claude /
+  // handle quota with fallback) lives in the AI gateway — tracked separately.
+  const automationId = job?.data?.automationId as string | undefined;
+  const exhausted = !job || job.attemptsMade >= (job.opts?.attempts ?? 1);
+  if (automationId && exhausted) {
+    try {
+      await prisma.automation.update({
+        where: { id: automationId },
+        data: { status: "failed" },
+      });
+      console.error(
+        `[automation-generator] marked automation ${automationId} as failed (was stuck generating)`,
+      );
+    } catch (e) {
+      console.error(
+        `[automation-generator] could not mark ${automationId} failed:`,
+        (e as Error).message,
+      );
+    }
+  }
 });
