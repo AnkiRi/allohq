@@ -12,6 +12,7 @@ import { useDemo } from "@/lib/useDemo";
 import { useToast } from "@/components/ui/Toast";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { DemoOnboarding } from "@/components/dashboard/DemoOnboarding";
 import {
   ConsoleFrame,
   CommandLine,
@@ -297,6 +298,15 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { openPanel, submit: submitAI } = useAlloAI();
   const demo = useDemo();
+  // Demo onboarding arc — show once per browser session (skippable).
+  const [arcSeen, setArcSeen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return sessionStorage.getItem("allo_demo_arc") === "1";
+    } catch {
+      return false;
+    }
+  });
   const rawFirst = user?.firstName || "there";
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1);
   const greeting = getGreeting();
@@ -684,6 +694,23 @@ export default function DashboardPage() {
   // seeded Vana workspace, so storeId resolves — this prompt won't show. Guard
   // explicitly so a storeless visitor only ever sees the demo entry CTA here,
   // never a dead-end.
+  // Demo first-entry: the staged "watch allo come alive" arc (once per session,
+  // skippable). Staged over the seeded Vana data — no real sync / Shopify call.
+  if (demo && !arcSeen) {
+    return (
+      <DemoOnboarding
+        onDone={() => {
+          try {
+            sessionStorage.setItem("allo_demo_arc", "1");
+          } catch {
+            /* ignore */
+          }
+          setArcSeen(true);
+        }}
+      />
+    );
+  }
+
   if (!storeId && !demo) {
     return <ConnectStorePrompt />;
   }
