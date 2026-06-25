@@ -4,6 +4,7 @@ import { shopify } from "@allohq/ecommerce-integrations";
 const { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections, registerWebhooks } = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { rfmQueue } from "../queues";
+import { logActivity } from "@allohq/agent-core";
 
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
 const brandKitQueue = new Queue(QUEUE_NAMES.BRAND_KIT, { connection: redisConnection });
@@ -103,6 +104,14 @@ export const syncWorker = new Worker<SyncJobData>(
       where: { id: storeId },
       data: { lastSyncAt: new Date() },
     });
+
+    // Operator terminal: the first thing allo did on this store (post-connect).
+    await logActivity({
+      storeId,
+      activityType: "store_scan",
+      summary: `Scanned your store — ${customerResult.imported.toLocaleString("en-IN")} customers, ${orderResult.imported.toLocaleString("en-IN")} orders synced`,
+      actionTaken: "synced",
+    }).catch(() => {});
 
     // 6. Trigger RFM + LTV calculation (background data enrichment)
     await rfmQueue.add("rfm-after-sync", { storeId });

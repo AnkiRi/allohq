@@ -8,6 +8,7 @@ import {
   DEFAULT_SEGMENTS,
 } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { logActivity } from "@allohq/agent-core";
 
 const segmentChangeQueue = new Queue(QUEUE_NAMES.SEGMENT_CHANGE, { connection: redisConnection });
 
@@ -192,6 +193,12 @@ export const rfmWorker = new Worker<RfmJobData>(
     }
 
     console.log(`RFM job completed for store ${storeId}: ${rfmCalculated} RFM, ${ltvCalculated} LTV`);
+    await logActivity({
+      storeId,
+      activityType: "rfm_scored",
+      summary: `Scored ${rfmCalculated.toLocaleString("en-IN")} customers into RFM segments`,
+      actionTaken: "scored",
+    }).catch(() => {});
     return { rfmCalculated, ltvCalculated };
   },
   { connection: redisConnection }

@@ -8,7 +8,7 @@ const AutonomyTier = {
 } as const;
 import { scanOpportunities } from "@allohq/campaign-engine";
 import { generateDailyBriefing } from "@allohq/merchant-copilot";
-import { logAgentActivity } from "@allohq/agent-core";
+import { logAgentActivity, logActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
 const automationGenerateQueue = new Queue(QUEUE_NAMES.AUTOMATION_GENERATE, {
@@ -330,6 +330,18 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
             `✓ Created **${label}** automation — ${isAutopilot ? "now active on autopilot" : "draft ready for your review"}`,
             { type: "automation_created", entityId: automation.id, entityType: "automation" },
           ).catch(() => {});
+          // Mirror to the operator TERMINAL (AgentActivityLog → /activity) so the
+          // post-connect activation "lights up" the timeline.
+          await logActivity({
+            storeId,
+            activityType: "automation_drafted",
+            summary: `Drafted ${label} automation — ${isAutopilot ? "active on autopilot" : "ready for your review"}`,
+            category: programType,
+            tier: config.tier,
+            actionTaken: isAutopilot ? "triggered_journey" : "queued_for_review",
+            entityId: automation.id,
+            entityType: "automation",
+          }).catch(() => {});
         } catch (err) {
           console.error(
             `[store-activation] Failed to create ${label} automation:`,
