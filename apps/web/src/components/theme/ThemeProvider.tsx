@@ -65,7 +65,15 @@ export function ThemeScript() {
   } catch(e){}
 })();
 `;
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  // suppressHydrationWarning: this is a pre-paint side-effect script; its text
+  // only ever differs server-vs-client during dev fast-refresh (when the source
+  // changes under an open tab). Production HTML/JS ship together, so it matches.
+  return (
+    <script
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: script }}
+    />
+  );
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
