@@ -6,6 +6,7 @@ import {
   generateWhatsApp,
   generateRcs,
   generateWorkflow,
+  DEFAULT_MODEL,
 } from "@allohq/customer-intelligence";
 import type { AIModelId } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
@@ -62,7 +63,12 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       });
       resolvedModel = (workspace?.defaultModel as AIModelId) || undefined;
     }
-    const aiModel = resolvedModel;
+    // Prefer Claude for automation generation: when no explicit/workspace model
+    // is set, use the gateway default (Claude Sonnet) instead of passing
+    // undefined. The gateway's complete() additionally falls back through the
+    // chain to Claude on any provider error (e.g. OpenAI quota), so generation
+    // survives a quota outage rather than hanging/failing.
+    const aiModel = resolvedModel ?? DEFAULT_MODEL;
 
     const creativeIntensity = (brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? undefined;
 
