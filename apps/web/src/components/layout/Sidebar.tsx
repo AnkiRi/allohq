@@ -53,6 +53,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const { signOut } = useClerk();
+  // Sign-out returns to the landing (not a bare login box). In prod the app is
+  // on agent.allohq.ai, where "/" redirects back to sign-in, so point at the
+  // root marketing domain; in dev "/" IS the landing.
+  const signOutRedirect =
+    process.env.NODE_ENV === "production" ? "https://allohq.ai" : "/";
   const { isOpen, close, collapsed, toggleCollapsed } = useMobileSidebar();
   const [moreOpen, setMoreOpen] = useState(true);
 
@@ -255,7 +260,7 @@ export function Sidebar() {
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => signOut({ redirectUrl: "/sign-in" })}
+                onClick={() => signOut({ redirectUrl: signOutRedirect })}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors"
                 title="Sign out"
               >
@@ -287,7 +292,7 @@ export function Sidebar() {
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => signOut({ redirectUrl: "/sign-in" })}
+                onClick={() => signOut({ redirectUrl: signOutRedirect })}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors"
                 title="Sign out"
               >
