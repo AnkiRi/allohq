@@ -67,7 +67,9 @@ export default function FormsPage() {
     onSuccess: () => (utils as any).forms.listForms.invalidate(),
   });
 
-  if (isLoading || !storeId) {
+  // Only spin while a connected store is actually loading. With NO store, fall
+  // through to the empty state instead of an infinite spinner.
+  if (storeId && isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

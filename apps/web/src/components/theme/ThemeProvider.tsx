@@ -34,7 +34,11 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const useTheme = () => useContext(ThemeContext);
 
-const STORAGE_KEY = "allo-theme";
+// The app keeps its OWN theme key, separate from the landing's palette key
+// ('allo-theme'). They are independent on purpose: the landing defaults to
+// drenched, the app to light, and the landing's palette never drags the app.
+// (This also sidesteps any stale 'allo-theme' value forcing the app to drenched.)
+const STORAGE_KEY = "allo-app-theme";
 // The APP defaults to LIGHT — it's a working tool and needs maximum legibility.
 // (The marketing landing keeps its own drenched/cobalt default via its scoped
 // .opt-v2 system; this default only governs the authenticated app shell.)

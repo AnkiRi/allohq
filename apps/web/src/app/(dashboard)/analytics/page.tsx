@@ -99,10 +99,19 @@ export default function AnalyticsPage() {
     }
   };
 
+  // No store connected → an empty state, not an infinite spinner.
   if (!storeId) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <div className="text-center max-w-sm">
+          <p className="text-[15px] font-semibold text-foreground font-serif mb-1">
+            Nothing to measure yet
+          </p>
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            Connect your store and allo starts measuring what it earned you,
+            lift against a held-out control, from the first send.
+          </p>
+        </div>
       </div>
     );
   }
