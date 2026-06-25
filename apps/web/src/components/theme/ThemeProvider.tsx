@@ -26,7 +26,7 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "drenched",
+  theme: "light",
   mounted: false,
   toggleTheme: () => {},
   setTheme: () => {},
@@ -35,7 +35,10 @@ const ThemeContext = createContext<ThemeContextType>({
 export const useTheme = () => useContext(ThemeContext);
 
 const STORAGE_KEY = "allo-theme";
-const DEFAULT_THEME: Theme = "drenched";
+// The APP defaults to LIGHT — it's a working tool and needs maximum legibility.
+// (The marketing landing keeps its own drenched/cobalt default via its scoped
+// .opt-v2 system; this default only governs the authenticated app shell.)
+const DEFAULT_THEME: Theme = "light";
 
 function isTheme(v: string | null): v is Theme {
   return v === "drenched" || v === "light" || v === "dark";
