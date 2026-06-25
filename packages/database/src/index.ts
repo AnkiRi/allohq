@@ -25,10 +25,14 @@ export type {
 // Customers to a shared Identity. Unused in single-brand behavior.
 export { normalizeEmail, normalizePhone } from "./identity";
 
-// Demo / sandbox mode constants (storeless visitor → seeded Vana, read-mostly)
+// Demo / sandbox mode (logged-out visitor → seeded Vana, read-mostly). Resolved
+// by STABLE slug/domain (portable across dev/prod), not hardcoded cuids.
 export {
-  DEMO_STORE_ID,
-  DEMO_WORKSPACE_ID,
+  DEMO_WORKSPACE_SLUG,
+  DEMO_STORE_DOMAIN,
+  DEMO_OWNER_CLERK_ID,
   DEMO_STORE_NAME,
   DEMO_HEADER,
+  getDemoWorkspaceId,
+  getDemoStoreId,
 } from "./demo";
