@@ -10,6 +10,7 @@ import {
   Loader2,
   Wand2,
   Pencil,
+  Undo2,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { createDefaultBlock, type EmailBlock, type EmailBlockType } from "@allohq/email-builder";
@@ -161,6 +162,20 @@ export function EmailStudio({
     setShowAdd(false);
   };
 
+  // Iteration history — each applied AI edit pushes the PRIOR version so the user
+  // can step back ("didn't like it → go one iteration behind"). Session-scoped.
+  const [history, setHistory] = React.useState<{ blocks: EmailBlock[]; subject: string }[]>([]);
+  const undo = () => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1]!;
+      setBlocks(prev.blocks);
+      setSubject(prev.subject);
+      setSelectedId(prev.blocks[0]?.id ?? null);
+      return h.slice(0, -1);
+    });
+  };
+
   const applyInstruction = (text: string) => {
     if (!text.trim() || promptMut.isPending) return;
     setPromptError(null);
@@ -169,6 +184,7 @@ export function EmailStudio({
       {
         onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; subject?: string; error?: string }) => {
           if (data.applied) {
+            setHistory((h) => [...h, { blocks, subject }]);
             setBlocks(data.blocks);
             if (typeof data.subject === "string") setSubject(data.subject);
             if (!data.blocks.some((b) => b.id === selectedId)) {
@@ -234,27 +250,50 @@ export function EmailStudio({
                 Tell allo what to change
               </h2>
             </div>
-            {/* Delight chips — one-click live LLM edits; click and watch it change */}
-            <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {/* Categorized chips — direct allo across dimensions; each runs a live edit */}
+            <div className="space-y-2 mb-2.5">
               {(
                 [
-                  ["Punch up subject", "Rewrite the subject line to be more compelling and on-brand — no hype, no ALL-CAPS."],
-                  ["Shorter", "Make the whole email shorter and tighter: cut filler, keep the core message and the CTA."],
-                  ["Warmer", "Make the tone warmer and more personal, like a short note from the founder."],
-                  ["Funnier", "Add a light, tasteful touch of humour — warm and brand-appropriate, never cheesy."],
-                  ["More visual", "Make it more visual: stronger hero, larger imagery, kept balanced and uncluttered."],
-                  ["Regenerate", "Regenerate this email with a fresh angle on the same goal and audience, keeping the brand voice."],
-                ] as [string, string][]
-              ).map(([label, instr]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => applyInstruction(instr)}
-                  disabled={promptMut.isPending}
-                  className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50 transition-colors"
-                >
-                  {label}
-                </button>
+                  ["Subject", [
+                    ["Punch up subject", "Rewrite the subject line to be more compelling and on-brand — no hype, no ALL-CAPS."],
+                    ["Shorten subject", "Make the subject line shorter and punchier while keeping its meaning."],
+                    ["A/B variant", "Rewrite the subject line as a strong alternative for an A/B test — a different angle, same intent."],
+                  ]],
+                  ["Copy", [
+                    ["Warmer", "Make the tone warmer and more personal, like a short note from the founder."],
+                    ["Funnier", "Add a light, tasteful touch of humour — warm and brand-appropriate, never cheesy."],
+                    ["Shorter", "Make the whole email shorter and tighter: cut filler, keep the core message and the CTA."],
+                    ["More urgent", "Add a gentle, honest sense of timeliness — never fake urgency or countdown pressure."],
+                    ["Match brand voice", "Rewrite the copy to match the brand's voice and guidelines exactly."],
+                  ]],
+                  ["Visual", [
+                    ["More visual", "Make it more visual: stronger hero, larger imagery, kept balanced and uncluttered."],
+                    ["Change layout", "Restructure the layout for a fresh look while keeping the message and each block's intent."],
+                    ["Swap product", "Swap the featured product for a different relevant one and update the copy to match."],
+                  ]],
+                  ["Tone", [
+                    ["More formal", "Make the tone more formal and polished, while staying warm."],
+                    ["More casual", "Make the tone more casual and conversational."],
+                    ["Regenerate", "Regenerate this email with a fresh angle on the same goal and audience, keeping the brand voice."],
+                  ]],
+                ] as [string, [string, string][]][]
+              ).map(([group, chips]) => (
+                <div key={group} className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground w-[52px] shrink-0">
+                    {group}
+                  </span>
+                  {chips.map(([label, instr]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => applyInstruction(instr)}
+                      disabled={promptMut.isPending}
+                      className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50 transition-colors"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
             <textarea
@@ -268,7 +307,18 @@ export function EmailStudio({
               className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
             />
             <div className="flex items-center justify-between mt-2 gap-3">
-              <p className="text-[11px] font-mono text-muted-foreground">⌘↵ to apply</p>
+              <div className="flex items-center gap-3">
+                <p className="text-[11px] font-mono text-muted-foreground">⌘↵ to apply</p>
+                {history.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={undo}
+                    className="inline-flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Undo2 className="w-3 h-3" /> Undo ({history.length})
+                  </button>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={runPrompt}
