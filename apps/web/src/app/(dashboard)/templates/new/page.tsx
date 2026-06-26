@@ -26,7 +26,6 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import { EmailCanvas } from "@/components/email-builder/EmailCanvas";
 import { createDefaultBlock } from "@allohq/email-builder";
 import type { EmailBlock, EmailBlockType } from "@allohq/email-builder";
 import { cn } from "@allohq/ui";
@@ -318,7 +317,6 @@ export default function NewTemplatePage() {
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [tone, setTone] = useState<string>("Professional");
   const [aiInstruction, setAiInstruction] = useState("");
-  const [showAdvancedEditor, setShowAdvancedEditor] = useState(false);
   const [showAlternatives, setShowAlternatives] = useState(false);
 
   // tRPC
@@ -331,7 +329,7 @@ export default function NewTemplatePage() {
 
   // AI regenerate (use if available)
   const regenerateMut = (trpc.ai as any).regenerateEmail?.useMutation?.({
-    onError: (err: { message?: string }) => toast(err.message || "Regeneration failed", "error"),
+    onError: (err: { message?: string }) => toast(err.message || "That rewrite didn't go through. Mind trying again?", "error"),
   }) as { mutateAsync?: (input: any) => Promise<any>; isPending?: boolean } | undefined;
 
   // Subject scoring
@@ -343,30 +341,54 @@ export default function NewTemplatePage() {
     [subject, goal]
   );
 
-  // -- Step 2: Auto-generate on entry --
+  // -- Step 2: Auto-generate on entry — REAL LLM generation --
+  // The skeleton only seeds block TYPES/structure; allo then writes real, on-brand
+  // copy from the goal + the user's custom instruction via regenerateEmail (the same
+  // real-LLM path the editor uses; demo-allowlisted + cost-capped). Falls back to the
+  // skeleton only if the model is unavailable — never ships "Your Heading Here".
   useEffect(() => {
     if (step === 2 && goal) {
-      // Simulate generation delay for UX
-      const timeout = setTimeout(() => {
-        const generatedBlocks = generateBlocksForGoal(goal);
-        const generatedSubject = SUBJECT_LINES[goal];
+      let cancelled = false;
+      (async () => {
+        const skeleton = generateBlocksForGoal(goal);
         const goalLabel = GOALS.find((g) => g.id === goal)?.label ?? "Custom";
-        setBlocks(generatedBlocks);
-        setSubject(generatedSubject);
+        const brief =
+          goal === "custom"
+            ? customPrompt.trim() || "Create a compelling, on-brand marketing email."
+            : `Write a ${goalLabel} email.${customPrompt.trim() ? " " + customPrompt.trim() : ""}`;
+        let nextBlocks = skeleton;
+        let nextSubject = SUBJECT_LINES[goal];
+        try {
+          if (storeId && regenerateMut?.mutateAsync) {
+            const result = await regenerateMut.mutateAsync({ storeId, blocks: skeleton, feedback: brief });
+            if (result?.blocks?.length) {
+              nextBlocks = result.blocks;
+              if (result.subject) nextSubject = result.subject;
+            }
+          }
+        } catch {
+          // resilient — keep the skeleton if the LLM call fails
+        }
+        if (cancelled) return;
+        setBlocks(nextBlocks);
+        setSubject(nextSubject);
         setTemplateName(`${goalLabel} Email`);
         setStep(3);
-      }, 1500);
-      return () => clearTimeout(timeout);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, goal]);
 
   // -- Render preview when blocks change on step 3 --
   useEffect(() => {
-    if (step === 3 && blocks.length > 0 && !showAdvancedEditor) {
+    if (step === 3 && blocks.length > 0) {
       renderMut.mutate({ blocks: blocks as any });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, blocks, showAdvancedEditor]);
+  }, [step, blocks]);
 
   // Preview HTML from render mutation — used as srcdoc on the iframe
   const previewHtml = renderMut.data?.html ?? "";
@@ -390,10 +412,10 @@ export default function NewTemplatePage() {
         blocks: blocks as any,
         category: "ai_generated",
       });
-      toast("Template saved!", "success");
+      toast("Your template is saved.", "success");
       router.push(`/templates/${template.id}/edit`);
     } catch {
-      toast("Failed to save template", "error");
+      toast("We couldn't save that. Mind trying again?", "error");
     }
   }
 
@@ -405,20 +427,31 @@ export default function NewTemplatePage() {
         blocks: blocks as any,
         category: "ai_generated",
       });
-      toast("Template saved! Redirecting to campaign creation...", "success");
+      toast("Saved \u2014 let's set up your campaign.", "success");
       router.push(`/campaigns/new?templateId=${template.id}`);
     } catch {
-      toast("Failed to save template", "error");
+      toast("We couldn't save that. Mind trying again?", "error");
     }
   }
 
-  function handleUseInAutomation() {
-    toast("Coming soon \u2014 attach this template to an automation", "info");
+  async function handleUseInAutomation() {
+    try {
+      await createMut.mutateAsync({
+        name: templateName || "Untitled Template",
+        subject: subject || templateName || "Untitled",
+        blocks: blocks as any,
+        category: "ai_generated",
+      });
+      toast("Saved \u2014 pick it in any automation's email step.", "success");
+      router.push("/automations");
+    } catch {
+      toast("We couldn't save that. Mind trying again?", "error");
+    }
   }
 
   async function handleRegenerate() {
     if (!storeId || !regenerateMut?.mutateAsync) {
-      toast("AI regeneration coming soon", "info");
+      toast("Connect a store first so allo can rewrite this.", "info");
       return;
     }
     try {
@@ -431,7 +464,7 @@ export default function NewTemplatePage() {
       if (result?.blocks) {
         setBlocks(result.blocks);
         if (result.subject) setSubject(result.subject);
-        toast("Email regenerated!", "success");
+        toast("Here's a fresh take.", "success");
         setAiInstruction("");
       }
     } catch {
@@ -439,11 +472,6 @@ export default function NewTemplatePage() {
     }
   }
 
-  function handleCanvasSave(savedBlocks: EmailBlock[]) {
-    setBlocks(savedBlocks);
-    setShowAdvancedEditor(false);
-    toast("Blocks updated!", "success");
-  }
 
   // -------------------------------------------------------------------------
   // Render
@@ -457,7 +485,7 @@ export default function NewTemplatePage() {
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
         <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">
-          Create Email
+          Create an email
         </h1>
       </div>
 
@@ -487,7 +515,7 @@ export default function NewTemplatePage() {
                 </div>
                 <span
                   className={cn(
-                    "text-[11px] font-mono transition-colors hidden sm:inline",
+                    "text-[11px] font-sans transition-colors hidden sm:inline",
                     isActive ? "text-foreground font-bold" : "text-muted-foreground"
                   )}
                 >
@@ -514,7 +542,7 @@ export default function NewTemplatePage() {
             className="space-y-6"
           >
             <div>
-              <h2 className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground mb-1">
+              <h2 className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground mb-1">
                 STEP 1
               </h2>
               <p className="text-[15px] text-foreground font-bold">
@@ -532,8 +560,8 @@ export default function NewTemplatePage() {
                     onClick={() => setGoal(g.id)}
                     className={cn(
                       "text-left p-5 rounded-xl transition-all",
-                      "bg-white/60 dark:bg-[rgba(40,36,30,0.7)]",
-                      "border border-black/5 dark:border-[rgba(200,180,150,0.12)]",
+                      "bg-card dark:bg-[rgba(40,36,30,0.7)]",
+                      "border border-border dark:border-[rgba(200,180,150,0.12)]",
                       "hover:shadow-md hover:-translate-y-0.5",
                       isSelected && "ring-2 ring-[var(--color-accent)]"
                     )}
@@ -573,7 +601,7 @@ export default function NewTemplatePage() {
                   transition={{ duration: 0.2 }}
                 >
                   <div className="mt-2">
-                    <label className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground block mb-1.5">
+                    <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground block mb-1.5">
                       DESCRIBE YOUR EMAIL
                     </label>
                     <textarea
@@ -581,7 +609,7 @@ export default function NewTemplatePage() {
                       onChange={(e) => setCustomPrompt(e.target.value)}
                       rows={3}
                       placeholder="E.g., 'A holiday sale email with a festive theme, featuring our top 6 products with a 20% off coupon code...'"
-                      className="w-full px-4 py-3 bg-white/60 dark:bg-[rgba(40,36,30,0.7)] border border-black/5 dark:border-[rgba(200,180,150,0.12)] rounded-xl text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] resize-none"
+                      className="w-full px-4 py-3 bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] resize-none"
                     />
                   </div>
                 </motion.div>
@@ -594,7 +622,7 @@ export default function NewTemplatePage() {
                 onClick={handleGoalNext}
                 disabled={!goal}
                 className={cn(
-                  "flex items-center gap-2 px-6 py-2.5 rounded-lg text-[13px] font-mono font-bold transition-all",
+                  "flex items-center gap-2 px-6 py-2.5 rounded-lg text-[13px] font-sans font-bold transition-all",
                   goal
                     ? "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
                     : "bg-muted text-muted-foreground cursor-not-allowed"
@@ -629,11 +657,11 @@ export default function NewTemplatePage() {
             </div>
 
             <div className="text-center space-y-2">
-              <h2 className="text-[16px] font-mono font-bold text-foreground">
-                Generating your {GOALS.find((g) => g.id === goal)?.label} email...
+              <h2 className="text-[16px] font-serif font-bold text-foreground">
+                allo is writing your {GOALS.find((g) => g.id === goal)?.label} email…
               </h2>
               <p className="text-[13px] text-muted-foreground">
-                Crafting blocks, subject line, and content
+                Putting together the layout, subject line, and words
               </p>
             </div>
 
@@ -651,7 +679,7 @@ export default function NewTemplatePage() {
         {/* ================================================================ */}
         {/* STEP 3: Preview & Refine                                         */}
         {/* ================================================================ */}
-        {step === 3 && !showAdvancedEditor && (
+        {step === 3 && (
           <motion.div
             key="step3"
             initial={{ opacity: 0, y: 12 }}
@@ -664,7 +692,7 @@ export default function NewTemplatePage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setStep(1)}
-                className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="w-3 h-3" />
                 Back to goals
@@ -672,7 +700,7 @@ export default function NewTemplatePage() {
               <div className="flex-1" />
               <button
                 onClick={() => setStep(4)}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-mono font-bold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-all"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-sans font-bold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-all"
               >
                 Continue
                 <ChevronRight className="w-4 h-4" />
@@ -685,14 +713,14 @@ export default function NewTemplatePage() {
               <div className="flex-[3] flex flex-col border border-border rounded-xl overflow-hidden bg-card">
                 {/* Preview toolbar */}
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card">
-                  <span className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground font-bold">
+                  <span className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     PREVIEW
                   </span>
                   <div className="flex items-center rounded-lg border border-border overflow-hidden">
                     <button
                       onClick={() => setPreviewMode("desktop")}
                       className={cn(
-                        "flex items-center gap-1 px-2.5 py-1 text-[10px] font-mono transition-colors",
+                        "flex items-center gap-1 px-2.5 py-1 text-[10px] font-sans transition-colors",
                         previewMode === "desktop"
                           ? "bg-secondary text-secondary-foreground"
                           : "bg-card text-muted-foreground hover:text-foreground"
@@ -704,7 +732,7 @@ export default function NewTemplatePage() {
                     <button
                       onClick={() => setPreviewMode("mobile")}
                       className={cn(
-                        "flex items-center gap-1 px-2.5 py-1 text-[10px] font-mono transition-colors",
+                        "flex items-center gap-1 px-2.5 py-1 text-[10px] font-sans transition-colors",
                         previewMode === "mobile"
                           ? "bg-secondary text-secondary-foreground"
                           : "bg-card text-muted-foreground hover:text-foreground"
@@ -741,27 +769,27 @@ export default function NewTemplatePage() {
               {/* Right: Refinement Panel (40%) */}
               <div className="flex-[2] flex flex-col gap-5 overflow-y-auto">
                 {/* Template name */}
-                <div className="bg-white/60 dark:bg-[rgba(40,36,30,0.7)] border border-black/5 dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
-                  <label className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground font-bold">
+                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                  <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     TEMPLATE NAME
                   </label>
                   <input
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
-                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                     placeholder="Template name..."
                   />
                 </div>
 
                 {/* Subject Line */}
-                <div className="bg-white/60 dark:bg-[rgba(40,36,30,0.7)] border border-black/5 dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
-                  <label className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground font-bold">
+                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                  <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     SUBJECT LINE
                   </label>
                   <input
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                     placeholder="Email subject..."
                   />
                   {/* Score badge */}
@@ -769,7 +797,7 @@ export default function NewTemplatePage() {
                     <span className={cn("text-[11px] font-mono font-bold", subjectScore.color)}>
                       {subjectScore.score}/100
                     </span>
-                    <span className={cn("text-[10px] font-mono px-2 py-0.5 rounded-full", subjectScore.color, "bg-current/10")}>
+                    <span className={cn("text-[10px] font-sans px-2 py-0.5 rounded-full", subjectScore.color, "bg-current/10")}>
                       {subjectScore.label}
                     </span>
                   </div>
@@ -777,7 +805,7 @@ export default function NewTemplatePage() {
                   {/* Suggest alternatives */}
                   <button
                     onClick={() => setShowAlternatives(!showAlternatives)}
-                    className="text-[11px] font-mono text-[var(--color-accent)] hover:underline"
+                    className="text-[11px] font-sans text-[var(--color-accent)] hover:underline"
                   >
                     {showAlternatives ? "Hide alternatives" : "Suggest alternatives"}
                   </button>
@@ -797,7 +825,7 @@ export default function NewTemplatePage() {
                               setSubject(alt);
                               setShowAlternatives(false);
                             }}
-                            className="w-full text-left px-3 py-2 text-[11px] font-mono text-foreground bg-muted hover:bg-muted/80 border border-border rounded-lg transition-colors"
+                            className="w-full text-left px-3 py-2 text-[11px] font-sans text-foreground bg-muted hover:bg-muted/80 border border-border rounded-lg transition-colors"
                           >
                             {alt}
                           </button>
@@ -808,20 +836,20 @@ export default function NewTemplatePage() {
                 </div>
 
                 {/* Quick Adjustments */}
-                <div className="bg-white/60 dark:bg-[rgba(40,36,30,0.7)] border border-black/5 dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
-                  <label className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground font-bold">
+                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                  <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     QUICK ADJUSTMENTS
                   </label>
 
                   {/* Tone */}
                   <div>
-                    <label className="text-[10px] font-mono text-muted-foreground block mb-1">
+                    <label className="text-[10px] font-sans text-muted-foreground block mb-1">
                       TONE
                     </label>
                     <select
                       value={tone}
                       onChange={(e) => setTone(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground focus:outline-none"
+                      className="w-full px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground focus:outline-none"
                     >
                       {TONE_OPTIONS.map((t) => (
                         <option key={t} value={t}>{t}</option>
@@ -831,21 +859,21 @@ export default function NewTemplatePage() {
 
                   {/* AI instruction */}
                   <div>
-                    <label className="text-[10px] font-mono text-muted-foreground block mb-1">
+                    <label className="text-[10px] font-sans text-muted-foreground block mb-1">
                       AI INSTRUCTION
                     </label>
                     <div className="flex gap-2">
                       <input
                         value={aiInstruction}
                         onChange={(e) => setAiInstruction(e.target.value)}
-                        placeholder="Tell AI what to change..."
+                        placeholder="Tell allo what to change…"
                         onKeyDown={(e) => e.key === "Enter" && handleRegenerate()}
-                        className="flex-1 px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        className="flex-1 px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                       />
                       <button
                         onClick={handleRegenerate}
                         disabled={regenerateMut?.isPending}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-[10px] font-mono font-bold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-[10px] font-sans font-bold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all"
                       >
                         <Wand2 className={cn("w-3 h-3", regenerateMut?.isPending && "animate-spin")} />
                         Regen
@@ -855,8 +883,8 @@ export default function NewTemplatePage() {
                 </div>
 
                 {/* Blocks */}
-                <div className="bg-white/60 dark:bg-[rgba(40,36,30,0.7)] border border-black/5 dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
-                  <label className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground font-bold">
+                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                  <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     BLOCKS ({blocks.length})
                   </label>
 
@@ -869,7 +897,7 @@ export default function NewTemplatePage() {
                         <span className="text-[12px]">
                           {BLOCK_TYPE_ICONS[block.type] || "\u25A0"}
                         </span>
-                        <span className="text-[11px] font-mono text-foreground flex-1">
+                        <span className="text-[11px] font-sans text-foreground flex-1">
                           {BLOCK_TYPE_LABELS[block.type] || block.type}
                         </span>
                         <button
@@ -882,49 +910,11 @@ export default function NewTemplatePage() {
                     ))}
                   </div>
 
-                  <button
-                    onClick={() => setShowAdvancedEditor(true)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-lg text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-                  >
-                    <Settings2 className="w-3.5 h-3.5" />
-                    Edit Blocks
-                  </button>
+                  <p className="text-center text-[11px] font-sans text-muted-foreground">
+                    Fine-tune any block in the editor after you create this.
+                  </p>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ================================================================ */}
-        {/* STEP 3b: Advanced Block Editor                                   */}
-        {/* ================================================================ */}
-        {step === 3 && showAdvancedEditor && (
-          <motion.div
-            key="step3b"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-4"
-          >
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowAdvancedEditor(false)}
-                className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-mono text-muted-foreground border border-border rounded-lg hover:text-foreground hover:border-foreground/30 transition-colors"
-              >
-                <ArrowLeft className="w-3 h-3" />
-                Back to Preview
-              </button>
-              <span className="text-[10px] uppercase tracking-[1px] font-mono text-muted-foreground font-bold">
-                BLOCK EDITOR
-              </span>
-            </div>
-
-            <div className="h-[calc(100vh-220px)] border border-border rounded-xl overflow-hidden">
-              <EmailCanvas
-                initialBlocks={blocks}
-                onSave={handleCanvasSave}
-              />
             </div>
           </motion.div>
         )}
@@ -944,14 +934,14 @@ export default function NewTemplatePage() {
             {/* Back button */}
             <button
               onClick={() => setStep(3)}
-              className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-3 h-3" />
               Back to preview
             </button>
 
             <div className="text-center space-y-2 py-6">
-              <h2 className="text-[20px] font-mono font-bold text-foreground tracking-[-0.5px]">
+              <h2 className="text-[20px] font-serif font-bold text-foreground tracking-[-0.5px]">
                 Your email is ready!
               </h2>
               <p className="text-[13px] text-muted-foreground max-w-md mx-auto">
@@ -960,7 +950,7 @@ export default function NewTemplatePage() {
             </div>
 
             {/* Summary card */}
-            <div className="max-w-lg mx-auto bg-white/60 dark:bg-[rgba(40,36,30,0.7)] border border-black/5 dark:border-[rgba(200,180,150,0.12)] rounded-xl p-5 space-y-3">
+            <div className="max-w-lg mx-auto bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)]/15 flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-[var(--color-accent)]" />
@@ -970,7 +960,7 @@ export default function NewTemplatePage() {
                   <p className="text-[11px] text-muted-foreground">{subject}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
+              <div className="flex items-center gap-3 text-[10px] font-sans text-muted-foreground">
                 <span>{blocks.length} blocks</span>
                 <span>\u2022</span>
                 <span>Goal: {GOALS.find((g) => g.id === goal)?.label}</span>
@@ -985,7 +975,7 @@ export default function NewTemplatePage() {
               <button
                 onClick={handleSaveTemplate}
                 disabled={createMut.isPending}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-mono font-bold transition-all bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
               >
                 {createMut.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -999,7 +989,7 @@ export default function NewTemplatePage() {
               <button
                 onClick={handleLaunchCampaign}
                 disabled={createMut.isPending}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-mono font-bold transition-all border-2 border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all border-2 border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
                 Launch as Campaign
@@ -1008,7 +998,7 @@ export default function NewTemplatePage() {
               {/* Use in Automation */}
               <button
                 onClick={handleUseInAutomation}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-mono font-bold transition-all border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
               >
                 <Settings2 className="w-4 h-4" />
                 Use in Automation

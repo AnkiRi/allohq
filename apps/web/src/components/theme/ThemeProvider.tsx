@@ -8,7 +8,15 @@ import {
   useCallback,
 } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "drenched" | "light" | "dark";
+
+/** The two dark palettes keep the `.dark` class so every `dark:` utility works. */
+const DARKISH: Theme[] = ["drenched", "dark"];
+export const THEMES: { id: Theme; label: string; hint: string }[] = [
+  { id: "drenched", label: "Drenched", hint: "Cobalt, allo's signature blue" },
+  { id: "light", label: "Light", hint: "Minimal, near-white" },
+  { id: "dark", label: "Dark", hint: "Near-black, emerald" },
+];
 
 interface ThemeContextType {
   theme: Theme;
@@ -26,81 +34,96 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const useTheme = () => useContext(ThemeContext);
 
-const STORAGE_KEY = "allo-theme";
+// The app keeps its OWN theme key, separate from the landing's palette key
+// ('allo-theme'). They are independent on purpose: the landing defaults to
+// drenched, the app to light, and the landing's palette never drags the app.
+// (This also sidesteps any stale 'allo-theme' value forcing the app to drenched.)
+const STORAGE_KEY = "allo-app-theme";
+// The APP defaults to LIGHT — it's a working tool and needs maximum legibility.
+// (The marketing landing keeps its own drenched/cobalt default via its scoped
+// .opt-v2 system; this default only governs the authenticated app shell.)
+const DEFAULT_THEME: Theme = "light";
+
+function isTheme(v: string | null): v is Theme {
+  return v === "drenched" || v === "light" || v === "dark";
+}
 
 /**
- * Inline script to prevent flash of wrong theme.
- * Rendered as a <script> in the <head> before paint.
+ * Inline script to prevent flash of wrong theme. Sets data-theme (and the
+ * `.dark` class for the two dark palettes) before paint. Default = drenched.
  */
 export function ThemeScript() {
   const script = `
 (function(){
   try {
     var stored = localStorage.getItem('${STORAGE_KEY}');
-    var theme = stored === 'dark' || stored === 'light' ? stored : null;
-    if (!theme) {
-      theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    var t = (stored === 'drenched' || stored === 'light' || stored === 'dark') ? stored : '${DEFAULT_THEME}';
+    var el = document.documentElement;
+    el.setAttribute('data-theme', t);
+    if (t === 'drenched' || t === 'dark') { el.classList.add('dark'); }
+    else { el.classList.remove('dark'); }
   } catch(e){}
 })();
 `;
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  // suppressHydrationWarning: this is a pre-paint side-effect script; its text
+  // only ever differs server-vs-client during dev fast-refresh (when the source
+  // changes under an open tab). Production HTML/JS ship together, so it matches.
+  return (
+    <script
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: script }}
+    />
+  );
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage / system preference
+  // Initialize from localStorage, otherwise the drenched default.
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === "dark" || stored === "light") {
-      setThemeState(stored);
-    } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      setThemeState(prefersDark ? "dark" : "light");
-    }
+    const stored = localStorage.getItem(STORAGE_KEY);
+    setThemeState(isTheme(stored) ? stored : DEFAULT_THEME);
     setMounted(true);
   }, []);
 
-  // Apply class to documentElement whenever theme changes
+  // Apply data-theme + `.dark` class whenever theme changes. Apply ONLY — do
+  // NOT persist here. Persisting the default on mount would pollute the shared
+  // 'allo-theme' key (e.g. the app's light default overwriting the landing's
+  // drenched). The key holds ONLY an explicit user choice (written below).
   useEffect(() => {
     if (!mounted) return;
     const root = document.documentElement;
-    if (theme === "dark") {
+    root.setAttribute("data-theme", theme);
+    if (DARKISH.includes(theme)) {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme, mounted]);
 
-  // Listen for system preference changes (only if no explicit preference stored)
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        setThemeState(e.matches ? "dark" : "light");
-      }
-    };
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  const persist = (t: Theme) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, t);
+    } catch {
+      /* ignore */
+    }
+  };
 
+  // Persist only on an explicit choice, so defaults never pollute the key.
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
+    persist(t);
   }, []);
 
+  // Cycle drenched → light → dark → drenched (used by any quick toggle).
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "light" ? "dark" : "light"));
+    setThemeState((prev) => {
+      const next =
+        prev === "drenched" ? "light" : prev === "light" ? "dark" : "drenched";
+      persist(next);
+      return next;
+    });
   }, []);
 
   return (

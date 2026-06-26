@@ -30,14 +30,26 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         httpBatchLink({
           url: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
           async headers() {
+            // Auth status is the source of truth for demo vs real:
+            //  • signed IN  → send the Bearer token only. NEVER the demo header,
+            //    so an authenticated user is always real (never Vana), even with
+            //    a stale demo flag.
+            //  • signed OUT → if the demo flag is set, send `x-allo-demo: 1` so
+            //    the API serves the read-only Vana demo (resolved as demo-guest).
+            let token: string | null = null;
             try {
-              const token = await getTokenRef.current();
-              if (token) {
-                return { authorization: `Bearer ${token}` };
-              }
-              console.warn("[trpc] No token from Clerk getToken()");
+              token = await getTokenRef.current();
             } catch (err) {
               console.error("[trpc] Clerk getToken error:", err);
+            }
+            if (token) {
+              return { authorization: `Bearer ${token}` };
+            }
+            if (
+              typeof window !== "undefined" &&
+              window.localStorage.getItem("allo_demo") === "1"
+            ) {
+              return { "x-allo-demo": "1" };
             }
             return {};
           },

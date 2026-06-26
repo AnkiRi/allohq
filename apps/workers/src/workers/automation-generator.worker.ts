@@ -6,6 +6,7 @@ import {
   generateWhatsApp,
   generateRcs,
   generateWorkflow,
+  DEFAULT_MODEL,
 } from "@allohq/customer-intelligence";
 import type { AIModelId } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
@@ -62,7 +63,12 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       });
       resolvedModel = (workspace?.defaultModel as AIModelId) || undefined;
     }
-    const aiModel = resolvedModel;
+    // Prefer Claude for automation generation: when no explicit/workspace model
+    // is set, use the gateway default (Claude Sonnet) instead of passing
+    // undefined. The gateway's complete() additionally falls back through the
+    // chain to Claude on any provider error (e.g. OpenAI quota), so generation
+    // survives a quota outage rather than hanging/failing.
+    const aiModel = resolvedModel ?? DEFAULT_MODEL;
 
     const creativeIntensity = (brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? undefined;
 
@@ -358,6 +364,31 @@ automationGeneratorWorker.on("completed", (job) => {
   console.log(`[automation-generator] Job ${job.id} completed`);
 });
 
-automationGeneratorWorker.on("failed", (job, err) => {
+automationGeneratorWorker.on("failed", async (job, err) => {
   console.error(`[automation-generator] Job ${job?.id} failed:`, err.message);
+  // Never leave the automation stuck in "generating" forever. The generation body
+  // (esp. the email-gen LLM call) can throw uncaught — typically OpenAI at quota —
+  // and the status was set to "generating" before it ran. Once retries are
+  // exhausted, mark it "failed" so the app stops waiting on it. This also lets
+  // activation resolve (a failed automation has generating=0, so isActivating /
+  // the setup view no longer hang). Root-cause fix (route generation to Claude /
+  // handle quota with fallback) lives in the AI gateway — tracked separately.
+  const automationId = job?.data?.automationId as string | undefined;
+  const exhausted = !job || job.attemptsMade >= (job.opts?.attempts ?? 1);
+  if (automationId && exhausted) {
+    try {
+      await prisma.automation.update({
+        where: { id: automationId },
+        data: { status: "failed" },
+      });
+      console.error(
+        `[automation-generator] marked automation ${automationId} as failed (was stuck generating)`,
+      );
+    } catch (e) {
+      console.error(
+        `[automation-generator] could not mark ${automationId} failed:`,
+        (e as Error).message,
+      );
+    }
+  }
 });

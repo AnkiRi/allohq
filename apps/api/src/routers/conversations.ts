@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import { TRPCError } from "@trpc/server";
 
 /**
@@ -58,6 +59,7 @@ export const conversationsRouter = router({
   get: workspaceProcedure
     .input(z.object({ conversationId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "conversation", input.conversationId);
       const conversation = await ctx.prisma.conversation.findFirst({
         where: { id: input.conversationId },
         include: {
@@ -94,6 +96,7 @@ export const conversationsRouter = router({
       agentName: z.string().default("Merchant"),
     }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "conversation", input.conversationId);
       await ctx.prisma.conversation.update({
         where: { id: input.conversationId },
         data: { assignedTo: input.agentName, status: "active" },
@@ -105,6 +108,7 @@ export const conversationsRouter = router({
   release: workspaceProcedure
     .input(z.object({ conversationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "conversation", input.conversationId);
       await ctx.prisma.conversation.update({
         where: { id: input.conversationId },
         data: { assignedTo: null, status: "waiting" },
@@ -119,6 +123,7 @@ export const conversationsRouter = router({
       message: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "conversation", input.conversationId);
       const conversation = await ctx.prisma.conversation.findFirst({
         where: { id: input.conversationId },
         include: {
@@ -156,6 +161,7 @@ export const conversationsRouter = router({
   resolve: workspaceProcedure
     .input(z.object({ conversationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "conversation", input.conversationId);
       const conversation = await ctx.prisma.conversation.findFirst({
         where: { id: input.conversationId },
         select: { storeId: true, customerId: true },
@@ -184,6 +190,7 @@ export const conversationsRouter = router({
   getContext: workspaceProcedure
     .input(z.object({ conversationId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "conversation", input.conversationId);
       const conversation = await ctx.prisma.conversation.findFirst({
         where: { id: input.conversationId },
         select: { storeId: true, customerId: true, aiBrief: true },

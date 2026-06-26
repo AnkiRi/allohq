@@ -57,7 +57,7 @@ export function WhyButton({ context, storeId }: WhyButtonProps) {
       <button
         ref={buttonRef}
         onClick={handleClick}
-        className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[9px] font-mono font-bold text-gray-400 hover:text-gray-600 bg-black/[0.04] hover:bg-black/[0.08] transition-all duration-200 cursor-pointer flex-shrink-0"
+        className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[9px] font-sans font-bold text-muted-foreground hover:text-foreground bg-foreground/[0.04] hover:bg-foreground/[0.08] transition-all duration-200 cursor-pointer flex-shrink-0"
         title="Why?"
       >
         ?
@@ -70,36 +70,32 @@ export function WhyButton({ context, storeId }: WhyButtonProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.96 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-[260px] rounded-xl border border-black/[0.06] p-3 shadow-lg"
-            style={{
-              background: "rgba(255,255,255,0.85)",
-              backdropFilter: "blur(24px)",
-            }}
+            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-[260px] rounded-xl border border-border p-3 shadow-lg bg-card/95 backdrop-blur-xl"
           >
             {/* Arrow */}
-            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 border-l border-t border-black/[0.06] bg-white/90" />
+            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 border-l border-t border-border bg-card" />
 
             {explainMutation.isPending ? (
               <div className="flex items-center gap-2 py-1">
-                <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
+                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                 <span
-                  className="text-[11px] text-gray-400"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-[11px] text-muted-foreground"
+                  style={{ fontFamily: "'Inter', sans-serif" }}
                 >
-                  Analyzing...
+                  Let me explain...
                 </span>
               </div>
             ) : explainMutation.isError ? (
               <p
                 className="text-[11px] text-[var(--color-urgent)] leading-relaxed"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ fontFamily: "'Inter', sans-serif" }}
               >
-                Could not generate explanation. Try again.
+                I couldn&apos;t pull that together just now. Mind trying again?
               </p>
             ) : explanation ? (
               <p
                 className="text-[11px] text-foreground/80 leading-relaxed"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ fontFamily: "'Inter', sans-serif" }}
               >
                 {explanation}
               </p>

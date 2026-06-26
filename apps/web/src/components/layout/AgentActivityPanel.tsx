@@ -93,10 +93,10 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
   const currentActivity = currentStep
     ? currentStep.label
     : generating > 0
-      ? `Generating content for ${generating} automation${generating > 1 ? "s" : ""}`
+      ? `Writing content for ${generating} automation${generating > 1 ? "s" : ""}`
       : isComplete
-        ? "All tasks complete"
-        : "Processing...";
+        ? "All done"
+        : "Working on it...";
 
   return (
     <AnimatePresence>
@@ -131,7 +131,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-semibold text-[#2C2C2C] truncate">
-                {isComplete ? "Allo is ready" : "Allo is working..."}
+                {isComplete ? "allo is ready" : "allo is working..."}
               </span>
               <span className="text-[11px] font-mono text-[#8B8074]">{progress}%</span>
             </div>
@@ -185,14 +185,14 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                 {/* Activation steps */}
                 {steps.length > 0 && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#8B8074]">
+                    <span className="text-[10px] font-sans uppercase tracking-wider text-[#8B8074]">
                       Setup
                     </span>
                     {steps.map((step) => (
                       <div key={step.key} className="flex items-center gap-2 py-0.5">
                         <StatusIcon status={step.status} />
                         <span
-                          className={`text-[12px] font-mono truncate ${
+                          className={`text-[12px] font-sans truncate ${
                             step.status === "done"
                               ? "text-[#5C5549]"
                               : step.status === "running"
@@ -211,7 +211,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                 {automationItems.length > 0 && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-[#8B8074]">
+                      <span className="text-[10px] font-sans uppercase tracking-wider text-[#8B8074]">
                         Automations
                       </span>
                       <span className="text-[10px] font-mono text-[#8B8074]">
@@ -222,7 +222,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                       <div key={item.id} className="flex items-center gap-2 py-0.5">
                         <StatusIcon status={item.status} />
                         <span
-                          className={`text-[12px] font-mono truncate ${
+                          className={`text-[12px] font-sans truncate ${
                             item.status === "active" || item.status === "ready"
                               ? "text-[#5C5549]"
                               : item.status === "generating"
@@ -233,7 +233,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                           {item.name.replace(" Automation", "")}
                         </span>
                         <span
-                          className={`text-[10px] font-mono ml-auto flex-shrink-0 ${
+                          className={`text-[10px] font-sans ml-auto flex-shrink-0 ${
                             item.status === "active"
                               ? "text-[#1F7A4F]"
                               : item.status === "generating"
@@ -252,10 +252,10 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
                 {isComplete && (
                   <div className="pt-2 border-t border-black/[0.06]">
                     <p className="text-[11px] text-[#8B8074]">
-                      {total} automations set up
+                      {total} automations ready to go
                       {activation.context?.pendingActions > 0 && (
                         <span className="text-[#1F7A4F]">
-                          {" "}&middot; {activation.context.pendingActions} actions need review
+                          {" "}&middot; {activation.context.pendingActions} waiting for your okay
                         </span>
                       )}
                     </p>

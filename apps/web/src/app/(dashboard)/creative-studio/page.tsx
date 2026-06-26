@@ -207,8 +207,8 @@ function ScoreGauge({ score }: { score: number }) {
         </div>
       </div>
       <div>
-        <p className="text-[14px] font-semibold text-foreground font-mono">{label}</p>
-        <p className="text-[11px] text-muted-foreground font-mono">out of 100</p>
+        <p className="text-[14px] font-semibold text-foreground font-sans">{label}</p>
+        <p className="text-[11px] text-muted-foreground font-sans">out of 100</p>
       </div>
     </div>
   );
@@ -232,7 +232,7 @@ function BreakdownBar({ label, score, maxScore, detail, icon: Icon }: {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-[12px] font-mono text-foreground">{label}</span>
+          <span className="text-[12px] font-sans text-foreground">{label}</span>
         </div>
         <span className="text-[11px] font-mono font-semibold" style={{ color }}>
           {score}/{maxScore}
@@ -265,10 +265,10 @@ function TabButton({ active, onClick, icon: Icon, label }: {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-mono transition-all ${
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-sans transition-all ${
         active
           ? "bg-foreground text-background font-semibold"
-          : "bg-white/20 border border-white/20 text-muted-foreground hover:bg-white/30 hover:text-foreground"
+          : "bg-muted border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       <Icon className="w-3.5 h-3.5" />
@@ -284,7 +284,7 @@ function TabButton({ active, onClick, icon: Icon, label }: {
 function StudioCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-2xl border border-black/5 dark:border-[rgba(200,180,150,0.12)] p-6 bg-white/60 dark:bg-[rgba(40,36,30,0.7)] ${className}`}
+      className={`rounded-2xl border border-border dark:border-[rgba(200,180,150,0.12)] p-6 bg-card dark:bg-[rgba(40,36,30,0.7)] ${className}`}
       style={{ backdropFilter: "blur(20px)" }}
     >
       {children}
@@ -308,8 +308,7 @@ function SectionHeader({ icon: Icon, title, subtitle }: {
       </div>
       <div>
         <h2
-          className="text-[13px] font-mono uppercase tracking-[0.08em] font-bold text-foreground"
-          style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          className="text-[13px] font-serif uppercase tracking-[0.08em] font-bold text-foreground"
         >
           {title}
         </h2>
@@ -338,7 +337,7 @@ export default function CreativeStudioPage() {
       {/* Header */}
       <motion.div variants={itemVariants}>
         <h1
-          className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-mono"
+          className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-bold text-foreground font-serif"
         >
           CREATIVE STUDIO
         </h1>
@@ -425,12 +424,12 @@ function SubjectLineScorer() {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Enter your subject line..."
-                className="w-full px-4 py-3 bg-white/30 border border-border rounded-xl text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-mono"
+                className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans"
                 maxLength={200}
               />
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] text-muted-foreground font-mono">{subject.length} characters</span>
-                <span className={`text-[10px] font-mono ${subject.length > 60 ? "text-amber-600" : "text-muted-foreground"}`}>
+                <span className={`text-[10px] font-sans ${subject.length > 60 ? "text-amber-600" : "text-muted-foreground"}`}>
                   {subject.length > 60 ? "May be truncated on mobile" : "Ideal: 30-60 characters"}
                 </span>
               </div>
@@ -439,7 +438,7 @@ function SubjectLineScorer() {
             {/* Suggestions */}
             {result.suggestions.length > 0 && subject.length > 0 && (
               <div className="space-y-2">
-                <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold">
+                <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold">
                   Suggestions
                 </h3>
                 <div className="space-y-1.5">
@@ -458,13 +457,13 @@ function SubjectLineScorer() {
         {/* Alternatives */}
         <StudioCard>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold">
+            <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold">
               AI Alternatives
             </h3>
             <button
               onClick={handleGenerateAlternatives}
               disabled={generatingAlts}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-[11px] font-mono font-semibold hover:opacity-90 transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-[11px] font-sans font-semibold hover:opacity-90 transition-all disabled:opacity-50"
             >
               {generatingAlts ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -482,7 +481,7 @@ function SubjectLineScorer() {
                 return (
                   <div
                     key={i}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white/30 border border-black/[0.04] group hover:bg-white/50 transition-colors"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border group hover:bg-card transition-colors"
                   >
                     <span
                       className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md ${
@@ -491,17 +490,17 @@ function SubjectLineScorer() {
                     >
                       {altScore}
                     </span>
-                    <span className="flex-1 text-[13px] font-mono text-foreground">{alt}</span>
+                    <span className="flex-1 text-[13px] font-sans text-foreground">{alt}</span>
                     <button
                       onClick={() => copyToClipboard(alt, i)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-white/40 text-muted-foreground hover:text-foreground transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
                       title="Copy"
                     >
                       {copiedIdx === i ? <Check className="w-3.5 h-3.5 text-[#6B7A2F]" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                     <button
                       onClick={() => setSubject(alt)}
-                      className="opacity-0 group-hover:opacity-100 text-[10px] font-mono text-[var(--color-accent)] hover:opacity-80 transition-all"
+                      className="opacity-0 group-hover:opacity-100 text-[10px] font-sans text-[var(--color-accent)] hover:opacity-80 transition-all"
                     >
                       Use
                     </button>
@@ -520,14 +519,14 @@ function SubjectLineScorer() {
       {/* Right: Score & breakdown */}
       <div className="lg:col-span-2 space-y-6">
         <StudioCard>
-          <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold mb-4">
+          <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold mb-4">
             Score
           </h3>
           <ScoreGauge score={result.total} />
         </StudioCard>
 
         <StudioCard>
-          <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold mb-4">
+          <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold mb-4">
             Breakdown
           </h3>
           <div className="space-y-4">
@@ -577,7 +576,7 @@ function EmailPreviewGenerator() {
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="w-full flex items-center justify-between px-4 py-2.5 bg-white/30 border border-border rounded-xl text-[13px] font-mono text-foreground hover:bg-white/40 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-muted border border-border rounded-xl text-[13px] font-sans text-foreground hover:bg-muted transition-colors"
             >
               <span className={selectedTemplate ? "text-foreground" : "text-muted-foreground/50"}>
                 {selectedTemplate ? selectedName : "Select a template..."}
@@ -593,7 +592,7 @@ function EmailPreviewGenerator() {
                     <button
                       key={t.id}
                       onClick={() => { setSelectedTemplate(t.id); setDropdownOpen(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-[12px] font-mono hover:bg-muted/50 transition-colors ${
+                      className={`w-full text-left px-4 py-2.5 text-[12px] font-sans hover:bg-muted/50 transition-colors ${
                         t.id === selectedTemplate ? "bg-muted/30 text-foreground font-semibold" : "text-foreground"
                       }`}
                     >
@@ -609,10 +608,10 @@ function EmailPreviewGenerator() {
           </div>
 
           {/* View mode toggle */}
-          <div className="flex items-center gap-1 p-1 bg-white/20 border border-white/20 rounded-xl">
+          <div className="flex items-center gap-1 p-1 bg-muted border border-border rounded-xl">
             <button
               onClick={() => setViewMode("desktop")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-sans transition-all ${
                 viewMode === "desktop" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -621,7 +620,7 @@ function EmailPreviewGenerator() {
             </button>
             <button
               onClick={() => setViewMode("mobile")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-sans transition-all ${
                 viewMode === "mobile" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -633,10 +632,10 @@ function EmailPreviewGenerator() {
           {/* Dark mode toggle */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-mono border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-sans border transition-all ${
               darkMode
                 ? "bg-gray-800 text-gray-200 border-gray-700"
-                : "bg-white/20 text-muted-foreground border-white/20 hover:bg-white/30"
+                : "bg-muted text-muted-foreground border-border hover:bg-muted"
             }`}
           >
             {darkMode ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
@@ -666,7 +665,7 @@ function EmailPreviewGenerator() {
                 <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
                 <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
               </div>
-              <div className={`flex-1 text-center text-[10px] font-mono ${darkMode ? "text-gray-500" : "text-muted-foreground"}`}>
+              <div className={`flex-1 text-center text-[10px] font-sans ${darkMode ? "text-gray-500" : "text-muted-foreground"}`}>
                 {selectedTemplate ? selectedName : "Email Preview"}
               </div>
             </div>
@@ -685,7 +684,7 @@ function EmailPreviewGenerator() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    <p className={`text-[14px] font-semibold font-mono ${darkMode ? "text-gray-100" : "text-foreground"}`}>
+                    <p className={`text-[14px] font-semibold font-sans ${darkMode ? "text-gray-100" : "text-foreground"}`}>
                       Subject: {templateDetail.subject}
                     </p>
                     <p className={`text-[13px] leading-relaxed ${darkMode ? "text-gray-300" : "text-foreground/80"}`}>
@@ -696,7 +695,7 @@ function EmailPreviewGenerator() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <Monitor className={`w-10 h-10 mb-3 ${darkMode ? "text-gray-600" : "text-muted-foreground/30"}`} />
-                  <p className={`text-[13px] font-mono ${darkMode ? "text-gray-500" : "text-muted-foreground"}`}>
+                  <p className={`text-[13px] font-sans ${darkMode ? "text-gray-500" : "text-muted-foreground"}`}>
                     Select a template to preview
                   </p>
                   <p className={`text-[11px] mt-1 ${darkMode ? "text-gray-600" : "text-muted-foreground/60"}`}>
@@ -792,7 +791,7 @@ function CopyAssistant() {
 
         {/* Tone selector */}
         <div className="mb-5">
-          <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold mb-3">
+          <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold mb-3">
             Tone
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -803,10 +802,10 @@ function CopyAssistant() {
                 className={`p-3 rounded-xl text-left transition-all border ${
                   tone === t.value
                     ? "bg-foreground/5 border-foreground/20 ring-1 ring-foreground/10"
-                    : "bg-white/20 border-white/20 hover:bg-white/30"
+                    : "bg-muted border-border hover:bg-muted"
                 }`}
               >
-                <span className={`block text-[12px] font-mono font-semibold ${
+                <span className={`block text-[12px] font-sans font-semibold ${
                   tone === t.value ? "text-foreground" : "text-foreground/70"
                 }`}>
                   {t.label}
@@ -822,14 +821,14 @@ function CopyAssistant() {
           {/* Original */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold">
+              <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold">
                 Original
               </h3>
               <div className="flex items-center gap-2">
                 {inputText && (
                   <button
                     onClick={() => copyText(inputText, "original")}
-                    className="p-1 rounded hover:bg-white/30 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {copiedField === "original" ? <Check className="w-3 h-3 text-[#6B7A2F]" /> : <Copy className="w-3 h-3" />}
                   </button>
@@ -844,21 +843,21 @@ function CopyAssistant() {
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Paste your marketing copy here..."
               rows={8}
-              className="w-full px-4 py-3 bg-white/30 border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
+              className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
             />
           </div>
 
           {/* Improved */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold">
+              <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold">
                 Improved
               </h3>
               <div className="flex items-center gap-2">
                 {improvedText && (
                   <button
                     onClick={() => copyText(improvedText, "improved")}
-                    className="p-1 rounded hover:bg-white/30 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {copiedField === "improved" ? <Check className="w-3 h-3 text-[#6B7A2F]" /> : <Copy className="w-3 h-3" />}
                   </button>
@@ -874,13 +873,13 @@ function CopyAssistant() {
               className={`w-full px-4 py-3 border rounded-xl text-[13px] leading-relaxed font-sans min-h-[200px] ${
                 improvedText
                   ? "bg-[#6B7A2F]/5 border-[#6B7A2F]/20 text-foreground"
-                  : "bg-white/10 border-border text-muted-foreground/50"
+                  : "bg-muted border-border text-muted-foreground/50"
               }`}
             >
               {improving ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-[12px] font-mono">Improving copy...</span>
+                  <span className="text-[12px] font-sans">Improving copy...</span>
                 </div>
               ) : improvedText ? (
                 improvedText
@@ -896,7 +895,7 @@ function CopyAssistant() {
           <button
             onClick={handleImprove}
             disabled={improving || !inputText.trim()}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-foreground text-background text-[13px] font-mono font-semibold hover:opacity-90 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-foreground text-background text-[13px] font-sans font-semibold hover:opacity-90 transition-all disabled:opacity-50"
           >
             {improving ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1028,7 +1027,7 @@ function BrandVoiceCheck() {
             onChange={(e) => setText(e.target.value)}
             placeholder="Paste any marketing text to check against your brand voice..."
             rows={10}
-            className="w-full px-4 py-3 bg-white/30 border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
+            className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors font-sans leading-relaxed resize-none"
           />
 
           <div className="flex items-center justify-between mt-3">
@@ -1038,7 +1037,7 @@ function BrandVoiceCheck() {
             <button
               onClick={handleAnalyze}
               disabled={analyzing || !text.trim()}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-foreground text-background text-[12px] font-mono font-semibold hover:opacity-90 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-foreground text-background text-[12px] font-sans font-semibold hover:opacity-90 transition-all disabled:opacity-50"
             >
               {analyzing ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1054,14 +1053,14 @@ function BrandVoiceCheck() {
       {/* Right: Results */}
       <div className="lg:col-span-2 space-y-6">
         <StudioCard>
-          <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold mb-4">
+          <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold mb-4">
             Alignment Score
           </h3>
           {analysis ? (
             <ScoreGauge score={analysis.alignmentScore} />
           ) : (
             <div className="flex items-center justify-center py-8">
-              <p className="text-[12px] text-muted-foreground font-mono text-center">
+              <p className="text-[12px] text-muted-foreground font-sans text-center">
                 Paste text and click Analyze
               </p>
             </div>
@@ -1069,7 +1068,7 @@ function BrandVoiceCheck() {
         </StudioCard>
 
         <StudioCard>
-          <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold mb-4">
+          <h3 className="text-[11px] font-serif uppercase tracking-wider text-muted-foreground font-bold mb-4">
             Feedback
           </h3>
           {analysis && analysis.feedback.length > 0 ? (
@@ -1086,7 +1085,7 @@ function BrandVoiceCheck() {
                       <Icon className="w-3 h-3" style={{ color }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-[12px] font-mono font-semibold text-foreground">{item.category}</span>
+                      <span className="text-[12px] font-sans font-semibold text-foreground">{item.category}</span>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{item.detail}</p>
                     </div>
                   </div>

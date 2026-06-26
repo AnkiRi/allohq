@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, storeProcedure } from "../trpc";
 import {
   computeAttribution,
   compareAttributionModels,
@@ -13,7 +13,7 @@ import type { AttributionModel } from "@allohq/analytics";
 
 export const analyticsRouter = router({
   /** Revenue attribution by source (campaign/automation) */
-  attribution: workspaceProcedure
+  attribution: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -26,42 +26,42 @@ export const analyticsRouter = router({
     }),
 
   /** Compare all attribution models side-by-side */
-  attributionComparison: workspaceProcedure
+  attributionComparison: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ input }) => {
       return compareAttributionModels(input.storeId, input.days);
     }),
 
   /** Revenue breakdown per messaging channel */
-  channelBreakdown: workspaceProcedure
+  channelBreakdown: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ input }) => {
       return getChannelBreakdown(input.storeId, input.days);
     }),
 
   /** AI-generated vs manual campaign performance comparison */
-  aiPerformance: workspaceProcedure
+  aiPerformance: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ input }) => {
       return compareAiVsManual(input.storeId, input.days);
     }),
 
   /** Monthly customer cohort retention analysis */
-  cohorts: workspaceProcedure
+  cohorts: storeProcedure
     .input(z.object({ storeId: z.string(), maxPeriods: z.number().default(6) }))
     .query(async ({ input }) => {
       return getCohortAnalysis(input.storeId, input.maxPeriods);
     }),
 
   /** ROI: AI token cost vs AI-attributed revenue */
-  roi: workspaceProcedure
+  roi: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ ctx, input }) => {
       return calculateRoi(ctx.workspaceId, input.storeId, input.days);
     }),
 
   /** Revenue time series (reuses dashboard logic but scoped to store) */
-  revenueTimeline: workspaceProcedure
+  revenueTimeline: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -86,7 +86,7 @@ export const analyticsRouter = router({
     }),
 
   /** Revenue forecast — upcoming 7 days + historical accuracy */
-  forecast: workspaceProcedure
+  forecast: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const forecasts = await ctx.prisma.revenueForecast.findMany({
@@ -118,7 +118,7 @@ export const analyticsRouter = router({
     }),
 
   /** Export analytics data as CSV */
-  exportCsv: workspaceProcedure
+  exportCsv: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -151,7 +151,7 @@ export const analyticsRouter = router({
     }),
 
   /** Attributed revenue summary — supports period filtering */
-  attributedRevenue: workspaceProcedure
+  attributedRevenue: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -242,7 +242,7 @@ export const analyticsRouter = router({
     }),
 
   /** Churn intervention analytics: interventions sent, customers saved, revenue preserved */
-  churnInterventions: workspaceProcedure
+  churnInterventions: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - input.days * 86400000);
@@ -342,8 +342,227 @@ export const analyticsRouter = router({
       };
     }),
 
+  /**
+   * Control lift — the Track B moat, on the wire.
+   *
+   * From the causal substrate (decision_records / message_logs, grouped by
+   * treatmentArm), computes the REAL incremental lift of allo's retention vs a
+   * held-out control cohort that received nothing:
+   *   - per customer we take the measured outcome (outcomeMargin if present,
+   *     else outcomeRevenue) and average within each arm,
+   *   - lift = treatment mean − control mean (per customer),
+   *   - incremental total = lift × treated count,
+   *   - fee = base monthly + performance % of the incremental margin vs control.
+   *
+   * `hasRealData` is true only when there are enough CONTROL rows WITH a measured
+   * outcome to be meaningful (>= MIN_CONTROL_WITH_OUTCOME). The web screen flips
+   * from representative figures to these REAL numbers off that flag.
+   */
+  controlLift: storeProcedure
+    .input(z.object({ storeId: z.string(), days: z.number().default(90) }))
+    .query(async ({ ctx, input }) => {
+      // Fee model — must match the representative figures on the web screen so
+      // the page reads as one honest model whichever state it's in.
+      const BASE_MONTHLY_FEE = 24_000; // ₹ / mo — running retention, the floor
+      const PERFORMANCE_RATE = 0.15; // 15% of proven incremental margin vs control
+      const MIN_CONTROL_WITH_OUTCOME = 30; // threshold for "meaningful"
+
+      const since = new Date(Date.now() - input.days * 86_400_000);
+
+      // Per-customer measured outcome by arm, over the window. Prefer margin;
+      // fall back to revenue. One row per arm with count + mean + members.
+      const rows = await ctx.prisma.$queryRaw<
+        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number }>
+      >`
+        SELECT "treatmentArm" AS arm,
+               COUNT(*)::bigint AS n,
+               COUNT(
+                 CASE WHEN COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL
+                      THEN 1 END
+               )::bigint AS "withOutcome",
+               COALESCE(
+                 AVG(COALESCE("outcomeMargin", "outcomeRevenue"))
+                   FILTER (WHERE COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL),
+                 0
+               )::float AS mean
+        FROM "message_logs"
+        WHERE "storeId" = ${input.storeId}
+          AND "treatmentArm" IS NOT NULL
+          AND "createdAt" >= ${since}
+        GROUP BY "treatmentArm"
+      `;
+
+      const control = rows.find((r) => r.arm === "CONTROL");
+      const treatment = rows.find((r) => r.arm === "TREATMENT");
+
+      const controlCount = Number(control?.n ?? 0);
+      const treatmentCount = Number(treatment?.n ?? 0);
+      const controlWithOutcome = Number(control?.withOutcome ?? 0);
+      const treatmentWithOutcome = Number(treatment?.withOutcome ?? 0);
+      const controlMean = control?.mean ?? 0;
+      const treatmentMean = treatment?.mean ?? 0;
+
+      // Whether the per-customer figures are margin (preferred) or revenue.
+      const marginUsed = await ctx.prisma.messageLog.count({
+        where: {
+          storeId: input.storeId,
+          treatmentArm: { not: null },
+          outcomeMargin: { not: null },
+          createdAt: { gte: since },
+        },
+      });
+      const basis: "margin" | "revenue" = marginUsed > 0 ? "margin" : "revenue";
+
+      const liftPerCustomer = treatmentMean - controlMean;
+      // Incremental total = per-customer lift applied across the treated cohort.
+      const incrementalTotal = liftPerCustomer * treatmentCount;
+
+      // Performance fee on the incremental margin vs control. If the per-customer
+      // basis is revenue (no costPrice data), approximate margin via the store's
+      // defaultContributionMargin so the fee stays grounded in margin.
+      const store = await ctx.prisma.store.findUnique({
+        where: { id: input.storeId },
+        select: { defaultContributionMargin: true },
+      });
+      const contributionMargin = store?.defaultContributionMargin ?? 0.6;
+      const incrementalMargin =
+        basis === "margin" ? incrementalTotal : incrementalTotal * contributionMargin;
+
+      const performanceFee = Math.max(0, incrementalMargin) * PERFORMANCE_RATE;
+      const totalFee = BASE_MONTHLY_FEE + performanceFee;
+
+      const hasRealData = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
+
+      return {
+        hasRealData,
+        windowDays: input.days,
+        basis, // "margin" | "revenue" — which figure the per-customer means are
+        // Raw counts
+        controlCount,
+        treatmentCount,
+        controlWithOutcome,
+        treatmentWithOutcome,
+        // Per-customer measured outcome (₹), by arm
+        controlMeanPerCustomer: Math.round(controlMean),
+        treatmentMeanPerCustomer: Math.round(treatmentMean),
+        // The lift
+        liftPerCustomer: Math.round(liftPerCustomer),
+        liftPct: controlMean > 0 ? (liftPerCustomer / controlMean) * 100 : 0,
+        incrementalTotal: Math.round(incrementalTotal),
+        incrementalMargin: Math.round(incrementalMargin),
+        // Fee math
+        baseMonthly: BASE_MONTHLY_FEE,
+        performanceRate: PERFORMANCE_RATE,
+        performanceFee: Math.round(performanceFee),
+        totalFee: Math.round(totalFee),
+        contributionMargin,
+      };
+    }),
+
+  /**
+   * Prediction accuracy — Track C's track record, measured against Track B.
+   *
+   * Compares what allo FORECAST (estimatedRevenue committed on executed actions)
+   * against what ACTUALLY happened (measured incremental revenue vs a held-out
+   * control). Returns an overall accuracy figure plus a few predicted-vs-actual
+   * rows shown plainly.
+   *
+   * HONESTY: `hasCalibration` is true only when there are enough measured
+   * control outcomes to back the comparison (same discipline as the Outcomes
+   * disclaimer). Until then the predictions are estimates and this section says
+   * so. The seeded closed Vana experiment is what makes this real today.
+   */
+  predictionAccuracy: storeProcedure
+    .input(z.object({ storeId: z.string(), days: z.number().default(30) }))
+    .query(async ({ ctx, input }) => {
+      const MIN_CONTROL_WITH_OUTCOME = 30;
+      const since = new Date(Date.now() - input.days * 86_400_000);
+
+      // ACTUAL: measured incremental revenue vs held-out control (Track B).
+      const rows = await ctx.prisma.$queryRaw<
+        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number }>
+      >`
+        SELECT "treatmentArm" AS arm,
+               COUNT(*)::bigint AS n,
+               COUNT(
+                 CASE WHEN COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL
+                      THEN 1 END
+               )::bigint AS "withOutcome",
+               COALESCE(
+                 AVG(COALESCE("outcomeMargin", "outcomeRevenue"))
+                   FILTER (WHERE COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL),
+                 0
+               )::float AS mean
+        FROM "message_logs"
+        WHERE "storeId" = ${input.storeId}
+          AND "treatmentArm" IS NOT NULL
+          AND "createdAt" >= ${since}
+        GROUP BY "treatmentArm"
+      `;
+
+      const control = rows.find((r) => r.arm === "CONTROL");
+      const treatment = rows.find((r) => r.arm === "TREATMENT");
+      const controlMean = control?.mean ?? 0;
+      const treatmentMean = treatment?.mean ?? 0;
+      const treatmentCount = Number(treatment?.n ?? 0);
+      const controlWithOutcome = Number(control?.withOutcome ?? 0);
+
+      const liftPerCustomer = treatmentMean - controlMean;
+      const actualIncremental = Math.max(0, liftPerCustomer * treatmentCount);
+
+      // PREDICTED: ₹ allo committed on the actions executed in the window.
+      const executed = await ctx.prisma.actionQueue.findMany({
+        where: { storeId: input.storeId, status: "executed", createdAt: { gte: since } },
+        select: { id: true, type: true, estimatedRevenue: true, createdAt: true, payload: true },
+        orderBy: { createdAt: "desc" },
+      });
+      const predictedTotal = executed.reduce(
+        (sum, a) => sum + (a.estimatedRevenue ?? 0),
+        0,
+      );
+
+      const hasCalibration = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
+
+      // Overall accuracy: "forecasts ran within X% of actual". Distance of the
+      // actual/predicted ratio from 1, expressed as a percentage gap.
+      const ratio = predictedTotal > 0 ? actualIncremental / predictedTotal : null;
+      const withinPct =
+        ratio != null ? Math.round(Math.abs(1 - ratio) * 100) : null;
+      const accuracyPct = withinPct != null ? Math.max(0, 100 - withinPct) : null;
+
+      // A few predicted-vs-actual rows, shown plainly. Distribute the measured
+      // total across executed actions by their share of the forecast, so each
+      // row's "actual" is the actual that forecast is accountable for.
+      const rowsOut = executed.slice(0, 5).map((a) => {
+        const predicted = a.estimatedRevenue ?? 0;
+        const share = predictedTotal > 0 ? predicted / predictedTotal : 0;
+        const actual = hasCalibration ? Math.round(actualIncremental * share) : null;
+        const payload = (a.payload ?? {}) as Record<string, unknown>;
+        return {
+          id: a.id,
+          label:
+            (payload.campaignName as string) ??
+            (a.type ? a.type.replace(/_/g, " ") : "decision"),
+          predicted: Math.round(predicted),
+          actual,
+        };
+      });
+
+      return {
+        hasCalibration,
+        windowDays: input.days,
+        sampleSize: controlWithOutcome,
+        executedCount: executed.length,
+        predictedTotal: Math.round(predictedTotal),
+        actualTotal: Math.round(actualIncremental),
+        accuracyPct, // e.g. 91 → "within 9% of actual"
+        withinPct, // the gap itself
+        rows: rowsOut,
+      };
+    }),
+
   /** Cross-store benchmarks: anonymous aggregate metrics for comparison */
-  benchmarks: workspaceProcedure
+  benchmarks: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findUnique({

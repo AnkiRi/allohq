@@ -23,6 +23,7 @@
     "@allohq/ecommerce-integrations": "workspace:*",
     "@allohq/forms-and-popups": "workspace:*",
     "@allohq/email-builder": "workspace:*",
+    "@allohq/emails": "workspace:*",
     "@allohq/merchant-copilot": "workspace:*",
     "@allohq/messaging": "workspace:*",
     "@allohq/product-recommendations": "workspace:*",

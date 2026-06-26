@@ -6,9 +6,9 @@ import { usePathname } from "next/navigation";
 import { useUser, useClerk } from "@clerk/nextjs";
 import {
   LayoutDashboard,
+  Radio,
   Users,
   Layers,
-  FileText,
   Mail,
   Sparkles,
   BarChart3,
@@ -22,6 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Brain,
+  Target,
+  Library,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -30,7 +32,9 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const primaryNav = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Activity", href: "/activity", icon: Radio },
   { name: "Actions", href: "/actions", icon: ListChecks, showBadge: true },
+  { name: "Outcomes", href: "/outcomes", icon: Target },
   { name: "Performance", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ] as const;
@@ -38,8 +42,8 @@ const primaryNav = [
 const secondaryNav = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Segments", href: "/segments", icon: Layers },
-  { name: "Templates", href: "/templates", icon: FileText },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
+  { name: "Library", href: "/templates", icon: Library },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Forms", href: "/forms", icon: MousePointerClick },
   { name: "Brand Voice", href: "/intelligence/brand", icon: Brain },
@@ -51,6 +55,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const { signOut } = useClerk();
+  // Sign-out returns to the landing (not a bare login box). In prod the app is
+  // on agent.allohq.ai, where "/" redirects back to sign-in, so point at the
+  // root marketing domain; in dev "/" IS the landing.
+  const signOutRedirect =
+    process.env.NODE_ENV === "production" ? "https://allohq.ai" : "/";
   const { isOpen, close, collapsed, toggleCollapsed } = useMobileSidebar();
   const [moreOpen, setMoreOpen] = useState(true);
 
@@ -107,14 +116,24 @@ export function Sidebar() {
         {/* Logo */}
         <div className={cn("border-b border-white/15 dark:border-white/10", collapsed ? "px-3 py-5" : "px-6 py-5")}>
           {collapsed ? (
-            <h1 className="text-[16px] font-bold text-foreground font-serif tracking-[-0.5px] text-center">A</h1>
+            <div className="flex justify-center">
+              <span
+                className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--accent))]"
+                aria-hidden="true"
+                title="allo"
+              />
+            </div>
           ) : (
             <>
-              <h1 className="text-[18px] font-bold text-foreground font-serif tracking-[-0.5px]">
-                AlloHQ
+              <h1 className="flex items-center gap-2 text-[20px] font-bold text-foreground font-sans tracking-[-0.02em]">
+                <span
+                  className="w-2 h-2 rounded-full bg-[hsl(var(--accent))]"
+                  aria-hidden="true"
+                />
+                allo
               </h1>
-              <p className="text-[9px] text-muted-foreground font-mono tracking-[1px] uppercase mt-0.5">
-                AI Retention Team
+              <p className="text-[9px] text-muted-foreground font-sans tracking-[1px] uppercase mt-0.5">
+                Your retention, handled
               </p>
             </>
           )}
@@ -130,7 +149,7 @@ export function Sidebar() {
                 href={item.href}
                 onClick={close}
                 className={cn(
-                  "group/tooltip flex items-center rounded-xl transition-all text-[13px] font-mono py-2.5 relative",
+                  "group/tooltip flex items-center rounded-xl transition-all text-[13px] font-sans py-2.5 relative",
                   collapsed ? "justify-center px-2" : "gap-3 px-3",
                   active
                     ? "bg-white/40 dark:bg-white/10 text-foreground font-semibold border-l-[3px] border-l-[var(--color-accent)]"
@@ -140,7 +159,7 @@ export function Sidebar() {
                 <item.icon className="w-4 h-4 flex-shrink-0" />
                 {!collapsed && <span className="flex-1">{item.name}</span>}
                 {collapsed && (
-                  <span className="absolute left-full ml-2 px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium whitespace-nowrap bg-foreground text-background shadow-lg opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50">
+                  <span className="absolute left-full ml-2 px-2.5 py-1 rounded-lg text-[11px] font-sans font-medium whitespace-nowrap bg-foreground text-background shadow-lg opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50">
                     {item.name}
                   </span>
                 )}
@@ -168,7 +187,7 @@ export function Sidebar() {
           {!collapsed && (
             <button
               onClick={() => setMoreOpen(!moreOpen)}
-              className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-[12px] font-mono text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 transition-all"
+              className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-[12px] font-sans text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 transition-all"
             >
               <ChevronDown
                 className={cn(
@@ -198,7 +217,7 @@ export function Sidebar() {
                         href={item.href}
                         onClick={close}
                         className={cn(
-                          "group/tooltip flex items-center rounded-xl transition-all text-[12px] font-mono relative",
+                          "group/tooltip flex items-center rounded-xl transition-all text-[12px] font-sans relative",
                           collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
                           active
                             ? "bg-white/30 dark:bg-white/10 text-foreground font-semibold border-l-[3px] border-l-[var(--color-accent)]"
@@ -208,7 +227,7 @@ export function Sidebar() {
                         <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
                         {!collapsed && <span>{item.name}</span>}
                         {collapsed && (
-                          <span className="absolute left-full ml-2 px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium whitespace-nowrap bg-foreground text-background shadow-lg opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50">
+                          <span className="absolute left-full ml-2 px-2.5 py-1 rounded-lg text-[11px] font-sans font-medium whitespace-nowrap bg-foreground text-background shadow-lg opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50">
                             {item.name}
                           </span>
                         )}
@@ -231,7 +250,7 @@ export function Sidebar() {
               {user?.imageUrl ? (
                 <img src={user.imageUrl} alt="" className="w-7 h-7 rounded-full" />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground font-mono">
+                <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground font-sans">
                   {initials}
                 </div>
               )}
@@ -243,7 +262,7 @@ export function Sidebar() {
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => signOut({ redirectUrl: "/sign-in" })}
+                onClick={() => signOut({ redirectUrl: signOutRedirect })}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors"
                 title="Sign out"
               >
@@ -255,15 +274,15 @@ export function Sidebar() {
               {user?.imageUrl ? (
                 <img src={user.imageUrl} alt="" className="w-7 h-7 rounded-full" />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground font-mono">
+                <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground font-sans">
                   {initials}
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-semibold text-foreground font-mono truncate">
+                <p className="text-[12px] font-semibold text-foreground font-sans truncate">
                   {user?.fullName || user?.emailAddresses[0]?.emailAddress || "User"}
                 </p>
-                <p className="text-[10px] text-muted-foreground font-mono truncate">
+                <p className="text-[10px] text-muted-foreground font-sans truncate">
                   {user?.emailAddresses[0]?.emailAddress || ""}
                 </p>
               </div>
@@ -275,7 +294,7 @@ export function Sidebar() {
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => signOut({ redirectUrl: "/sign-in" })}
+                onClick={() => signOut({ redirectUrl: signOutRedirect })}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors"
                 title="Sign out"
               >

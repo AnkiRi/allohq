@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import {
   createArticle,
   updateArticle,
@@ -19,7 +20,7 @@ const categorySchema = z.enum([
 
 export const knowledgeRouter = router({
   /** List knowledge articles, optionally filtered by category */
-  list: workspaceProcedure
+  list: storeProcedure
     .input(z.object({
       storeId: z.string(),
       category: categorySchema.optional(),
@@ -29,7 +30,7 @@ export const knowledgeRouter = router({
     }),
 
   /** Create a knowledge article + embed for RAG */
-  create: workspaceProcedure
+  create: storeProcedure
     .input(z.object({
       storeId: z.string(),
       category: categorySchema,
@@ -53,7 +54,8 @@ export const knowledgeRouter = router({
       category: categorySchema.optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "knowledgeArticle", input.id);
       const { id, ...data } = input;
       await updateArticle(id, data);
       return { success: true };
@@ -62,13 +64,14 @@ export const knowledgeRouter = router({
   /** Delete a knowledge article + remove embedding */
   delete: workspaceProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "knowledgeArticle", input.id);
       await deleteArticle(input.id);
       return { success: true };
     }),
 
   /** Semantic search across knowledge articles */
-  search: workspaceProcedure
+  search: storeProcedure
     .input(z.object({
       storeId: z.string(),
       query: z.string().min(1),

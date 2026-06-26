@@ -9,3 +9,5 @@ export type { GenerateRcsInput, GenerateRcsOutput, RcsAction } from "./generate-
 export { brandVoiceBlock, intentInstructions, formatProductsForPrompt } from "./prompt-templates";
 export { LAYOUT_TEMPLATES, getLayoutById } from "./layout-templates";
 export type { LayoutTemplate } from "./layout-templates";
+export { renderBrandedEmail, loadBrandKit } from "./render-branded-email";
+export type { RenderBrandedEmailInput } from "./render-branded-email";

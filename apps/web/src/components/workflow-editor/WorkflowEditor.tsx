@@ -4,10 +4,11 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Zap, Clock, Users, LogOut, Mail, MessageSquare, Timer,
   GitBranch, Webhook, Plus, Trash2, Save, Loader2, Check,
-  ChevronDown, ArrowDown, Phone, Radio,
+  ChevronDown, ArrowDown, Phone, Radio, Sparkles,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { TemplatePicker } from "./TemplatePicker";
+import { trpc } from "@/lib/trpc";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,22 +68,92 @@ const ACTION_OPTIONS: { type: WorkflowNode["type"]; label: string; description: 
 // ---------------------------------------------------------------------------
 
 function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
+  const templateSubject = (config.templateSubject as string) || "";
+  const subject = (config.subject as string) || "";
+  const [variants, setVariants] = useState<string[]>([]);
+  const suggestMut = (trpc.templates as any).suggestSubjects.useMutation({
+    onSuccess: (d: { suggestions: string[] }) => setVariants(d.suggestions || []),
+  }) as { mutate: (i: any) => void; isPending: boolean };
   return (
     <div className="space-y-2">
       <TemplatePicker
         channel="email"
         currentTemplateId={config.templateId as string | undefined}
         currentTemplateName={config.templateName as string | undefined}
-        onPick={(t) => onChange({ ...config, templateId: t.id, templateName: t.subject || t.name })}
+        onPick={(t) =>
+          onChange({
+            ...config,
+            templateId: t.id,
+            templateName: t.subject || t.name,
+            templateSubject: t.subject || "",
+            // Subject lives ON the email — default to the template's subject; the
+            // field below is an explicit per-send override, not a separate field.
+            subject: (config.subject as string) || t.subject || "",
+          })
+        }
       />
-      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase mt-2">Subject Line</label>
+      <div className="flex items-center justify-between mt-2">
+        <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase">
+          Subject line · for this send
+        </label>
+        <div className="flex items-center gap-2.5">
+          {templateSubject && subject !== templateSubject ? (
+            <button
+              type="button"
+              onClick={() => onChange({ ...config, subject: templateSubject })}
+              className="text-[10px] font-sans text-[var(--color-accent)] hover:underline"
+            >
+              Use the email&apos;s subject
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() =>
+              suggestMut.mutate({
+                current: subject || templateSubject,
+                context: (config.templateName as string) || "",
+              })
+            }
+            disabled={suggestMut.isPending}
+            className="inline-flex items-center gap-1 text-[10px] font-sans text-[var(--color-accent)] hover:underline disabled:opacity-50"
+          >
+            {suggestMut.isPending ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Sparkles className="w-3 h-3" />
+            )}
+            Suggest alternatives
+          </button>
+        </div>
+      </div>
       <input
         type="text"
-        value={(config.subject as string) || ""}
+        value={subject}
         onChange={(e) => onChange({ ...config, subject: e.target.value })}
-        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
-        placeholder="e.g., Welcome to {{brand_name}}!"
+        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
+        placeholder={templateSubject || "Defaults from the email"}
       />
+      {variants.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          {variants.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => {
+                onChange({ ...config, subject: v });
+                setVariants([]);
+              }}
+              className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors max-w-full truncate"
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <p className="text-[10px] font-sans text-muted-foreground/70">
+        Defaults from the email. Override it to send the same email with a different
+        subject per segment.
+      </p>
     </div>
   );
 }
@@ -129,7 +200,7 @@ function SendRcsConfig({ config, onChange }: { config: Record<string, unknown>; 
 function WaitConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="text-[10px] font-mono font-semibold text-muted-foreground uppercase">Wait</label>
+      <label className="text-[10px] font-sans font-semibold text-muted-foreground uppercase">Wait</label>
       <input
         type="number"
         value={(config.duration as number) || 1}
@@ -140,7 +211,7 @@ function WaitConfig({ config, onChange }: { config: Record<string, unknown>; onC
       <select
         value={(config.unit as string) || "hours"}
         onChange={(e) => onChange({ ...config, unit: e.target.value })}
-        className="px-2 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
+        className="px-2 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
       >
         <option value="minutes">Minutes</option>
         <option value="hours">Hours</option>
@@ -153,11 +224,11 @@ function WaitConfig({ config, onChange }: { config: Record<string, unknown>; onC
 function ConditionConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase">Condition</label>
+      <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase">Condition</label>
       <select
         value={(config.condition as string) || "has_purchased"}
         onChange={(e) => onChange({ ...config, condition: e.target.value })}
-        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
+        className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
       >
         <option value="has_purchased">Has made a purchase</option>
         <option value="opened_email">Opened previous email</option>
@@ -172,7 +243,7 @@ function ConditionConfig({ config, onChange }: { config: Record<string, unknown>
 function WebhookConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-mono font-semibold text-muted-foreground uppercase">Webhook URL</label>
+      <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase">Webhook URL</label>
       <input
         type="url"
         value={(config.url as string) || ""}
@@ -313,7 +384,7 @@ export function WorkflowEditor({
                 <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
                   <Zap className="w-3 h-3 text-secondary-foreground" />
                 </div>
-                <span className="text-[10px] font-mono font-bold text-foreground uppercase tracking-[1px]">Trigger</span>
+                <span className="text-[10px] font-sans font-bold text-foreground uppercase tracking-[1px]">Trigger</span>
               </div>
 
               {/* Trigger type selector */}
@@ -326,7 +397,7 @@ export function WorkflowEditor({
                       setTriggerConfig(opt.type === "event" ? { event: "order_placed" } : {});
                     }}
                     className={cn(
-                      "flex items-center gap-2 p-2 rounded-lg border text-left transition-all text-[11px] font-mono",
+                      "flex items-center gap-2 p-2 rounded-lg border text-left transition-all text-[11px] font-sans",
                       triggerType === opt.type
                         ? "border-secondary bg-secondary text-secondary-foreground"
                         : "border-border text-muted-foreground hover:border-primary/50"
@@ -343,7 +414,7 @@ export function WorkflowEditor({
                 <select
                   value={(triggerConfig.event as string) || "order_placed"}
                   onChange={(e) => setTriggerConfig({ event: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
                 >
                   {EVENT_OPTIONS.map((e) => (
                     <option key={e.value} value={e.value}>{e.label}</option>
@@ -354,7 +425,7 @@ export function WorkflowEditor({
                 <select
                   value={(triggerConfig.schedule as string) || "daily"}
                   onChange={(e) => setTriggerConfig({ schedule: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
                 >
                   <option value="hourly">Every Hour</option>
                   <option value="daily">Every Day</option>
@@ -367,7 +438,7 @@ export function WorkflowEditor({
                   type="text"
                   value={(triggerConfig.segmentName as string) || ""}
                   onChange={(e) => setTriggerConfig({ segmentName: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
                   placeholder="Segment name..."
                 />
               )}
@@ -409,7 +480,7 @@ export function WorkflowEditor({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Icon className="w-4 h-4" />
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-[1px]">
+                      <span className="text-[10px] font-sans font-bold uppercase tracking-[1px]">
                         {node.type.replace(/_/g, " ")}
                       </span>
                     </div>
@@ -426,7 +497,7 @@ export function WorkflowEditor({
 
                   {/* Collapsed summary */}
                   {!isExpanded && (
-                    <p className="text-[11px] font-mono mt-1.5 opacity-70 truncate">
+                    <p className="text-[11px] font-sans mt-1.5 opacity-70 truncate">
                       {getNodeSummary(node)}
                     </p>
                   )}
@@ -466,7 +537,7 @@ export function WorkflowEditor({
             <div className="w-10 h-10 rounded-full border-2 border-muted-foreground/50 bg-card flex items-center justify-center">
               <Check className="w-4 h-4 text-muted-foreground" />
             </div>
-            <span className="text-[10px] font-mono text-muted-foreground mt-1.5">END</span>
+            <span className="text-[10px] font-sans text-muted-foreground mt-1.5">END</span>
           </div>
         </div>
       </div>
@@ -478,7 +549,7 @@ export function WorkflowEditor({
             onClick={handleSave}
             disabled={saving}
             className={cn(
-              "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-mono transition-all",
+              "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-sans transition-all",
               saveStatus === "success"
                 ? "bg-green-600 text-white"
                 : "bg-secondary text-secondary-foreground hover:bg-secondary/90 disabled:opacity-70"
@@ -497,47 +568,47 @@ export function WorkflowEditor({
 
         <div className="p-4 space-y-4 flex-1">
           <div>
-            <h3 className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">Summary</h3>
-            <div className="space-y-2 text-[11px] font-mono text-muted-foreground">
+            <h3 className="text-[10px] font-serif font-bold text-muted-foreground uppercase tracking-wider mb-2">Summary</h3>
+            <div className="space-y-2 text-[11px] font-sans text-muted-foreground">
               <div className="flex justify-between">
                 <span>Trigger</span>
                 <span className="font-bold text-foreground">{triggerType.replace(/_/g, " ")}</span>
               </div>
               <div className="flex justify-between">
                 <span>Steps</span>
-                <span className="font-bold text-foreground">{nodes.length}</span>
+                <span className="font-mono font-bold text-foreground">{nodes.length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Emails</span>
-                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_email").length}</span>
+                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_email").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>SMS</span>
-                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_sms").length}</span>
+                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_sms").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>WhatsApp</span>
-                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_whatsapp").length}</span>
+                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_whatsapp").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>RCS</span>
-                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "send_rcs").length}</span>
+                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_rcs").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Waits</span>
-                <span className="font-bold text-foreground">{nodes.filter((n) => n.type === "wait").length}</span>
+                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "wait").length}</span>
               </div>
             </div>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">Quick Add</h3>
+            <h3 className="text-[10px] font-serif font-bold text-muted-foreground uppercase tracking-wider mb-2">Quick Add</h3>
             <div className="space-y-1.5">
               {ACTION_OPTIONS.map((opt) => (
                 <button
                   key={opt.type}
                   onClick={() => addNode(opt.type, nodes.length - 1)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-left text-[11px] font-mono text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-left text-[11px] font-sans text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
                 >
                   <opt.icon className="w-3.5 h-3.5" />
                   {opt.label}
@@ -568,8 +639,8 @@ function AddMenu({ onSelect, onClose }: { onSelect: (type: WorkflowNode["type"])
           >
             <opt.icon className="w-4 h-4 text-muted-foreground" />
             <div>
-              <p className="text-[11px] font-mono font-bold text-foreground">{opt.label}</p>
-              <p className="text-[10px] font-mono text-muted-foreground">{opt.description}</p>
+              <p className="text-[11px] font-sans font-bold text-foreground">{opt.label}</p>
+              <p className="text-[10px] font-sans text-muted-foreground">{opt.description}</p>
             </div>
           </button>
         ))}

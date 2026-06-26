@@ -31,7 +31,6 @@ import {
   MessageSquare,
   Check,
   PartyPopper,
-  Brain,
   ShoppingCart,
   TrendingDown,
   Package,
@@ -47,6 +46,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
 import { CampaignPreviewCard } from "./CampaignPreviewCard";
+import { StreamOutput, StreamRow } from "@/components/console";
+import {
+  useActivationChecklist,
+  type ChecklistStep,
+} from "@/components/dashboard/useActivationChecklist";
 
 // ---------------------------------------------------------------------------
 // Context — lets TopBar & Cmd+K open/focus the panel
@@ -56,12 +60,14 @@ type AlloAIPanelContextType = {
   openPanel: () => void;
   focusInput: () => void;
   setInput: (text: string) => void;
+  submit: (text: string) => void;
 };
 
 const AlloAIPanelContext = createContext<AlloAIPanelContextType>({
   openPanel: () => {},
   focusInput: () => {},
   setInput: () => {},
+  submit: () => {},
 });
 
 export const useAlloAI = () => useContext(AlloAIPanelContext);
@@ -133,10 +139,9 @@ function derivePageContext(pathname: string): string {
 // ---------------------------------------------------------------------------
 
 const PLACEHOLDERS = [
-  "Ask Allo anything...",
+  "Tell allo what you want: e.g. win back my lapsed buyers before Diwali",
   "What should I focus on today?",
-  "Create a campaign for...",
-  "Show me at-risk customers...",
+  "Who's slipping away?",
   "How did last week go?",
 ];
 
@@ -207,7 +212,7 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
       pills.push({ label: `${insights.segmentAlerts.atRiskCount} customers at churn risk`, instruction: "Show me at-risk customers and create a win-back campaign" });
     }
     if (!insights.storeState.hasCampaigns) {
-      pills.push({ label: "Your audience hasn't heard from you", instruction: "Create a promotional email campaign" });
+      pills.push({ label: "It's been quiet. Let's reach out", instruction: "Create a promotional email campaign" });
     }
     if (insights.segmentAlerts.championsCount > 0) {
       pills.push({ label: `Reward ${insights.segmentAlerts.championsCount} VIP customers`, instruction: "Create a VIP reward campaign for champion customers" });
@@ -221,25 +226,25 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
       });
     }
   } else if (pageContext === "customers") {
-    pills.push({ label: "Show at-risk customers", instruction: "Show me customers who are at risk of churning" });
-    pills.push({ label: "Find high spenders", instruction: "Find customers who spent over $200 in the last 90 days" });
+    pills.push({ label: "Who's at risk of slipping away?", instruction: "Show me customers who are at risk of churning" });
+    pills.push({ label: "Find your top spenders", instruction: "Find customers who spent over ₹200 in the last 90 days" });
   } else if (pageContext === "campaigns" || pageContext === "templates") {
-    pills.push({ label: "Create a campaign", instruction: "Create a new email campaign" });
-    pills.push({ label: "Generate email template", instruction: "Create a promotional email template" });
+    pills.push({ label: "Help me create a campaign", instruction: "Create a new email campaign" });
+    pills.push({ label: "Draft an email template", instruction: "Create a promotional email template" });
   } else if (pageContext === "automations") {
-    pills.push({ label: "Activate recommended", instruction: "Show me all recommended automations and activate them" });
+    pills.push({ label: "Turn on what I'd recommend", instruction: "Show me all recommended automations and activate them" });
   } else if (pageContext === "analytics") {
-    pills.push({ label: "Compare to last month", instruction: "Compare this month's performance to last month" });
-    pills.push({ label: "Show channel breakdown", instruction: "Show me a breakdown of revenue by channel" });
+    pills.push({ label: "How's this month vs last?", instruction: "Compare this month's performance to last month" });
+    pills.push({ label: "Where's revenue coming from?", instruction: "Show me a breakdown of revenue by channel" });
   } else if (pageContext === "segments") {
-    pills.push({ label: "Show segment movements", instruction: "Show me how customer segments have shifted recently" });
+    pills.push({ label: "How have segments shifted?", instruction: "Show me how customer segments have shifted recently" });
   }
 
   if (!insights.storeState.hasBrandProfile) {
-    pills.push({ label: "Analyze brand voice", instruction: "Analyze my brand voice" });
+    pills.push({ label: "Learn my brand voice", instruction: "Analyze my brand voice" });
   }
 
-  pills.push({ label: "Analyze last 30 days", instruction: "Analyze my customer data from the last 30 days" });
+  pills.push({ label: "Look back over the last 30 days", instruction: "Analyze my customer data from the last 30 days" });
 
   return pills.slice(0, 4);
 }
@@ -256,7 +261,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-no-store",
       role: "assistant",
-      content: "Welcome to Allo! Connect your Shopify store from the dashboard to get started. I'll be ready to help once your store is set up.",
+      content: "Hi, I'm allo. Connect your Shopify store from the dashboard and I'll get to work. I'll be right here once you're set up.",
       timestamp: now,
     });
     return messages;
@@ -266,7 +271,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-syncing",
       role: "assistant",
-      content: "Your store is connected and I'm syncing your data. This usually takes 1-3 minutes. You'll see progress in the AI panel once activation begins.",
+      content: "Your store is connected. I'm pulling in your data now. This usually takes a minute or two, and you'll see progress here as I get going.",
       timestamp: now,
     });
     return messages;
@@ -276,7 +281,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-activating",
       role: "assistant",
-      content: "Your store data is synced! I'm setting up your retention system now — creating automations and scanning for opportunities. Watch the progress above.",
+      content: "Your data is in. I'm setting things up now, building your first automations and looking for opportunities. You can follow along above.",
       timestamp: now,
     });
     return messages;
@@ -287,19 +292,19 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const parts: string[] = [];
-  parts.push(`${greeting}! Here's your update:`);
+  parts.push(`${greeting}. Here's where things stand:`);
   parts.push("");
 
   // Revenue & orders
   if (insights.metrics.revenueThisMonth > 0) {
     const trend = insights.metrics.revenueTrend;
     const trendText = trend > 0 ? `up ${trend}%` : trend < 0 ? `down ${Math.abs(trend)}%` : "steady";
-    parts.push(`Revenue this month: ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs last month)`);
+    parts.push(`Revenue (last 30 days): ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs prior 30 days)`);
   }
 
   // Customers
   if (insights.metrics.totalCustomers > 0) {
-    parts.push(`${insights.metrics.totalCustomers.toLocaleString()} total customers`);
+    parts.push(`${insights.metrics.totalCustomers.toLocaleString("en-IN")} total customers`);
   }
 
   // Alerts
@@ -330,7 +335,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     }
     if (opportunityParts.length > 0) {
       parts.push("");
-      parts.push(`**Revenue recovery:** I see ${opportunityParts.join(", ")}. Want me to send recovery emails?`);
+      parts.push(`**Revenue to recover:** I'm seeing ${opportunityParts.join(", ")}. Want me to reach out for you?`);
     }
   }
 
@@ -382,7 +387,7 @@ function InsightCardView({ card }: { card: InsightCard }) {
 
   return (
     <div className={cn("rounded-xl p-3.5 border mt-2.5 mb-1", colors.bg, colors.border)}>
-      <div className={cn("font-mono text-[10px] uppercase tracking-wider mb-1.5", colors.text)}>
+      <div className={cn("font-sans text-[10px] uppercase tracking-wider mb-1.5", colors.text)}>
         {card.label}
       </div>
       {card.value && (
@@ -398,7 +403,7 @@ function InsightCardView({ card }: { card: InsightCard }) {
           {card.stats.map((stat) => (
             <div key={stat.label}>
               <div className={cn("font-mono text-lg font-bold", colors.text)}>{stat.value}</div>
-              <div className="font-mono text-[10px] text-muted-foreground">{stat.label}</div>
+              <div className="font-sans text-[10px] text-muted-foreground">{stat.label}</div>
             </div>
           ))}
         </div>
@@ -423,35 +428,35 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
 }> = {
   cart_recovery: {
     icon: ShoppingCart,
-    label: "Abandoned Carts",
+    label: "Abandoned carts",
     accentColor: "text-amber-500",
     accentBg: "bg-amber-500/10",
     accentBorder: "border-amber-500/20",
-    description: (count) => `${count} abandoned cart${count !== 1 ? "s" : ""} detected. Recovery emails drafted.`,
+    description: (count) => `${count} cart${count !== 1 ? "s" : ""} left behind. I've drafted recovery emails, ready when you are.`,
   },
   price_drop_alert: {
     icon: TrendingDown,
-    label: "Price Drops",
+    label: "Price drops",
     accentColor: "text-blue-500",
     accentBg: "bg-blue-500/10",
     accentBorder: "border-blue-500/20",
-    description: (count) => `${count} product${count !== 1 ? "s" : ""} with price drops for interested customers.`,
+    description: (count) => `${count} product${count !== 1 ? "s" : ""} dropped in price. Let's tell the customers who were watching.`,
   },
   restock_alert: {
     icon: Package,
-    label: "Restock Alerts",
+    label: "Back in stock",
     accentColor: "text-emerald-500",
     accentBg: "bg-emerald-500/10",
     accentBorder: "border-emerald-500/20",
-    description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock. Notify waiting customers.`,
+    description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock. Let's let waiting customers know.`,
   },
   repurchase_reminder: {
     icon: RefreshCw,
-    label: "Repurchase Reminders",
+    label: "Time to reorder",
     accentColor: "text-purple-500",
     accentBg: "bg-purple-500/10",
     accentBorder: "border-purple-500/20",
-    description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a repurchase reminder.`,
+    description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a refill, a gentle nudge could bring them back.`,
   },
 };
 
@@ -524,8 +529,8 @@ function RecoveryOpportunityCards({
 
   return (
     <div className="space-y-2 mb-3">
-      <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
-        Revenue Recovery
+      <div className="font-sans text-[10px] text-muted-foreground uppercase tracking-wider">
+        Revenue to recover
       </div>
       <AnimatePresence mode="popLayout">
         {entries.map(([type, info], i) => {
@@ -555,7 +560,7 @@ function RecoveryOpportunityCards({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <div className={cn("font-mono text-[10px] uppercase tracking-wider", config.accentColor)}>
+                    <div className={cn("font-sans text-[10px] uppercase tracking-wider", config.accentColor)}>
                       {config.label}
                     </div>
                     {info.totalRevenue > 0 && (
@@ -577,7 +582,7 @@ function RecoveryOpportunityCards({
                         }}
                         disabled={approvingType === type}
                         className={cn(
-                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono font-medium transition-all",
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-sans font-medium transition-all",
                           approvingType === type
                             ? "bg-muted text-muted-foreground"
                             : cn("text-white", type === "cart_recovery" ? "bg-amber-500 hover:bg-amber-600" : type === "price_drop_alert" ? "bg-blue-500 hover:bg-blue-600" : type === "restock_alert" ? "bg-emerald-500 hover:bg-emerald-600" : "bg-purple-500 hover:bg-purple-600"),
@@ -588,12 +593,12 @@ function RecoveryOpportunityCards({
                         ) : (
                           <CheckCircle2 className="w-3 h-3" />
                         )}
-                        {approvingType === type ? "Approving..." : "Approve All"}
+                        {approvingType === type ? "Sending..." : "Send all"}
                       </button>
                     )}
                     <button
                       onClick={() => onReview(type)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border text-[10px] font-mono text-foreground hover:bg-muted transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border text-[10px] font-sans text-foreground hover:bg-muted transition-colors"
                     >
                       <Eye className="w-3 h-3" />
                       Review
@@ -609,14 +614,15 @@ function RecoveryOpportunityCards({
   );
 }
 
+// Reasoning steps, phrased as a terminal stream in allo's warm, plain voice.
 const AGENT_STEPS = [
-  { icon: "🔍", text: "Reading your store data..." },
-  { icon: "📊", text: "Analyzing customer segments..." },
-  { icon: "🧠", text: "Reasoning about the best approach..." },
-  { icon: "🛠", text: "Calling tools..." },
-  { icon: "✍️", text: "Generating content..." },
-  { icon: "🔄", text: "Processing results..." },
-  { icon: "📝", text: "Composing response..." },
+  "scanning your store data",
+  "reading your customer segments",
+  "thinking through the best approach",
+  "pulling together what I need",
+  "drafting this up for you",
+  "making sense of the results",
+  "putting your answer together",
 ];
 
 function AgentActivityIndicator() {
@@ -650,40 +656,53 @@ function AgentActivityIndicator() {
   return (
     <div className="flex gap-2.5">
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Sparkles className="w-3 h-3 text-[var(--color-warning)] animate-spin" style={{ animationDuration: "3s" }} />
+        <Sparkles className="w-3 h-3 text-[hsl(var(--accent))]" />
       </div>
-      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-warning)]/30 pl-3">
-        {/* Completed steps */}
-        <div className="space-y-1 mb-1.5">
+      <div className="flex-1 min-w-0 border-l-2 border-[hsl(var(--accent))]/20 pl-3">
+        {/* Reasoning as a terminal stream — done rows + the live step */}
+        <StreamOutput aria-label="allo reasoning">
           {completedSteps.map((idx) => {
             const step = AGENT_STEPS[idx];
             if (!step) return null;
             return (
-              <div key={idx} className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground/60">
-                <Check className="w-3 h-3 text-[var(--color-success)]" />
-                <span>{step.text.replace("...", "")}</span>
-              </div>
+              <StreamRow key={idx} tick="ok">
+                {step}
+              </StreamRow>
             );
           })}
-        </div>
-
-        {/* Current step */}
-        <div className="flex items-center gap-2 py-0.5">
-          <div className="flex gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.3s]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] animate-[warm-pulse_1.5s_ease-in-out_infinite_0.6s]" />
-          </div>
-          <span className="text-[12px] font-mono text-[var(--color-warning)]">
-            {currentStep.text}
-          </span>
-        </div>
+          <StreamRow tick="step">
+            {currentStep}
+            <span className="console-live-caret ml-1 inline-block w-[2px] h-[1em] align-[-0.1em] bg-[hsl(var(--accent))]" />
+          </StreamRow>
+        </StreamOutput>
 
         {/* Timer */}
-        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1">
+        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1.5">
           {elapsed}s elapsed
         </div>
       </div>
+
+      {/* Scoped caret keyframes — does not touch globals.css */}
+      <style jsx>{`
+        .console-live-caret {
+          animation: console-live-caret 1s step-end infinite;
+        }
+        @keyframes console-live-caret {
+          0%,
+          50% {
+            opacity: 1;
+          }
+          50.01%,
+          100% {
+            opacity: 0;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .console-live-caret {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -735,7 +754,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
                 key={h.label}
                 className="flex-1 min-w-[80px] rounded-xl bg-[hsl(var(--accent-bg))] border border-border px-3 py-2.5"
               >
-                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="font-sans text-[10px] uppercase tracking-wider text-muted-foreground">
                   {h.label}
                 </div>
                 <div className="font-mono text-[15px] font-bold text-[var(--color-accent)] mt-0.5">
@@ -838,7 +857,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
               <button
                 key={link.href}
                 onClick={() => onNavigate?.(link.href)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 transition-colors"
               >
                 {link.label}
                 <ArrowRight className="w-3 h-3" />
@@ -872,111 +891,71 @@ type ActivationData = {
   context?: { pendingActions: number };
 };
 
-function ActivationStatusIcon({ status }: { status: string }) {
-  if (status === "done" || status === "active" || status === "ready") {
-    return (
-      <div className="w-5 h-5 rounded-full bg-[var(--color-success)]/15 flex items-center justify-center flex-shrink-0">
-        <Check className="w-3 h-3 text-[var(--color-success)]" />
-      </div>
-    );
-  }
-  if (status === "running" || status === "generating") {
-    return <Loader2 className="w-5 h-5 animate-spin text-[var(--color-warning)] flex-shrink-0" />;
-  }
-  // pending / queued
-  return <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" />;
+// Operator-voice checklist row, terminal stream styling.
+function ActivationChecklistRow({ step }: { step: ChecklistStep }) {
+  const tick = step.status === "done" ? "ok" : step.status === "generating" ? "step" : "hold";
+  return (
+    <StreamRow tick={tick}>
+      <span className="inline-flex items-center gap-2 flex-wrap">
+        <span className={cn(
+          step.status === "done" ? "text-foreground" :
+          step.status === "generating" ? "text-[hsl(var(--accent))]" :
+          "text-muted-foreground"
+        )}>
+          {step.label}
+          {step.status === "generating" && <span className="animate-pulse">…</span>}
+        </span>
+        {step.status === "done" && step.detail && (
+          <span className="text-[11px] text-muted-foreground/70">· {step.detail}</span>
+        )}
+      </span>
+    </StreamRow>
+  );
 }
 
-const ACTIVATION_LOG_MESSAGES: Record<string, string[]> = {
-  generating: [
-    "Designing workflow triggers and conditions",
-    "Building email sequence with optimal timing",
-    "Writing subject lines and body copy",
-    "Setting up A/B test variants",
-    "Configuring segment targeting rules",
-  ],
-  analysis: [
-    "Scanning product catalog for patterns",
-    "Computing customer lifetime value distribution",
-    "Identifying churn risk signals",
-    "Building RFM segmentation model",
-    "Extracting brand voice from store copy",
-  ],
-};
-
 function ActivationProgressPanel({ activation }: { activation: ActivationData }) {
-  const steps = activation.steps ?? [];
+  // Real backend details blended into the client-driven checklist.
   const items = activation.automationProgress?.items ?? [];
-  const total = activation.automationProgress?.total ?? 0;
-  const generating = activation.automationProgress?.generating ?? 0;
-  const doneCount = steps.filter((s) => s.status === "done").length + (total - generating);
-  const totalTasks = steps.length + total;
+  const automationCount = items.length;
+  const details: Partial<Record<string, string>> = {};
+  if (automationCount > 0) details.winback = `${automationCount} drafted`;
 
-  // Elapsed timer
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Backend reports it's finished → let the feed finish early. Otherwise the
+  // capped client timer paces it so it ALWAYS advances and lands in ~40s.
+  const backendComplete = !!(
+    !activation.isActivating &&
+    activation.overallProgress >= 100 &&
+    (activation.automationProgress?.generating ?? 0) === 0
+  );
 
-  // Activity log — accumulates messages over time
-  const [logEntries, setLogEntries] = useState<{ time: number; text: string }[]>([]);
-  const logRef = useRef<HTMLDivElement>(null);
-  const lastLogTimeRef = useRef(0);
-
-  useEffect(() => {
-    // Add a new log entry every 3-5 seconds
-    if (elapsed - lastLogTimeRef.current < 3) return;
-    lastLogTimeRef.current = elapsed;
-
-    const generatingItem = items.find((i) => i.status === "generating");
-    const runningStep = steps.find((s) => s.status === "running");
-
-    let pool: string[];
-    if (generatingItem) {
-      const name = generatingItem.name.replace(" Automation", "");
-      pool = [
-        ...(ACTIVATION_LOG_MESSAGES.generating ?? []).map((m) => `${name}: ${m}`),
-        `${name}: Analyzing best send windows`,
-        `${name}: Matching tone to brand voice`,
-      ];
-    } else if (runningStep) {
-      pool = ACTIVATION_LOG_MESSAGES.analysis ?? [];
-    } else {
-      pool = ["Finalizing configuration...", "Running quality checks..."];
-    }
-
-    const usedTexts = new Set(logEntries.map((e) => e.text));
-    const available = pool.filter((m) => !usedTexts.has(m));
-    const msg = available.length > 0
-      ? available[Math.floor(Math.random() * available.length)]!
-      : pool[Math.floor(Math.random() * pool.length)]!;
-
-    setLogEntries((prev) => [...prev.slice(-15), { time: elapsed, text: msg }]);
-  }, [elapsed, items, steps]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-scroll log
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [logEntries]);
-
-  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const { steps, doneCount, total, progress, complete } = useActivationChecklist({
+    backendComplete,
+    details,
+  });
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-[var(--color-warning)]/10 flex items-center justify-center">
-          <Brain className="w-4 h-4 text-[var(--color-warning)] animate-pulse" />
+        <div className="w-8 h-8 rounded-xl bg-[hsl(var(--accent-bg))] flex items-center justify-center shrink-0">
+          {complete ? (
+            <Check className="w-4 h-4 text-[hsl(var(--accent))]" />
+          ) : (
+            <Loader2 className="w-4 h-4 text-[hsl(var(--accent))] animate-spin" />
+          )}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="text-[14px] font-serif font-semibold text-foreground">
-            Setting up your retention system
+            {complete ? "All set" : "Setting things up for you"}
           </div>
-          <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
-            <span>{doneCount} of {totalTasks} tasks</span>
-            <span className="text-muted-foreground/40">•</span>
-            <span>{fmtTime(elapsed)} elapsed</span>
+          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+            <span>{doneCount} of {total} done</span>
+            {!complete && (
+              <>
+                <span className="text-muted-foreground/40">·</span>
+                <span>about {Math.max(5, Math.ceil((total - doneCount) * 4))}s left</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -984,98 +963,19 @@ function ActivationProgressPanel({ activation }: { activation: ActivationData })
       {/* Progress bar */}
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
         <motion.div
-          className="h-full bg-[var(--color-warning)] rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${activation.overallProgress}%` }}
+          className="h-full bg-[hsl(var(--accent))] rounded-full"
+          initial={false}
+          animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         />
       </div>
 
-      {/* Automations + Analysis in compact view */}
-      <div className="space-y-1">
-        {items.map((item) => (
-          <motion.div
-            key={item.id}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2.5 py-1"
-          >
-            <ActivationStatusIcon status={item.status} />
-            <span className={cn(
-              "text-[12px] font-mono flex-1 truncate",
-              (item.status === "active" || item.status === "ready") ? "text-foreground" :
-              item.status === "generating" ? "text-[var(--color-warning)]" :
-              "text-muted-foreground"
-            )}>
-              {item.name.replace(" Automation", "")}
-            </span>
-            <span className={cn(
-              "text-[10px] font-mono capitalize flex-shrink-0",
-              item.status === "active" ? "text-[var(--color-success)]" :
-              item.status === "ready" ? "text-[var(--color-accent)]" :
-              item.status === "generating" ? "text-[var(--color-warning)]" :
-              "text-muted-foreground"
-            )}>
-              {item.status === "active" ? "Active" :
-               item.status === "ready" ? "Ready" :
-               item.status}
-            </span>
-          </motion.div>
-        ))}
+      {/* Checklist — terminal stream */}
+      <StreamOutput aria-label="setup progress">
         {steps.map((step) => (
-          <div key={step.key} className="flex items-center gap-2.5 py-1">
-            <ActivationStatusIcon status={step.status} />
-            <span className={cn(
-              "text-[12px] font-mono truncate",
-              step.status === "done" ? "text-foreground" :
-              step.status === "running" ? "text-[var(--color-warning)]" :
-              "text-muted-foreground"
-            )}>
-              {step.label}
-            </span>
-          </div>
+          <ActivationChecklistRow key={step.key} step={step} />
         ))}
-      </div>
-
-      {/* Live activity log */}
-      {logEntries.length > 0 && (
-        <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 mb-1.5">
-            Live Activity
-          </div>
-          <div
-            ref={logRef}
-            className="max-h-[180px] overflow-y-auto space-y-0.5 border-l-2 border-[var(--color-warning)]/20 pl-3"
-          >
-            {logEntries.map((entry, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-start gap-2 py-0.5"
-              >
-                <span className="text-[9px] font-mono text-muted-foreground/40 w-8 flex-shrink-0 pt-px">
-                  {fmtTime(entry.time)}
-                </span>
-                <span className={cn(
-                  "text-[11px] font-mono",
-                  i === logEntries.length - 1
-                    ? "text-[var(--color-warning)]"
-                    : "text-muted-foreground/60"
-                )}>
-                  {entry.text}
-                </span>
-              </motion.div>
-            ))}
-            {/* Blinking cursor on latest */}
-            <div className="flex items-center gap-2 py-0.5">
-              <span className="text-[9px] font-mono text-muted-foreground/40 w-8 flex-shrink-0">{fmtTime(elapsed)}</span>
-              <span className="w-1.5 h-3 bg-[var(--color-warning)] animate-[warm-pulse_1s_ease-in-out_infinite]" />
-            </div>
-          </div>
-        </div>
-      )}
+      </StreamOutput>
     </div>
   );
 }
@@ -1103,10 +1003,10 @@ function CompletionSummary({
         </div>
         <div>
           <div className="text-[14px] font-serif font-semibold text-foreground">
-            Your AI retention system is ready!
+            All set. I&apos;m up and running
           </div>
-          <div className="text-[11px] font-mono text-muted-foreground">
-            Here&apos;s what I set up
+          <div className="text-[11px] font-sans text-muted-foreground">
+            Here&apos;s what I set up for you
           </div>
         </div>
       </div>
@@ -1114,14 +1014,14 @@ function CompletionSummary({
       {/* Active automations */}
       {activeItems.length > 0 && (
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-success)] mb-2">
-            Active (running now)
+          <div className="text-[10px] font-sans uppercase tracking-wider text-[var(--color-success)] mb-2">
+            Live now
           </div>
           <div className="space-y-1.5">
             {activeItems.map((item) => (
               <div key={item.id} className="flex items-center gap-2 py-1">
                 <Check className="w-3.5 h-3.5 text-[var(--color-success)] flex-shrink-0" />
-                <span className="text-[12px] font-mono text-foreground">
+                <span className="text-[12px] font-sans text-foreground">
                   {item.name.replace(" Automation", "")}
                 </span>
               </div>
@@ -1133,25 +1033,25 @@ function CompletionSummary({
       {/* Review items */}
       {reviewItems.length > 0 && (
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-accent)] mb-2">
-            Ready for your review
+          <div className="text-[10px] font-sans uppercase tracking-wider text-[var(--color-accent)] mb-2">
+            Waiting for your okay
           </div>
           <div className="space-y-2">
             {reviewItems.map((item) => (
               <div key={item.id} className="rounded-xl border border-border p-3">
-                <div className="text-[12px] font-mono font-medium text-foreground mb-2">
+                <div className="text-[12px] font-sans font-medium text-foreground mb-2">
                   {item.name.replace(" Automation", "")}
                 </div>
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => onAction(`Approve the ${item.name.replace(" Automation", "")} automation`)}
-                    className="px-2.5 py-1 rounded-lg bg-[var(--color-success)] text-white text-[10px] font-mono font-medium hover:opacity-90 transition-opacity"
+                    className="px-2.5 py-1 rounded-lg bg-[var(--color-success)] text-white text-[10px] font-sans font-medium hover:opacity-90 transition-opacity"
                   >
                     Approve
                   </button>
                   <button
                     onClick={() => onAction(`Show me details about the ${item.name.replace(" Automation", "")} automation`)}
-                    className="px-2.5 py-1 rounded-lg border border-border text-[10px] font-mono text-foreground hover:bg-muted transition-colors"
+                    className="px-2.5 py-1 rounded-lg border border-border text-[10px] font-sans text-foreground hover:bg-muted transition-colors"
                   >
                     Preview
                   </button>
@@ -1164,34 +1064,34 @@ function CompletionSummary({
 
       {/* Pending actions note */}
       {pendingActions > 0 && (
-        <div className="text-[11px] font-mono text-muted-foreground">
-          {pendingActions} action{pendingActions > 1 ? "s" : ""} in your action queue for review.
+        <div className="text-[11px] font-sans text-muted-foreground">
+          {pendingActions} action{pendingActions > 1 ? "s are" : " is"} waiting in your queue for a look.
         </div>
       )}
 
       {/* Next step buttons */}
       <div className="space-y-2 pt-2 border-t border-border">
-        <div className="text-[11px] font-mono text-muted-foreground mb-2">
-          What would you like to do first?
+        <div className="text-[11px] font-sans text-muted-foreground mb-2">
+          Where would you like to start?
         </div>
         <div className="flex flex-wrap gap-1.5">
           {reviewItems.length > 0 && (
             <button
               onClick={() => onAction("Approve all pending automations")}
-              className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
+              className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
             >
-              Approve all automations
+              Approve everything
             </button>
           )}
           <button
             onClick={() => onAction("What should I focus on today?")}
-            className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
+            className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
           >
             What should I focus on?
           </button>
           <button
             onClick={onDismiss}
-            className="px-3 py-1.5 rounded-full border border-border text-foreground font-mono text-[11px] hover:bg-muted transition-all"
+            className="px-3 py-1.5 rounded-full border border-border text-foreground font-sans text-[11px] hover:bg-muted transition-all"
           >
             Start chatting
           </button>
@@ -1209,6 +1109,7 @@ export interface AlloAIPanelHandle {
   open: () => void;
   focusInput: () => void;
   setInput: (text: string) => void;
+  submit: (text: string) => void;
 }
 
 export interface AlloAIPanelProps {
@@ -1224,7 +1125,30 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const pageContext = derivePageContext(pathname);
   const isDashboard = pathname === "/dashboard";
 
-  const [panelState, setPanelState] = useState<PanelState>("open");
+  // Default COLLAPSED: the page/console is the primary, full-width surface.
+  // allo is summoned on demand (floating button · ⌘K · Home command line).
+  // Restore a stored pref if present, but default to collapsed (never auto-dock).
+  const [panelState, setPanelState] = useState<PanelState>("collapsed");
+
+  // Hydrate stored open/collapsed pref after mount. Anything other than an
+  // explicit "open" stays collapsed — we never surprise the operator with a dock.
+  const panelPrefHydrated = useRef(false);
+  useEffect(() => {
+    if (panelPrefHydrated.current) return;
+    panelPrefHydrated.current = true;
+    if (typeof window === "undefined") return;
+    const saved = sessionStorage.getItem("allo-panel-state");
+    if (saved === "open" || saved === "expanded" || saved === "fullscreen") {
+      setPanelState(saved as PanelState);
+    }
+  }, []);
+
+  // Persist the open/collapsed pref so a summoned console survives soft nav,
+  // but the persisted default is always "collapsed".
+  useEffect(() => {
+    if (typeof window === "undefined" || embedded) return;
+    sessionStorage.setItem("allo-panel-state", panelState);
+  }, [panelState, embedded]);
   const [panelWidth, setPanelWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
   const { collapsed: sidebarCollapsed, toggleCollapsed: toggleSidebar } = useMobileSidebar();
@@ -1276,8 +1200,9 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // On dashboard, panel defaults open but can be collapsed
-  // In embedded mode, always open — no collapsing
+  // Panel is collapsed by default and summoned on demand. The console/page is
+  // the primary surface and gets full width whenever the panel is collapsed.
+  // In embedded mode, always open — no collapsing.
   const effectiveState = embedded ? "open" : panelState;
 
   // Get storeId
@@ -1350,8 +1275,6 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   );
   // Show activation view when: in progress, or just completed (until dismissed)
   const showActivationView = !activationDismissed && activationData && (isActivationInProgress || activationJustCompleted);
-  // Only disable chat when automations are actively being generated (not paused/ready)
-  const agentBusy = !!(activationData && activationData.automationProgress && activationData.automationProgress.generating > 0);
 
   // Fetch smart suggested actions (Fix 7)
   const { data: smartSuggestions } = (trpc as any).briefings.suggestedActions.useQuery(
@@ -1513,6 +1436,12 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       setInput(text);
       setTimeout(() => inputRef.current?.focus(), 100);
     },
+    submit(text: string) {
+      // One-action shortcut from the Home field: open the conversation AND send,
+      // so a single Enter on Home carries the goal in and fires it (no 2nd Enter).
+      if (panelState === "collapsed") setPanelState("open");
+      sendMessage(text);
+    },
   }));
 
   // AI chat mutation
@@ -1624,12 +1553,12 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             ? {
                 ...m,
                 isLoading: false,
-                content: err.message ?? "Something went wrong. Please try again.",
+                content: err.message ?? "Sorry, something went wrong on my end. Mind trying that again?",
               }
             : m,
         ),
       );
-      toast(err.message ?? "Chat failed", "error");
+      toast(err.message ?? "Sorry, I couldn't get through that one. Try again?", "error");
     },
   }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[] }) => void };
 
@@ -1637,13 +1566,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const executeChatActionMut = (trpc.ai as any).executeChatAction.useMutation({
     onSuccess: (data: { success: boolean; status: string }) => {
       if (data.success && data.status === "sending") {
-        toast("Campaign approved and sending!", "success");
+        toast("Approved. Your campaign is on its way.", "success");
       } else if (data.success && data.status === "cancelled") {
-        toast("Campaign cancelled.", "success");
+        toast("No problem. I've called that one off.", "success");
       }
     },
     onError: (err: { message?: string }) => {
-      toast(err.message ?? "Action failed", "error");
+      toast(err.message ?? "That didn't go through. Mind trying again?", "error");
     },
   }) as { mutate: (input: { actionType: "approve_campaign" | "reject_campaign"; campaignId: string }) => void };
 
@@ -1867,7 +1796,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           <button
             onClick={toggle}
             className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-            title={effectiveState === "collapsed" ? "Open AI Panel" : "Close AI Panel"}
+            title={effectiveState === "collapsed" ? "Open allo" : "Close allo"}
           >
             {effectiveState === "collapsed" ? (
               <ChevronLeft className="w-4 h-4" />
@@ -1960,7 +1889,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                     }
                     setEditingHeaderTitle(false);
                   }}
-                  className="w-full px-2 py-1 bg-background border border-foreground/30 rounded-lg text-[13px] font-mono font-bold text-foreground focus:outline-none focus:border-foreground"
+                  className="w-full px-2 py-1 bg-background border border-foreground/30 rounded-lg text-[13px] font-sans font-bold text-foreground focus:outline-none focus:border-foreground"
                   autoFocus
                 />
               </div>
@@ -1976,16 +1905,20 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               >
                 <MessageSquare className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-serif font-bold text-foreground truncate">
-                    {currentChatTitle || "Allo AI"}
+                  <div className="text-[12px] truncate">
+                    {currentChatTitle ? (
+                      <span className="font-serif font-bold text-foreground">{currentChatTitle}</span>
+                    ) : (
+                      <span className="font-mono font-semibold text-foreground">allo · operator</span>
+                    )}
                   </div>
                   {storeId && (
-                    <div className="text-[10px] font-mono text-muted-foreground truncate">
-                      {isProcessing ? "Agent working..." :
-                       isActivationInProgress ? "Setting up your retention system..." :
-                       agentStatus?.isWorking ? `Working on ${agentStatus.activeJobs.length} task${agentStatus.activeJobs.length > 1 ? "s" : ""}...` :
-                       agentStatus?.pendingActions ? `${agentStatus.pendingActions} action${agentStatus.pendingActions > 1 ? "s" : ""} need review` :
-                       "All systems running"}
+                    <div className="text-[10px] font-sans text-muted-foreground truncate">
+                      {isProcessing ? "On it..." :
+                       isActivationInProgress ? "Setting things up..." :
+                       agentStatus?.isWorking ? `Working on ${agentStatus.activeJobs.length} thing${agentStatus.activeJobs.length > 1 ? "s" : ""}...` :
+                       agentStatus?.pendingActions ? `${agentStatus.pendingActions} thing${agentStatus.pendingActions > 1 ? "s" : ""} waiting for you` :
+                       "Here and watching over things"}
                     </div>
                   )}
                 </div>
@@ -2027,7 +1960,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                     value={chatSearch}
                     onChange={(e) => setChatSearch(e.target.value)}
                     placeholder="Search chats..."
-                    className="w-full pl-7 pr-3 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
+                    className="w-full pl-7 pr-3 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
                     autoFocus
                   />
                 </div>
@@ -2040,7 +1973,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 )}
               >
                 <Plus className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="text-[12px] font-mono font-medium text-foreground">New conversation</span>
+                <span className="text-[12px] font-sans font-medium text-foreground">New conversation</span>
               </button>
               <div className="flex-1 overflow-y-auto">
                 {(() => {
@@ -2053,8 +1986,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                     return (
                       <div className="text-center py-6">
                         <MessageSquare className="w-4 h-4 text-muted-foreground/30 mx-auto mb-1.5" />
-                        <p className="text-[11px] text-muted-foreground font-mono">
-                          {chatSearch.trim() ? "No matching chats" : "No previous chats"}
+                        <p className="text-[11px] text-muted-foreground font-sans">
+                          {chatSearch.trim() ? "Nothing matches that yet" : "No conversations yet. Say hi to get started"}
                         </p>
                       </div>
                     );
@@ -2090,15 +2023,15 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                               setEditingChatId(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full px-1.5 py-0.5 -ml-1.5 bg-background border border-foreground/30 rounded text-[12px] font-mono font-medium text-foreground focus:outline-none focus:border-foreground"
+                            className="w-full px-1.5 py-0.5 -ml-1.5 bg-background border border-foreground/30 rounded text-[12px] font-sans font-medium text-foreground focus:outline-none focus:border-foreground"
                             autoFocus
                           />
                         ) : (
-                          <div className="text-[12px] font-mono font-medium text-foreground truncate">
+                          <div className="text-[12px] font-sans font-medium text-foreground truncate">
                             {chat.title}
                           </div>
                         )}
-                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+                        <div className="text-[10px] text-muted-foreground font-sans mt-0.5 truncate">
                           {chat.lastMessage}
                         </div>
                         <div className="text-[9px] text-muted-foreground/50 font-mono mt-0.5">
@@ -2138,18 +2071,25 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         </div>
 
         {/* Content area — activation progress OR completion OR chat */}
-        {showActivationView && isActivationInProgress && activationData ? (
+        {/* Full setup view (which hard-disables the input) ONLY while the store's
+            data is still syncing. Once data is ready the chat is usable even if
+            automations are still generating in the background — those must not
+            lock the chat. */}
+        {showActivationView && isActivationInProgress && activationData && !dataReady ? (
           <>
             <ActivationProgressPanel activation={activationData} />
-            {/* Disabled input during activation */}
+            {/* Disabled command line during activation */}
             <div className="px-5 py-4 border-t border-border">
-              <div className="relative">
+              <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 opacity-60">
+                <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
+                  allo ›
+                </span>
                 <input
                   disabled
                   value=""
                   readOnly
-                  placeholder="Allo is setting up your retention system..."
-                  className="w-full pl-4 pr-10 py-3 rounded-[20px] bg-muted/80 border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50"
+                  placeholder="allo is setting things up"
+                  className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </div>
@@ -2174,7 +2114,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 <RecoveryOpportunityCards
                   storeId={storeId}
                   onApproveAll={(type, actionIds) => {
-                    toast(`Approving ${actionIds.length} ${type.replace(/_/g, " ")} action${actionIds.length > 1 ? "s" : ""}...`, "success");
+                    toast(`On it. Sending ${actionIds.length} ${type.replace(/_/g, " ")} message${actionIds.length > 1 ? "s" : ""}.`, "success");
                   }}
                   onReview={(type) => {
                     const filterMap: Record<string, string> = {
@@ -2201,7 +2141,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               {/* Dynamic suggestion pills from AI response */}
               {!isProcessing && activeSuggestions && (
                 <div className="pl-[34px]">
-                  <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                  <div className="font-sans text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
                     Follow up
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -2209,7 +2149,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       <button
                         key={text}
                         onClick={() => sendMessage(text)}
-                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all text-left"
+                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all text-left"
                       >
                         {text}
                       </button>
@@ -2221,7 +2161,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               {/* Static suggestion pills */}
               {!isProcessing && !activeSuggestions && suggestions.length > 0 && (
                 <div className="pl-[34px]">
-                  <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                  <div className="font-sans text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
                     Suggested
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -2229,7 +2169,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       <button
                         key={pill.label}
                         onClick={() => handlePillClick(pill)}
-                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-mono text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all"
+                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all"
                       >
                         {pill.label}
                       </button>
@@ -2241,9 +2181,21 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input area */}
+            {/* Command line — the `allo ›` console input. Stays controlled so
+                ⌘K / the Home command line can prefill via setInput, and the ref
+                keeps focus working. Reskinned to the console's terminal language. */}
             <div className="px-5 py-4 border-t border-border">
-              <div className="relative">
+              <div
+                className={cn(
+                  "group flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 transition-colors",
+                  "border-border focus-within:border-[hsl(var(--accent))] hover:border-muted-foreground/40 focus-within:hover:border-[hsl(var(--accent))]",
+                  (isProcessing || !storeId || !dataReady) && "opacity-60",
+                )}
+                onClick={() => inputRef.current?.focus()}
+              >
+                <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
+                  allo ›
+                </span>
                 <input
                   ref={inputRef}
                   value={input}
@@ -2251,14 +2203,16 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) handleSubmit();
                   }}
-                  placeholder={!storeId ? "Connect a store to start..." : agentBusy ? "Allo is setting up your system..." : !dataReady ? "Setting up your store..." : placeholder}
-                  disabled={isProcessing || !storeId || !dataReady || agentBusy}
-                  className="w-full pl-4 pr-10 py-3 rounded-[20px] bg-muted/80 border border-border text-[13px] font-sans text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_1px_var(--color-accent)] transition-all disabled:opacity-50"
+                  placeholder={!storeId ? "Connect a store and we'll get started" : !dataReady ? "Getting your store ready" : placeholder}
+                  disabled={isProcessing || !storeId || !dataReady}
+                  aria-label="Tell allo what you want, in your own words"
+                  className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSubmit}
-                  disabled={isProcessing || !input.trim() || !storeId || !dataReady || agentBusy}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[var(--color-accent)] hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30"
+                  disabled={isProcessing || !input.trim() || !storeId || !dataReady}
+                  className="p-1 rounded-md text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent-bg))] transition-colors disabled:opacity-30 shrink-0"
+                  title="Send"
                 >
                   {isProcessing ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2272,17 +2226,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         )}
       </aside>
 
-      {/* Floating button when collapsed — hidden in embedded mode */}
+      {/* Summon affordance when collapsed — a calm console cue, not a docked chat.
+          The console/page stays full-width; allo is summoned here, via ⌘K, or
+          the Home command line. Hidden in embedded mode. */}
       {!embedded && effectiveState === "collapsed" && (
         <button
           onClick={() => {
             setPanelState("open");
             setTimeout(() => inputRef.current?.focus(), 200);
           }}
-          className="fixed bottom-6 right-6 w-12 h-12 rounded-[14px] bg-[var(--color-accent)] text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-[60]"
-          title="Open Allo AI"
+          className="group fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent))]/30 bg-card px-3.5 py-2.5 shadow-lg hover:border-[hsl(var(--accent))] transition-colors z-[60]"
+          title="Summon allo (⌘J)"
         >
-          <Sparkles className="w-5 h-5" />
+          <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
+            allo ›
+          </span>
+          <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground/70 border border-border rounded px-1.5 py-0.5 select-none">
+            ⌘J
+          </kbd>
         </button>
       )}
     </>
@@ -2298,10 +2259,24 @@ const PanelRefContext = createContext<React.RefObject<AlloAIPanelHandle | null> 
 export function AlloAIPanelProvider({ children }: { children: React.ReactNode }) {
   const panelRef = useRef<AlloAIPanelHandle>(null);
 
+  // ⌘J / Ctrl+J summons allo (the AI panel). ⌘K belongs to the command palette;
+  // the panel uses ⌘J so the two shortcuts never collide.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === "J")) {
+        e.preventDefault();
+        panelRef.current?.open();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const value: AlloAIPanelContextType = {
     openPanel: () => panelRef.current?.open(),
     focusInput: () => panelRef.current?.focusInput(),
     setInput: (text: string) => panelRef.current?.setInput(text),
+    submit: (text: string) => panelRef.current?.submit(text),
   };
 
   return (

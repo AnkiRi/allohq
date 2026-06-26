@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Queue } from "bullmq";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { DEFAULT_SEGMENTS } from "@allohq/customer-intelligence";
 
 const redisConnection = {
@@ -114,7 +114,7 @@ export const segmentsRouter = router({
   }),
 
   /** Initialize default segments for a store */
-  initDefaults: workspaceProcedure
+  initDefaults: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const segments = await ctx.prisma.customerSegment.createMany({
@@ -154,7 +154,7 @@ export const segmentsRouter = router({
   }),
 
   /** Create a custom segment */
-  create: workspaceProcedure
+  create: storeProcedure
     .input(
       z.object({
         storeId: z.string(),

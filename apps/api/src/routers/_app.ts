@@ -6,6 +6,7 @@ import { rfmRouter } from "./rfm";
 import { storesRouter } from "./stores";
 import { dashboardRouter } from "./dashboard";
 import { templatesRouter } from "./templates";
+import { emailsRouter } from "./emails";
 import { campaignsRouter } from "./campaigns";
 import { productsRouter } from "./products";
 import { aiRouter } from "./ai";
@@ -21,6 +22,7 @@ import { onboardingRouter } from "./onboarding";
 import { notificationsRouter } from "./notifications";
 import { conversationsRouter } from "./conversations";
 import { eventsRouter } from "./events";
+import { activityRouter } from "./activity";
 
 /**
  * Root tRPC router
@@ -33,6 +35,7 @@ export const appRouter = router({
   stores: storesRouter,
   dashboard: dashboardRouter,
   templates: templatesRouter,
+  emails: emailsRouter,
   campaigns: campaignsRouter,
   products: productsRouter,
   ai: aiRouter,
@@ -48,6 +51,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   conversations: conversationsRouter,
   events: eventsRouter,
+  activity: activityRouter,
 });
 
 export type AppRouter = typeof appRouter;

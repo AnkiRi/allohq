@@ -99,6 +99,39 @@ model NotificationPreference {
 }
 
 // ============================================================================
+// CAUSAL-DATA MOAT — CONTROL GROUPS + DECISION RECORD (B1/B2/B3)
+// ============================================================================
+
+/// Which arm of a holdout experiment a message belongs to.
+/// CONTROL = withheld (no message sent) — the counterfactual baseline.
+/// TREATMENT = message actually sent.
+enum TreatmentArm {
+  CONTROL
+  TREATMENT
+}
+
+/// A holdout experiment: deterministically splits a store cohort into CONTROL
+/// (withheld) and TREATMENT (messaged) arms so the incremental lift of agent
+/// decisions can be measured. The substrate of outcome-based pricing.
+model Experiment {
+  id               String    @id @default(cuid())
+  storeId          String
+  cohortDefinition Json // describes the cohort: { segment, rfmSegment, filter, label, ... }
+  splitRatio       Float     @default(0.15) // fraction assigned to CONTROL (withheld)
+  assignmentSeed   String // stable seed; hash(seed + customerId) → arm (auditable)
+  startAt          DateTime  @default(now())
+  endAt            DateTime?
+  status           String    @default("learning") // learning | steady | closed
+  createdAt        DateTime  @default(now())
+
+  store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messageLogs MessageLog[]
+
+  @@index([storeId])
+  @@map("experiments")
+}
+
+// ============================================================================
 // E-COMMERCE INTEGRATIONS
 // ============================================================================
 
@@ -128,6 +161,10 @@ model Store {
   activatedAt           DateTime? // timestamp when store activation completed
   activationLog         Json? // JSON field for tracking activation progress
   storeCategory         String? // fashion, beauty, food, electronics, home, health
+
+  // Causal-data moat: default contribution margin used to derive outcomeMargin
+  // from outcomeRevenue when product-level COGS is unavailable.
+  defaultContributionMargin Float? @default(0.6)
 
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   products      Product[]
@@ -207,6 +244,9 @@ model Store {
   // Basket Intelligence
   basketArchetypes BasketArchetype[]
 
+  // Causal-data moat: holdout experiments
+  experiments Experiment[]
+
   @@unique([workspaceId, shopDomain])
   @@map("stores")
 }
@@ -227,6 +267,7 @@ model Product {
   imageUrl       String?
   price          Float
   compareAtPrice Float?
+  costPrice      Decimal? @db.Decimal(12, 2) // COGS — for margin-based outcome accounting
   status         String   @default("active")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -309,10 +350,14 @@ model Customer {
   lastName         String?
   acceptsMarketing Boolean  @default(false)
   tags             String[]
+  // Cross-brand identity layer (additive, nullable — unused in single-brand behavior).
+  // Links this per-store Customer to a shared cross-brand Identity. Nothing reads it yet.
+  identityId       String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   store                          Store                           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  identity                       Identity?                       @relation(fields: [identityId], references: [id])
   orders                         Order[]
   rfmScore                       RfmScore?
   lifetimeValue                  CustomerLifetimeValue?
@@ -329,7 +374,27 @@ model Customer {
 
   @@unique([storeId, externalId])
   @@index([email])
+  @@index([identityId])
   @@map("customers")
+}
+
+// ============================================================================
+// CROSS-BRAND IDENTITY LAYER (additive)
+// ============================================================================
+
+/// A single real person across stores/brands. One Identity per unique
+/// normalized phone or email. Additive and currently unused by single-brand
+/// behavior — it exists so the cross-brand customer future stays possible
+/// without a re-platform. Customers link to it via the nullable identityId FK.
+model Identity {
+  id              String   @id @default(cuid())
+  normalizedPhone String?  @unique
+  normalizedEmail String?  @unique
+  createdAt       DateTime @default(now())
+
+  customers Customer[]
+
+  @@map("identities")
 }
 
 model Order {
@@ -599,6 +664,12 @@ model BrandProfile {
   showSocialLinks Boolean @default(true)
   showAddress     Boolean @default(true)
 
+  // Sending + sender settings — global defaults (per-campaign overridable)
+  sendingFrequency String? @default("balanced") // "minimal" | "balanced" | "frequent"
+  fromName         String?
+  fromEmail        String?
+  replyToEmail     String?
+
   analyzedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -848,11 +919,17 @@ model MessageLog {
   // Outcome tracking — for ML training data (Sprint 12+)
   outcome           String? // opened, clicked, purchased, unsubscribed, ignored
   outcomeRevenue    Decimal?  @db.Decimal(12, 2) // revenue attributed to this message
+  outcomeMargin     Decimal?  @db.Decimal(12, 2) // margin = outcomeRevenue × store contribution margin
   outcomeTimestamp  DateTime? // when outcome was recorded
   customerStateSnap Json? // snapshot of CustomerState at send time
   messageFeatures   Json? // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  // Causal-data moat: control-group assignment
+  treatmentArm TreatmentArm? // CONTROL = withheld, TREATMENT = sent
+  experimentId String? // which holdout experiment this row belongs to
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id])
+  experiment Experiment? @relation(fields: [experimentId], references: [id])
 
   @@index([workspaceId])
   @@index([campaignId])
@@ -861,6 +938,7 @@ model MessageLog {
   @@index([channel, status])
   @@index([customerId, status, createdAt])
   @@index([outcome, createdAt])
+  @@index([experimentId])
   @@map("message_logs")
 }
 
@@ -1010,6 +1088,7 @@ model ConversationMessage {
 model AgentAction {
   id         String   @id @default(cuid())
   storeId    String
+  customerId String? // the customer this decision concerns (for DecisionRecord stitching)
   agentType  String // customer_assistant, retention_strategist
   actionType String // send_message, create_discount, lookup_order, create_campaign, etc.
   input      Json     @default("{}")
@@ -1023,6 +1102,7 @@ model AgentAction {
 
   @@index([storeId, createdAt])
   @@index([agentType])
+  @@index([customerId])
   @@map("agent_actions")
 }
 

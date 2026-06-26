@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@allohq/customer-intelligence": "workspace:*",
     "@allohq/database": "workspace:*"
   },
   "devDependencies": {

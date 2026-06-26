@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { renderToHtml } from "@allohq/email-builder/src/server";
+import { renderBrandedEmail, complete } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
 
 export const templatesRouter = router({
@@ -408,10 +408,16 @@ export const templatesRouter = router({
       z.object({
         blocks: z.any(),
         variables: z.record(z.string()).optional(),
+        storeId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const blocks = (input.blocks ?? []) as any[];
+
+      // Resolve a store to derive the brand kit (defaults to the workspace's first store).
+      const store = input.storeId
+        ? await ctx.prisma.store.findFirst({ where: { id: input.storeId, workspaceId: ctx.workspaceId } })
+        : await ctx.prisma.store.findFirst({ where: { workspaceId: ctx.workspaceId } });
 
       // Collect product IDs from product blocks
       const productIds = blocks
@@ -450,7 +456,9 @@ export const templatesRouter = router({
         }
       }
 
-      const html = renderToHtml(blocks, {
+      const html = await renderBrandedEmail({
+        storeId: store?.id ?? "",
+        blocks,
         variables: input.variables ?? {},
         products,
         previewMode: true,
@@ -466,5 +474,45 @@ export const templatesRouter = router({
     )
     .query(({ input }) => {
       return scoreSubjectLine(input.subject);
+    }),
+
+  /**
+   * Suggest alternative subject lines (LLM) — powers the per-send override's
+   * "suggest alternatives". Resilient: returns [] if the model is unavailable.
+   */
+  suggestSubjects: workspaceProcedure
+    .input(
+      z.object({
+        current: z.string().optional(),
+        context: z.string().optional(),
+        brandVoice: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const system = [
+        "You are allo, an expert email subject-line writer for an Indian D2C brand.",
+        "Write 4 alternative subject lines: warm, specific, on-brand. No hype, no",
+        "ALL-CAPS, no clickbait, no emoji spam.",
+        "Return ONLY a JSON array of 4 strings — no prose, no markdown fences.",
+        input.brandVoice ? `BRAND VOICE: ${input.brandVoice}` : "",
+      ].join("\n");
+      const prompt = [
+        input.current ? `CURRENT SUBJECT: ${input.current}` : "",
+        input.context ? `EMAIL IS ABOUT: ${input.context}` : "",
+        "Return 4 alternative subject lines as a JSON array of strings.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      try {
+        const result = await complete({ prompt, system, jsonMode: true, temperature: 0.8, maxTokens: 400 });
+        const m = result.content.match(/\[[\s\S]*\]/);
+        const parsed: unknown = m ? JSON.parse(m[0]) : [];
+        const suggestions = Array.isArray(parsed)
+          ? parsed.filter((s): s is string => typeof s === "string" && s.trim().length > 0).slice(0, 5)
+          : [];
+        return { suggestions };
+      } catch {
+        return { suggestions: [] as string[] };
+      }
     }),
 });

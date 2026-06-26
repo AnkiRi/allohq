@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
+import { predictConsequence } from "../lib/predictions";
+import { getStoreCalibration } from "../lib/calibration";
 import {
   getAllAutonomyConfigs,
   setAutonomyTier,
@@ -19,14 +22,14 @@ import {
 
 export const autonomyRouter = router({
   /** Get all autonomy configs for a store */
-  getConfig: workspaceProcedure
+  getConfig: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
       return getAllAutonomyConfigs(input.storeId);
     }),
 
   /** Update autonomy tier for a category */
-  updateConfig: workspaceProcedure
+  updateConfig: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -42,7 +45,7 @@ export const autonomyRouter = router({
     }),
 
   /** Initialize default autonomy configs for a new store */
-  initializeDefaults: workspaceProcedure
+  initializeDefaults: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ input }) => {
       await initializeDefaults(input.storeId);
@@ -50,7 +53,7 @@ export const autonomyRouter = router({
     }),
 
   /** List actions in the queue with enriched payload data */
-  listActions: workspaceProcedure
+  listActions: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -60,7 +63,7 @@ export const autonomyRouter = router({
         offset: z.number().min(0).optional(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       // Expire stale actions first
       await expireStaleActions(input.storeId);
       const result = await listPendingActions(input.storeId, {
@@ -70,10 +73,38 @@ export const autonomyRouter = router({
         offset: input.offset,
       });
 
+      // Track C: derive store-level calibration ONCE from real control data
+      // (Track B). It flips each prediction from "estimate" to "calibrated"
+      // only when there are enough measured control outcomes behind it.
+      const calibration = await getStoreCalibration(ctx.prisma, input.storeId);
+
       // Enrich each action by unpacking the payload JSON
       const enrichedActions = result.actions.map((action) => {
         const payload = (action.payload ?? {}) as Record<string, unknown>;
+        const targetSegment =
+          (payload.targetSegment as { name: string; count: number }) ?? null;
+        const channel = (payload.channel as string) ?? null;
+
+        // Track C: COMMIT to a predicted consequence before acting. Inputs are
+        // generalizable features (cohort/channel/category/typical-rate), so the
+        // same call could later be served by a cross-brand trained model.
+        const prediction = predictConsequence({
+          cohortSize: targetSegment?.count ?? 0,
+          estimatedRevenue: action.estimatedRevenue ?? 0,
+          confidenceScore: action.confidenceScore ?? 0,
+          channel,
+          category: action.category ?? action.type,
+          calibration: calibration
+            ? {
+                accuracyRatio: calibration.accuracyRatio,
+                liftPct: calibration.liftPct,
+                sampleSize: calibration.sampleSize,
+              }
+            : null,
+        });
+
         return {
+          prediction,
           id: action.id,
           type: action.type,
           category: action.category,
@@ -88,10 +119,10 @@ export const autonomyRouter = router({
           htmlPreview: (payload.htmlPreview as string) ?? null,
           thumbnails: (payload.thumbnails as string[]) ?? [],
           archetype: (payload.archetype as string) ?? null,
-          targetSegment: (payload.targetSegment as { name: string; count: number }) ?? null,
+          targetSegment,
           campaignName: (payload.campaignName as string) ?? null,
           subjectLine: (payload.subjectLine as string) ?? null,
-          channel: (payload.channel as string) ?? null,
+          channel,
           products: (payload.products as Array<{ name: string; imageUrl: string; price: number }>) ?? [],
         };
       });
@@ -102,7 +133,8 @@ export const autonomyRouter = router({
   /** Get a single action by ID */
   getActionById: workspaceProcedure
     .input(z.object({ actionId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
       return getActionById(input.actionId);
     }),
 
@@ -115,6 +147,10 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
+      // Demo/sandbox: show the approved success state without firing anything
+      // real (no execute, no send enqueue, no mutation of the shared seed).
+      if (ctx.isDemo) return { success: true, executedType: "demo", demo: true };
       await approveAction(input.actionId, ctx.userId, input.note);
       try {
         const result = await executeApprovedAction(input.actionId);
@@ -133,6 +169,8 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
+      if (ctx.isDemo) return { success: true, demo: true };
       await rejectAction(input.actionId, ctx.userId, input.reason);
       return { success: true };
     }),
@@ -145,6 +183,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (ctx.isDemo) return { approved: input.actionIds.length, demo: true };
       const count = await bulkApprove(input.actionIds, ctx.userId);
       for (const id of input.actionIds) {
         try { await executeApprovedAction(id); } catch { /* best-effort */ }
@@ -161,6 +200,7 @@ export const autonomyRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (ctx.isDemo) return { rejected: input.actionIds.length, demo: true };
       const count = await bulkReject(input.actionIds, ctx.userId, input.reason);
       return { rejected: count };
     }),

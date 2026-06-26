@@ -66,6 +66,14 @@ async function runHourlyAttribution() {
 }
 
 async function attributeOrdersForStore(storeId: string) {
+  // Causal-data moat: contribution margin used to derive outcomeMargin from
+  // outcomeRevenue. Falls back to 0.6 when unset.
+  const storeRow = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { defaultContributionMargin: true },
+  });
+  const marginRate = storeRow?.defaultContributionMargin ?? 0.6;
+
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const windowStart = new Date(
     Date.now() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000,
@@ -149,6 +157,7 @@ async function attributeOrdersForStore(storeId: string) {
       data: {
         outcome: "purchased",
         outcomeRevenue: (order.totalPrice),
+        outcomeMargin: (order.totalPrice * marginRate),
         outcomeTimestamp: new Date(),
       },
     });
@@ -170,6 +179,7 @@ async function attributeOrdersForStore(storeId: string) {
         data: {
           outcome: "purchased",
           outcomeRevenue: (existingRevenue + order.totalPrice),
+          outcomeMargin: ((existingRevenue + order.totalPrice) * marginRate),
           outcomeTimestamp: new Date(),
         },
       });
@@ -193,6 +203,7 @@ async function attributeOrdersForStore(storeId: string) {
           data: {
             outcome: "purchased",
             outcomeRevenue: (existingRevenue + share),
+            outcomeMargin: ((existingRevenue + share) * marginRate),
             outcomeTimestamp: new Date(),
           },
         });

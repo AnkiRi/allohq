@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { FileText, Plus, Copy, Trash2, Sparkles, Loader2, Eye, Pencil, Search, ChevronDown, AlertTriangle, CheckSquare, Square, MessageSquare } from "lucide-react";
+import { templateDisplayName, templatePurpose, distinctPurposes } from "@/lib/templateName";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -47,6 +48,7 @@ function formatCategoryLabel(category: string): string {
 export default function TemplatesPage() {
   const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+  const [purposeFilter, setPurposeFilter] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRemoveMenu, setShowRemoveMenu] = useState(false);
@@ -58,29 +60,29 @@ export default function TemplatesPage() {
   const utils = trpc.useUtils();
 
   const duplicateMut = trpc.templates.duplicate.useMutation({
-    onSuccess: () => { utils.templates.list.invalidate(); toast("Template duplicated", "success"); },
-    onError: () => toast("Failed to duplicate", "error"),
+    onSuccess: () => { utils.templates.list.invalidate(); toast("Copied. Here's your duplicate.", "success"); },
+    onError: () => toast("We couldn't duplicate that. Mind trying again?", "error"),
   });
   const deleteMut = trpc.templates.delete.useMutation({
-    onSuccess: () => { utils.templates.list.invalidate(); toast("Template deleted", "success"); },
-    onError: () => toast("Failed to delete", "error"),
+    onSuccess: () => { utils.templates.list.invalidate(); toast("Template deleted.", "success"); },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
   const bulkDeleteMut = (trpc as any).templates.bulkDelete.useMutation({
     onSuccess: (result: { deleted: number }) => {
       utils.templates.list.invalidate();
-      toast(`${result.deleted} templates deleted`, "success");
+      toast(`${result.deleted} templates deleted.`, "success");
       setSelectedIds(new Set());
     },
-    onError: () => toast("Failed to delete templates", "error"),
+    onError: () => toast("We couldn't delete those. Mind trying again?", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
   const deleteByCategoryMut = (trpc as any).templates.deleteByCategory.useMutation({
     onSuccess: (result: { deleted: number }) => {
       utils.templates.list.invalidate();
-      toast(`${result.deleted} templates removed`, "success");
+      toast(`${result.deleted} templates removed.`, "success");
       setShowRemoveMenu(false);
       setConfirmRemoveAll(false);
     },
-    onError: () => toast("Failed to remove templates", "error"),
+    onError: () => toast("We couldn't remove those. Mind trying again?", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
   const categories = [
@@ -94,12 +96,17 @@ export default function TemplatesPage() {
   // Filter by search query
   const filteredTemplates = useMemo(() => {
     if (!templates) return [];
-    if (!searchQuery.trim()) return templates;
-    const q = searchQuery.toLowerCase();
-    return templates.filter(
-      (t) => t.name.toLowerCase().includes(q) || t.subject.toLowerCase().includes(q)
-    );
-  }, [templates, searchQuery]);
+    const q = searchQuery.trim().toLowerCase();
+    return templates.filter((t) => {
+      if (purposeFilter && templatePurpose(t.name) !== purposeFilter) return false;
+      if (!q) return true;
+      return (
+        templateDisplayName(t.name).toLowerCase().includes(q) ||
+        t.name.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q)
+      );
+    });
+  }, [templates, searchQuery, purposeFilter]);
 
   // Detect duplicates (same subject)
   const duplicateSubjects = useMemo(() => {
@@ -163,14 +170,14 @@ export default function TemplatesPage() {
             Templates
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            Email templates for campaigns and automations
+            Your saved, reusable emails — pick any one into a campaign or automation
           </p>
         </div>
         <div className="flex items-center gap-2">
           {/* Channel templates link */}
           <Link
             href="/templates/channel"
-            className="flex items-center gap-2 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-mono hover:bg-muted/50 transition-all"
+            className="flex items-center gap-2 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-sans hover:bg-muted/50 transition-all"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             SMS / WhatsApp / RCS
@@ -179,7 +186,7 @@ export default function TemplatesPage() {
           <div className="relative">
             <button
               onClick={() => setShowRemoveMenu(!showRemoveMenu)}
-              className="flex items-center gap-1.5 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-mono hover:bg-muted/50 transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 border border-border text-muted-foreground rounded-lg text-xs font-sans hover:bg-muted/50 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Remove
@@ -211,7 +218,7 @@ export default function TemplatesPage() {
                     className="w-full text-left px-3 py-2 text-xs bg-red-50 text-red-700 font-medium"
                   >
                     <AlertTriangle className="w-3 h-3 inline mr-1" />
-                    Confirm — delete all {templates?.length || 0} templates
+                    Yes, delete all {templates?.length || 0}. This can't be undone
                   </button>
                 )}
               </div>
@@ -219,7 +226,7 @@ export default function TemplatesPage() {
           </div>
           <Link
             href="/templates/new"
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
             New Template
@@ -235,9 +242,38 @@ export default function TemplatesPage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search templates by name or subject..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white/20 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+          className="w-full pl-10 pr-4 py-2.5 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
         />
       </div>
+
+      {/* Purpose filter — find by what the email is FOR, not its machine name */}
+      {templates && templates.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setPurposeFilter(undefined)}
+            className={`px-2.5 py-1 text-[11px] font-sans rounded-full transition-all ${
+              !purposeFilter
+                ? "bg-secondary text-secondary-foreground"
+                : "bg-muted border border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All purposes
+          </button>
+          {distinctPurposes(templates.map((t) => t.name)).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPurposeFilter(p === purposeFilter ? undefined : p)}
+              className={`px-2.5 py-1 text-[11px] font-sans rounded-full transition-all ${
+                purposeFilter === p
+                  ? "bg-secondary text-secondary-foreground"
+                  : "bg-muted border border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Category filters with counts */}
       <div className="flex items-center gap-2">
@@ -245,10 +281,10 @@ export default function TemplatesPage() {
           <button
             key={cat.label}
             onClick={() => setCategoryFilter(cat.value)}
-            className={`px-3 py-1.5 text-xs font-mono rounded-lg transition-all ${
+            className={`px-3 py-1.5 text-xs font-sans rounded-lg transition-all ${
               categoryFilter === cat.value
                 ? "bg-secondary text-secondary-foreground"
-                : "bg-white/20 border border-white/20 text-muted-foreground hover:bg-white/30"
+                : "bg-muted border border-border text-muted-foreground hover:bg-muted"
             }`}
           >
             {cat.label}
@@ -303,7 +339,7 @@ export default function TemplatesPage() {
             <motion.div key={group.category} variants={itemVariants}>
               {/* Group header */}
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-[13px] font-bold text-foreground/70 font-mono tracking-wide">
+                <h2 className="text-[13px] font-bold text-foreground/70 font-serif tracking-wide">
                   {group.label}
                 </h2>
                 <span className="text-[11px] text-muted-foreground/60 font-mono">
@@ -334,7 +370,7 @@ export default function TemplatesPage() {
                       {/* Selection checkbox */}
                       <button
                         onClick={() => toggleSelect(template.id)}
-                        className="absolute top-3 left-3 z-10 w-5 h-5 rounded flex items-center justify-center bg-white/80 border border-border hover:bg-white transition-colors"
+                        className="absolute top-3 left-3 z-10 w-5 h-5 rounded flex items-center justify-center bg-card border border-border hover:bg-white transition-colors"
                       >
                         {isSelected ? (
                           <CheckSquare className="w-4 h-4 text-foreground" />
@@ -350,8 +386,8 @@ export default function TemplatesPage() {
 
                       <div className="p-4 space-y-3">
                         {/* Title */}
-                        <h3 className="text-[13px] font-bold text-foreground font-mono leading-snug line-clamp-2">
-                          {template.name}
+                        <h3 className="text-[13px] font-bold text-foreground font-serif leading-snug line-clamp-2">
+                          {templateDisplayName(template.name)}
                         </h3>
 
                         {/* Subject line */}
@@ -362,16 +398,16 @@ export default function TemplatesPage() {
                         {/* Badges */}
                         <div className="flex items-center gap-2 flex-wrap">
                           {template.category === "ai_generated" && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-sans bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
                               <Sparkles className="w-2.5 h-2.5" />
                               AI
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 text-[10px] font-mono rounded-md ${getCategoryBadgeStyle(template.category)}`}>
+                          <span className={`px-2 py-0.5 text-[10px] font-sans rounded-md ${getCategoryBadgeStyle(template.category)}`}>
                             {formatCategoryLabel(template.category)}
                           </span>
                           {isDuplicate && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-mono bg-amber-100 text-amber-700 border border-amber-200 rounded-md">
+                            <span className="px-1.5 py-0.5 text-[10px] font-sans bg-amber-100 text-amber-700 border border-amber-200 rounded-md">
                               Duplicate
                             </span>
                           )}
@@ -382,14 +418,14 @@ export default function TemplatesPage() {
                           <div className="flex items-center gap-3">
                             <Link
                               href={`/templates/${template.id}/edit`}
-                              className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                             >
                               <Pencil className="w-3 h-3" />
                               Edit
                             </Link>
                             <Link
                               href={`/templates/${template.id}/edit`}
-                              className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
                             >
                               <Eye className="w-3 h-3" />
                               Preview
@@ -399,14 +435,14 @@ export default function TemplatesPage() {
                             <button
                               onClick={() => duplicateMut.mutate({ id: template.id })}
                               disabled={duplicateMut.isPending}
-                              className="p-1.5 rounded-lg hover:bg-white/20 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
                             >
                               {duplicateMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
                             <button
                               onClick={() => deleteMut.mutate({ id: template.id })}
                               disabled={deleteMut.isPending}
-                              className="p-1.5 rounded-lg hover:bg-white/20 text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
                             >
                               {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                             </button>
@@ -423,19 +459,19 @@ export default function TemplatesPage() {
       ) : searchQuery ? (
         <div className="glass-card-static rounded-xl p-12 text-center">
           <Search className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-foreground">No matches</h3>
+          <h3 className="text-lg font-semibold text-foreground">Nothing matched</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            No templates match &ldquo;{searchQuery}&rdquo;. Try a different search.
+            Nothing matches &ldquo;{searchQuery}&rdquo;. Try another search.
           </p>
         </div>
       ) : (
         <SmartEmptyState
           icon={FileText}
           title="No templates yet"
-          description="Allo can generate beautiful email templates matching your brand."
+          description="allo can write beautiful emails that sound just like your brand."
           actions={[
-            { label: "Generate Welcome Email", primary: true },
-            { label: "Generate Win-Back Email" },
+            { label: "Write a welcome email", primary: true },
+            { label: "Write a win-back email" },
           ]}
         />
       )}

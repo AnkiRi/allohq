@@ -3,6 +3,7 @@
 export function ApplyForm() {
   return (
     <form
+      className="apply-form"
       onSubmit={(e) => {
         e.preventDefault();
         const q1 = (document.getElementById("apply-q1") as HTMLInputElement)?.value || "";
@@ -32,7 +33,7 @@ export function ApplyForm() {
         <input
           id="apply-q2"
           type="text"
-          placeholder="ballpark is fine — 50, 500, 5,000"
+          placeholder="ballpark is fine: 50, 500, 5,000"
           autoComplete="off"
         />
       </div>
@@ -41,13 +42,13 @@ export function ApplyForm() {
         <input
           id="apply-q3"
           type="text"
-          placeholder="Klaviyo · Mailchimp · gut feel · nothing"
+          placeholder="your ESP · a spreadsheet · gut feel · nothing"
           autoComplete="off"
         />
       </div>
       <div className="actions">
-        <button type="submit" className="submit">
-          Send →
+        <button type="submit" className="btn-primary">
+          Send <span aria-hidden="true">→</span>
         </button>
         <span className="reassurance">
           We won&apos;t add you to a newsletter.

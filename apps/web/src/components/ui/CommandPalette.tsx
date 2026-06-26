@@ -242,7 +242,7 @@ export function CommandPalette() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
-                placeholder="Search pages, actions, AI commands..."
+                placeholder="Search pages, actions, or ask allo..."
               />
               <kbd className="text-[10px] font-mono text-muted-foreground/70 bg-muted/60 px-1.5 py-0.5 rounded border border-border/30">
                 ESC
@@ -277,11 +277,11 @@ export function CommandPalette() {
                       >
                         <item.icon className="w-3.5 h-3.5" />
                       </div>
-                      <span className="text-[13px] font-mono flex-1 text-foreground">
+                      <span className="text-[13px] font-sans flex-1 text-foreground">
                         {item.label}
                       </span>
                       {item.hint && (
-                        <span className="text-[10px] font-mono text-muted-foreground/60">
+                        <span className="text-[10px] font-sans text-muted-foreground/60">
                           {item.hint}
                         </span>
                       )}
@@ -294,7 +294,7 @@ export function CommandPalette() {
                 flatIndex += group.items.length;
                 return (
                   <div key={group.category} className="mb-1">
-                    <div className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider px-3 py-1.5 mt-1">
+                    <div className="text-[10px] font-sans text-muted-foreground/60 uppercase tracking-wider px-3 py-1.5 mt-1">
                       {CATEGORY_LABELS[group.category]}
                     </div>
                     {renderedItems}
@@ -303,24 +303,24 @@ export function CommandPalette() {
               })}
 
               {flatItems.length === 0 && query && (
-                <div className="px-3 py-8 text-center text-sm text-muted-foreground font-mono">
-                  No results for &ldquo;{query}&rdquo;
+                <div className="px-3 py-8 text-center text-sm text-muted-foreground font-sans">
+                  Nothing found for &ldquo;{query}&rdquo;
                 </div>
               )}
             </div>
 
             {/* Footer hint */}
-            <div className="flex items-center gap-4 px-4 py-2 border-t border-border/30 text-[10px] font-mono text-muted-foreground/50">
+            <div className="flex items-center gap-4 px-4 py-2 border-t border-border/30 text-[10px] font-sans text-muted-foreground/50">
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 rounded bg-muted/60 border border-border/30">&uarr;&darr;</kbd>
+                <kbd className="font-mono px-1 py-0.5 rounded bg-muted/60 border border-border/30">&uarr;&darr;</kbd>
                 navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 rounded bg-muted/60 border border-border/30">&crarr;</kbd>
+                <kbd className="font-mono px-1 py-0.5 rounded bg-muted/60 border border-border/30">&crarr;</kbd>
                 select
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 rounded bg-muted/60 border border-border/30">esc</kbd>
+                <kbd className="font-mono px-1 py-0.5 rounded bg-muted/60 border border-border/30">esc</kbd>
                 close
               </span>
             </div>
@@ -386,11 +386,11 @@ function buildCommandItems(deps: {
     { id: "action-churn-report", icon: Target, label: "View Churn Risk Report", hint: "Analytics", category: "quick-actions", action: () => navigate("/analytics") },
 
     // -- AI Commands --
-    { id: "ai-ask", icon: Sparkles, label: "Ask AI...", hint: "Open panel", category: "ai-commands", action: () => openAI() },
+    { id: "ai-ask", icon: Sparkles, label: "Ask allo...", hint: "Open panel", category: "ai-commands", action: () => openAI() },
     { id: "ai-whatif", icon: HelpCircle, label: "What if...", hint: "Scenario", category: "ai-commands", action: () => openAI("What if ") },
     { id: "ai-explain-metrics", icon: TrendingUp, label: "Explain my metrics", hint: "AI insight", category: "ai-commands", action: () => openAI("Explain my key metrics and what they mean for my business") },
-    { id: "ai-recommend", icon: Brain, label: "Recommend next action", hint: "AI advice", category: "ai-commands", action: () => openAI("What should I do next to improve retention?") },
-    { id: "ai-write-email", icon: Mail, label: "Write an email with AI", hint: "AI draft", category: "ai-commands", action: () => openAI("Write a marketing email for ") },
+    { id: "ai-recommend", icon: Brain, label: "What should I do next?", hint: "AI advice", category: "ai-commands", action: () => openAI("What should I do next to improve retention?") },
+    { id: "ai-write-email", icon: Mail, label: "Draft an email with allo", hint: "AI draft", category: "ai-commands", action: () => openAI("Write a marketing email for ") },
 
     // -- Settings --
     {

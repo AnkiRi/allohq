@@ -116,7 +116,7 @@ export function AgentCanvas() {
         <Zap className="w-4 h-4 text-[hsl(var(--accent))]" />
         <span className="font-semibold text-sm">Agent Canvas</span>
         {unacknowledgedCount > 0 && (
-          <span className="ml-auto px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 text-[10px] font-mono font-bold">
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 text-[10px] font-sans font-bold">
             {unacknowledgedCount} new
           </span>
         )}
@@ -126,7 +126,7 @@ export function AgentCanvas() {
       <div className="flex border-b border-border">
         <button
           className={cn(
-            "flex-1 py-2 text-xs font-mono uppercase tracking-wider text-center transition-colors",
+            "flex-1 py-2 text-xs font-sans uppercase tracking-wider text-center transition-colors",
             tab === "observations"
               ? "text-foreground border-b-2 border-[hsl(var(--accent))]"
               : "text-muted-foreground hover:text-foreground"
@@ -138,7 +138,7 @@ export function AgentCanvas() {
         </button>
         <button
           className={cn(
-            "flex-1 py-2 text-xs font-mono uppercase tracking-wider text-center transition-colors",
+            "flex-1 py-2 text-xs font-sans uppercase tracking-wider text-center transition-colors",
             tab === "actions"
               ? "text-foreground border-b-2 border-[hsl(var(--accent))]"
               : "text-muted-foreground hover:text-foreground"
@@ -155,8 +155,8 @@ export function AgentCanvas() {
         {tab === "observations" && (
           <div className="p-3 space-y-2">
             {!observations?.length && (
-              <div className="text-center py-8 text-muted-foreground text-xs font-mono">
-                No observations yet. The agent monitors your store every 15 minutes.
+              <div className="text-center py-8 text-muted-foreground text-xs font-sans">
+                Nothing to flag right now. allo keeps an eye on your store every 15 minutes.
               </div>
             )}
             {observations?.map((obs) => (
@@ -177,14 +177,14 @@ export function AgentCanvas() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold">{obs.summary}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground mt-1">
+                    <div className="text-[10px] font-sans text-muted-foreground mt-1">
                       {obs.type.replace(/_/g, " ")} · {timeAgo(obs.createdAt)}
                     </div>
                   </div>
                   {!obs.acknowledged && (
                     <button
                       onClick={() => ackMut.mutate({ observationId: obs.id })}
-                      className="text-[10px] font-mono px-2 py-1 rounded bg-foreground/5 hover:bg-foreground/10 transition-colors"
+                      className="text-[10px] font-sans px-2 py-1 rounded bg-foreground/5 hover:bg-foreground/10 transition-colors"
                     >
                       Dismiss
                     </button>
@@ -198,8 +198,8 @@ export function AgentCanvas() {
         {tab === "actions" && (
           <div className="p-3 space-y-1">
             {!actions?.length && (
-              <div className="text-center py-8 text-muted-foreground text-xs font-mono">
-                No agent actions yet.
+              <div className="text-center py-8 text-muted-foreground text-xs font-sans">
+                Nothing here yet. allo&apos;s work will show up as it happens.
               </div>
             )}
             {actions?.map((action) => (
@@ -224,11 +224,11 @@ export function AgentCanvas() {
                   )}
                 </button>
                 {expandedAction === action.id && (
-                  <div className="mt-2 pl-6 text-[11px] font-mono text-muted-foreground space-y-1">
+                  <div className="mt-2 pl-6 text-[11px] font-sans text-muted-foreground space-y-1">
                     <div>Agent: {action.agentType.replace(/_/g, " ")}</div>
                     <div>Status: {action.status}</div>
                     {action.input != null && (
-                      <pre className="bg-foreground/5 rounded p-1.5 text-[10px] overflow-x-auto max-h-24">
+                      <pre className="bg-foreground/5 rounded p-1.5 text-[10px] font-mono overflow-x-auto max-h-24">
                         {JSON.stringify(action.input, null, 2)}
                       </pre>
                     )}

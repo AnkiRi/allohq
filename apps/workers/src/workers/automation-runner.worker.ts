@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
-import { renderToHtml } from "@allohq/email-builder/src/server";
+import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
 import type { StoreMessagingConfig } from "@allohq/messaging";
@@ -143,27 +143,9 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             }
           }
 
-          // Fetch brand settings
+          // Fetch store (for shopDomain) — brand styling is derived from the
+          // store's BrandProfile + BrandVisualProfile inside renderBrandedEmail.
           const store = await prisma.store.findUnique({ where: { id: automation.storeId } });
-          const brandProfile = store ? await prisma.brandProfile.findFirst({
-            where: { storeId: automation.storeId, workspaceId: automation.workspaceId },
-            select: { logoPosition: true, headerBgColor: true, footerText: true, showSocialLinks: true, showAddress: true, brandName: true },
-          }) : null;
-
-          const brandSettings = store && brandProfile ? {
-            logoUrl: store.storeLogoUrl ?? undefined,
-            logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
-            headerBgColor: brandProfile.headerBgColor ?? undefined,
-            storeName: store.storeName ?? brandProfile.brandName,
-            address: store.address ? (() => {
-              const addr = store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string };
-              return [addr.address1, addr.city, addr.province, addr.zip, addr.country].filter(Boolean).join(", ");
-            })() : undefined,
-            socialLinks: store.socialLinks ? Object.entries(store.socialLinks as Record<string, string>).filter(([, v]) => v).map(([k, v]) => ({ platform: k, url: v })) : undefined,
-            footerText: brandProfile.footerText ?? undefined,
-            showSocialLinks: brandProfile.showSocialLinks,
-            showAddress: brandProfile.showAddress,
-          } : undefined;
 
           // Build variables with all merge tags
           const now = new Date();
@@ -199,12 +181,14 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
-          // Render email HTML
-          const html = renderToHtml(blocks, {
+          // Render email HTML — brand-styled via the store's BrandKit
+          const html = await renderBrandedEmail({
+            storeId: automation.storeId,
+            blocks,
+            subject: template.subject,
             variables,
             products: productsMap,
             previewMode: false,
-            brandSettings,
             tracking: {
               utmSource: "allo",
               utmMedium: "email",

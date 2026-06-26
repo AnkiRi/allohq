@@ -1,14 +1,14 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { useMobileSidebar } from "./MobileSidebarContext";
-import { useTheme } from "@/components/theme/ThemeProvider";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
 import { trpc } from "@/lib/trpc";
+import { useDemo } from "@/lib/useDemo";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Home",
@@ -44,7 +44,7 @@ function getBreadcrumb(pathname: string): string[] {
 
 export function TopBar() {
   const { toggle } = useMobileSidebar();
-  const { theme, mounted, toggleTheme } = useTheme();
+  const demo = useDemo();
   const pathname = usePathname();
   const commandPalette = useCommandPalette();
   const isDashboard = pathname === "/dashboard";
@@ -83,11 +83,11 @@ export function TopBar() {
     if (!latestAgentRun?.createdAt) return null;
     const diff = Date.now() - new Date(latestAgentRun.createdAt).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Last activity just now";
-    if (mins < 60) return `Last activity ${mins}m ago`;
+    if (mins < 1) return "Active just now";
+    if (mins < 60) return `Active ${mins}m ago`;
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `Last activity ${hours}h ago`;
-    return `Last activity ${Math.floor(hours / 24)}d ago`;
+    if (hours < 24) return `Active ${hours}h ago`;
+    return `Active ${Math.floor(hours / 24)}d ago`;
   })();
 
   return (
@@ -110,7 +110,7 @@ export function TopBar() {
             >
               <ArrowLeft className="w-3.5 h-3.5" />
             </Link>
-            <span className="text-[11px] font-mono tracking-[0.5px] uppercase text-muted-foreground">
+            <span className="text-[11px] font-sans tracking-[0.5px] uppercase text-muted-foreground">
               Home
             </span>
           </div>
@@ -127,7 +127,7 @@ export function TopBar() {
                 <span key={i} className="flex items-center gap-1">
                   {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/40" />}
                   <span
-                    className={`text-[11px] font-mono tracking-[0.5px] uppercase ${
+                    className={`text-[11px] font-sans tracking-[0.5px] uppercase ${
                       i === breadcrumb.length - 1
                         ? "text-muted-foreground"
                         : "text-muted-foreground/50"
@@ -143,15 +143,40 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Demo marker + relaunch (P5). This shows only in the logged-out Vana
+            demo (useDemo = signed-out + flag). Relaunch resets in-session state to
+            a clean demo — nothing is persisted to reset, given the write-floor. */}
+        {demo && (
+          <span className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted border border-border text-[10.5px] font-mono text-muted-foreground">
+            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))]" />
+            Demo · Vana Naturals · sample data
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  sessionStorage.clear();
+                } catch {
+                  /* ignore */
+                }
+                window.location.assign("/dashboard");
+              }}
+              className="text-[hsl(var(--accent))] hover:underline"
+              title="Restart the demo from a clean state"
+            >
+              restart
+            </button>
+          </span>
+        )}
+
         {/* Agent Status Pill */}
         {onboardingDone && (
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1F7A4F]/8 border border-[#1F7A4F]/15">
-            <PulseDot color="bg-[#1F7A4F]" />
-            <span className="text-[11px] font-mono text-[#1F7A4F]/85">
-              Agent monitoring {totalCustomers.toLocaleString()} customers
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/[0.08] border border-primary/15">
+            <PulseDot color="bg-primary" />
+            <span className="text-[11px] font-sans text-primary/85">
+              allo is watching over {totalCustomers.toLocaleString("en-IN")} customers
             </span>
             {lastActivityText && (
-              <span className="text-[10px] font-mono text-[#1F7A4F]/55">
+              <span className="text-[10px] font-sans text-primary/60">
                 {lastActivityText}
               </span>
             )}
@@ -160,15 +185,16 @@ export function TopBar() {
 
         {/* Revenue Counter */}
         {aiRevenue > 0 && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#B89466]/10 border border-[#B89466]/22">
-            <DollarSign className="w-3.5 h-3.5 text-[#8a6f3a]" />
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border" style={{ backgroundColor: "color-mix(in srgb, var(--color-warning) 10%, transparent)", borderColor: "color-mix(in srgb, var(--color-warning) 22%, transparent)" }}>
+            <DollarSign className="w-3.5 h-3.5" style={{ color: "var(--color-warning)" }} />
             <AnimatedCounter
               value={Math.round(aiRevenue)}
-              prefix="$"
-              className="text-[12px] font-mono font-bold text-[#8a6f3a] tabular-nums"
+              prefix="₹"
+              className="text-[12px] font-mono font-bold tabular-nums"
+              style={{ color: "var(--color-warning)" }}
               duration={0.8}
             />
-            <span className="text-[10px] font-mono text-[#8a6f3a]/55">AI revenue this month</span>
+            <span className="text-[10px] font-sans" style={{ color: "color-mix(in srgb, var(--color-warning) 70%, transparent)" }}>AI revenue · 30d</span>
           </div>
         )}
 
@@ -184,20 +210,7 @@ export function TopBar() {
           </kbd>
         </button>
 
-        {/* Dark mode toggle */}
-        {mounted && (
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/8 transition-colors"
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? (
-              <Sun className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <Moon className="w-4 h-4 text-muted-foreground" />
-            )}
-          </button>
-        )}
+        {/* Theme moved to Settings → Appearance (not floating in the nav). */}
 
         {/* Bell */}
         <button className="relative p-2 rounded-lg hover:bg-black/3 dark:hover:bg-white/5 transition-colors">

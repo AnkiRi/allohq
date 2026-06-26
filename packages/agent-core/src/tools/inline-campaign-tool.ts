@@ -176,16 +176,19 @@ export const inlineCampaignTools: ToolDefinition[] = [
         },
       });
 
-      // Render to HTML for preview
-      const { renderToHtml } = require("@allohq/email-builder/src/server") as any;
-      const previewHtml = renderToHtml(result.blocks as any[], {
+      // Render to HTML for preview — brand-styled via the store's BrandKit
+      const { renderBrandedEmail } = await import("@allohq/customer-intelligence");
+      const previewHtml = await renderBrandedEmail({
+        storeId: store.id,
+        blocks: result.blocks as any[],
+        subject: result.subject,
+        previewText: result.previewText,
         variables: {
           firstName: "Customer",
           storeName: store.storeName ?? store.shopDomain,
           storeUrl: storeUrl,
         },
         previewMode: true,
-        brandSettings: brandSettingsForEmail as any,
       });
 
       // Create the draft campaign

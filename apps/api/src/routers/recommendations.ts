@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Queue } from "bullmq";
-import { router, protectedProcedure } from "../trpc";
+import { router, storeProcedure } from "../trpc";
 import { getRecommendations, getAffinityRecommendations, getTrendingProducts, resolveProducts } from "@allohq/product-recommendations";
 
 const redisConnection = {
@@ -13,7 +13,7 @@ const recommendationQueue = new Queue("product-recommendation", { connection: re
 
 export const recommendationsRouter = router({
   /** Get personalized recommendations for a customer */
-  forCustomer: protectedProcedure
+  forCustomer: storeProcedure
     .input(z.object({
       storeId: z.string(),
       customerId: z.string(),
@@ -37,7 +37,7 @@ export const recommendationsRouter = router({
     }),
 
   /** Get "frequently bought together" for a product */
-  forProduct: protectedProcedure
+  forProduct: storeProcedure
     .input(z.object({
       storeId: z.string(),
       productId: z.string(),
@@ -61,7 +61,7 @@ export const recommendationsRouter = router({
     }),
 
   /** Get trending products for a store */
-  trending: protectedProcedure
+  trending: storeProcedure
     .input(z.object({
       storeId: z.string(),
       limit: z.number().min(1).max(50).default(10),
@@ -80,7 +80,7 @@ export const recommendationsRouter = router({
     }),
 
   /** Manually trigger affinity matrix rebuild */
-  rebuildAffinity: protectedProcedure
+  rebuildAffinity: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ input }) => {
       await recommendationQueue.add("build-affinity", {

@@ -2,7 +2,7 @@ import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs } from "@allohq/messaging";
 import type { Channel } from "@allohq/messaging";
-import { renderToHtml } from "@allohq/email-builder/src/server";
+import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock } from "@allohq/email-builder";
 import {
   executeJourneyStep,
@@ -304,26 +304,8 @@ async function sendJourneyEmail(
     context,
   );
 
-  // Load brand settings for visual consistency
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
-  const brandProfile = store ? await prisma.brandProfile.findFirst({
-    where: { storeId, workspaceId: store.workspaceId },
-    select: { logoPosition: true, headerBgColor: true, footerText: true, showSocialLinks: true, showAddress: true, brandName: true },
-  }) : null;
-
-  const brandSettings = store && brandProfile ? {
-    logoUrl: store.storeLogoUrl ?? undefined,
-    logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
-    headerBgColor: brandProfile.headerBgColor ?? undefined,
-    storeName: store.storeName ?? brandProfile.brandName,
-    address: store.address ? (() => {
-      const addr = store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string };
-      return [addr.address1, addr.city, addr.province, addr.zip, addr.country].filter(Boolean).join(", ");
-    })() : undefined,
-    footerText: brandProfile.footerText ?? undefined,
-    showSocialLinks: brandProfile.showSocialLinks,
-    showAddress: brandProfile.showAddress,
-  } : undefined;
+  // Brand styling is applied automatically by renderBrandedEmail (loads the
+  // store's BrandProfile + BrandVisualProfile and derives its BrandKit).
 
   if (templateId) {
     const template = await prisma.emailTemplate.findUnique({
@@ -331,11 +313,17 @@ async function sendJourneyEmail(
       select: { blocks: true, subject: true },
     });
     if (template) {
-      subject = personaliseContent(template.subject ?? subject, context);
+      // The step's subject (node.config.subject) is a per-send OVERRIDE; fall
+      // back to the email's OWN subject when no override was set. (Previously the
+      // template's subject always overwrote the override.)
+      const override = (node.config["subject"] as string) || "";
+      subject = personaliseContent(override || template.subject || subject, context);
       const blocks = (template.blocks ?? []) as unknown as EmailBlock[];
-      html = renderToHtml(blocks, {
+      html = await renderBrandedEmail({
+        storeId,
+        blocks,
+        subject,
         variables: { first_name: context.firstName ?? "there" },
-        brandSettings,
       });
     } else {
       html = personaliseContent((node.config["html"] as string) ?? "<p>Hello</p>", context);

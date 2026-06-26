@@ -1,12 +1,7 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
-
-// Cost per million tokens for each model (mirrors AI_MODELS in customer-intelligence)
-const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-};
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
+// Single source of truth for model costs lives in the AI gateway.
+import { computeTokenCost } from "@allohq/customer-intelligence";
 
 function periodToDateFilter(period: string | undefined): { gte?: Date; lt?: Date } | undefined {
   if (!period || period === "all") return undefined;
@@ -101,7 +96,9 @@ export const dashboardRouter = router({
     const storeIds = stores.map((s) => s.id);
 
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // F1: single revenue figure across the app — trailing 30-day window
+    // (was calendar-month, which contradicted the 30d figure on other screens).
+    const last30dStart = new Date(now.getTime() - 30 * 86400000);
 
     const [totalCustomers, totalRevenue, revenueThisMonth, recentOrders] =
       await Promise.all([
@@ -115,7 +112,7 @@ export const dashboardRouter = router({
         ctx.prisma.order.aggregate({
           where: {
             storeId: { in: storeIds },
-            createdAt: { gte: startOfMonth },
+            createdAt: { gte: last30dStart },
           },
           _sum: { totalPrice: true },
         }),
@@ -175,10 +172,7 @@ export const dashboardRouter = router({
         const inputTokens = g._sum.inputTokens ?? 0;
         const outputTokens = g._sum.outputTokens ?? 0;
         const calls = g._count;
-        const costs = MODEL_COSTS[g.model] ?? { input: 0, output: 0 };
-        const cost =
-          (inputTokens / 1_000_000) * costs.input +
-          (outputTokens / 1_000_000) * costs.output;
+        const cost = computeTokenCost(g.model, inputTokens, outputTokens);
 
         totalInputTokens += inputTokens;
         totalOutputTokens += outputTokens;
@@ -357,7 +351,7 @@ export const dashboardRouter = router({
     }),
 
   /** Revenue attribution summary for dashboard KPI cards */
-  revenueAttribution: workspaceProcedure
+  revenueAttribution: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const now = new Date();
@@ -409,7 +403,7 @@ export const dashboardRouter = router({
     }),
 
   /** Customer Voice — latest weekly voice synthesis report */
-  customerVoice: workspaceProcedure
+  customerVoice: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const report = await ctx.prisma.customerVoiceReport.findFirst({

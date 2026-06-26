@@ -1,0 +1,71 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+
+// ---------------------------------------------------------------------------
+// useDemo — reads the demo flag (localStorage["allo_demo"] === "1"), SSR-safe.
+//
+// The flag is set when the storeless visitor enters the demo. When set, the
+// tRPC client sends `x-allo-demo: 1` and the API routes the user read-mostly to
+// the seeded "Vana Naturals" workspace (mutations sandboxed). The flag persists
+// for the session. This hook hydrates after mount so SSR markup matches the
+// server (flag reads false until the effect runs in the browser).
+// ---------------------------------------------------------------------------
+
+export const DEMO_FLAG_KEY = "allo_demo";
+
+/** True iff the demo flag is set. Safe to read during SSR (returns false). */
+export function isDemoActive(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(DEMO_FLAG_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Turn the demo on for this browser/session. */
+export function enterDemo(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DEMO_FLAG_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Leave the demo: clear the flag so the tRPC client stops sending `x-allo-demo`
+ * and the user is routed to their OWN workspace (real store data), never Vana.
+ * Call this before connecting a real store. A reload is the simplest way to make
+ * every query drop the header (same-tab setItem doesn't fire a 'storage' event).
+ */
+export function exitDemo(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(DEMO_FLAG_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function useDemo(): boolean {
+  // Demo is a logged-OUT experience. An authenticated user is ALWAYS real, so
+  // we only return true when signed out AND the flag is set. This prevents a
+  // stale flag from dragging demo chrome/routing into a real user's app, with
+  // no race (no flag-clearing needed).
+  const { isSignedIn } = useAuth();
+  const [demo, setDemo] = useState(false);
+
+  useEffect(() => {
+    setDemo(isDemoActive());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === DEMO_FLAG_KEY) setDemo(isDemoActive());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  return demo && isSignedIn === false;
+}

@@ -23,3 +23,11 @@ export { predictReorderTiming } from "./reorder-predictor";
 export { computeFullState, updateStateOnEvent, decayStaleStates } from "./state-engine";
 export { computeChurnProbability } from "./churn-prediction";
 export type { ChurnSignals } from "./churn-prediction";
+
+// Causal-data moat: control-group assignment
+export {
+  getOrCreateExperiment,
+  assignArm,
+  assignmentValue,
+} from "./experiments";
+export type { Arm, CohortDefinition } from "./experiments";

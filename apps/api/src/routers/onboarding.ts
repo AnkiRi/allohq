@@ -261,6 +261,10 @@ export const onboardingRouter = router({
         brandDesignTokens: z.any().optional(),
         toneAttributes: z.record(z.string()).optional(),
         bannedWords: z.array(z.string()).optional(),
+        sendingFrequency: z.string().optional(),
+        fromName: z.string().optional(),
+        fromEmail: z.string().optional(),
+        replyToEmail: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -272,7 +276,7 @@ export const onboardingRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Not on brand review step" });
       }
 
-      const { storeId, toneAttributes, bannedWords, ...visualData } = input;
+      const { storeId, toneAttributes, bannedWords, sendingFrequency, fromName, fromEmail, replyToEmail, ...visualData } = input;
 
       // Update BrandVisualProfile
       await ctx.prisma.brandVisualProfile.upsert({
@@ -286,8 +290,8 @@ export const onboardingRouter = router({
         update: visualData,
       });
 
-      // Update BrandProfile tone/banned words if provided
-      if (toneAttributes || bannedWords) {
+      // Update BrandProfile tone/banned words + send/sender settings if provided
+      if (toneAttributes || bannedWords || sendingFrequency || fromName || fromEmail || replyToEmail) {
         const brandProfile = await ctx.prisma.brandProfile.findFirst({ where: { storeId } });
         if (brandProfile) {
           const updateData: Record<string, unknown> = {};
@@ -296,6 +300,10 @@ export const onboardingRouter = router({
             const existing = (brandProfile.vocabulary as Record<string, unknown>) ?? {};
             updateData.vocabulary = { ...existing, bannedWords };
           }
+          if (sendingFrequency !== undefined) updateData.sendingFrequency = sendingFrequency;
+          if (fromName !== undefined) updateData.fromName = fromName;
+          if (fromEmail !== undefined) updateData.fromEmail = fromEmail;
+          if (replyToEmail !== undefined) updateData.replyToEmail = replyToEmail;
           await ctx.prisma.brandProfile.update({
             where: { id: brandProfile.id },
             data: updateData,

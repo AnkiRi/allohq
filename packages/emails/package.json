@@ -1,0 +1,30 @@
+{
+  "name": "@allohq/emails",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc",
+    "prepare": "tsc"
+  },
+  "devDependencies": {
+    "@allohq/tsconfig": "workspace:*",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@allohq/email-builder": "workspace:*",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.9",
+    "react": "^19.0.0"
+  }
+}

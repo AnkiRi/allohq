@@ -10,10 +10,10 @@ import {
 import { trpc } from "@/lib/trpc";
 
 const STATUS_COLORS: Record<string, string> = {
-  paid: "bg-green-50 text-green-700",
-  fulfilled: "bg-blue-50 text-blue-700",
-  pending: "bg-yellow-50 text-yellow-700",
-  cancelled: "bg-red-50 text-red-700",
+  paid: "bg-[hsl(var(--success))/0.12] text-[var(--color-success)]",
+  fulfilled: "bg-[hsl(var(--accent))/0.12] text-[hsl(var(--accent))]",
+  pending: "bg-[var(--color-warning)]/12 text-[var(--color-warning)]",
+  cancelled: "bg-destructive/12 text-destructive",
 };
 
 export default function OrdersPage() {
@@ -51,7 +51,7 @@ export default function OrdersPage() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
+          className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all"
         />
       </div>
 
@@ -60,22 +60,22 @@ export default function OrdersPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Order
               </th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Customer
               </th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Total
               </th>
-              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-right px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Items
               </th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Status
               </th>
-              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-mono text-muted-foreground uppercase">
+              <th className="text-left px-5 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
                 Date
               </th>
             </tr>
@@ -94,10 +94,10 @@ export default function OrdersPage() {
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <ShoppingCart className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-[13px] text-muted-foreground">
-                    No orders found
+                    {search ? "Nothing matches that search." : "No orders yet. allo is just getting started."}
                   </p>
                   <p className="text-[11px] text-muted-foreground/50 mt-1">
-                    Sync your store to import orders
+                    {search ? "Try a different order number or customer." : "Connect your store and orders land here."}
                   </p>
                 </td>
               </tr>
@@ -123,14 +123,14 @@ export default function OrdersPage() {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-right text-[13px] font-mono font-bold text-foreground">
-                    ${order.totalPrice.toFixed(2)}
+                    ₹{order.totalPrice.toFixed(2)}
                   </td>
                   <td className="px-5 py-4 text-right text-[13px] font-mono text-muted-foreground">
                     {order.items.length}
                   </td>
                   <td className="px-5 py-4">
                     <span
-                      className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-mono ${
+                      className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-sans ${
                         STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
                       }`}
                     >

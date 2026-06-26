@@ -1,32 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Check,
-  Loader2,
-  Sparkles,
-  Zap,
-  Brain,
-  ChevronRight,
-  AlertCircle,
-} from "lucide-react";
+import { motion } from "framer-motion";
+import { Check, Loader2, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { StreamOutput, StreamRow } from "@/components/console";
+import { useActivationChecklist, type ChecklistStep } from "./useActivationChecklist";
 
 // ---------------------------------------------------------------------------
-// Friendly step labels for the activation log
-// ---------------------------------------------------------------------------
-
-const STEP_DISPLAY: Record<string, { icon: typeof Sparkles; label: string }> = {
-  create_automations: { icon: Zap, label: "Creating automations from your preferences" },
-  scan_opportunities: { icon: Brain, label: "Scanning for campaign opportunities" },
-  generate_briefing: { icon: Sparkles, label: "Generating your first daily briefing" },
-  finalize: { icon: Check, label: "Finalizing your AI retention system" },
-};
-
-// ---------------------------------------------------------------------------
-// ActivationProgress
+// ActivationProgress — post-onboarding setup feed.
+//
+// Progression is driven by a capped client timer (`useActivationChecklist`) so
+// it ALWAYS advances and finishes inside ~40s, never showing "0 of 0 done" and
+// never looping the same phrase. Real backend status only pulls completion
+// forward. Terminal/emerald console aesthetic, reduced-motion safe.
 // ---------------------------------------------------------------------------
 
 export function ActivationProgress({
@@ -51,32 +39,41 @@ export function ActivationProgress({
 
   const [dismissed, setDismissed] = useState(false);
 
-  // Auto-dismiss 60s after activation completes
+  const ctx = activation?.context ?? {};
+  const segments = ctx.segments ?? [];
+
+  // Real backend details, blended into the client checklist where we have them.
+  const details: Partial<Record<string, string>> = {};
+  if (ctx.customerCount > 0) details.scan = `${ctx.customerCount.toLocaleString("en-IN")} scanned`;
+  if (segments.length > 0) details.rfm = `${segments.length} segments`;
+  if (ctx.automationCount > 0) details.winback = `${ctx.automationCount} automations drafted`;
+
+  // Backend done? Pull the feed forward. Otherwise the client timer paces it.
+  const backendComplete = !!(
+    activation &&
+    !activation.isActivating &&
+    (activation.steps?.length
+      ? activation.steps.every((s: any) => s.status === "done")
+      : false)
+  );
+
+  const checklist = useActivationChecklist({ backendComplete, details });
+  const { steps, doneCount, total, progress, complete } = checklist;
+
+  // Auto-dismiss 60s after the feed completes.
   useEffect(() => {
-    if (activation?.completedAt && !activation?.isActivating) {
-      const timer = setTimeout(() => {
-        setDismissed(true);
-        onDismiss?.();
-      }, 60_000);
-      return () => clearTimeout(timer);
-    }
-  }, [activation?.completedAt, activation?.isActivating, onDismiss]);
+    if (!complete) return;
+    const timer = setTimeout(() => {
+      setDismissed(true);
+      onDismiss?.();
+    }, 60_000);
+    return () => clearTimeout(timer);
+  }, [complete, onDismiss]);
 
   if (!activation) return null;
   if (dismissed) return null;
-
-  // Only show if activating or recently activated (within 30min)
-  if (!activation.isActivating && !activation.isRecentlyActivated) return null;
-
-  const steps = activation.steps as Array<{
-    key: string;
-    label: string;
-    status: string;
-    detail?: string;
-  }>;
-  const allDone = steps.length > 0 && steps.every((s) => s.status === "done");
-  const ctx = activation.context ?? {};
-  const segments = ctx.segments ?? [];
+  // Only show while activating or recently activated (within the backend window).
+  if (!activation.isActivating && !activation.isRecentlyActivated && !complete) return null;
 
   return (
     <motion.div
@@ -84,86 +81,75 @@ export function ActivationProgress({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={{ duration: 0.4 }}
-      className="glass-card-static rounded-xl border-l-[3px] border-l-[#1F7A4F] p-6 mb-6"
+      className="rounded-xl border border-border bg-card p-5 mb-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#1F7A4F]/10 flex items-center justify-center">
-            <Sparkles className={`w-4 h-4 text-[#1F7A4F] ${!allDone ? "animate-pulse" : ""}`} />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-[#2C2C2C]">
-              {allDone ? "Your AI retention team is live!" : "Allo is setting up your retention system..."}
-            </h2>
-            {!allDone && (
-              <p className="text-[11px] text-[#8B8074] mt-0.5">This takes about 30 seconds</p>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center shrink-0">
+            {complete ? (
+              <Check className="w-4 h-4 text-[hsl(var(--accent))]" />
+            ) : (
+              <Loader2 className="w-4 h-4 text-[hsl(var(--accent))] animate-spin" />
             )}
           </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-serif font-semibold text-foreground">
+              {complete ? "All set. Here's what allo found" : "allo is setting things up"}
+            </h2>
+            <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground mt-0.5">
+              <span>{doneCount} of {total} done</span>
+              {!complete && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span>about {Math.max(5, Math.ceil((total - doneCount) * 4))}s left</span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        {allDone && onDismiss && (
+        {complete && onDismiss && (
           <button
             onClick={() => { setDismissed(true); onDismiss(); }}
-            className="text-[11px] font-mono text-[#8B8074] hover:text-[#2C2C2C] transition-colors"
+            className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
-            Dismiss
+            dismiss
           </button>
         )}
       </div>
 
-      {/* Steps */}
-      <div className="space-y-2">
-        <AnimatePresence mode="popLayout">
-          {steps.map((step, i) => {
-            const display = STEP_DISPLAY[step.key];
-            const label = display?.label ?? step.label;
-
-            return (
-              <motion.div
-                key={step.key}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.3 }}
-                className="flex items-start gap-3 py-1"
-              >
-                {step.status === "done" ? (
-                  <div className="w-5 h-5 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 text-[#1F7A4F]" />
-                  </div>
-                ) : step.status === "running" ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-[#B89466] flex-shrink-0 mt-0.5" />
-                ) : step.status === "error" ? (
-                  <AlertCircle className="w-5 h-5 text-[#1F7A4F] flex-shrink-0 mt-0.5" />
-                ) : (
-                  <div className="w-5 h-5 rounded-full border border-[#EDE7DB] flex-shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className={`text-[13px] font-mono ${step.status === "done" ? "text-[#2C2C2C]" : step.status === "running" ? "text-[#B89466]" : "text-[#8B8074]"}`}>
-                    {label}
-                  </span>
-                  {step.status === "done" && step.detail && (
-                    <p className="text-[11px] text-[#8B8074] mt-0.5">{step.detail}</p>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+      {/* Progress bar */}
+      <div className="h-1 bg-muted rounded-full overflow-hidden mb-4">
+        <motion.div
+          className="h-full bg-[hsl(var(--accent))] rounded-full"
+          initial={false}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        />
       </div>
 
+      {/* Checklist — terminal stream */}
+      <StreamOutput aria-label="setup progress" className="space-y-1.5">
+        {steps.map((step) => (
+          <ChecklistRow key={step.key} step={step} />
+        ))}
+      </StreamOutput>
+
       {/* Summary when done */}
-      {allDone && (
+      {complete && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-4 pt-4 border-t border-black/[0.06]"
+          transition={{ delay: 0.2 }}
+          className="mt-4 pt-4 border-t border-border"
         >
-          {/* Segment summary */}
           {segments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {segments.map((seg: any) => (
-                <span key={seg.name} className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/[0.04] text-[#5C5549]">
+                <span
+                  key={seg.name}
+                  className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                >
                   {seg.name}: {seg.count}
                 </span>
               ))}
@@ -171,18 +157,18 @@ export function ActivationProgress({
           )}
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-[12px] font-mono text-[#8B8074]">
+            <div className="flex items-center gap-4 text-[12px] font-mono text-muted-foreground">
               {ctx.automationCount > 0 && (
                 <span>{ctx.automationCount} automations created</span>
               )}
               {ctx.customerCount > 0 && (
-                <span>{ctx.customerCount} customers segmented</span>
+                <span>{ctx.customerCount.toLocaleString("en-IN")} customers segmented</span>
               )}
             </div>
             {ctx.pendingActions > 0 && (
               <Link
                 href="/actions"
-                className="flex items-center gap-1 text-[12px] font-mono text-[#1F7A4F] hover:text-[#1F7A4F]/80 transition-colors"
+                className="flex items-center gap-1 text-[12px] font-sans text-[hsl(var(--accent))] hover:opacity-80 transition-opacity"
               >
                 {ctx.pendingActions} actions need your approval
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -192,5 +178,32 @@ export function ActivationProgress({
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function ChecklistRow({ step }: { step: ChecklistStep }) {
+  const tick = step.status === "done" ? "ok" : step.status === "generating" ? "step" : "hold";
+  return (
+    <StreamRow tick={tick}>
+      <span className="inline-flex items-center gap-2 flex-wrap">
+        <span
+          className={
+            step.status === "done"
+              ? "text-foreground"
+              : step.status === "generating"
+                ? "text-[hsl(var(--accent))]"
+                : "text-muted-foreground"
+          }
+        >
+          {step.label}
+          {step.status === "generating" && <span className="animate-pulse">…</span>}
+        </span>
+        {step.status === "done" && step.detail && (
+          <span className="text-[11px] text-muted-foreground/70">· {step.detail}</span>
+        )}
+      </span>
+    </StreamRow>
   );
 }

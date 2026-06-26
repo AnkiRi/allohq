@@ -2,11 +2,11 @@
 
 import { Phone, MessageSquare, Mail, Globe } from "lucide-react";
 
-const channelConfig: Record<string, { bg: string; text: string; icon: typeof Phone }> = {
-  whatsapp: { bg: "bg-green-500/10", text: "text-green-600", icon: Phone },
-  sms: { bg: "bg-blue-500/10", text: "text-blue-600", icon: MessageSquare },
-  email: { bg: "bg-purple-500/10", text: "text-purple-600", icon: Mail },
-  widget: { bg: "bg-amber-500/10", text: "text-amber-600", icon: Globe },
+const channelConfig: Record<string, { color: string; icon: typeof Phone }> = {
+  whatsapp: { color: "var(--color-success)", icon: Phone },
+  sms: { color: "var(--color-info)", icon: MessageSquare },
+  email: { color: "var(--color-accent)", icon: Mail },
+  widget: { color: "var(--color-warning)", icon: Globe },
 };
 
 export function ChannelBadge({ channel }: { channel: string }) {
@@ -14,7 +14,8 @@ export function ChannelBadge({ channel }: { channel: string }) {
   if (!config) return null;
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded ${config.bg} ${config.text}`}
+      className="inline-flex items-center gap-1 text-[10px] font-sans px-1.5 py-0.5 rounded"
+      style={{ color: config.color, backgroundColor: `color-mix(in srgb, ${config.color} 12%, transparent)` }}
     >
       {channel}
     </span>

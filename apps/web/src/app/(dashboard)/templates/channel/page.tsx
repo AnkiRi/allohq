@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { templateDisplayName } from "@/lib/templateName";
 import {
   MessageSquare,
   Plus,
@@ -99,7 +100,7 @@ function SmsPreview({ content }: { content: string }) {
       <div className="w-[260px] h-[460px] bg-gray-100 rounded-[32px] border-[3px] border-gray-300 overflow-hidden flex flex-col">
         {/* Phone status bar */}
         <div className="h-8 bg-gray-200 flex items-center justify-center">
-          <span className="text-[10px] text-gray-500 font-mono">SMS Preview</span>
+          <span className="text-[10px] text-gray-500 font-sans">SMS Preview</span>
         </div>
         {/* Messages area */}
         <div className="flex-1 p-3 overflow-y-auto">
@@ -134,7 +135,7 @@ function WhatsAppPreview({
       <div className="w-[260px] h-[460px] bg-[#e5ddd5] rounded-[32px] border-[3px] border-gray-300 overflow-hidden flex flex-col">
         {/* WhatsApp header bar */}
         <div className="h-10 bg-[#075e54] flex items-center px-3 gap-2">
-          <div className="w-6 h-6 rounded-full bg-white/20" />
+          <div className="w-6 h-6 rounded-full bg-muted" />
           <span className="text-[11px] text-white font-medium">Business</span>
         </div>
         {/* Messages area */}
@@ -203,7 +204,7 @@ function RcsPreview({
       <div className="w-[260px] h-[460px] bg-gray-50 rounded-[32px] border-[3px] border-gray-300 overflow-hidden flex flex-col">
         {/* Status bar */}
         <div className="h-8 bg-blue-600 flex items-center justify-center">
-          <span className="text-[10px] text-white font-mono">RCS Preview</span>
+          <span className="text-[10px] text-white font-sans">RCS Preview</span>
         </div>
         {/* Messages */}
         <div className="flex-1 p-3 overflow-y-auto">
@@ -283,8 +284,8 @@ function TemplateCard({
       </div>
 
       <div className="p-4 space-y-3">
-        <h3 className="text-[13px] font-bold text-foreground font-mono leading-snug line-clamp-1">
-          {template.name}
+        <h3 className="text-[13px] font-bold text-foreground font-serif leading-snug line-clamp-1">
+          {templateDisplayName(template.name, channel)}
         </h3>
 
         {/* Content preview */}
@@ -294,7 +295,7 @@ function TemplateCard({
 
         {/* Badges */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-2 py-0.5 text-[10px] font-mono rounded-md border ${badgeMap[channel]}`}>
+          <span className={`px-2 py-0.5 text-[10px] font-sans rounded-md border ${badgeMap[channel]}`}>
             {channel.toUpperCase()}
           </span>
           {channel === "sms" && (
@@ -317,14 +318,14 @@ function TemplateCard({
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={onEdit}
-              className="px-2 py-1 rounded-lg text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-white/20 transition-colors"
+              className="px-2 py-1 rounded-lg text-[11px] font-sans text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               Edit
             </button>
             <button
               onClick={onDelete}
               disabled={isDeleting}
-              className="p-1.5 rounded-lg hover:bg-white/20 text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
             >
               {isDeleting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -352,7 +353,7 @@ function ButtonsEditor({
 }) {
   return (
     <div className="space-y-2">
-      <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">
+      <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider">
         Buttons
       </label>
       {buttons.map((btn, i) => (
@@ -364,7 +365,7 @@ function ButtonsEditor({
               updated[i] = { ...btn, type: e.target.value };
               onChange(updated);
             }}
-            className="px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground"
+            className="px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground"
           >
             <option value="quick_reply">Quick Reply</option>
             <option value="url">URL</option>
@@ -379,7 +380,7 @@ function ButtonsEditor({
               onChange(updated);
             }}
             placeholder="Button text"
-            className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
+            className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50"
           />
           {btn.type === "url" && (
             <input
@@ -391,7 +392,7 @@ function ButtonsEditor({
                 onChange(updated);
               }}
               placeholder="https://..."
-              className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
+              className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
             />
           )}
           <button
@@ -405,7 +406,7 @@ function ButtonsEditor({
       {buttons.length < 3 && (
         <button
           onClick={() => onChange([...buttons, { type: "quick_reply", text: "" }])}
-          className="text-[11px] font-mono text-olive hover:underline"
+          className="text-[11px] font-sans text-olive hover:underline"
         >
           + Add button
         </button>
@@ -427,7 +428,7 @@ function ActionsEditor({
 }) {
   return (
     <div className="space-y-2">
-      <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">
+      <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider">
         Suggested Actions
       </label>
       {actions.map((action, i) => (
@@ -439,7 +440,7 @@ function ActionsEditor({
               updated[i] = { ...action, type: e.target.value };
               onChange(updated);
             }}
-            className="px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground"
+            className="px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground"
           >
             <option value="reply">Reply</option>
             <option value="url">Open URL</option>
@@ -454,7 +455,7 @@ function ActionsEditor({
               onChange(updated);
             }}
             placeholder="Action text"
-            className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
+            className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50"
           />
           {action.type === "url" && (
             <input
@@ -466,7 +467,7 @@ function ActionsEditor({
                 onChange(updated);
               }}
               placeholder="https://..."
-              className="flex-1 px-2 py-1.5 bg-white/20 border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
+              className="flex-1 px-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/50"
             />
           )}
           <button
@@ -480,7 +481,7 @@ function ActionsEditor({
       {actions.length < 4 && (
         <button
           onClick={() => onChange([...actions, { type: "reply", text: "" }])}
-          className="text-[11px] font-mono text-olive hover:underline"
+          className="text-[11px] font-sans text-olive hover:underline"
         >
           + Add action
         </button>
@@ -542,28 +543,28 @@ function TemplateEditor({
 
   // Mutations
   const createSmsMut = trpc.templates.createSms.useMutation({
-    onSuccess: () => { toast("SMS template created", "success"); onSaved(); },
-    onError: () => toast("Failed to create template", "error"),
+    onSuccess: () => { toast("Your SMS template is ready.", "success"); onSaved(); },
+    onError: () => toast("We couldn't save that. Mind trying again?", "error"),
   });
   const updateSmsMut = trpc.templates.updateSms.useMutation({
-    onSuccess: () => { toast("SMS template updated", "success"); onSaved(); },
-    onError: () => toast("Failed to update template", "error"),
+    onSuccess: () => { toast("SMS template updated.", "success"); onSaved(); },
+    onError: () => toast("We couldn't save that. Mind trying again?", "error"),
   });
   const createWaMut = trpc.templates.createWhatsApp.useMutation({
-    onSuccess: () => { toast("WhatsApp template created", "success"); onSaved(); },
-    onError: () => toast("Failed to create template", "error"),
+    onSuccess: () => { toast("Your WhatsApp template is ready.", "success"); onSaved(); },
+    onError: () => toast("We couldn't save that. Mind trying again?", "error"),
   });
   const updateWaMut = trpc.templates.updateWhatsApp.useMutation({
-    onSuccess: () => { toast("WhatsApp template updated", "success"); onSaved(); },
-    onError: () => toast("Failed to update template", "error"),
+    onSuccess: () => { toast("WhatsApp template updated.", "success"); onSaved(); },
+    onError: () => toast("We couldn't save that. Mind trying again?", "error"),
   });
   const createRcsMut = trpc.templates.createRcs.useMutation({
-    onSuccess: () => { toast("RCS template created", "success"); onSaved(); },
-    onError: () => toast("Failed to create template", "error"),
+    onSuccess: () => { toast("Your RCS template is ready.", "success"); onSaved(); },
+    onError: () => toast("We couldn't save that. Mind trying again?", "error"),
   });
   const updateRcsMut = trpc.templates.updateRcs.useMutation({
-    onSuccess: () => { toast("RCS template updated", "success"); onSaved(); },
-    onError: () => toast("Failed to update template", "error"),
+    onSuccess: () => { toast("RCS template updated.", "success"); onSaved(); },
+    onError: () => toast("We couldn't save that. Mind trying again?", "error"),
   });
 
   const isSaving =
@@ -576,11 +577,11 @@ function TemplateEditor({
 
   const handleSave = () => {
     if (!name.trim()) {
-      toast("Name is required", "error");
+      toast("Give your template a name to continue.", "error");
       return;
     }
     if (!content.trim()) {
-      toast("Content is required", "error");
+      toast("Add a message before saving.", "error");
       return;
     }
 
@@ -649,7 +650,7 @@ function TemplateEditor({
     >
       {/* Editor header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-[14px] font-bold font-mono text-foreground">
+        <h3 className="text-[14px] font-bold font-serif text-foreground">
           {isEditing ? "Edit" : "New"} {channel.toUpperCase()} Template
         </h3>
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors">
@@ -662,7 +663,7 @@ function TemplateEditor({
         <div className="space-y-4">
           {/* Name */}
           <div>
-            <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">
+            <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider block mb-1.5">
               Template Name
             </label>
             <input
@@ -670,7 +671,7 @@ function TemplateEditor({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Welcome SMS, Order Confirmation"
-              className="w-full px-3 py-2.5 bg-white/20 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+              className="w-full px-3 py-2.5 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
             />
           </div>
 
@@ -678,13 +679,13 @@ function TemplateEditor({
           {channel === "whatsapp" && (
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">
+                <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider block mb-1.5">
                   Header Type
                 </label>
                 <select
                   value={headerType}
                   onChange={(e) => setHeaderType(e.target.value)}
-                  className="w-full px-3 py-2 bg-white/20 border border-border rounded-lg text-[12px] font-mono text-foreground"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground"
                 >
                   <option value="none">None</option>
                   <option value="text">Text</option>
@@ -698,7 +699,7 @@ function TemplateEditor({
                   value={headerContent}
                   onChange={(e) => setHeaderContent(e.target.value)}
                   placeholder="Header text..."
-                  className="w-full px-3 py-2 bg-white/20 border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
                 />
               )}
             </div>
@@ -707,7 +708,7 @@ function TemplateEditor({
           {/* RCS card title */}
           {channel === "rcs" && (
             <div>
-              <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">
+              <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider block mb-1.5">
                 Card Title (optional)
               </label>
               <input
@@ -715,7 +716,7 @@ function TemplateEditor({
                 value={cardTitle}
                 onChange={(e) => setCardTitle(e.target.value)}
                 placeholder="Rich card title..."
-                className="w-full px-3 py-2.5 bg-white/20 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+                className="w-full px-3 py-2.5 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
               />
             </div>
           )}
@@ -723,7 +724,7 @@ function TemplateEditor({
           {/* Content */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">
+              <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider">
                 Message Content
               </label>
               {channel === "sms" && (
@@ -738,7 +739,7 @@ function TemplateEditor({
               rows={6}
               maxLength={channel === "sms" ? 1600 : undefined}
               placeholder="Type your message here..."
-              className="w-full px-3 py-2.5 bg-white/20 border border-border rounded-lg text-[13px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors resize-none"
+              className="w-full px-3 py-2.5 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors resize-none"
             />
             {/* Content preview with highlighted variables */}
             {content && (
@@ -750,7 +751,7 @@ function TemplateEditor({
 
           {/* Variable insertion */}
           <div>
-            <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">
+            <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider block mb-1.5">
               <Variable className="w-3 h-3 inline mr-1" />
               Insert Variable
             </label>
@@ -770,7 +771,7 @@ function TemplateEditor({
           {/* WhatsApp footer */}
           {channel === "whatsapp" && (
             <div>
-              <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">
+              <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider block mb-1.5">
                 Footer Text (optional)
               </label>
               <input
@@ -778,7 +779,7 @@ function TemplateEditor({
                 value={footerText}
                 onChange={(e) => setFooterText(e.target.value)}
                 placeholder="Footer text..."
-                className="w-full px-3 py-2 bg-white/20 border border-border rounded-lg text-[12px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
               />
             </div>
           )}
@@ -796,7 +797,7 @@ function TemplateEditor({
 
         {/* Right: Preview */}
         <div className="flex flex-col items-center justify-start pt-4">
-          <label className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider mb-4">
+          <label className="text-[11px] font-sans text-muted-foreground uppercase tracking-wider mb-4">
             Live Preview
           </label>
           {channel === "sms" && <SmsPreview content={content} />}
@@ -819,14 +820,14 @@ function TemplateEditor({
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/40">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+          className="px-4 py-2 text-xs font-sans text-muted-foreground hover:text-foreground transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
           disabled={isSaving || !name.trim() || !content.trim()}
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all disabled:opacity-50"
         >
           {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           {isEditing ? "Update" : "Create"} Template
@@ -855,16 +856,16 @@ export default function ChannelTemplatesPage() {
 
   // Delete mutations
   const deleteSmsMut = trpc.templates.deleteSms.useMutation({
-    onSuccess: () => { utils.templates.listSms.invalidate(); toast("SMS template deleted", "success"); },
-    onError: () => toast("Failed to delete", "error"),
+    onSuccess: () => { utils.templates.listSms.invalidate(); toast("SMS template deleted.", "success"); },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
   const deleteWaMut = trpc.templates.deleteWhatsApp.useMutation({
-    onSuccess: () => { utils.templates.listWhatsApp.invalidate(); toast("WhatsApp template deleted", "success"); },
-    onError: () => toast("Failed to delete", "error"),
+    onSuccess: () => { utils.templates.listWhatsApp.invalidate(); toast("WhatsApp template deleted.", "success"); },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
   const deleteRcsMut = trpc.templates.deleteRcs.useMutation({
-    onSuccess: () => { utils.templates.listRcs.invalidate(); toast("RCS template deleted", "success"); },
-    onError: () => toast("Failed to delete", "error"),
+    onSuccess: () => { utils.templates.listRcs.invalidate(); toast("RCS template deleted.", "success"); },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
 
   const currentQuery: { data: any; isLoading: boolean } =
@@ -906,7 +907,7 @@ export default function ChannelTemplatesPage() {
           <div className="flex items-center gap-3 mb-1">
             <Link
               href="/templates"
-              className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-3 h-3" />
               Back to Email Templates
@@ -916,12 +917,12 @@ export default function ChannelTemplatesPage() {
             Channel templates
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            SMS, WhatsApp, and RCS message templates
+            Your messages for SMS, WhatsApp, and RCS
           </p>
         </div>
         <button
           onClick={handleNewTemplate}
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-mono hover:bg-secondary/90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           New Template
@@ -929,7 +930,7 @@ export default function ChannelTemplatesPage() {
       </div>
 
       {/* Channel Tabs */}
-      <div className="flex items-center gap-1 bg-white/10 border border-border rounded-lg p-1">
+      <div className="flex items-center gap-1 bg-muted border border-border rounded-lg p-1">
         {channelTabs.map((tab) => {
           const Icon = tab.icon;
           const count =
@@ -947,10 +948,10 @@ export default function ChannelTemplatesPage() {
                 setShowEditor(false);
                 setEditingTemplate(null);
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-mono transition-all flex-1 justify-center ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-sans transition-all flex-1 justify-center ${
                 activeChannel === tab.key
                   ? "bg-secondary text-secondary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -1010,7 +1011,7 @@ export default function ChannelTemplatesPage() {
         <SmartEmptyState
           icon={MessageSquare}
           title={`No ${activeChannel.toUpperCase()} templates yet`}
-          description={`Create your first ${activeChannel.toUpperCase()} template to start sending messages.`}
+          description={`Write your first ${activeChannel.toUpperCase()} message and you're ready to send.`}
           actions={[
             {
               label: `Create ${activeChannel.toUpperCase()} Template`,

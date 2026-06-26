@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 
 export const customersRouter = router({
   /** List customers with pagination, search, and segment filter */
@@ -69,6 +70,7 @@ export const customersRouter = router({
   getById: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "customer", input.id);
       const customer = await ctx.prisma.customer.findUnique({
         where: { id: input.id },
         include: {

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import { getMissionControlData, getBaseline, generateStoreReport } from "@allohq/merchant-copilot";
 
 export const briefingsRouter = router({
   /** Get the latest briefing for a store, enriched with customer voice themes */
-  latest: protectedProcedure
+  latest: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [briefing, voiceReport] = await Promise.all([
@@ -47,7 +48,7 @@ export const briefingsRouter = router({
     }),
 
   /** List briefings with pagination */
-  list: protectedProcedure
+  list: storeProcedure
     .input(z.object({
       storeId: z.string(),
       type: z.enum(["daily", "weekly", "alert"]).optional(),
@@ -75,9 +76,10 @@ export const briefingsRouter = router({
     }),
 
   /** Mark a briefing as read */
-  markRead: protectedProcedure
+  markRead: workspaceProcedure
     .input(z.object({ briefingId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "merchantBriefing", input.briefingId);
       return ctx.prisma.merchantBriefing.update({
         where: { id: input.briefingId },
         data: { readAt: new Date() },
@@ -85,28 +87,28 @@ export const briefingsRouter = router({
     }),
 
   /** Get Mission Control data */
-  missionControl: protectedProcedure
+  missionControl: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
-      return getMissionControlData(input.storeId);
+      return (await getMissionControlData(input.storeId)) ?? null;
     }),
 
   /** Get store baseline metrics */
-  baseline: protectedProcedure
+  baseline: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
-      return getBaseline(input.storeId);
+      return (await getBaseline(input.storeId)) ?? null;
     }),
 
   /** Generate store intelligence report */
-  storeReport: protectedProcedure
+  storeReport: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ input }) => {
-      return generateStoreReport(input.storeId);
+      return (await generateStoreReport(input.storeId)) ?? null;
     }),
 
   /** Get notification preferences for briefings */
-  preferences: protectedProcedure
+  preferences: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findUnique({
@@ -126,7 +128,7 @@ export const briefingsRouter = router({
     }),
 
   /** Update notification preferences for briefings */
-  updatePreferences: protectedProcedure
+  updatePreferences: storeProcedure
     .input(z.object({
       storeId: z.string(),
       channel: z.enum(["email", "whatsapp", "in_app"]).optional(),
@@ -164,7 +166,7 @@ export const briefingsRouter = router({
     }),
 
   /** Get contextual page greeting and suggestions for the AI panel */
-  pageContext: protectedProcedure
+  pageContext: storeProcedure
     .input(z.object({ storeId: z.string(), page: z.string() }))
     .query(async ({ ctx, input }) => {
       const { storeId, page } = input;
@@ -247,7 +249,7 @@ export const briefingsRouter = router({
     }),
 
   /** Get smart suggested actions based on current store state */
-  suggestedActions: protectedProcedure
+  suggestedActions: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { storeId } = input;

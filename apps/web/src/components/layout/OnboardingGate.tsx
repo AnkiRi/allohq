@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
  */
 const ALLOWED_ROUTES = [
   "/dashboard",
+  "/demo",
   "/integrations",
   "/onboarding",
   "/settings",

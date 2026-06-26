@@ -12,7 +12,7 @@ export function Footer() {
     <footer className="mt-8 pt-4 border-t border-[#e5e2db] dark:border-[rgba(200,180,150,0.08)]">
       <div className="flex items-center justify-between gap-4 text-[#6B7280] dark:text-[#6B6358]">
         {/* Left */}
-        <span className="text-[10px] font-mono shrink-0">
+        <span className="text-[10px] font-sans shrink-0">
           &copy; {new Date().getFullYear()} Allo
         </span>
 
@@ -22,7 +22,7 @@ export function Footer() {
             <a
               key={link.label}
               href={link.href}
-              className="text-[10px] font-mono hover:text-foreground transition-colors hidden sm:inline"
+              className="text-[10px] font-sans hover:text-foreground transition-colors hidden sm:inline"
             >
               {link.label}
             </a>
@@ -30,7 +30,7 @@ export function Footer() {
         </nav>
 
         {/* Right */}
-        <span className="flex items-center gap-1 text-[10px] font-mono shrink-0">
+        <span className="flex items-center gap-1 text-[10px] font-sans shrink-0">
           Made with
           <Heart className="w-2.5 h-2.5 text-[#1F7A4F] fill-[#1F7A4F]" />
           by Allo

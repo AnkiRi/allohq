@@ -2,6 +2,7 @@ import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { analyzeBrandVoice, analyzeBrandFromDocument } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { logActivity } from "@allohq/agent-core";
 
 const memoryWriterQueue = new Queue(QUEUE_NAMES.MEMORY_WRITER, { connection: redisConnection });
 
@@ -123,6 +124,12 @@ export const brandAnalysisWorker = new Worker<BrandAnalysisJobData>(
     });
 
     console.log(`[brand-analysis] Completed for store ${storeId}: ${result.brandName}`);
+    await logActivity({
+      storeId,
+      activityType: "brand_analyzed",
+      summary: `Analyzed your brand voice and visual identity${result.brandName ? ` for ${result.brandName}` : ""}`,
+      actionTaken: "analyzed",
+    }).catch(() => {});
     return result;
   },
   {

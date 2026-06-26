@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { verifyStoreScopedAccess } from "../lib/storeAccess";
 
 export const guardrailsRouter = router({
   /** List all guardrails for a store */
-  list: workspaceProcedure
+  list: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.prisma.guardrail.findMany({
@@ -13,7 +14,7 @@ export const guardrailsRouter = router({
     }),
 
   /** Create a new guardrail rule */
-  create: workspaceProcedure
+  create: storeProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -44,6 +45,7 @@ export const guardrailsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "guardrail", input.id);
       const { id, ...data } = input;
       const updateData: Record<string, unknown> = {};
       if (data.ruleType !== undefined) updateData.ruleType = data.ruleType;
@@ -59,12 +61,13 @@ export const guardrailsRouter = router({
   delete: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyStoreScopedAccess(ctx, "guardrail", input.id);
       await ctx.prisma.guardrail.delete({ where: { id: input.id } });
       return { success: true };
     }),
 
   /** Validate a proposed action against all active guardrails */
-  validate: workspaceProcedure
+  validate: storeProcedure
     .input(
       z.object({
         storeId: z.string(),

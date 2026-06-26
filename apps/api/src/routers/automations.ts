@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
+import { verifyWorkspaceObjectAccess } from "../lib/storeAccess";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 
@@ -511,6 +512,7 @@ export const automationsRouter = router({
   journeyStats: workspaceProcedure
     .input(z.object({ automationId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyWorkspaceObjectAccess(ctx, "automation", input.automationId);
       const journeys = await ctx.prisma.customerJourney.findMany({
         where: { automationId: input.automationId },
         select: {
@@ -566,6 +568,7 @@ export const automationsRouter = router({
       offset: z.number().default(0),
     }))
     .query(async ({ ctx, input }) => {
+      await verifyWorkspaceObjectAccess(ctx, "automation", input.automationId);
       const where: Record<string, unknown> = { automationId: input.automationId };
       if (input.status) where["status"] = input.status;
 

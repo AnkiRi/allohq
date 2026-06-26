@@ -36,87 +36,99 @@ export async function syncAllOrders(
 
     const response = await client.get<ShopifyOrder>("orders", params);
 
-    for (const order of response.data) {
-      try {
-        if (!order.customer?.id) {
-          errors.push(`Order ${order.id}: no customer attached, skipping`);
-          continue;
-        }
+    // Process each page's orders in bounded parallel chunks — the old one-at-a-
+    // time await (customer lookup + order upsert + line-item writes per order)
+    // serialized big stores. Lower concurrency than customers since each order is
+    // several queries; pool protected. Upsert semantics + error collection kept.
+    const ORDER_CONCURRENCY = 10;
+    for (let i = 0; i < response.data.length; i += ORDER_CONCURRENCY) {
+      const chunk = response.data.slice(i, i + ORDER_CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map(async (order) => {
+          if (!order.customer?.id) {
+            errors.push(`Order ${order.id}: no customer attached, skipping`);
+            return;
+          }
 
-        // Look up the customer by externalId
-        const customer = await prisma.customer.findUnique({
-          where: {
-            storeId_externalId: {
-              storeId,
-              externalId: String(order.customer.id),
-            },
-          },
-        });
-
-        if (!customer) {
-          errors.push(
-            `Order ${order.id}: customer ${order.customer.id} not found in DB, skipping`
-          );
-          continue;
-        }
-
-        const shippingAmount =
-          parseFloat(order.total_shipping_price_set?.shop_money?.amount ?? "0");
-
-        const upserted = await prisma.order.upsert({
-          where: {
-            storeId_externalId: {
-              storeId,
-              externalId: String(order.id),
-            },
-          },
-          create: {
-            storeId,
-            customerId: customer.id,
-            externalId: String(order.id),
-            orderNumber: order.name,
-            totalPrice: parseFloat(order.total_price),
-            subtotal: parseFloat(order.subtotal_price),
-            tax: parseFloat(order.total_tax),
-            shipping: shippingAmount,
-            currency: order.currency,
-            status: mapOrderStatus(order),
-          },
-          update: {
-            customerId: customer.id,
-            orderNumber: order.name,
-            totalPrice: parseFloat(order.total_price),
-            subtotal: parseFloat(order.subtotal_price),
-            tax: parseFloat(order.total_tax),
-            shipping: shippingAmount,
-            currency: order.currency,
-            status: mapOrderStatus(order),
-          },
-        });
-
-        // Delete existing line items and recreate
-        await prisma.orderItem.deleteMany({
-          where: { orderId: upserted.id },
-        });
-
-        for (const item of order.line_items) {
-          await prisma.orderItem.create({
-            data: {
-              orderId: upserted.id,
-              productId: item.product_id ? String(item.product_id) : "unknown",
-              variantId: item.variant_id ? String(item.variant_id) : null,
-              title: item.title,
-              quantity: item.quantity,
-              price: parseFloat(item.price),
+          // Look up the customer by externalId
+          const customer = await prisma.customer.findUnique({
+            where: {
+              storeId_externalId: {
+                storeId,
+                externalId: String(order.customer.id),
+              },
             },
           });
-        }
 
-        imported++;
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Order ${order.id}: ${msg}`);
-      }
+          if (!customer) {
+            errors.push(
+              `Order ${order.id}: customer ${order.customer.id} not found in DB, skipping`
+            );
+            return;
+          }
+
+          const shippingAmount =
+            parseFloat(order.total_shipping_price_set?.shop_money?.amount ?? "0");
+
+          const upserted = await prisma.order.upsert({
+            where: {
+              storeId_externalId: {
+                storeId,
+                externalId: String(order.id),
+              },
+            },
+            create: {
+              storeId,
+              customerId: customer.id,
+              externalId: String(order.id),
+              orderNumber: order.name,
+              totalPrice: parseFloat(order.total_price),
+              subtotal: parseFloat(order.subtotal_price),
+              tax: parseFloat(order.total_tax),
+              shipping: shippingAmount,
+              currency: order.currency,
+              status: mapOrderStatus(order),
+            },
+            update: {
+              customerId: customer.id,
+              orderNumber: order.name,
+              totalPrice: parseFloat(order.total_price),
+              subtotal: parseFloat(order.subtotal_price),
+              tax: parseFloat(order.total_tax),
+              shipping: shippingAmount,
+              currency: order.currency,
+              status: mapOrderStatus(order),
+            },
+          });
+
+          // Delete existing line items and recreate
+          await prisma.orderItem.deleteMany({
+            where: { orderId: upserted.id },
+          });
+
+          for (const item of order.line_items) {
+            await prisma.orderItem.create({
+              data: {
+                orderId: upserted.id,
+                productId: item.product_id ? String(item.product_id) : "unknown",
+                variantId: item.variant_id ? String(item.variant_id) : null,
+                title: item.title,
+                quantity: item.quantity,
+                price: parseFloat(item.price),
+              },
+            });
+          }
+
+          imported++;
+        }),
+      );
+      results.forEach((r, j) => {
+        if (r.status === "rejected") {
+          const msg =
+            r.reason instanceof Error ? r.reason.message : String(r.reason);
+          errors.push(`Order ${chunk[j]?.id}: ${msg}`);
+        }
+      });
     }
 
     pageInfo = response.nextPageInfo;
