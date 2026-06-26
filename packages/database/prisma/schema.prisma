@@ -664,6 +664,12 @@ model BrandProfile {
   showSocialLinks Boolean @default(true)
   showAddress     Boolean @default(true)
 
+  // Sending + sender settings — global defaults (per-campaign overridable)
+  sendingFrequency String? @default("balanced") // "minimal" | "balanced" | "frequent"
+  fromName         String?
+  fromEmail        String?
+  replyToEmail     String?
+
   analyzedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

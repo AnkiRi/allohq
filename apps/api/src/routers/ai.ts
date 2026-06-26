@@ -1567,6 +1567,10 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         bannedWords: z.array(z.string()).optional(),
       }).optional(),
       brandDocument: z.string().optional(),
+      sendingFrequency: z.string().optional(),
+      fromName: z.string().optional(),
+      fromEmail: z.string().optional(),
+      replyToEmail: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const profile = await ctx.prisma.brandProfile.findFirst({
@@ -1577,6 +1581,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       const updateData: Record<string, unknown> = {};
       if (input.brandDocument !== undefined) {
         updateData.brandDocument = input.brandDocument;
+      }
+      for (const k of ["sendingFrequency", "fromName", "fromEmail", "replyToEmail"] as const) {
+        if (input[k] !== undefined) updateData[k] = input[k];
       }
       if (input.toneAttributes) {
         updateData.toneAttributes = input.toneAttributes;

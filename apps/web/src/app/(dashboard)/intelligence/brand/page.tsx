@@ -41,7 +41,7 @@ export default function BrandProfilePage() {
       refetchInterval: analyzing ? 3000 : false,
     }
   ) as {
-    data: { brandName: string; brandDescription: string | null; brandDocument: string | null; toneAttributes: unknown; vocabulary: unknown; visualStyle: unknown; sampleCopy: unknown; analyzedAt: string } | null | undefined;
+    data: { brandName: string; brandDescription: string | null; brandDocument: string | null; sendingFrequency: string | null; fromName: string | null; fromEmail: string | null; replyToEmail: string | null; toneAttributes: unknown; vocabulary: unknown; visualStyle: unknown; sampleCopy: unknown; analyzedAt: string } | null | undefined;
     isLoading: boolean;
   };
 
@@ -243,6 +243,10 @@ export default function BrandProfilePage() {
   const [bannedWordsEdit, setBannedWordsEdit] = useState("");
   const [toneInitialized, setToneInitialized] = useState(false);
   const [guidelinesEdit, setGuidelinesEdit] = useState("");
+  const [sendFreqEdit, setSendFreqEdit] = useState("balanced");
+  const [fromNameEdit, setFromNameEdit] = useState("");
+  const [fromEmailEdit, setFromEmailEdit] = useState("");
+  const [replyToEdit, setReplyToEdit] = useState("");
 
   // Editable visual state
   const [editingVisual, setEditingVisual] = useState(false);
@@ -259,6 +263,10 @@ export default function BrandProfilePage() {
       const bw = (vocabulary?.["bannedWords"] as unknown as string[]) ?? [];
       setBannedWordsEdit(bw.join(", "));
       setGuidelinesEdit(profile.brandDocument ?? "");
+      setSendFreqEdit(profile.sendingFrequency ?? "balanced");
+      setFromNameEdit(profile.fromName ?? "");
+      setFromEmailEdit(profile.fromEmail ?? "");
+      setReplyToEdit(profile.replyToEmail ?? "");
       setToneInitialized(true);
     }
   }, [tone, vocabulary, toneInitialized, profile]);
@@ -290,6 +298,10 @@ export default function BrandProfilePage() {
         bannedWords: bannedWordsEdit.split(",").map((w: string) => w.trim()).filter(Boolean),
       },
       brandDocument: guidelinesEdit,
+      sendingFrequency: sendFreqEdit,
+      fromName: fromNameEdit,
+      fromEmail: fromEmailEdit,
+      replyToEmail: replyToEdit,
     });
   };
 
@@ -474,6 +486,54 @@ export default function BrandProfilePage() {
               >
                 <Save className="w-3.5 h-3.5" />
                 {updateVoiceMut.isPending ? "Saving…" : "Save guidelines"}
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Sending & sender — global send defaults (per-campaign overridable) */}
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <Share2 className="w-4 h-4 text-muted-foreground" />
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Sending &amp; sender</h2>
+            </div>
+            <p className="text-[12px] text-muted-foreground mb-4">
+              Global defaults for how often allo reaches out and who emails come from. A
+              campaign can still override these for one send.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">SENDING FREQUENCY</label>
+                <select
+                  value={sendFreqEdit}
+                  onChange={(e) => setSendFreqEdit(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                >
+                  <option value="minimal">Minimal — only the important moments</option>
+                  <option value="balanced">Balanced — a steady, considered cadence</option>
+                  <option value="frequent">Frequent — stay top of mind</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">FROM NAME</label>
+                <input type="text" value={fromNameEdit} onChange={(e) => setFromNameEdit(e.target.value)} placeholder="e.g. Vana Naturals" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">FROM EMAIL</label>
+                <input type="email" value={fromEmailEdit} onChange={(e) => setFromEmailEdit(e.target.value)} placeholder="hello@yourbrand.com" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">REPLY-TO EMAIL</label>
+                <input type="email" value={replyToEdit} onChange={(e) => setReplyToEdit(e.target.value)} placeholder="care@yourbrand.com" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={handleSaveVoice}
+                disabled={updateVoiceMut.isPending}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {updateVoiceMut.isPending ? "Saving…" : "Save settings"}
               </button>
             </div>
           </motion.div>
