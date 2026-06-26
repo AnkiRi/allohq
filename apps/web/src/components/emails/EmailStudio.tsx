@@ -136,9 +136,10 @@ export function EmailStudio({
     promptMut.mutate(
       { instruction: text, blocks, subject, previewText },
       {
-        onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; error?: string }) => {
+        onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; subject?: string; error?: string }) => {
           if (data.applied) {
             setBlocks(data.blocks);
+            if (typeof data.subject === "string") setSubject(data.subject);
             if (!data.blocks.some((b) => b.id === selectedId)) {
               setSelectedId(data.blocks[0]?.id ?? null);
             }

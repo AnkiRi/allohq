@@ -109,34 +109,50 @@ export const emailsRouter = router({
     .mutation(async ({ input }) => {
       const original = input.blocks as any[];
 
+      // CONTRACT: the model returns ONLY the CHANGES (subject + per-block changed
+      // props), keyed by block id — NOT the whole array. Small, targeted JSON is
+      // far less likely to be malformed (the whole-array round-trip produced
+      // unescaped newlines/quotes inside html and broke JSON.parse). We apply the
+      // changes onto the existing blocks server-side.
       const system = [
-        "You are allo, an expert email copywriter and designer for an Indian",
-        "e-commerce brand. You edit emails represented as a JSON array of blocks",
-        "(EmailBlock[]). Each block has { id, type, props }. Block types include:",
-        "hero, text, image, button, product, product_grid, icon_row, testimonial,",
-        "divider, spacer, countdown, social.",
+        "You are allo, an expert email copywriter for an Indian e-commerce brand.",
+        "You receive the email as JSON blocks {id,type,props} and an instruction.",
+        "Apply the instruction and return ONLY THE CHANGES as a compact JSON object,",
+        "never the whole array.",
+        "",
+        "RETURN EXACTLY this shape and nothing else:",
+        '{ "subject": "<new subject — omit key if unchanged>", "blocks": { "<blockId>": { "<prop>": <newValue> } } }',
         "",
         "RULES:",
-        "- Apply the user's instruction by editing the MINIMUM set of blocks needed.",
-        "- PRESERVE every block's `id` and `type` unless the instruction clearly",
-        "  asks to add, remove, or reorder blocks.",
-        "- Keep merge tags like {{first_name}} and {{last_order_month}} intact.",
-        "- Prices are in Indian Rupees (₹) as plain numbers in product.props.price.",
-        "- Keep the brand voice warm, unhurried and on-brand. Never add hype, ALL-CAPS,",
-        "  or fake urgency.",
-        "- text blocks use props.html with \\n\\n between paragraphs (plain text, no markup).",
-        "- Return ONLY the full updated JSON array of blocks. No prose, no markdown fences.",
+        "- Include ONLY the blocks you changed, keyed by their EXISTING id, and only the props you changed.",
+        "- text blocks: edit props.html (paragraphs separated by \\n\\n).",
+        "- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\\". Never put a literal line break inside a string.",
+        "- Keep merge tags like {{first_name}} intact. ₹ prices stay plain numbers.",
+        "- Warm, unhurried brand voice. Never hype, ALL-CAPS, or fake urgency.",
+        "- Return ONLY the JSON object — no prose, no markdown fences.",
         input.brandVoice ? `\nBRAND VOICE NOTES:\n${input.brandVoice}` : "",
       ].join("\n");
 
       const prompt = [
         `INSTRUCTION: ${input.instruction}`,
+        input.subject ? `\nCURRENT SUBJECT: ${input.subject}` : "",
         "",
         "CURRENT BLOCKS:",
-        JSON.stringify(original, null, 2),
+        JSON.stringify(
+          original.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+          null,
+          2,
+        ),
         "",
-        "Return the full updated blocks array as JSON.",
+        "Return ONLY the changes object.",
       ].join("\n");
+
+      const fail = (error: string) => ({
+        applied: false,
+        blocks: original,
+        subject: input.subject,
+        error,
+      });
 
       try {
         const result = await complete({
@@ -144,33 +160,42 @@ export const emailsRouter = router({
           system,
           jsonMode: true,
           temperature: 0.6,
-          maxTokens: 4096,
+          maxTokens: 2048,
         });
 
         const parsed = JSON.parse(extractJsonPayload(result.content));
-        const nextBlocks: unknown = Array.isArray(parsed) ? parsed : parsed?.blocks;
+        const changes: Record<string, Record<string, unknown>> =
+          parsed && typeof parsed === "object" && parsed.blocks && typeof parsed.blocks === "object"
+            ? parsed.blocks
+            : {};
+        const newSubject =
+          typeof parsed?.subject === "string" && parsed.subject.trim()
+            ? parsed.subject.trim()
+            : undefined;
 
-        if (
-          Array.isArray(nextBlocks) &&
-          nextBlocks.length > 0 &&
-          nextBlocks.every(
-            (b) => b && typeof b === "object" && "type" in b && "props" in b,
-          )
-        ) {
-          // Backfill ids the model may have dropped.
-          const safe = (nextBlocks as any[]).map((b, i) => ({
-            ...b,
-            id: typeof b.id === "string" && b.id ? b.id : `block-${i}-${Date.now()}`,
-          }));
-          return { applied: true, blocks: safe, model: result.model };
+        // Apply the per-block prop changes onto the existing blocks.
+        const nextBlocks = original.map((b) =>
+          changes[b.id] && typeof changes[b.id] === "object"
+            ? { ...b, props: { ...b.props, ...changes[b.id] } }
+            : b,
+        );
+        const changedCount = Object.keys(changes).filter((id) =>
+          original.some((b) => b.id === id),
+        ).length;
+
+        if (changedCount === 0 && !newSubject) {
+          return fail("allo didn't change anything — try rephrasing.");
         }
-        return { applied: false, blocks: original, error: "Model returned an unexpected shape." };
-      } catch (err: any) {
         return {
-          applied: false,
-          blocks: original,
-          error: err?.message ?? "AI is unavailable right now. Your email is unchanged.",
+          applied: true,
+          blocks: nextBlocks,
+          subject: newSubject ?? input.subject,
+          model: result.model,
         };
+      } catch (err: any) {
+        return fail(
+          err?.message ?? "allo is unavailable right now. Your email is unchanged.",
+        );
       }
     }),
 });
