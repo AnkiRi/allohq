@@ -341,21 +341,45 @@ export default function NewTemplatePage() {
     [subject, goal]
   );
 
-  // -- Step 2: Auto-generate on entry --
+  // -- Step 2: Auto-generate on entry — REAL LLM generation --
+  // The skeleton only seeds block TYPES/structure; allo then writes real, on-brand
+  // copy from the goal + the user's custom instruction via regenerateEmail (the same
+  // real-LLM path the editor uses; demo-allowlisted + cost-capped). Falls back to the
+  // skeleton only if the model is unavailable — never ships "Your Heading Here".
   useEffect(() => {
     if (step === 2 && goal) {
-      // Simulate generation delay for UX
-      const timeout = setTimeout(() => {
-        const generatedBlocks = generateBlocksForGoal(goal);
-        const generatedSubject = SUBJECT_LINES[goal];
+      let cancelled = false;
+      (async () => {
+        const skeleton = generateBlocksForGoal(goal);
         const goalLabel = GOALS.find((g) => g.id === goal)?.label ?? "Custom";
-        setBlocks(generatedBlocks);
-        setSubject(generatedSubject);
+        const brief =
+          goal === "custom"
+            ? customPrompt.trim() || "Create a compelling, on-brand marketing email."
+            : `Write a ${goalLabel} email.${customPrompt.trim() ? " " + customPrompt.trim() : ""}`;
+        let nextBlocks = skeleton;
+        let nextSubject = SUBJECT_LINES[goal];
+        try {
+          if (storeId && regenerateMut?.mutateAsync) {
+            const result = await regenerateMut.mutateAsync({ storeId, blocks: skeleton, feedback: brief });
+            if (result?.blocks?.length) {
+              nextBlocks = result.blocks;
+              if (result.subject) nextSubject = result.subject;
+            }
+          }
+        } catch {
+          // resilient — keep the skeleton if the LLM call fails
+        }
+        if (cancelled) return;
+        setBlocks(nextBlocks);
+        setSubject(nextSubject);
         setTemplateName(`${goalLabel} Email`);
         setStep(3);
-      }, 1500);
-      return () => clearTimeout(timeout);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, goal]);
 
   // -- Render preview when blocks change on step 3 --
