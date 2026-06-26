@@ -49,6 +49,53 @@ export const customerTools: ToolDefinition[] = [
   },
 
   {
+    name: "find_customers",
+    description:
+      "Search the store's customers by name or email (partial, case-insensitive). Returns each match's id, name, email, and RFM segment. ALWAYS use this when the merchant names specific people or wants an EXACT set (e.g. 'Archana S', 'these 10 customers'), then pass the returned ids to create_segment (customerIds) or create_campaign_with_preview (customerIds). NEVER approximate named or explicitly-listed customers with an RFM segment.",
+    parameters: {
+      query: {
+        type: "string",
+        description: "Name or email fragment to match (case-insensitive).",
+      },
+      limit: {
+        type: "number",
+        description: "Max results to return (default 25, max 100).",
+      },
+    },
+    handler: async (params, ctx) => {
+      if (!ctx.storeId) return { error: "No store in context" };
+      const query = String(params.query ?? "").trim();
+      const take = Math.min(Math.max(Number(params.limit ?? 25), 1), 100);
+      const customers = await prisma.customer.findMany({
+        where: {
+          storeId: ctx.storeId,
+          ...(query
+            ? {
+                OR: [
+                  { firstName: { contains: query, mode: "insensitive" } },
+                  { lastName: { contains: query, mode: "insensitive" } },
+                  { email: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
+        include: { rfmScore: { select: { segment: true, totalSpent: true } } },
+        take,
+      });
+      return {
+        count: customers.length,
+        customers: customers.map((c) => ({
+          id: c.id,
+          name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,
+          email: c.email,
+          segment: c.rfmScore?.segment ?? null,
+          totalSpent: c.rfmScore?.totalSpent ?? 0,
+        })),
+      };
+    },
+  },
+
+  {
     name: "recommend_products",
     description:
       "Get product recommendations for the customer based on their preferences and purchase history. Uses semantic search to find relevant products.",
