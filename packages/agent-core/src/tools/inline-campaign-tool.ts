@@ -5,7 +5,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
   {
     name: "create_campaign_with_preview",
     description:
-      "Create a campaign draft with inline email preview. Use when merchant asks to create/send a campaign, run a sale, or email customers. Returns HTML preview, subject, and draft campaign ID.",
+      "Create a campaign draft with inline email preview. Use when merchant asks to create/send a campaign, run a sale, or email customers. Target EITHER an RFM segment (segmentFilter) OR an EXACT set of people (customerIds, from find_customers). When the merchant names specific customers or wants 'just one customer', ALWAYS call find_customers first and pass customerIds — never approximate named/specific customers with a segment. Returns HTML preview, subject, and draft campaign ID.",
     parameters: {
       campaignName: {
         type: "string",
@@ -18,7 +18,12 @@ export const inlineCampaignTools: ToolDefinition[] = [
       },
       segmentFilter: {
         type: "string",
-        description: "Target segment name or description (e.g. 'Hibernating', 'Champions')",
+        description: "Target RFM segment name (e.g. 'Hibernating', 'Champions'). Use ONLY for broad segment targeting — not for named or specific customers.",
+      },
+      customerIds: {
+        type: "array",
+        description: "Exact customer ids (from find_customers) to target EXACTLY these people (e.g. a single customer). Takes precedence over segmentFilter.",
+        items: { type: "string" },
       },
       discountPercent: {
         type: "number",
@@ -56,15 +61,51 @@ export const inlineCampaignTools: ToolDefinition[] = [
       });
       if (!store) return { success: false, message: "Store not found" };
 
-      // Find target segment
-      const segment = segmentFilter
-        ? await prisma.customerSegment.findFirst({
-            where: {
-              storeId: ctx.storeId,
-              name: { contains: segmentFilter, mode: "insensitive" },
-            },
-          })
-        : null;
+      // Resolve the audience: explicit customers (a manual segment) take
+      // precedence over a named RFM segment, so "campaign for Archana" targets
+      // exactly Archana, not the nearest broad segment.
+      const rawIds = Array.isArray(params.customerIds)
+        ? (params.customerIds as unknown[]).map(String).filter(Boolean)
+        : [];
+      let segment;
+      if (rawIds.length > 0) {
+        const members = await prisma.customer.findMany({
+          where: { id: { in: rawIds }, storeId: ctx.storeId },
+          include: { rfmScore: { select: { totalSpent: true } } },
+        });
+        const memberIds = members.map((m) => m.id);
+        const totalRevenue = members.reduce(
+          (s, m) => s + (m.rfmScore?.totalSpent ?? 0),
+          0,
+        );
+        const slug = `${campaignName} selected`
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .concat(`-${Date.now().toString(36)}`);
+        segment = await prisma.customerSegment.create({
+          data: {
+            storeId: ctx.storeId,
+            name: `${campaignName} · selected`,
+            slug,
+            description: "Customers selected for this campaign",
+            kind: "manual",
+            customerIds: memberIds,
+            customerCount: memberIds.length,
+            totalRevenue,
+            isSystem: false,
+          },
+        });
+      } else {
+        segment = segmentFilter
+          ? await prisma.customerSegment.findFirst({
+              where: {
+                storeId: ctx.storeId,
+                name: { contains: segmentFilter, mode: "insensitive" },
+              },
+            })
+          : null;
+      }
 
       // Fetch brand profile
       const brandProfile = await prisma.brandProfile.findFirst({
