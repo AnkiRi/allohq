@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { FileText, Plus, Copy, Trash2, Sparkles, Loader2, Eye, Pencil, Search, ChevronDown, AlertTriangle, CheckSquare, Square, MessageSquare } from "lucide-react";
-import { templateDisplayName } from "@/lib/templateName";
+import { templateDisplayName, templatePurpose, distinctPurposes } from "@/lib/templateName";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -48,6 +48,7 @@ function formatCategoryLabel(category: string): string {
 export default function TemplatesPage() {
   const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+  const [purposeFilter, setPurposeFilter] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRemoveMenu, setShowRemoveMenu] = useState(false);
@@ -95,15 +96,17 @@ export default function TemplatesPage() {
   // Filter by search query
   const filteredTemplates = useMemo(() => {
     if (!templates) return [];
-    if (!searchQuery.trim()) return templates;
-    const q = searchQuery.toLowerCase();
-    return templates.filter(
-      (t) =>
+    const q = searchQuery.trim().toLowerCase();
+    return templates.filter((t) => {
+      if (purposeFilter && templatePurpose(t.name) !== purposeFilter) return false;
+      if (!q) return true;
+      return (
         templateDisplayName(t.name).toLowerCase().includes(q) ||
         t.name.toLowerCase().includes(q) ||
         t.subject.toLowerCase().includes(q)
-    );
-  }, [templates, searchQuery]);
+      );
+    });
+  }, [templates, searchQuery, purposeFilter]);
 
   // Detect duplicates (same subject)
   const duplicateSubjects = useMemo(() => {
@@ -242,6 +245,35 @@ export default function TemplatesPage() {
           className="w-full pl-10 pr-4 py-2.5 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
         />
       </div>
+
+      {/* Purpose filter — find by what the email is FOR, not its machine name */}
+      {templates && templates.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setPurposeFilter(undefined)}
+            className={`px-2.5 py-1 text-[11px] font-sans rounded-full transition-all ${
+              !purposeFilter
+                ? "bg-secondary text-secondary-foreground"
+                : "bg-muted border border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All purposes
+          </button>
+          {distinctPurposes(templates.map((t) => t.name)).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPurposeFilter(p === purposeFilter ? undefined : p)}
+              className={`px-2.5 py-1 text-[11px] font-sans rounded-full transition-all ${
+                purposeFilter === p
+                  ? "bg-secondary text-secondary-foreground"
+                  : "bg-muted border border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Category filters with counts */}
       <div className="flex items-center gap-2">
