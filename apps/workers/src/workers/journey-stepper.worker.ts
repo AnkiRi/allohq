@@ -313,7 +313,11 @@ async function sendJourneyEmail(
       select: { blocks: true, subject: true },
     });
     if (template) {
-      subject = personaliseContent(template.subject ?? subject, context);
+      // The step's subject (node.config.subject) is a per-send OVERRIDE; fall
+      // back to the email's OWN subject when no override was set. (Previously the
+      // template's subject always overwrote the override.)
+      const override = (node.config["subject"] as string) || "";
+      subject = personaliseContent(override || template.subject || subject, context);
       const blocks = (template.blocks ?? []) as unknown as EmailBlock[];
       html = await renderBrandedEmail({
         storeId,

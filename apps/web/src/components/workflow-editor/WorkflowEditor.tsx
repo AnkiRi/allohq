@@ -67,22 +67,51 @@ const ACTION_OPTIONS: { type: WorkflowNode["type"]; label: string; description: 
 // ---------------------------------------------------------------------------
 
 function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
+  const templateSubject = (config.templateSubject as string) || "";
+  const subject = (config.subject as string) || "";
   return (
     <div className="space-y-2">
       <TemplatePicker
         channel="email"
         currentTemplateId={config.templateId as string | undefined}
         currentTemplateName={config.templateName as string | undefined}
-        onPick={(t) => onChange({ ...config, templateId: t.id, templateName: t.subject || t.name })}
+        onPick={(t) =>
+          onChange({
+            ...config,
+            templateId: t.id,
+            templateName: t.subject || t.name,
+            templateSubject: t.subject || "",
+            // Subject lives ON the email — default to the template's subject; the
+            // field below is an explicit per-send override, not a separate field.
+            subject: (config.subject as string) || t.subject || "",
+          })
+        }
       />
-      <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase mt-2">Subject Line</label>
+      <div className="flex items-center justify-between mt-2">
+        <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase">
+          Subject line · for this send
+        </label>
+        {templateSubject && subject !== templateSubject ? (
+          <button
+            type="button"
+            onClick={() => onChange({ ...config, subject: templateSubject })}
+            className="text-[10px] font-sans text-[var(--color-accent)] hover:underline"
+          >
+            Use the email&apos;s subject
+          </button>
+        ) : null}
+      </div>
       <input
         type="text"
-        value={(config.subject as string) || ""}
+        value={subject}
         onChange={(e) => onChange({ ...config, subject: e.target.value })}
         className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
-        placeholder="e.g., Welcome to {{brand_name}}!"
+        placeholder={templateSubject || "Defaults from the email"}
       />
+      <p className="text-[10px] font-sans text-muted-foreground/70">
+        Defaults from the email. Override it to send the same email with a different
+        subject per segment.
+      </p>
     </div>
   );
 }
