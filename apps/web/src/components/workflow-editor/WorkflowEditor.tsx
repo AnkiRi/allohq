@@ -4,10 +4,11 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Zap, Clock, Users, LogOut, Mail, MessageSquare, Timer,
   GitBranch, Webhook, Plus, Trash2, Save, Loader2, Check,
-  ChevronDown, ArrowDown, Phone, Radio,
+  ChevronDown, ArrowDown, Phone, Radio, Sparkles,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { TemplatePicker } from "./TemplatePicker";
+import { trpc } from "@/lib/trpc";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,6 +70,10 @@ const ACTION_OPTIONS: { type: WorkflowNode["type"]; label: string; description: 
 function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void }) {
   const templateSubject = (config.templateSubject as string) || "";
   const subject = (config.subject as string) || "";
+  const [variants, setVariants] = useState<string[]>([]);
+  const suggestMut = (trpc.templates as any).suggestSubjects.useMutation({
+    onSuccess: (d: { suggestions: string[] }) => setVariants(d.suggestions || []),
+  }) as { mutate: (i: any) => void; isPending: boolean };
   return (
     <div className="space-y-2">
       <TemplatePicker
@@ -91,15 +96,35 @@ function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>
         <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase">
           Subject line · for this send
         </label>
-        {templateSubject && subject !== templateSubject ? (
+        <div className="flex items-center gap-2.5">
+          {templateSubject && subject !== templateSubject ? (
+            <button
+              type="button"
+              onClick={() => onChange({ ...config, subject: templateSubject })}
+              className="text-[10px] font-sans text-[var(--color-accent)] hover:underline"
+            >
+              Use the email&apos;s subject
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => onChange({ ...config, subject: templateSubject })}
-            className="text-[10px] font-sans text-[var(--color-accent)] hover:underline"
+            onClick={() =>
+              suggestMut.mutate({
+                current: subject || templateSubject,
+                context: (config.templateName as string) || "",
+              })
+            }
+            disabled={suggestMut.isPending}
+            className="inline-flex items-center gap-1 text-[10px] font-sans text-[var(--color-accent)] hover:underline disabled:opacity-50"
           >
-            Use the email&apos;s subject
+            {suggestMut.isPending ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Sparkles className="w-3 h-3" />
+            )}
+            Suggest alternatives
           </button>
-        ) : null}
+        </div>
       </div>
       <input
         type="text"
@@ -108,6 +133,23 @@ function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>
         className="w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground"
         placeholder={templateSubject || "Defaults from the email"}
       />
+      {variants.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          {variants.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => {
+                onChange({ ...config, subject: v });
+                setVariants([]);
+              }}
+              className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors max-w-full truncate"
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <p className="text-[10px] font-sans text-muted-foreground/70">
         Defaults from the email. Override it to send the same email with a different
         subject per segment.

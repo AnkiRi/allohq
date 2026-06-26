@@ -161,6 +161,8 @@ const DEMO_INTERACTIVE_MUTATIONS = new Set<string>([
   // the delight chips / NL edits; renderPreview = the live preview.
   "emails.promptEdit",
   "emails.renderPreview",
+  // Subject suggestions: stateless LLM call (returns variant strings, persists nothing).
+  "templates.suggestSubjects",
 ]);
 
 // Public-demo LLM/compute paths that must be cost-capped (per-IP + global daily).
@@ -170,6 +172,7 @@ const DEMO_LLM_PATHS = new Set<string>([
   "ai.generateEmail",
   "ai.regenerateEmail",
   "emails.promptEdit", // delight chips make a live LLM call — cap it (renderPreview is render-only, no cost)
+  "templates.suggestSubjects", // subject suggestions make a live LLM call
 ]);
 
 /**
