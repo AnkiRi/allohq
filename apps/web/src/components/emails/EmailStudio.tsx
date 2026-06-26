@@ -130,11 +130,11 @@ export function EmailStudio({
     setShowAdd(false);
   };
 
-  const runPrompt = () => {
-    if (!instruction.trim() || promptMut.isPending) return;
+  const applyInstruction = (text: string) => {
+    if (!text.trim() || promptMut.isPending) return;
     setPromptError(null);
     promptMut.mutate(
-      { instruction, blocks, subject, previewText },
+      { instruction: text, blocks, subject, previewText },
       {
         onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; error?: string }) => {
           if (data.applied) {
@@ -152,6 +152,7 @@ export function EmailStudio({
       },
     );
   };
+  const runPrompt = () => applyInstruction(instruction);
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-7rem)] min-h-[640px]">
@@ -180,6 +181,29 @@ export function EmailStudio({
               <h2 className="text-[11px] font-mono uppercase tracking-[0.14em] text-foreground">
                 Edit with a prompt
               </h2>
+            </div>
+            {/* Delight chips — one-click live LLM edits; click and watch it change */}
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {(
+                [
+                  ["Punch up subject", "Rewrite the subject line to be more compelling and on-brand — no hype, no ALL-CAPS."],
+                  ["Shorter", "Make the whole email shorter and tighter: cut filler, keep the core message and the CTA."],
+                  ["Warmer", "Make the tone warmer and more personal, like a short note from the founder."],
+                  ["Funnier", "Add a light, tasteful touch of humour — warm and brand-appropriate, never cheesy."],
+                  ["More visual", "Make it more visual: stronger hero, larger imagery, kept balanced and uncluttered."],
+                  ["Regenerate", "Regenerate this email with a fresh angle on the same goal and audience, keeping the brand voice."],
+                ] as [string, string][]
+              ).map(([label, instr]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => applyInstruction(instr)}
+                  disabled={promptMut.isPending}
+                  className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <textarea
               value={instruction}

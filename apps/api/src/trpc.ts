@@ -156,6 +156,11 @@ const DEMO_INTERACTIVE_MUTATIONS = new Set<string>([
   "autonomy.rejectAction",
   "autonomy.bulkApprove",
   "autonomy.bulkReject",
+  // Email creator: stateless transforms (take blocks → return blocks/HTML, persist
+  // NOTHING), so they're inherently ephemeral + safe for the demo. promptEdit =
+  // the delight chips / NL edits; renderPreview = the live preview.
+  "emails.promptEdit",
+  "emails.renderPreview",
 ]);
 
 // Public-demo LLM/compute paths that must be cost-capped (per-IP + global daily).
@@ -164,6 +169,7 @@ const DEMO_LLM_PATHS = new Set<string>([
   "ai.explain",
   "ai.generateEmail",
   "ai.regenerateEmail",
+  "emails.promptEdit", // delight chips make a live LLM call — cap it (renderPreview is render-only, no cost)
 ]);
 
 /**
