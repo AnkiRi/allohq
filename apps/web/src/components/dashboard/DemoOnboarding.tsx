@@ -13,10 +13,16 @@ import { useActivationChecklist } from "./useActivationChecklist";
 // Shopify call. Lands on "what allo found" → the dashboard. Skippable.
 // ---------------------------------------------------------------------------
 
+// Single source of truth for the Vana figures — every line in this arc reads from
+// VANA so the header, the step detail, and the finale always AGREE (and match the
+// seeded store the dashboard/TopBar show). No partial/animated counts that diverge.
+const VANA = { customers: 4820, orders: 16320 };
+const fmt = (n: number) => n.toLocaleString("en-IN");
+
 // Real mono details per step, sized to the seeded Vana store (consistent).
 const DETAILS: Record<string, string> = {
   classify: "Plant-based wellness · India",
-  scan: "4,820 customers · 16,320 orders",
+  scan: `${fmt(VANA.customers)} customers · ${fmt(VANA.orders)} orders`,
   rfm: "8 segments scored",
   voice: "warm, grounded, expert",
   winback: "187 lapsed targeted",
@@ -39,8 +45,10 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
   });
   const [entering, setEntering] = useState(false);
 
-  const customers = Math.round(4820 * Math.min(progress, 100) / 100);
-  const orders = Math.round(16320 * Math.min(progress, 100) / 100);
+  // Full figures shown steadily (no partial animation) so they never disagree with
+  // the step detail or the TopBar; the progress bar + steps convey the "live" feel.
+  const customers = VANA.customers;
+  const orders = VANA.orders;
 
   return (
     <div className="w-full max-w-2xl mx-auto py-8">
@@ -119,8 +127,8 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
             Vana Naturals is ready
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            Scanned 4,820 customers and 16,320 orders, scored your segments, learned
-            your brand voice, and drafted your starter campaigns.
+            Scanned {fmt(VANA.customers)} customers and {fmt(VANA.orders)} orders, scored
+            your segments, learned your brand voice, and drafted your starter campaigns.
           </p>
 
           <div className="grid grid-cols-3 gap-3 mt-6">

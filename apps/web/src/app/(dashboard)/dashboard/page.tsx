@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Store,
   Loader2,
@@ -821,6 +822,16 @@ export default function DashboardPage() {
             </StreamRow>
           </StreamOutput>
         )}
+        {/* This is the live preview of allo's autonomous work; the full persisted
+            run log lives at /activity (one dream cycle, two views). */}
+        <div className="mt-4 pt-3 border-t border-border flex justify-end">
+          <Link
+            href="/activity"
+            className="font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            view full activity →
+          </Link>
+        </div>
       </ConsoleFrame>
 
       {/* 4. Pending decisions */}
