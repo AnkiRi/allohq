@@ -26,7 +26,6 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import { EmailCanvas } from "@/components/email-builder/EmailCanvas";
 import { createDefaultBlock } from "@allohq/email-builder";
 import type { EmailBlock, EmailBlockType } from "@allohq/email-builder";
 import { cn } from "@allohq/ui";
@@ -318,7 +317,6 @@ export default function NewTemplatePage() {
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [tone, setTone] = useState<string>("Professional");
   const [aiInstruction, setAiInstruction] = useState("");
-  const [showAdvancedEditor, setShowAdvancedEditor] = useState(false);
   const [showAlternatives, setShowAlternatives] = useState(false);
 
   // tRPC
@@ -362,11 +360,11 @@ export default function NewTemplatePage() {
 
   // -- Render preview when blocks change on step 3 --
   useEffect(() => {
-    if (step === 3 && blocks.length > 0 && !showAdvancedEditor) {
+    if (step === 3 && blocks.length > 0) {
       renderMut.mutate({ blocks: blocks as any });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, blocks, showAdvancedEditor]);
+  }, [step, blocks]);
 
   // Preview HTML from render mutation — used as srcdoc on the iframe
   const previewHtml = renderMut.data?.html ?? "";
@@ -439,11 +437,6 @@ export default function NewTemplatePage() {
     }
   }
 
-  function handleCanvasSave(savedBlocks: EmailBlock[]) {
-    setBlocks(savedBlocks);
-    setShowAdvancedEditor(false);
-    toast("Your changes are in.", "success");
-  }
 
   // -------------------------------------------------------------------------
   // Render
@@ -651,7 +644,7 @@ export default function NewTemplatePage() {
         {/* ================================================================ */}
         {/* STEP 3: Preview & Refine                                         */}
         {/* ================================================================ */}
-        {step === 3 && !showAdvancedEditor && (
+        {step === 3 && (
           <motion.div
             key="step3"
             initial={{ opacity: 0, y: 12 }}
@@ -882,49 +875,11 @@ export default function NewTemplatePage() {
                     ))}
                   </div>
 
-                  <button
-                    onClick={() => setShowAdvancedEditor(true)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-lg text-[11px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-                  >
-                    <Settings2 className="w-3.5 h-3.5" />
-                    Edit Blocks
-                  </button>
+                  <p className="text-center text-[11px] font-sans text-muted-foreground">
+                    Fine-tune any block in the editor after you create this.
+                  </p>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ================================================================ */}
-        {/* STEP 3b: Advanced Block Editor                                   */}
-        {/* ================================================================ */}
-        {step === 3 && showAdvancedEditor && (
-          <motion.div
-            key="step3b"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-4"
-          >
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowAdvancedEditor(false)}
-                className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-sans text-muted-foreground border border-border rounded-lg hover:text-foreground hover:border-foreground/30 transition-colors"
-              >
-                <ArrowLeft className="w-3 h-3" />
-                Back to Preview
-              </button>
-              <span className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
-                BLOCK EDITOR
-              </span>
-            </div>
-
-            <div className="h-[calc(100vh-220px)] border border-border rounded-xl overflow-hidden">
-              <EmailCanvas
-                initialBlocks={blocks}
-                onSave={handleCanvasSave}
-              />
             </div>
           </motion.div>
         )}
