@@ -313,9 +313,10 @@ export function EmailStudio({
                   <button
                     type="button"
                     onClick={undo}
-                    className="inline-flex items-center gap-1 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors"
+                    title="Step back to the previous version"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-accent)]/40 text-[11px] font-sans font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
                   >
-                    <Undo2 className="w-3 h-3" /> Undo ({history.length})
+                    <Undo2 className="w-3.5 h-3.5" /> Undo ({history.length})
                   </button>
                 ) : null}
               </div>

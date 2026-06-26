@@ -827,9 +827,9 @@ export default function DashboardPage() {
         <div className="mt-4 pt-3 border-t border-border flex justify-end">
           <Link
             href="/activity"
-            className="font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-sans font-medium text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
           >
-            view full activity →
+            View full activity →
           </Link>
         </div>
       </ConsoleFrame>
