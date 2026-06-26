@@ -532,6 +532,10 @@ function BrandReviewStep({
   const [bannedWords, setBannedWords] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [brandDocument, setBrandDocument] = useState("");
+  const [sendFreq, setSendFreq] = useState("balanced");
+  const [fromName, setFromName] = useState("");
+  const [fromEmail, setFromEmail] = useState("");
+  const [replyTo, setReplyTo] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisDone, setAnalysisDone] = useState(false);
 
@@ -565,6 +569,16 @@ function BrandReviewStep({
   useEffect(() => {
     if (bp?.brandDocument && !brandDocument) {
       setBrandDocument(bp.brandDocument as string);
+    }
+  }, [bp]);
+
+  // Load existing send/sender settings
+  useEffect(() => {
+    if (bp) {
+      if (bp.sendingFrequency) setSendFreq(bp.sendingFrequency as string);
+      if (bp.fromName) setFromName(bp.fromName as string);
+      if (bp.fromEmail) setFromEmail(bp.fromEmail as string);
+      if (bp.replyToEmail) setReplyTo(bp.replyToEmail as string);
     }
   }, [bp]);
 
@@ -613,6 +627,10 @@ function BrandReviewStep({
       brandDesignTokens: tokens,
       toneAttributes: Object.keys(tone).length > 0 ? tone : undefined,
       bannedWords: bannedWords.split(",").map((w) => w.trim()).filter(Boolean),
+      sendingFrequency: sendFreq,
+      fromName: fromName || undefined,
+      fromEmail: fromEmail || undefined,
+      replyToEmail: replyTo || undefined,
     });
   };
 
@@ -670,6 +688,36 @@ function BrandReviewStep({
             )}
           </div>
         )}
+      </div>
+
+      {/* Sending & sender */}
+      <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
+        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Sending &amp; sender</h3>
+        <p className="text-sm text-[#8B8074] mb-4">
+          How often should allo reach out, and who do emails come from? You can change these anytime.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[#8B8074] mb-1 block">Sending frequency</label>
+            <select value={sendFreq} onChange={(e) => setSendFreq(e.target.value)} className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30">
+              <option value="minimal">Minimal — only the important moments</option>
+              <option value="balanced">Balanced — a steady, considered cadence</option>
+              <option value="frequent">Frequent — stay top of mind</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[#8B8074] mb-1 block">From name</label>
+            <input type="text" value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="e.g. Vana Naturals" className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30" />
+          </div>
+          <div>
+            <label className="text-xs text-[#8B8074] mb-1 block">From email</label>
+            <input type="email" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="hello@yourbrand.com" className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30" />
+          </div>
+          <div>
+            <label className="text-xs text-[#8B8074] mb-1 block">Reply-to email</label>
+            <input type="email" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder="care@yourbrand.com" className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30" />
+          </div>
+        </div>
       </div>
 
       {/* What Allo Found */}
