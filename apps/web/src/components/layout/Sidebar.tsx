@@ -24,6 +24,7 @@ import {
   Brain,
   Target,
   Wand2,
+  Library,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -44,6 +45,7 @@ const secondaryNav = [
   { name: "Segments", href: "/segments", icon: Layers },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Emails", href: "/emails", icon: Wand2 },
+  { name: "Library", href: "/templates", icon: Library },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Forms", href: "/forms", icon: MousePointerClick },
   { name: "Brand Voice", href: "/intelligence/brand", icon: Brain },

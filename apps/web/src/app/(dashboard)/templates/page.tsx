@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { FileText, Plus, Copy, Trash2, Sparkles, Loader2, Eye, Pencil, Search, ChevronDown, AlertTriangle, CheckSquare, Square, MessageSquare } from "lucide-react";
+import { templateDisplayName } from "@/lib/templateName";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -97,7 +98,10 @@ export default function TemplatesPage() {
     if (!searchQuery.trim()) return templates;
     const q = searchQuery.toLowerCase();
     return templates.filter(
-      (t) => t.name.toLowerCase().includes(q) || t.subject.toLowerCase().includes(q)
+      (t) =>
+        templateDisplayName(t.name).toLowerCase().includes(q) ||
+        t.name.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q)
     );
   }, [templates, searchQuery]);
 
@@ -163,7 +167,7 @@ export default function TemplatesPage() {
             Templates
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            The emails behind your campaigns and automations
+            Your saved, reusable emails — pick any one into a campaign or automation
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -351,7 +355,7 @@ export default function TemplatesPage() {
                       <div className="p-4 space-y-3">
                         {/* Title */}
                         <h3 className="text-[13px] font-bold text-foreground font-serif leading-snug line-clamp-2">
-                          {template.name}
+                          {templateDisplayName(template.name)}
                         </h3>
 
                         {/* Subject line */}
