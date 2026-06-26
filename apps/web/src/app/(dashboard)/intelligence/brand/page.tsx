@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, RefreshCw, Palette, Type, MessageSquare, Quote, AlertTriangle, Sliders, Image, MapPin, Share2, Store, Save } from "lucide-react";
+import { ArrowLeft, RefreshCw, Palette, Type, MessageSquare, Quote, AlertTriangle, Sliders, Image, MapPin, Share2, Store, Save, FileText } from "lucide-react";
 import { ColorField } from "@/components/ui/ColorField";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
@@ -41,7 +41,7 @@ export default function BrandProfilePage() {
       refetchInterval: analyzing ? 3000 : false,
     }
   ) as {
-    data: { brandName: string; brandDescription: string | null; toneAttributes: unknown; vocabulary: unknown; visualStyle: unknown; sampleCopy: unknown; analyzedAt: string } | null | undefined;
+    data: { brandName: string; brandDescription: string | null; brandDocument: string | null; toneAttributes: unknown; vocabulary: unknown; visualStyle: unknown; sampleCopy: unknown; analyzedAt: string } | null | undefined;
     isLoading: boolean;
   };
 
@@ -242,6 +242,7 @@ export default function BrandProfilePage() {
   const [toneEdits, setToneEdits] = useState<Record<string, string>>({});
   const [bannedWordsEdit, setBannedWordsEdit] = useState("");
   const [toneInitialized, setToneInitialized] = useState(false);
+  const [guidelinesEdit, setGuidelinesEdit] = useState("");
 
   // Editable visual state
   const [editingVisual, setEditingVisual] = useState(false);
@@ -257,6 +258,7 @@ export default function BrandProfilePage() {
       setToneEdits(tone ? { ...defaults, ...tone } : defaults);
       const bw = (vocabulary?.["bannedWords"] as unknown as string[]) ?? [];
       setBannedWordsEdit(bw.join(", "));
+      setGuidelinesEdit(profile.brandDocument ?? "");
       setToneInitialized(true);
     }
   }, [tone, vocabulary, toneInitialized, profile]);
@@ -287,6 +289,7 @@ export default function BrandProfilePage() {
       vocabulary: {
         bannedWords: bannedWordsEdit.split(",").map((w: string) => w.trim()).filter(Boolean),
       },
+      brandDocument: guidelinesEdit,
     });
   };
 
@@ -445,6 +448,34 @@ export default function BrandProfilePage() {
             <p className="text-[10px] text-muted-foreground/50 mt-3">
               Last analyzed: {new Date(profile.analyzedAt).toLocaleString()}
             </p>
+          </motion.div>
+
+          {/* Brand guidelines — the raw source allo writes from (set at onboarding) */}
+          <motion.div variants={itemVariants} className="glass-card-static p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <FileText className="w-4 h-4 text-muted-foreground" />
+              <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Brand guidelines</h2>
+            </div>
+            <p className="text-[12px] text-muted-foreground mb-3">
+              The raw guidelines allo reads from — pasted or uploaded at onboarding. Everything it writes respects this.
+            </p>
+            <textarea
+              value={guidelinesEdit}
+              onChange={(e) => setGuidelinesEdit(e.target.value)}
+              rows={5}
+              placeholder="Paste your brand guidelines, do's and don'ts, positioning notes…"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+            />
+            <div className="flex justify-end mt-3">
+              <button
+                onClick={handleSaveVoice}
+                disabled={updateVoiceMut.isPending}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {updateVoiceMut.isPending ? "Saving…" : "Save guidelines"}
+              </button>
+            </div>
           </motion.div>
 
           <div className="grid grid-cols-2 gap-6">

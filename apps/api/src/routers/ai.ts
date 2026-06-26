@@ -1566,6 +1566,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         brandTerms: z.array(z.string()).optional(),
         bannedWords: z.array(z.string()).optional(),
       }).optional(),
+      brandDocument: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const profile = await ctx.prisma.brandProfile.findFirst({
@@ -1574,6 +1575,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Brand profile not found. Run brand analysis first." });
 
       const updateData: Record<string, unknown> = {};
+      if (input.brandDocument !== undefined) {
+        updateData.brandDocument = input.brandDocument;
+      }
       if (input.toneAttributes) {
         updateData.toneAttributes = input.toneAttributes;
       }
