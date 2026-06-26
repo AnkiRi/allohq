@@ -54,8 +54,10 @@ const PAL_INIT = `
 })();
 `;
 
-const signUp = "http://localhost:3000/sign-up";
-const signIn = "http://localhost:3000/sign-in";
+// Relative so they resolve to the current origin (prod, preview, or local) — never
+// a hardcoded localhost. On the landing domain these route to agent.<apex> via middleware.
+const signUp = "/sign-up";
+const signIn = "/sign-in";
 
 type PalId = "drenched" | "light" | "dark";
 function isPal(v: unknown): v is PalId {
