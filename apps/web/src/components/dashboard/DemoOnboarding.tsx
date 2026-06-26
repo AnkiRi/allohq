@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Loader2, ArrowRight, Sparkles } from "lucide-react";
 import { useActivationChecklist } from "./useActivationChecklist";
 
 // ---------------------------------------------------------------------------
 // DemoOnboarding — the "watch allo come alive" arc shown ONCE on first demo entry.
 //
-// STAGED + FAST + SIMULATED over the already-seeded Vana data — it reuses the
-// capped client checklist (useActivationChecklist), so it FEELS like a real
-// onboarding (~30–45s, counts climbing) but NEVER runs the real slow sync or any
-// Shopify call. Lands on "what allo found" → the dashboard. Skippable.
+// Replays the real 3-stage onboarding journey, STAGED + FAST + SIMULATED over the
+// already-seeded Vana data (it reuses the capped client checklist; it NEVER runs
+// the real slow sync or any Shopify call):
+//   1. Getting to know your store  (syncing + background learning)
+//   2. Setting allo up             (wiring allo into the store)
+//   3. What allo found             (the payoff) → dashboard
+// Skippable at any point.
 // ---------------------------------------------------------------------------
 
 // Single source of truth for the Vana figures — every line in this arc reads from
@@ -33,6 +36,15 @@ const DETAILS: Record<string, string> = {
   recommend: "recommendations ready",
 };
 
+const SETUP_STEPS = [
+  "Creating your operator workspace",
+  "Calibrating to your brand voice",
+  "Drafting your starter campaigns",
+  "Setting send guardrails & a control holdout",
+];
+
+const STAGE_LABELS = ["Getting to know your store", "Setting allo up", "What allo found"];
+
 const FOUND = [
   { label: "At risk / lapsed", value: "187 customers", tone: "var(--color-urgent)" },
   { label: "Lifetime revenue", value: "₹2.39 Cr", tone: "hsl(var(--accent))" },
@@ -43,16 +55,37 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
   const { steps, doneCount, total, progress, complete } = useActivationChecklist({
     details: DETAILS,
   });
+  const [stage, setStage] = useState<1 | 2 | 3>(1);
+  const [setupDone, setSetupDone] = useState(0);
   const [entering, setEntering] = useState(false);
 
-  // Full figures shown steadily (no partial animation) so they never disagree with
-  // the step detail or the TopBar; the progress bar + steps convey the "live" feel.
-  const customers = VANA.customers;
-  const orders = VANA.orders;
+  // Stage 1 → 2 once the learning checklist completes.
+  useEffect(() => {
+    if (stage === 1 && complete) {
+      const t = setTimeout(() => setStage(2), 900);
+      return () => clearTimeout(t);
+    }
+  }, [stage, complete]);
+
+  // Stage 2: tick through the setup items, then advance to the payoff.
+  useEffect(() => {
+    if (stage !== 2) return;
+    setSetupDone(0);
+    const tick = setInterval(
+      () => setSetupDone((d) => Math.min(d + 1, SETUP_STEPS.length)),
+      650,
+    );
+    const advance = setTimeout(() => setStage(3), SETUP_STEPS.length * 650 + 700);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(advance);
+    };
+  }, [stage]);
 
   return (
     <div className="w-full max-w-2xl mx-auto py-8">
-      <div className="flex items-center justify-between mb-6">
+      {/* Header + skip */}
+      <div className="flex items-center justify-between mb-5">
         <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
           allo · setting up Vana Naturals
         </p>
@@ -64,17 +97,48 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
         </button>
       </div>
 
-      {!complete ? (
+      {/* Stage indicator */}
+      <div className="flex items-center gap-2 mb-7">
+        {STAGE_LABELS.map((label, i) => {
+          const n = i + 1;
+          const active = stage === n;
+          const past = stage > n;
+          return (
+            <div key={label} className="flex items-center gap-2">
+              <span
+                className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-mono shrink-0 ${
+                  past
+                    ? "bg-[var(--color-success)] text-white"
+                    : active
+                      ? "bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]"
+                      : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {past ? <Check className="w-3 h-3" /> : n}
+              </span>
+              <span
+                className={`text-[11px] font-sans hidden sm:inline ${active ? "text-foreground" : "text-muted-foreground/60"}`}
+              >
+                {label}
+              </span>
+              {i < STAGE_LABELS.length - 1 && <span className="w-5 h-px bg-border" />}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Stage 1 — getting to know your store (syncing + learning) */}
+      {stage === 1 && (
         <>
           <h1 className="text-[24px] font-serif font-semibold text-foreground tracking-[-0.02em]">
             allo is getting to know your store
           </h1>
           <div className="mt-2 flex items-baseline gap-4 font-mono text-[13px] text-muted-foreground tabular-nums">
             <span>
-              <span className="text-foreground">{customers.toLocaleString("en-IN")}</span> customers
+              <span className="text-foreground">{fmt(VANA.customers)}</span> customers
             </span>
             <span>
-              <span className="text-foreground">{orders.toLocaleString("en-IN")}</span> orders
+              <span className="text-foreground">{fmt(VANA.orders)}</span> orders
             </span>
           </div>
 
@@ -116,8 +180,40 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
             {doneCount} of {total} · this is a fast demo over sample data
           </p>
         </>
-      ) : (
-        // Finale: "here's what allo found"
+      )}
+
+      {/* Stage 2 — setting allo up */}
+      {stage === 2 && (
+        <>
+          <h1 className="text-[24px] font-serif font-semibold text-foreground tracking-[-0.02em]">
+            Setting allo up
+          </h1>
+          <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
+            Wiring allo into your store so it can start working for you.
+          </p>
+          <ul className="mt-6 space-y-2.5">
+            {SETUP_STEPS.map((s, i) => (
+              <li key={s} className="flex items-center gap-3 text-[13px]">
+                <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+                  {i < setupDone ? (
+                    <Check className="w-4 h-4 text-[var(--color-success)]" />
+                  ) : (
+                    <Loader2 className="w-3.5 h-3.5 text-[hsl(var(--accent))] animate-spin" />
+                  )}
+                </span>
+                <span
+                  className={`font-sans ${i < setupDone ? "text-foreground" : "text-muted-foreground/60"}`}
+                >
+                  {s}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* Stage 3 — what allo found (the payoff) */}
+      {stage === 3 && (
         <div>
           <div className="flex items-center gap-2 text-[hsl(var(--accent))] mb-2">
             <Sparkles className="w-4 h-4" />
