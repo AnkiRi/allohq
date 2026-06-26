@@ -15,6 +15,7 @@ import { cn } from "@allohq/ui";
 import { createDefaultBlock, type EmailBlock, type EmailBlockType } from "@allohq/email-builder";
 import type { BrandKit } from "@allohq/emails";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
 import { BlockEditor } from "./BlockEditor";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 
@@ -56,15 +57,20 @@ export function EmailStudio({
   brandKit,
   previewVariables,
   reasoning,
+  templateId,
 }: {
   initialBlocks: EmailBlock[];
   initialSubject: string;
   initialPreviewText: string;
   initialHtml: string;
-  brandKit: BrandKit;
+  /** Optional: when absent, the server resolves the workspace store's brand kit
+      (so the one editor can load ANY template, not just the demo seed). */
+  brandKit?: BrandKit;
   previewVariables: Record<string, string>;
   /** allo's short rationale for THIS draft, shown as a byline ("I wrote this for…"). */
   reasoning?: string;
+  /** When editing a saved template, its id — enables the persistent "Save changes". */
+  templateId?: string;
 }) {
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(initialBlocks);
   const [subject, setSubject] = React.useState(initialSubject);
@@ -82,9 +88,31 @@ export function EmailStudio({
   });
   const promptMut = (trpc.emails as any).promptEdit.useMutation();
 
+  // Persistent save — only when editing a real saved template (templateId set).
+  // The /emails demo seed has no templateId, so it stays ephemeral (and a demo
+  // guest is blocked by the write-floor regardless).
+  const { toast } = useToast();
+  const saveMut = (trpc.templates as any).update.useMutation() as {
+    mutate: (input: any, opts?: any) => void;
+    isPending: boolean;
+  };
+  const handleSave = () => {
+    if (!templateId) return;
+    saveMut.mutate(
+      { id: templateId, subject, previewText, blocks },
+      {
+        onSuccess: () => toast("Saved. Your changes are in.", "success"),
+        onError: (e: { message?: string }) =>
+          toast(e?.message || "Couldn't save — give it another go.", "error"),
+      },
+    );
+  };
+
   // Re-render the preview whenever the content model changes (debounced).
   // First paint uses the server-rendered initialHtml, so we skip the mount run.
-  const firstRun = React.useRef(true);
+  // Skip the mount re-render only when we already have server-rendered HTML.
+  // When loaded without SSR html (e.g. a template opened by id), render on mount.
+  const firstRun = React.useRef(Boolean(initialHtml));
   const renderRef = React.useRef(renderMut);
   renderRef.current = renderMut;
   React.useEffect(() => {
@@ -162,16 +190,31 @@ export function EmailStudio({
     <div className="flex flex-col gap-4 h-[calc(100vh-7rem)] min-h-[640px]">
       {/* Framing header — allo authored this; you direct it (not a blank builder) */}
       <header className="shrink-0">
-        <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-[var(--color-accent)]">
-          allo · drafted this for you
-        </p>
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <h1 className="text-2xl font-serif font-semibold text-foreground tracking-tight">
-            allo drafted this email.
-          </h1>
-          <span className="text-[13px] font-sans text-muted-foreground">
-            Tell allo what to change — or fine-tune any block by hand.
-          </span>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-[var(--color-accent)]">
+              allo · drafted this for you
+            </p>
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <h1 className="text-2xl font-serif font-semibold text-foreground tracking-tight">
+                allo drafted this email.
+              </h1>
+              <span className="text-[13px] font-sans text-muted-foreground">
+                Tell allo what to change — or fine-tune any block by hand.
+              </span>
+            </div>
+          </div>
+          {templateId ? (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saveMut.isPending}
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors"
+            >
+              {saveMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {saveMut.isPending ? "Saving…" : "Save changes"}
+            </button>
+          ) : null}
         </div>
         {reasoning ? (
           <p className="mt-2 text-[12.5px] font-sans text-muted-foreground/90 leading-relaxed max-w-2xl">
