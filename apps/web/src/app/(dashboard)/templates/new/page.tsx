@@ -410,13 +410,24 @@ export default function NewTemplatePage() {
     }
   }
 
-  function handleUseInAutomation() {
-    toast("Coming soon \u2014 you'll be able to drop this into an automation.", "info");
+  async function handleUseInAutomation() {
+    try {
+      await createMut.mutateAsync({
+        name: templateName || "Untitled Template",
+        subject: subject || templateName || "Untitled",
+        blocks: blocks as any,
+        category: "ai_generated",
+      });
+      toast("Saved \u2014 pick it in any automation's email step.", "success");
+      router.push("/automations");
+    } catch {
+      toast("We couldn't save that. Mind trying again?", "error");
+    }
   }
 
   async function handleRegenerate() {
     if (!storeId || !regenerateMut?.mutateAsync) {
-      toast("Rewriting with allo is coming soon.", "info");
+      toast("Connect a store first so allo can rewrite this.", "info");
       return;
     }
     try {
