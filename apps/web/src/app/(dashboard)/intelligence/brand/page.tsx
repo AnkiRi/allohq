@@ -379,6 +379,10 @@ export default function BrandProfilePage() {
             <p className="text-[13px] text-muted-foreground font-sans mt-1">
               The personality allo picked up from your store, so everything it writes sounds like you.
             </p>
+            <p className="text-[12px] text-muted-foreground/80 font-sans mt-1.5">
+              This is your <span className="text-foreground font-medium">global default</span>. Any
+              campaign, automation, or email can override it for a single send — without changing it here.
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
