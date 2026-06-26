@@ -525,6 +525,8 @@ model CustomerSegment {
   customerCount Int      @default(0)
   totalRevenue  Float    @default(0)
   conditions    Json? // custom segment rules: { operator, conditions[] }
+  customerIds   String[] @default([]) // explicit member ids when kind = "manual"
+  kind          String   @default("rfm") // "rfm" (RFM score range) | "manual" (explicit customer list)
   isSystem      Boolean  @default(false) // system-generated vs custom
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

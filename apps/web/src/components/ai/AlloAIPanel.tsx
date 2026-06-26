@@ -629,6 +629,7 @@ function AgentActivityIndicator() {
   const [stepIdx, setStepIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -658,28 +659,42 @@ function AgentActivityIndicator() {
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
         <Sparkles className="w-3 h-3 text-[hsl(var(--accent))]" />
       </div>
-      <div className="flex-1 min-w-0 border-l-2 border-[hsl(var(--accent))]/20 pl-3">
-        {/* Reasoning as a terminal stream — done rows + the live step */}
-        <StreamOutput aria-label="allo reasoning">
-          {completedSteps.map((idx) => {
-            const step = AGENT_STEPS[idx];
-            if (!step) return null;
-            return (
-              <StreamRow key={idx} tick="ok">
-                {step}
-              </StreamRow>
-            );
-          })}
-          <StreamRow tick="step">
-            {currentStep}
-            <span className="console-live-caret ml-1 inline-block w-[2px] h-[1em] align-[-0.1em] bg-[hsl(var(--accent))]" />
-          </StreamRow>
-        </StreamOutput>
+      <div className="flex-1 min-w-0">
+        {/* Collapsed by default: a quiet "Thinking" line. Expand to see the
+            reasoning steps (like Claude/GPT's collapsible thinking). */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="inline-flex items-center gap-1.5 text-[13px] font-sans text-muted-foreground hover:text-foreground transition-colors"
+          aria-expanded={expanded}
+        >
+          <span>Thinking</span>
+          <span className="console-live-caret inline-block w-[2px] h-[1em] align-[-0.1em] bg-[hsl(var(--accent))]" />
+          <span className="text-[10px] font-mono text-muted-foreground/40">{elapsed}s</span>
+          <ChevronDown
+            className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+        </button>
 
-        {/* Timer */}
-        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1.5">
-          {elapsed}s elapsed
-        </div>
+        {expanded && (
+          <div className="border-l-2 border-[hsl(var(--accent))]/20 pl-3 mt-2">
+            <StreamOutput aria-label="allo reasoning">
+              {completedSteps.map((idx) => {
+                const step = AGENT_STEPS[idx];
+                if (!step) return null;
+                return (
+                  <StreamRow key={idx} tick="ok">
+                    {step}
+                  </StreamRow>
+                );
+              })}
+              <StreamRow tick="step">
+                {currentStep}
+                <span className="console-live-caret ml-1 inline-block w-[2px] h-[1em] align-[-0.1em] bg-[hsl(var(--accent))]" />
+              </StreamRow>
+            </StreamOutput>
+          </div>
+        )}
       </div>
 
       {/* Scoped caret keyframes — does not touch globals.css */}
