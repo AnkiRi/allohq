@@ -54,8 +54,14 @@ export const sendWorker = new Worker<SendJobData>(
     };
 
     if (campaign.segmentId && campaign.segment) {
-      // Add segment-based filtering using RFM scores
-      customerWhere["rfmScore"] = { segment: campaign.segment.name };
+      if (campaign.segment.kind === "manual") {
+        // Manual segment → EXACTLY the customers the merchant chose (still
+        // respecting the acceptsMarketing opt-out filter above).
+        customerWhere["id"] = { in: campaign.segment.customerIds ?? [] };
+      } else {
+        // RFM segment → all customers whose RFM segment matches.
+        customerWhere["rfmScore"] = { segment: campaign.segment.name };
+      }
     }
 
     const customers = await prisma.customer.findMany({
