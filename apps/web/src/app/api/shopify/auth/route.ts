@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  // Use the real request origin (e.g. https://agent.allohq.ai) so the OAuth
+  // redirect_uri is correct in every environment — never a hardcoded localhost.
+  // NEXT_PUBLIC_APP_URL overrides it if you need to pin a canonical domain.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
   const redirectUri = `${appUrl}/api/shopify/callback`;
 
   // Generate CSRF state token
