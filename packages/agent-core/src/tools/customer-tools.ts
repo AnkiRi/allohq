@@ -51,21 +51,33 @@ export const customerTools: ToolDefinition[] = [
   {
     name: "find_customers",
     description:
-      "Search the store's customers by name or email (partial, case-insensitive). Returns each match's id, name, email, and RFM segment. ALWAYS use this when the merchant names specific people or wants an EXACT set (e.g. 'Archana S', 'these 10 customers'), then pass the returned ids to create_segment (customerIds) or create_campaign_with_preview (customerIds). NEVER approximate named or explicitly-listed customers with an RFM segment.",
+      "Find specific customers in the store. TWO modes: (1) SEARCH by name/email — pass `query` (e.g. 'Archana S'); (2) TOP-N ranking — pass `topBy` ('spend' | 'orders' | 'rfm') with `limit` (e.g. 'top 25 customers' → topBy:'spend', limit:25). Returns each customer's id, name, email, segment, and spend. ALWAYS use this for 'top N customers', 'best/highest-value customers', named people, or 'these N' — then pass the returned ids as customerIds to create_segment / create_campaign_with_preview. NEVER invent customer names, and NEVER approximate a named/explicit/top-N set with an RFM segment.",
     parameters: {
       query: {
         type: "string",
-        description: "Name or email fragment to match (case-insensitive).",
+        description: "Name or email fragment to match (case-insensitive). Use for specific named customers.",
+      },
+      topBy: {
+        type: "string",
+        description: "Return the TOP customers ranked by this metric: 'spend' (highest lifetime spend), 'orders' (most orders), or 'rfm' (best RFM score). Use this for 'top N' / 'best customers' — do NOT search by name for those.",
       },
       limit: {
         type: "number",
-        description: "Max results to return (default 25, max 100).",
+        description: "Max results (default 25, max 100). For 'top N', set this to N.",
       },
     },
     handler: async (params, ctx) => {
       if (!ctx.storeId) return { error: "No store in context" };
       const query = String(params.query ?? "").trim();
+      const topBy = String(params.topBy ?? "").trim().toLowerCase();
       const take = Math.min(Math.max(Number(params.limit ?? 25), 1), 100);
+
+      // Ranked retrieval for "top N" requests (customers without an RFM score sort last).
+      let orderBy: unknown;
+      if (topBy === "spend") orderBy = { rfmScore: { totalSpent: "desc" } };
+      else if (topBy === "orders") orderBy = { rfmScore: { orderCount: "desc" } };
+      else if (topBy === "rfm") orderBy = { rfmScore: { totalScore: "desc" } };
+
       const customers = await prisma.customer.findMany({
         where: {
           storeId: ctx.storeId,
@@ -78,8 +90,10 @@ export const customerTools: ToolDefinition[] = [
                 ],
               }
             : {}),
+          ...(orderBy ? { rfmScore: { isNot: null } } : {}),
         },
         include: { rfmScore: { select: { segment: true, totalSpent: true } } },
+        ...(orderBy ? { orderBy: orderBy as never } : {}),
         take,
       });
       return {
