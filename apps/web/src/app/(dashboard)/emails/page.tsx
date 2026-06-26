@@ -48,6 +48,7 @@ export default async function EmailsPage() {
       initialHtml={initialHtml}
       brandKit={brandKit}
       previewVariables={PREVIEW_VARIABLES}
+      reasoning="I drafted this for your 187 lapsed spring buyers — warm, no discount, leading with the restock they loved. Tell me what to change."
     />
   );
 }

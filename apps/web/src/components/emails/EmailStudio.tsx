@@ -55,6 +55,7 @@ export function EmailStudio({
   initialHtml,
   brandKit,
   previewVariables,
+  reasoning,
 }: {
   initialBlocks: EmailBlock[];
   initialSubject: string;
@@ -62,6 +63,8 @@ export function EmailStudio({
   initialHtml: string;
   brandKit: BrandKit;
   previewVariables: Record<string, string>;
+  /** allo's short rationale for THIS draft, shown as a byline ("I wrote this for…"). */
+  reasoning?: string;
 }) {
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(initialBlocks);
   const [subject, setSubject] = React.useState(initialSubject);
@@ -157,19 +160,24 @@ export function EmailStudio({
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-7rem)] min-h-[640px]">
-      {/* Framing header */}
+      {/* Framing header — allo authored this; you direct it (not a blank builder) */}
       <header className="shrink-0">
         <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-[var(--color-accent)]">
-          allo · generated email
+          allo · drafted this for you
         </p>
         <div className="flex items-baseline gap-3 flex-wrap">
           <h1 className="text-2xl font-serif font-semibold text-foreground tracking-tight">
-            allo wrote this. Edit anything.
+            allo drafted this email.
           </h1>
           <span className="text-[13px] font-sans text-muted-foreground">
-            Generate-first, edit-freely. Prompt it, or click any block.
+            Tell allo what to change — or fine-tune any block by hand.
           </span>
         </div>
+        {reasoning ? (
+          <p className="mt-2 text-[12.5px] font-sans text-muted-foreground/90 leading-relaxed max-w-2xl">
+            {reasoning}
+          </p>
+        ) : null}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4 flex-1 min-h-0">
@@ -180,7 +188,7 @@ export function EmailStudio({
             <div className="flex items-center gap-2 mb-2">
               <Wand2 className="w-4 h-4 text-[var(--color-accent)]" />
               <h2 className="text-[11px] font-mono uppercase tracking-[0.14em] text-foreground">
-                Edit with a prompt
+                Tell allo what to change
               </h2>
             </div>
             {/* Delight chips — one-click live LLM edits; click and watch it change */}
