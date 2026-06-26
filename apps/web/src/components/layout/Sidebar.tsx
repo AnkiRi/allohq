@@ -23,7 +23,6 @@ import {
   ChevronRight,
   Brain,
   Target,
-  Wand2,
   Library,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
@@ -44,7 +43,6 @@ const secondaryNav = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Segments", href: "/segments", icon: Layers },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
-  { name: "Emails", href: "/emails", icon: Wand2 },
   { name: "Library", href: "/templates", icon: Library },
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Forms", href: "/forms", icon: MousePointerClick },
