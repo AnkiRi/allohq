@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, RefreshCw, Palette, Type, MessageSquare, Quote, AlertTriangle, Sliders, Image, MapPin, Share2, Store, Save } from "lucide-react";
+import { ColorField } from "@/components/ui/ColorField";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -782,10 +783,10 @@ export default function BrandProfilePage() {
                     {COLOR_TOKEN_LABELS.map(({ key, label }) => (
                       <div key={key}>
                         <label className="text-[10px] text-muted-foreground font-sans mb-1 block">{label}</label>
-                        <div className="flex items-center gap-2">
-                          <input type="color" value={colorTokens[key] || "#000000"} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="w-7 h-7 rounded border border-border cursor-pointer" />
-                          <input type="text" value={colorTokens[key] || ""} onChange={(e) => setColorTokens((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-2 py-1 text-[10px] font-mono rounded border border-border bg-muted text-foreground" />
-                        </div>
+                        <ColorField
+                          value={colorTokens[key] || "#000000"}
+                          onChange={(v) => setColorTokens((prev) => ({ ...prev, [key]: v }))}
+                        />
                       </div>
                     ))}
                   </div>
@@ -872,20 +873,11 @@ export default function BrandProfilePage() {
               </div>
               <div>
                 <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">HEADER BACKGROUND</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={headerBgColor}
-                    onChange={(e) => setHeaderBgColor(e.target.value)}
-                    className="w-8 h-8 rounded border border-border cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={headerBgColor}
-                    onChange={(e) => setHeaderBgColor(e.target.value)}
-                    className="w-28 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-secondary"
-                  />
-                </div>
+                <ColorField
+                  value={headerBgColor}
+                  onChange={setHeaderBgColor}
+                  className="max-w-xs"
+                />
               </div>
             </div>
           </motion.div>
