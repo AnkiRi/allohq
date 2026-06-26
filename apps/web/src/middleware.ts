@@ -25,7 +25,10 @@ export default clerkMiddleware(async (auth, request) => {
       return NextResponse.next();
     }
     const agentUrl = new URL(request.url);
-    agentUrl.hostname = `agent.${host}`;
+    // Strip a leading "www." so the app subdomain is always "agent.<apex>"
+    // (host "www.allohq.ai" must map to "agent.allohq.ai", NOT the non-existent
+    // "agent.www.allohq.ai").
+    agentUrl.hostname = `agent.${host.replace(/^www\./, "")}`;
     return NextResponse.redirect(agentUrl);
   }
 
