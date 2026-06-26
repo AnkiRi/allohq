@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ColorField } from "@/components/ui/ColorField";
 import {
   ArrowLeft,
   Plus,
@@ -234,17 +235,27 @@ export default function NewFormPage() {
             ["backgroundColor", "Background"],
             ["textColor", "Text Color"],
             ["borderRadius", "Border Radius"],
-          ] as const).map(([key, label]) => (
-            <div key={key} className="space-y-1">
-              <span className="text-[10px] font-sans text-muted-foreground">{label}</span>
-              <input
-                type={key.includes("Color") || key === "backgroundColor" ? "color" : "text"}
-                value={styling[key]}
-                onChange={(e) => setStyling({ ...styling, [key]: e.target.value })}
-                className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
-              />
-            </div>
-          ))}
+          ] as const).map(([key, label]) => {
+            const isColor = key.includes("Color") || key === "backgroundColor";
+            return (
+              <div key={key} className="space-y-1">
+                <span className="text-[10px] font-sans text-muted-foreground">{label}</span>
+                {isColor ? (
+                  <ColorField
+                    value={styling[key]}
+                    onChange={(v) => setStyling({ ...styling, [key]: v })}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={styling[key]}
+                    onChange={(e) => setStyling({ ...styling, [key]: e.target.value })}
+                    className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans text-foreground focus:outline-none focus:border-foreground/30"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
