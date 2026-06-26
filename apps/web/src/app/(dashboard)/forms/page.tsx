@@ -104,7 +104,7 @@ export default function FormsPage() {
           icon={MousePointerClick}
           title="No forms yet"
           description="No one's opting in yet. allo can build a popup that captures emails for you."
-          actions={[{ label: "Create a popup", primary: true }]}
+          actions={[{ label: "Create a popup", href: "/forms/new", primary: true }]}
         />
       ) : (
         <motion.div
