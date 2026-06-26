@@ -176,11 +176,14 @@ export function EmailStudio({
     });
   };
 
-  const applyInstruction = (text: string) => {
+  const applyInstruction = (
+    text: string,
+    scope?: "subject" | "copy" | "visual" | "tone",
+  ) => {
     if (!text.trim() || promptMut.isPending) return;
     setPromptError(null);
     promptMut.mutate(
-      { instruction: text, blocks, subject, previewText },
+      { instruction: text, blocks, subject, previewText, scope },
       {
         onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; subject?: string; error?: string }) => {
           if (data.applied) {
@@ -286,7 +289,7 @@ export function EmailStudio({
                     <button
                       key={label}
                       type="button"
-                      onClick={() => applyInstruction(instr)}
+                      onClick={() => applyInstruction(instr, group.toLowerCase() as "subject" | "copy" | "visual" | "tone")}
                       disabled={promptMut.isPending}
                       className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50 transition-colors"
                     >

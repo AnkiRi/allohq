@@ -106,6 +106,10 @@ export const emailsRouter = router({
         subject: z.string().optional(),
         previewText: z.string().optional(),
         brandVoice: z.string().optional(),
+        // Lane for a chip: "subject" → only the subject; "copy"/"tone" → only
+        // existing-block copy edits; "visual" → only structure (add/remove/reorder
+        // + visual blocks). Omitted (free-text "tell allo") = no restriction.
+        scope: z.enum(["subject", "copy", "visual", "tone"]).optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -116,11 +120,18 @@ export const emailsRouter = router({
       // far less likely to be malformed (the whole-array round-trip produced
       // unescaped newlines/quotes inside html and broke JSON.parse). We apply the
       // changes onto the existing blocks server-side.
+      const SCOPE_RULE: Record<string, string> = {
+        subject: 'SCOPE: change ONLY the subject. Return just { "subject": "..." } — do NOT touch any blocks.',
+        copy: "SCOPE: edit ONLY the copy of EXISTING blocks. Do NOT change the subject, and do NOT add, remove, or reorder blocks.",
+        tone: "SCOPE: adjust ONLY the tone of EXISTING blocks' copy. Do NOT change the subject, and do NOT add, remove, or reorder blocks.",
+        visual: "SCOPE: change ONLY the visual structure — add/remove/reorder blocks and edit visual blocks (image/hero/product/product_grid). Do NOT change the subject and do NOT rewrite body copy.",
+      };
       const system = [
         "You are allo, an expert email copywriter + designer for an Indian e-commerce brand.",
         "You receive the email as JSON blocks {id,type,props} and an instruction.",
         "Apply the instruction and return ONLY THE CHANGES as a compact JSON object —",
         "never the whole array. You can EDIT, ADD, REMOVE, and REORDER blocks.",
+        input.scope ? "\n" + SCOPE_RULE[input.scope] + "\n" : "",
         "",
         "Block types: hero, text, image, button, product, product_grid, icon_row,",
         "testimonial, divider, spacer, social.",
@@ -194,18 +205,32 @@ export const emailsRouter = router({
             ? parsed.subject.trim()
             : undefined;
 
+        // Enforce the chip's lane — drop any out-of-scope changes the model returned,
+        // so Subject chips never touch the body, Copy/Tone never touch the subject or
+        // structure, and Visual never rewrites the subject. (Belt-and-suspenders over
+        // the SCOPE_RULE in the prompt.)
+        const sc = input.scope;
+        const editsAllowed = !sc || sc === "copy" || sc === "tone" || sc === "visual";
+        const structureAllowed = !sc || sc === "visual";
+        const subjectAllowed = !sc || sc === "subject";
+        const effChanges = editsAllowed ? changes : {};
+        const effRemove = structureAllowed ? removeIds : new Set<string>();
+        const effAdd = structureAllowed ? addList : [];
+        const effOrder = structureAllowed ? order : null;
+        const effSubject = subjectAllowed ? newSubject : undefined;
+
         // 1. edit existing + drop removed
         let next = original
-          .filter((b) => !removeIds.has(b.id))
+          .filter((b) => !effRemove.has(b.id))
           .map((b) =>
-            changes[b.id] && typeof changes[b.id] === "object"
-              ? { ...b, props: { ...b.props, ...changes[b.id] } }
+            effChanges[b.id] && typeof effChanges[b.id] === "object"
+              ? { ...b, props: { ...b.props, ...effChanges[b.id] } }
               : b,
           );
 
         // 2. add new blocks (server assigns ids; insert after afterId or append)
         let addCount = 0;
-        for (const a of addList) {
+        for (const a of effAdd) {
           if (!a || typeof a !== "object" || typeof a.type !== "string") continue;
           const block = {
             id: `b-${Date.now()}-${addCount}`,
@@ -219,18 +244,18 @@ export const emailsRouter = router({
         }
 
         // 3. reorder (known ids first in the given order, then any leftovers)
-        if (order && order.length) {
+        if (effOrder && effOrder.length) {
           const byId = new Map(next.map((b) => [b.id, b]));
-          const ordered = order.map((id) => byId.get(id)).filter(Boolean) as any[];
-          const rest = next.filter((b) => !order.includes(b.id));
+          const ordered = effOrder.map((id) => byId.get(id)).filter(Boolean) as any[];
+          const rest = next.filter((b) => !effOrder!.includes(b.id));
           if (ordered.length) next = [...ordered, ...rest];
         }
 
-        const changedCount = Object.keys(changes).filter((id) =>
+        const changedCount = Object.keys(effChanges).filter((id) =>
           original.some((b) => b.id === id),
         ).length;
         const applied =
-          changedCount > 0 || addCount > 0 || removeIds.size > 0 || !!order || !!newSubject;
+          changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject;
 
         if (!applied) {
           return fail("allo didn't change anything — try rephrasing.");
@@ -238,7 +263,7 @@ export const emailsRouter = router({
         return {
           applied: true,
           blocks: next,
-          subject: newSubject ?? input.subject,
+          subject: effSubject ?? input.subject,
           model: result.model,
         };
       } catch (err: any) {
