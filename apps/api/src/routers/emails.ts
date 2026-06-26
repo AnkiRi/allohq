@@ -45,18 +45,20 @@ async function resolveBrandKit(
 
 // LLMs (esp. Claude) often wrap JSON in ```fences``` or add a trailing note, so
 // JSON.parse(result.content) throws and the prompt-edit silently no-ops. Extract
-// the JSON array/object payload before parsing so the delight chips actually apply.
+// the JSON payload before parsing. promptEdit's response is an OBJECT (which may
+// CONTAIN arrays like `add: [...]`), so take the outermost object — first "{" to
+// last "}". Prose brackets like "[Brand Name]" are "[", so starting at "{" skips
+// them; falls back to an array only if there's no object at all.
 function extractJsonPayload(s: string): string {
   let t = s.trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence && fence[1]) t = fence[1].trim();
-  // The blocks payload is an array OF OBJECTS: "[ { ... } ]". Match that
-  // specifically (first "[{" through the last "}]") so brackets in the copy
-  // (e.g. "[Brand Name]") or surrounding prose don't fool the parser.
-  const arr = t.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (arr) return arr[0];
-  const obj = t.match(/\{[\s\S]*\}/);
-  if (obj) return obj[0];
+  const o = t.indexOf("{");
+  const lo = t.lastIndexOf("}");
+  if (o !== -1 && lo > o) return t.slice(o, lo + 1);
+  const a = t.indexOf("[");
+  const la = t.lastIndexOf("]");
+  if (a !== -1 && la > a) return t.slice(a, la + 1);
   return t;
 }
 
@@ -115,20 +117,32 @@ export const emailsRouter = router({
       // unescaped newlines/quotes inside html and broke JSON.parse). We apply the
       // changes onto the existing blocks server-side.
       const system = [
-        "You are allo, an expert email copywriter for an Indian e-commerce brand.",
+        "You are allo, an expert email copywriter + designer for an Indian e-commerce brand.",
         "You receive the email as JSON blocks {id,type,props} and an instruction.",
-        "Apply the instruction and return ONLY THE CHANGES as a compact JSON object,",
-        "never the whole array.",
+        "Apply the instruction and return ONLY THE CHANGES as a compact JSON object —",
+        "never the whole array. You can EDIT, ADD, REMOVE, and REORDER blocks.",
         "",
-        "RETURN EXACTLY this shape and nothing else:",
-        '{ "subject": "<new subject — omit key if unchanged>", "blocks": { "<blockId>": { "<prop>": <newValue> } } }',
+        "Block types: hero, text, image, button, product, product_grid, icon_row,",
+        "testimonial, divider, spacer, social.",
+        "",
+        "RETURN EXACTLY this shape (include only the keys you actually need):",
+        "{",
+        '  "subject": "<new subject — omit if unchanged>",',
+        '  "blocks": { "<existingId>": { "<prop>": <newValue> } },        // EDIT existing',
+        '  "add": [ { "type": "image", "props": { }, "afterId": "<existingId>" } ], // ADD new',
+        '  "remove": ["<existingId>"],                                     // DELETE',
+        '  "order": ["<id>", "<id>"]                                       // REORDER (full id list)',
+        "}",
         "",
         "RULES:",
-        "- Include ONLY the blocks you changed, keyed by their EXISTING id, and only the props you changed.",
-        "- text blocks: edit props.html (paragraphs separated by \\n\\n).",
-        "- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\\". Never put a literal line break inside a string.",
-        "- Keep merge tags like {{first_name}} intact. ₹ prices stay plain numbers.",
+        "- EDIT: only changed blocks (by existing id), only changed props. text → props.html (\\n\\n between paragraphs).",
+        "- MORE VISUAL / add imagery: ADD a hero, an image, or — best for a store — a product_grid",
+        '  with props { "source": "trending", "columns": 3, "dynamicProductCount": 3, "showPrice": true }.',
+        "  product_grid renders REAL store products at send time, so you never need an image URL. Place it with afterId.",
+        "- CHANGE LAYOUT: use \"order\" to resequence, and add/remove blocks as needed.",
+        "- Keep existing ids/types stable. Keep merge tags like {{first_name}} intact. ₹ prices plain numbers.",
         "- Warm, unhurried brand voice. Never hype, ALL-CAPS, or fake urgency.",
+        "- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\\". No literal line breaks inside strings.",
         "- Return ONLY the JSON object — no prose, no markdown fences.",
         input.brandVoice ? `\nBRAND VOICE NOTES:\n${input.brandVoice}` : "",
       ].join("\n");
@@ -168,27 +182,62 @@ export const emailsRouter = router({
           parsed && typeof parsed === "object" && parsed.blocks && typeof parsed.blocks === "object"
             ? parsed.blocks
             : {};
+        const removeIds = new Set(
+          Array.isArray(parsed?.remove) ? parsed.remove.filter((x: unknown) => typeof x === "string") : [],
+        );
+        const addList: any[] = Array.isArray(parsed?.add) ? parsed.add : [];
+        const order: string[] | null = Array.isArray(parsed?.order)
+          ? parsed.order.filter((x: unknown) => typeof x === "string")
+          : null;
         const newSubject =
           typeof parsed?.subject === "string" && parsed.subject.trim()
             ? parsed.subject.trim()
             : undefined;
 
-        // Apply the per-block prop changes onto the existing blocks.
-        const nextBlocks = original.map((b) =>
-          changes[b.id] && typeof changes[b.id] === "object"
-            ? { ...b, props: { ...b.props, ...changes[b.id] } }
-            : b,
-        );
+        // 1. edit existing + drop removed
+        let next = original
+          .filter((b) => !removeIds.has(b.id))
+          .map((b) =>
+            changes[b.id] && typeof changes[b.id] === "object"
+              ? { ...b, props: { ...b.props, ...changes[b.id] } }
+              : b,
+          );
+
+        // 2. add new blocks (server assigns ids; insert after afterId or append)
+        let addCount = 0;
+        for (const a of addList) {
+          if (!a || typeof a !== "object" || typeof a.type !== "string") continue;
+          const block = {
+            id: `b-${Date.now()}-${addCount}`,
+            type: a.type,
+            props: a.props && typeof a.props === "object" ? a.props : {},
+          };
+          const idx = a.afterId ? next.findIndex((b) => b.id === a.afterId) : -1;
+          if (idx >= 0) next.splice(idx + 1, 0, block);
+          else next.push(block);
+          addCount++;
+        }
+
+        // 3. reorder (known ids first in the given order, then any leftovers)
+        if (order && order.length) {
+          const byId = new Map(next.map((b) => [b.id, b]));
+          const ordered = order.map((id) => byId.get(id)).filter(Boolean) as any[];
+          const rest = next.filter((b) => !order.includes(b.id));
+          if (ordered.length) next = [...ordered, ...rest];
+        }
+
         const changedCount = Object.keys(changes).filter((id) =>
           original.some((b) => b.id === id),
         ).length;
+        const applied =
+          changedCount > 0 || addCount > 0 || removeIds.size > 0 || !!order || !!newSubject;
 
-        if (changedCount === 0 && !newSubject) {
+        if (!applied) {
           return fail("allo didn't change anything — try rephrasing.");
         }
         return {
           applied: true,
-          blocks: nextBlocks,
+          blocks: next,
           subject: newSubject ?? input.subject,
           model: result.model,
         };
