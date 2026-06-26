@@ -43,6 +43,23 @@ async function resolveBrandKit(
   return { brandKit: buildBrandKit(null, null), storeId: store?.id ?? "" };
 }
 
+// LLMs (esp. Claude) often wrap JSON in ```fences``` or add a trailing note, so
+// JSON.parse(result.content) throws and the prompt-edit silently no-ops. Extract
+// the JSON array/object payload before parsing so the delight chips actually apply.
+function extractJsonPayload(s: string): string {
+  let t = s.trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence && fence[1]) t = fence[1].trim();
+  // The blocks payload is an array OF OBJECTS: "[ { ... } ]". Match that
+  // specifically (first "[{" through the last "}]") so brackets in the copy
+  // (e.g. "[Brand Name]") or surrounding prose don't fool the parser.
+  const arr = t.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (arr) return arr[0];
+  const obj = t.match(/\{[\s\S]*\}/);
+  if (obj) return obj[0];
+  return t;
+}
+
 export const emailsRouter = router({
   /**
    * Render an EmailBlock[] content model to bulletproof, brand-styled HTML.
@@ -130,7 +147,7 @@ export const emailsRouter = router({
           maxTokens: 4096,
         });
 
-        const parsed = JSON.parse(result.content);
+        const parsed = JSON.parse(extractJsonPayload(result.content));
         const nextBlocks: unknown = Array.isArray(parsed) ? parsed : parsed?.blocks;
 
         if (
