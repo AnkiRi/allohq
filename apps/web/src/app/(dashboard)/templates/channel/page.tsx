@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { templateDisplayName } from "@/lib/templateName";
 import {
   MessageSquare,
   Plus,
@@ -284,7 +285,7 @@ function TemplateCard({
 
       <div className="p-4 space-y-3">
         <h3 className="text-[13px] font-bold text-foreground font-serif leading-snug line-clamp-1">
-          {template.name}
+          {templateDisplayName(template.name, channel)}
         </h3>
 
         {/* Content preview */}

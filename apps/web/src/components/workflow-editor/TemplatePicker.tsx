@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Search, X, Mail, MessageSquare, Phone, Radio, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { templateDisplayName } from "@/lib/templateName";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,13 +55,13 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
   const templates: PickedTemplate[] = useMemo(() => {
     switch (channel) {
       case "email":
-        return (emailTemplates ?? []).map((t: any) => ({ id: t.id, name: t.name, subject: t.subject }));
+        return (emailTemplates ?? []).map((t: any) => ({ id: t.id, name: templateDisplayName(t.name, "email"), subject: t.subject }));
       case "sms":
-        return (smsTemplates ?? []).map((t: any) => ({ id: t.id, name: t.name }));
+        return (smsTemplates ?? []).map((t: any) => ({ id: t.id, name: templateDisplayName(t.name, "sms") }));
       case "whatsapp":
-        return (whatsAppTemplates ?? []).map((t: any) => ({ id: t.id, name: t.name }));
+        return (whatsAppTemplates ?? []).map((t: any) => ({ id: t.id, name: templateDisplayName(t.name, "whatsapp") }));
       case "rcs":
-        return (rcsTemplates ?? []).map((t: any) => ({ id: t.id, name: t.name }));
+        return (rcsTemplates ?? []).map((t: any) => ({ id: t.id, name: templateDisplayName(t.name, "rcs") }));
     }
   }, [channel, emailTemplates, smsTemplates, whatsAppTemplates, rcsTemplates]);
 
