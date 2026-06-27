@@ -52,13 +52,15 @@ export async function getStoreCalibration(
   >`
     SELECT "treatmentArm" AS arm,
            COUNT(*)::bigint AS n,
-           COUNT(
-             CASE WHEN COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL
-                  THEN 1 END
-           )::bigint AS "withOutcome",
+           -- OBSERVED customers (window closed → outcome recorded: purchased OR ignored)
+           COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END)::bigint AS "withOutcome",
+           -- PER-OBSERVED-CUSTOMER mean: total revenue ÷ observed customers, so
+           -- non-buyers count as $0 and lift captures conversion-rate differences
+           -- (group-size normalized = the causal number), not just buyers' AOV.
            COALESCE(
-             AVG(COALESCE("outcomeMargin", "outcomeRevenue"))
-               FILTER (WHERE COALESCE("outcomeMargin", "outcomeRevenue") IS NOT NULL),
+             SUM(COALESCE("outcomeMargin", "outcomeRevenue", 0))
+               FILTER (WHERE "outcome" IS NOT NULL)
+             / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0),
              0
            )::float AS mean
     FROM "message_logs"
