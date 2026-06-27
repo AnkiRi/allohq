@@ -1,4 +1,4 @@
-import { prisma } from "@allohq/database";
+import { prisma, buildWhereFromConditions } from "@allohq/database";
 import type { ToolDefinition } from "../types";
 
 export const inlineCampaignTools: ToolDefinition[] = [
@@ -105,6 +105,23 @@ export const inlineCampaignTools: ToolDefinition[] = [
               },
             })
           : null;
+      }
+
+      // Real recipient count = EXACTLY what the send worker will target: the same
+      // membership resolution + the acceptsMarketing opt-in filter. So the previewed
+      // count equals what actually gets sent (no "1,243 previewed / 987 sent" gap).
+      let recipientCount = 0;
+      if (segment) {
+        const seg = segment as { kind?: string; customerIds?: string[]; conditions?: unknown; name: string };
+        let recipientWhere: Record<string, unknown>;
+        if (seg.kind === "manual") {
+          recipientWhere = { storeId: ctx.storeId, id: { in: seg.customerIds ?? [] }, acceptsMarketing: true };
+        } else if (seg.kind === "conditions" && seg.conditions) {
+          recipientWhere = { ...buildWhereFromConditions(seg.conditions as any, [ctx.storeId]), acceptsMarketing: true };
+        } else {
+          recipientWhere = { storeId: ctx.storeId, rfmScore: { segment: seg.name }, acceptsMarketing: true };
+        }
+        recipientCount = await prisma.customer.count({ where: recipientWhere });
       }
 
       // Fetch brand profile
@@ -241,7 +258,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           templateId: template.id,
           segmentId: segment?.id,
           status: "draft",
-          recipientCount: segment?.customerCount ?? 0,
+          recipientCount,
         },
       });
 
@@ -299,9 +316,9 @@ export const inlineCampaignTools: ToolDefinition[] = [
         campaignName,
         draftCampaignId: campaign.id,
         templateId: template.id,
-        estimatedRecipients: segment?.customerCount ?? 0,
+        estimatedRecipients: recipientCount,
         segment: segment?.name ?? "All customers",
-        message: `Campaign "${campaignName}" created as draft with inline preview. Target: ${segment?.name ?? "All customers"} (${segment?.customerCount ?? 0} recipients). Subject: "${result.subject}". Review the preview and approve to send.`,
+        message: `Campaign "${campaignName}" created as draft with inline preview. Target: ${segment?.name ?? "All customers"} (${recipientCount} recipients). Subject: "${result.subject}". Review the preview and approve to send.`,
       };
     },
   },
