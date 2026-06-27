@@ -50,6 +50,10 @@ async function runHourlyAttribution() {
     const result = await attributeOrdersForStore(store.id);
     totalOrdersAttributed += result.ordersAttributed;
     totalRevenueAttributed += result.revenueAttributed;
+    // Close elapsed holdout windows: anyone (treatment OR control) whose window
+    // passed with no purchase is now an OBSERVED non-buyer ($0), so per-customer
+    // means count the WHOLE arm — the basis for genuinely causal lift.
+    await closeElapsedWindows(store.id);
 
     if (result.ordersAttributed > 0) {
       console.log(
@@ -116,7 +120,36 @@ async function attributeOrdersForStore(storeId: string) {
       },
     });
 
-    if (messages.length === 0) continue;
+    if (messages.length === 0) {
+      // No treatment message — but the customer may be in a CONTROL holdout and
+      // ordered ANYWAY. Record that on their CONTROL row as the causal BASELINE
+      // (no OrderAttribution — nothing we sent caused it; this is the counterfactual
+      // that makes lift = treatment − control real, not treatment − nothing).
+      const controlRow = await prisma.messageLog.findFirst({
+        where: {
+          customerId: order.customerId,
+          storeId,
+          treatmentArm: "CONTROL",
+          createdAt: { gte: windowStart },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, outcomeRevenue: true },
+      });
+      if (controlRow) {
+        const existing = controlRow.outcomeRevenue ? Number(controlRow.outcomeRevenue) : 0;
+        await prisma.messageLog.update({
+          where: { id: controlRow.id },
+          data: {
+            outcome: "purchased",
+            outcomeRevenue: existing + order.totalPrice,
+            outcomeMargin: (existing + order.totalPrice) * marginRate,
+            outcomeTimestamp: new Date(),
+          },
+        });
+        revenueAttributed += order.totalPrice;
+      }
+      continue;
+    }
 
     // Filter to only messages sent BEFORE the order was created
     // (we don't have order.createdAt in select, but orders are from the last hour
@@ -215,6 +248,26 @@ async function attributeOrdersForStore(storeId: string) {
   }
 
   return { ordersAttributed, revenueAttributed };
+}
+
+/**
+ * Mark holdout rows (treatment OR control) whose attribution window has fully
+ * elapsed with NO recorded purchase as observed non-buyers (outcome "ignored",
+ * $0). This is what makes the per-customer mean denominator the WHOLE arm — so
+ * lift captures conversion-rate differences, not just buyers' AOV.
+ */
+async function closeElapsedWindows(storeId: string): Promise<number> {
+  const windowClosed = new Date(Date.now() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const res = await prisma.messageLog.updateMany({
+    where: {
+      storeId,
+      treatmentArm: { not: null },
+      outcome: null,
+      createdAt: { lt: windowClosed },
+    },
+    data: { outcome: "ignored", outcomeRevenue: 0, outcomeMargin: 0, outcomeTimestamp: new Date() },
+  });
+  return res.count;
 }
 
 // ---------------------------------------------------------------------------
