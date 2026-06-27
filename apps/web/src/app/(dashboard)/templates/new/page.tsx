@@ -318,6 +318,8 @@ export default function NewTemplatePage() {
   const [tone, setTone] = useState<string>("Professional");
   const [aiInstruction, setAiInstruction] = useState("");
   const [showAlternatives, setShowAlternatives] = useState(false);
+  const [genError, setGenError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   // tRPC
   const createMut = trpc.templates.create.useMutation();
@@ -349,38 +351,35 @@ export default function NewTemplatePage() {
   useEffect(() => {
     if (step === 2 && goal) {
       let cancelled = false;
+      setGenError(false);
       (async () => {
-        const skeleton = generateBlocksForGoal(goal);
+        const skeleton = generateBlocksForGoal(goal); // seeds block TYPES only — never shown as-is
         const goalLabel = GOALS.find((g) => g.id === goal)?.label ?? "Custom";
         const brief =
           goal === "custom"
             ? customPrompt.trim() || "Create a compelling, on-brand marketing email."
             : `Write a ${goalLabel} email.${customPrompt.trim() ? " " + customPrompt.trim() : ""}`;
-        let nextBlocks = skeleton;
-        let nextSubject = SUBJECT_LINES[goal];
         try {
-          if (storeId && regenerateMut?.mutateAsync) {
-            const result = await regenerateMut.mutateAsync({ storeId, blocks: skeleton, feedback: brief });
-            if (result?.blocks?.length) {
-              nextBlocks = result.blocks;
-              if (result.subject) nextSubject = result.subject;
-            }
-          }
+          if (!storeId || !regenerateMut?.mutateAsync) throw new Error("no store to generate from");
+          const result = await regenerateMut.mutateAsync({ storeId, blocks: skeleton, feedback: brief });
+          if (cancelled) return;
+          if (!result?.blocks?.length) throw new Error("empty generation");
+          // Only advance with REAL generated copy — never the placeholder skeleton.
+          setBlocks(result.blocks);
+          setSubject(result.subject || SUBJECT_LINES[goal]);
+          setTemplateName(`${goalLabel} Email`);
+          setStep(3);
         } catch {
-          // resilient — keep the skeleton if the LLM call fails
+          // Generation failed — surface a retry; NEVER ship "Your Heading Here".
+          if (!cancelled) setGenError(true);
         }
-        if (cancelled) return;
-        setBlocks(nextBlocks);
-        setSubject(nextSubject);
-        setTemplateName(`${goalLabel} Email`);
-        setStep(3);
       })();
       return () => {
         cancelled = true;
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, goal]);
+  }, [step, goal, retryNonce]);
 
   // -- Render preview when blocks change on step 3 --
   useEffect(() => {
@@ -647,32 +646,53 @@ export default function NewTemplatePage() {
             transition={{ duration: 0.3 }}
             className="flex flex-col items-center justify-center py-20 space-y-6"
           >
-            {/* Pulsing gradient animation */}
-            <div className="relative w-24 h-24">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-success)] opacity-20 animate-ping" />
-              <div className="absolute inset-2 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-success)] opacity-30 animate-pulse" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="w-10 h-10 text-[var(--color-accent)]" />
+            {genError ? (
+              <div className="text-center space-y-4 max-w-sm">
+                <h2 className="text-[16px] font-serif font-bold text-foreground">Couldn't write that email</h2>
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
+                  allo hit a snag generating your copy — nothing was saved (no placeholder text).
+                  Give it another go.
+                </p>
+                <button
+                  onClick={() => {
+                    setGenError(false);
+                    setRetryNonce((n) => n + 1);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 transition-opacity"
+                >
+                  Retry
+                </button>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Pulsing gradient animation */}
+                <div className="relative w-24 h-24">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-success)] opacity-20 animate-ping" />
+                  <div className="absolute inset-2 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-success)] opacity-30 animate-pulse" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Sparkles className="w-10 h-10 text-[var(--color-accent)]" />
+                  </div>
+                </div>
 
-            <div className="text-center space-y-2">
-              <h2 className="text-[16px] font-serif font-bold text-foreground">
-                allo is writing your {GOALS.find((g) => g.id === goal)?.label} email…
-              </h2>
-              <p className="text-[13px] text-muted-foreground">
-                Putting together the layout, subject line, and words
-              </p>
-            </div>
+                <div className="text-center space-y-2">
+                  <h2 className="text-[16px] font-serif font-bold text-foreground">
+                    allo is writing your {GOALS.find((g) => g.id === goal)?.label} email…
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground">
+                    Putting together the layout, subject line, and words
+                  </p>
+                </div>
 
-            <div className="w-48 h-1 bg-muted rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-success)] rounded-full"
-                initial={{ width: "0%" }}
-                animate={{ width: "100%" }}
-                transition={{ duration: 1.3, ease: "easeInOut" }}
-              />
-            </div>
+                <div className="w-48 h-1 bg-muted rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-success)] rounded-full"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 1.3, ease: "easeInOut" }}
+                  />
+                </div>
+              </>
+            )}
           </motion.div>
         )}
 
