@@ -29,10 +29,14 @@ export async function runAgent(opts: {
     tools,
     toolContext,
     agentType,
-    conversationHistory = [],
+    conversationHistory: rawHistory = [],
     model = DEFAULT_MODEL,
     maxTokens = 4096,
   } = opts;
+
+  // Cap history so context (and cost) doesn't grow unbounded per turn — keep the
+  // most recent exchanges (last 12 messages ≈ 6 turns); older turns drop off.
+  const conversationHistory = rawHistory.slice(-12);
 
   // Try Anthropic first (the working default tier), fall back to OpenAI.
   // Provider availability is sourced from the gateway's adapter registry so the

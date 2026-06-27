@@ -796,7 +796,13 @@ export const aiRouter = router({
       const job = await brandAnalysisQueue.add(
         "analyze-brand",
         { storeId: input.storeId, model: input.model },
-        { attempts: 2, backoff: { type: "exponential", delay: 5000 } }
+        {
+          attempts: 2,
+          backoff: { type: "exponential", delay: 5000 },
+          // Idempotency: collapse rapid double-clicks (same store within a 30s window)
+          // into ONE job so the brand LLM analysis isn't run — and charged — twice.
+          jobId: `brand-${input.storeId}-${Math.floor(Date.now() / 30000)}`,
+        }
       );
       return { status: "queued" as const, jobId: job.id };
     }),
@@ -856,7 +862,6 @@ export const aiRouter = router({
       // 1. Fetch comprehensive store context in parallel
       // ---------------------------------------------------------------
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       // Pre-search: extract potential names/terms from message to find relevant customers
@@ -870,11 +875,9 @@ export const aiRouter = router({
         segments,
         automations,
         campaigns,
-        ,
         revenueThisMonth,
         brandProfile,
         searchedCustomers,
-        ,
         recentObservations,
         agentMemories,
         latestVoiceReport,
@@ -908,13 +911,6 @@ export const aiRouter = router({
           orderBy: { updatedAt: "desc" },
           take: 20,
         }),
-        // Recent orders (last 30 days)
-        ctx.prisma.order.findMany({
-          where: { storeId: input.storeId, createdAt: { gte: thirtyDaysAgo } },
-          include: { customer: { select: { firstName: true, lastName: true, email: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 50,
-        }),
         // Revenue this month
         ctx.prisma.order.aggregate({
           where: { storeId: input.storeId, createdAt: { gte: startOfMonth } },
@@ -945,13 +941,6 @@ export const aiRouter = router({
               take: 10,
             })
           : Promise.resolve([]),
-        // Token usage stats
-        ctx.prisma.tokenUsage.groupBy({
-          by: ["model"],
-          where: { workspaceId: ctx.workspaceId },
-          _sum: { inputTokens: true, outputTokens: true },
-          _count: { id: true },
-        }),
         // Recent unacknowledged observations for proactive surfacing
         ctx.prisma.agentObservation.findMany({
           where: {
@@ -1301,69 +1290,14 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         };
       } | null = null;
 
-      // If agent's response mentions creating something, try to execute via instruction system
-      const createPatterns = [
-        { pattern: /(?:create|build|set up) (?:a |an )?(?:win.?back|re.?engagement) (?:automation|flow|campaign)/i, type: "create_automation" },
-        { pattern: /(?:create|build|set up) (?:a |an )?campaign/i, type: "create_campaign" },
-        // create_segment intentionally NOT here. The agent's create_segment tool
-        // (find_customers + customerIds / conditions, with the no-broad-RFM guardrail)
-        // is the single authoritative segment path. The legacy instruction executor
-        // ran in parallel and produced a duplicate broad "Custom Segment" — removed so
-        // there is ONE deterministic segment-creation path.
-      ];
-
-      // Check if user explicitly asked to create something
-      const userAskedToCreate = createPatterns.some((p) => p.pattern.test(input.message));
-      if (userAskedToCreate) {
-        const matchedPattern = createPatterns.find((p) => p.pattern.test(input.message));
-        if (matchedPattern) {
-          try {
-            const { parseInstruction, executeInstruction } = await import("@allohq/customer-intelligence");
-
-            const parsedInstruction = await parseInstruction(input.message, {
-              page: "dashboard",
-              existingSegments: segments.map((s) => s.name),
-              existingAutomations: automations.map((a) => a.name),
-            });
-
-            const execResult = await executeInstruction(parsedInstruction, {
-              prisma: ctx.prisma as any,
-              storeId: input.storeId,
-              workspaceId: ctx.workspaceId,
-              brandProfile: brandProfile ? {
-                brandName: brandProfile.brandName,
-                brandDescription: brandProfile.brandDescription ?? undefined,
-                toneAttributes: {} as Record<string, string>,
-                vocabulary: {} as Record<string, string[]>,
-                visualStyle: {} as Record<string, string | string[]>,
-                sampleCopy: [],
-              } : undefined,
-            });
-
-            actionResult = {
-              intent: execResult.intent,
-              success: execResult.success,
-              summary: execResult.summary,
-              created: execResult.created,
-            };
-
-            if (execResult.tokenUsage.input > 0) {
-              await ctx.prisma.tokenUsage.create({
-                data: {
-                  workspaceId: ctx.workspaceId,
-                  model: execResult.tokenUsage.model,
-                  inputTokens: execResult.tokenUsage.input,
-                  outputTokens: execResult.tokenUsage.output,
-                  purpose: "chat_action",
-                },
-              });
-            }
-          } catch (err) {
-            console.error("[AI Chat] Action execution failed:", err);
-            reply += "\n\n*(Note: I tried to execute the action but encountered an error. Please try again or use the specific feature page.)*";
-          }
-        }
-      }
+      // Campaign / automation / segment creation is handled SOLELY by the agent's
+      // tools above (create_campaign_with_preview, create_segment, automation tools).
+      // The legacy parseInstruction → executeInstruction path that ran HERE in parallel
+      // double-created entities (two campaigns for one "create a campaign") AND paid for
+      // a redundant LLM parse — removed so there is ONE creation path (the agent).
+      // actionResult stays null; the agent's reply + toolCalls + campaignPreview convey
+      // what was created. (The standalone ai.executeInstruction procedure — used by the
+      // Command Bar — still exists for that entry point, with its own guardrails.)
 
       // Record chat token usage
       await ctx.prisma.tokenUsage.create({
