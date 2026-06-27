@@ -96,6 +96,28 @@ function buildComparison(op: string, value: any): any {
   }
 }
 
+/**
+ * ONE place that resolves a segment's members → a Prisma customer `where`,
+ * regardless of how the segment is defined: explicit list (customerIds) →
+ * conditions → RFM range. Used by getById (members), create/update (count) and
+ * preview so the SAME query answers, builds, and displays — counts always match.
+ */
+function resolveSegmentWhere(
+  segment: { customerIds?: string[] | null; conditions?: unknown; rfmMin?: number | null; rfmMax?: number | null },
+  storeIds: string[],
+): any {
+  if (segment.customerIds && segment.customerIds.length > 0) {
+    return { storeId: { in: storeIds }, id: { in: segment.customerIds } };
+  }
+  if (segment.conditions) {
+    return buildWhereFromConditions(segment.conditions as z.infer<typeof conditionsSchema>, storeIds);
+  }
+  return {
+    storeId: { in: storeIds },
+    rfmScore: { totalScore: { gte: segment.rfmMin ?? 0, lte: segment.rfmMax ?? 15 } },
+  };
+}
+
 export const segmentsRouter = router({
   /** List all segments for the workspace */
   list: workspaceProcedure.query(async ({ ctx }) => {
@@ -112,6 +134,45 @@ export const segmentsRouter = router({
 
     return segments;
   }),
+
+  /** Get one segment + its RESOLVED members (works for every segment kind). */
+  getById: workspaceProcedure
+    .input(z.object({ id: z.string(), membersLimit: z.number().min(1).max(500).default(100) }))
+    .query(async ({ ctx, input }) => {
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      const storeIds = stores.map((s) => s.id);
+      const segment = await ctx.prisma.customerSegment.findFirst({
+        where: { id: input.id, storeId: { in: storeIds } },
+      });
+      if (!segment) return null;
+
+      const where = resolveSegmentWhere(segment as any, storeIds);
+      const [count, members] = await Promise.all([
+        ctx.prisma.customer.count({ where }),
+        ctx.prisma.customer.findMany({
+          where,
+          take: input.membersLimit,
+          include: { rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, lastOrderAt: true } } },
+          orderBy: { rfmScore: { totalSpent: "desc" } },
+        }),
+      ]);
+
+      return {
+        segment,
+        count,
+        members: members.map((m) => ({
+          id: m.id,
+          name: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.email,
+          email: m.email,
+          segment: m.rfmScore?.segment ?? null,
+          totalSpent: m.rfmScore?.totalSpent ?? 0,
+          orderCount: m.rfmScore?.orderCount ?? 0,
+        })),
+      };
+    }),
 
   /** Initialize default segments for a store */
   initDefaults: storeProcedure
@@ -166,6 +227,11 @@ export const segmentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+      // Resolve the member count NOW via the SAME query preview uses, so the
+      // created segment's count always equals the preview the user just saw.
+      const where = buildWhereFromConditions(input.conditions, [input.storeId]);
+      const customerCount = await ctx.prisma.customer.count({ where });
+
       const segment = await ctx.prisma.customerSegment.create({
         data: {
           storeId: input.storeId,
@@ -173,6 +239,8 @@ export const segmentsRouter = router({
           slug,
           description: input.description,
           conditions: input.conditions as any,
+          kind: "conditions",
+          customerCount,
           isSystem: false,
         },
       });
@@ -191,6 +259,19 @@ export const segmentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Recompute the count via the same query when the definition changes, so an
+      // edited segment's count stays consistent with what a preview would show.
+      let recount: Record<string, unknown> = {};
+      if (input.conditions) {
+        const existing = await ctx.prisma.customerSegment.findUnique({
+          where: { id: input.id },
+          select: { storeId: true },
+        });
+        if (existing) {
+          const where = buildWhereFromConditions(input.conditions, [existing.storeId]);
+          recount = { customerCount: await ctx.prisma.customer.count({ where }), kind: "conditions" };
+        }
+      }
       const segment = await ctx.prisma.customerSegment.update({
         where: { id: input.id },
         data: {
@@ -200,6 +281,7 @@ export const segmentsRouter = router({
           }),
           ...(input.description !== undefined && { description: input.description }),
           ...(input.conditions && { conditions: input.conditions as any }),
+          ...recount,
         },
       });
 

@@ -9,7 +9,7 @@ export const segmentTools: ToolDefinition[] = [
     parameters: {
       name: {
         type: "string",
-        description: "Segment name (e.g. 'High-Value At Risk', 'Recent Buyers')",
+        description: "The segment's name — ALWAYS use the EXACT name the merchant specified (e.g. they said 'call it VIPs' → name='VIPs'). Only invent a short descriptive name if they gave none. NEVER leave this blank or generic.",
       },
       description: {
         type: "string",
@@ -31,12 +31,14 @@ export const segmentTools: ToolDefinition[] = [
       },
     },
     handler: async (params, ctx) => {
-      const name = String(params.name ?? "Custom Segment");
       const description = String(params.description ?? "");
       const rawIds = Array.isArray(params.customerIds)
         ? (params.customerIds as unknown[]).map(String).filter(Boolean)
         : [];
       const isManual = rawIds.length > 0;
+      // Respect the merchant's name; only fall back to a descriptive default when none given.
+      const name =
+        String(params.name ?? "").trim() || (isManual ? "Selected customers" : "Custom segment");
 
       const slug = name
         .toLowerCase()
