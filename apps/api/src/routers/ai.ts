@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure, ownerProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 
@@ -135,6 +135,62 @@ async function writeMemoryIfSignificant(
 }
 
 export const aiRouter = router({
+  /**
+   * FOUNDER-ONLY LLM cost + error console. Surfaces real spend (from tokenUsage) and
+   * recent agent errors so the founder isn't flying blind on runway. Owner-gated:
+   * demo-guests + non-admins → FORBIDDEN. Logs a warning when daily spend crosses a
+   * configurable threshold (LLM_DAILY_SPEND_ALERT_USD, default $25).
+   */
+  llmSpend: ownerProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // $ per 1M tokens (input/output). Default to Sonnet rates for unknown models.
+    const RATES: Record<string, { in: number; out: number }> = {
+      "claude-sonnet-4-6": { in: 3, out: 15 },
+      "gpt-4o": { in: 2.5, out: 10 },
+      "gpt-4o-mini": { in: 0.15, out: 0.6 },
+    };
+    const usd = (rows: { model: string; _sum: { inputTokens: number | null; outputTokens: number | null } }[]) =>
+      rows.reduce((s, r) => {
+        const rate = RATES[r.model] ?? { in: 3, out: 15 };
+        return s + ((r._sum.inputTokens ?? 0) * rate.in + (r._sum.outputTokens ?? 0) * rate.out) / 1_000_000;
+      }, 0);
+
+    const stores = await ctx.prisma.store.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true } });
+    const storeIds = stores.map((s) => s.id);
+
+    const [today, week, byModel, recentErrors] = await Promise.all([
+      ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfDay } }, _sum: { inputTokens: true, outputTokens: true } }),
+      ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } }, _sum: { inputTokens: true, outputTokens: true } }),
+      ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } }, _sum: { inputTokens: true, outputTokens: true }, _count: { id: true } }),
+      ctx.prisma.agentAction.findMany({ where: { storeId: { in: storeIds }, status: "failed" }, orderBy: { createdAt: "desc" }, take: 20, select: { actionType: true, error: true, createdAt: true } }),
+    ]);
+
+    const todayUsd = usd(today);
+    const threshold = Number(process.env["LLM_DAILY_SPEND_ALERT_USD"] ?? "25");
+    const exceeded = todayUsd > threshold;
+    if (exceeded) {
+      console.warn(`[LLM spend alert] today $${todayUsd.toFixed(2)} exceeds threshold $${threshold} (workspace ${ctx.workspaceId})`);
+    }
+
+    return {
+      todayUsd: Math.round(todayUsd * 100) / 100,
+      weekUsd: Math.round(usd(week) * 100) / 100,
+      byModel: byModel
+        .map((m) => ({
+          model: m.model,
+          calls: m._count.id,
+          inputTokens: m._sum.inputTokens ?? 0,
+          outputTokens: m._sum.outputTokens ?? 0,
+          usd: Math.round(usd([m]) * 100) / 100,
+        }))
+        .sort((a, b) => b.usd - a.usd),
+      recentErrors,
+      threshold: { dailyUsd: threshold, exceeded },
+    };
+  }),
+
   /** Aggregated insights for the AI panel */
   panelInsights: workspaceProcedure
     .input(z.object({ storeId: z.string() }))

@@ -263,3 +263,22 @@ export const storeProcedure = workspaceProcedure
     await verifyStoreAccess(ctx, (input as { storeId: string }).storeId);
     return next();
   });
+
+/**
+ * Owner procedure — founder/owner-only surfaces (e.g. the LLM cost/error console).
+ * Requires workspace access AND an admin role on that workspace; demo-guests and
+ * non-admin members → FORBIDDEN. Same isolation discipline as everything else.
+ */
+export const ownerProcedure = workspaceProcedure.use(async ({ ctx, next }) => {
+  if (ctx.isDemo) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Owner-only." });
+  }
+  const member = await prisma.workspaceMember.findFirst({
+    where: { workspaceId: ctx.workspaceId, user: { clerkId: ctx.userId } },
+    select: { role: true },
+  });
+  if (!member || member.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Owner-only." });
+  }
+  return next();
+});
