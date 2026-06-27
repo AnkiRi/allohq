@@ -55,6 +55,31 @@ export interface CompletionResult {
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 4096;
 
+// ---------------------------------------------------------------------------
+// Provider circuit-breaker. When a provider rate-limits/quota-errors, skip it
+// for a cooldown window instead of hammering it (and paying doomed round-trips)
+// on every subsequent call. This is what makes economy-tier routing safe: a
+// quota'd OpenAI is tried ONCE, marked down, then skipped — calls fall straight
+// to the working default (Claude) until the cooldown expires.
+// ---------------------------------------------------------------------------
+const PROVIDER_COOLDOWN_MS = 60_000;
+const providerCooldownUntil: Partial<Record<AIProvider, number>> = {};
+
+function isProviderCoolingDown(p: AIProvider): boolean {
+  const until = providerCooldownUntil[p];
+  return until !== undefined && Date.now() < until;
+}
+function markProviderCooldown(p: AIProvider): void {
+  providerCooldownUntil[p] = Date.now() + PROVIDER_COOLDOWN_MS;
+  console.warn(`[AI Gateway] ${p} cooling down ${PROVIDER_COOLDOWN_MS / 1000}s after a rate-limit/quota error.`);
+}
+function isRateLimited(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 429) return true;
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return msg.includes("quota") || msg.includes("rate limit") || msg.includes("429") || msg.includes("overloaded");
+}
+
 /**
  * Is an error a "skip to the next provider" signal? Quota/rate-limit (429),
  * auth (401/403) and missing-key errors are recoverable via fallback.
@@ -92,9 +117,11 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
 
     const provider = getProvider(modelDef.provider);
 
-    // 2. Graceful degrade: skip providers with no key / not available, so the
-    //    chain falls through to the working default (Claude) instead of failing.
+    // 2. Graceful degrade: skip providers with no key / not available, OR ones
+    //    currently cooling down from a recent rate-limit, so the chain falls
+    //    through to the working default (Claude) instead of failing/storming.
     if (!provider.isAvailable()) continue;
+    if (isProviderCoolingDown(modelDef.provider)) continue;
 
     const providerReq: ProviderRequest = {
       model: modelId,
@@ -149,6 +176,9 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
       };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      // Rate-limit/quota → trip the circuit-breaker so this provider is skipped
+      // on subsequent calls (no storm), then fall through to the next candidate now.
+      if (isRateLimited(err)) markProviderCooldown(modelDef.provider);
       console.error(
         `[AI Gateway] ${modelId} (${modelDef.provider}) failed: ${lastError.message}.` +
           (isRecoverable(err) ? " Falling back..." : " Non-recoverable, but trying next candidate..."),

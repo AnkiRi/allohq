@@ -114,6 +114,7 @@ export async function parseInstruction(
 
   const result = await complete({
     model,
+    task: "classification", // intent parsing is cheap/deterministic → economy tier
     prompt,
     temperature: 0.3,
     jsonMode: true,

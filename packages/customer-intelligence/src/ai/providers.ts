@@ -57,7 +57,9 @@ class AnthropicProvider implements LlmProvider {
   }
 
   async complete(req: ProviderRequest): Promise<ProviderResult> {
-    const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+    // timeout: fail fast instead of hanging a worker; maxRetries: 1 so the gateway's
+    // circuit-breaker handles cross-provider fallback rather than slow SDK retries.
+    const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"], timeout: 60_000, maxRetries: 1 });
 
     const response = await client.messages.create({
       model: req.model,
@@ -93,7 +95,7 @@ class OpenAIProvider implements LlmProvider {
   }
 
   async complete(req: ProviderRequest): Promise<ProviderResult> {
-    const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
+    const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"], timeout: 60_000, maxRetries: 1 });
 
     const messages: { role: "system" | "user"; content: string }[] = [];
     if (req.system) messages.push({ role: "system", content: req.system });
