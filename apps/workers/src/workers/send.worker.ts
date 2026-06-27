@@ -1,5 +1,5 @@
 import { Worker, Queue } from "bullmq";
-import { prisma } from "@allohq/database";
+import { prisma, buildWhereFromConditions } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
@@ -54,13 +54,19 @@ export const sendWorker = new Worker<SendJobData>(
     };
 
     if (campaign.segmentId && campaign.segment) {
-      if (campaign.segment.kind === "manual") {
+      const seg = campaign.segment;
+      if (seg.kind === "manual") {
         // Manual segment → EXACTLY the customers the merchant chose (still
         // respecting the acceptsMarketing opt-out filter above).
-        customerWhere["id"] = { in: campaign.segment.customerIds ?? [] };
+        customerWhere["id"] = { in: seg.customerIds ?? [] };
+      } else if (seg.kind === "conditions" && seg.conditions) {
+        // Rule-based segment → resolve via the SAME builder as preview/create,
+        // merged with the acceptsMarketing filter already set above.
+        const condWhere = buildWhereFromConditions(seg.conditions as any, [campaign.storeId]);
+        Object.assign(customerWhere, condWhere);
       } else {
         // RFM segment → all customers whose RFM segment matches.
-        customerWhere["rfmScore"] = { segment: campaign.segment.name };
+        customerWhere["rfmScore"] = { segment: seg.name };
       }
     }
 

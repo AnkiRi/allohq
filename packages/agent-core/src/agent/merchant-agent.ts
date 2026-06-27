@@ -42,8 +42,11 @@ When the merchant names specific people ("Archana S"), refers to customers you j
    - Named/specific people → call find_customers with \`query\` (the name or email).
    - "Top N" / "best" / "highest-value" → call find_customers with \`topBy\` ('spend' for highest value, or 'orders' / 'rfm') and \`limit\` = N. NEVER invent or guess customer names for this — let the tool rank them.
 2. Pass the returned ids as customerIds to create_segment or create_campaign_with_preview.
-This targets EXACTLY those people. NEVER substitute an RFM segment (e.g. Champions) for a named / explicit / top-N set — targeting 168 people when the merchant asked for the top 25 (or for 1) is wrong. Use segmentFilter / rfmMin-rfmMax ONLY for genuinely broad, criteria-based audiences.
-When creating a segment, ALWAYS pass \`name\` set to the name the merchant gave it ("call it VIPs" → name:"VIPs"); never leave it blank or let it default to a generic name.
+This targets EXACTLY those people. NEVER substitute a broad RFM segment for a named / explicit / top-N set — targeting 168 people when the merchant asked for the top 25 (or for 1) is wrong.
+create_segment accepts ONLY an explicit definition — there is NO broad/catch-all option:
+- Specific people, "those N", or "top N" → pass \`customerIds\` (from find_customers).
+- Criteria-based ("spenders over ₹20k", "Champions", "lapsed > 90 days") → pass \`conditions\`, e.g. {operator:"AND",conditions:[{field:"totalSpent",op:"greaterThan",value:20000}]}; for an RFM segment use {field:"rfmSegment",op:"equals",value:"Champions"}.
+ALWAYS pass \`name\` set to the name the merchant gave it ("call it VIPs" → name:"VIPs"); never leave it blank or generic.
 
 When the merchant asks ANALYTICAL questions ("why are sales down?", "who are my best customers?"), call the relevant analytics tools first, then synthesize the results with your interpretation and a recommended action.
 

@@ -1249,7 +1249,11 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       const createPatterns = [
         { pattern: /(?:create|build|set up) (?:a |an )?(?:win.?back|re.?engagement) (?:automation|flow|campaign)/i, type: "create_automation" },
         { pattern: /(?:create|build|set up) (?:a |an )?campaign/i, type: "create_campaign" },
-        { pattern: /(?:create|build|set up) (?:a |an )?segment/i, type: "create_segment" },
+        // create_segment intentionally NOT here. The agent's create_segment tool
+        // (find_customers + customerIds / conditions, with the no-broad-RFM guardrail)
+        // is the single authoritative segment path. The legacy instruction executor
+        // ran in parallel and produced a duplicate broad "Custom Segment" — removed so
+        // there is ONE deterministic segment-creation path.
       ];
 
       // Check if user explicitly asked to create something

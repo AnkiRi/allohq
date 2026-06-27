@@ -25,6 +25,10 @@ export type {
 // Customers to a shared Identity. Unused in single-brand behavior.
 export { normalizeEmail, normalizePhone } from "./identity";
 
+// Shared segment membership resolution (one model: manual | conditions | rfm)
+export { buildWhereFromConditions, resolveSegmentWhere } from "./segments";
+export type { SegmentCondition, SegmentConditions } from "./segments";
+
 // Demo / sandbox mode (logged-out visitor → seeded Vana, read-mostly). Resolved
 // by STABLE slug/domain (portable across dev/prod), not hardcoded cuids.
 export {
