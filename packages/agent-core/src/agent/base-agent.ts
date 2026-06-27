@@ -75,6 +75,13 @@ async function runAnthropicAgent(opts: {
 
   const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
   const anthropicTools = toAnthropicTools(tools);
+  // Prompt caching — cache the STABLE prefix (system prompt + tool schemas) so the
+  // ~3k-token prefix isn't re-billed on every round of the agent loop (rounds 2-5
+  // read it from cache, ~90% cheaper). Dynamic conversation messages stay uncached.
+  if (anthropicTools.length > 0) {
+    (anthropicTools[anthropicTools.length - 1] as Record<string, unknown>).cache_control = { type: "ephemeral" };
+  }
+  const cachedSystem = [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }];
 
   const messages: Anthropic.MessageParam[] = [];
   for (const msg of conversationHistory) {
@@ -94,13 +101,22 @@ async function runAnthropicAgent(opts: {
     const response = await client.messages.create({
       model,
       max_tokens: maxTokens,
-      system: systemPrompt,
+      system: cachedSystem as unknown as Anthropic.MessageCreateParams["system"],
       tools: anthropicTools,
       messages,
     });
 
-    totalInputTokens += response.usage.input_tokens;
-    totalOutputTokens += response.usage.output_tokens;
+    const usage = response.usage as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+    };
+    totalInputTokens += usage.input_tokens;
+    totalOutputTokens += usage.output_tokens;
+    if ((usage.cache_read_input_tokens ?? 0) > 0 || (usage.cache_creation_input_tokens ?? 0) > 0) {
+      console.log(`[Agent cache] round ${round}: read=${usage.cache_read_input_tokens ?? 0} created=${usage.cache_creation_input_tokens ?? 0} fresh_input=${usage.input_tokens}`);
+    }
 
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
