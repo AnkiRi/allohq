@@ -14,6 +14,7 @@ import { journeyTools } from "./journey-tools";
 import { simulationTools } from "./simulation-tools";
 import { inlineCampaignTools } from "./inline-campaign-tool";
 import { deepAnalyticsTools } from "./deep-analytics-tools";
+import { storeMetricsTools } from "./store-metrics-tools";
 
 /** All tools available to the customer-facing agent */
 export function getCustomerTools(): ToolDefinition[] {
@@ -43,6 +44,7 @@ export function getMerchantTools(): ToolDefinition[] {
     ...simulationTools,
     ...inlineCampaignTools,
     ...deepAnalyticsTools,
+    ...storeMetricsTools,
   ];
 }
 

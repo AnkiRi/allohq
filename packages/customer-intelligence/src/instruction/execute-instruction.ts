@@ -5,6 +5,7 @@ import { generateSms } from "../content/generate-sms";
 import { generateWhatsApp } from "../content/generate-whatsapp";
 import { generateRcs } from "../content/generate-rcs";
 import { generateWorkflow } from "../programs/generate-workflow";
+import { buildWhereFromConditions } from "@allohq/database";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,57 +44,64 @@ interface ExecutionDeps {
 // Segment creation helper
 // ---------------------------------------------------------------------------
 
+// Map the instruction parser's criteria vocabulary → the canonical conditions shape.
+const OP_MAP: Record<string, string> = {
+  gt: "greaterThan",
+  lt: "lessThan",
+  gte: "greaterThanOrEqual",
+  lte: "lessThanOrEqual",
+  eq: "equals",
+  equals: "equals",
+};
+const FIELD_MAP: Record<string, string> = { segment: "rfmSegment" };
+
+function describeConditions(conds: Array<{ field: string; op: string; value: unknown }>): string {
+  const labels: Record<string, string> = {
+    totalSpent: "spend",
+    orderCount: "orders",
+    daysSinceLastOrder: "days since order",
+    avgOrderValue: "AOV",
+    rfmSegment: "segment",
+  };
+  const ops: Record<string, string> = {
+    greaterThan: ">",
+    lessThan: "<",
+    greaterThanOrEqual: "≥",
+    lessThanOrEqual: "≤",
+    equals: "=",
+  };
+  const parts = conds.map((c) => `${labels[c.field] ?? c.field} ${ops[c.op] ?? ""} ${c.value}`.trim());
+  return parts.join(", ").slice(0, 60) || "Targeted segment";
+}
+
 async function createSegmentFromCriteria(
   deps: ExecutionDeps,
   parsed: ParsedInstruction,
 ): Promise<{ segmentId: string; customerCount: number; segmentName: string }> {
-  const criteria = parsed.params.segmentCriteria;
-  const segmentName = parsed.params.targetSegment ?? "Custom Segment";
+  // Map the parser's criteria → the CANONICAL conditions shape, so this path (the
+  // Command Bar / instruction executor) resolves membership with the SAME query as
+  // the chat agent and the segment detail view. One resolver, every entry point —
+  // no more ad-hoc query that drifts from buildWhereFromConditions.
+  const conditions = (parsed.params.segmentCriteria?.conditions ?? [])
+    .map((c) => ({ field: FIELD_MAP[c.field] ?? c.field, op: OP_MAP[c.op] ?? "equals", value: c.value }))
+    .filter((c) => c.value !== undefined && c.value !== null && c.value !== "");
 
-  // Generate a URL-safe slug from the segment name
-  const slug = segmentName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    + "-" + Date.now().toString(36);
-
-  // Build Prisma where clause from criteria
-  const where: Record<string, unknown> = { storeId: deps.storeId };
-
-  if (criteria) {
-    for (const cond of criteria.conditions) {
-      switch (cond.field) {
-        case "totalSpent":
-          where["rfmScore"] = {
-            ...(where["rfmScore"] as Record<string, unknown> ?? {}),
-            totalSpent: { [cond.op === "gt" ? "gt" : cond.op === "lt" ? "lt" : "equals"]: cond.value },
-          };
-          break;
-        case "orderCount":
-          where["rfmScore"] = {
-            ...(where["rfmScore"] as Record<string, unknown> ?? {}),
-            frequency: { [cond.op === "gt" ? "gt" : cond.op === "lt" ? "lt" : "equals"]: cond.value },
-          };
-          break;
-        case "daysSinceLastOrder":
-          if (cond.op === "gt") {
-            const cutoff = new Date(Date.now() - (cond.value as number) * 24 * 60 * 60 * 1000);
-            where["rfmScore"] = {
-              ...(where["rfmScore"] as Record<string, unknown> ?? {}),
-              lastOrderAt: { lt: cutoff },
-            };
-          }
-          break;
-        case "segment":
-          where["rfmScore"] = {
-            ...(where["rfmScore"] as Record<string, unknown> ?? {}),
-            segment: cond.value,
-          };
-          break;
-      }
-    }
+  // GUARDRAIL: never silently create a broad all-customers "Custom Segment" blob.
+  // A segment must have an explicit definition — otherwise refuse and ask.
+  if (conditions.length === 0) {
+    throw new Error(
+      'I need a clear definition for that segment — e.g. "spent over ₹2,000" or "no order in 60 days". What should define it?',
+    );
   }
 
+  const canonical = { operator: "AND" as const, conditions };
+  // Respect the requested name; fall back to a description of the rules — never a generic blob name.
+  const segmentName = parsed.params.targetSegment?.trim() || describeConditions(conditions);
+  const slug =
+    segmentName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") +
+    "-" + Date.now().toString(36);
+
+  const where = buildWhereFromConditions(canonical, [deps.storeId]);
   const customerCount = await (deps.prisma as any).customer.count({ where });
 
   const segment = await (deps.prisma as any).customerSegment.create({
@@ -102,7 +110,8 @@ async function createSegmentFromCriteria(
       name: segmentName,
       slug,
       description: parsed.reasoning,
-      conditions: criteria ?? {},
+      kind: "conditions",
+      conditions: canonical,
       customerCount,
       isSystem: false,
     },
