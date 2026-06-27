@@ -810,7 +810,7 @@ export const aiRouter = router({
         .filter((w) => w.length > 2 && !STOP_WORDS.has(w.toLowerCase()));
 
       const [
-        allCustomers,
+        topCustomers,
         segments,
         automations,
         campaigns,
@@ -822,16 +822,17 @@ export const aiRouter = router({
         recentObservations,
         agentMemories,
         latestVoiceReport,
+        customerCount,
+        optedInCount,
       ] = await Promise.all([
-        // Top 100 customers with RFM + LTV
+        // Top 10 customers BY SPEND — a labeled SAMPLE for the prompt, not a total.
         ctx.prisma.customer.findMany({
-          where: { storeId: input.storeId },
+          where: { storeId: input.storeId, rfmScore: { isNot: null } },
           include: {
-            rfmScore: { select: { segment: true, recency: true, frequency: true, monetary: true, totalScore: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true } },
-            lifetimeValue: { select: { historicalLtv: true, predictedLtv: true, churnProbability: true, purchaseFrequency: true } },
+            rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, lastOrderAt: true } },
           },
-          orderBy: { updatedAt: "desc" },
-          take: 150,
+          orderBy: { rfmScore: { totalSpent: "desc" } },
+          take: 10,
         }),
         // All segments
         ctx.prisma.customerSegment.findMany({
@@ -923,12 +924,15 @@ export const aiRouter = router({
           where: { storeId: input.storeId },
           orderBy: { weekOf: "desc" },
         }),
+        // Real totals — facts come from aggregate queries, NEVER a capped fetch's length.
+        ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
+        ctx.prisma.customer.count({ where: { storeId: input.storeId, acceptsMarketing: true } }),
       ]);
 
       // ---------------------------------------------------------------
       // 2. Build store intelligence summary for the system prompt
       // ---------------------------------------------------------------
-      const totalCustomers = allCustomers.length;
+      const totalCustomers = customerCount;
 
       // Helper: get segment insight text
       function getSegmentInsight(s: { name: string; customerCount: number; totalRevenue: number }): string {
@@ -958,9 +962,8 @@ export const aiRouter = router({
           opportunities.push(`${idx++}. RETENTION: ${atRisk.customerCount} ${atRisk.name} customers showing churn signals. Best action: personal check-in or loyalty reward.`);
         }
 
-        // Check for 0% opt-in
-        const acceptsMarketing = allCustomers.filter((c) => c.acceptsMarketing).length;
-        const optInRate = totalCustomers > 0 ? Math.round((acceptsMarketing / totalCustomers) * 100) : 0;
+        // Check for 0% opt-in (from REAL counts, not the sampled top customers)
+        const optInRate = customerCount > 0 ? Math.round((optedInCount / customerCount) * 100) : 0;
         if (optInRate < 5) {
           opportunities.push(`${idx++}. LEAD CAPTURE: Marketing opt-in rate is ${optInRate}% — CRITICAL. Cannot send campaigns until customers opt in. Set up a popup form with incentive.`);
         }
@@ -980,9 +983,7 @@ export const aiRouter = router({
         return opportunities.join("\n") || "No urgent opportunities detected.";
       }
 
-      const topCustomersList = [...allCustomers]
-        .sort((a, b) => (b.rfmScore?.totalSpent ?? 0) - (a.rfmScore?.totalSpent ?? 0))
-        .slice(0, 10)
+      const topCustomersList = topCustomers
         .map((c) => {
           const rfm = c.rfmScore;
           const daysSinceOrder = rfm?.lastOrderAt ? Math.round((Date.now() - new Date(rfm.lastOrderAt).getTime()) / (86400000)) : -1;
@@ -1009,8 +1010,7 @@ export const aiRouter = router({
       const monthOrders = revenueThisMonth._count;
       const avgOrderValue = monthOrders > 0 ? (monthRevenue / monthOrders) : 0;
 
-      const acceptsMarketing = allCustomers.filter((c) => c.acceptsMarketing).length;
-      const optInRate = totalCustomers > 0 ? Math.round((acceptsMarketing / totalCustomers) * 100) : 0;
+      const optInRate = customerCount > 0 ? Math.round((optedInCount / customerCount) * 100) : 0;
 
       const storeContext = `
 ## STORE INTELLIGENCE SUMMARY FOR ${brandProfile?.brandName ?? store.shopDomain}
@@ -1040,7 +1040,7 @@ ${campaigns.length > 0 ? campaigns.map((c) => {
   return `- ${c.name} (${c.status}): ${openRate}% open, ${clickRate}% click, ${c.recipientCount} recipients`;
 }).join("\n") : "No campaigns created yet."}
 
-### Top 10 Customers (by lifetime spend)
+### Top Customers (a SAMPLE — the 10 highest spenders of ${totalCustomers.toLocaleString()} total; ask to see more)
 ${topCustomersList || "No customer data yet."}
 ${searchResults}
 ${recentObservations.length > 0 ? `
