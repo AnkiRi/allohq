@@ -210,7 +210,11 @@ export default function SegmentsPage() {
                   return (
                     <Link
                       key={seg.id}
-                      href={`/customers?segment=${encodeURIComponent(seg.name)}`}
+                      href={
+                        seg.kind === "conditions" || seg.kind === "manual"
+                          ? `/segments/${seg.id}`
+                          : `/customers?segment=${encodeURIComponent(seg.name)}`
+                      }
                       className="group block rounded-lg px-3 py-2.5 hover:bg-background/40 transition-colors"
                     >
                       <div className="flex items-center gap-3">
