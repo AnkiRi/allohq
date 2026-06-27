@@ -133,6 +133,7 @@ export async function analyzeBrandVoice(
 
   const result = await complete({
     model: options?.model,
+    task: "analysis", // brand extraction/summarization → economy tier
     prompt,
     temperature: 0.3,
     jsonMode: true,
@@ -186,6 +187,7 @@ export async function analyzeBrandFromDocument(
 
   const result = await complete({
     model: options?.model,
+    task: "analysis", // brand extraction/summarization → economy tier
     prompt,
     temperature: 0.3,
     jsonMode: true,

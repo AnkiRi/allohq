@@ -73,7 +73,7 @@ async function runAnthropicAgent(opts: {
 }): Promise<AgentResult> {
   const { systemPrompt, userMessage, tools, toolContext, agentType, conversationHistory, model, maxTokens } = opts;
 
-  const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+  const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"], timeout: 60_000, maxRetries: 1 });
   const anthropicTools = toAnthropicTools(tools);
   // Prompt caching — cache the STABLE prefix (system prompt + tool schemas) so the
   // ~3k-token prefix isn't re-billed on every round of the agent loop (rounds 2-5
@@ -188,7 +188,7 @@ async function runOpenAIAgent(opts: {
 }): Promise<AgentResult> {
   const { systemPrompt, userMessage, tools, toolContext, agentType, conversationHistory, maxTokens } = opts;
 
-  const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
+  const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"], timeout: 60_000, maxRetries: 1 });
   const openaiTools = toOpenAITools(tools);
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [

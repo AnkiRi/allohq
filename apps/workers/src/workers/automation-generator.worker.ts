@@ -330,10 +330,29 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
     });
 
     // -- 6. UPDATE AUTOMATION WITH ALL GENERATED DATA --
+    // Partial-failure guard: a workflow node pointing at a template we FAILED to
+    // generate is a dangling step that would break at send time. Never present that
+    // as "ready" — mark it "incomplete" with a reason so it isn't activated blind.
+    const danglingChannels = new Set<string>();
+    for (const n of enrichedNodes as Array<{ type: string; config: Record<string, unknown> }>) {
+      if (n.type === "send_email" && !templateIds.includes(String(n.config.templateId ?? ""))) danglingChannels.add("email");
+      if (n.type === "send_sms" && !smsTemplateIds.includes(String(n.config.smsTemplateId ?? ""))) danglingChannels.add("SMS");
+      if (n.type === "send_whatsapp" && !whatsappTemplateIds.includes(String(n.config.whatsappTemplateId ?? ""))) danglingChannels.add("WhatsApp");
+      if (n.type === "send_rcs" && !rcsTemplateIds.includes(String(n.config.rcsTemplateId ?? ""))) danglingChannels.add("RCS");
+    }
+    const incomplete = danglingChannels.size > 0;
+    const reason = incomplete ? `couldn't generate ${[...danglingChannels].join(", ")} content` : "";
+    if (incomplete) {
+      console.error(`[automation-generator] ${automation.name} INCOMPLETE — ${reason}; marking not-ready (no dangling activation).`);
+    }
+
     await prisma.automation.update({
       where: { id: automationId },
       data: {
-        status: "ready",
+        status: incomplete ? "incomplete" : "ready",
+        ...(incomplete && !(automation.description ?? "").startsWith("⚠")
+          ? { description: `⚠ Incomplete — ${reason}. ${automation.description ?? ""}`.trim() }
+          : {}),
         templateIds,
         smsTemplateIds,
         whatsappTemplateIds,
