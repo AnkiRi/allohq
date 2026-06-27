@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { DEFAULT_SEGMENTS } from "@allohq/customer-intelligence";
@@ -292,9 +293,38 @@ export const segmentsRouter = router({
   delete: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.customerSegment.delete({
-        where: { id: input.id },
+      // Ownership: the segment must belong to one of THIS workspace's stores (no IDOR).
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { id: true },
       });
+      const storeIds = stores.map((s) => s.id);
+      const segment = await ctx.prisma.customerSegment.findFirst({
+        where: { id: input.id, storeId: { in: storeIds } },
+      });
+      if (!segment) throw new TRPCError({ code: "NOT_FOUND", message: "Segment not found" });
+      if (segment.isSystem) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Built-in segments can't be deleted." });
+      }
+
+      // In-use guard: don't orphan campaigns/automations that target this segment.
+      const campaignsUsing = await ctx.prisma.campaign.count({ where: { segmentId: input.id } });
+      const autos = await ctx.prisma.automation.findMany({
+        where: { storeId: segment.storeId },
+        select: { triggerConfig: true },
+      });
+      const autosUsing = autos.filter((a) => JSON.stringify(a.triggerConfig ?? {}).includes(input.id)).length;
+      if (campaignsUsing > 0 || autosUsing > 0) {
+        const parts: string[] = [];
+        if (campaignsUsing) parts.push(`${campaignsUsing} campaign${campaignsUsing === 1 ? "" : "s"}`);
+        if (autosUsing) parts.push(`${autosUsing} automation${autosUsing === 1 ? "" : "s"}`);
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Can't delete — this segment is used by ${parts.join(" and ")}. Remove it there first.`,
+        });
+      }
+
+      await ctx.prisma.customerSegment.delete({ where: { id: input.id } });
       return { success: true };
     }),
 
