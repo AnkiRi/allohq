@@ -80,6 +80,8 @@ export function EmailStudio({
     initialBlocks[0]?.id ?? null,
   );
   const [html, setHtml] = React.useState(initialHtml);
+  // Mobile: toggle between editing and previewing (side-by-side only on lg+).
+  const [mobileTab, setMobileTab] = React.useState<"edit" | "preview">("edit");
   const [instruction, setInstruction] = React.useState("");
   const [promptError, setPromptError] = React.useState<string | null>(null);
   const [showAdd, setShowAdd] = React.useState(false);
@@ -242,9 +244,36 @@ export function EmailStudio({
         ) : null}
       </header>
 
+      {/* Mobile-only Edit / Preview toggle — both panes are side-by-side on lg+ */}
+      <div className="lg:hidden shrink-0 grid grid-cols-2 gap-1 p-1 rounded-lg border border-border bg-card">
+        <button
+          type="button"
+          onClick={() => setMobileTab("edit")}
+          className={cn(
+            "py-1.5 rounded-md text-[12px] font-sans font-medium transition-colors",
+            mobileTab === "edit" ? "bg-[var(--color-accent)] text-white" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("preview")}
+          className={cn(
+            "py-1.5 rounded-md text-[12px] font-sans font-medium transition-colors",
+            mobileTab === "preview" ? "bg-[var(--color-accent)] text-white" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Preview
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4 flex-1 min-h-0">
         {/* LEFT — editor: prompt-edit + block list + property panel */}
-        <div className="flex flex-col gap-4 min-h-0 overflow-y-auto pr-1">
+        <div className={cn(
+          "flex flex-col gap-4 min-h-0 overflow-y-auto pr-1",
+          mobileTab === "preview" && "hidden lg:flex",
+        )}>
           {/* Prompt-edit (the wedge) */}
           <section className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -433,7 +462,10 @@ export function EmailStudio({
         </div>
 
         {/* RIGHT — live preview */}
-        <div className="min-h-0 lg:sticky lg:top-0">
+        <div className={cn(
+          "min-h-0 lg:sticky lg:top-0",
+          mobileTab === "edit" && "hidden lg:block",
+        )}>
           <EmailPreviewFrame html={html} isLoading={renderMut.isPending} />
         </div>
       </div>

@@ -1166,6 +1166,17 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   }, [panelState, embedded]);
   const [panelWidth, setPanelWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
+  // On phones the docked 380px panel would crush the page; render it as a full
+  // overlay below the header instead, with an obvious close.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
   const { collapsed: sidebarCollapsed, toggleCollapsed: toggleSidebar } = useMobileSidebar();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -1777,13 +1788,20 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
 
       {/* Main panel */}
       <aside
-        style={!embedded && effectiveState === "open" ? { width: `${panelWidth}px` } : undefined}
+        style={!embedded && effectiveState === "open" && !isMobile ? { width: `${panelWidth}px` } : undefined}
         className={cn(
           "flex flex-col relative",
           !isResizing && "transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
           embedded
             ? "w-full h-full ai-panel-bg border-0"
-            : cn(
+            : isMobile
+              ? cn(
+                  // Phone: any open-ish state is a full overlay below the header — never a dock.
+                  effectiveState === "collapsed"
+                    ? "w-0 border-l-0 overflow-hidden"
+                    : "fixed inset-x-0 top-14 bottom-0 z-50 w-full ai-panel-bg border-0 shadow-2xl",
+                )
+              : cn(
                 "border-l",
                 effectiveState === "open" && "flex-shrink-0 ai-panel-bg border-border",
                 effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
@@ -1824,8 +1842,16 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         {/* Panel controls — hidden in embedded mode */}
         {!embedded && effectiveState !== "collapsed" && (
           <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
-            {/* Sidebar collapse toggle */}
-            {effectiveState === "open" && (
+            {/* Mobile: one obvious close — the docked toggle sits off-screen when overlaid */}
+            <button
+              onClick={toggle}
+              className="md:hidden w-8 h-8 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              title="Close allo"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            {/* Sidebar collapse toggle (desktop only) */}
+            {!isMobile && effectiveState === "open" && (
               <button
                 onClick={toggleSidebar}
                 className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

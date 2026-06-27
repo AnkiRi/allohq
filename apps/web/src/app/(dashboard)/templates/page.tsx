@@ -323,7 +323,7 @@ export default function TemplatesPage() {
 
       {/* Template grid */}
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-52 glass-skeleton rounded-xl" />
           ))}
@@ -353,7 +353,7 @@ export default function TemplatesPage() {
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
-                className="grid grid-cols-2 gap-5"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-5"
               >
                 {group.templates.map((template) => {
                   const isDuplicate = duplicateSubjects.has(template.subject);

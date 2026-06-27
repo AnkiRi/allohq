@@ -1,9 +1,9 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Loader2, Save, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -22,9 +22,19 @@ export default function SegmentDetailPage() {
     { enabled: !!id },
   ) as { data: any; isLoading: boolean; error: unknown };
 
+  const router = useRouter();
   const updateMut = (trpc.segments.update as any).useMutation({
     onSuccess: () => (utils.segments as any).getById.invalidate({ id }),
   }) as { mutate: (i: any, o?: any) => void; isPending: boolean };
+
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteMut = (trpc.segments.delete as any).useMutation({
+    onSuccess: () => {
+      (utils.segments as any).list.invalidate();
+      router.push("/segments");
+    },
+    onError: (e: { message?: string }) => setDeleteError(e?.message ?? "Could not delete this segment."),
+  }) as { mutate: (i: any) => void; isPending: boolean };
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -98,17 +108,37 @@ export default function SegmentDetailPage() {
             <span>· {defn}</span>
           </div>
         </div>
-        {editing ? (
-          <button onClick={save} disabled={updateMut.isPending} className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity">
-            {updateMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            Save
-          </button>
-        ) : (
-          <button onClick={startEdit} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-[12px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors">
-            <Pencil className="w-3.5 h-3.5" /> Edit
-          </button>
-        )}
+        <div className="shrink-0 flex items-center gap-2">
+          {editing ? (
+            <button onClick={save} disabled={updateMut.isPending} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity">
+              {updateMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Save
+            </button>
+          ) : (
+            <button onClick={startEdit} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-[12px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors">
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+          )}
+          {!editing ? (
+            <button
+              onClick={() => {
+                setDeleteError(null);
+                if (window.confirm(`Delete "${seg.name}"? This can't be undone.`)) deleteMut.mutate({ id });
+              }}
+              disabled={deleteMut.isPending}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:border-red-500/50 hover:text-red-500 disabled:opacity-50 transition-colors"
+              title="Delete segment"
+            >
+              {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            </button>
+          ) : null}
+        </div>
       </header>
+      {deleteError ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-[12.5px] text-red-600 dark:text-red-400 font-sans">
+          {deleteError}
+        </div>
+      ) : null}
 
       {/* Members */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
