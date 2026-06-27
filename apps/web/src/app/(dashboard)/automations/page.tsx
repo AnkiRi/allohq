@@ -191,14 +191,14 @@ export default function AutomationsPage() {
 
       {/* Automations grid */}
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-40 glass-skeleton rounded-xl" />
           ))}
         </div>
       ) : automations && automations.length > 0 ? (
         <motion.div
-          className="grid grid-cols-2 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
