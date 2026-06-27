@@ -109,6 +109,18 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       data: { status: "generating" },
     });
 
+    // Idempotency (retry-safe): a failed attempt (attempts:2) may have created partial
+    // templates. Clear this automation's prior templates so a retry produces exactly ONE
+    // set per channel — never duplicates / double-charges accumulating across attempts.
+    await Promise.all([
+      automation.templateIds?.length
+        ? prisma.emailTemplate.deleteMany({ where: { id: { in: automation.templateIds } } })
+        : Promise.resolve(),
+      prisma.smsTemplate.deleteMany({ where: { automationId } }),
+      prisma.whatsAppTemplate.deleteMany({ where: { automationId } }),
+      prisma.rcsTemplate.deleteMany({ where: { automationId } }),
+    ]);
+
     // -- 1. GENERATE EMAILS --
     const emailResults = await activateProgram({
       programType: automation.category,

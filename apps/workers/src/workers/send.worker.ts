@@ -182,7 +182,16 @@ export const sendWorker = new Worker<SendJobData>(
     let failCount = 0;
     let suppressedCount = 0;
     let controlCount = 0;
+    // Idempotency: a re-run / re-queue of this campaign must not re-process anyone.
+    // Anyone with a MessageLog for this campaign (sent / withheld / suppressed) was
+    // already handled — skip them so a retry never double-sends or double-charges.
+    const processedCustomerIds = new Set(
+      (await prisma.messageLog.findMany({ where: { campaignId }, select: { customerId: true } }))
+        .map((m) => m.customerId)
+        .filter((id): id is string => !!id),
+    );
     for (const customer of customers) {
+      if (processedCustomerIds.has(customer.id)) continue;
       // Causal-data moat: deterministic control-group assignment.
       // CONTROL ⇒ withhold the send and record a "withheld" MessageLog row so
       // the counterfactual baseline accumulates (audit trail for outcome pricing).

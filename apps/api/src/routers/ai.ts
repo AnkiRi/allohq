@@ -796,7 +796,13 @@ export const aiRouter = router({
       const job = await brandAnalysisQueue.add(
         "analyze-brand",
         { storeId: input.storeId, model: input.model },
-        { attempts: 2, backoff: { type: "exponential", delay: 5000 } }
+        {
+          attempts: 2,
+          backoff: { type: "exponential", delay: 5000 },
+          // Idempotency: collapse rapid double-clicks (same store within a 30s window)
+          // into ONE job so the brand LLM analysis isn't run — and charged — twice.
+          jobId: `brand-${input.storeId}-${Math.floor(Date.now() / 30000)}`,
+        }
       );
       return { status: "queued" as const, jobId: job.id };
     }),
