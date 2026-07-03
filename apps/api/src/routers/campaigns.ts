@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
+import { buildHumanDecision } from "../lib/human-decision";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -178,7 +179,8 @@ export const campaignsRouter = router({
 
       await ctx.prisma.campaign.update({
         where: { id: input.id },
-        data: { status: "sending" },
+        // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
+        data: { status: "sending", humanDecision: buildHumanDecision(campaign) as object },
       });
 
       await emailSendQueue.add("campaign-send", { campaignId: input.id });

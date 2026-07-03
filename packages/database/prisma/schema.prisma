@@ -632,6 +632,12 @@ model Campaign {
   recipientCount Int            @default(0)
   openCount      Int            @default(0)
   clickCount     Int            @default(0)
+  // Human-in-the-loop judgment signal (can't-backfill). agentProposal = the action
+  // bundle allo proposed at draft time (segment/discount/channel/timing/intent), frozen.
+  // humanDecision = structured agent_proposed → human_final diff on those action
+  // variables, computed at approval + a content-edit magnitude flag + approval state.
+  agentProposal  Json?
+  humanDecision  Json?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 

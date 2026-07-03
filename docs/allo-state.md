@@ -69,12 +69,15 @@ _Last updated: 2026-07-03._
 - [x] ✅ **customerStateSnap capture** — 2026-07-03, Phase 1. Written at the send/decision
   chokepoint on **all arms incl. CONTROL**; verified 147/147 control rows carry BOTH a frozen
   state snapshot AND a logged outcome (state-conditional CAM ready, not average-lift-only).
-- [ ] **Human-override capture (agent_proposed → human_final)** — HIGH PRIORITY, can't-backfill.
-  Capture structured before/after on the ACTION variables the human changes (discount, channel,
-  timing, offer, segment) at approval time; flag content-edit magnitude + approval state only.
-  Today only the final campaign is stored → the agent's original intent (the highest-value
-  judgment signal that lets the forward-deployed team recede) is lost forever. Same class as
-  the state-snapshot leak. Build before the first pilot fires real overrides.
+- [x] ✅ **Human-override capture (agent_proposed → human_final)** — 2026-07-03. `Campaign.agentProposal`
+  freezes the proposed action bundle (segment/discount/channel/timing/intent) at draft;
+  `Campaign.humanDecision` records the structured proposed→final diff on action variables +
+  `acceptedAsProposed` flag at approval — wired at BOTH approve chokepoints (chat
+  `executeChatAction` + `campaigns.send`), via one shared `buildHumanDecision` helper.
+  Content/creative edits = magnitude flag only (live in email content, not campaign columns).
+  Verified: a segment+timing override captured `{proposed,final}`; an unchanged approval flags
+  `acceptedAsProposed`. (Dormant until a real human overrides — the capture is now in place so
+  the first pilot's judgment signal is not lost.)
 - [ ] **Statistical confidence on lift** — point estimate + ≥30 floor only; no CI / significance /
   power. Must also **persist per-experiment variance/confidence** so the CAM weights traces by
   confidence (a lift on 5,000 > a lift on 60), not just display it.

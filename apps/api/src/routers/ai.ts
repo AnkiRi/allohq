@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, workspaceProcedure, ownerProcedure } from "../trpc";
+import { buildHumanDecision } from "../lib/human-decision";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 
@@ -1484,10 +1485,11 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         });
         if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
 
-        // Update campaign status to sending
+        // Capture the human's judgment (agent_proposed → human_final on the action vars)
+        // at the moment of approval, before it ships. Can't-backfill signal for the CAM.
         await ctx.prisma.campaign.update({
           where: { id: input.campaignId },
-          data: { status: "sending" },
+          data: { status: "sending", humanDecision: buildHumanDecision(campaign) as object },
         });
 
         return { success: true, status: "sending" };
