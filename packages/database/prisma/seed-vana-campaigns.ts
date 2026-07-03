@@ -48,7 +48,11 @@ async function main() {
   // Pull a stable, ordered slice of customers to assign to cohorts.
   const customers = await prisma.customer.findMany({
     where: { storeId },
-    select: { id: true, email: true },
+    select: {
+      id: true, email: true,
+      rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true, recency: true, frequency: true, monetary: true, totalScore: true } },
+      lifetimeValue: { select: { historicalLtv: true, predictedLtv: true, churnProbability: true } },
+    },
     orderBy: { id: "asc" },
     take: 1100,
   });
@@ -94,15 +98,30 @@ async function main() {
     const orderRows: any[] = [];
     const attribRows: any[] = [];
 
-    const build = (arm: "CONTROL" | "TREATMENT", list: { id: string; email: string }[], buyers: number) => {
+    const build = (arm: "CONTROL" | "TREATMENT", list: any[], buyers: number) => {
       list.forEach((c, i) => {
         const isBuyer = i < buyers;
         const mlId = `seed-${spec.key}-ml-${arm}-${i}`;
+        // Same feature-snapshot shape the send worker writes at send time.
+        const rfm = c.rfmScore; const ltv = c.lifetimeValue;
+        const stateSnap = {
+          capturedAt: sentAt.toISOString(),
+          segment: rfm?.segment ?? null,
+          rfm: rfm ? { recency: rfm.recency, frequency: rfm.frequency, monetary: rfm.monetary, totalScore: rfm.totalScore } : null,
+          totalSpent: rfm?.totalSpent ?? null,
+          orderCount: rfm?.orderCount ?? null,
+          avgOrderValue: rfm?.avgOrderValue ?? null,
+          lastOrderAt: rfm?.lastOrderAt ? rfm.lastOrderAt.toISOString() : null,
+          historicalLtv: ltv?.historicalLtv ?? null,
+          predictedLtv: ltv?.predictedLtv ?? null,
+          churnProbability: ltv?.churnProbability ?? null,
+        };
         mlRows.push({
           id: mlId, workspaceId, storeId, customerId: c.id, channel: "email",
           to: c.email, subject: spec.subject, campaignId, experimentId,
           status: arm === "CONTROL" ? "withheld" : "sent",
           treatmentArm: arm, sentAt: arm === "CONTROL" ? null : sentAt, createdAt: sentAt,
+          customerStateSnap: stateSnap,
           outcome: isBuyer ? "purchased" : "ignored",
           outcomeRevenue: isBuyer ? spec.aov : 0,
           outcomeMargin: isBuyer ? spec.aov * MARGIN : 0,

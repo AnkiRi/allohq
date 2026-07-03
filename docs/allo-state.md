@@ -66,8 +66,21 @@ _Last updated: 2026-07-03._
 ---
 
 ## PENDING — BUILD GAPS (buildable now, no pilot needed)
-- [ ] **customerStateSnap capture** — the trace's feature snapshot is never written (leaks daily).
-- [ ] **Statistical confidence on lift** — point estimate + ≥30 floor only; no CI / significance / power.
+- [x] ✅ **customerStateSnap capture** — 2026-07-03, Phase 1. Written at the send/decision
+  chokepoint on **all arms incl. CONTROL**; verified 147/147 control rows carry BOTH a frozen
+  state snapshot AND a logged outcome (state-conditional CAM ready, not average-lift-only).
+- [ ] **Human-override capture (agent_proposed → human_final)** — HIGH PRIORITY, can't-backfill.
+  Capture structured before/after on the ACTION variables the human changes (discount, channel,
+  timing, offer, segment) at approval time; flag content-edit magnitude + approval state only.
+  Today only the final campaign is stored → the agent's original intent (the highest-value
+  judgment signal that lets the forward-deployed team recede) is lost forever. Same class as
+  the state-snapshot leak. Build before the first pilot fires real overrides.
+- [ ] **Statistical confidence on lift** — point estimate + ≥30 floor only; no CI / significance /
+  power. Must also **persist per-experiment variance/confidence** so the CAM weights traces by
+  confidence (a lift on 5,000 > a lift on 60), not just display it.
+- [ ] **Matched/stratified holdouts** — buildable now (stratify by state-cell before randomizing);
+  value only shows on small/mid-market brands (sparse state-cells under plain randomization).
+  Deferred; validate on real small-brand pilot data.
 - [ ] **Model re-tiering** — route on output-stakes (customer-facing/qualitative → frontier), not surface difficulty.
 - [ ] **Content-quality eval** — no signal if cheap-model copy degrades.
 - [ ] **Messaging-cost tracking** — only inference cost is tracked, not per-message send cost.
@@ -81,5 +94,5 @@ _Last updated: 2026-07-03._
 - [ ] First real-brand completed campaign cycle → a **real** proven-lift number (cloud-OK partner, e.g. PNG).
 - [ ] Local-hosted deploy — **build-gated first**, then unblocks Technosport (who require on-prem).
 - [ ] Cross-brand CAM training — needs multi-brand accumulated causal data.
-- [ ] Matched/propensity holdouts — better than random split on small samples.
+  (Matched/stratified holdouts moved to BUILD gaps — buildable now, validated on pilot data.)
 - [ ] Real production messaging fired (demo is hard no-send).

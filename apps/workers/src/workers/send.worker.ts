@@ -78,9 +78,9 @@ export const sendWorker = new Worker<SendJobData>(
         firstName: true,
         lastName: true,
         rfmScore: {
-          select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true },
+          select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true, recency: true, frequency: true, monetary: true, totalScore: true },
         },
-        lifetimeValue: { select: { historicalLtv: true } },
+        lifetimeValue: { select: { historicalLtv: true, predictedLtv: true, churnProbability: true } },
       },
     });
 
@@ -192,6 +192,25 @@ export const sendWorker = new Worker<SendJobData>(
     );
     for (const customer of customers) {
       if (processedCustomerIds.has(customer.id)) continue;
+
+      // Feature SNAPSHOT at send/decision time — captured once per customer and written on
+      // EVERY arm's MessageLog so decision_records carries the state the decision was made
+      // against. Permanent CAM training data: it cannot be reconstructed after the fact.
+      const rfm = customer.rfmScore;
+      const ltv = customer.lifetimeValue;
+      const stateSnap = {
+        capturedAt: new Date().toISOString(),
+        segment: rfm?.segment ?? null,
+        rfm: rfm ? { recency: rfm.recency, frequency: rfm.frequency, monetary: rfm.monetary, totalScore: rfm.totalScore } : null,
+        totalSpent: rfm?.totalSpent ?? null,
+        orderCount: rfm?.orderCount ?? null,
+        avgOrderValue: rfm?.avgOrderValue ?? null,
+        lastOrderAt: rfm?.lastOrderAt ? rfm.lastOrderAt.toISOString() : null,
+        historicalLtv: ltv?.historicalLtv ?? null,
+        predictedLtv: ltv?.predictedLtv ?? null,
+        churnProbability: ltv?.churnProbability ?? null,
+      };
+
       // Causal-data moat: deterministic control-group assignment.
       // CONTROL ⇒ withhold the send and record a "withheld" MessageLog row so
       // the counterfactual baseline accumulates (audit trail for outcome pricing).
@@ -210,6 +229,7 @@ export const sendWorker = new Worker<SendJobData>(
             status: "withheld",
             treatmentArm: "CONTROL",
             experimentId: experiment.id,
+            customerStateSnap: stateSnap,
             metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
           },
         });
@@ -255,6 +275,7 @@ export const sendWorker = new Worker<SendJobData>(
             status: "suppressed",
             treatmentArm: "TREATMENT",
             experimentId: experiment.id,
+            customerStateSnap: stateSnap,
             error: `Suppressed: ${governorCheck.reason}`,
             metadata: { suppressed: true, rule: governorCheck.rule },
           },
@@ -307,6 +328,7 @@ export const sendWorker = new Worker<SendJobData>(
           status: "queued",
           treatmentArm: "TREATMENT",
           experimentId: experiment.id,
+          customerStateSnap: stateSnap,
           messageFeatures,
           metadata: abTestId ? { abTestId, abVariant } : undefined,
         },
