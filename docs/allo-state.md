@@ -1,6 +1,9 @@
 # allo — living state & gap ledger
 
 **Single source of truth for build state.** Ground-truthed against code + DB.
+See also **`docs/allo-lifecycle-walkthrough.md`** — the full schema + a top-to-bottom worked
+story (3 customers through every table: enter → state → segment → campaign → holdout → outcome
+→ decision_records → CAM), the nightly agents, and the self-improvement "dream cycle".
 
 > **LEDGER RULE (all future passes follow this):** when a pending item is completed, mark it
 > **✅ with date + PR in THIS doc**, in the *same commit* as the change. Do **not** create a
