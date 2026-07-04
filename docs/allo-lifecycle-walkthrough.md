@@ -77,6 +77,20 @@ cust_C     loyal            0.34     inactive     silver      0.6
 
 ---
 
+**How R/F/M + churn are actually computed (classical, no LLM):**
+- **R/F/M = relative quintiles** ranked against the store's whole base:
+  `score = clamp(ceil(percentile × 5), 1, 5)`; recency inverted (fewer idle days → higher).
+  A "5" means top-quintile *for this store* — scores are relative to the brand's own base, not
+  absolute (`packages/customer-intelligence/src/rfm/score-quintile.ts`).
+- **segment** = rule thresholds on r/f/m: `Champions r≥4 & f≥4 & m≥4` · `Loyal r≥3 & f≥3 & m≥3 &
+  total≥9` · `At Risk r≤3 & f≥2 & total≥5` · … · else `Lost`.
+- **churnProbability = weighted logistic** (sigmoids), `sigmoid(x,mid,k)=1/(1+e^(−k(x−mid)))`,
+  blended by weights (recency .30, frequency .20, …) → 0–1:
+  `recencyRisk=sigmoid(daysIdle,90,0.03)` · `frequencyRisk=1−sigmoid(orders,4,0.8)` ·
+  `monetaryRisk=1−sigmoid(spend,150,0.015)` · `overdueRisk=sigmoid(daysIdle/avgInterval,1.5,2)`
+  (overdue vs the customer's OWN cadence) · `emailRisk=1−sigmoid(openRate,0.2,10)`. Deterministic
+  — this IS the classical Layer-1 model (`packages/customer-state/src/churn-prediction.ts`).
+
 # STAGE 2 — Targeting (`CustomerSegment`)  ← *"does it segment / pick by criteria?"*
 
 **Yes.** A segment is either **RFM/criteria-based** (`conditions` / `kind:"conditions"|"rfm"`) or an
@@ -131,6 +145,19 @@ Chetan  cust_C → hash=0.41 → TREATMENT   (gets the email, via the Loyal camp
 
 ---
 
+**What "arm" means + why assignment is deterministic (not a coin flip).** An *arm* is one group
+of the controlled experiment — **TREATMENT** (gets the message) or **CONTROL** (held out, the
+counterfactual); "arm member" = any customer in either group. Assignment is a **hash**, so the
+same customer always lands in the same arm for that experiment — no cross-run leakage (a
+held-out customer stays held out across retries/redeploys), and it's auditable forever:
+```
+assignmentValue(seed, customerId) = SHA256(`${seed}:${customerId}`)
+    → first 6 bytes (48 bits) as int / 2^48   → uniform value in [0, 1)
+arm = value < splitRatio ? CONTROL : TREATMENT     # splitRatio 0.15 → ~15% control
+```
+SHA-256 is uniform, so ~15% of customers fall below 0.15 → a clean ~15% control split, with no
+stored random state (`packages/customer-state/src/experiments.ts`).
+
 # STAGE 5 — Send OR hold (`send.worker` → `MessageLog`), with FROZEN state
 
 Per customer, the worker writes a `message_logs` row. **The state is frozen INTO the row**
@@ -147,6 +174,11 @@ ml_C    cust_C     TREATMENT  sent       {segment:Loyal,rfm:3/4/3,orders:4,…} 
 `messageFeatures` on TREATMENT rows also stores the ACTION features
 (`{hasDiscount,discountPercent,sendHour,tone,archetype}`). `*outcome/revenue` filled in Stage 6.
 (Demo = hard no-send: the row is written, no real email leaves.)
+
+Each row also carries **`campaignId`** (= `cmp_diwali` here) linking it to the campaign — plus
+`automationId`. Both are *nullable* because a message can come from a **campaign**, an
+**automation**, or neither (transactional); one `message_logs` table serves all three sources.
+Lift/attribution group by `campaignId` / `experimentId`.
 
 ---
 
