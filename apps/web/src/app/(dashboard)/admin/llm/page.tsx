@@ -27,7 +27,7 @@ export default function LlmSpendPage() {
     <div className="w-full max-w-3xl mx-auto space-y-6">
       <header>
         <h1 className="text-[22px] font-serif font-semibold text-foreground tracking-[-0.01em]">LLM spend</h1>
-        <p className="text-[13px] text-muted-foreground font-sans mt-1">Founder-only — real spend from measured token usage.</p>
+        <p className="text-[13px] text-muted-foreground font-sans mt-1">Founder-only — real spend: inference (tokens, $) + messaging (sends, ₹).</p>
       </header>
 
       <div className="grid grid-cols-2 gap-3">
@@ -56,6 +56,26 @@ export default function LlmSpendPage() {
                   {m.calls} calls · {(m.inputTokens / 1000).toFixed(0)}k→{(m.outputTokens / 1000).toFixed(0)}k
                 </span>
                 <span className="font-mono text-foreground tabular-nums w-16 text-right">${m.usd.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border bg-muted/30 font-mono text-[10px] uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+          <span>Messaging cost (7 days)</span>
+          <span className="text-foreground tabular-nums normal-case">₹{data.messaging?.weekInr?.toFixed(2) ?? "0.00"} · today ₹{data.messaging?.todayInr?.toFixed(2) ?? "0.00"}</span>
+        </div>
+        {!data.messaging || data.messaging.byChannel.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[13px] text-muted-foreground font-sans">No sends yet.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {data.messaging.byChannel.map((c: any) => (
+              <div key={c.channel} className="px-4 py-2.5 flex items-center gap-3 text-[13px]">
+                <span className="font-mono text-foreground flex-1 truncate">{c.channel}</span>
+                <span className="font-mono text-[11px] text-muted-foreground tabular-nums hidden sm:inline">{c.messages.toLocaleString("en-IN")} sent</span>
+                <span className="font-mono text-foreground tabular-nums w-20 text-right">₹{c.inr.toFixed(2)}</span>
               </div>
             ))}
           </div>

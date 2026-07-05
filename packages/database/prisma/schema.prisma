@@ -935,6 +935,7 @@ model MessageLog {
   outcomeTimestamp  DateTime? // when outcome was recorded
   customerStateSnap Json? // snapshot of CustomerState at send time
   messageFeatures   Json? // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
+  sendCost          Decimal?  @db.Decimal(10, 4) // per-message provider send cost (₹) by channel — brand-level messaging P&L alongside inference cost
 
   // Causal-data moat: control-group assignment
   treatmentArm TreatmentArm? // CONTROL = withheld, TREATMENT = sent

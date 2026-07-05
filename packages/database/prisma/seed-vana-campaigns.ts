@@ -15,7 +15,7 @@
  * Run: pnpm --filter @allohq/database exec tsx prisma/seed-vana-campaigns.ts
  */
 import "dotenv/config";
-import { prisma, DEMO_STORE_DOMAIN } from "../src/index";
+import { prisma, DEMO_STORE_DOMAIN, messagingCostFor } from "../src/index";
 
 const MARGIN = 0.6;
 const ATTRIB_WINDOW = 7;
@@ -120,6 +120,7 @@ async function main() {
           id: mlId, workspaceId, storeId, customerId: c.id, channel: "email",
           to: c.email, subject: spec.subject, campaignId, experimentId,
           status: arm === "CONTROL" ? "withheld" : "sent",
+          sendCost: arm === "TREATMENT" ? messagingCostFor("email") : null, // only sent arm incurs provider cost
           treatmentArm: arm, sentAt: arm === "CONTROL" ? null : sentAt, createdAt: sentAt,
           customerStateSnap: stateSnap,
           outcome: isBuyer ? "purchased" : "ignored",

@@ -161,12 +161,16 @@ export const aiRouter = router({
     const stores = await ctx.prisma.store.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true } });
     const storeIds = stores.map((s) => s.id);
 
-    const [today, week, byModel, recentErrors] = await Promise.all([
+    const [today, week, byModel, recentErrors, msgToday, msgWeek] = await Promise.all([
       ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfDay } }, _sum: { inputTokens: true, outputTokens: true } }),
       ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } }, _sum: { inputTokens: true, outputTokens: true } }),
       ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } }, _sum: { inputTokens: true, outputTokens: true }, _count: { id: true } }),
       ctx.prisma.agentAction.findMany({ where: { storeId: { in: storeIds }, status: "failed" }, orderBy: { createdAt: "desc" }, take: 20, select: { actionType: true, error: true, createdAt: true } }),
+      // Messaging (provider send) cost — per-brand P&L alongside inference.
+      ctx.prisma.messageLog.groupBy({ by: ["channel"], where: { workspaceId: ctx.workspaceId, sendCost: { not: null }, createdAt: { gte: startOfDay } }, _sum: { sendCost: true }, _count: { id: true } }),
+      ctx.prisma.messageLog.groupBy({ by: ["channel"], where: { workspaceId: ctx.workspaceId, sendCost: { not: null }, createdAt: { gte: startOfWeek } }, _sum: { sendCost: true }, _count: { id: true } }),
     ]);
+    const msgInr = (rows: { _sum: { sendCost: unknown } }[]) => rows.reduce((s, r) => s + Number(r._sum.sendCost ?? 0), 0);
 
     const todayUsd = usd(today);
     const threshold = Number(process.env["LLM_DAILY_SPEND_ALERT_USD"] ?? "25");
@@ -189,6 +193,13 @@ export const aiRouter = router({
         .sort((a, b) => b.usd - a.usd),
       recentErrors,
       threshold: { dailyUsd: threshold, exceeded },
+      messaging: {
+        todayInr: Math.round(msgInr(msgToday) * 100) / 100,
+        weekInr: Math.round(msgInr(msgWeek) * 100) / 100,
+        byChannel: msgWeek
+          .map((r) => ({ channel: r.channel, messages: r._count.id, inr: Math.round(Number(r._sum.sendCost ?? 0) * 100) / 100 }))
+          .sort((a, b) => b.inr - a.inr),
+      },
     };
   }),
 

@@ -106,7 +106,11 @@ _Last updated: 2026-07-03._
   per-case pass/fail + accuracy. Verified 5/5: real win_back/vip_reward copy passes (judge 88/94),
   placeholder fixture caught by hard checks, off-brand fixture caught by judge (score 0), clean
   fixture passes (97). Doubles as the Phase-3 re-tiering regression tripwire.
-- [ ] **Messaging-cost tracking** — only inference cost is tracked, not per-message send cost.
+- [x] ✅ **Messaging-cost tracking** — 2026-07-05, Phase 5. Additive `MessageLog.sendCost` (₹ per
+  message by channel via shared `messagingCostFor` in `@allohq/database`), stamped on the sent
+  arm by the send worker + seed; owner cost console (`/admin/llm`) now shows per-brand messaging
+  cost (today / 7-day + by channel) alongside inference ($). Verified: 833 seeded Vana sends →
+  ₹83.30 aggregated by channel.
 - [ ] **In-product decision-trace surface** — `decision_records` exists but isn't shown.
 - [ ] Broader evals suite (grounding, segment-intent, model-routing, reliability, cost regression, attribution correctness).
 - [ ] Sync reconciliation/backfill + webhook retry + store Shopify `created_at` + the zero-scopes config issue.

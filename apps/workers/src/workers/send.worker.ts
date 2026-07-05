@@ -1,5 +1,5 @@
 import { Worker, Queue } from "bullmq";
-import { prisma, buildWhereFromConditions } from "@allohq/database";
+import { prisma, buildWhereFromConditions, messagingCostFor } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
@@ -330,6 +330,7 @@ export const sendWorker = new Worker<SendJobData>(
           experimentId: experiment.id,
           customerStateSnap: stateSnap,
           messageFeatures,
+          sendCost: messagingCostFor("email"), // per-message provider cost — brand messaging P&L
           metadata: abTestId ? { abTestId, abVariant } : undefined,
         },
       });
