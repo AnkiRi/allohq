@@ -17,9 +17,9 @@ export type AIModelId =
 export type ModelTier = "premium" | "standard" | "economy";
 
 /**
- * Task classes a caller can declare. Drives tier selection:
- *  - reasoning / planning  → frontier (quality matters)
- *  - generation / classification / analysis → economy (high volume, cheap)
+ * Task classes a caller can declare. Drives tier selection on OUTPUT STAKES:
+ *  - reasoning / generation / analysis → frontier (customer-facing or qualitatively judged)
+ *  - classification → economy (mechanical intent/label/parse — verifiable, low-stakes)
  */
 export type AITask =
   | "reasoning"
@@ -76,13 +76,16 @@ export const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
 export const WORKING_DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
 
 /**
- * task → tier. "frontier"/premium for thinking, "economy" for volume.
+ * task → tier. ROUTE ON OUTPUT STAKES, not surface difficulty: anything a customer
+ * sees or a human judges qualitatively goes FRONTIER (premium) even when the prompt
+ * looks easy — cheap-model quality loss on copy is invisible (no verification signal).
+ * Only genuinely MECHANICAL / verifiable / internal work goes economy.
  */
 export const TASK_TIER: Record<AITask, ModelTier> = {
   reasoning: "premium",       // planning / agentic / nuanced judgement
-  generation: "economy",      // high-volume copy/email/sms generation
-  classification: "economy",  // intent/label detection — cheap + deterministic
-  analysis: "economy",        // summaries / extraction over structured data
+  generation: "premium",      // customer-facing copy (email/sms/brand voice) — qualitative
+  analysis: "premium",        // brand-voice / customer-voice synthesis — feeds what customers see
+  classification: "economy",  // intent/label detection, parsing — mechanical + verifiable
 };
 
 /**

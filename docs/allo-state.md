@@ -93,7 +93,12 @@ _Last updated: 2026-07-03._
 - [ ] **Matched/stratified holdouts** — buildable now (stratify by state-cell before randomizing);
   value only shows on small/mid-market brands (sparse state-cells under plain randomization).
   Deferred; validate on real small-brand pilot data.
-- [ ] **Model re-tiering** — route on output-stakes (customer-facing/qualitative → frontier), not surface difficulty.
+- [x] ✅ **Model re-tiering** — 2026-07-05, Phase 3. `TASK_TIER` now routes on OUTPUT STAKES:
+  `generation` + `analysis` → **premium/frontier** (customer-facing copy + brand-voice synthesis —
+  previously economy, the invisible-quality-loss trap); `classification` stays economy (mechanical
+  parsing, savings preserved); `reasoning` premium. Principle documented in `policy.ts`;
+  `generate-email` routes `task:"generation"` explicitly. Verified: generation/analysis/reasoning →
+  claude-sonnet-4-6 first, classification → gpt-4o-mini first.
 - [ ] **Content-quality eval** — no signal if cheap-model copy degrades.
 - [ ] **Messaging-cost tracking** — only inference cost is tracked, not per-message send cost.
 - [ ] **In-product decision-trace surface** — `decision_records` exists but isn't shown.
