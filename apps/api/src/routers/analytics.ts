@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, storeProcedure } from "../trpc";
+import { computeLiftStats, varianceFromAggregates } from "@allohq/customer-state";
 import {
   computeAttribution,
   compareAttributionModels,
@@ -372,7 +373,7 @@ export const analyticsRouter = router({
       // Per-customer measured outcome by arm, over the window. Prefer margin;
       // fall back to revenue. One row per arm with count + mean + members.
       const rows = await ctx.prisma.$queryRaw<
-        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number }>
+        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number; sumsq: number }>
       >`
         SELECT "treatmentArm" AS arm,
                COUNT(*)::bigint AS n,
@@ -385,7 +386,13 @@ export const analyticsRouter = router({
                    FILTER (WHERE "outcome" IS NOT NULL)
                  / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0),
                  0
-               )::float AS mean
+               )::float AS mean,
+               -- Σx² of the per-customer outcome → sample variance for the CI / significance test.
+               COALESCE(
+                 SUM(POWER(COALESCE("outcomeMargin", "outcomeRevenue", 0), 2))
+                   FILTER (WHERE "outcome" IS NOT NULL),
+                 0
+               )::float AS sumsq
         FROM "message_logs"
         WHERE "storeId" = ${input.storeId}
           AND "treatmentArm" IS NOT NULL
@@ -402,6 +409,17 @@ export const analyticsRouter = router({
       const treatmentWithOutcome = Number(treatment?.withOutcome ?? 0);
       const controlMean = control?.mean ?? 0;
       const treatmentMean = treatment?.mean ?? 0;
+
+      // Statistical confidence: sample variance per arm (from Σx²) → Welch CI +
+      // significance test on the lift, so a small/noisy sample is flagged underpowered
+      // rather than reported as a confident number.
+      const controlVar = varianceFromAggregates(control?.sumsq ?? 0, controlWithOutcome, controlMean);
+      const treatmentVar = varianceFromAggregates(treatment?.sumsq ?? 0, treatmentWithOutcome, treatmentMean);
+      const stats = computeLiftStats(
+        { n: treatmentWithOutcome, mean: treatmentMean, variance: treatmentVar },
+        { n: controlWithOutcome, mean: controlMean, variance: controlVar },
+        MIN_CONTROL_WITH_OUTCOME,
+      );
 
       // Whether the per-customer figures are margin (preferred) or revenue.
       const marginUsed = await ctx.prisma.messageLog.count({
@@ -449,6 +467,14 @@ export const analyticsRouter = router({
         // The lift
         liftPerCustomer: Math.round(liftPerCustomer),
         liftPct: controlMean > 0 ? (liftPerCustomer / controlMean) * 100 : 0,
+        // Statistical confidence on the lift (Welch two-sample) — for honesty + CAM weighting
+        liftCiLow: Math.round(stats.ciLow),
+        liftCiHigh: Math.round(stats.ciHigh),
+        liftStdErr: Math.round(stats.stdErr),
+        pValue: stats.pValue,
+        significant: stats.significant,
+        underpowered: stats.underpowered,
+        confidence: stats.confidence,
         incrementalTotal: Math.round(incrementalTotal),
         incrementalMargin: Math.round(incrementalMargin),
         // Fee math

@@ -122,6 +122,10 @@ model Experiment {
   startAt          DateTime  @default(now())
   endAt            DateTime?
   status           String    @default("learning") // learning | steady | closed
+  // Persisted lift statistics (recomputed as outcomes finalize): the CAM weights each
+  // experiment's trace by confidence — { lift, ciLow, ciHigh, pValue, significant,
+  // underpowered, confidence, nTreatment, nControl, computedAt }.
+  stats            Json?
   createdAt        DateTime  @default(now())
 
   store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)

@@ -44,6 +44,8 @@ _Last updated: 2026-07-03._
   control) → per-customer causal lift → fee, works end-to-end. **The worked instance is
   SYNTHETIC** — the seeded Vana campaigns (**lift ₹42/customer, +31.4%, fee ₹29,238**) are
   **demo/seed data, not a real brand.** No real brand has produced a proven lift number yet.
+  As of Phase 2 the honesty layer flags this lift as a point estimate that is **NOT yet
+  statistically significant** (95% CI −22…106, p=0.20) — Outcomes shows "not yet significant".
 - **CAM: within-brand calibration is real; cross-brand CAM is architecture-ready, NOT trained.**
   The calibration output shape is brand-agnostic, but nothing aggregates across brands and no
   uplift/propensity/churn model is trained on the accumulated causal data yet.
@@ -81,9 +83,13 @@ _Last updated: 2026-07-03._
   Verified: a segment+timing override captured `{proposed,final}`; an unchanged approval flags
   `acceptedAsProposed`. (Dormant until a real human overrides — the capture is now in place so
   the first pilot's judgment signal is not lost.)
-- [ ] **Statistical confidence on lift** — point estimate + ≥30 floor only; no CI / significance /
-  power. Must also **persist per-experiment variance/confidence** so the CAM weights traces by
-  confidence (a lift on 5,000 > a lift on 60), not just display it.
+- [x] ✅ **Statistical confidence on lift** — 2026-07-05, Phase 2. Welch CI + significance test +
+  underpowered flag (`computeLiftStats` in `@allohq/customer-state`, beside `experiments.ts`);
+  surfaced on Outcomes (95% CI + significant / not-yet-significant / underpowered badge) AND
+  persisted per-experiment on `Experiment.stats` (lift, CI, pValue, significant, underpowered,
+  confidence, nT/nC) by the hourly worker so the CAM weights traces by confidence. Verified:
+  clear sample → significant, tiny → underpowered, and the seeded Vana lift is honestly flagged
+  NOT-yet-significant (₹42, 95% CI −22…106, p=0.20 — bimodal per-customer revenue → high variance).
 - [ ] **Matched/stratified holdouts** — buildable now (stratify by state-cell before randomizing);
   value only shows on small/mid-market brands (sparse state-cells under plain randomization).
   Deferred; validate on real small-brand pilot data.

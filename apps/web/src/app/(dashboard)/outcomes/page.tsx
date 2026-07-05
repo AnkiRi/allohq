@@ -128,6 +128,12 @@ export default function OutcomesPage() {
           treatmentMeanPerCustomer: number;
           liftPerCustomer: number;
           liftPct: number;
+          liftCiLow: number;
+          liftCiHigh: number;
+          significant: boolean;
+          underpowered: boolean;
+          pValue: number;
+          confidence: number;
           incrementalTotal: number;
           incrementalMargin: number;
           baseMonthly: number;
@@ -153,6 +159,10 @@ export default function OutcomesPage() {
         windowDays: liftData!.windowDays,
         liftPerCustomer: liftData!.liftPerCustomer,
         liftPct: liftData!.liftPct,
+        liftCiLow: liftData!.liftCiLow,
+        liftCiHigh: liftData!.liftCiHigh,
+        significant: liftData!.significant,
+        underpowered: liftData!.underpowered,
         incrementalRevenue: liftData!.incrementalTotal,
         baseMonthly: liftData!.baseMonthly,
         performanceRate: liftData!.performanceRate,
@@ -174,6 +184,10 @@ export default function OutcomesPage() {
           liftPct: COHORT.controlRevPerCustomer
             ? (liftPerCustomer / COHORT.controlRevPerCustomer) * 100
             : 0,
+          liftCiLow: null,
+          liftCiHigh: null,
+          significant: false,
+          underpowered: false,
           incrementalRevenue,
           baseMonthly: FEE.baseMonthly,
           performanceRate: FEE.performanceRate,
@@ -366,6 +380,25 @@ export default function OutcomesPage() {
                 </span>
               </span>
             </div>
+            {isReal && model.liftCiLow !== null && (
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <span className="font-mono text-[11px] text-muted-foreground lowercase">
+                  95% confidence interval
+                </span>
+                <span className="font-mono text-[11px] tabular-nums">
+                  <span className="text-muted-foreground">
+                    {moneyExact(model.liftCiLow)} … {moneyExact(model.liftCiHigh)}
+                  </span>{" "}
+                  {model.underpowered ? (
+                    <span className="text-amber-500">· underpowered — gathering data</span>
+                  ) : model.significant ? (
+                    <span className="text-[hsl(var(--accent))]">· statistically significant</span>
+                  ) : (
+                    <span className="text-amber-500">· not yet significant</span>
+                  )}
+                </span>
+              </div>
+            )}
             <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <span className="font-mono text-[11px] text-muted-foreground lowercase">
                 incremental revenue · lift × {model.treatmentCustomers.toLocaleString("en-IN")} treated
