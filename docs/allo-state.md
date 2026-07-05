@@ -99,7 +99,13 @@ _Last updated: 2026-07-03._
   parsing, savings preserved); `reasoning` premium. Principle documented in `policy.ts`;
   `generate-email` routes `task:"generation"` explicitly. Verified: generation/analysis/reasoning →
   claude-sonnet-4-6 first, classification → gpt-4o-mini first.
-- [ ] **Content-quality eval** — no signal if cheap-model copy degrades.
+- [x] ✅ **Content-quality eval** — 2026-07-05, Phase 4. `evalContent` = deterministic hard checks
+  (placeholders, unrendered `{{vars}}`, empty/oversized) + LLM-as-judge on the frontier tier
+  (on-brand / coherent / follows-instruction, scored) with a score gate. Harness
+  `run-content-eval.ts` runs over REAL generated Vana copy + injected bad cases and reports
+  per-case pass/fail + accuracy. Verified 5/5: real win_back/vip_reward copy passes (judge 88/94),
+  placeholder fixture caught by hard checks, off-brand fixture caught by judge (score 0), clean
+  fixture passes (97). Doubles as the Phase-3 re-tiering regression tripwire.
 - [ ] **Messaging-cost tracking** — only inference cost is tracked, not per-message send cost.
 - [ ] **In-product decision-trace surface** — `decision_records` exists but isn't shown.
 - [ ] Broader evals suite (grounding, segment-intent, model-routing, reliability, cost regression, attribution correctness).
