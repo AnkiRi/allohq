@@ -6,6 +6,7 @@ import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, 
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { DecisionTracePanel } from "@/components/campaigns/DecisionTracePanel";
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -146,6 +147,9 @@ export default function CampaignDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* How allo decided — the moat, made legible */}
+      <DecisionTracePanel campaignId={campaignId} />
 
       {/* Email preview — full width */}
       <div className="border border-border rounded-xl bg-card overflow-hidden">

@@ -3,6 +3,7 @@ import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
+import { DEMO_STORE_DOMAIN } from "@allohq/database";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -74,6 +75,75 @@ export const campaignsRouter = router({
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
       return campaign;
+    }),
+
+  /**
+   * How allo decided — a legible, in-product decision trace for a campaign. Reuses what's
+   * already captured (agentProposal / humanDecision, the holdout Experiment + its stats, and
+   * per-customer message_logs with the frozen state snapshot) — no new data. Plain language,
+   * not an ML dashboard: the founder reads "look how allo thought about this so I don't have to".
+   */
+  decisionTrace: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: {
+          id: true, name: true, agentProposal: true, humanDecision: true,
+          segment: { select: { name: true } },
+          store: { select: { shopDomain: true } },
+        },
+      });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const [armCounts, expRow] = await Promise.all([
+        ctx.prisma.messageLog.groupBy({ by: ["treatmentArm"], where: { campaignId: campaign.id, treatmentArm: { not: null } }, _count: { id: true } }),
+        ctx.prisma.messageLog.findFirst({ where: { campaignId: campaign.id, experimentId: { not: null } }, select: { experimentId: true } }),
+      ]);
+      const controlCount = Number(armCounts.find((a) => a.treatmentArm === "CONTROL")?._count.id ?? 0);
+      const treatmentCount = Number(armCounts.find((a) => a.treatmentArm === "TREATMENT")?._count.id ?? 0);
+      const experiment = expRow?.experimentId
+        ? await ctx.prisma.experiment.findUnique({ where: { id: expRow.experimentId }, select: { splitRatio: true, stats: true } })
+        : null;
+
+      // Sample per-customer traces: a treatment buyer, a treatment non-buyer, a control buyer.
+      const pick = (arm: "CONTROL" | "TREATMENT", outcome: string) =>
+        ctx.prisma.messageLog.findFirst({
+          where: { campaignId: campaign.id, treatmentArm: arm, outcome },
+          select: { customerId: true, treatmentArm: true, outcome: true, outcomeRevenue: true, customerStateSnap: true },
+        });
+      const raw = (await Promise.all([pick("TREATMENT", "purchased"), pick("TREATMENT", "ignored"), pick("CONTROL", "purchased")])).filter(Boolean) as Array<{ customerId: string | null; treatmentArm: string | null; outcome: string | null; outcomeRevenue: unknown; customerStateSnap: unknown }>;
+      const custIds = raw.map((r) => r.customerId).filter(Boolean) as string[];
+      const custs = custIds.length ? await ctx.prisma.customer.findMany({ where: { id: { in: custIds } }, select: { id: true, firstName: true } }) : [];
+      const samples = raw.map((r) => {
+        const st = (r.customerStateSnap ?? {}) as { segment?: string; orderCount?: number; totalSpent?: number };
+        return {
+          name: custs.find((c) => c.id === r.customerId)?.firstName ?? "A customer",
+          segment: st.segment ?? null,
+          orders: st.orderCount ?? null,
+          spent: st.totalSpent ?? null,
+          arm: r.treatmentArm,
+          outcome: r.outcome,
+          revenue: Number(r.outcomeRevenue ?? 0),
+        };
+      });
+
+      const ap = (campaign.agentProposal ?? {}) as { intent?: string; segmentName?: string; discountPercent?: number; channel?: string };
+      const hd = campaign.humanDecision as { acceptedAsProposed?: boolean; overrides?: Record<string, unknown> } | null;
+      return {
+        campaignName: campaign.name,
+        isSynthetic: campaign.store?.shopDomain === DEMO_STORE_DOMAIN,
+        decision: {
+          intent: ap.intent ?? null,
+          segment: ap.segmentName ?? campaign.segment?.name ?? null,
+          discountPercent: ap.discountPercent ?? null,
+          channel: ap.channel ?? "email",
+        },
+        human: hd ? { acceptedAsProposed: hd.acceptedAsProposed ?? null, overrides: hd.overrides ?? {} } : null,
+        experiment: { splitRatio: experiment?.splitRatio ?? null, controlCount, treatmentCount },
+        stats: (experiment?.stats ?? null) as null | { lift: number; ciLow: number; ciHigh: number; significant: boolean; underpowered: boolean; confidence: number },
+        samples,
+      };
     }),
 
   create: workspaceProcedure

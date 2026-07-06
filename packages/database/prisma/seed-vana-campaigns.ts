@@ -31,13 +31,16 @@ type CampaignSpec = {
   controlConv: number; // baseline conversion (control)
   treatmentConv: number; // lifted conversion (treatment)
   aov: number; // ₹ average order value (same both arms → lift is pure conversion)
+  intent: string; // what allo proposed (for the decision trace)
+  segmentName: string;
+  discountPercent: number;
 };
 
 // Numbers chosen so lift is positive + driven by CONVERSION (same AOV both arms),
 // holdouts ≥30 (gate-eligible), and figures reconcile with Vana's scale.
 const SENT: CampaignSpec[] = [
-  { key: "diwali-winback", name: "Diwali Win-Back", subject: "We saved your favourites for Diwali 🪔", daysAgo: 24, cohortStart: 0, cohortSize: 620, holdoutPct: 0.15, controlConv: 0.10, treatmentConv: 0.135, aov: 1300 },
-  { key: "champions-vip", name: "Champions VIP Reward", subject: "A private thank-you from Vana", daysAgo: 16, cohortStart: 700, cohortSize: 360, holdoutPct: 0.15, controlConv: 0.18, treatmentConv: 0.235, aov: 2100 },
+  { key: "diwali-winback", name: "Diwali Win-Back", subject: "We saved your favourites for Diwali 🪔", daysAgo: 24, cohortStart: 0, cohortSize: 620, holdoutPct: 0.15, controlConv: 0.10, treatmentConv: 0.135, aov: 1300, intent: "win_back", segmentName: "Lapsed Champions", discountPercent: 15 },
+  { key: "champions-vip", name: "Champions VIP Reward", subject: "A private thank-you from Vana", daysAgo: 16, cohortStart: 700, cohortSize: 360, holdoutPct: 0.15, controlConv: 0.18, treatmentConv: 0.235, aov: 2100, intent: "vip_reward", segmentName: "Champions", discountPercent: 10 },
 ];
 
 async function main() {
@@ -82,6 +85,12 @@ async function main() {
         id: campaignId, workspaceId, storeId, name: spec.name,
         status: "sent", sentAt, recipientCount: treatment.length,
         openCount: Math.round(treatment.length * 0.42), clickCount: Math.round(treatment.length * 0.11),
+        // What allo PROPOSED — powers the in-product decision trace ("How allo decided").
+        agentProposal: {
+          proposedAt: sentAt.toISOString(),
+          intent: spec.intent, segmentName: spec.segmentName, channel: "email",
+          discountPercent: spec.discountPercent, recipientCount: treatment.length,
+        },
       },
     });
     await prisma.experiment.create({

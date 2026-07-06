@@ -10,7 +10,7 @@ story (3 customers through every table: enter → state → segment → campaign
 > new state doc — update this one. Build-gaps flip to ✅; pilot-gaps stay until a real pilot
 > closes them.
 
-_Last updated: 2026-07-03._
+_Last updated: 2026-07-06._
 
 ---
 
@@ -111,7 +111,13 @@ _Last updated: 2026-07-03._
   arm by the send worker + seed; owner cost console (`/admin/llm`) now shows per-brand messaging
   cost (today / 7-day + by channel) alongside inference ($). Verified: 833 seeded Vana sends →
   ₹83.30 aggregated by channel.
-- [ ] **In-product decision-trace surface** — `decision_records` exists but isn't shown.
+- [x] ✅ **In-product decision-trace surface** — 2026-07-06, Phase 6. `campaigns.decisionTrace`
+  endpoint (reuses agentProposal/humanDecision + Experiment.stats + message_logs — no new data) +
+  `DecisionTracePanel` ("How allo decided", expandable, plain-language) on the campaign detail
+  page: the decision (what allo chose + why) → holdout/control → per-customer state+arm+outcome →
+  lift + significance. Honest labels (synthetic tag on demo; "not yet significant" on the lift).
+  Verified on Diwali: arms 93/527, lift ₹30 CI[−23,82] flagged not-significant, samples show the
+  counterfactual (a held-out customer who bought anyway → "allo didn't cause this").
 - [ ] Broader evals suite (grounding, segment-intent, model-routing, reliability, cost regression, attribution correctness).
 - [ ] Sync reconciliation/backfill + webhook retry + store Shopify `created_at` + the zero-scopes config issue.
 - [ ] Security hardening (Clerk CVE, headers, npm highs, git-history scan) + **rotate the two exposed secrets**.
