@@ -122,6 +122,10 @@ model Experiment {
   startAt          DateTime  @default(now())
   endAt            DateTime?
   status           String    @default("learning") // learning | steady | closed
+  // Persisted lift statistics (recomputed as outcomes finalize): the CAM weights each
+  // experiment's trace by confidence — { lift, ciLow, ciHigh, pValue, significant,
+  // underpowered, confidence, nTreatment, nControl, computedAt }.
+  stats            Json?
   createdAt        DateTime  @default(now())
 
   store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -632,6 +636,12 @@ model Campaign {
   recipientCount Int            @default(0)
   openCount      Int            @default(0)
   clickCount     Int            @default(0)
+  // Human-in-the-loop judgment signal (can't-backfill). agentProposal = the action
+  // bundle allo proposed at draft time (segment/discount/channel/timing/intent), frozen.
+  // humanDecision = structured agent_proposed → human_final diff on those action
+  // variables, computed at approval + a content-edit magnitude flag + approval state.
+  agentProposal  Json?
+  humanDecision  Json?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -925,6 +935,7 @@ model MessageLog {
   outcomeTimestamp  DateTime? // when outcome was recorded
   customerStateSnap Json? // snapshot of CustomerState at send time
   messageFeatures   Json? // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
+  sendCost          Decimal?  @db.Decimal(10, 4) // per-message provider send cost (₹) by channel — brand-level messaging P&L alongside inference cost
 
   // Causal-data moat: control-group assignment
   treatmentArm TreatmentArm? // CONTROL = withheld, TREATMENT = sent

@@ -23,6 +23,8 @@ export { predictReorderTiming } from "./reorder-predictor";
 export { computeFullState, updateStateOnEvent, decayStaleStates } from "./state-engine";
 export { computeChurnProbability } from "./churn-prediction";
 export type { ChurnSignals } from "./churn-prediction";
+export { computeLiftStats, varianceFromAggregates } from "./lift-stats";
+export type { GroupStat, LiftStats } from "./lift-stats";
 
 // Causal-data moat: control-group assignment
 export {

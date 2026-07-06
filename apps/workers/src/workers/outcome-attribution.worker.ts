@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
+import { computeLiftStats, varianceFromAggregates } from "@allohq/customer-state";
 
 import { redisConnection, QUEUE_NAMES } from "../config";
 
@@ -54,6 +55,9 @@ async function runHourlyAttribution() {
     // passed with no purchase is now an OBSERVED non-buyer ($0), so per-customer
     // means count the WHOLE arm — the basis for genuinely causal lift.
     await closeElapsedWindows(store.id);
+    // Recompute + persist per-experiment lift statistics (CI / significance / confidence)
+    // now that outcomes have finalized — the CAM weights each trace by this confidence.
+    await persistExperimentStats(store.id);
 
     if (result.ordersAttributed > 0) {
       console.log(
@@ -268,6 +272,66 @@ async function closeElapsedWindows(storeId: string): Promise<number> {
     data: { outcome: "ignored", outcomeRevenue: 0, outcomeMargin: 0, outcomeTimestamp: new Date() },
   });
   return res.count;
+}
+
+/**
+ * Recompute + persist per-experiment lift statistics (Welch CI / significance / confidence)
+ * from observed outcomes. Persisted onto Experiment.stats so the CAM can weight each
+ * experiment's trace by confidence rather than treating a 60-customer lift like a 5,000 one.
+ */
+async function persistExperimentStats(storeId: string): Promise<void> {
+  const rows = await prisma.$queryRaw<
+    Array<{ experimentId: string; arm: "CONTROL" | "TREATMENT"; withOutcome: number; mean: number; sumsq: number }>
+  >`
+    SELECT "experimentId", "treatmentArm" AS arm,
+           COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END)::int AS "withOutcome",
+           COALESCE(
+             SUM(COALESCE("outcomeMargin", "outcomeRevenue", 0)) FILTER (WHERE "outcome" IS NOT NULL)
+             / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0), 0
+           )::float AS mean,
+           COALESCE(
+             SUM(POWER(COALESCE("outcomeMargin", "outcomeRevenue", 0), 2)) FILTER (WHERE "outcome" IS NOT NULL), 0
+           )::float AS sumsq
+    FROM "message_logs"
+    WHERE "storeId" = ${storeId} AND "experimentId" IS NOT NULL AND "treatmentArm" IS NOT NULL
+    GROUP BY "experimentId", "treatmentArm"
+  `;
+
+  const byExp = new Map<string, { c?: (typeof rows)[number]; t?: (typeof rows)[number] }>();
+  for (const r of rows) {
+    const e = byExp.get(r.experimentId) ?? {};
+    if (r.arm === "CONTROL") e.c = r;
+    else e.t = r;
+    byExp.set(r.experimentId, e);
+  }
+
+  for (const [experimentId, { c, t }] of byExp) {
+    if (!c || !t) continue; // need both arms to compute a difference
+    const cv = varianceFromAggregates(c.sumsq, c.withOutcome, c.mean);
+    const tv = varianceFromAggregates(t.sumsq, t.withOutcome, t.mean);
+    const s = computeLiftStats(
+      { n: t.withOutcome, mean: t.mean, variance: tv },
+      { n: c.withOutcome, mean: c.mean, variance: cv },
+    );
+    await prisma.experiment.update({
+      where: { id: experimentId },
+      data: {
+        stats: {
+          lift: Math.round(s.lift),
+          ciLow: Math.round(s.ciLow),
+          ciHigh: Math.round(s.ciHigh),
+          stdErr: Math.round(s.stdErr),
+          pValue: s.pValue,
+          significant: s.significant,
+          underpowered: s.underpowered,
+          confidence: s.confidence,
+          nTreatment: t.withOutcome,
+          nControl: c.withOutcome,
+          computedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

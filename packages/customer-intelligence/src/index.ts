@@ -72,3 +72,6 @@ export type { ChurnModelInput, ChurnPrediction } from "./churn-model";
 // Send Time Optimization
 export { getOptimalSendTime } from "./send-time-optimizer";
 export type { SendTimeResult } from "./send-time-optimizer";
+
+export { hardChecks, judgeContent, evalContent, blocksToText } from "./eval/content-quality";
+export type { EvalContent, BrandContext, JudgeVerdict, ContentEvalResult } from "./eval/content-quality";
