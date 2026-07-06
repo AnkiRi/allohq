@@ -16,9 +16,11 @@ const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: 
 
 export default function CampaignsPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
-  const { data: campaigns, isLoading } = trpc.campaigns.list.useQuery(
+  // Cast breaks a TS2589 "excessively deep" instantiation on the tRPC list result (the
+  // AppRouter type is large); matches the (trpc.X as any).useQuery pattern used elsewhere.
+  const { data: campaigns, isLoading } = (trpc.campaigns.list as any).useQuery(
     statusFilter ? { status: statusFilter as any } : undefined
-  );
+  ) as { data: any[] | undefined; isLoading: boolean };
 
   const statuses = [
     { value: undefined, label: "All" },
