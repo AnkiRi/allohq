@@ -39,8 +39,11 @@ type CampaignSpec = {
 // Numbers chosen so lift is positive + driven by CONVERSION (same AOV both arms),
 // holdouts ≥30 (gate-eligible), and figures reconcile with Vana's scale.
 const SENT: CampaignSpec[] = [
-  { key: "diwali-winback", name: "Diwali Win-Back", subject: "We saved your favourites for Diwali 🪔", daysAgo: 24, cohortStart: 0, cohortSize: 620, holdoutPct: 0.15, controlConv: 0.10, treatmentConv: 0.135, aov: 1300, intent: "win_back", segmentName: "Lapsed Champions", discountPercent: 15 },
-  { key: "champions-vip", name: "Champions VIP Reward", subject: "A private thank-you from Vana", daysAgo: 16, cohortStart: 700, cohortSize: 360, holdoutPct: 0.15, controlConv: 0.18, treatmentConv: 0.235, aov: 2100, intent: "vip_reward", segmentName: "Champions", discountPercent: 10 },
+  // Effect sizes + holdouts chosen so the lift is genuinely STATISTICALLY SIGNIFICANT (z≈3,
+  // p<0.01) — strong-but-plausible campaigns, larger control arms — so the Outcomes screen and
+  // the decision trace honestly read "significant" rather than "gathering data".
+  { key: "diwali-winback", name: "Diwali Win-Back", subject: "We saved your favourites for Diwali 🪔", daysAgo: 24, cohortStart: 0, cohortSize: 620, holdoutPct: 0.25, controlConv: 0.08, treatmentConv: 0.17, aov: 1300, intent: "win_back", segmentName: "Lapsed Champions", discountPercent: 15 },
+  { key: "champions-vip", name: "Champions VIP Reward", subject: "A private thank-you from Vana", daysAgo: 16, cohortStart: 700, cohortSize: 360, holdoutPct: 0.25, controlConv: 0.15, treatmentConv: 0.29, aov: 2100, intent: "vip_reward", segmentName: "Champions", discountPercent: 10 },
 ];
 
 async function main() {
@@ -101,6 +104,38 @@ async function main() {
         status: "closed", startAt: sentAt, endAt: new Date(sentAt.getTime() + ATTRIB_WINDOW * 86400000),
       },
     });
+
+    // Persist lift stats on the experiment (same Welch computation the hourly worker uses) so
+    // the in-product decision trace reads correctly the instant the seed runs — no waiting on
+    // the worker. Per-customer basis = margin (aov × MARGIN for buyers, 0 otherwise).
+    {
+      const val = spec.aov * MARGIN;
+      const armStat = (buyers: number, n: number) => {
+        const mean = n > 0 ? (buyers * val) / n : 0;
+        const variance = n > 1 ? Math.max(0, (buyers * val * val - n * mean * mean) / (n - 1)) : 0;
+        return { n, mean, variance };
+      };
+      const t = armStat(treatmentBuyers, treatment.length);
+      const c = armStat(controlBuyers, control.length);
+      const se = Math.sqrt(t.variance / Math.max(t.n, 1) + c.variance / Math.max(c.n, 1));
+      const lift = t.mean - c.mean;
+      const z = se > 0 ? lift / se : 0;
+      const ncdf = (x: number) => { const k = 1 / (1 + 0.2316419 * Math.abs(x)); const d = 0.3989422804014327 * Math.exp(-(x * x) / 2); const p = d * k * (0.31938153 + k * (-0.356563782 + k * (1.781477937 + k * (-1.821255978 + k * 1.330274429)))); return x >= 0 ? 1 - p : p; };
+      const pValue = se > 0 ? 2 * (1 - ncdf(Math.abs(z))) : 1;
+      const underpowered = t.n < 30 || c.n < 30;
+      const significant = !underpowered && se > 0 && (lift - 1.96 * se > 0 || lift + 1.96 * se < 0);
+      await prisma.experiment.update({
+        where: { id: experimentId },
+        data: {
+          stats: {
+            lift: Math.round(lift), ciLow: Math.round(lift - 1.96 * se), ciHigh: Math.round(lift + 1.96 * se),
+            stdErr: Math.round(se), pValue, significant, underpowered,
+            confidence: underpowered ? 0 : Math.max(0, Math.min(1, 1 - pValue)),
+            nTreatment: t.n, nControl: c.n, computedAt: sentAt.toISOString(),
+          },
+        },
+      });
+    }
 
     // --- message logs (every member OBSERVED) + orders for buyers ---
     const mlRows: any[] = [];

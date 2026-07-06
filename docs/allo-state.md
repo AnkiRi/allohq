@@ -42,10 +42,11 @@ _Last updated: 2026-07-06._
 ## THE MOAT — honest state
 - **Causal control-group data: REAL machinery.** Holdout → order linkage (treatment **and**
   control) → per-customer causal lift → fee, works end-to-end. **The worked instance is
-  SYNTHETIC** — the seeded Vana campaigns (**lift ₹42/customer, +31.4%, fee ₹29,238**) are
-  **demo/seed data, not a real brand.** No real brand has produced a proven lift number yet.
-  As of Phase 2 the honesty layer flags this lift as a point estimate that is **NOT yet
-  statistically significant** (95% CI −22…106, p=0.20) — Outcomes shows "not yet significant".
+  SYNTHETIC** — the seeded Vana campaigns (**pooled lift ₹107/customer, 95% CI [56,159],
+  p<0.0001, statistically significant**; Diwali +₹72 p=0.0008, Champions +₹168 p=0.0048) are
+  **demo/seed data, not a real brand.** The seed is tuned to a realistic STRONG result so the
+  demo honestly reads "significant"; the honesty layer (Phase 2) still flags any genuinely
+  underpowered/insignificant data as such. No real brand has produced a proven lift number yet.
 - **CAM: within-brand calibration is real; cross-brand CAM is architecture-ready, NOT trained.**
   The calibration output shape is brand-agnostic, but nothing aggregates across brands and no
   uplift/propensity/churn model is trained on the accumulated causal data yet.
@@ -88,8 +89,9 @@ _Last updated: 2026-07-06._
   surfaced on Outcomes (95% CI + significant / not-yet-significant / underpowered badge) AND
   persisted per-experiment on `Experiment.stats` (lift, CI, pValue, significant, underpowered,
   confidence, nT/nC) by the hourly worker so the CAM weights traces by confidence. Verified:
-  clear sample → significant, tiny → underpowered, and the seeded Vana lift is honestly flagged
-  NOT-yet-significant (₹42, 95% CI −22…106, p=0.20 — bimodal per-customer revenue → high variance).
+  clear sample → significant, tiny → underpowered. (Demo seed later tuned to a significant strong
+  result — pooled ₹107/cust, p<0.0001 — so the walkthrough reads "significant"; the layer still
+  flags real underpowered data honestly.)
 - [ ] **Matched/stratified holdouts** — buildable now (stratify by state-cell before randomizing);
   value only shows on small/mid-market brands (sparse state-cells under plain randomization).
   Deferred; validate on real small-brand pilot data.
