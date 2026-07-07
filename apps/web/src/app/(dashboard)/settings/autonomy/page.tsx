@@ -15,9 +15,9 @@ const itemVariants = {
 };
 
 const TIERS = [
-  { value: "autopilot", label: "Autopilot", icon: Zap, desc: "allo acts on its own when it's confident" },
-  { value: "copilot", label: "Copilot", icon: Eye, desc: "allo drafts, you approve before it goes out" },
-  { value: "advisor", label: "Advisor", icon: Bot, desc: "allo suggests, you make every call" },
+  { value: "autopilot", label: "Autopilot", icon: Zap, desc: "joon acts on its own when it's confident" },
+  { value: "copilot", label: "Copilot", icon: Eye, desc: "joon drafts, you approve before it goes out" },
+  { value: "advisor", label: "Advisor", icon: Bot, desc: "joon suggests, you make every call" },
 ] as const;
 
 const CATEGORIES = [
@@ -72,14 +72,14 @@ export default function AutonomySettingsPage() {
           Autonomy
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
-          Decide how much allo can do on its own for each kind of action
+          Decide how much joon can do on its own for each kind of action
         </p>
       </motion.div>
 
       {!storeId ? (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <Shield className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground">Connect a store and allo can start helping here.</p>
+          <p className="text-[11px] text-muted-foreground">Connect a store and joon can start helping here.</p>
         </motion.div>
       ) : isLoading ? (
         <div className="space-y-3">
@@ -92,14 +92,14 @@ export default function AutonomySettingsPage() {
           {(!configs || configs.length === 0) && (
             <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
               <p className="text-[11px] text-muted-foreground mb-3">
-                You haven&apos;t set autonomy yet. allo will ask before doing anything until you do.
+                You haven&apos;t set autonomy yet. joon will ask before doing anything until you do.
               </p>
               <button
                 onClick={() => initMut.mutate({ storeId })}
                 disabled={initMut.isPending}
                 className="px-4 py-2 rounded-lg text-[11px] font-sans bg-foreground text-background hover:opacity-90 transition-opacity"
               >
-                Use allo&apos;s recommendations
+                Use joon&apos;s recommendations
               </button>
             </motion.div>
           )}

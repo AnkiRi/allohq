@@ -133,7 +133,7 @@ export default function NewSegmentPage() {
           New segment
         </h1>
         <p className="text-[13px] text-muted-foreground mt-1">
-          Set a few conditions and allo will gather everyone who fits.
+          Set a few conditions and joon will gather everyone who fits.
         </p>
       </div>
 

@@ -148,7 +148,7 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      {/* How allo decided — the moat, made legible */}
+      {/* How joon decided — the moat, made legible */}
       <DecisionTracePanel campaignId={campaignId} />
 
       {/* Email preview — full width */}

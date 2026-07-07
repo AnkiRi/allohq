@@ -151,7 +151,7 @@ export default function ShopifyDetailPage() {
           <Loader2 className="w-5 h-5 text-foreground animate-spin flex-shrink-0" />
           <div className="flex-1">
             <p className="text-[13px] font-bold text-foreground">
-              allo is syncing your store...
+              joon is syncing your store...
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Bringing in products, customers, and orders from {store.shopDomain}
@@ -185,7 +185,7 @@ export default function ShopifyDetailPage() {
               All synced
             </p>
             <p className="text-[11px] text-[var(--color-success)]/80 mt-0.5">
-              allo has everything from {store.shopDomain}
+              joon has everything from {store.shopDomain}
             </p>
           </div>
           <div className="flex gap-4">
@@ -283,7 +283,7 @@ export default function ShopifyDetailPage() {
               Disconnect this store?
             </h3>
             <p className="text-[11px] text-muted-foreground mb-5">
-              allo will stop syncing from {store.shopDomain}. Everything it&apos;s
+              joon will stop syncing from {store.shopDomain}. Everything it&apos;s
               already learned stays put.
             </p>
             <div className="flex gap-2">

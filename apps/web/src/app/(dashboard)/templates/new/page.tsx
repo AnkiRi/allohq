@@ -344,7 +344,7 @@ export default function NewTemplatePage() {
   );
 
   // -- Step 2: Auto-generate on entry — REAL LLM generation --
-  // The skeleton only seeds block TYPES/structure; allo then writes real, on-brand
+  // The skeleton only seeds block TYPES/structure; joon then writes real, on-brand
   // copy from the goal + the user's custom instruction via regenerateEmail (the same
   // real-LLM path the editor uses; demo-allowlisted + cost-capped). Falls back to the
   // skeleton only if the model is unavailable — never ships "Your Heading Here".
@@ -450,7 +450,7 @@ export default function NewTemplatePage() {
 
   async function handleRegenerate() {
     if (!storeId || !regenerateMut?.mutateAsync) {
-      toast("Connect a store first so allo can rewrite this.", "info");
+      toast("Connect a store first so joon can rewrite this.", "info");
       return;
     }
     try {
@@ -650,7 +650,7 @@ export default function NewTemplatePage() {
               <div className="text-center space-y-4 max-w-sm">
                 <h2 className="text-[16px] font-serif font-bold text-foreground">Couldn't write that email</h2>
                 <p className="text-[13px] text-muted-foreground leading-relaxed">
-                  allo hit a snag generating your copy — nothing was saved (no placeholder text).
+                  joon hit a snag generating your copy — nothing was saved (no placeholder text).
                   Give it another go.
                 </p>
                 <button
@@ -676,7 +676,7 @@ export default function NewTemplatePage() {
 
                 <div className="text-center space-y-2">
                   <h2 className="text-[16px] font-serif font-bold text-foreground">
-                    allo is writing your {GOALS.find((g) => g.id === goal)?.label} email…
+                    joon is writing your {GOALS.find((g) => g.id === goal)?.label} email…
                   </h2>
                   <p className="text-[13px] text-muted-foreground">
                     Putting together the layout, subject line, and words
@@ -886,7 +886,7 @@ export default function NewTemplatePage() {
                       <input
                         value={aiInstruction}
                         onChange={(e) => setAiInstruction(e.target.value)}
-                        placeholder="Tell allo what to change…"
+                        placeholder="Tell joon what to change…"
                         onKeyDown={(e) => e.key === "Enter" && handleRegenerate()}
                         className="flex-1 px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                       />

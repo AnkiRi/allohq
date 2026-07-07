@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@allohq/ui";
 
 // ---------------------------------------------------------------------------
-// CommandLine — the `allo ›` prompt + text input. Mono, blinking caret,
+// CommandLine — the `joon ›` prompt + text input. Mono, blinking caret,
 // rotating placeholder. Enter submits.
 // ---------------------------------------------------------------------------
 
@@ -20,7 +20,7 @@ export interface CommandLineProps {
 }
 
 export function CommandLine({
-  placeholder = "Tell allo what you want, e.g. win back my lapsed buyers before Diwali",
+  placeholder = "Tell joon what you want, e.g. win back my lapsed buyers before Diwali",
   onSubmit,
   rotateMs = 3800,
   className,
@@ -64,7 +64,7 @@ export function CommandLine({
       onClick={() => inputRef.current?.focus()}
     >
       <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
-        allo ›
+        joon ›
       </span>
       <div className="relative flex-1 min-w-0">
         <input
@@ -83,8 +83,8 @@ export function CommandLine({
           }}
           // Native placeholder kept empty; we render our own rotating one so it
           // can animate. aria-label keeps it accessible. Input is human
-          // (sans) — you talk to allo in plain language; allo THINKS in mono.
-          aria-label="Tell allo what you want, in your own words"
+          // (sans) — you talk to joon in plain language; joon THINKS in mono.
+          aria-label="Tell joon what you want, in your own words"
           className="w-full bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))]"
         />
         {value.length === 0 && (

@@ -9,7 +9,7 @@ import type { DecisionPrediction, DecisionReasonLine } from "./DecisionCard";
 
 // ---------------------------------------------------------------------------
 // DecisionDetail — the "view" target for a decision. Opens the ACTUAL thing
-// allo lined up before you approve it: who it's for, the drafted message
+// joon lined up before you approve it: who it's for, the drafted message
 // (subject + body / rendered email preview), the predicted consequence (upside,
 // NAMED downside, confidence, basis), and the reasoning. Fixed overlay so it is
 // never clipped by a scrolling container.

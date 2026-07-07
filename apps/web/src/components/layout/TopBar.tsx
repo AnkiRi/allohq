@@ -173,7 +173,7 @@ export function TopBar() {
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/[0.08] border border-primary/15">
             <PulseDot color="bg-primary" />
             <span className="text-[11px] font-sans text-primary/85">
-              allo is watching over {totalCustomers.toLocaleString("en-IN")} customers
+              joon is watching over {totalCustomers.toLocaleString("en-IN")} customers
             </span>
             {lastActivityText && (
               <span className="text-[10px] font-sans text-primary/60">

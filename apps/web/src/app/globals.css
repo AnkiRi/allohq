@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =====================================================================
-   allo app theme = V2 (canonical). Three user-selectable palettes,
+   joon app theme = V2 (canonical). Three user-selectable palettes,
    keyed on html[data-theme]:
      drenched  (DEFAULT)  cobalt + warm gold        — the blue hero look
      light                minimal near-white + emerald

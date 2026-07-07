@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
-// "How allo decided" — allo showing its work, in plain language (not an ML dashboard).
-// Reads the real decision trace: what allo chose + why, the held-out control (the
+// "How joon decided" — joon showing its work, in plain language (not an ML dashboard).
+// Reads the real decision trace: what joon chose + why, the held-out control (the
 // counterfactual), the state each customer was in, and what happened. Honest labels: numbers
 // stay flagged illustrative on demo data, and lift is shown with its significance.
 export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
@@ -37,7 +37,7 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
       >
         <div className="flex items-center gap-3">
           <div className="w-px h-6 bg-secondary" />
-          <h2 className="text-[13px] font-bold text-foreground font-serif">How allo decided</h2>
+          <h2 className="text-[13px] font-bold text-foreground font-serif">How joon decided</h2>
         </div>
         {open ? (
           <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -54,7 +54,7 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
               The decision
             </div>
             <p className="text-[13px] text-foreground font-sans leading-relaxed">
-              allo chose to send a <b>{d.intent?.replace(/_/g, " ") ?? "retention"}</b> email
+              joon chose to send a <b>{d.intent?.replace(/_/g, " ") ?? "retention"}</b> email
               {d.discountPercent ? (
                 <>
                   {" "}with a <b>{d.discountPercent}% offer</b>
@@ -68,7 +68,7 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
             {data.human && data.human.acceptedAsProposed !== null && (
               <p className="text-[12px] text-muted-foreground font-sans mt-1.5">
                 {data.human.acceptedAsProposed
-                  ? "You shipped allo's proposal as-is."
+                  ? "You shipped joon's proposal as-is."
                   : `You adjusted: ${Object.keys(data.human.overrides ?? {}).join(", ") || "the plan"}.`}
               </p>
             )}
@@ -100,17 +100,17 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
             </div>
           )}
 
-          {/* allo's growth call — do more by sending LESS. Derived from the measured
+          {/* joon's growth call — do more by sending LESS. Derived from the measured
               significance above; never asserted beyond what the control group shows. */}
           {s && !s.underpowered && (
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
               <div className="text-[10px] uppercase tracking-[1px] text-muted-foreground font-sans font-bold mb-1.5">
-                allo's growth call
+                joon's growth call
               </div>
               {s.significant && s.lift > 0 ? (
                 <p className="text-[13px] text-foreground font-sans leading-relaxed">
                   <span className="text-[hsl(var(--accent))] font-semibold">Keep sending this segment.</span>{" "}
-                  The lift is real, so every message here earns its place — this is where allo
+                  The lift is real, so every message here earns its place — this is where joon
                   concentrates the sends.
                 </p>
               ) : (
@@ -144,7 +144,7 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
                     <span className="text-muted-foreground">—</span>
                     <span className={c.outcome === "purchased" ? "text-foreground" : "text-muted-foreground"}>
                       {c.outcome === "purchased" ? `bought ${money(c.revenue)}` : "didn't buy"}
-                      {c.arm === "CONTROL" && c.outcome === "purchased" ? " anyway — so allo didn't cause this" : ""}
+                      {c.arm === "CONTROL" && c.outcome === "purchased" ? " anyway — so joon didn't cause this" : ""}
                     </span>
                   </div>
                 ))}

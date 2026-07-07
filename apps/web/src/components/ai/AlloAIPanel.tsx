@@ -139,7 +139,7 @@ function derivePageContext(pathname: string): string {
 // ---------------------------------------------------------------------------
 
 const PLACEHOLDERS = [
-  "Tell allo what you want: e.g. win back my lapsed buyers before Diwali",
+  "Tell joon what you want: e.g. win back my lapsed buyers before Diwali",
   "What should I focus on today?",
   "Who's slipping away?",
   "How did last week go?",
@@ -261,7 +261,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-no-store",
       role: "assistant",
-      content: "Hi, I'm allo. Connect your Shopify store from the dashboard and I'll get to work. I'll be right here once you're set up.",
+      content: "Hi, I'm joon. Connect your Shopify store from the dashboard and I'll get to work. I'll be right here once you're set up.",
       timestamp: now,
     });
     return messages;
@@ -614,7 +614,7 @@ function RecoveryOpportunityCards({
   );
 }
 
-// Reasoning steps, phrased as a terminal stream in allo's warm, plain voice.
+// Reasoning steps, phrased as a terminal stream in joon's warm, plain voice.
 const AGENT_STEPS = [
   "scanning your store data",
   "reading your customer segments",
@@ -678,7 +678,7 @@ function AgentActivityIndicator() {
 
         {expanded && (
           <div className="border-l-2 border-[hsl(var(--accent))]/20 pl-3 mt-2">
-            <StreamOutput aria-label="allo reasoning">
+            <StreamOutput aria-label="joon reasoning">
               {completedSteps.map((idx) => {
                 const step = AGENT_STEPS[idx];
                 if (!step) return null;
@@ -1141,7 +1141,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const isDashboard = pathname === "/dashboard";
 
   // Default COLLAPSED: the page/console is the primary, full-width surface.
-  // allo is summoned on demand (floating button · ⌘K · Home command line).
+  // joon is summoned on demand (floating button · ⌘K · Home command line).
   // Restore a stored pref if present, but default to collapsed (never auto-dock).
   const [panelState, setPanelState] = useState<PanelState>("collapsed");
 
@@ -1829,7 +1829,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           <button
             onClick={toggle}
             className="absolute top-3 -left-10 w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
-            title={effectiveState === "collapsed" ? "Open allo" : "Close allo"}
+            title={effectiveState === "collapsed" ? "Open joon" : "Close joon"}
           >
             {effectiveState === "collapsed" ? (
               <ChevronLeft className="w-4 h-4" />
@@ -1846,7 +1846,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             <button
               onClick={toggle}
               className="md:hidden w-8 h-8 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-              title="Close allo"
+              title="Close joon"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1950,7 +1950,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                     {currentChatTitle ? (
                       <span className="font-serif font-bold text-foreground">{currentChatTitle}</span>
                     ) : (
-                      <span className="font-mono font-semibold text-foreground">allo · operator</span>
+                      <span className="font-mono font-semibold text-foreground">joon · operator</span>
                     )}
                   </div>
                   {storeId && (
@@ -2123,13 +2123,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             <div className="px-5 py-4 border-t border-border">
               <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 opacity-60">
                 <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
-                  allo ›
+                  joon ›
                 </span>
                 <input
                   disabled
                   value=""
                   readOnly
-                  placeholder="allo is setting things up"
+                  placeholder="joon is setting things up"
                   className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
@@ -2222,7 +2222,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Command line — the `allo ›` console input. Stays controlled so
+            {/* Command line — the `joon ›` console input. Stays controlled so
                 ⌘K / the Home command line can prefill via setInput, and the ref
                 keeps focus working. Reskinned to the console's terminal language. */}
             <div className="px-5 py-4 border-t border-border">
@@ -2235,7 +2235,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 onClick={() => inputRef.current?.focus()}
               >
                 <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
-                  allo ›
+                  joon ›
                 </span>
                 <input
                   ref={inputRef}
@@ -2246,7 +2246,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   }}
                   placeholder={!storeId ? "Connect a store and we'll get started" : !dataReady ? "Getting your store ready" : placeholder}
                   disabled={isProcessing || !storeId || !dataReady}
-                  aria-label="Tell allo what you want, in your own words"
+                  aria-label="Tell joon what you want, in your own words"
                   className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
                 />
                 <button
@@ -2268,7 +2268,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       </aside>
 
       {/* Summon affordance when collapsed — a calm console cue, not a docked chat.
-          The console/page stays full-width; allo is summoned here, via ⌘K, or
+          The console/page stays full-width; joon is summoned here, via ⌘K, or
           the Home command line. Hidden in embedded mode. */}
       {!embedded && effectiveState === "collapsed" && (
         <button
@@ -2277,10 +2277,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             setTimeout(() => inputRef.current?.focus(), 200);
           }}
           className="group fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent))]/30 bg-card px-3.5 py-2.5 shadow-lg hover:border-[hsl(var(--accent))] transition-colors z-[60]"
-          title="Summon allo (⌘J)"
+          title="Summon joon (⌘J)"
         >
           <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
-            allo ›
+            joon ›
           </span>
           <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground/70 border border-border rounded px-1.5 py-0.5 select-none">
             ⌘J
@@ -2300,7 +2300,7 @@ const PanelRefContext = createContext<React.RefObject<AlloAIPanelHandle | null> 
 export function AlloAIPanelProvider({ children }: { children: React.ReactNode }) {
   const panelRef = useRef<AlloAIPanelHandle>(null);
 
-  // ⌘J / Ctrl+J summons allo (the AI panel). ⌘K belongs to the command palette;
+  // ⌘J / Ctrl+J summons joon (the AI panel). ⌘K belongs to the command palette;
   // the panel uses ⌘J so the two shortcuts never collide.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -140,8 +140,8 @@ export default function CampaignsPage() {
       ) : (
         <SmartEmptyState
           icon={Mail}
-          title="No campaigns yet. Want allo to draft one?"
-          description="allo has spotted a few moments worth reaching out about."
+          title="No campaigns yet. Want joon to draft one?"
+          description="joon has spotted a few moments worth reaching out about."
           actions={[{ label: "Create a campaign", href: "/campaigns/new", primary: true }]}
         />
       )}

@@ -18,7 +18,7 @@ const itemVariants = {
 };
 
 // Segment → semantic V2 token class. Strong cohorts read in success; the ones
-// allo watches read in urgent; everyone else stays neutral. No hardcoded paint.
+// joon watches read in urgent; everyone else stays neutral. No hardcoded paint.
 function getSegmentBadgeColor(segment: string): string {
   const s = segment.toLowerCase();
   if (s.includes("champion"))
@@ -44,8 +44,8 @@ function getRfmBarColor(score: number): string {
 // (getAiInsight removed — the per-customer worldview now flows through the
 // shared ReasoningReveal story below.)
 
-// What allo noticed about THIS person — a single compact reasoning story for the
-// shared ReasoningReveal. Always carries the worldview shape: what allo saw, the
+// What joon noticed about THIS person — a single compact reasoning story for the
+// shared ReasoningReveal. Always carries the worldview shape: what joon saw, the
 // move (or the deliberate restraint), predicted upside + NAMED downside, and a
 // confidence-tagged close. Estimates until control data backs them.
 function getCustomerStory(args: {
@@ -66,7 +66,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} has gone quiet`,
       lines: [
-        { text: `allo noticed: ${seen}` },
+        { text: `joon noticed: ${seen}` },
         { text: "a warm, personal win-back fits people like them" },
         { text: "downside if mistimed: ~3% unsub · low" },
         { text: "estimate · expected recovery worth a nudge", arrow: true },
@@ -77,7 +77,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} is starting to drift`,
       lines: [
-        { text: `allo noticed: ${seen}` },
+        { text: `joon noticed: ${seen}` },
         { text: "a timely, light note now keeps them close" },
         { text: "downside: annoyance if over-messaged · ~4%" },
         { text: "estimate · medium confidence", arrow: true },
@@ -88,7 +88,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} is one of your best`,
       lines: [
-        { text: `allo noticed: ${seen}` },
+        { text: `joon noticed: ${seen}` },
         { text: "early access or a thank-you reads well here" },
         { text: "no discount: kept on the list · not messaged", beat: true },
         { text: "estimate · protecting the relationship", arrow: true },
@@ -99,7 +99,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} keeps coming back`,
       lines: [
-        { text: `allo noticed: ${seen}` },
+        { text: `joon noticed: ${seen}` },
         { text: "a small loyalty nudge can move them up a tier" },
         { text: "downside: discount-training if overused · low" },
         { text: "estimate · medium confidence", arrow: true },
@@ -110,7 +110,7 @@ function getCustomerStory(args: {
     return {
       lead: `${who} just joined you`,
       lines: [
-        { text: `allo noticed: ${seen}` },
+        { text: `joon noticed: ${seen}` },
         { text: "a warm welcome beats a hard sell this early" },
         { text: "downside: too soon to push · keep it light", beat: true },
         { text: "estimate · low confidence yet", arrow: true },
@@ -120,7 +120,7 @@ function getCustomerStory(args: {
   return {
     lead: `${who}`,
     lines: [
-      { text: `allo noticed: ${seen}` },
+      { text: `joon noticed: ${seen}` },
       { text: "a personal note is the gentlest nudge to their next order" },
       { text: "downside: minimal at this cadence" },
       { text: "estimate · confidence builds with their history", arrow: true },
@@ -177,7 +177,7 @@ export default function CustomerDetailPage() {
     ? Math.floor((Date.now() - new Date(rfm.lastOrderAt).getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
-  // What allo noticed about THIS person — fed to the shared ReasoningReveal.
+  // What joon noticed about THIS person — fed to the shared ReasoningReveal.
   const fullName = `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim();
   const customerStory = getCustomerStory({
     name: customer.firstName?.trim() || fullName || customer.email,
@@ -220,7 +220,7 @@ export default function CustomerDetailPage() {
                     {segment}
                   </span>
                 )}
-                {/* Restraint, named — when allo deliberately holds off messaging */}
+                {/* Restraint, named — when joon deliberately holds off messaging */}
                 {leftAlone && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono lowercase text-muted-foreground border border-border">
                     kept on the list · not messaged
@@ -262,14 +262,14 @@ export default function CustomerDetailPage() {
         </div>
       </motion.div>
 
-      {/* ── What allo noticed about THIS person ── leads the page, right after
-          who they are. The ONE shared reasoning-reveal: what allo saw, the move
+      {/* ── What joon noticed about THIS person ── leads the page, right after
+          who they are. The ONE shared reasoning-reveal: what joon saw, the move
           (or the deliberate restraint), predicted upside + named downside +
           confidence. Estimate until control data backs it. ── */}
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="w-4 h-4 text-[hsl(var(--accent))]" />
-          <h2 className="section-header text-[13px]">What allo noticed</h2>
+          <h2 className="section-header text-[13px]">What joon noticed</h2>
         </div>
         <ReasoningReveal stories={[customerStory]} />
         <Link
@@ -342,7 +342,7 @@ export default function CustomerDetailPage() {
               </div>
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground font-sans">No RFM score yet. allo will add one as orders come in.</p>
+            <p className="text-[13px] text-muted-foreground font-sans">No RFM score yet. joon will add one as orders come in.</p>
           )}
         </motion.div>
 

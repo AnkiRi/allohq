@@ -7,7 +7,7 @@ import { ConsoleFrame } from "@/components/console";
 // Growth intelligence — "do MORE by sending LESS", made legible.
 //
 // The holdout isn't the pitch; it's the training signal underneath. What the
-// founder (and a VC) sees here is the DECISION it produces: allo sends where a
+// founder (and a VC) sees here is the DECISION it produces: joon sends where a
 // control group PROVES incremental lift, and holds back where it doesn't (the
 // loyalists who'd have bought anyway) — same revenue, fewer sends, a channel
 // that stays worth opening.
@@ -87,7 +87,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
   const calibrated = data.campaigns.filter((c) => !c.underpowered).length;
 
   return (
-    <ConsoleFrame title="allo · growth intelligence">
+    <ConsoleFrame title="joon · growth intelligence">
       <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
         send where lift is proven · hold back where it isn&apos;t · {windowDays}-day window
       </p>
@@ -97,7 +97,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
         Do more by sending less.
       </p>
       <p className="font-sans text-[12.5px] text-muted-foreground leading-relaxed mb-5">
-        allo concentrated sends on the segments a held-out control proved would respond, and held
+        joon concentrated sends on the segments a held-out control proved would respond, and held
         back the ones that would have bought anyway.
       </p>
 
@@ -113,7 +113,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
           </div>
         </div>
         <div className="rounded-xl border border-border bg-background/40 p-4">
-          <div className="font-mono text-[10.5px] text-muted-foreground lowercase mb-1.5">sends allo would skip</div>
+          <div className="font-mono text-[10.5px] text-muted-foreground lowercase mb-1.5">sends joon would skip</div>
           <div className="font-mono text-[22px] tabular-nums text-foreground">{t.sendsAvoidablePct}%</div>
           <div className="font-sans text-[11px] text-muted-foreground mt-1">
             {num(t.sendsAvoidable)} of {num(t.messaged)} messages — no proven lift, so drop them
@@ -123,7 +123,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
           <div className="font-mono text-[10.5px] text-muted-foreground lowercase mb-1.5">held back to measure</div>
           <div className="font-mono text-[22px] tabular-nums text-foreground">{num(t.heldToMeasure)}</div>
           <div className="font-sans text-[11px] text-muted-foreground mt-1">
-            the control cohort — how allo can prove lift instead of guessing
+            the control cohort — how joon can prove lift instead of guessing
           </div>
         </div>
       </div>
@@ -131,7 +131,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
       {/* Concentrated lift, per segment — the "which to send, which to skip" table. */}
       <div className="rounded-xl border border-border bg-background/40 overflow-hidden">
         <div className="hidden sm:grid grid-cols-[1.6fr_0.7fr_0.7fr_1fr_0.8fr] gap-2 px-4 py-2 border-b border-border">
-          {["segment", "messaged", "held back", "lift / customer", "allo's call"].map((h) => (
+          {["segment", "messaged", "held back", "lift / customer", "joon's call"].map((h) => (
             <span key={h} className="font-mono text-[10px] text-muted-foreground lowercase tracking-wide">
               {h}
             </span>
@@ -186,7 +186,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
 
       {/* Getting sharper — honest confidence state, not a fake CAM % bar. */}
       <p className="font-sans text-[11px] text-muted-foreground mt-4 leading-relaxed">
-        {calibrated} of {t.campaigns} segments now control-backed. As allo runs more cycles, the
+        {calibrated} of {t.campaigns} segments now control-backed. As joon runs more cycles, the
         calls get sharper — every holdout adds to what it knows about who to send and who to skip.
       </p>
 

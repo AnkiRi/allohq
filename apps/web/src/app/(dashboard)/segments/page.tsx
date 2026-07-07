@@ -63,7 +63,7 @@ export default function SegmentsPage() {
           populatedSegments[0],
         )
       : null;
-  // Biggest at-risk cohort — the opportunity allo would point to.
+  // Biggest at-risk cohort — the opportunity joon would point to.
   const atRiskSegments = populatedSegments.filter((s: any) =>
     AT_RISK_SEGMENTS.has(s.name),
   );
@@ -93,7 +93,7 @@ export default function SegmentsPage() {
             The base
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            How allo reads your customers, grouped by how they shop, and what
+            How joon reads your customers, grouped by how they shop, and what
             they tend to buy together.
           </p>
         </div>
@@ -139,7 +139,7 @@ export default function SegmentsPage() {
 
       {/* RFM Segments tab */}
       {activeTab === "rfm" && (
-        <ConsoleFrame title="allo · segment view">
+        <ConsoleFrame title="joon · segment view">
           {/* Status line — pure counts. The "largest" and "watch" framing lives
               in the warm-voice stream just below, so it isn't said twice. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -156,7 +156,7 @@ export default function SegmentsPage() {
           {/* Warm-voice stream — N customers across M segments · opportunity */}
           {totalCustomers > 0 && (
             <StreamOutput
-              aria-label="how allo reads your base"
+              aria-label="how joon reads your base"
               className="mb-5"
             >
               <StreamRow tick="ok">
@@ -279,7 +279,7 @@ export default function SegmentsPage() {
                 No segments yet.
               </p>
               <p className="text-[12px] text-muted-foreground font-sans mt-1 max-w-sm mx-auto">
-                Connect your store and allo will group your customers as it gets
+                Connect your store and joon will group your customers as it gets
                 to know them.
               </p>
             </div>
@@ -289,7 +289,7 @@ export default function SegmentsPage() {
 
       {/* Basket Patterns tab */}
       {activeTab === "baskets" && (
-        <ConsoleFrame title="allo · basket patterns">
+        <ConsoleFrame title="joon · basket patterns">
           {basketsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -309,7 +309,7 @@ export default function SegmentsPage() {
               </div>
 
               {/* Warm-voice stream */}
-              <StreamOutput aria-label="what allo found in baskets" className="mb-5">
+              <StreamOutput aria-label="what joon found in baskets" className="mb-5">
                 <StreamRow tick="ok">
                   found <b>{baskets.length}</b> product combinations your
                   customers tend to buy together
@@ -387,7 +387,7 @@ export default function SegmentsPage() {
                 No basket patterns yet.
               </p>
               <p className="text-[12px] text-muted-foreground font-sans mt-1 max-w-sm mx-auto">
-                allo spots the products your customers like to buy together.
+                joon spots the products your customers like to buy together.
                 Patterns show up once you have enough multi-item orders.
               </p>
             </div>

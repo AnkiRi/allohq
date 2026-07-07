@@ -468,7 +468,7 @@ export default function TemplatesPage() {
         <SmartEmptyState
           icon={FileText}
           title="No templates yet"
-          description="allo can write beautiful emails that sound just like your brand."
+          description="joon can write beautiful emails that sound just like your brand."
           actions={[
             { label: "Write a welcome email", primary: true },
             { label: "Write a win-back email" },

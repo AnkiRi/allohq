@@ -15,7 +15,7 @@ export function InvalidLink() {
     >
       <div style={{ textAlign: "center", maxWidth: 420 }}>
         <p style={{ fontSize: 12, letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.55, margin: 0 }}>
-          allo
+          joon
         </p>
         <h1 style={{ marginTop: 14, fontSize: 22, fontWeight: 600, lineHeight: 1.25 }}>
           This link isn&apos;t valid or has expired

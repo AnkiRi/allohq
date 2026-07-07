@@ -95,7 +95,7 @@ export function ActivationProgress({
           </div>
           <div className="min-w-0">
             <h2 className="text-sm font-serif font-semibold text-foreground">
-              {complete ? "All set. Here's what allo found" : "allo is setting things up"}
+              {complete ? "All set. Here's what joon found" : "joon is setting things up"}
             </h2>
             <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground mt-0.5">
               <span>{doneCount} of {total} done</span>

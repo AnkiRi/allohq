@@ -103,7 +103,7 @@ export default function FormsPage() {
         <SmartEmptyState
           icon={MousePointerClick}
           title="No forms yet"
-          description="No one's opting in yet. allo can build a popup that captures emails for you."
+          description="No one's opting in yet. joon can build a popup that captures emails for you."
           actions={[{ label: "Create a popup", href: "/forms/new", primary: true }]}
         />
       ) : (

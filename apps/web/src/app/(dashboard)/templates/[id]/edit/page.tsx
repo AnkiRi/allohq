@@ -11,7 +11,7 @@ import type { EmailBlock } from "@allohq/email-builder";
  * The ONE email editor. Every "edit this email" entry point — the template
  * library, a campaign's "Edit template", an automation's "Edit", the chat's
  * "View Template" — routes to /templates/[id]/edit, which now loads the good
- * allo-native EmailStudio (soft BrandEmailLayout render, "tell allo what to
+ * allo-native EmailStudio (soft BrandEmailLayout render, "tell joon what to
  * change", chips, block editing as the hand-tweak path, persistent Save) with
  * the email by id.
  *

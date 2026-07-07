@@ -47,13 +47,13 @@ function formatTokens(n: number): string {
 }
 
 function getCostComparison(cost: number): string {
-  if (cost === 0) return "Nothing spent yet. allo is just getting started";
+  if (cost === 0) return "Nothing spent yet. joon is just getting started";
   if (cost < 0.01) return "Less than a rounding error";
   if (cost < 0.10) return "Less than a small piece of candy";
   if (cost < 1.00) return "Less than a cup of coffee";
   if (cost < 5.00) return "About the price of a coffee";
   if (cost < 20.00) return "Less than a nice lunch";
-  return "allo has been hard at work for you";
+  return "joon has been hard at work for you";
 }
 
 function TokenUsageSection() {
@@ -80,7 +80,7 @@ function TokenUsageSection() {
       {usage && (
         <div className="mb-5">
           <p className="text-[20px] tracking-[-0.5px] font-bold text-foreground">
-            allo cost you ${usage.totalCost.toFixed(4)} this period
+            joon cost you ${usage.totalCost.toFixed(4)} this period
           </p>
           <p className="text-[12px] text-muted-foreground font-sans mt-1">
             {getCostComparison(usage.totalCost)}
@@ -158,7 +158,7 @@ function TokenUsageSection() {
           ) : (
             <div className="text-center py-4">
               <p className="text-[11px] text-muted-foreground">
-                Nothing yet for this period. allo hasn&apos;t needed to spend here.
+                Nothing yet for this period. joon hasn&apos;t needed to spend here.
               </p>
             </div>
           )}
@@ -206,7 +206,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
   };
 
   const createMut = (trpc.knowledge as any).create.useMutation({
-    onSuccess: () => { toast("Article saved. allo can use it now.", "success"); resetForm(); refetch(); },
+    onSuccess: () => { toast("Article saved. joon can use it now.", "success"); resetForm(); refetch(); },
     onError: (err: { message?: string }) => toast(err.message || "Something went wrong. Please try again.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
@@ -258,7 +258,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
         </button>
       </div>
       <p className="text-[11px] text-muted-foreground mb-4">
-        Add your policies, FAQs, and product details so allo can answer customer questions the way you would.
+        Add your policies, FAQs, and product details so joon can answer customer questions the way you would.
       </p>
 
       {/* Category filter */}
@@ -325,7 +325,7 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
       {/* Articles list */}
       {!articles?.length && !showForm && (
         <div className="text-center py-6 text-muted-foreground text-[11px] font-sans">
-          No articles yet. Add a few policies and FAQs so allo can answer customers well.
+          No articles yet. Add a few policies and FAQs so joon can answer customers well.
         </div>
       )}
       <div className="space-y-2">
@@ -390,7 +390,7 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
         <h2 className="section-header accent-bar-left text-[13px]">Messaging providers</h2>
       </div>
       <p className="text-[11px] text-muted-foreground mb-5">
-        Pick who delivers each channel for this store. If you leave it on Default, allo uses Twilio.
+        Pick who delivers each channel for this store. If you leave it on Default, joon uses Twilio.
       </p>
 
       {isLoading ? (
@@ -425,7 +425,7 @@ function MessagingConfigSection({ storeId }: { storeId: string }) {
                       </div>
                     )}
                     <p className="text-[11px] font-bold text-foreground">Default</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Let allo choose</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Let joon choose</p>
                   </button>
                   {PROVIDERS.map((prov) => {
                     const isSelected = current === prov.value;
@@ -483,7 +483,7 @@ function NotificationPreferencesSection() {
   ] as const;
 
   const events = [
-    { key: "onActionRequired", label: "Needs your approval", desc: "allo wants your sign-off before acting" },
+    { key: "onActionRequired", label: "Needs your approval", desc: "joon wants your sign-off before acting" },
     { key: "onCampaignSent", label: "Campaign sent", desc: "A campaign finished going out" },
     { key: "onEscalation", label: "Escalations", desc: "A conversation needs a human" },
     { key: "onChurnAlert", label: "Churn alerts", desc: "A customer looks at risk of leaving" },
@@ -605,7 +605,7 @@ function NotificationPreferencesSection() {
         </select>
       </div>
       <p className="text-[10px] text-muted-foreground mt-2">
-        allo stays quiet during these hours. Urgent escalations still come through.
+        joon stays quiet during these hours. Urgent escalations still come through.
       </p>
     </motion.div>
   );
@@ -662,7 +662,7 @@ function SuppressionStatsSection() {
 
       {suppressed > 0 && (
         <p className="text-[11px] text-[var(--color-success)] mb-3">
-          allo held back {suppressed} messages that would have worn out your customers
+          joon held back {suppressed} messages that would have worn out your customers
         </p>
       )}
 
@@ -680,7 +680,7 @@ function SuppressionStatsSection() {
 
       {suppressed === 0 && sent === 0 && (
         <p className="text-[11px] text-muted-foreground font-sans">
-          No messages yet. Once your campaigns start going out, you&apos;ll see how allo protects your customers here.
+          No messages yet. Once your campaigns start going out, you&apos;ll see how joon protects your customers here.
         </p>
       )}
     </motion.div>
@@ -733,7 +733,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
-          Tune how allo works for you and your store
+          Tune how joon works for you and your store
         </p>
       </motion.div>
 
@@ -810,7 +810,7 @@ export default function SettingsPage() {
           </div>
         ) : (
           <p className="text-[13px] text-muted-foreground">
-            No store connected yet. Head to Integrations and allo will start learning yours.
+            No store connected yet. Head to Integrations and joon will start learning yours.
           </p>
         )}
       </motion.div>
@@ -861,7 +861,7 @@ export default function SettingsPage() {
           <div className="text-center py-6">
             <Sparkles className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
             <p className="text-[11px] text-muted-foreground">
-              Let allo study your brand first, then these preferences open up.
+              Let joon study your brand first, then these preferences open up.
             </p>
           </div>
         )}
@@ -874,7 +874,7 @@ export default function SettingsPage() {
           <h2 className="section-header accent-bar-left text-[13px]">Default AI model</h2>
         </div>
         <p className="text-[11px] text-muted-foreground mb-4">
-          Pick the model allo reaches for when it writes and creates for you
+          Pick the model joon reaches for when it writes and creates for you
         </p>
         {models && models.length > 0 ? (
           <div className="grid grid-cols-3 gap-3">
@@ -924,7 +924,7 @@ export default function SettingsPage() {
         )}
         {aiSettings?.defaultModel === null && models && (
           <p className="text-[10px] text-muted-foreground/50 mt-3">
-            No default chosen. allo will use Claude Sonnet 4.6
+            No default chosen. joon will use Claude Sonnet 4.6
           </p>
         )}
       </motion.div>

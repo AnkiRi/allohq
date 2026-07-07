@@ -81,7 +81,7 @@ export default function IntelligencePage() {
             Intelligence
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
-            What allo has learned about your customers: who they are, and what they&apos;re worth.
+            What joon has learned about your customers: who they are, and what they&apos;re worth.
           </p>
         </div>
         <div className="flex gap-2">
@@ -343,7 +343,7 @@ export default function IntelligencePage() {
             <Brain className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
             <p className="text-[13px] text-muted-foreground">No segments yet.</p>
             <p className="text-[11px] text-muted-foreground/50 mt-1">
-              Run an analysis and allo will group your customers for you.
+              Run an analysis and joon will group your customers for you.
             </p>
           </div>
         )}

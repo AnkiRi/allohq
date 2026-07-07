@@ -5,7 +5,7 @@ import { ReplenishmentEmail } from "@/emails/ReplenishmentEmail";
 import { EmailViewer } from "./EmailViewer";
 
 export const metadata = {
-  title: "Vana Naturals · Email Showcase | allo",
+  title: "Vana Naturals · Email Showcase | joon",
 };
 
 // Render emails to bulletproof HTML server-side, then hand to the client
@@ -37,7 +37,7 @@ export default async function DemoEmailsPage() {
               color: "#2E7D5B",
             }}
           >
-            Allo · generated output
+            Joon · generated output
           </p>
           <h1
             style={{
@@ -61,7 +61,7 @@ export default async function DemoEmailsPage() {
               color: "#9fb8a8",
             }}
           >
-            Two best-in-class lifecycle emails produced by allo for a plant-based
+            Two best-in-class lifecycle emails produced by joon for a plant-based
             wellness brand. Real React Email, bulletproof table HTML, one shared
             brand kit. Toggle each between desktop and mobile, light and dark.
           </p>

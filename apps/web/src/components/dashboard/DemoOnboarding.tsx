@@ -5,14 +5,14 @@ import { Check, Loader2, ArrowRight, Sparkles } from "lucide-react";
 import { useActivationChecklist } from "./useActivationChecklist";
 
 // ---------------------------------------------------------------------------
-// DemoOnboarding — the "watch allo come alive" arc shown ONCE on first demo entry.
+// DemoOnboarding — the "watch joon come alive" arc shown ONCE on first demo entry.
 //
 // Replays the real 3-stage onboarding journey, STAGED + FAST + SIMULATED over the
 // already-seeded Vana data (it reuses the capped client checklist; it NEVER runs
 // the real slow sync or any Shopify call):
 //   1. Getting to know your store  (syncing + background learning)
-//   2. Setting allo up             (wiring allo into the store)
-//   3. What allo found             (the payoff) → dashboard
+//   2. Setting joon up             (wiring joon into the store)
+//   3. What joon found             (the payoff) → dashboard
 // Skippable at any point.
 // ---------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ const SETUP_STEPS = [
   "Setting send guardrails & a control holdout",
 ];
 
-const STAGE_LABELS = ["Getting to know your store", "Setting allo up", "What allo found"];
+const STAGE_LABELS = ["Getting to know your store", "Setting joon up", "What joon found"];
 
 const FOUND = [
   { label: "At risk / lapsed", value: "187 customers", tone: "var(--color-urgent)" },
@@ -87,7 +87,7 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
       {/* Header + skip */}
       <div className="flex items-center justify-between mb-5">
         <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-          allo · setting up Vana Naturals
+          joon · setting up Vana Naturals
         </p>
         <button
           onClick={onDone}
@@ -131,7 +131,7 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
       {stage === 1 && (
         <>
           <h1 className="text-[24px] font-serif font-semibold text-foreground tracking-[-0.02em]">
-            allo is getting to know your store
+            joon is getting to know your store
           </h1>
           <div className="mt-2 flex items-baseline gap-4 font-mono text-[13px] text-muted-foreground tabular-nums">
             <span>
@@ -182,14 +182,14 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
         </>
       )}
 
-      {/* Stage 2 — setting allo up */}
+      {/* Stage 2 — setting joon up */}
       {stage === 2 && (
         <>
           <h1 className="text-[24px] font-serif font-semibold text-foreground tracking-[-0.02em]">
-            Setting allo up
+            Setting joon up
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            Wiring allo into your store so it can start working for you.
+            Wiring joon into your store so it can start working for you.
           </p>
           <ul className="mt-6 space-y-2.5">
             {SETUP_STEPS.map((s, i) => (
@@ -212,12 +212,12 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
         </>
       )}
 
-      {/* Stage 3 — what allo found (the payoff) */}
+      {/* Stage 3 — what joon found (the payoff) */}
       {stage === 3 && (
         <div>
           <div className="flex items-center gap-2 text-[hsl(var(--accent))] mb-2">
             <Sparkles className="w-4 h-4" />
-            <span className="text-[11px] font-mono uppercase tracking-wider">Here's what allo found</span>
+            <span className="text-[11px] font-mono uppercase tracking-wider">Here's what joon found</span>
           </div>
           <h1 className="text-[24px] font-serif font-semibold text-foreground tracking-[-0.02em]">
             Vana Naturals is ready

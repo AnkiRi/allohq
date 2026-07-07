@@ -84,12 +84,12 @@ export default function AutomationsPage() {
   type Mut<I, D = void> = { mutate: (input: I) => void; mutateAsync: (input: I) => Promise<D>; isPending: boolean };
 
   const generateMut = (trpc.automations.generate as any).useMutation({
-    onSuccess: () => { utils.automations.list.invalidate(); toast("allo is on it \u2014 this takes about a minute.", "info"); },
+    onSuccess: () => { utils.automations.list.invalidate(); toast("joon is on it \u2014 this takes about a minute.", "info"); },
     onError: (err: { message?: string }) => toast(err.message || "We couldn't write that one. Mind trying again?", "error"),
   } satisfies MutOpts<unknown>) as Mut<{ id: string; model?: string }>;
 
   const generateAllMut = (trpc.automations.generateAll as any).useMutation({
-    onSuccess: (data: { queued: number }) => { utils.automations.list.invalidate(); toast(`allo is writing ${data.queued} automations for you…`, "info"); },
+    onSuccess: (data: { queued: number }) => { utils.automations.list.invalidate(); toast(`joon is writing ${data.queued} automations for you…`, "info"); },
     onError: (err: { message?: string }) => toast(err.message || "We couldn't write those. Mind trying again?", "error"),
   } satisfies MutOpts<{ queued: number }>) as Mut<{ storeId: string; model?: string }, { queued: number }>;
 
@@ -124,7 +124,7 @@ export default function AutomationsPage() {
             <Sparkles className="w-5 h-5" /> Automations
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            {automations ? `${automations.filter((a) => a.status === "active").length} live, ${automations.filter((a) => a.status === "ready").length} ready to go, ${automations.filter((a) => a.status === "generating").length} being written` : "Always-on flows across every channel, handled by allo"}
+            {automations ? `${automations.filter((a) => a.status === "active").length} live, ${automations.filter((a) => a.status === "ready").length} ready to go, ${automations.filter((a) => a.status === "generating").length} being written` : "Always-on flows across every channel, handled by joon"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export default function AutomationsPage() {
           <div className="flex-1">
             <p className="text-[13px] font-bold text-foreground">Let's set up your brand voice first</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-              Once allo knows how your brand sounds, everything it writes will feel like you.
+              Once joon knows how your brand sounds, everything it writes will feel like you.
             </p>
           </div>
           <Link
@@ -178,7 +178,7 @@ export default function AutomationsPage() {
         >
           <Loader2 className="w-4 h-4 text-warm-gold animate-spin flex-shrink-0" />
           <div>
-            <p className="text-[13px] font-bold text-foreground">allo is writing your messages…</p>
+            <p className="text-[13px] font-bold text-foreground">joon is writing your messages…</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
               Drafting email, SMS, WhatsApp, and RCS, usually 30 to 60 seconds per automation.
             </p>
@@ -283,7 +283,7 @@ export default function AutomationsPage() {
                   {automation.status === "generating" && (
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-warm-gold/10 text-warm-gold border border-warm-gold/20 rounded-lg text-xs font-sans">
                       <Loader2 className="w-3 h-3 animate-spin" />
-                      allo is writing…
+                      joon is writing…
                     </div>
                   )}
                   {automation.status === "ready" && (
@@ -378,8 +378,8 @@ export default function AutomationsPage() {
       ) : (
         <SmartEmptyState
           icon={Sparkles}
-          title="Nothing yet. allo is just getting started."
-          description="allo has a few automations in mind, picked from how your customers behave."
+          title="Nothing yet. joon is just getting started."
+          description="joon has a few automations in mind, picked from how your customers behave."
           actions={[{ label: "Take a look", href: "/automations", primary: true }]}
         />
       )}
