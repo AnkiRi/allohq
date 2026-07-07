@@ -24,7 +24,7 @@ import {
 export const metadata: Metadata = {
   title: "allo · one marketer for every customer",
   description:
-    "allo runs retention and first-line customer service for consumer brands, across email, WhatsApp and SMS, on your own accounts. It holds out a control on every campaign and only bills on the lift that control proves is real.",
+    "allo grows retention revenue for consumer brands by sending less, not more — it learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
 };
 
 /**
@@ -147,7 +147,7 @@ export function V2Landing({
               <div className="v2-hero__lead">
                 <p className="v2-hero__stance mono">
                   <span className="v2-hero__stance-dot" aria-hidden="true" />
-                  outcome-priced retention · built for commerce, from india
+                  grow by sending less · built for commerce, from india
                 </p>
                 <KineticHeadline />
                 <p className="v2-hero__sub">
