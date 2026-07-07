@@ -13,6 +13,7 @@ import {
   ReasoningReveal,
   type ReasoningStory,
 } from "@/components/console/ReasoningReveal";
+import { GrowthImpactPanel } from "@/components/outcomes/GrowthImpactPanel";
 
 // ---------------------------------------------------------------------------
 // Outcomes / Control — the business model on a screen, in operator language.
@@ -287,11 +288,14 @@ export default function OutcomesPage() {
           Outcomes
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          The only number that matters is the one you wouldn&apos;t have earned
-          on your own. We hold a cohort back, send them nothing, and measure the
-          gap. That gap is what allo is for, and what allo gets paid on.
+          allo grows revenue by sending <b>less</b>, not more — concentrating on the customers a
+          held-out control proves will respond, and holding back the ones who&apos;d have bought
+          anyway. Below: what that earned, and the causal proof underneath it.
         </p>
       </div>
+
+      {/* 0. Growth intelligence — the hero: do more by sending less ---------- */}
+      <GrowthImpactPanel storeId={storeId} windowDays={COHORT.windowDays} />
 
       {/* 1. The control comparison — the most important pixel ---------------- */}
       <ConsoleFrame title="allo · incremental revenue vs control">

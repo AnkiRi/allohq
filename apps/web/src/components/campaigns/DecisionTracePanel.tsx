@@ -100,6 +100,29 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
             </div>
           )}
 
+          {/* allo's growth call — do more by sending LESS. Derived from the measured
+              significance above; never asserted beyond what the control group shows. */}
+          {s && !s.underpowered && (
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <div className="text-[10px] uppercase tracking-[1px] text-muted-foreground font-sans font-bold mb-1.5">
+                allo's growth call
+              </div>
+              {s.significant && s.lift > 0 ? (
+                <p className="text-[13px] text-foreground font-sans leading-relaxed">
+                  <span className="text-[hsl(var(--accent))] font-semibold">Keep sending this segment.</span>{" "}
+                  The lift is real, so every message here earns its place — this is where allo
+                  concentrates the sends.
+                </p>
+              ) : (
+                <p className="text-[13px] text-foreground font-sans leading-relaxed">
+                  <span className="text-[hsl(var(--accent))] font-semibold">Hold this segment back next time.</span>{" "}
+                  They largely bought anyway — the emails didn't cause the revenue. Skipping them means
+                  the same revenue with fewer sends, and a channel that stays worth opening.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* A few customers */}
           {data.samples.length > 0 && (
             <div>
