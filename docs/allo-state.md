@@ -10,7 +10,43 @@ story (3 customers through every table: enter → state → segment → campaign
 > new state doc — update this one. Build-gaps flip to ✅; pilot-gaps stay until a real pilot
 > closes them.
 
-_Last updated: 2026-07-06._
+_Last updated: 2026-07-07._
+
+---
+
+## THESIS (2026-07-07) — growth intelligence is the hero
+
+allo is **two things**:
+1. **Automation** — it runs the whole retention motion autonomously (the dream cycle: agents
+   segment / write / schedule / queue-for-approval overnight).
+2. **Growth intelligence (the CAM)** — a causally-trained DECISION layer that learns **who / when /
+   which channel** to message **and whom to SKIP**, so a brand does **more revenue with fewer
+   sends** (channel preservation, CX preservation, concentrated lift).
+
+**The pitch is "do more by sending LESS," not "we prove causal lift."** Blast-everyone (incumbents)
+trains customers to mute / archive / unsubscribe — it burns the list. allo sends less, smarter.
+The **holdout is the invisible training engine underneath** — how the CAM learns where sending
+actually causes lift — **not the headline**.
+
+- **Billing:** base fee to run retention **+ a performance cut of proven incremental revenue** on
+  treated customers (growth-aligned; never "18% of incremental").
+- **Moat (three layers, honest):** (a) the **causally-trained CAM** — a decision engine trained on
+  control-group data incumbents never collected and **cannot backfill**; (b) **structural** —
+  outcome-based pricing *forces* allo to hold out and accumulate causal data, while volume-priced
+  incumbents are structurally disincentivized from ever reducing sends; (c) **channel preservation**
+  as the felt differentiator (send less → a list that stays worth opening). See
+  `docs/moat-holdout-cam-groundtruth.md` for the full, code-cited competitive argument.
+- **The CAM is NOT the LLM.** LLM = execution/copy (Layer 3, rented). CAM = the who/when/whether
+  decision (Layer 1, owned). **Honest build-state:** the CAM today is **deterministic stubs +
+  within-brand SQL calibration** (see the stub inventory in `moat-holdout-cam-groundtruth.md` §
+  Phase 0). Trained / cross-brand / per-customer-in-the-campaign-path are the **roadmap**, labelled
+  as such in-product ("estimate" vs "calibrated", "control-backed", synthetic-vs-real).
+
+### Build north star (post-Wed, tracked in BUILD GAPS below)
+Wire per-customer intelligence (channel / time / **skip**) into the **main campaign path** (today
+campaigns are segment-level, email-only — the learned functions aren't called there) + **populate
+response telemetry** + **capture the offer/variant at send**. That is the CAM's actual inputs +
+execution — more important than more measurement hardening.
 
 ---
 
@@ -42,11 +78,15 @@ _Last updated: 2026-07-06._
 ## THE MOAT — honest state
 - **Causal control-group data: REAL machinery.** Holdout → order linkage (treatment **and**
   control) → per-customer causal lift → fee, works end-to-end. **The worked instance is
-  SYNTHETIC** — the seeded Vana campaigns (**pooled lift ₹107/customer, 95% CI [56,159],
-  p<0.0001, statistically significant**; Diwali +₹72 p=0.0008, Champions +₹168 p=0.0048) are
-  **demo/seed data, not a real brand.** The seed is tuned to a realistic STRONG result so the
-  demo honestly reads "significant"; the honesty layer (Phase 2) still flags any genuinely
-  underpowered/insignificant data as such. No real brand has produced a proven lift number yet.
+  SYNTHETIC** — the seeded Vana campaigns are demo/seed data, not a real brand. As of 2026-07-07
+  the seed tells the **concentrated-lift / send-less** story across three segments (per-customer
+  lift, N-independent): **Diwali Win-Back (Lapsed Champions) ≈ +₹70 · SIGNIFICANT → send**;
+  **At-Risk Reactivation ≈ +₹62 · SIGNIFICANT → send**; **Champions VIP Reward (loyal buy-anyway)
+  ≈ +₹6 · NOT significant → HOLD BACK** (control≈treatment: they'd have bought anyway). ~28% of
+  sends land on the hold-back segment → "same revenue, fewer sends." The honesty layer still flags
+  the loyalist segment as no-proven-lift; the send/hold call is computed live from each segment's
+  measured significance. No real brand has produced a proven lift number yet. (Counts scale with
+  Vana's actual population; read exact ₹ off the screen after reseeding.)
 - **CAM: within-brand calibration is real; cross-brand CAM is architecture-ready, NOT trained.**
   The calibration output shape is brand-agnostic, but nothing aggregates across brands and no
   uplift/propensity/churn model is trained on the accumulated causal data yet.
@@ -120,6 +160,19 @@ _Last updated: 2026-07-06._
   lift + significance. Honest labels (synthetic tag on demo; "not yet significant" on the lift).
   Verified on Diwali: arms 93/527, lift ₹30 CI[−23,82] flagged not-significant, samples show the
   counterfactual (a held-out customer who bought anyway → "allo didn't cause this").
+- [x] ✅ **CAM-impact / growth-intelligence surface** — 2026-07-07. `analytics.camImpact` (per
+  campaign: held-back/messaged + Welch lift/significance, same machinery as `controlLift`, grouped
+  per campaign → "do more by sending less" roll-up: proven incremental, % sends avoidable, fee on
+  PROVEN lift only; send/hold DERIVED from measured significance). `GrowthImpactPanel` leads the
+  Outcomes page (concentrated-lift table, send vs hold, control-backed confidence line);
+  `DecisionTracePanel` gains a per-campaign growth call. Seed reshaped to the honest 3-segment
+  concentrated dataset (2 responsive-significant + 1 loyalist buy-anyway ~₹0/not-significant).
+- [ ] **[NORTH STAR] Wire per-customer intelligence into the MAIN CAMPAIGN path** — today campaigns
+  are segment-level, email-only; `getBestChannel`/`getOptimalSendTime`/skip-low-lift are **never
+  called** there (only journeys use timing/channel). This is the CAM's real execution surface.
+- [ ] **[NORTH STAR] Populate response telemetry + capture offer/variant at send** — `openedAt`/
+  `clickedAt`/`messageFeatures` only on real sends (empty in demo); no `discountCode`/`offerId` on
+  MessageLog (the `discountPercent` schema comment is never written). Can't-backfill once a send goes.
 - [ ] Broader evals suite (grounding, segment-intent, model-routing, reliability, cost regression, attribution correctness).
 - [ ] Sync reconciliation/backfill + webhook retry + store Shopify `created_at` + the zero-scopes config issue.
 - [ ] Security hardening (Clerk CVE, headers, npm highs, git-history scan) + **rotate the two exposed secrets**.
