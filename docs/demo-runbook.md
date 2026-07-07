@@ -71,9 +71,9 @@ gets sharper every cycle, because every holdout teaches it who to send and who t
 ---
 
 ## THE NUMBERS (per-customer lift is population-independent; ₹ totals scale with Vana's count)
-- **Diwali Win-Back** (Lapsed Champions): lift ≈ **+₹70/cust**, significant → **SEND**.
-- **At-Risk Reactivation** (At Risk): lift ≈ **+₹62/cust**, significant → **SEND**.
-- **Champions VIP Reward** (Champions / loyal): lift ≈ **+₹6/cust**, NOT significant → **HOLD BACK**.
+- **Diwali Win-Back** (Lapsed Champions): lift ≈ **+₹88/cust**, significant → **SEND**.
+- **At-Risk Reactivation** (At Risk): lift ≈ **+₹67/cust**, significant → **SEND**.
+- **Champions VIP Reward** (Champions / loyal): lift ≈ **+₹5/cust**, NOT significant → **HOLD BACK**.
 - **Sends allo would skip ≈ 28%** (the Champions treated volume). Fee = **base ₹24,000/mo + 15% of
   PROVEN incremental margin** (only the two significant segments count). Read exact ₹ off the screen.
 

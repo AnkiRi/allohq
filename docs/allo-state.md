@@ -80,9 +80,9 @@ execution — more important than more measurement hardening.
   control) → per-customer causal lift → fee, works end-to-end. **The worked instance is
   SYNTHETIC** — the seeded Vana campaigns are demo/seed data, not a real brand. As of 2026-07-07
   the seed tells the **concentrated-lift / send-less** story across three segments (per-customer
-  lift, N-independent): **Diwali Win-Back (Lapsed Champions) ≈ +₹70 · SIGNIFICANT → send**;
-  **At-Risk Reactivation ≈ +₹62 · SIGNIFICANT → send**; **Champions VIP Reward (loyal buy-anyway)
-  ≈ +₹6 · NOT significant → HOLD BACK** (control≈treatment: they'd have bought anyway). ~28% of
+  lift, N-independent): **Diwali Win-Back (Lapsed Champions) ≈ +₹88 · SIGNIFICANT → send**;
+  **At-Risk Reactivation ≈ +₹67 · SIGNIFICANT → send**; **Champions VIP Reward (loyal buy-anyway)
+  ≈ +₹5 · NOT significant → HOLD BACK** (control≈treatment: they'd have bought anyway). ~28% of
   sends land on the hold-back segment → "same revenue, fewer sends." The honesty layer still flags
   the loyalist segment as no-proven-lift; the send/hold call is computed live from each segment's
   measured significance. No real brand has produced a proven lift number yet. (Counts scale with
