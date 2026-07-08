@@ -33,7 +33,16 @@ export interface ShopifyCustomer {
   phone: string | null;
   first_name: string | null;
   last_name: string | null;
-  accepts_marketing: boolean;
+  // Legacy boolean — REMOVED from the REST customer resource in API 2022-04, so on
+  // 2024-01 it's absent. Kept optional for older stores/versions that still send it.
+  accepts_marketing?: boolean;
+  // Current consent model (API 2022-04+): state ∈ subscribed | not_subscribed |
+  // unsubscribed | pending | redacted. Only "subscribed" means opted-in.
+  email_marketing_consent?: {
+    state: string;
+    opt_in_level?: string | null;
+    consent_updated_at?: string | null;
+  } | null;
   tags: string;
   created_at: string;
   updated_at: string;
