@@ -7,7 +7,7 @@ export default async function HomePage() {
   const headersList = await headers();
   const host = headersList.get("host") || "";
 
-  // agent.allohq.ai — skip landing, go straight to app (unchanged)
+  // agent.allohq.ai, skip landing, go straight to app (unchanged)
   if (host.startsWith("agent.")) {
     const { userId } = await auth();
     if (userId) {

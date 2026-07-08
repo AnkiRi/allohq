@@ -4,14 +4,14 @@ import { animate, useInView, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 /* ------------------------------------------------------------------ */
-/* THE BILL — reused from frontend-invoice/BillSignature.tsx.          */
+/* THE BILL, reused from frontend-invoice/BillSignature.tsx.          */
 /* A self-itemizing statement that posts its line items one by one and */
 /* resolves each figure with an odometer:                              */
 /*   gross ₹4,20,000 − control ₹3,00,000 = proven lift ₹1,20,000       */
 /*   performance fee sits ONLY on the proven lift; base is separate.   */
 /* RE-THEMED for v2 (its own .v2-bill__* classes + colour tokens).     */
 /* Indian number grouping. Reduced motion / JS-off: every figure       */
-/* resolved, posting instant — nothing gated on the animation.         */
+/* resolved, posting instant, nothing gated on the animation.         */
 /* ------------------------------------------------------------------ */
 
 function groupIndian(n: number): string {
@@ -151,7 +151,7 @@ export function BillStatement() {
           </div>
         ))}
 
-        {/* the proven lift — what remains, the only thing a fee may touch */}
+        {/* the proven lift, what remains, the only thing a fee may touch */}
         <div className="v2-bill__row v2-bill__row--lift" style={posted(2)}>
           <span className="v2-bill__sign mono" aria-hidden="true">
             =
@@ -167,7 +167,7 @@ export function BillStatement() {
           </span>
         </div>
 
-        {/* the fee — sits ON the lift, never on gross */}
+        {/* the fee, sits ON the lift, never on gross */}
         <div className="v2-bill__row v2-bill__row--fee" style={posted(3)}>
           <span className="v2-bill__sign mono" aria-hidden="true">
             ↳

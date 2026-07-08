@@ -1,21 +1,21 @@
 /* ============================================================================
-   joon — THE SYNTHESIS ("v2")  ·  built with the Frontend Design plugin
+   joon, THE SYNTHESIS ("v2")  ·  built with the Frontend Design plugin
    ----------------------------------------------------------------------------
-   One operator-console landing that synthesizes the user-approved signatures —
+   One operator-console landing that synthesizes the user-approved signatures, 
    the kinetic hero (manifesto word-swap), the irreversible holdout, the self-
    itemizing bill, the scroll-scrubbed day rail, and the shared streaming
-   console — under ONE colour-switcher: three palettes on identical markup,
+   console, under ONE colour-switcher: three palettes on identical markup,
    driven by `data-pal` and CSS custom properties.
 
    Type: Hanken Grotesk (display + body), JetBrains Mono (data / console / IDs).
-   ALL selectors scoped under .opt-v2 — no global / :root / body / html rules.
+   ALL selectors scoped under .opt-v2, no global / :root / body / html rules.
    Tokens are defined per palette on .opt-v2[data-pal="…"]; every reused
    mechanic re-themes from these tokens (the holdout warming + clock sky are
    token/opacity-driven, never hardcoded hex).
    ========================================================================== */
 
 /* ── palette tokens (the switcher's whole job) ───────────────────────────── */
-/* DRENCHED — impeccable-drenched cobalt surface + warm-gold accent (default). */
+/* DRENCHED, impeccable-drenched cobalt surface + warm-gold accent (default). */
 .opt-v2[data-pal="drenched"] {
   --bg: oklch(0.3 0.16 266);
   --surface: oklch(0.345 0.155 266);
@@ -31,7 +31,7 @@
   --shadow: 0 28px 70px -34px oklch(0.16 0.12 266 / 0.9);
   color-scheme: dark;
 }
-/* LIGHT — very minimal, clean near-white; one restrained emerald accent. */
+/* LIGHT, very minimal, clean near-white; one restrained emerald accent. */
 .opt-v2[data-pal="light"] {
   --bg: #fafaf9;
   --surface: #ffffff;
@@ -50,7 +50,7 @@
   --shadow: 0 24px 52px -34px rgba(20, 30, 26, 0.28);
   color-scheme: light;
 }
-/* DARK — dark, emerald-forward ground. */
+/* DARK, dark, emerald-forward ground. */
 .opt-v2[data-pal="dark"] {
   --bg: #0b1210;
   --surface: #111a16;
@@ -244,7 +244,7 @@
   font-size: 24px;
   letter-spacing: -0.03em;
   margin-right: auto;
-  /* a slow, barely-there float — the wordmark feels alive, not static */
+  /* a slow, barely-there float, the wordmark feels alive, not static */
   animation: v2-brand-float 5.6s ease-in-out infinite;
   will-change: transform;
 }
@@ -320,7 +320,7 @@
   gap: 14px;
 }
 
-/* ── "joon keeps your hours" — the light-of-day control ─────────────────── */
+/* ── "joon keeps your hours", the light-of-day control ─────────────────── */
 /* Not a palette picker: a sun-cycle (dawn / day / night) that sets the light
    joon is working in. Quiet by default, set off from the nav links by a faint
    rule; the active hour glows in the accent. */
@@ -367,7 +367,7 @@
   padding-bottom: clamp(40px, 6vw, 76px);
   overflow: clip;
 }
-/* a single restrained aura behind the hero — depth, not decoration. Reads on
+/* a single restrained aura behind the hero, depth, not decoration. Reads on
    all three palettes because it's accent-soft over the page ground. */
 .opt-v2 .v2-hero__aura {
   position: absolute;
@@ -434,7 +434,7 @@
 }
 /* word-swap: both phrases live in ONE grid cell (stacked) and crossfade. The
    cell always sizes to the longest phrase ("every customer."), so swapping can
-   never change the headline height — no reflow, no collapse. */
+   never change the headline height, no reflow, no collapse. */
 .opt-v2 .v2-swap {
   display: grid;
 }
@@ -478,7 +478,7 @@
   color: var(--faint);
 }
 
-/* slim live proof strip — the store, right now */
+/* slim live proof strip, the store, right now */
 .opt-v2 .v2-proofstrip {
   display: flex;
   flex-wrap: wrap;
@@ -541,7 +541,7 @@
   box-shadow: var(--shadow), 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent) inset;
   min-width: 0;
 }
-/* inner accent glow at the top — gives the console depth + a "live" feel */
+/* inner accent glow at the top, gives the console depth + a "live" feel */
 .opt-v2 .v2-console::before {
   content: "";
   position: absolute;
@@ -633,7 +633,7 @@
   --rr-mono: var(--font-mono);
 }
 
-/* the live dot — used by the hero proof strip + console header */
+/* the live dot, used by the hero proof strip + console header */
 .opt-v2 .v2-live-dot {
   width: 7px;
   height: 7px;
@@ -648,7 +648,7 @@
 .opt-v2 .v2-section {
   padding-block: clamp(56px, 8vw, 104px);
 }
-/* tinted band — alternated down the page so half-page sections don't read as
+/* tinted band, alternated down the page so half-page sections don't read as
    one flat stack. Surface ground + hairline rules, re-themes per palette. */
 .opt-v2 .v2-section--alt {
   background: color-mix(in srgb, var(--surface) 58%, var(--bg));
@@ -722,7 +722,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   MORNING BRIEF — reused from frontend-brief, re-themed via v2 tokens.
+   MORNING BRIEF, reused from frontend-brief, re-themed via v2 tokens.
    ════════════════════════════════════════════════════════════════════════ */
 .opt-v2 .v2-mb {
   background: var(--surface);
@@ -858,7 +858,7 @@
   border-color: var(--ink);
   color: var(--ink);
 }
-/* the control line — set apart; this is the moat being captured */
+/* the control line, set apart; this is the moat being captured */
 .opt-v2 .v2-mb__item-inner.is-control {
   align-items: center;
 }
@@ -901,7 +901,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   SWARM — reused from frontend-swarm/CustomerField, re-themed via v2 tokens.
+   SWARM, reused from frontend-swarm/CustomerField, re-themed via v2 tokens.
    ════════════════════════════════════════════════════════════════════════ */
 .opt-v2 .v2-swarm-frame {
   background: var(--surface);
@@ -1007,9 +1007,9 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   HOLDOUT — the original HoldoutField graphic, re-themed via v2 tokens.
+   HOLDOUT, the original HoldoutField graphic, re-themed via v2 tokens.
    Warming is class/token-driven (cool→.is-warm flips to var(--ink)), so it
-   works on LIGHT (ink-on-white) as well as both darks — no baked hex.
+   works on LIGHT (ink-on-white) as well as both darks, no baked hex.
    ════════════════════════════════════════════════════════════════════════ */
 .opt-v2 .v2-proof-card {
   background: var(--surface);
@@ -1315,7 +1315,7 @@
 .opt-v2 .v2-bill__amt.is-strike {
   color: var(--dim);
 }
-/* the proven lift — the single bold beat; the only place accent runs large */
+/* the proven lift, the single bold beat; the only place accent runs large */
 .opt-v2 .v2-bill__row--lift {
   margin-inline: -24px;
   padding: 20px 24px 18px;
@@ -1592,7 +1592,7 @@
   font-size: 13.5px;
 }
 
-/* consequence — upside / NAMED downside / confidence */
+/* consequence, upside / NAMED downside / confidence */
 .opt-v2 .v2-consequence {
   margin-top: 18px;
   border: 1px solid var(--line-2);
@@ -1922,7 +1922,7 @@
 }
 
 /* very narrow: the switcher (the deliverable) must stay reachable, so the
-   nav CTA steps aside — "Start free" is already prominent in the hero below. */
+   nav CTA steps aside, "Start free" is already prominent in the hero below. */
 @media (max-width: 440px) {
   .opt-v2 .v2-nav__right .v2-btn {
     display: none;
@@ -2036,7 +2036,7 @@
 }
 
 /* ============================================================================
-   REDUCED MOTION — everything present, static, fully readable; no reveal gates.
+   REDUCED MOTION, everything present, static, fully readable; no reveal gates.
    (The framer-motion leaves also short-circuit on prefers-reduced-motion; this
    is the CSS belt-and-braces.)
    ========================================================================== */

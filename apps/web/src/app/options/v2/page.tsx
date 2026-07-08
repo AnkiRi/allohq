@@ -24,7 +24,7 @@ import {
 export const metadata: Metadata = {
   title: "joon · one marketer for every customer",
   description:
-    "joon grows retention revenue for consumer brands by sending less, not more — it learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
+    "joon grows retention revenue for consumer brands by sending less, not more. It learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
 };
 
 /**
@@ -54,7 +54,7 @@ const PAL_INIT = `
 })();
 `;
 
-// Relative so they resolve to the current origin (prod, preview, or local) — never
+// Relative so they resolve to the current origin (prod, preview, or local), never
 // a hardcoded localhost. On the landing domain these route to agent.<apex> via middleware.
 const signUp = "/sign-up";
 const signIn = "/sign-in";
@@ -75,7 +75,7 @@ function isPal(v: unknown): v is PalId {
  *   Switcher's mount effect still handle ?pal= / localStorage for visitors.
  *
  * The visitor-facing palette switcher (Drenched / Light / Dark) always renders
- * in the nav — it is the landing's theme control, independent of the banner.
+ * in the nav, it is the landing's theme control, independent of the banner.
  */
 export function V2Landing({
   showBanner = true,
@@ -88,7 +88,7 @@ export function V2Landing({
     <div className="opt-v2" data-pal={initialPal} suppressHydrationWarning>
       {/* No-FOUC: resolve ?pal= / stored palette synchronously, before paint.
           The script mutates data-pal before hydration, so this element's
-          attributes legitimately differ server vs client — suppress the warning
+          attributes legitimately differ server vs client, suppress the warning
           (same pattern the root <html> uses for the app's data-theme). */}
       <script dangerouslySetInnerHTML={{ __html: PAL_INIT }} />
 
@@ -104,7 +104,7 @@ export function V2Landing({
         href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       />
 
-      {/* ── prototype label banner — /options/v2 only ──────────── */}
+      {/* ── prototype label banner, /options/v2 only ──────────── */}
       {showBanner && (
         <div className="v2-banner" role="note">
           <span className="v2-banner__label mono">
@@ -140,7 +140,7 @@ export function V2Landing({
         </header>
 
         <main id="top">
-          {/* ── 2 · HERO — full-bleed: thesis + console + proof strip ── */}
+          {/* ── 2 · HERO, full-bleed: thesis + console + proof strip ── */}
           <section className="v2-hero">
             <div className="v2-hero__aura" aria-hidden="true" />
             <div className="v2-wrap v2-hero__grid">
@@ -152,7 +152,7 @@ export function V2Landing({
                 <KineticHeadline />
                 <p className="v2-hero__sub">
                   joon connects to your store, learns your brand, and reaches each
-                  customer individually across WhatsApp, email and SMS — so you grow
+                  customer individually across WhatsApp, email and SMS, so you grow
                   revenue from the customers you already have, without burning your list.
                 </p>
                 <div className="v2-hero__cta">
@@ -190,7 +190,7 @@ export function V2Landing({
                 </p>
               </div>
 
-              {/* the operator console — elevated ReasoningReveal surface */}
+              {/* the operator console, elevated ReasoningReveal surface */}
               <div className="v2-console" aria-label="joon operator console">
                 <div className="v2-console__bar">
                   <span className="v2-lamp" aria-hidden="true" />
@@ -213,7 +213,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 3 · MORNING BRIEF — HALF page, visual-LEFT ─────────── */}
+          {/* ── 3 · MORNING BRIEF, HALF page, visual-LEFT ─────────── */}
           <section className="v2-section" id="brief">
             <div className="v2-wrap v2-half v2-half--art-left">
               <Rise className="v2-half__art">
@@ -237,7 +237,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 4 · SWARM — HALF page, visual-RIGHT ────────────────── */}
+          {/* ── 4 · SWARM, HALF page, visual-RIGHT ────────────────── */}
           <section className="v2-section v2-section--alt">
             <div className="v2-wrap v2-half v2-half--art-right">
               <Rise className="v2-half__copy">
@@ -253,7 +253,7 @@ export function V2Landing({
                 </p>
                 <p className="v2-section__lede">
                   It does more by sending less. Blast the whole list and your best
-                  customers learn to mute, archive and unsubscribe — the audience you
+                  customers learn to mute, archive and unsubscribe. The audience you
                   paid to build quietly stops opening. joon reaches only who&rsquo;s
                   worth reaching today, so your list stays healthy and keeps listening.
                 </p>
@@ -269,7 +269,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 5 · HOLDOUT — HALF page, visual-LEFT ───────────────── */}
+          {/* ── 5 · HOLDOUT, HALF page, visual-LEFT ───────────────── */}
           <section className="v2-section" id="proof">
             <div className="v2-wrap v2-half v2-half--art-left v2-half--wide-art">
               <Rise className="v2-half__art">
@@ -286,7 +286,7 @@ export function V2Landing({
                   Reaching the right customer at the right moment grows revenue without
                   adding sends. And it isn&rsquo;t a guess: on every campaign joon holds
                   a few back, matched on past spend and left untouched, so the lift is
-                  measured against that control — never claimed.
+                  measured against that control, never claimed.
                 </p>
                 <p className="v2-half__aside">
                   Holdouts are one-way: you can&rsquo;t run a control on history.
@@ -296,7 +296,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 6 · ON THE CLOCK — full, scroll-scrub day rail ─────── */}
+          {/* ── 6 · ON THE CLOCK, full, scroll-scrub day rail ─────── */}
           <section className="v2-section v2-section--alt v2-day" id="day">
             <div className="v2-wrap">
               <Rise className="v2-section__head v2-section__head--center">
@@ -469,7 +469,7 @@ export function V2Landing({
             </DayRail>
           </section>
 
-          {/* ── 7 · THE BILL — HALF page, visual-RIGHT ─────────────── */}
+          {/* ── 7 · THE BILL, HALF page, visual-RIGHT ─────────────── */}
           <section className="v2-section" id="bill">
             <div className="v2-wrap v2-half v2-half--art-right v2-half--wide-art">
               <Rise className="v2-half__copy">
@@ -493,7 +493,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 8 · HOW IT WORKS — connect / learn / attend cards ──── */}
+          {/* ── 8 · HOW IT WORKS, connect / learn / attend cards ──── */}
           <section className="v2-section v2-section--alt" id="how">
             <div className="v2-wrap">
               <Rise className="v2-section__head">
@@ -538,7 +538,7 @@ export function V2Landing({
                 </Rise>
               </ol>
 
-              {/* consequence prediction — upside / NAMED downside / confidence */}
+              {/* consequence prediction, upside / NAMED downside / confidence */}
               <Rise>
                 <div className="v2-consequence">
                   <div className="v2-consequence__head">
@@ -581,7 +581,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 9 · POSITIONING band — centered ────────────────────── */}
+          {/* ── 9 · POSITIONING band, centered ────────────────────── */}
           <section className="v2-position" aria-label="Positioning">
             <div className="v2-wrap v2-position__inner">
               <Rise>
@@ -655,7 +655,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 12 · FINAL CTA — command prompt redux ──────────────── */}
+          {/* ── 12 · FINAL CTA, command prompt redux ──────────────── */}
           <section className="v2-final" aria-label="Get started">
             <div className="v2-wrap">
               <Rise>

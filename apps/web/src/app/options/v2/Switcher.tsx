@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { Sunrise, Sun, Moon } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* "joon keeps your hours" — not a palette picker, a sun-cycle that    */
+/* "joon keeps your hours", not a palette picker, a sun-cycle that    */
 /* sets the LIGHT joon is working in: Dawn (the blue hour, drafts      */
 /* before sunrise), Day (approvals over coffee), Night (the late       */
 /* shift). It reads as comfort/context, not a design choice.           */
-/* Persists to localStorage('allo-theme') — the SAME key the app's     */
-/* ThemeProvider reads — and mirrors data-theme + .dark on <html>, so  */
+/* Persists to localStorage('allo-theme'), the SAME key the app's     */
+/* ThemeProvider reads, and mirrors data-theme + .dark on <html>, so  */
 /* the choice carries landing <-> app live. SSR default is Dawn        */
 /* (drenched); a no-FOUC inline script in page.tsx sets it pre-paint.  */
 /* ------------------------------------------------------------------ */
@@ -61,7 +61,7 @@ export function PaletteSwitcher() {
     const resolved = resolvePal();
     setPal(resolved);
     const root = document.querySelector<HTMLElement>(".opt-v2");
-    // hydration may have reset the attribute to the SSR default — re-apply.
+    // hydration may have reset the attribute to the SSR default, re-apply.
     if (root && root.dataset.pal !== resolved) root.dataset.pal = resolved;
   }, []);
 
@@ -81,7 +81,7 @@ export function PaletteSwitcher() {
     }
   };
 
-  // A discreet sun-cycle — match joon to the light you're working in. Reads as
+  // A discreet sun-cycle, match joon to the light you're working in. Reads as
   // comfort/context (dawn/day/night), not a "pick your design" widget.
   return (
     <div className="v2-pal" role="group" aria-label="Set joon to your hours">

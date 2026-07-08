@@ -8,14 +8,14 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /* ------------------------------------------------------------------ */
-/* THE MORNING BRIEF — reused from frontend-brief/ (Salutation +       */
+/* THE MORNING BRIEF, reused from frontend-brief/ (Salutation +       */
 /* BriefLine + the approvable .mb-item structure), adapted into v2 and */
 /* re-themed via the v2 colour tokens (its own .v2-mb__* classes).     */
 /*                                                                     */
-/* "Good morning, Ujjawal —" types itself once, then each approvable   */
+/* "Good morning, Ujjawal, " types itself once, then each approvable   */
 /* line settles in sequence, as if joon is composing the note while    */
 /* you watch. CONTENT is always rendered; motion only enhances an      */
-/* already-readable default — JS-off / reduced-motion ships the whole  */
+/* already-readable default, JS-off / reduced-motion ships the whole  */
 /* brief readable and every Approve / Hold control usable.             */
 /* ------------------------------------------------------------------ */
 

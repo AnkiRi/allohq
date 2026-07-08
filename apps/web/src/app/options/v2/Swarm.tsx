@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 
 /* ------------------------------------------------------------------ */
-/* THE SWARM — reused from frontend-swarm/CustomerField.tsx.           */
+/* THE SWARM, reused from frontend-swarm/CustomerField.tsx.           */
 /*                                                                     */
 /* A brand has 4,820 customers. A human marketer can attend to a       */
 /* handful, so the rest get a blast. joon attends to each one. ~240    */
@@ -15,7 +15,7 @@ import { useReducedMotion } from "framer-motion";
 /*                                                                     */
 /* RE-THEMED for v2: colours are read from the live .opt-v2 palette    */
 /* tokens (--ink / --accent / --faint), so the field re-themes across  */
-/* drenched / light / dark — ink/accent marks on white in LIGHT,       */
+/* drenched / light / dark, ink/accent marks on white in LIGHT,       */
 /* never neon-on-black baked in.                                       */
 /*                                                                     */
 /* Continuous pointer + animation values live in refs + one rAF loop,  */
@@ -60,7 +60,7 @@ function parseColor(c: string): [number, number, number] {
     const p = (m[1] ?? "").split(",").map((n) => parseFloat(n));
     return [p[0] || 0, p[1] || 0, p[2] || 0];
   }
-  // oklch / unknown — return a mid grey; the field still reads
+  // oklch / unknown, return a mid grey; the field still reads
   return [150, 150, 150];
 }
 function lerp3(
@@ -75,7 +75,7 @@ function lerp3(
   ];
 }
 
-// Mulberry32 — deterministic so the field is identical every render / on SSR.
+// Mulberry32, deterministic so the field is identical every render / on SSR.
 function rng(seed: number) {
   let s = seed >>> 0;
   return () => {
@@ -445,7 +445,7 @@ export function SwarmField() {
         </p>
       )}
 
-      {/* static / accessible legend — always in the DOM, never gated on motion */}
+      {/* static / accessible legend, always in the DOM, never gated on motion */}
       <ul className="v2-swarm__legend mono" aria-label="The 4,820 customers, sorted">
         {SEGMENTS.map((s) => (
           <li key={s.key} className={`v2-swarm__chip v2-swarm__chip--${s.key}`}>
