@@ -107,7 +107,7 @@ export function BillStatement() {
     >
       <div className="v2-bill__head">
         <div className="v2-bill__masthead">
-          <span className="v2-bill__mark">Joon</span>
+          <span className="v2-bill__mark">joon</span>
           <span className="v2-bill__doc mono">Statement of proof</span>
         </div>
         <dl className="v2-bill__meta">
@@ -159,7 +159,7 @@ export function BillStatement() {
           <span className="v2-bill__k">
             Proven lift
             <span className="v2-bill__note">
-              revenue that exists only because Joon ran, measured, not claimed
+              revenue that exists only because joon ran, measured, not claimed
             </span>
           </span>
           <span className="v2-bill__amt v2-bill__amt--lift mono">

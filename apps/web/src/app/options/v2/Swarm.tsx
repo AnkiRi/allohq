@@ -7,7 +7,7 @@ import { useReducedMotion } from "framer-motion";
 /* THE SWARM — reused from frontend-swarm/CustomerField.tsx.           */
 /*                                                                     */
 /* A brand has 4,820 customers. A human marketer can attend to a       */
-/* handful, so the rest get a blast. Joon attends to each one. ~240    */
+/* handful, so the rest get a blast. joon attends to each one. ~240    */
 /* individual customer marks render as a living, pointer-reactive      */
 /* swarm that self-organizes through real states: one undifferentiated */
 /* CROWD → four SEGMENTS (lapsed / loyal / at-risk / new) → FOCUS, the */

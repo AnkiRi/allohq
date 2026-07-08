@@ -4,13 +4,13 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 /* ------------------------------------------------------------------ */
-/* Kinetic hero headline — Joon's thesis with ONE tasteful kinetic     */
+/* Kinetic hero headline — joon's thesis with ONE tasteful kinetic     */
 /* beat. The headline states the thesis plainly:                       */
 /*                                                                     */
 /*     One marketer for                                                */
 /*     [ everyone → every customer ]                                   */
 /*                                                                     */
-/* The category sells "one campaign for everyone"; Joon flips the last */
+/* The category sells "one campaign for everyone"; joon flips the last */
 /* word — "everyone" gives way to "every customer." That single swap   */
 /* is the whole point, performed once. SSR / JS-off / reduced-motion   */
 /* render the resolved, fully readable sentence; meaning is never      */

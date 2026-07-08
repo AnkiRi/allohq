@@ -22,9 +22,9 @@ import {
 } from "./Clock";
 
 export const metadata: Metadata = {
-  title: "Joon · one marketer for every customer",
+  title: "joon · one marketer for every customer",
   description:
-    "Joon grows retention revenue for consumer brands by sending less, not more — it learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
+    "joon grows retention revenue for consumer brands by sending less, not more — it learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
 };
 
 /**
@@ -122,7 +122,7 @@ export function V2Landing({
           <div className="v2-wrap v2-nav__inner">
             <a className="v2-brand" href="#top">
               <span className="v2-blip" aria-hidden="true" />
-              <span className="v2-brand__word">Joon</span>
+              <span className="v2-brand__word">joon</span>
             </a>
             <nav className="v2-nav__links mono" aria-label="Primary">
               <a href="#brief">the brief</a>
@@ -151,7 +151,7 @@ export function V2Landing({
                 </p>
                 <KineticHeadline />
                 <p className="v2-hero__sub">
-                  Joon connects to your store, learns your brand, and reaches each
+                  joon connects to your store, learns your brand, and reaches each
                   customer individually across WhatsApp, email and SMS — so you grow
                   revenue from the customers you already have, without burning your list.
                 </p>
@@ -191,12 +191,12 @@ export function V2Landing({
               </div>
 
               {/* the operator console — elevated ReasoningReveal surface */}
-              <div className="v2-console" aria-label="Joon operator console">
+              <div className="v2-console" aria-label="joon operator console">
                 <div className="v2-console__bar">
                   <span className="v2-lamp" aria-hidden="true" />
                   <span className="v2-lamp" aria-hidden="true" />
                   <span className="v2-lamp is-live" aria-hidden="true" />
-                  <span className="v2-console__title mono">Joon · operator</span>
+                  <span className="v2-console__title mono">joon · operator</span>
                   <span className="v2-console__status mono" aria-hidden="true">
                     <span className="v2-live-dot" /> attending
                   </span>
@@ -225,7 +225,7 @@ export function V2Landing({
                   Drafts before sunrise. <em>Approvals over coffee.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  You wake up; Joon already worked. One short note of what it did
+                  You wake up; joon already worked. One short note of what it did
                   overnight: who&rsquo;s slipping, what it drafted in your
                   voice, what it held back. Read it, approve a line, finish your
                   coffee.
@@ -247,14 +247,14 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   A human marketer can attend to a handful, so the rest get a
-                  blast. Joon attends to each one. The crowd sorts into who
+                  blast. joon attends to each one. The crowd sorts into who
                   they actually are, then narrows to the single person worth
                   reaching today.
                 </p>
                 <p className="v2-section__lede">
                   It does more by sending less. Blast the whole list and your best
                   customers learn to mute, archive and unsubscribe — the audience you
-                  paid to build quietly stops opening. Joon reaches only who&rsquo;s
+                  paid to build quietly stops opening. joon reaches only who&rsquo;s
                   worth reaching today, so your list stays healthy and keeps listening.
                 </p>
                 <p className="v2-half__aside mono">
@@ -284,7 +284,7 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   Reaching the right customer at the right moment grows revenue without
-                  adding sends. And it isn&rsquo;t a guess: on every campaign Joon holds
+                  adding sends. And it isn&rsquo;t a guess: on every campaign joon holds
                   a few back, matched on past spend and left untouched, so the lift is
                   measured against that control — never claimed.
                 </p>
@@ -333,7 +333,7 @@ export function V2Landing({
                             Drafts written while you sleep.
                           </h3>
                           <p className="v2-event__detail">
-                            Joon segments overnight and writes the day&rsquo;s
+                            joon segments overnight and writes the day&rsquo;s
                             sends in your voice, queued, not sent.
                           </p>
                           <p className="v2-event__meta mono">
@@ -380,7 +380,7 @@ export function V2Landing({
                             wool. Left alone.
                           </h3>
                           <p className="v2-event__detail">
-                            She bought a linen tunic in March. Joon won&rsquo;t
+                            She bought a linen tunic in March. joon won&rsquo;t
                             pitch her October&rsquo;s woollens, kept on the
                             list, the 9am blast left alone.
                           </p>
@@ -454,7 +454,7 @@ export function V2Landing({
                             midnight.
                           </h3>
                           <p className="v2-event__detail">
-                            Not at 9am. Joon left the blast alone and writes him
+                            Not at 9am. joon left the blast alone and writes him
                             when he&rsquo;s actually reading.
                           </p>
                           <p className="v2-event__meta mono">
@@ -502,35 +502,35 @@ export function V2Landing({
                   It does the job, not <em>&ldquo;a tool to do the job.&rdquo;</em>
                 </h2>
                 <p className="v2-section__lede">
-                  You type a goal in plain language. Joon works the way a careful
+                  You type a goal in plain language. joon works the way a careful
                   marketer would, out loud, before a single message sends.
                 </p>
               </Rise>
               <ol className="v2-steps">
                 <Rise className="v2-step">
-                  <span className="v2-step__k mono">$ Joon connect</span>
+                  <span className="v2-step__k mono">$ joon connect</span>
                   <h3 className="v2-step__h">It reads your store.</h3>
                   <p className="v2-step__p">
                     One click into Shopify and your own email, WhatsApp and SMS.
-                    Joon scans <strong>4,820</strong> customers and finds the{" "}
+                    joon scans <strong>4,820</strong> customers and finds the{" "}
                     <strong>187</strong> lapsed buyers worth reaching, about{" "}
                     <strong>₹4.2L</strong> in past revenue.
                   </p>
                 </Rise>
                 <Rise className="v2-step" delay={0.08}>
-                  <span className="v2-step__k mono">$ Joon learn</span>
+                  <span className="v2-step__k mono">$ joon learn</span>
                   <h3 className="v2-step__h">It holds out a control first.</h3>
                   <p className="v2-step__p">
-                    From the 187, Joon holds back <strong>22</strong>, matched on
+                    From the 187, joon holds back <strong>22</strong>, matched on
                     past spend, and leaves them untouched. Everything next is
                     measured against them, proven, not assumed.
                   </p>
                 </Rise>
                 <Rise className="v2-step" delay={0.16}>
-                  <span className="v2-step__k mono">$ Joon attend</span>
+                  <span className="v2-step__k mono">$ joon attend</span>
                   <h3 className="v2-step__h">It writes, then waits for your nod.</h3>
                   <p className="v2-step__p">
-                    Joon drafts <strong>3</strong> win-back variants in your
+                    joon drafts <strong>3</strong> win-back variants in your
                     voice and predicts the outcome before you approve:{" "}
                     <strong>₹1.2L</strong> expected recovery, a named downside,
                     and a confidence.
@@ -543,7 +543,7 @@ export function V2Landing({
                 <div className="v2-consequence">
                   <div className="v2-consequence__head">
                     <span className="v2-consequence__tag">
-                      What Joon shows before you approve
+                      What joon shows before you approve
                     </span>
                     <span className="v2-consequence__est mono">
                       Estimate · not yet measured
@@ -565,7 +565,7 @@ export function V2Landing({
                       </span>
                       <span className="v2-consequence__v">~0.6% unsubscribe</span>
                       <span className="v2-consequence__d">
-                        the risk Joon will not hide from you
+                        the risk joon will not hide from you
                       </span>
                     </div>
                     <div className="v2-consequence__cell">
@@ -585,9 +585,9 @@ export function V2Landing({
           <section className="v2-position" aria-label="Positioning">
             <div className="v2-wrap v2-position__inner">
               <Rise>
-                <p className="v2-position__eyebrow mono">what Joon is</p>
+                <p className="v2-position__eyebrow mono">what joon is</p>
                 <p className="v2-position__line">
-                  Retention tools give you software and a bill. Joon gives you an{" "}
+                  Retention tools give you software and a bill. joon gives you an{" "}
                   <span className="v2-accent">operator</span> that does the work,
                   and only bills on the lift it proves against a control.{" "}
                   <em>You pay for outcomes, not access.</em> Built for commerce,
@@ -608,7 +608,7 @@ export function V2Landing({
                   At Zymrat, the moment I stopped writing every email myself was
                   the moment retention died.{" "}
                   <span className="v2-accent">
-                    Joon would have given me back my Sundays.
+                    joon would have given me back my Sundays.
                   </span>
                 </blockquote>
                 <figcaption className="v2-founder__by mono">
@@ -625,7 +625,7 @@ export function V2Landing({
                 <div className="v2-cohort__copy">
                   <h2 id="cohort-h" className="v2-section__h">
                     Five founding partners.{" "}
-                    <em>Shape Joon with us.</em>
+                    <em>Shape joon with us.</em>
                   </h2>
                   <p className="v2-section__lede">
                     We onboard slowly, on purpose. Each brand&rsquo;s control
@@ -660,14 +660,14 @@ export function V2Landing({
             <div className="v2-wrap">
               <Rise>
                 <p className="v2-final__prompt mono">
-                  <span className="v2-accent">Joon ❯</span> deploy on my store
+                  <span className="v2-accent">joon ❯</span> deploy on my store
                 </p>
                 <h2 className="v2-final__h">
-                  Try Joon with your store.{" "}
+                  Try joon with your store.{" "}
                   <em>Free for 14 days.</em>
                 </h2>
                 <p className="v2-final__p">
-                  Connect Shopify in one click. Joon holds out its first control
+                  Connect Shopify in one click. joon holds out its first control
                   and writes your first campaign before you finish your coffee.
                 </p>
                 <div className="v2-final__cta">
@@ -687,7 +687,7 @@ export function V2Landing({
         <footer className="v2-footer">
           <div className="v2-wrap v2-footer__inner mono">
             <span className="v2-footer__brand">hand-built in bangalore</span>
-            <span>© 2026 Joon</span>
+            <span>© 2026 joon</span>
           </div>
         </footer>
       </div>
