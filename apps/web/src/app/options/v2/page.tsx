@@ -246,16 +246,21 @@ export function V2Landing({
                   4,820 customers. <em>Not one undifferentiated blast.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  A human marketer can attend to a handful, so the rest get a
-                  blast. joon attends to each one. The crowd sorts into who
-                  they actually are, then narrows to the single person worth
-                  reaching today.
+                  A human marketer can only truly know a handful of customers, so
+                  everyone else gets the same blast. joon knows each one. It learns
+                  who they are, what they want, when they want to hear from you, and
+                  how they like to be spoken to, and it reaches each customer that way.
                 </p>
                 <p className="v2-section__lede">
-                  It does more by sending less. Blast the whole list and your best
-                  customers learn to mute, archive and unsubscribe. The audience you
-                  paid to build quietly stops opening. joon reaches only who&rsquo;s
-                  worth reaching today, so your list stays healthy and keeps listening.
+                  Attention means knowing when to stay quiet, too. Blast your whole
+                  list and your best customers learn to mute, archive and unsubscribe.
+                  The audience you paid to build quietly stops opening. joon reaches
+                  each customer when it actually matters to them, and holds back when
+                  it doesn&rsquo;t. So every customer feels looked after, no one feels
+                  spammed, and your list stays healthy and keeps listening.
+                </p>
+                <p className="v2-section__lede">
+                  More revenue, from fewer, better messages.
                 </p>
                 <p className="v2-half__aside mono">
                   // lapsed · loyal · at risk · new · every one a person, not a row
