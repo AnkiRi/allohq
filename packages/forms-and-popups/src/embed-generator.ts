@@ -9,7 +9,7 @@ export function generateEmbedCode(opts: {
   apiUrl: string;
   popupIds: string[];
 }): EmbedCode {
-  const script = `<!-- Allo Popup Widget -->
+  const script = `<!-- Joon Popup Widget -->
 <script>
 (function() {
   var s = document.createElement('script');
@@ -33,7 +33,7 @@ export function generateFormEmbedCode(opts: {
   formId: string;
   apiUrl: string;
 }): string {
-  return `<!-- Allo Form Embed -->
+  return `<!-- Joon Form Embed -->
 <div id="allo-form-${opts.formId}"></div>
 <script>
 (function() {

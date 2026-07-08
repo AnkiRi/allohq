@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// predictConsequence — Track C: allo COMMITS to a predicted outcome before it
+// predictConsequence — Track C: joon COMMITS to a predicted outcome before it
 // acts. Every decision carries an expected upside, a NAMED downside/risk, and a
 // confidence. The gap between this prediction and the real control-measured
 // outcome (Track B) is what trains better predictions over time.

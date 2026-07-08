@@ -6,7 +6,7 @@
 // actually happened against a held-out control:
 //   - actual:    measured per-customer outcome of the treatment arm, and the
 //                incremental lift vs the held-out control (the Track B moat).
-//   - predicted: what allo committed to up front — the estimatedRevenue stamped
+//   - predicted: what joon committed to up front — the estimatedRevenue stamped
 //                on the actions that were actually executed in the window.
 //   accuracyRatio = actual ÷ predicted  (1.0 = forecast was spot on).
 //
@@ -82,7 +82,7 @@ export async function getStoreCalibration(
   const actualTotal = Math.max(0, liftPerCustomer * treatmentCount);
   const liftPct = controlMean > 0 ? (liftPerCustomer / controlMean) * 100 : 0;
 
-  // --- PREDICTED: ₹ allo committed on the actions executed in the window -----
+  // --- PREDICTED: ₹ joon committed on the actions executed in the window -----
   const predicted = await prisma.actionQueue.aggregate({
     where: {
       storeId,

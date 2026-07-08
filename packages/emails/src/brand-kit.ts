@@ -113,11 +113,11 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
     sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   },
   logo: {
-    wordmark: "Allo",
-    alt: "Allo",
+    wordmark: "Joon",
+    alt: "Joon",
   },
   voice: {
-    brandName: "Allo",
+    brandName: "Joon",
     bannedWords: [],
   },
   footer: {},

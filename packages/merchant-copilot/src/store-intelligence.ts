@@ -3,7 +3,7 @@ import type { StoreIntelligenceReport } from "./types";
 
 /**
  * Generate a comprehensive store intelligence report.
- * Used during onboarding to show the merchant what Allo found.
+ * Used during onboarding to show the merchant what Joon found.
  */
 export async function generateStoreReport(storeId: string): Promise<StoreIntelligenceReport> {
   const [
@@ -94,7 +94,7 @@ export async function generateStoreReport(storeId: string): Promise<StoreIntelli
     recommendations.push("Your customer base is large but under-segmented. RFM analysis will unlock targeted campaigns.");
   }
   if (recommendations.length === 0) {
-    recommendations.push("Your store is in good shape. Allo will continuously monitor for opportunities.");
+    recommendations.push("Your store is in good shape. Joon will continuously monitor for opportunities.");
   }
 
   const report: StoreIntelligenceReport = {

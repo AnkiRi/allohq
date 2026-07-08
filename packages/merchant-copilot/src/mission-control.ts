@@ -3,7 +3,7 @@ import type { MissionControlData } from "./types";
 
 /**
  * Get Mission Control data for the merchant dashboard.
- * "What happened / What matters / What needs approval / What Allo did"
+ * "What happened / What matters / What needs approval / What Joon did"
  */
 export async function getMissionControlData(storeId: string): Promise<MissionControlData> {
   const now = new Date();
@@ -32,12 +32,12 @@ export async function getMissionControlData(storeId: string): Promise<MissionCon
       where: { storeId, status: "pending" },
       select: { urgencyScore: true },
     }),
-    // Messages sent by Allo in last 24h
+    // Messages sent by Joon in last 24h
     prisma.messageLog.findMany({
       where: { storeId, createdAt: { gte: twentyFourHoursAgo } },
       select: { status: true },
     }),
-    // Revenue attributed to Allo campaigns
+    // Revenue attributed to Joon campaigns
     prisma.orderAttribution.aggregate({
       where: { storeId, attributedAt: { gte: twentyFourHoursAgo } },
       _sum: { revenue: true },

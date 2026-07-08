@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 /**
  * Demo / sandbox mode — shared constants + resolution.
  *
- * A logged-OUT visitor (e.g. a VC opening the public demo link) explores allo as
+ * A logged-OUT visitor (e.g. a VC opening the public demo link) explores joon as
  * the seeded "Vana Naturals" brand. Their requests are routed to the Vana demo
  * workspace READ-MOSTLY; mutations are short-circuited (ctx.isDemo) so nothing
  * real fires and the shared seed never mutates.

@@ -30,18 +30,18 @@ type CampaignSpec = {
   controlConv: number; // baseline conversion (control)
   treatmentConv: number; // lifted conversion (treatment)
   aov: number; // ₹ average order value (same both arms → lift is pure conversion)
-  intent: string; // what allo proposed (for the decision trace)
+  intent: string; // what joon proposed (for the decision trace)
   segmentName: string;
   discountPercent: number;
 };
 
 // GROWTH-INTELLIGENCE demo dataset (all SYNTHETIC/seed, honestly labelled). The story the real
-// controlLift machinery then reads off this data: CONCENTRATED lift — allo sends where a holdout
+// controlLift machinery then reads off this data: CONCENTRATED lift — joon sends where a holdout
 // PROVES incremental lift and holds back where it doesn't (loyalists who'd have bought anyway).
 //   • two RESPONSIVE segments (win-back / at-risk): treatment ≫ control → statistically SIGNIFICANT
-//     lift → allo SENDS.
+//     lift → joon SENDS.
 //   • one LOYALIST "buy-anyway" segment (Champions, high baseline): treatment ≈ control → ~₹0
-//     measured lift, NOT significant → allo recommends HOLDING BACK (protect the channel, no
+//     measured lift, NOT significant → joon recommends HOLDING BACK (protect the channel, no
 //     wasted sends). The ~0 lift is genuine (real Welch test on these rows), not a fabricated
 //     "insight" — that honesty is the whole point.
 // Cohorts are taken as FRACTIONS of the real population so the seed adapts to Vana's actual count;
@@ -50,7 +50,7 @@ const SENT: CampaignSpec[] = [
   { key: "diwali-winback", name: "Diwali Win-Back", subject: "We saved your favourites for Diwali 🪔", daysAgo: 24, frac: 0.38, holdoutPct: 0.25, controlConv: 0.08, treatmentConv: 0.19, aov: 1300, intent: "win_back", segmentName: "Lapsed Champions", discountPercent: 15 },
   { key: "atrisk-reactivate", name: "At-Risk Reactivation", subject: "It's been a while — a little something inside", daysAgo: 12, frac: 0.34, holdoutPct: 0.25, controlConv: 0.06, treatmentConv: 0.16, aov: 1150, intent: "win_back", segmentName: "At Risk", discountPercent: 12 },
   // The loyalist "buy-anyway" case: high control conversion (they buy without a nudge), treatment
-  // barely above it → measured lift ≈ ₹0, CI straddles 0 → allo holds this segment back.
+  // barely above it → measured lift ≈ ₹0, CI straddles 0 → joon holds this segment back.
   { key: "champions-vip", name: "Champions VIP Reward", subject: "A private thank-you from Vana", daysAgo: 16, frac: 0.28, holdoutPct: 0.25, controlConv: 0.30, treatmentConv: 0.305, aov: 2100, intent: "vip_reward", segmentName: "Champions", discountPercent: 10 },
 ];
 
@@ -102,7 +102,7 @@ async function main() {
         id: campaignId, workspaceId, storeId, name: spec.name,
         status: "sent", sentAt, recipientCount: treatment.length,
         openCount: Math.round(treatment.length * 0.42), clickCount: Math.round(treatment.length * 0.11),
-        // What allo PROPOSED — powers the in-product decision trace ("How allo decided").
+        // What joon PROPOSED — powers the in-product decision trace ("How joon decided").
         agentProposal: {
           proposedAt: sentAt.toISOString(),
           intent: spec.intent, segmentName: spec.segmentName, channel: "email",

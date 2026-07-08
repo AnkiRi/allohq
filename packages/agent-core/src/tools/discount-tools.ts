@@ -75,7 +75,7 @@ export const discountTools: ToolDefinition[] = [
             code,
             valueType: discountType,
             value,
-            title: `Allo: ${reason}`,
+            title: `Joon: ${reason}`,
             oncePerCustomer: true,
             endsAt,
           });

@@ -347,7 +347,7 @@ export const analyticsRouter = router({
    * Control lift — the Track B moat, on the wire.
    *
    * From the causal substrate (decision_records / message_logs, grouped by
-   * treatmentArm), computes the REAL incremental lift of allo's retention vs a
+   * treatmentArm), computes the REAL incremental lift of joon's retention vs a
    * held-out control cohort that received nothing:
    *   - per customer we take the measured outcome (outcomeMargin if present,
    *     else outcomeRevenue) and average within each arm,
@@ -488,7 +488,7 @@ export const analyticsRouter = router({
 
   /**
    * CAM-impact — growth intelligence made visible. Per campaign, the holdout tells
-   * allo where sending PROVABLY drove incremental revenue and where it didn't (the
+   * joon where sending PROVABLY drove incremental revenue and where it didn't (the
    * loyalists who'd have bought anyway). The story: do MORE by sending LESS — send
    * where lift is proven, hold back where it isn't (protect the channel).
    *
@@ -542,7 +542,7 @@ export const analyticsRouter = router({
         byCampaign.set(r.campaignId, entry);
       }
 
-      // Campaign names + the segment allo proposed (for legible labels).
+      // Campaign names + the segment joon proposed (for legible labels).
       const campaignIds = [...byCampaign.keys()];
       const campaignMeta = campaignIds.length
         ? await ctx.prisma.campaign.findMany({
@@ -619,7 +619,7 @@ export const analyticsRouter = router({
         .filter((c) => c.decision === "send")
         .reduce((s, c) => s + Math.max(0, c.incremental), 0);
       const provenIncrementalMargin = basis === "margin" ? provenIncrementalRaw : provenIncrementalRaw * contributionMargin;
-      // Sends allo would now AVOID = the treated volume on hold-back segments (no proven lift).
+      // Sends joon would now AVOID = the treated volume on hold-back segments (no proven lift).
       const sendsAvoidable = campaigns.filter((c) => c.decision === "hold").reduce((s, c) => s + c.messaged, 0);
       const sendsAvoidablePct = totalMessaged > 0 ? Math.round((sendsAvoidable / totalMessaged) * 100) : 0;
 
@@ -653,7 +653,7 @@ export const analyticsRouter = router({
   /**
    * Prediction accuracy — Track C's track record, measured against Track B.
    *
-   * Compares what allo FORECAST (estimatedRevenue committed on executed actions)
+   * Compares what joon FORECAST (estimatedRevenue committed on executed actions)
    * against what ACTUALLY happened (measured incremental revenue vs a held-out
    * control). Returns an overall accuracy figure plus a few predicted-vs-actual
    * rows shown plainly.
@@ -702,7 +702,7 @@ export const analyticsRouter = router({
       const liftPerCustomer = treatmentMean - controlMean;
       const actualIncremental = Math.max(0, liftPerCustomer * treatmentCount);
 
-      // PREDICTED: ₹ allo committed on the actions executed in the window.
+      // PREDICTED: ₹ joon committed on the actions executed in the window.
       const executed = await ctx.prisma.actionQueue.findMany({
         where: { storeId: input.storeId, status: "executed", createdAt: { gte: since } },
         select: { id: true, type: true, estimatedRevenue: true, createdAt: true, payload: true },

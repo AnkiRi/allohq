@@ -43,7 +43,7 @@ export async function deliverIncentive(
       code,
       valueType: "percentage",
       value: 0,
-      title: `Allo Signup - Free Shipping - ${code}`,
+      title: `Joon Signup - Free Shipping - ${code}`,
       oncePerCustomer: true,
     });
     return { code, type: "freeShipping" };
@@ -54,7 +54,7 @@ export async function deliverIncentive(
     code,
     valueType: config.discountType ?? "percentage",
     value: config.discountValue ?? 10,
-    title: `Allo Signup - ${code}`,
+    title: `Joon Signup - ${code}`,
     oncePerCustomer: true,
   });
 

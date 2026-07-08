@@ -259,7 +259,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           segmentId: segment?.id,
           status: "draft",
           recipientCount,
-          // Freeze what allo PROPOSED (the action bundle) so a later human edit can be
+          // Freeze what joon PROPOSED (the action bundle) so a later human edit can be
           // diffed against it at approval. Can't-backfill: once the draft is edited in
           // place, the agent's original intent is gone otherwise.
           agentProposal: {

@@ -490,7 +490,7 @@ export const templatesRouter = router({
     )
     .mutation(async ({ input }) => {
       const system = [
-        "You are allo, an expert email subject-line writer for an Indian D2C brand.",
+        "You are joon, an expert email subject-line writer for an Indian D2C brand.",
         "Write 4 alternative subject lines: warm, specific, on-brand. No hype, no",
         "ALL-CAPS, no clickbait, no emoji spam.",
         "Return ONLY a JSON array of 4 strings — no prose, no markdown fences.",

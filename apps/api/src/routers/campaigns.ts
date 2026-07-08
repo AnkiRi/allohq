@@ -78,10 +78,10 @@ export const campaignsRouter = router({
     }),
 
   /**
-   * How allo decided — a legible, in-product decision trace for a campaign. Reuses what's
+   * How joon decided — a legible, in-product decision trace for a campaign. Reuses what's
    * already captured (agentProposal / humanDecision, the holdout Experiment + its stats, and
    * per-customer message_logs with the frozen state snapshot) — no new data. Plain language,
-   * not an ML dashboard: the founder reads "look how allo thought about this so I don't have to".
+   * not an ML dashboard: the founder reads "look how joon thought about this so I don't have to".
    */
   decisionTrace: workspaceProcedure
     .input(z.object({ id: z.string() }))
