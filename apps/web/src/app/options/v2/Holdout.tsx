@@ -194,7 +194,7 @@ export function HoldoutField() {
         </motion.div>
       </div>
 
-      {/* THE READOUT — per-customer recovery, and the gap joon can prove. */}
+      {/* THE READOUT — per-customer recovery, and the gap Joon can prove. */}
       <div className="v2-hf__readout">
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
@@ -254,7 +254,7 @@ export function HoldoutField() {
             />
           </div>
           <p className="v2-hf__gap-sub">
-            Recovered above the held-back baseline. The gap is the only thing joon
+            Recovered above the held-back baseline. The gap is the only thing Joon
             bills a performance fee on, never the gross.
           </p>
         </div>

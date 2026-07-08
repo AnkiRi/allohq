@@ -28,9 +28,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "joon · retention, handled",
+  title: "Joon · retention, handled",
   description:
-    "joon runs retention and first-line customer service for consumer brands, and only gets paid when it works.",
+    "Joon runs retention and first-line customer service for consumer brands, and only gets paid when it works.",
 };
 
 export default function RootLayout({

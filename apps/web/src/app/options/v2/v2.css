@@ -1,5 +1,5 @@
 /* ============================================================================
-   joon — THE SYNTHESIS ("v2")  ·  built with the Frontend Design plugin
+   Joon — THE SYNTHESIS ("v2")  ·  built with the Frontend Design plugin
    ----------------------------------------------------------------------------
    One operator-console landing that synthesizes the user-approved signatures —
    the kinetic hero (manifesto word-swap), the irreversible holdout, the self-
@@ -258,7 +258,7 @@
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
   animation: v2-blip 2.4s ease-out infinite;
 }
-/* very subtle life on the wordmark: a faint sheen travelling across "joon".
+/* very subtle life on the wordmark: a faint sheen travelling across "Joon".
    Motion only; reduced-motion renders it static and solid (see below). */
 .opt-v2 .v2-brand__word {
   background: linear-gradient(
@@ -320,9 +320,9 @@
   gap: 14px;
 }
 
-/* ── "joon keeps your hours" — the light-of-day control ─────────────────── */
+/* ── "Joon keeps your hours" — the light-of-day control ─────────────────── */
 /* Not a palette picker: a sun-cycle (dawn / day / night) that sets the light
-   joon is working in. Quiet by default, set off from the nav links by a faint
+   Joon is working in. Quiet by default, set off from the nav links by a faint
    rule; the active hour glows in the accent. */
 .opt-v2 .v2-pal {
   display: inline-flex;
