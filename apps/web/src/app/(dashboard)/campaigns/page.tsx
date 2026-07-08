@@ -155,12 +155,12 @@ export default function CampaignsPage() {
                         }
                       }}
                       disabled={deleteMut.isPending && deleteMut.variables?.id === campaign.id}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-[var(--color-urgent)] hover:bg-[var(--color-urgent)]/10 disabled:opacity-50 transition-all"
+                      className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-transparent text-muted-foreground/60 hover:text-[var(--color-urgent)] hover:border-[var(--color-urgent)]/40 hover:bg-[var(--color-urgent)]/10 disabled:opacity-50 transition-all"
                     >
                       {deleteMut.isPending && deleteMut.variables?.id === campaign.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       )}
                     </button>
                   )}

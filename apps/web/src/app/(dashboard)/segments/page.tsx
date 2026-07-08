@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, Plus, ShoppingCart, Layers } from "lucide-react";
+import { Users, ArrowUpRight, Plus, ShoppingCart, Layers, Trash2, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
 import {
   ConsoleFrame,
   StreamOutput,
@@ -33,6 +34,18 @@ export default function SegmentsPage() {
   const distribution = distQuery.data as any[] | undefined;
   const baskets = basketQuery.data as any[] | undefined;
   const segmentsLoading = segmentsQuery.isLoading;
+
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
+  const deleteMut = (trpc.segments.delete as any).useMutation({
+    onSuccess: () => {
+      utils.segments.list.invalidate();
+      utils.segments.distribution.invalidate();
+      toast("Segment deleted.", "info");
+    },
+    // The backend refuses built-in / in-use segments — surface its reason.
+    onError: (e: { message?: string }) => toast(e?.message ?? "We couldn't delete that segment.", "error"),
+  }) as { mutate: (v: { id: string }) => void; isPending: boolean; variables?: { id: string } };
   const distLoading = distQuery.isLoading;
   const basketsLoading = basketQuery.isLoading;
 
@@ -255,7 +268,33 @@ export default function SegmentsPage() {
                           {formatINR(seg.liveRevenue)}
                         </div>
 
-                        <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-[hsl(var(--accent))] transition-colors flex-shrink-0" />
+                        {/* Delete — only for custom (manual/conditions) segments; RFM
+                            cohorts are built-in and the backend refuses them. A wide
+                            36px target with its own hover state so it never mis-fires
+                            into the row's navigation. */}
+                        {seg.kind === "manual" || seg.kind === "conditions" ? (
+                          <button
+                            aria-label={`Delete segment ${seg.name}`}
+                            title="Delete segment"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (window.confirm(`Delete "${seg.name}"? This can't be undone.`)) {
+                                deleteMut.mutate({ id: seg.id });
+                              }
+                            }}
+                            disabled={deleteMut.isPending && deleteMut.variables?.id === seg.id}
+                            className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-transparent text-muted-foreground/50 hover:text-[var(--color-urgent)] hover:border-[var(--color-urgent)]/40 hover:bg-[var(--color-urgent)]/10 disabled:opacity-50 transition-all"
+                          >
+                            {deleteMut.isPending && deleteMut.variables?.id === seg.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-[hsl(var(--accent))] transition-colors flex-shrink-0" />
+                        )}
                       </div>
                     </Link>
                   );
