@@ -49,7 +49,7 @@ export default function AutomationsPage() {
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
-  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-5");
+  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-4-6");
   const [polling, setPolling] = useState(false);
 
   const { data: brandStatus } = (trpc.ai.brandProfileStatus as any).useQuery(

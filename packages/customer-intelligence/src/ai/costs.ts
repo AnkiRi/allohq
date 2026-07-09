@@ -20,13 +20,10 @@ export interface ModelCost {
  * still resolve a price.
  */
 export const MODEL_COSTS: Record<string, ModelCost> = {
-  // Current roster (best-estimate Claude pricing — verify vs Anthropic pricing).
-  "claude-sonnet-5": { input: 3, output: 15 },
-  "claude-haiku-4-5-20251001": { input: 1, output: 5 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  // Legacy ids kept so historical TokenUsage rows still resolve a price.
   "claude-sonnet-4-6": { input: 3, output: 15 },
+  // dated Anthropic snapshot id still written by some callers
   "claude-sonnet-4-20250514": { input: 3, output: 15 },
+  "gpt-4o": { input: 2.5, output: 10 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
 };
 

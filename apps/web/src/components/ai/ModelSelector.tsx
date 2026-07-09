@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check, Cpu } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
-type AIModelId = "claude-sonnet-5" | "gpt-4o" | "claude-haiku-4-5-20251001";
+type AIModelId = "claude-sonnet-4-6" | "gpt-4o" | "gpt-4o-mini";
 
 interface ModelSelectorProps {
   value: AIModelId | undefined;
@@ -13,9 +13,9 @@ interface ModelSelectorProps {
 }
 
 const MODEL_LABELS: Record<AIModelId, { label: string; short: string; provider: string }> = {
-  "claude-sonnet-5": { label: "Claude Sonnet 5", short: "Sonnet 5", provider: "Anthropic" },
+  "claude-sonnet-4-6": { label: "Claude Sonnet 4.6", short: "Sonnet 4.6", provider: "Anthropic" },
   "gpt-4o": { label: "GPT-4o", short: "GPT-4o", provider: "OpenAI" },
-  "claude-haiku-4-5-20251001": { label: "Claude Haiku 4.5", short: "Haiku 4.5", provider: "Anthropic" },
+  "gpt-4o-mini": { label: "GPT-4o Mini", short: "GPT-4o Mini", provider: "OpenAI" },
 };
 
 const TIER_BADGE: Record<string, { bg: string; text: string; label: string }> = {
