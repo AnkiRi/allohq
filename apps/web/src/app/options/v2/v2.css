@@ -670,7 +670,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(32px, 5vw, 72px);
-  align-items: center;
+  /* Anchor the art to the top of the row (aligned with the heading) instead of
+     centering it: when the copy column is taller, a centered graphic floats with
+     dead space above AND below. Top-aligned reads as intentional. */
+  align-items: start;
 }
 /* art gets a touch more room where the artifact is wide (holdout, bill) */
 .opt-v2 .v2-half--wide-art {
