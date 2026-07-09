@@ -19,7 +19,9 @@ config();
 const PORT = process.env.PORT || 3001;
 
 const corsMiddleware = cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(",") || [
+  // Trim each entry so a stray space in ALLOWED_ORIGINS (e.g. "a, b") can't
+  // silently break origin matching — the origin compare is exact.
+  origin: process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) || [
     "http://localhost:3000",
     "http://localhost:3001",
   ],
