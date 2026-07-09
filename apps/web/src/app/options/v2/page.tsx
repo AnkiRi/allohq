@@ -245,31 +245,18 @@ export function V2Landing({
                 <h2 className="v2-section__h">
                   4,820 customers. <em>Not one undifferentiated blast.</em>
                 </h2>
-                <div className="v2-attend">
-                  <div className="v2-attend__beat">
-                    <p className="v2-section__lede">
-                      A human marketer can only truly know a handful of customers, so
-                      everyone else gets the same blast. joon knows each one, and reaches
-                      them the way each actually wants:
-                    </p>
-                    <ul className="v2-attend__learns">
-                      <li>who they are</li>
-                      <li>what they want</li>
-                      <li>when they want to hear from you</li>
-                      <li>how they like to be spoken to</li>
-                    </ul>
-                  </div>
+                <div className="v2-attend__beat">
                   <p className="v2-section__lede">
-                    <strong className="v2-attend__lead">Attention means knowing when to stay quiet, too.</strong>{" "}
-                    Blast your whole list and your best customers learn to mute, archive
-                    and unsubscribe, until the audience you paid to build quietly stops
-                    opening. joon reaches each customer when it matters to them, and holds
-                    back when it doesn&rsquo;t, so everyone feels looked after and no one
-                    feels spammed.
+                    A human marketer can only truly know a handful of customers, so
+                    everyone else gets the same blast. joon knows each one, and reaches
+                    them the way each actually wants:
                   </p>
-                  <p className="v2-attend__punch">
-                    More revenue, from fewer, better messages.
-                  </p>
+                  <ul className="v2-attend__learns">
+                    <li>who they are</li>
+                    <li>what they want</li>
+                    <li>when they want to hear from you</li>
+                    <li>how they like to be spoken to</li>
+                  </ul>
                 </div>
                 <p className="v2-half__aside mono">
                   // lapsed · loyal · at risk · new · every one a person, not a row
@@ -281,6 +268,20 @@ export function V2Landing({
                 </div>
               </Rise>
             </div>
+            {/* Continuation, full width below the half so the intro + list sit
+                level with the art and the rest doesn't leave a side gap. */}
+            <Rise className="v2-wrap v2-attend__more">
+              <p className="v2-section__lede">
+                <strong className="v2-attend__lead">Attention means knowing when to stay quiet, too.</strong>{" "}
+                Blast your whole list and your best customers learn to mute, archive and
+                unsubscribe, until the audience you paid to build quietly stops opening.
+                joon reaches each customer when it matters to them, and holds back when it
+                doesn&rsquo;t, so everyone feels looked after and no one feels spammed.
+              </p>
+              <p className="v2-attend__punch">
+                More revenue, from fewer, better messages.
+              </p>
+            </Rise>
           </section>
 
           {/* ── 5 · HOLDOUT, HALF page, visual-LEFT ───────────────── */}
