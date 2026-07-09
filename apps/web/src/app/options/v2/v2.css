@@ -738,8 +738,27 @@
   margin-top: clamp(26px, 3.5vw, 44px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 72ch;
+  gap: 18px;
+}
+/* Full-width two-column band: a bold "stay quiet" statement on the left, the
+   supporting copy filling the right, so it spans the width and stays short. */
+.opt-v2 .v2-attend__more-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.35fr);
+  gap: clamp(24px, 5vw, 64px);
+  align-items: start;
+}
+.opt-v2 .v2-attend__more-lead {
+  margin: 0;
+  font-size: clamp(20px, 2.5vw, 27px);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.opt-v2 .v2-attend__more .v2-section__lede {
+  max-width: none;
 }
 .opt-v2 .v2-attend__learns {
   list-style: none;
@@ -763,10 +782,6 @@
   left: 0;
   top: 0;
   color: var(--accent);
-}
-.opt-v2 .v2-attend__lead {
-  color: var(--ink);
-  font-weight: 600;
 }
 .opt-v2 .v2-attend__punch {
   margin: 0;
@@ -1919,6 +1934,10 @@
   }
   .opt-v2 .v2-half--art-right .v2-half__art {
     order: -1;
+  }
+  .opt-v2 .v2-attend__more-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
   .opt-v2 .v2-half__copy {
     max-width: 60ch;

@@ -271,13 +271,17 @@ export function V2Landing({
             {/* Continuation, full width below the half so the intro + list sit
                 level with the art and the rest doesn't leave a side gap. */}
             <Rise className="v2-wrap v2-attend__more">
-              <p className="v2-section__lede">
-                <strong className="v2-attend__lead">Attention means knowing when to stay quiet, too.</strong>{" "}
-                Blast your whole list and your best customers learn to mute, archive and
-                unsubscribe, until the audience you paid to build quietly stops opening.
-                joon reaches each customer when it matters to them, and holds back when it
-                doesn&rsquo;t, so everyone feels looked after and no one feels spammed.
-              </p>
+              <div className="v2-attend__more-grid">
+                <p className="v2-attend__more-lead">
+                  Attention means knowing when to stay quiet, too.
+                </p>
+                <p className="v2-section__lede">
+                  Blast your whole list and your best customers learn to mute, archive and
+                  unsubscribe, until the audience you paid to build quietly stops opening.
+                  joon reaches each customer when it matters to them, and holds back when it
+                  doesn&rsquo;t, so everyone feels looked after and no one feels spammed.
+                </p>
+              </div>
               <p className="v2-attend__punch">
                 More revenue, from fewer, better messages.
               </p>
