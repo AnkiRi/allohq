@@ -8,14 +8,14 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /* ------------------------------------------------------------------ */
-/* THE MORNING BRIEF — reused from frontend-brief/ (Salutation +       */
+/* THE MORNING BRIEF, reused from frontend-brief/ (Salutation +       */
 /* BriefLine + the approvable .mb-item structure), adapted into v2 and */
 /* re-themed via the v2 colour tokens (its own .v2-mb__* classes).     */
 /*                                                                     */
-/* "Good morning, Ujjawal —" types itself once, then each approvable   */
-/* line settles in sequence, as if allo is composing the note while    */
+/* "Good morning, Ujjawal, " types itself once, then each approvable   */
+/* line settles in sequence, as if joon is composing the note while    */
 /* you watch. CONTENT is always rendered; motion only enhances an      */
-/* already-readable default — JS-off / reduced-motion ships the whole  */
+/* already-readable default, JS-off / reduced-motion ships the whole  */
 /* brief readable and every Approve / Hold control usable.             */
 /* ------------------------------------------------------------------ */
 
@@ -76,9 +76,9 @@ function BriefLine({
 
 export function MorningBrief() {
   return (
-    <article className="v2-mb" aria-label="Your morning brief from allo">
+    <article className="v2-mb" aria-label="Your morning brief from joon">
       <div className="v2-mb__head">
-        <span className="v2-mb__from mono">from allo · overnight</span>
+        <span className="v2-mb__from mono">from joon · overnight</span>
         <span className="v2-mb__date mono">Mon, 23 Jun · 5:54</span>
       </div>
 
@@ -152,7 +152,7 @@ export function MorningBrief() {
 
         <p className="v2-mb__sign">
           That&rsquo;s the whole morning. Approve the lot, or tap into any line.
-          <span className="v2-mb__sig">· allo</span>
+          <span className="v2-mb__sig">· joon</span>
         </p>
       </div>
 

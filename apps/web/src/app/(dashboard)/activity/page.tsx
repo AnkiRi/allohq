@@ -6,7 +6,7 @@ import { Loader2, ChevronRight, Radio, ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 // ---------------------------------------------------------------------------
-// Activity — the operator TERMINAL as a persisted, scrollable log of what allo's
+// Activity — the operator TERMINAL as a persisted, scrollable log of what joon's
 // agents did (autonomous scheduled runs), newest first, grouped by day. The user
 // WATCHES here; it is NOT an input. Each run is expandable to its reasoning.
 // Data is read from AgentActivityLog (server/DB), so it SURVIVES refresh — this
@@ -29,7 +29,7 @@ function labelFor(type: string): string {
   return LABELS[type] ?? type.replace(/_/g, " ");
 }
 
-// Tier -> how the user reads allo's autonomy on this run.
+// Tier -> how the user reads joon's autonomy on this run.
 const TIER_NOTE: Record<string, string> = {
   autopilot: "ran on its own",
   copilot: "waiting on you",
@@ -156,7 +156,7 @@ export default function ActivityPage() {
           </h1>
         </div>
         <p className="text-[13px] text-muted-foreground font-sans leading-relaxed">
-          What allo did while you were away, newest first. The overnight runs and
+          What joon did while you were away, newest first. The overnight runs and
           background work, with the reasoning behind each.
         </p>
       </header>
@@ -172,7 +172,7 @@ export default function ActivityPage() {
               Nothing logged yet
             </p>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              allo's overnight runs land here, scans, win-backs, recovered carts,
+              joon's overnight runs land here, scans, win-backs, recovered carts,
               each with its reasoning. The first briefing runs before sunrise.
             </p>
           </div>

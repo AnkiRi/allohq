@@ -242,7 +242,7 @@ export function CommandPalette() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
-                placeholder="Search pages, actions, or ask allo..."
+                placeholder="Search pages, actions, or ask joon..."
               />
               <kbd className="text-[10px] font-mono text-muted-foreground/70 bg-muted/60 px-1.5 py-0.5 rounded border border-border/30">
                 ESC
@@ -386,11 +386,11 @@ function buildCommandItems(deps: {
     { id: "action-churn-report", icon: Target, label: "View Churn Risk Report", hint: "Analytics", category: "quick-actions", action: () => navigate("/analytics") },
 
     // -- AI Commands --
-    { id: "ai-ask", icon: Sparkles, label: "Ask allo...", hint: "Open panel", category: "ai-commands", action: () => openAI() },
+    { id: "ai-ask", icon: Sparkles, label: "Ask joon...", hint: "Open panel", category: "ai-commands", action: () => openAI() },
     { id: "ai-whatif", icon: HelpCircle, label: "What if...", hint: "Scenario", category: "ai-commands", action: () => openAI("What if ") },
     { id: "ai-explain-metrics", icon: TrendingUp, label: "Explain my metrics", hint: "AI insight", category: "ai-commands", action: () => openAI("Explain my key metrics and what they mean for my business") },
     { id: "ai-recommend", icon: Brain, label: "What should I do next?", hint: "AI advice", category: "ai-commands", action: () => openAI("What should I do next to improve retention?") },
-    { id: "ai-write-email", icon: Mail, label: "Draft an email with allo", hint: "AI draft", category: "ai-commands", action: () => openAI("Write a marketing email for ") },
+    { id: "ai-write-email", icon: Mail, label: "Draft an email with joon", hint: "AI draft", category: "ai-commands", action: () => openAI("Write a marketing email for ") },
 
     // -- Settings --
     {

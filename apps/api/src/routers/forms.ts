@@ -293,10 +293,10 @@ export const formsRouter = router({
         select: { id: true },
       });
 
-      const apiUrl = process.env["API_URL"] ?? "https://api.allo.so";
+      const apiUrl = process.env["API_URL"] ?? "https://api.joon.so";
       const popupIds = popups.map((p) => p.id);
 
-      const script = `<!-- Allo Popup Widget -->
+      const script = `<!-- Joon Popup Widget -->
 <script>
 (function() {
   var s = document.createElement('script');

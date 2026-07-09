@@ -19,7 +19,7 @@ const ecommercePlatforms = [
   {
     id: "shopify",
     name: "Shopify",
-    description: "Connect Shopify and allo will start learning your store: products, customers, and orders.",
+    description: "Connect Shopify and joon will start learning your store: products, customers, and orders.",
     status: "available" as const,
   },
   {
@@ -118,7 +118,7 @@ export default function IntegrationsPage() {
           Integrations
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1 pl-4">
-          Connect your store and tools so allo can work across all of them
+          Connect your store and tools so joon can work across all of them
         </p>
       </motion.div>
 

@@ -39,7 +39,7 @@ export async function createRefund(
 ): Promise<ShopifyRefund> {
   const body: Record<string, unknown> = {
     refund: {
-      note: opts.note ?? "Refund issued via Allo agent",
+      note: opts.note ?? "Refund issued via Joon agent",
       notify: opts.notify ?? true,
       ...(opts.lineItems ? {
         refund_line_items: opts.lineItems.map((li) => ({

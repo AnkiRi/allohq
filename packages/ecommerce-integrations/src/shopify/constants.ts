@@ -12,6 +12,11 @@ export const SHOPIFY_SCOPES = [
   "read_checkouts",
   "read_discounts",
   "write_discounts",
+  // The discount tool creates coupons via the REST price_rules endpoint, which is
+  // gated by write_price_rules (write_discounts only covers the GraphQL Discounts
+  // API). Without these the REST call 403s. Requires a reconnect to take effect.
+  "read_price_rules",
+  "write_price_rules",
   "read_fulfillments",
   "read_inventory",
 ] as const;

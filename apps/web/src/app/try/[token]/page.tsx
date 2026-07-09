@@ -3,7 +3,7 @@ import { EnterTryDemo } from "./EnterTryDemo";
 import { InvalidLink } from "./InvalidLink";
 
 export const metadata = {
-  title: "allo · Vana Naturals demo",
+  title: "joon · Vana Naturals demo",
   robots: { index: false, follow: false }, // private link — never indexed
 };
 

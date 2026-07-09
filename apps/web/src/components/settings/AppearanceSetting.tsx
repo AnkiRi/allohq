@@ -24,7 +24,7 @@ export function AppearanceSetting() {
     <div>
       <h2 className="section-header accent-bar-left text-[13px]">Appearance</h2>
       <p className="text-[12px] text-muted-foreground mt-2 mb-4">
-        Pick how allo looks. Your choice is saved to this browser.
+        Pick how joon looks. Your choice is saved to this browser.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {THEMES.map((t) => {
@@ -50,7 +50,7 @@ export function AppearanceSetting() {
                   className="text-[13px] font-semibold leading-none"
                   style={{ color: sw.ink }}
                 >
-                  allo
+                  joon
                 </span>
                 <span
                   className="w-3.5 h-3.5 rounded-full"

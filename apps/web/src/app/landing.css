@@ -1,5 +1,5 @@
 /* =====================================================================
-   allo — landing page (unified TERMINAL design)
+   joon — landing page (unified TERMINAL design)
    One operator-console composition, two themes:
      LIGHT  — paper #F8FAF8, emerald accent #0B7A4E
      DARK   — near-black #0A0C10, amber accent #FFB000
@@ -629,7 +629,7 @@ html[data-allo-theme="dark"] .allo-terminal .console { box-shadow: 0 0 0 1px rgb
 .allo-terminal .kpi .kpi-delta.down { color: var(--t-dim); }
 
 /* =====================================================================
-   NOTICES — "How allo notices" 3 moments (numbered log entries)
+   NOTICES — "How joon notices" 3 moments (numbered log entries)
    ===================================================================== */
 .allo-terminal .notices {
   border-top: 1px solid var(--t-rule);

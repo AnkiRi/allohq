@@ -20,7 +20,7 @@ import {
 } from "react";
 
 /* ------------------------------------------------------------------ */
-/* ON THE CLOCK — reused from frontend-clock/motion.tsx.               */
+/* ON THE CLOCK, reused from frontend-clock/motion.tsx.               */
 /* A single day, pre-dawn → midnight, is one scroll-scrubbed rail.     */
 /* useScroll → progress 0..1 → the clock digits, the sweep hand, and   */
 /* each event "posting" at its real hour with its lamp warming.        */
@@ -80,7 +80,7 @@ export function DayRail({ children }: { children: ReactNode }) {
   );
 }
 
-/* SkyWash — the day's light, carried through the palette's own tokens.
+/* SkyWash, the day's light, carried through the palette's own tokens.
    The accent-soft "lamp glow" sweeps brighter at dawn/dusk; the ground stays
    on var(--surface). Disciplined value/temperature, never a rainbow. */
 export function SkyWash() {
@@ -182,7 +182,7 @@ export function Event({
   );
 }
 
-/* Rise — calm one-shot reveal for the quiet connective sections. NOT a
+/* Rise, calm one-shot reveal for the quiet connective sections. NOT a
    signature; used sparingly. Content always rendered. */
 export function Rise({
   children,
@@ -209,7 +209,7 @@ export function Rise({
   );
 }
 
-/* ConsoleClock — the small live HH:MM:SS in the hero console bar; ticks each
+/* ConsoleClock, the small live HH:MM:SS in the hero console bar; ticks each
    second. Reduced motion / JS-off: a static placeholder, never empty. */
 export function ConsoleClock() {
   const reduce = useReducedMotion();

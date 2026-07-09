@@ -37,7 +37,7 @@ export default function GuardrailsPage() {
 
   const createMut = (trpc as any).guardrails.create.useMutation({
     onSuccess: () => {
-      toast("Limit added. allo will respect it from now on.", "success");
+      toast("Limit added. joon will respect it from now on.", "success");
       (utils as any).guardrails.list.invalidate({ storeId });
       setShowForm(false);
       setNewRule({ ruleType: "", values: {} });
@@ -109,7 +109,7 @@ export default function GuardrailsPage() {
             Guardrails
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            Set the limits allo always stays within
+            Set the limits joon always stays within
           </p>
         </div>
         {storeId && (
@@ -182,7 +182,7 @@ export default function GuardrailsPage() {
       {!storeId ? (
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-          <p className="text-[11px] text-muted-foreground">Connect a store and you can set limits for allo here.</p>
+          <p className="text-[11px] text-muted-foreground">Connect a store and you can set limits for joon here.</p>
         </motion.div>
       ) : isLoading ? (
         <div className="space-y-3">
@@ -241,7 +241,7 @@ export default function GuardrailsPage() {
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 text-center">
           <ShieldCheck className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
           <p className="text-[11px] text-muted-foreground">
-            No limits set yet. allo will ask before doing anything risky. Add a limit to set firm boundaries.
+            No limits set yet. joon will ask before doing anything risky. Add a limit to set firm boundaries.
           </p>
         </motion.div>
       )}

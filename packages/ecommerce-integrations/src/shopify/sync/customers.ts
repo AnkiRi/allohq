@@ -35,6 +35,14 @@ export async function syncAllCustomers(
           const tags = customer.tags
             ? customer.tags.split(",").map((t) => t.trim()).filter(Boolean)
             : [];
+          // Email marketing consent: prefer the current consent model
+          // (email_marketing_consent.state === "subscribed"), fall back to the
+          // legacy accepts_marketing boolean for older stores/API versions.
+          // Always a real boolean so a re-sync CORRECTS existing rows (passing
+          // undefined on update would leave them stale).
+          const acceptsMarketing =
+            customer.email_marketing_consent?.state === "subscribed" ||
+            customer.accepts_marketing === true;
           return prisma.customer.upsert({
             where: {
               storeId_externalId: { storeId, externalId: String(customer.id) },
@@ -46,7 +54,7 @@ export async function syncAllCustomers(
               phone: customer.phone,
               firstName: customer.first_name,
               lastName: customer.last_name,
-              acceptsMarketing: customer.accepts_marketing,
+              acceptsMarketing,
               tags,
             },
             update: {
@@ -54,7 +62,7 @@ export async function syncAllCustomers(
               phone: customer.phone,
               firstName: customer.first_name,
               lastName: customer.last_name,
-              acceptsMarketing: customer.accepts_marketing,
+              acceptsMarketing,
               tags,
             },
           });

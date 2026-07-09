@@ -64,7 +64,7 @@ function ConnectStorePrompt() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
-      <ConsoleFrame title="allo · start" className="max-w-md w-full">
+      <ConsoleFrame title="joon · start" className="max-w-md w-full">
         <div className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-[hsl(var(--accent))]/10 flex items-center justify-center mx-auto mb-5">
             <Store className="w-7 h-7 text-[hsl(var(--accent))]" />
@@ -73,7 +73,7 @@ function ConnectStorePrompt() {
             Connect your store
           </h1>
           <p className="text-sm text-muted-foreground font-sans mb-6 leading-relaxed">
-            Connect your Shopify store and allo reads your customers and orders,
+            Connect your Shopify store and joon reads your customers and orders,
             learns your brand, and stands up your retention, all on your own
             data.
           </p>
@@ -178,7 +178,7 @@ function actionToDetail(action: {
     title:
       action.campaignName ||
       firstLine(action.reasoning, 80) ||
-      "allo lined up an action for you",
+      "joon lined up an action for you",
     tags: actionToTags(action),
     channel: action.channel ?? null,
     segment: action.targetSegment ?? null,
@@ -201,7 +201,7 @@ function actionToDetail(action: {
 // spend). Instead we surface a staged reasoning stream against the seeded Vana
 // figures already loaded on the page, using the same console primitives the
 // operator already sees. The rows reveal on a short client timer so it reads
-// like allo thinking, then lands on a "queued for your okay" line. Reduced
+// like joon thinking, then lands on a "queued for your okay" line. Reduced
 // motion shows every row at once.
 // ---------------------------------------------------------------------------
 
@@ -224,7 +224,7 @@ function DemoReasoning({
       tick: "ok",
       node: (
         <>
-          allo noticed <b>{(lapsed?.customerCount ?? atRisk).toLocaleString("en-IN")}</b>{" "}
+          joon noticed <b>{(lapsed?.customerCount ?? atRisk).toLocaleString("en-IN")}</b>{" "}
           who fit
           {lapsed && lapsed.totalRevenue > 0 ? (
             <> · <b>{formatINR(lapsed.totalRevenue)}</b> of past revenue in play</>
@@ -246,7 +246,7 @@ function DemoReasoning({
   ];
   const total = lines.length;
 
-  // Reveal rows one at a time so it reads like allo thinking. Reduced motion
+  // Reveal rows one at a time so it reads like joon thinking. Reduced motion
   // shows every row at once. No network — purely a client timer.
   const [visible, setVisible] = useState(reduce ? total : 1);
   useEffect(() => {
@@ -267,7 +267,7 @@ function DemoReasoning({
   }, [reduce, total]);
 
   return (
-    <ConsoleFrame title="allo · reasoning" className="mt-8">
+    <ConsoleFrame title="joon · reasoning" className="mt-8">
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
         <span className="font-mono text-[11px] text-muted-foreground">
           staged · no live send
@@ -279,7 +279,7 @@ function DemoReasoning({
           clear
         </button>
       </div>
-      <StreamOutput aria-label="allo reasoning">
+      <StreamOutput aria-label="joon reasoning">
         {lines.slice(0, visible).map((l, i) => (
           <StreamRow key={i} tick={l.tick}>
             {l.node}
@@ -500,7 +500,7 @@ export default function DashboardPage() {
   // Approve / pass mutations (same as the actions queue)
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
     onSuccess: () => {
-      toast("Approved. allo's on it.", "success");
+      toast("Approved. joon's on it.", "success");
       (utils as any).autonomy.listActions.invalidate({ storeId });
     },
     onError: (err: { message?: string }) =>
@@ -563,7 +563,7 @@ export default function DashboardPage() {
   const draftedCount = allActions.filter((a) =>
     ["pending", "approved", "executed", "auto_executed"].includes(a.status),
   ).length;
-  // Decisions allo held back (fatigue / suppression) read off rejected/expired.
+  // Decisions joon held back (fatigue / suppression) read off rejected/expired.
   const heldBack = allActions.filter((a) =>
     ["rejected", "expired"].includes(a.status),
   ).length;
@@ -572,7 +572,7 @@ export default function DashboardPage() {
 
   // --- Home reasoning story — feeds the SHARED ReasoningReveal (same component
   // the landing hero uses, so the two surfaces can't drift). Built from real
-  // page data: lead = the briefing headline / latest goal; lines = allo's recent
+  // page data: lead = the briefing headline / latest goal; lines = joon's recent
   // reasoning in the landing's vocabulary (scanned N · held back M as control ·
   // drafted X · ready · expected recovery ₹…). Falls back to ATTENTION_STORIES
   // when there's no real reasoning yet (drafts before sunrise register).
@@ -589,7 +589,7 @@ export default function DashboardPage() {
   if (hasSyncedData) {
     homeLines.push({
       text:
-        `allo scanned ${totalCustomers.toLocaleString("en-IN")} customers` +
+        `joon scanned ${totalCustomers.toLocaleString("en-IN")} customers` +
         (segmentDist && segmentDist.length > 0
           ? ` across ${segmentDist.length} segments`
           : ""),
@@ -597,7 +597,7 @@ export default function DashboardPage() {
   }
   if (lapsed && lapsed.customerCount > 0) {
     homeLines.push({
-      text: `allo noticed ${lapsed.customerCount.toLocaleString("en-IN")} who've gone quiet · ${formatINR(lapsed.totalRevenue)} of past revenue`,
+      text: `joon noticed ${lapsed.customerCount.toLocaleString("en-IN")} who've gone quiet · ${formatINR(lapsed.totalRevenue)} of past revenue`,
     });
   }
   if (heldBack > 0) {
@@ -624,7 +624,7 @@ export default function DashboardPage() {
       arrow: true,
     });
   }
-  // Show allo's REAL activity as a SINGLE story (plays once, then rests — never
+  // Show joon's REAL activity as a SINGLE story (plays once, then rests — never
   // the canned landing reel on a loop). Only fall back to ATTENTION_STORIES when
   // there's genuinely no real activity yet (e.g. a brand-new store mid-sync).
   const homeStories: ReasoningStory[] =
@@ -641,7 +641,7 @@ export default function DashboardPage() {
 
   // Demo: the typed goal resolves into a real, viewable drafted decision —
   // rendered with the SAME DecisionCard the live app uses (seeded but tailored
-  // to the goal + Vana's figures, so it reads as allo's work, not a script).
+  // to the goal + Vana's figures, so it reads as joon's work, not a script).
   const demoDecision: DecisionDetailData | null =
     demo && demoGoal
       ? (() => {
@@ -695,7 +695,7 @@ export default function DashboardPage() {
   // seeded Vana workspace, so storeId resolves — this prompt won't show. Guard
   // explicitly so a storeless visitor only ever sees the demo entry CTA here,
   // never a dead-end.
-  // Demo first-entry: the staged "watch allo come alive" arc (once per session,
+  // Demo first-entry: the staged "watch joon come alive" arc (once per session,
   // skippable). Staged over the seeded Vana data — no real sync / Shopify call.
   if (demo && !arcSeen) {
     return (
@@ -734,7 +734,7 @@ export default function DashboardPage() {
             {greeting}, {firstName}
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            Tell allo what you want done. It scans, reasons, and queues the work
+            Tell joon what you want done. It scans, reasons, and queues the work
             for your okay.
           </p>
         </div>
@@ -742,7 +742,7 @@ export default function DashboardPage() {
         {/* 1. Command line */}
         <CommandLine
           placeholder={[
-            "Tell allo what you want: e.g. win back my lapsed buyers before Diwali",
+            "Tell joon what you want: e.g. win back my lapsed buyers before Diwali",
             "Who's slipping away?",
             "Draft a Diwali win-back for me",
             "Look after my best customers",
@@ -775,7 +775,7 @@ export default function DashboardPage() {
                     data: demoDecision,
                     onApprove: () => {
                       toast(
-                        "In the demo, allo holds the send. Connect your store to ship it for real.",
+                        "In the demo, joon holds the send. Connect your store to ship it for real.",
                         "success",
                       );
                       setViewing(null);
@@ -788,7 +788,7 @@ export default function DashboardPage() {
                 }
                 onApprove={() =>
                   toast(
-                    "In the demo, allo holds the send. Connect your store to ship it for real.",
+                    "In the demo, joon holds the send. Connect your store to ship it for real.",
                     "success",
                   )
                 }
@@ -801,7 +801,7 @@ export default function DashboardPage() {
 
       {/* The response: console + decisions, given room to breathe */}
       {/* 2 + 3. Reasoning stream + status line, in the console frame */}
-      <ConsoleFrame title="allo · operator" className="mt-8">
+      <ConsoleFrame title="joon · operator" className="mt-8">
         {/* Status line — mono readouts; the live lamp rides the first readout */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
           <MetricReadout label="customers" value={totalCustomers} live />
@@ -816,13 +816,13 @@ export default function DashboardPage() {
         {hasSyncedData ? (
           <ReasoningReveal stories={homeStories} />
         ) : (
-          <StreamOutput aria-label="what allo has been doing">
+          <StreamOutput aria-label="what joon has been doing">
             <StreamRow tick="step">
               pulling in your store data, this usually takes a minute
             </StreamRow>
           </StreamOutput>
         )}
-        {/* This is the live preview of allo's autonomous work; the full persisted
+        {/* This is the live preview of joon's autonomous work; the full persisted
             run log lives at /activity (one dream cycle, two views). */}
         <div className="mt-4 pt-3 border-t border-border flex justify-end">
           <Link
@@ -853,7 +853,7 @@ export default function DashboardPage() {
                   decision={
                     action.campaignName ||
                     reasoning ||
-                    "allo lined up an action for you"
+                    "joon lined up an action for you"
                   }
                   reasoning={
                     action.campaignName && reasoning
@@ -894,7 +894,7 @@ export default function DashboardPage() {
               Nothing waiting on you.
             </p>
             <p className="font-sans text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
-              Drafts before sunrise, approvals over coffee. allo will have the
+              Drafts before sunrise, approvals over coffee. joon will have the
               next decision ready when it&apos;s worth your okay.
             </p>
           </div>

@@ -5,7 +5,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
   {
     name: "create_campaign_with_preview",
     description:
-      "Create a campaign draft with inline email preview. Use when merchant asks to create/send a campaign, run a sale, or email customers. Target EITHER an RFM segment (segmentFilter) OR an EXACT set of people (customerIds, from find_customers). When the merchant names specific customers or wants 'just one customer', ALWAYS call find_customers first and pass customerIds — never approximate named/specific customers with a segment. Returns HTML preview, subject, and draft campaign ID.",
+      "Create a campaign draft with inline email preview. Use when merchant asks to create/send a campaign, run a sale, or email customers. Target the audience ONE of three ways, in priority order: (1) segmentId — an EXISTING segment already built in this conversation (e.g. one create_segment just returned); pass its id when the merchant says 'campaign for these' / 'for that segment'. (2) customerIds — an EXACT set of people from find_customers (named/specific/'top N' customers); ALWAYS call find_customers first for those. (3) segmentFilter — a broad RFM segment by name (e.g. 'Champions', 'Hibernating'). Never approximate named/specific/top-N customers with a broad segment. Returns HTML preview, subject, and draft campaign ID.",
     parameters: {
       campaignName: {
         type: "string",
@@ -15,6 +15,10 @@ export const inlineCampaignTools: ToolDefinition[] = [
         type: "string",
         description:
           "Campaign intent: 'flash_sale', 'promotion', 'announcement', 'win_back', 'vip_reward', 'custom'",
+      },
+      segmentId: {
+        type: "string",
+        description: "Id of an EXISTING segment to target (e.g. one create_segment just returned). Use this to run a campaign for a segment already built in this conversation — do NOT rebuild it. Takes precedence over segmentFilter.",
       },
       segmentFilter: {
         type: "string",
@@ -42,6 +46,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
     handler: async (params, ctx) => {
       const campaignName = String(params.campaignName ?? "AI Campaign");
       const intent = String(params.intent ?? "promotion");
+      const segmentId = params.segmentId ? String(params.segmentId) : undefined;
       const segmentFilter = params.segmentFilter ? String(params.segmentFilter) : undefined;
       const discountPercent = params.discountPercent ? Number(params.discountPercent) : undefined;
       const customInstructions = params.customInstructions ? String(params.customInstructions) : undefined;
@@ -96,6 +101,13 @@ export const inlineCampaignTools: ToolDefinition[] = [
             isSystem: false,
           },
         });
+      } else if (segmentId) {
+        // Target an EXISTING segment (e.g. one create_segment just returned) by id.
+        // This is what "create a campaign for these / for that segment" needs — the
+        // segment already holds its customerIds (manual) or conditions.
+        segment = await prisma.customerSegment.findFirst({
+          where: { id: segmentId, storeId: ctx.storeId },
+        });
       } else {
         segment = segmentFilter
           ? await prisma.customerSegment.findFirst({
@@ -122,6 +134,18 @@ export const inlineCampaignTools: ToolDefinition[] = [
           recipientWhere = { storeId: ctx.storeId, rfmScore: { segment: seg.name }, acceptsMarketing: true };
         }
         recipientCount = await prisma.customer.count({ where: recipientWhere });
+      }
+
+      // Don't create a dead campaign that targets nobody. If the audience didn't
+      // resolve (no segment matched) or has no opted-in customers, tell the agent
+      // exactly how to fix it instead of silently producing a 0-recipient draft.
+      if (recipientCount === 0) {
+        return {
+          success: false,
+          message: !segment
+            ? "I couldn't tell who to send this to. Target an audience explicitly: pass segmentId for a segment you already built, customerIds (from find_customers) for named/top-N people, or segmentFilter for a broad RFM segment like 'Champions'."
+            : `The audience "${(segment as { name?: string }).name ?? "segment"}" has no reachable recipients (0 opted-in customers). Pick a different segment, or check that these customers accept marketing.`,
+        };
       }
 
       // Fetch brand profile
@@ -259,7 +283,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           segmentId: segment?.id,
           status: "draft",
           recipientCount,
-          // Freeze what allo PROPOSED (the action bundle) so a later human edit can be
+          // Freeze what joon PROPOSED (the action bundle) so a later human edit can be
           // diffed against it at approval. Can't-backfill: once the draft is edited in
           // place, the agent's original intent is gone otherwise.
           agentProposal: {

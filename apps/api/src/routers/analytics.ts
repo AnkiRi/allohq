@@ -347,7 +347,7 @@ export const analyticsRouter = router({
    * Control lift — the Track B moat, on the wire.
    *
    * From the causal substrate (decision_records / message_logs, grouped by
-   * treatmentArm), computes the REAL incremental lift of allo's retention vs a
+   * treatmentArm), computes the REAL incremental lift of joon's retention vs a
    * held-out control cohort that received nothing:
    *   - per customer we take the measured outcome (outcomeMargin if present,
    *     else outcomeRevenue) and average within each arm,
@@ -487,9 +487,173 @@ export const analyticsRouter = router({
     }),
 
   /**
+   * CAM-impact — growth intelligence made visible. Per campaign, the holdout tells
+   * joon where sending PROVABLY drove incremental revenue and where it didn't (the
+   * loyalists who'd have bought anyway). The story: do MORE by sending LESS — send
+   * where lift is proven, hold back where it isn't (protect the channel).
+   *
+   * All figures derive from the SAME real machinery as controlLift (per-customer
+   * mean by arm + Welch significance) — just grouped per campaign, then rolled up.
+   * A campaign's send/hold "decision" is DERIVED from its measured significance, so
+   * nothing here is asserted beyond what the control group actually shows.
+   */
+  camImpact: storeProcedure
+    .input(z.object({ storeId: z.string(), days: z.number().default(90) }))
+    .query(async ({ ctx, input }) => {
+      const BASE_MONTHLY_FEE = 24_000; // ₹ / mo — must match controlLift
+      const PERFORMANCE_RATE = 0.15; // 15% of PROVEN incremental margin vs control
+      const MIN_OBSERVED = 30; // per-arm floor for a trustworthy significance test
+
+      const since = new Date(Date.now() - input.days * 86_400_000);
+
+      // Per-customer measured outcome by (campaign, arm) — same normalisation as controlLift.
+      const rows = await ctx.prisma.$queryRaw<
+        Array<{ campaignId: string; arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number; sumsq: number }>
+      >`
+        SELECT "campaignId",
+               "treatmentArm" AS arm,
+               COUNT(*)::bigint AS n,
+               COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END)::bigint AS "withOutcome",
+               COALESCE(
+                 SUM(COALESCE("outcomeMargin", "outcomeRevenue", 0))
+                   FILTER (WHERE "outcome" IS NOT NULL)
+                 / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0),
+                 0
+               )::float AS mean,
+               COALESCE(
+                 SUM(POWER(COALESCE("outcomeMargin", "outcomeRevenue", 0), 2))
+                   FILTER (WHERE "outcome" IS NOT NULL),
+                 0
+               )::float AS sumsq
+        FROM "message_logs"
+        WHERE "storeId" = ${input.storeId}
+          AND "treatmentArm" IS NOT NULL
+          AND "campaignId" IS NOT NULL
+          AND "createdAt" >= ${since}
+        GROUP BY "campaignId", "treatmentArm"
+      `;
+
+      // Group the arm rows by campaign.
+      const byCampaign = new Map<string, { control?: (typeof rows)[number]; treatment?: (typeof rows)[number] }>();
+      for (const r of rows) {
+        const entry = byCampaign.get(r.campaignId) ?? {};
+        if (r.arm === "CONTROL") entry.control = r;
+        else entry.treatment = r;
+        byCampaign.set(r.campaignId, entry);
+      }
+
+      // Campaign names + the segment joon proposed (for legible labels).
+      const campaignIds = [...byCampaign.keys()];
+      const campaignMeta = campaignIds.length
+        ? await ctx.prisma.campaign.findMany({
+            where: { id: { in: campaignIds }, storeId: input.storeId },
+            select: { id: true, name: true, sentAt: true, agentProposal: true },
+          })
+        : [];
+      const metaById = new Map(campaignMeta.map((c) => [c.id, c]));
+
+      // Whether per-customer figures are margin (preferred) or revenue → fee grounding.
+      const marginUsed = await ctx.prisma.messageLog.count({
+        where: { storeId: input.storeId, treatmentArm: { not: null }, outcomeMargin: { not: null }, createdAt: { gte: since } },
+      });
+      const basis: "margin" | "revenue" = marginUsed > 0 ? "margin" : "revenue";
+      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId }, select: { defaultContributionMargin: true } });
+      const contributionMargin = store?.defaultContributionMargin ?? 0.6;
+
+      const campaigns = campaignIds.map((id) => {
+        const { control, treatment } = byCampaign.get(id)!;
+        const meta = metaById.get(id);
+        const proposal = (meta?.agentProposal ?? {}) as { segmentName?: string; intent?: string };
+
+        const controlCount = Number(control?.n ?? 0);
+        const treatmentCount = Number(treatment?.n ?? 0);
+        const controlWith = Number(control?.withOutcome ?? 0);
+        const treatmentWith = Number(treatment?.withOutcome ?? 0);
+        const controlMean = control?.mean ?? 0;
+        const treatmentMean = treatment?.mean ?? 0;
+
+        const stats = computeLiftStats(
+          { n: treatmentWith, mean: treatmentMean, variance: varianceFromAggregates(treatment?.sumsq ?? 0, treatmentWith, treatmentMean) },
+          { n: controlWith, mean: controlMean, variance: varianceFromAggregates(control?.sumsq ?? 0, controlWith, controlMean) },
+          MIN_OBSERVED,
+        );
+        const lift = treatmentMean - controlMean;
+        const incremental = lift * treatmentCount;
+
+        // Decision DERIVED from the measured control result — never asserted beyond it.
+        const decision: "send" | "hold" | "learning" = stats.underpowered
+          ? "learning"
+          : stats.significant && lift > 0
+            ? "send"
+            : "hold";
+
+        return {
+          campaignId: id,
+          name: meta?.name ?? "Campaign",
+          segment: proposal.segmentName ?? null,
+          sentAt: meta?.sentAt ?? null,
+          heldBack: controlCount, // held out to MEASURE (the counterfactual)
+          messaged: treatmentCount,
+          controlMeanPerCustomer: Math.round(controlMean),
+          treatmentMeanPerCustomer: Math.round(treatmentMean),
+          liftPerCustomer: Math.round(lift),
+          liftPct: controlMean > 0 ? Math.round((lift / controlMean) * 100) : 0,
+          ciLow: Math.round(stats.ciLow),
+          ciHigh: Math.round(stats.ciHigh),
+          pValue: stats.pValue,
+          significant: stats.significant,
+          underpowered: stats.underpowered,
+          incremental: Math.round(incremental),
+          decision,
+        };
+      });
+
+      // Highest proven lift first; holds/learning fall to the bottom.
+      campaigns.sort((a, b) => Number(b.decision === "send") - Number(a.decision === "send") || b.liftPerCustomer - a.liftPerCustomer);
+
+      // --- roll-up: do MORE by sending LESS -----------------------------------
+      const totalMessaged = campaigns.reduce((s, c) => s + c.messaged, 0);
+      const totalHeldToMeasure = campaigns.reduce((s, c) => s + c.heldBack, 0);
+      // Proven incremental = only the campaigns whose lift cleared significance.
+      const provenIncrementalRaw = campaigns
+        .filter((c) => c.decision === "send")
+        .reduce((s, c) => s + Math.max(0, c.incremental), 0);
+      const provenIncrementalMargin = basis === "margin" ? provenIncrementalRaw : provenIncrementalRaw * contributionMargin;
+      // Sends joon would now AVOID = the treated volume on hold-back segments (no proven lift).
+      const sendsAvoidable = campaigns.filter((c) => c.decision === "hold").reduce((s, c) => s + c.messaged, 0);
+      const sendsAvoidablePct = totalMessaged > 0 ? Math.round((sendsAvoidable / totalMessaged) * 100) : 0;
+
+      const performanceFee = Math.round(Math.max(0, provenIncrementalMargin) * PERFORMANCE_RATE);
+      const baseMonthly = BASE_MONTHLY_FEE;
+
+      return {
+        windowDays: input.days,
+        basis,
+        hasData: campaigns.length > 0,
+        campaigns,
+        total: {
+          campaigns: campaigns.length,
+          sendSegments: campaigns.filter((c) => c.decision === "send").length,
+          holdSegments: campaigns.filter((c) => c.decision === "hold").length,
+          messaged: totalMessaged,
+          heldToMeasure: totalHeldToMeasure,
+          provenIncremental: Math.round(provenIncrementalRaw),
+          provenIncrementalMargin: Math.round(provenIncrementalMargin),
+          sendsAvoidable,
+          sendsAvoidablePct,
+          baseMonthly,
+          performanceRate: PERFORMANCE_RATE,
+          performanceFee,
+          totalFee: baseMonthly + performanceFee,
+          contributionMargin,
+        },
+      };
+    }),
+
+  /**
    * Prediction accuracy — Track C's track record, measured against Track B.
    *
-   * Compares what allo FORECAST (estimatedRevenue committed on executed actions)
+   * Compares what joon FORECAST (estimatedRevenue committed on executed actions)
    * against what ACTUALLY happened (measured incremental revenue vs a held-out
    * control). Returns an overall accuracy figure plus a few predicted-vs-actual
    * rows shown plainly.
@@ -538,7 +702,7 @@ export const analyticsRouter = router({
       const liftPerCustomer = treatmentMean - controlMean;
       const actualIncremental = Math.max(0, liftPerCustomer * treatmentCount);
 
-      // PREDICTED: ₹ allo committed on the actions executed in the window.
+      // PREDICTED: ₹ joon committed on the actions executed in the window.
       const executed = await ctx.prisma.actionQueue.findMany({
         where: { storeId: input.storeId, status: "executed", createdAt: { gte: since } },
         select: { id: true, type: true, estimatedRevenue: true, createdAt: true, payload: true },

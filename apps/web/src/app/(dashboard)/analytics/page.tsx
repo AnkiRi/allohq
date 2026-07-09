@@ -108,7 +108,7 @@ export default function AnalyticsPage() {
             Nothing to measure yet
           </p>
           <p className="text-[13px] text-muted-foreground leading-relaxed">
-            Connect your store and allo starts measuring what it earned you,
+            Connect your store and joon starts measuring what it earned you,
             lift against a held-out control, from the first send.
           </p>
         </div>
@@ -275,7 +275,7 @@ export default function AnalyticsPage() {
               <SmartEmptyState
                 icon={BarChart3}
                 title="Nothing to attribute yet"
-                description="The moment allo's first send goes out, this fills in: where the revenue came from, how each channel pulled its weight, and how your customers are holding up."
+                description="The moment joon's first send goes out, this fills in: where the revenue came from, how each channel pulled its weight, and how your customers are holding up."
                 actions={[{ label: "See what's waiting", href: "/actions", primary: true }]}
               />
             ) : (
@@ -358,11 +358,11 @@ export default function AnalyticsPage() {
             {aiLoading ? (
               <Loading />
             ) : !aiData ? (
-              <EmptyState icon={Zap} text="Nothing to compare yet. Once a few sends go out, you'll see what allo wrote against what was written by hand." />
+              <EmptyState icon={Zap} text="Nothing to compare yet. Once a few sends go out, you'll see what joon wrote against what was written by hand." />
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {([
-                  { data: aiData.ai, label: "Written by allo", color: "text-[var(--color-accent)]", bg: "bg-[hsl(var(--accent))]/[0.06]", border: "border-[hsl(var(--accent))]/40" },
+                  { data: aiData.ai, label: "Written by joon", color: "text-[var(--color-accent)]", bg: "bg-[hsl(var(--accent))]/[0.06]", border: "border-[hsl(var(--accent))]/40" },
                   { data: aiData.manual, label: "Written by hand", color: "text-foreground", bg: "bg-muted", border: "border-border" },
                 ] as const).map((group) => (
                   <motion.div key={group.label} variants={itemVariants} className={`p-5 ${group.bg} border ${group.border} rounded-xl`}>
@@ -478,7 +478,7 @@ export default function AnalyticsPage() {
             {forecastLoading ? (
               <Loading />
             ) : !forecastData ? (
-              <EmptyState icon={TrendingUp} text="No forecast yet. allo draws a fresh one each day before sunrise. Check back in the morning." />
+              <EmptyState icon={TrendingUp} text="No forecast yet. joon draws a fresh one each day before sunrise. Check back in the morning." />
             ) : (
               <>
                 <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">

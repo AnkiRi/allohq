@@ -490,7 +490,7 @@ export default function ABTestPage() {
               <div>
                 <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] flex items-center gap-1.5 mb-2">
                   <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
-                  allo's suggestions
+                  joon's suggestions
                 </label>
                 <div className="space-y-2">
                   {currentSuggestions.map((s, idx) => (
@@ -1086,7 +1086,7 @@ export default function ABTestPage() {
       {!isLoading && (!abTests || abTests.length === 0) && !showForm && (
         <motion.div variants={itemVariants} className="text-center py-16">
           <FlaskConical className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">Nothing tested yet. allo is just getting started.</h3>
+          <h3 className="text-[13px] font-bold text-foreground font-serif mb-1">Nothing tested yet. joon is just getting started.</h3>
           <p className="text-[11px] text-muted-foreground font-sans mb-4">
             Try two versions against each other and let the results tell you what works.
           </p>

@@ -577,7 +577,7 @@ export function renderToHtml(
       id: "auto-footer",
       type: "footer",
       props: {
-        text: footerParts.join("\n") || "Sent with Allo",
+        text: footerParts.join("\n") || "Sent with Joon",
         unsubscribeText: "Unsubscribe",
       },
     };

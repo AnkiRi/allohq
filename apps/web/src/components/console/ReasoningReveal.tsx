@@ -27,7 +27,7 @@ export interface ReasoningLine {
   arrow?: boolean;
 }
 export interface ReasoningStory {
-  /** The `allo ›` context/goal that types itself. */
+  /** The `joon ›` context/goal that types itself. */
   lead: string;
   lines: ReasoningLine[];
 }
@@ -120,7 +120,7 @@ export function ReasoningReveal({
   return (
     <div ref={ref} className={`rr ${className}`}>
       <div className="rr-cmd">
-        <span className="rr-prompt">allo ›</span>
+        <span className="rr-prompt">joon ›</span>
         <span className="rr-lead" data-rr-lead>{first.lead}</span>
         <span className="rr-caret" aria-hidden="true" />
       </div>
@@ -149,7 +149,7 @@ export const ATTENTION_STORIES: ReasoningStory[] = [
   {
     lead: "Priya bought a linen tunic in March",
     lines: [
-      { text: "allo noticed: linen, not wool" },
+      { text: "joon noticed: linen, not wool" },
       { text: "won't pitch her wool in October" },
       { text: "kept on the list · left alone", beat: true },
     ],
@@ -175,7 +175,7 @@ export const ATTENTION_STORIES: ReasoningStory[] = [
   {
     lead: "Karan reads email at midnight, not 9am",
     lines: [
-      { text: "allo noticed his open times" },
+      { text: "joon noticed his open times" },
       { text: "left the 9am blast alone", beat: true },
       { text: "writes him at midnight" },
     ],

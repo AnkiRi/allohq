@@ -1,5 +1,5 @@
 // Human-in-the-loop judgment capture. At the moment a human APPROVES a campaign, diff the
-// action bundle allo proposed (frozen in campaign.agentProposal at draft time) against the
+// action bundle joon proposed (frozen in campaign.agentProposal at draft time) against the
 // human's final state → a structured agent_proposed → human_final record. This disagreement
 // signal (plus the campaign's later outcome) is the highest-value training data for the CAM:
 // it's how the model eventually learns the human's judgment and the forward-deployed team recedes.
@@ -39,7 +39,7 @@ export function buildHumanDecision(c: CampaignForDecision): Record<string, unkno
   const changedFields = Object.keys(overrides);
   return {
     approvedAt,
-    acceptedAsProposed: changedFields.length === 0, // human shipped allo's proposal unchanged
+    acceptedAsProposed: changedFields.length === 0, // human shipped joon's proposal unchanged
     changedFields,
     overrides, // agent_proposed → human_final on the structured action variables
     // discount/offer/creative live in the email content, not campaign columns → flag, don't deep-capture

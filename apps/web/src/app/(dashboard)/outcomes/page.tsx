@@ -13,6 +13,7 @@ import {
   ReasoningReveal,
   type ReasoningStory,
 } from "@/components/console/ReasoningReveal";
+import { GrowthImpactPanel } from "@/components/outcomes/GrowthImpactPanel";
 
 // ---------------------------------------------------------------------------
 // Outcomes / Control — the business model on a screen, in operator language.
@@ -34,9 +35,9 @@ import {
 // ---------------------------------------------------------------------------
 
 // --- Representative control-group model (clearly labelled in the UI) --------
-// Held-out control received nothing; treatment received allo's retention.
+// Held-out control received nothing; treatment received joon's retention.
 const COHORT = {
-  treatmentCustomers: 1840, // received allo's retention over the window
+  treatmentCustomers: 1840, // received joon's retention over the window
   controlCustomers: 460, // held out · received nothing
   treatmentRevPerCustomer: 2_140, // ₹ / customer over the window
   controlRevPerCustomer: 1_690, // ₹ / customer over the window
@@ -202,7 +203,7 @@ export default function OutcomesPage() {
   const performanceFee = model.performanceFee;
   const totalFee = model.totalFee;
 
-  // --- Reasoning story: the decision behind the result, in allo's voice -----
+  // --- Reasoning story: the decision behind the result, in joon's voice -----
   // Predicted upside (the lift) → NAMED downside (control gives up revenue;
   // some unsubscribe) → confidence (measured vs estimate). Feeds the SHARED
   // ReasoningReveal so this surface can't drift from the home console / landing.
@@ -223,7 +224,7 @@ export default function OutcomesPage() {
           text: `predicted upside · +${moneyExact(liftPerCustomer)}/customer · ${moneyExact(incrementalRevenue)} incremental`,
         },
         {
-          text: "named downside · the held-out cohort earns allo nothing · a few may unsubscribe",
+          text: "named downside · the held-out cohort earns joon nothing · a few may unsubscribe",
         },
         {
           text: isReal
@@ -259,17 +260,17 @@ export default function OutcomesPage() {
             Outcomes
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            Once your store is connected and allo&apos;s been running, this is
+            Once your store is connected and joon&apos;s been running, this is
             where the proof lives: incremental revenue measured against a
             held-out control, and what that earns its keep.
           </p>
         </div>
-        <ConsoleFrame title="allo · outcomes" live={false}>
+        <ConsoleFrame title="joon · outcomes" live={false}>
           <p className="font-sans text-[13.5px] text-foreground">
             Nothing to prove yet.
           </p>
           <p className="font-sans text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
-            Connect your store and let allo run a cycle. We&apos;ll hold a
+            Connect your store and let joon run a cycle. We&apos;ll hold a
             cohort back as control and start measuring lift the moment there&apos;s
             something to measure.
           </p>
@@ -287,14 +288,17 @@ export default function OutcomesPage() {
           Outcomes
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          The only number that matters is the one you wouldn&apos;t have earned
-          on your own. We hold a cohort back, send them nothing, and measure the
-          gap. That gap is what allo is for, and what allo gets paid on.
+          joon grows revenue by sending <b>less</b>, not more — concentrating on the customers a
+          held-out control proves will respond, and holding back the ones who&apos;d have bought
+          anyway. Below: what that earned, and the causal proof underneath it.
         </p>
       </div>
 
+      {/* 0. Growth intelligence — the hero: do more by sending less ---------- */}
+      <GrowthImpactPanel storeId={storeId} windowDays={COHORT.windowDays} />
+
       {/* 1. The control comparison — the most important pixel ---------------- */}
-      <ConsoleFrame title="allo · incremental revenue vs control">
+      <ConsoleFrame title="joon · incremental revenue vs control">
         {/* Caption: honesty about measurement state */}
         <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
           {isReal
@@ -316,7 +320,7 @@ export default function OutcomesPage() {
                 </span>
               </div>
               <p className="font-sans text-[11.5px] text-muted-foreground leading-relaxed mb-3">
-                received allo&apos;s retention
+                received joon&apos;s retention
               </p>
               <div className="space-y-1.5">
                 <MetricReadout
@@ -440,16 +444,16 @@ export default function OutcomesPage() {
             confidence. Same shared component the home console + landing use. */}
         <div className="mt-5 pt-4 border-t border-border">
           <p className="font-mono text-[10.5px] text-muted-foreground mb-2">
-            how allo reasoned it
+            how joon reasoned it
           </p>
           <ReasoningReveal stories={outcomeStory} />
         </div>
       </ConsoleFrame>
 
       {/* 2. Fee = base + performance on proven lift -------------------------- */}
-      <ConsoleFrame title="allo · what this earns" live={false} clock={false}>
+      <ConsoleFrame title="joon · what this earns" live={false} clock={false}>
         <p className="font-sans text-[13px] text-foreground leading-relaxed mb-4">
-          A flat fee keeps your retention running. On top of that, allo takes a
+          A flat fee keeps your retention running. On top of that, joon takes a
           small cut of the lift it proved against control, so we only win more
           when you do.
         </p>
@@ -475,7 +479,7 @@ export default function OutcomesPage() {
           </div>
           <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
             <span className="text-foreground lowercase font-semibold">
-              total · base + only what allo earned you
+              total · base + only what joon earned you
             </span>
             <span className="text-[hsl(var(--accent))] tabular-nums text-[16px] font-semibold">
               {moneyExact(totalFee)}
@@ -490,7 +494,7 @@ export default function OutcomesPage() {
       </ConsoleFrame>
 
       {/* 3. Real AI cost vs the lift — unit economics ----------------------- */}
-      <ConsoleFrame title="allo · unit economics" live={false} clock={false}>
+      <ConsoleFrame title="joon · unit economics" live={false} clock={false}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pb-4 mb-4 border-b border-border">
           <MetricReadout label="AI cost · window" value={aiCostLabel} />
           <MetricReadout label="AI revenue" value={aiRevenue} money />
@@ -530,7 +534,7 @@ export default function OutcomesPage() {
 }
 
 // ---------------------------------------------------------------------------
-// ForecastAccuracy — Track C on the Outcomes screen. allo commits to a
+// ForecastAccuracy — Track C on the Outcomes screen. joon commits to a
 // predicted recovery BEFORE acting; here we show how those forecasts held up
 // against what the held-out control actually measured.
 //
@@ -573,9 +577,9 @@ function ForecastAccuracy({
   const calibrated = !!data?.hasCalibration;
 
   return (
-    <ConsoleFrame title="allo · forecast accuracy" live={false} clock={false}>
+    <ConsoleFrame title="joon · forecast accuracy" live={false} clock={false}>
       <p className="font-sans text-[13px] text-foreground leading-relaxed mb-1">
-        Before acting, allo commits to a predicted recovery. This is how those
+        Before acting, joon commits to a predicted recovery. This is how those
         forecasts held up against what the held-out control actually measured.
       </p>
 
@@ -583,7 +587,7 @@ function ForecastAccuracy({
       <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
         {calibrated && data?.withinPct != null
           ? `recovery forecasts ran within ${data.withinPct}% of actual over the last ${data.windowDays}d · ${data.sampleSize} measured outcomes`
-          : "forecasts are estimates · not yet control-backed · figures shown are what allo committed to, actual fills in as control outcomes land"}
+          : "forecasts are estimates · not yet control-backed · figures shown are what joon committed to, actual fills in as control outcomes land"}
       </p>
 
       {/* Predicted vs actual rows, stated plainly. */}
@@ -639,7 +643,7 @@ function ForecastAccuracy({
         </div>
       ) : (
         <p className="font-sans text-[12.5px] text-muted-foreground leading-relaxed">
-          No executed decisions in this window yet. Once allo acts, each
+          No executed decisions in this window yet. Once joon acts, each
           forecast lands here next to what control actually measured.
         </p>
       )}

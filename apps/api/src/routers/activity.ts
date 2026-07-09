@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 
 /**
- * Activity log — the persisted, human-readable record of what allo's agents
+ * Activity log — the persisted, human-readable record of what joon's agents
  * actually did (autonomous scheduled runs: overnight ops, churn interventions,
  * A/B conclusions, opportunities, etc.). This powers the operator TERMINAL as a
  * real, scrollable, refresh-surviving history (not the cosmetic per-mount feed).

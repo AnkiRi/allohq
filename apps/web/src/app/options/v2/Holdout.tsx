@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion, animate } from "framer-motion";
 
 /* ------------------------------------------------------------------ */
-/* THE HOLDOUT — the original graphic the user liked, reused from      */
+/* THE HOLDOUT, the original graphic the user liked, reused from      */
 /* frontend-holdout/HoldoutField.tsx and re-themed via v2 tokens.      */
 /*                                                                     */
 /* 187 lapsed buyers render as a field of individual unit marks. On    */
@@ -13,7 +13,7 @@ import { motion, useInView, useReducedMotion, animate } from "framer-motion";
 /* (treatment) and WARM UP. The lift is the measured gap between them. */
 /*                                                                     */
 /* The warming is class/token-driven (cool → .is-warm flips the mark   */
-/* to var(--ink)), NOT a hardcoded hex tween — so it works on the      */
+/* to var(--ink)), NOT a hardcoded hex tween, so it works on the      */
 /* LIGHT palette too (ink-on-white) as well as both darks.             */
 /*                                                                     */
 /* Motion only reveals what is already true: reduced motion / JS-off   */
@@ -115,7 +115,7 @@ export function HoldoutField() {
         </span>
       </div>
 
-      {/* THE FIELD — 187 unit marks, 22 held out of the crowd. */}
+      {/* THE FIELD, 187 unit marks, 22 held out of the crowd. */}
       <div className="v2-hf__panels">
         <div className="v2-hf__worked" aria-hidden="true">
           <span className="v2-hf__panel-tag mono">Worked</span>
@@ -194,7 +194,7 @@ export function HoldoutField() {
         </motion.div>
       </div>
 
-      {/* THE READOUT — per-customer recovery, and the gap allo can prove. */}
+      {/* THE READOUT, per-customer recovery, and the gap joon can prove. */}
       <div className="v2-hf__readout">
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
@@ -254,7 +254,7 @@ export function HoldoutField() {
             />
           </div>
           <p className="v2-hf__gap-sub">
-            Recovered above the held-back baseline. The gap is the only thing allo
+            Recovered above the held-back baseline. The gap is the only thing joon
             bills a performance fee on, never the gross.
           </p>
         </div>

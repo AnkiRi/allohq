@@ -250,7 +250,7 @@ export const shopifyTools: ToolDefinition[] = [
     },
     handler: async (params, ctx) => {
       const orderNum = String(params.orderNumber ?? "").replace("#", "");
-      const note = String(params.note ?? "Refund issued via Allo agent");
+      const note = String(params.note ?? "Refund issued via Joon agent");
       const notify = params.notify !== false;
 
       const order = await prisma.order.findFirst({

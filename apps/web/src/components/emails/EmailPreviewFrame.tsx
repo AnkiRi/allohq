@@ -11,7 +11,7 @@ const WIDTHS: Record<PreviewWidth, number> = { desktop: 600, mobile: 375 };
 /**
  * Live React Email preview — renders bulletproof HTML inside an iframe with
  * light/dark + desktop/mobile framing, mirroring the demo-emails viewer so the
- * editor preview is identical to what allo ships. Output is never hand-mangled;
+ * editor preview is identical to what joon ships. Output is never hand-mangled;
  * the HTML comes straight from renderGeneratedEmail via the emails router.
  */
 export function EmailPreviewFrame({

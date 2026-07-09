@@ -144,7 +144,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSubmit();
             }}
-            placeholder="Tell allo what you'd like to do..."
+            placeholder="Tell joon what you'd like to do..."
             disabled={isProcessing}
             className="flex-1 ml-3 text-[13px] font-sans text-foreground placeholder:text-muted-foreground bg-transparent outline-none disabled:opacity-50"
           />

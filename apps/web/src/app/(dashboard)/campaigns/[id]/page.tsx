@@ -1,8 +1,8 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -10,6 +10,7 @@ import { DecisionTracePanel } from "@/components/campaigns/DecisionTracePanel";
 
 export default function CampaignDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const campaignId = params.id as string;
   const { toast } = useToast();
 
@@ -43,6 +44,14 @@ export default function CampaignDetailPage() {
       toast("Campaign cancelled.", "info");
     },
     onError: () => toast("We couldn't cancel that. Mind trying again?", "error"),
+  });
+  const deleteMut = trpc.campaigns.delete.useMutation({
+    onSuccess: () => {
+      utils.campaigns.list.invalidate();
+      toast("Draft deleted.", "info");
+      router.push("/campaigns");
+    },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
 
   if (isLoading) {
@@ -103,6 +112,20 @@ export default function CampaignDetailPage() {
               {cancelMut.isPending ? "Cancelling…" : "Cancel"}
             </button>
           )}
+          {campaign.status === "draft" && (
+            <button
+              onClick={() => {
+                if (window.confirm(`Delete the draft "${campaign.name}"? This can't be undone.`)) {
+                  deleteMut.mutate({ id: campaignId });
+                }
+              }}
+              disabled={deleteMut.isPending}
+              className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:border-[var(--color-urgent)] hover:text-[var(--color-urgent)] disabled:opacity-50 transition-all"
+            >
+              {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              {deleteMut.isPending ? "Deleting…" : "Delete"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,7 +171,7 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      {/* How allo decided — the moat, made legible */}
+      {/* How joon decided — the moat, made legible */}
       <DecisionTracePanel campaignId={campaignId} />
 
       {/* Email preview — full width */}

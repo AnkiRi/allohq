@@ -241,7 +241,7 @@ export const workspaceProcedure = protectedProcedure
         code: "TOO_MANY_REQUESTS",
         message:
           cap.reason === "global"
-            ? "allo's demo is resting for today, it's been a busy day. Come back tomorrow, or sign up to run it for real."
+            ? "joon's demo is resting for today, it's been a busy day. Come back tomorrow, or sign up to run it for real."
             : "You're moving quickly, give the demo a moment and try again.",
       });
     }

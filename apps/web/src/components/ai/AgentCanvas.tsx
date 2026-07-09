@@ -156,7 +156,7 @@ export function AgentCanvas() {
           <div className="p-3 space-y-2">
             {!observations?.length && (
               <div className="text-center py-8 text-muted-foreground text-xs font-sans">
-                Nothing to flag right now. allo keeps an eye on your store every 15 minutes.
+                Nothing to flag right now. joon keeps an eye on your store every 15 minutes.
               </div>
             )}
             {observations?.map((obs) => (
@@ -199,7 +199,7 @@ export function AgentCanvas() {
           <div className="p-3 space-y-1">
             {!actions?.length && (
               <div className="text-center py-8 text-muted-foreground text-xs font-sans">
-                Nothing here yet. allo&apos;s work will show up as it happens.
+                Nothing here yet. joon&apos;s work will show up as it happens.
               </div>
             )}
             {actions?.map((action) => (

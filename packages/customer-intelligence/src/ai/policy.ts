@@ -10,9 +10,9 @@ import type { AIProvider } from "./providers";
 // ---------------------------------------------------------------------------
 
 export type AIModelId =
-  | "claude-sonnet-4-6"
+  | "claude-sonnet-5"
   | "gpt-4o"
-  | "gpt-4o-mini";
+  | "claude-haiku-4-5-20251001";
 
 export type ModelTier = "premium" | "standard" | "economy";
 
@@ -37,12 +37,15 @@ export interface AIModel {
   tier: ModelTier;
 }
 
+// NOTE: input/outputCostPerMillion must match MODEL_COSTS in costs.ts. The new
+// Claude prices below are best-estimate (Sonnet tier ≈ $3/$15, Haiku tier ≈ $1/$5)
+// — verify against Anthropic's current pricing when convenient. Cost display only.
 export const AI_MODELS: AIModel[] = [
   {
-    id: "claude-sonnet-4-6",
+    id: "claude-sonnet-5",
     provider: "anthropic",
-    label: "Claude Sonnet 4.6",
-    description: "Best quality — Anthropic's most capable model for creative content",
+    label: "Claude Sonnet 5",
+    description: "Best quality — Anthropic's most capable model for creative, customer-facing copy",
     inputCostPerMillion: 3,
     outputCostPerMillion: 15,
     tier: "premium",
@@ -57,23 +60,23 @@ export const AI_MODELS: AIModel[] = [
     tier: "standard",
   },
   {
-    id: "gpt-4o-mini",
-    provider: "openai",
-    label: "GPT-4o Mini",
-    description: "Fast and affordable — good for quick iterations",
-    inputCostPerMillion: 0.15,
-    outputCostPerMillion: 0.6,
+    id: "claude-haiku-4-5-20251001",
+    provider: "anthropic",
+    label: "Claude Haiku 4.5",
+    description: "Fast and affordable — great for high-volume, mechanical tasks",
+    inputCostPerMillion: 1,
+    outputCostPerMillion: 5,
     tier: "economy",
   },
 ];
 
-export const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
+export const DEFAULT_MODEL: AIModelId = "claude-sonnet-5";
 
 /**
  * The working default provider. The OpenAI key is at quota (429), so Claude is
  * the reliable backstop — it appears in every degrade path.
  */
-export const WORKING_DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
+export const WORKING_DEFAULT_MODEL: AIModelId = "claude-sonnet-5";
 
 /**
  * task → tier. ROUTE ON OUTPUT STAKES, not surface difficulty: anything a customer
@@ -95,11 +98,11 @@ export const TASK_TIER: Record<AITask, ModelTier> = {
  * still resolves a viable model instead of hard-failing.
  */
 export const TIER_MODELS: Record<ModelTier, AIModelId[]> = {
-  // economy wants the cheap OpenAI model first, then falls through to Claude
-  // (the only currently-working provider) rather than failing.
-  economy: ["gpt-4o-mini", "gpt-4o", "claude-sonnet-4-6"],
-  standard: ["gpt-4o", "claude-sonnet-4-6", "gpt-4o-mini"],
-  premium: ["claude-sonnet-4-6", "gpt-4o", "gpt-4o-mini"],
+  // economy prefers the cheap Anthropic model (Haiku) first — Claude is the
+  // reliable provider while the OpenAI key is at quota — then degrades.
+  economy: ["claude-haiku-4-5-20251001", "gpt-4o", "claude-sonnet-5"],
+  standard: ["gpt-4o", "claude-sonnet-5", "claude-haiku-4-5-20251001"],
+  premium: ["claude-sonnet-5", "gpt-4o", "claude-haiku-4-5-20251001"],
 };
 
 /**
@@ -107,9 +110,9 @@ export const TIER_MODELS: Record<ModelTier, AIModelId[]> = {
  * Preserves the legacy FALLBACK_CHAIN behaviour from client.ts.
  */
 export const FALLBACK_CHAIN: Record<AIModelId, AIModelId[]> = {
-  "claude-sonnet-4-6": ["gpt-4o", "gpt-4o-mini"],
-  "gpt-4o": ["claude-sonnet-4-6", "gpt-4o-mini"],
-  "gpt-4o-mini": ["gpt-4o", "claude-sonnet-4-6"],
+  "claude-sonnet-5": ["gpt-4o", "claude-haiku-4-5-20251001"],
+  "gpt-4o": ["claude-sonnet-5", "claude-haiku-4-5-20251001"],
+  "claude-haiku-4-5-20251001": ["claude-sonnet-5", "gpt-4o"],
 };
 
 export function getModel(id: AIModelId): AIModel | undefined {
@@ -129,7 +132,10 @@ export function resolveModelChain(opts: {
   model?: AIModelId;
   task?: AITask;
 }): AIModelId[] {
-  if (opts.model) {
+  // Only honour an explicit model we still recognise. A legacy/stored id (e.g. a
+  // workspace default saved before a model upgrade) falls through to task/default
+  // routing instead of returning a dead single-element chain the gateway can't serve.
+  if (opts.model && getModel(opts.model)) {
     return dedupe([opts.model, ...(FALLBACK_CHAIN[opts.model] ?? [])]);
   }
   if (opts.task) {

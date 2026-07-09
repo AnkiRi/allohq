@@ -22,9 +22,9 @@ import {
 } from "./Clock";
 
 export const metadata: Metadata = {
-  title: "allo · one marketer for every customer",
+  title: "joon · one marketer for every customer",
   description:
-    "allo runs retention and first-line customer service for consumer brands, across email, WhatsApp and SMS, on your own accounts. It holds out a control on every campaign and only bills on the lift that control proves is real.",
+    "joon grows retention revenue for consumer brands by sending less, not more. It learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
 };
 
 /**
@@ -54,7 +54,7 @@ const PAL_INIT = `
 })();
 `;
 
-// Relative so they resolve to the current origin (prod, preview, or local) — never
+// Relative so they resolve to the current origin (prod, preview, or local), never
 // a hardcoded localhost. On the landing domain these route to agent.<apex> via middleware.
 const signUp = "/sign-up";
 const signIn = "/sign-in";
@@ -75,7 +75,7 @@ function isPal(v: unknown): v is PalId {
  *   Switcher's mount effect still handle ?pal= / localStorage for visitors.
  *
  * The visitor-facing palette switcher (Drenched / Light / Dark) always renders
- * in the nav — it is the landing's theme control, independent of the banner.
+ * in the nav, it is the landing's theme control, independent of the banner.
  */
 export function V2Landing({
   showBanner = true,
@@ -88,7 +88,7 @@ export function V2Landing({
     <div className="opt-v2" data-pal={initialPal} suppressHydrationWarning>
       {/* No-FOUC: resolve ?pal= / stored palette synchronously, before paint.
           The script mutates data-pal before hydration, so this element's
-          attributes legitimately differ server vs client — suppress the warning
+          attributes legitimately differ server vs client, suppress the warning
           (same pattern the root <html> uses for the app's data-theme). */}
       <script dangerouslySetInnerHTML={{ __html: PAL_INIT }} />
 
@@ -104,7 +104,7 @@ export function V2Landing({
         href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       />
 
-      {/* ── prototype label banner — /options/v2 only ──────────── */}
+      {/* ── prototype label banner, /options/v2 only ──────────── */}
       {showBanner && (
         <div className="v2-banner" role="note">
           <span className="v2-banner__label mono">
@@ -122,7 +122,7 @@ export function V2Landing({
           <div className="v2-wrap v2-nav__inner">
             <a className="v2-brand" href="#top">
               <span className="v2-blip" aria-hidden="true" />
-              <span className="v2-brand__word">allo</span>
+              <span className="v2-brand__word">joon</span>
             </a>
             <nav className="v2-nav__links mono" aria-label="Primary">
               <a href="#brief">the brief</a>
@@ -140,20 +140,20 @@ export function V2Landing({
         </header>
 
         <main id="top">
-          {/* ── 2 · HERO — full-bleed: thesis + console + proof strip ── */}
+          {/* ── 2 · HERO, full-bleed: thesis + console + proof strip ── */}
           <section className="v2-hero">
             <div className="v2-hero__aura" aria-hidden="true" />
             <div className="v2-wrap v2-hero__grid">
               <div className="v2-hero__lead">
                 <p className="v2-hero__stance mono">
                   <span className="v2-hero__stance-dot" aria-hidden="true" />
-                  outcome-priced retention · built for commerce, from india
+                  grow by sending less · built for commerce, from india
                 </p>
                 <KineticHeadline />
                 <p className="v2-hero__sub">
-                  allo connects to your store, learns your brand, and attends to
-                  every customer one at a time, across email, WhatsApp and
-                  SMS, on your own accounts.
+                  joon connects to your store, learns your brand, and reaches each
+                  customer individually across WhatsApp, email and SMS, so you grow
+                  revenue from the customers you already have, without burning your list.
                 </p>
                 <div className="v2-hero__cta">
                   <a className="v2-btn v2-btn--primary v2-btn--lg" href={signUp}>
@@ -190,13 +190,13 @@ export function V2Landing({
                 </p>
               </div>
 
-              {/* the operator console — elevated ReasoningReveal surface */}
-              <div className="v2-console" aria-label="allo operator console">
+              {/* the operator console, elevated ReasoningReveal surface */}
+              <div className="v2-console" aria-label="joon operator console">
                 <div className="v2-console__bar">
                   <span className="v2-lamp" aria-hidden="true" />
                   <span className="v2-lamp" aria-hidden="true" />
                   <span className="v2-lamp is-live" aria-hidden="true" />
-                  <span className="v2-console__title mono">allo · operator</span>
+                  <span className="v2-console__title mono">joon · operator</span>
                   <span className="v2-console__status mono" aria-hidden="true">
                     <span className="v2-live-dot" /> attending
                   </span>
@@ -213,7 +213,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 3 · MORNING BRIEF — HALF page, visual-LEFT ─────────── */}
+          {/* ── 3 · MORNING BRIEF, HALF page, visual-LEFT ─────────── */}
           <section className="v2-section" id="brief">
             <div className="v2-wrap v2-half v2-half--art-left">
               <Rise className="v2-half__art">
@@ -225,7 +225,7 @@ export function V2Landing({
                   Drafts before sunrise. <em>Approvals over coffee.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  You wake up; allo already worked. One short note of what it did
+                  You wake up; joon already worked. One short note of what it did
                   overnight: who&rsquo;s slipping, what it drafted in your
                   voice, what it held back. Read it, approve a line, finish your
                   coffee.
@@ -237,7 +237,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 4 · SWARM — HALF page, visual-RIGHT ────────────────── */}
+          {/* ── 4 · SWARM, HALF page, visual-RIGHT ────────────────── */}
           <section className="v2-section v2-section--alt">
             <div className="v2-wrap v2-half v2-half--art-right">
               <Rise className="v2-half__copy">
@@ -245,12 +245,19 @@ export function V2Landing({
                 <h2 className="v2-section__h">
                   4,820 customers. <em>Not one undifferentiated blast.</em>
                 </h2>
-                <p className="v2-section__lede">
-                  A human marketer can attend to a handful, so the rest get a
-                  blast. allo attends to each one. The crowd sorts into who
-                  they actually are, then narrows to the single person worth
-                  reaching today.
-                </p>
+                <div className="v2-attend__beat">
+                  <p className="v2-section__lede">
+                    A human marketer can only truly know a handful of customers, so
+                    everyone else gets the same blast. joon knows each one, and reaches
+                    them the way each actually wants:
+                  </p>
+                  <ul className="v2-attend__learns">
+                    <li>who they are</li>
+                    <li>what they want</li>
+                    <li>when they want to hear from you</li>
+                    <li>how they like to be spoken to</li>
+                  </ul>
+                </div>
                 <p className="v2-half__aside mono">
                   // lapsed · loyal · at risk · new · every one a person, not a row
                 </p>
@@ -261,9 +268,27 @@ export function V2Landing({
                 </div>
               </Rise>
             </div>
+            {/* Continuation, full width below the half so the intro + list sit
+                level with the art and the rest doesn't leave a side gap. */}
+            <Rise className="v2-wrap v2-attend__more">
+              <div className="v2-attend__more-grid">
+                <p className="v2-attend__more-lead">
+                  Attention means knowing when to stay quiet, too.
+                </p>
+                <p className="v2-section__lede">
+                  Blast your whole list and your best customers learn to mute, archive and
+                  unsubscribe, until the audience you paid to build quietly stops opening.
+                  joon reaches each customer when it matters to them, and holds back when it
+                  doesn&rsquo;t, so everyone feels looked after and no one feels spammed.
+                </p>
+              </div>
+              <p className="v2-attend__punch">
+                More revenue, from fewer, better messages.
+              </p>
+            </Rise>
           </section>
 
-          {/* ── 5 · HOLDOUT — HALF page, visual-LEFT ───────────────── */}
+          {/* ── 5 · HOLDOUT, HALF page, visual-LEFT ───────────────── */}
           <section className="v2-section" id="proof">
             <div className="v2-wrap v2-half v2-half--art-left v2-half--wide-art">
               <Rise className="v2-half__art">
@@ -272,15 +297,15 @@ export function V2Landing({
                 </div>
               </Rise>
               <Rise className="v2-half__copy">
-                <p className="v2-eyebrow mono">proven, not claimed</p>
+                <p className="v2-eyebrow mono">more from less</p>
                 <h2 className="v2-section__h">
-                  It attends to each one. <em>And it can prove it.</em>
+                  More revenue from fewer, better messages. <em>And you can prove it.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  On every campaign allo holds a few back, matched on past spend
-                  and left untouched. The worked group lifts above that held-back
-                  baseline, so the lift you pay on is measured against a control,
-                  never claimed.
+                  Reaching the right customer at the right moment grows revenue without
+                  adding sends. And it isn&rsquo;t a guess: on every campaign joon holds
+                  a few back, matched on past spend and left untouched, so the lift is
+                  measured against that control, never claimed.
                 </p>
                 <p className="v2-half__aside">
                   Holdouts are one-way: you can&rsquo;t run a control on history.
@@ -290,7 +315,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 6 · ON THE CLOCK — full, scroll-scrub day rail ─────── */}
+          {/* ── 6 · ON THE CLOCK, full, scroll-scrub day rail ─────── */}
           <section className="v2-section v2-section--alt v2-day" id="day">
             <div className="v2-wrap">
               <Rise className="v2-section__head v2-section__head--center">
@@ -327,7 +352,7 @@ export function V2Landing({
                             Drafts written while you sleep.
                           </h3>
                           <p className="v2-event__detail">
-                            allo segments overnight and writes the day&rsquo;s
+                            joon segments overnight and writes the day&rsquo;s
                             sends in your voice, queued, not sent.
                           </p>
                           <p className="v2-event__meta mono">
@@ -374,7 +399,7 @@ export function V2Landing({
                             wool. Left alone.
                           </h3>
                           <p className="v2-event__detail">
-                            She bought a linen tunic in March. allo won&rsquo;t
+                            She bought a linen tunic in March. joon won&rsquo;t
                             pitch her October&rsquo;s woollens, kept on the
                             list, the 9am blast left alone.
                           </p>
@@ -448,7 +473,7 @@ export function V2Landing({
                             midnight.
                           </h3>
                           <p className="v2-event__detail">
-                            Not at 9am. allo left the blast alone and writes him
+                            Not at 9am. joon left the blast alone and writes him
                             when he&rsquo;s actually reading.
                           </p>
                           <p className="v2-event__meta mono">
@@ -463,13 +488,13 @@ export function V2Landing({
             </DayRail>
           </section>
 
-          {/* ── 7 · THE BILL — HALF page, visual-RIGHT ─────────────── */}
+          {/* ── 7 · THE BILL, HALF page, visual-RIGHT ─────────────── */}
           <section className="v2-section" id="bill">
             <div className="v2-wrap v2-half v2-half--art-right v2-half--wide-art">
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">base + performance</p>
                 <h2 className="v2-section__h">
-                  A bill you can read <em>line by line.</em>
+                  You only pay when <em>you grow.</em>
                 </h2>
                 <p className="v2-section__lede">
                   A base fee to run retention, charged either way. Then a
@@ -487,7 +512,7 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 8 · HOW IT WORKS — connect / learn / attend cards ──── */}
+          {/* ── 8 · HOW IT WORKS, connect / learn / attend cards ──── */}
           <section className="v2-section v2-section--alt" id="how">
             <div className="v2-wrap">
               <Rise className="v2-section__head">
@@ -496,35 +521,35 @@ export function V2Landing({
                   It does the job, not <em>&ldquo;a tool to do the job.&rdquo;</em>
                 </h2>
                 <p className="v2-section__lede">
-                  You type a goal in plain language. allo works the way a careful
+                  You type a goal in plain language. joon works the way a careful
                   marketer would, out loud, before a single message sends.
                 </p>
               </Rise>
               <ol className="v2-steps">
                 <Rise className="v2-step">
-                  <span className="v2-step__k mono">$ allo connect</span>
+                  <span className="v2-step__k mono">$ joon connect</span>
                   <h3 className="v2-step__h">It reads your store.</h3>
                   <p className="v2-step__p">
                     One click into Shopify and your own email, WhatsApp and SMS.
-                    allo scans <strong>4,820</strong> customers and finds the{" "}
+                    joon scans <strong>4,820</strong> customers and finds the{" "}
                     <strong>187</strong> lapsed buyers worth reaching, about{" "}
                     <strong>₹4.2L</strong> in past revenue.
                   </p>
                 </Rise>
                 <Rise className="v2-step" delay={0.08}>
-                  <span className="v2-step__k mono">$ allo learn</span>
+                  <span className="v2-step__k mono">$ joon learn</span>
                   <h3 className="v2-step__h">It holds out a control first.</h3>
                   <p className="v2-step__p">
-                    From the 187, allo holds back <strong>22</strong>, matched on
+                    From the 187, joon holds back <strong>22</strong>, matched on
                     past spend, and leaves them untouched. Everything next is
                     measured against them, proven, not assumed.
                   </p>
                 </Rise>
                 <Rise className="v2-step" delay={0.16}>
-                  <span className="v2-step__k mono">$ allo attend</span>
+                  <span className="v2-step__k mono">$ joon attend</span>
                   <h3 className="v2-step__h">It writes, then waits for your nod.</h3>
                   <p className="v2-step__p">
-                    allo drafts <strong>3</strong> win-back variants in your
+                    joon drafts <strong>3</strong> win-back variants in your
                     voice and predicts the outcome before you approve:{" "}
                     <strong>₹1.2L</strong> expected recovery, a named downside,
                     and a confidence.
@@ -532,12 +557,12 @@ export function V2Landing({
                 </Rise>
               </ol>
 
-              {/* consequence prediction — upside / NAMED downside / confidence */}
+              {/* consequence prediction, upside / NAMED downside / confidence */}
               <Rise>
                 <div className="v2-consequence">
                   <div className="v2-consequence__head">
                     <span className="v2-consequence__tag">
-                      What allo shows before you approve
+                      What joon shows before you approve
                     </span>
                     <span className="v2-consequence__est mono">
                       Estimate · not yet measured
@@ -559,7 +584,7 @@ export function V2Landing({
                       </span>
                       <span className="v2-consequence__v">~0.6% unsubscribe</span>
                       <span className="v2-consequence__d">
-                        the risk allo will not hide from you
+                        the risk joon will not hide from you
                       </span>
                     </div>
                     <div className="v2-consequence__cell">
@@ -575,13 +600,13 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 9 · POSITIONING band — centered ────────────────────── */}
+          {/* ── 9 · POSITIONING band, centered ────────────────────── */}
           <section className="v2-position" aria-label="Positioning">
             <div className="v2-wrap v2-position__inner">
               <Rise>
-                <p className="v2-position__eyebrow mono">what allo is</p>
+                <p className="v2-position__eyebrow mono">what joon is</p>
                 <p className="v2-position__line">
-                  Retention tools give you software and a bill. allo gives you an{" "}
+                  Retention tools give you software and a bill. joon gives you an{" "}
                   <span className="v2-accent">operator</span> that does the work,
                   and only bills on the lift it proves against a control.{" "}
                   <em>You pay for outcomes, not access.</em> Built for commerce,
@@ -602,7 +627,7 @@ export function V2Landing({
                   At Zymrat, the moment I stopped writing every email myself was
                   the moment retention died.{" "}
                   <span className="v2-accent">
-                    allo would have given me back my Sundays.
+                    joon would have given me back my Sundays.
                   </span>
                 </blockquote>
                 <figcaption className="v2-founder__by mono">
@@ -619,7 +644,7 @@ export function V2Landing({
                 <div className="v2-cohort__copy">
                   <h2 id="cohort-h" className="v2-section__h">
                     Five founding partners.{" "}
-                    <em>Shape allo with us.</em>
+                    <em>Shape joon with us.</em>
                   </h2>
                   <p className="v2-section__lede">
                     We onboard slowly, on purpose. Each brand&rsquo;s control
@@ -649,19 +674,19 @@ export function V2Landing({
             </div>
           </section>
 
-          {/* ── 12 · FINAL CTA — command prompt redux ──────────────── */}
+          {/* ── 12 · FINAL CTA, command prompt redux ──────────────── */}
           <section className="v2-final" aria-label="Get started">
             <div className="v2-wrap">
               <Rise>
                 <p className="v2-final__prompt mono">
-                  <span className="v2-accent">allo ❯</span> deploy on my store
+                  <span className="v2-accent">joon ❯</span> deploy on my store
                 </p>
                 <h2 className="v2-final__h">
-                  Try allo with your store.{" "}
+                  Try joon with your store.{" "}
                   <em>Free for 14 days.</em>
                 </h2>
                 <p className="v2-final__p">
-                  Connect Shopify in one click. allo holds out its first control
+                  Connect Shopify in one click. joon holds out its first control
                   and writes your first campaign before you finish your coffee.
                 </p>
                 <div className="v2-final__cta">
@@ -681,7 +706,7 @@ export function V2Landing({
         <footer className="v2-footer">
           <div className="v2-wrap v2-footer__inner mono">
             <span className="v2-footer__brand">hand-built in bangalore</span>
-            <span>© 2026 allo</span>
+            <span>© 2026 joon</span>
           </div>
         </footer>
       </div>

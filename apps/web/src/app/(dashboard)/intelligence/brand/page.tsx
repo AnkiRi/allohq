@@ -28,7 +28,7 @@ export default function BrandProfilePage() {
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
-  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-4-6");
+  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-5");
   const [analyzing, setAnalyzing] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,9 +66,9 @@ export default function BrandProfilePage() {
       setJobId(null);
       const reason = jobStatus.failedReason ?? "Unknown error";
       const friendlyMsg = reason.includes("429")
-        ? "allo has hit its AI usage limit for now. Take a look at your billing settings."
+        ? "joon has hit its AI usage limit for now. Take a look at your billing settings."
         : reason.includes("API key") || reason.includes("apiKey")
-          ? "allo can't find a valid AI key. Check your ANTHROPIC_API_KEY or OPENAI_API_KEY."
+          ? "joon can't find a valid AI key. Check your ANTHROPIC_API_KEY or OPENAI_API_KEY."
           : reason.includes("All AI models failed")
             ? "None of the AI models would respond. Check your API keys in your environment variables."
             : `Something went wrong: ${reason}`;
@@ -83,7 +83,7 @@ export default function BrandProfilePage() {
       setJobId(null);
       setError(null);
       prevAnalyzedAt.current = profile.analyzedAt;
-      toast("All done. allo has your brand down.", "success");
+      toast("All done. joon has your brand down.", "success");
       return;
     }
 
@@ -112,11 +112,11 @@ export default function BrandProfilePage() {
       setJobId(data.jobId ?? null);
       analyzeStartedAt.current = Date.now();
       prevAnalyzedAt.current = profile?.analyzedAt ?? null;
-      toast("On it. allo needs about 15 seconds.", "info");
+      toast("On it. joon needs about 15 seconds.", "info");
     },
     onError: (err) => {
-      setError(err.message || "allo couldn't get started. Give it another try.");
-      toast(err.message || "allo couldn't get started. Give it another try.", "error");
+      setError(err.message || "joon couldn't get started. Give it another try.");
+      toast(err.message || "joon couldn't get started. Give it another try.", "error");
     },
   });
 
@@ -393,7 +393,7 @@ export default function BrandProfilePage() {
           <div>
             <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">Brand voice</h1>
             <p className="text-[13px] text-muted-foreground font-sans mt-1">
-              The personality allo picked up from your store, so everything it writes sounds like you.
+              The personality joon picked up from your store, so everything it writes sounds like you.
             </p>
             <p className="text-[12px] text-muted-foreground/80 font-sans mt-1.5">
               This is your <span className="text-foreground font-medium">global default</span>. Any
@@ -422,7 +422,7 @@ export default function BrandProfilePage() {
           <div>
             <p className="text-[13px] font-bold text-foreground">Reading your brand...</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              allo is going through your products to learn how your brand sounds and looks. This usually takes 10-20 seconds.
+              joon is going through your products to learn how your brand sounds and looks. This usually takes 10-20 seconds.
             </p>
           </div>
         </motion.div>
@@ -462,14 +462,14 @@ export default function BrandProfilePage() {
             </p>
           </motion.div>
 
-          {/* Brand guidelines — the raw source allo writes from (set at onboarding) */}
+          {/* Brand guidelines — the raw source joon writes from (set at onboarding) */}
           <motion.div variants={itemVariants} className="glass-card-static p-6">
             <div className="flex items-center gap-3 mb-2">
               <FileText className="w-4 h-4 text-muted-foreground" />
               <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Brand guidelines</h2>
             </div>
             <p className="text-[12px] text-muted-foreground mb-3">
-              The raw guidelines allo reads from — pasted or uploaded at onboarding. Everything it writes respects this.
+              The raw guidelines joon reads from — pasted or uploaded at onboarding. Everything it writes respects this.
             </p>
             <textarea
               value={guidelinesEdit}
@@ -497,7 +497,7 @@ export default function BrandProfilePage() {
               <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Sending &amp; sender</h2>
             </div>
             <p className="text-[12px] text-muted-foreground mb-4">
-              Global defaults for how often allo reaches out and who emails come from. A
+              Global defaults for how often joon reaches out and who emails come from. A
               campaign can still override these for one send.
             </p>
             <div className="grid grid-cols-2 gap-4">
@@ -643,7 +643,7 @@ export default function BrandProfilePage() {
                       placeholder="e.g. cheap, discount, limited time"
                       className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                     />
-                    <p className="text-[9px] text-muted-foreground/50 mt-1">Separate with commas. allo will keep these words out of everything it writes.</p>
+                    <p className="text-[9px] text-muted-foreground/50 mt-1">Separate with commas. joon will keep these words out of everything it writes.</p>
                   </div>
                 </div>
               )}
@@ -695,7 +695,7 @@ export default function BrandProfilePage() {
               <h2 className="section-header accent-bar-left text-[13px] font-bold text-foreground font-serif">Creative intensity</h2>
             </div>
             <p className="text-[11px] text-muted-foreground mb-4">
-              How much visual flair allo brings to the emails it writes.
+              How much visual flair joon brings to the emails it writes.
             </p>
             <div className="grid grid-cols-3 gap-3">
               {([
@@ -907,7 +907,7 @@ export default function BrandProfilePage() {
 
           <motion.div variants={itemVariants} className="pt-4 border-t border-border">
             <h2 className="section-header accent-bar-left text-[16px] tracking-[-0.5px] font-bold text-foreground font-serif mb-1">Email settings</h2>
-            <p className="text-[11px] text-muted-foreground font-sans mb-6">The fixed details allo applies to every email it sends.</p>
+            <p className="text-[11px] text-muted-foreground font-sans mb-6">The fixed details joon applies to every email it sends.</p>
           </motion.div>
 
           {/* Logo & Header */}
@@ -1118,7 +1118,7 @@ export default function BrandProfilePage() {
           <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
           <p className="text-[13px] text-muted-foreground">No brand profile yet.</p>
           <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
-            allo builds this on its own after your Shopify sync. Or hit &quot;Re-analyze&quot; above to start now.
+            joon builds this on its own after your Shopify sync. Or hit &quot;Re-analyze&quot; above to start now.
           </p>
         </motion.div>
       )}

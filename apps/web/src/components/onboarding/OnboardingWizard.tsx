@@ -31,8 +31,8 @@ import { trpc } from "@/lib/trpc";
 
 const PHASES = [
   { label: "Getting to know your store", steps: [0, 1] },
-  { label: "Setting allo up", steps: [2, 3, 4, 5] },
-  { label: "What allo found", steps: [6, 7] },
+  { label: "Setting joon up", steps: [2, 3, 4, 5] },
+  { label: "What joon found", steps: [6, 7] },
 ] as const;
 
 const AESTHETIC_OPTIONS = [
@@ -110,9 +110,9 @@ const AUTONOMY_CATEGORIES = [
 ] as const;
 
 const TIER_OPTIONS = [
-  { value: "autopilot", label: "Autopilot", desc: "allo acts on its own" },
-  { value: "copilot", label: "Co-pilot", desc: "allo suggests, you approve" },
-  { value: "advisor", label: "Advisor", desc: "allo only advises" },
+  { value: "autopilot", label: "Autopilot", desc: "joon acts on its own" },
+  { value: "copilot", label: "Co-pilot", desc: "joon suggests, you approve" },
+  { value: "advisor", label: "Advisor", desc: "joon only advises" },
 ] as const;
 
 const COLOR_TOKENS = [
@@ -368,7 +368,7 @@ function BackgroundAnalysisStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">allo is getting to know your store</h2>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">joon is getting to know your store</h2>
         <p className="text-sm text-[#8B8074]">We&apos;re bringing in your data and learning the details. This usually takes a minute or two.</p>
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
@@ -391,7 +391,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
-        <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">What allo is learning {analysisDone ? "(done)" : "(in the background)"}</p>
+        <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">What joon is learning {analysisDone ? "(done)" : "(in the background)"}</p>
         {analysisRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
@@ -406,7 +406,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       {syncDone && !analysisDone && (
-        <p className="text-xs text-[#8B8074]">Almost there. allo is just finishing up...</p>
+        <p className="text-xs text-[#8B8074]">Almost there. joon is just finishing up...</p>
       )}
       <div className="flex justify-end">
         <button onClick={onContinue} disabled={!canContinue || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -452,8 +452,8 @@ function ModelSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Choose the model allo runs on</h2>
-        <p className="text-sm text-[#8B8074]">This is the brain behind allo&apos;s emails, customer analysis, and the actions it takes for you.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Choose the model joon runs on</h2>
+        <p className="text-sm text-[#8B8074]">This is the brain behind joon&apos;s emails, customer analysis, and the actions it takes for you.</p>
       </div>
       <div className="grid gap-3">
         {models
@@ -604,7 +604,7 @@ function BrandReviewStep({
           setBannedWords((vocab.bannedWords as string[]).join(", "));
         }
       }
-      // Refetch server data so "What Allo Found" section updates too
+      // Refetch server data so "What Joon Found" section updates too
       refetchReviewData();
       setIsAnalyzing(false);
       setAnalysisDone(true);
@@ -638,7 +638,7 @@ function BrandReviewStep({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-[#8B8074]" />
-        <span className="ml-3 text-sm text-[#8B8074]">Loading what allo found...</span>
+        <span className="ml-3 text-sm text-[#8B8074]">Loading what joon found...</span>
       </div>
     );
   }
@@ -655,7 +655,7 @@ function BrandReviewStep({
       <div>
         <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Review your brand</h2>
         <p className="text-sm text-[#8B8074]">
-          Here&apos;s the brand identity allo picked up from your store. Adjust anything that doesn&apos;t feel right.
+          Here&apos;s the brand identity joon picked up from your store. Adjust anything that doesn&apos;t feel right.
         </p>
       </div>
 
@@ -663,7 +663,7 @@ function BrandReviewStep({
       <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand guidelines</h3>
         <p className="text-sm text-[#8B8074] mb-4">
-          Already have brand guidelines? Paste them here and allo will follow them as the source of truth for your voice,
+          Already have brand guidelines? Paste them here and joon will follow them as the source of truth for your voice,
           ahead of anything it picked up on its own.
         </p>
         <textarea
@@ -694,7 +694,7 @@ function BrandReviewStep({
       <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Sending &amp; sender</h3>
         <p className="text-sm text-[#8B8074] mb-4">
-          How often should allo reach out, and who do emails come from? You can change these anytime.
+          How often should joon reach out, and who do emails come from? You can change these anytime.
         </p>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -720,12 +720,12 @@ function BrandReviewStep({
         </div>
       </div>
 
-      {/* What Allo Found */}
+      {/* What Joon Found */}
       {bp && (
         <div className="glass-card-static rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-[#1F7A4F]" />
-            <span className="text-xs font-medium uppercase tracking-wide text-[#1F7A4F]">What allo found</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-[#1F7A4F]">What joon found</span>
           </div>
           <p className="text-sm text-[#2C2C2C] font-medium mb-1">
             {bp.brandName || "Your Store"}
@@ -923,7 +923,7 @@ function AutonomyStep({ storeId, onSave, onBack }: { storeId: string; onSave: { 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">How much should allo do on its own?</h2>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">How much should joon do on its own?</h2>
         <p className="text-sm text-[#8B8074]">Set this for each kind of action. You can change it anytime.</p>
       </div>
       <div className="space-y-3">
@@ -970,8 +970,8 @@ function GuardrailsStep({ storeId, onSave, onBack }: { storeId: string; onSave: 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Set allo&apos;s limits</h2>
-        <p className="text-sm text-[#8B8074]">These are the boundaries allo always stays within. You can change them anytime.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Set joon&apos;s limits</h2>
+        <p className="text-sm text-[#8B8074]">These are the boundaries joon always stays within. You can change them anytime.</p>
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-5">
         <div>
@@ -1025,8 +1025,8 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">What allo learned about your store</h2>
-        <p className="text-sm text-[#8B8074]">Here&apos;s a first look at what allo found.</p>
+        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">What joon learned about your store</h2>
+        <p className="text-sm text-[#8B8074]">Here&apos;s a first look at what joon found.</p>
       </div>
       {report && (
         <div className="space-y-4">
@@ -1065,7 +1065,7 @@ function StoreReportStep({ storeId, onAcknowledge, isAdvancing, onBack }: { stor
         ) : <div />}
         <button onClick={onAcknowledge} disabled={isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40">
           {isAdvancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-          Got it. Show me what allo can do
+          Got it. Show me what joon can do
         </button>
       </div>
     </div>
@@ -1094,8 +1094,8 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         </div>
         <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">You&apos;re all set</h2>
         <p className="text-sm text-[#8B8074] max-w-md mx-auto leading-relaxed">
-          When you continue, allo gets to work: setting up your automations, looking for campaign
-          opportunities, and writing your first briefing. You can watch it all happen live in the allo panel.
+          When you continue, joon gets to work: setting up your automations, looking for campaign
+          opportunities, and writing your first briefing. You can watch it all happen live in the joon panel.
         </p>
       </div>
 
@@ -1103,9 +1103,9 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         <div className="text-xs font-medium uppercase tracking-wide text-[#8B8074] mb-3">What happens next</div>
         <div className="space-y-3">
           {[
-            { icon: Zap, text: "allo sets up automations to match the autonomy you chose" },
-            { icon: Sparkles, text: "allo spots campaign opportunities in your customer data" },
-            { icon: Boxes, text: "allo writes your first briefing, full of insights" },
+            { icon: Zap, text: "joon sets up automations to match the autonomy you chose" },
+            { icon: Sparkles, text: "joon spots campaign opportunities in your customer data" },
+            { icon: Boxes, text: "joon writes your first briefing, full of insights" },
           ].map(({ icon: Icon, text }, i) => (
             <div key={i} className="flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center flex-shrink-0">
@@ -1123,7 +1123,7 @@ function FirstActionsStep({ onComplete, isCompleting, onBack }: { storeId: strin
         ) : <div />}
         <button onClick={onComplete} disabled={isCompleting} className="flex items-center gap-2 px-6 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40">
           {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-          Launch allo
+          Launch joon
         </button>
       </div>
     </div>

@@ -13,7 +13,7 @@ export function Footer() {
       <div className="flex items-center justify-between gap-4 text-[#6B7280] dark:text-[#6B6358]">
         {/* Left */}
         <span className="text-[10px] font-sans shrink-0">
-          &copy; {new Date().getFullYear()} Allo
+          &copy; {new Date().getFullYear()} Joon
         </span>
 
         {/* Center links */}
@@ -33,7 +33,7 @@ export function Footer() {
         <span className="flex items-center gap-1 text-[10px] font-sans shrink-0">
           Made with
           <Heart className="w-2.5 h-2.5 text-[#1F7A4F] fill-[#1F7A4F]" />
-          by Allo
+          by Joon
         </span>
       </div>
     </footer>

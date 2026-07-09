@@ -53,7 +53,7 @@ export const storeMetricsTools: ToolDefinition[] = [
   {
     name: "get_marketing_optout_count",
     description:
-      "Real marketing opt-in/opt-out figures: how many customers have opted OUT of marketing (acceptsMarketing=false) vs opted in. Use for 'unsubscribe', 'opt-out', 'how many can I email'. NOTE: this is opt-out STATUS — allo does not track per-email unsubscribe events, so say that if asked for unsubscribe history.",
+      "Real marketing opt-in/opt-out figures: how many customers have opted OUT of marketing (acceptsMarketing=false) vs opted in. Use for 'unsubscribe', 'opt-out', 'how many can I email'. NOTE: this is opt-out STATUS — joon does not track per-email unsubscribe events, so say that if asked for unsubscribe history.",
     parameters: {},
     handler: async (_params, ctx) => {
       if (!ctx.storeId) return { error: "No store in context" };

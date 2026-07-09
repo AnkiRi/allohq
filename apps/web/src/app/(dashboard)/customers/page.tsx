@@ -165,7 +165,7 @@ function CustomersConsole() {
           Who
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          Everyone who&apos;s shopped with you, and where they stand. Ask allo to
+          Everyone who&apos;s shopped with you, and where they stand. Ask joon to
           pull up the cohort you care about.
         </p>
       </div>
@@ -182,7 +182,7 @@ function CustomersConsole() {
       />
 
       {/* The base, framed in the console */}
-      <ConsoleFrame title="allo · customer base">
+      <ConsoleFrame title="joon · customer base">
         {/* Status line — mono readouts. Who-of-the-base first, money second,
             split by a hairline so the two groups read as distinct. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -215,16 +215,16 @@ function CustomersConsole() {
           )}
         </div>
 
-        {/* Command echo — confirms allo understood the last typed goal. Its own
+        {/* Command echo — confirms joon understood the last typed goal. Its own
             line so it never collides with or gets clipped by the filter state. */}
         {lastCommand && (
           <div className="font-mono text-[11.5px] text-muted-foreground mb-2 truncate">
-            <span className="text-[hsl(var(--accent))]">allo ›</span>{" "}
+            <span className="text-[hsl(var(--accent))]">joon ›</span>{" "}
             {lastCommand}
           </div>
         )}
 
-        {/* Active filter line — what allo is showing right now (operator voice) */}
+        {/* Active filter line — what joon is showing right now (operator voice) */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="font-mono text-[12px] text-muted-foreground">
             showing

@@ -2,7 +2,7 @@
  * Vana Naturals — seed content for the /emails generate-first editor.
  *
  * This is a real, on-brand "generated" email expressed in the portable
- * EmailBlock[] content model. It is what allo would have written: a calm,
+ * EmailBlock[] content model. It is what joon would have written: a calm,
  * no-discount win-back for a lapsed Ayurveda/wellness customer. Everything
  * here round-trips through @allohq/emails → bulletproof, cross-client HTML,
  * so the human can edit any block to the pixel and the output stays safe.

@@ -34,7 +34,7 @@ export function EnterTryDemo({ token }: { token: string }) {
     >
       <div style={{ textAlign: "center" }}>
         <p style={{ fontSize: 12, letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.55, margin: 0 }}>
-          allo
+          joon
         </p>
         <p style={{ marginTop: 10, fontSize: 15, opacity: 0.85 }}>
           Opening the Vana Naturals demo…

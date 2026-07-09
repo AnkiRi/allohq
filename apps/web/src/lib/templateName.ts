@@ -36,7 +36,7 @@ const CHANNEL_LABEL: Record<string, string> = {
 /** Strip channel/store/test suffixes and title-case what's left, as a fallback. */
 function titleCaseFallback(name: string): string {
   const cleaned = name
-    .replace(/[_-]?allo[_-]?test[_-]?\d+$/i, "")
+    .replace(/[_-]?joon[_-]?test[_-]?\d+$/i, "")
     .replace(/[_-]?(sms|email|whatsapp|wa|rcs)$/i, "")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())

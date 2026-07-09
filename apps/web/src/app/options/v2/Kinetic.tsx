@@ -4,14 +4,14 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 /* ------------------------------------------------------------------ */
-/* Kinetic hero headline — allo's thesis with ONE tasteful kinetic     */
+/* Kinetic hero headline, joon's thesis with ONE tasteful kinetic     */
 /* beat. The headline states the thesis plainly:                       */
 /*                                                                     */
 /*     One marketer for                                                */
 /*     [ everyone → every customer ]                                   */
 /*                                                                     */
-/* The category sells "one campaign for everyone"; allo flips the last */
-/* word — "everyone" gives way to "every customer." That single swap   */
+/* The category sells "one campaign for everyone"; joon flips the last */
+/* word, "everyone" gives way to "every customer." That single swap   */
 /* is the whole point, performed once. SSR / JS-off / reduced-motion   */
 /* render the resolved, fully readable sentence; meaning is never      */
 /* animated away or left blank.                                        */
@@ -27,7 +27,7 @@ function useKineticReady() {
 }
 
 /**
- * SwapTail — the one kinetic beat. "everyone" sits in the accent slot, gets a
+ * SwapTail, the one kinetic beat. "everyone" sits in the accent slot, gets a
  * strike, and is replaced by "every customer." Resolved fallback shows the
  * struck word + the kept phrase, fully legible without JS.
  */
@@ -48,7 +48,7 @@ function SwapTail() {
   // Both phrases are ALWAYS mounted, stacked in one CSS-grid cell, and we just
   // crossfade between them. The cell sizes to the longer phrase ("every
   // customer."), so swapping "everyone" → "every customer." can never change the
-  // headline's height — no reflow, no collapse (nothing ever unmounts). SSR /
+  // headline's height, no reflow, no collapse (nothing ever unmounts). SSR /
   // reduced-motion shows the resolved "every customer." (struck word hidden).
   const swapped = !kinetic || phase >= 2; // resolved state
   return (

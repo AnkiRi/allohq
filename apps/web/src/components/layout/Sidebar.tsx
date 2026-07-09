@@ -120,7 +120,7 @@ export function Sidebar() {
               <span
                 className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--accent))]"
                 aria-hidden="true"
-                title="allo"
+                title="joon"
               />
             </div>
           ) : (
@@ -130,7 +130,7 @@ export function Sidebar() {
                   className="w-2 h-2 rounded-full bg-[hsl(var(--accent))]"
                   aria-hidden="true"
                 />
-                allo
+                joon
               </h1>
               <p className="text-[9px] text-muted-foreground font-sans tracking-[1px] uppercase mt-0.5">
                 Your retention, handled

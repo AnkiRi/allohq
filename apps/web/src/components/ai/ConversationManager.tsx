@@ -303,7 +303,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-[var(--color-warning)]" />
             <span className="text-xs font-sans font-semibold uppercase tracking-wider text-[var(--color-warning)]">
-              allo&apos;s read
+              joon&apos;s read
             </span>
           </div>
           <div className="text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap bg-[var(--color-warning)]/5 rounded-lg p-3 border border-[var(--color-warning)]/15">
@@ -554,7 +554,7 @@ export function ConversationManager() {
       <div className="flex-1 overflow-y-auto">
         {!filteredConversations?.length && (
           <div className="text-center py-8 text-muted-foreground text-xs font-sans">
-            {searchQuery ? "Nothing matches that search." : "Quiet for now. allo is handling the front line. Anything that needs you lands here."}
+            {searchQuery ? "Nothing matches that search." : "Quiet for now. joon is handling the front line. Anything that needs you lands here."}
           </div>
         )}
         {filteredConversations?.map((conv) => (

@@ -20,7 +20,7 @@ import {
 // Plays the SAME capped activation animation a real store sees after sync, but
 // purely client-side: it drives `useActivationChecklist` directly with no
 // Shopify sync and no tRPC connect/sync call (no real work, no token spend).
-// Lands on "what allo found" using the seeded Vana Naturals figures, then
+// Lands on "what joon found" using the seeded Vana Naturals figures, then
 // routes to /dashboard. A sessionStorage marker makes it play once per session
 // — re-entry goes straight to /dashboard.
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ export default function DemoWelcomePage() {
   });
 
   // On completion, mark played and hand off to the dashboard after a short beat
-  // so the operator reads "what allo found" before the transition.
+  // so the operator reads "what joon found" before the transition.
   useEffect(() => {
     if (!complete || skip) return;
     if (typeof window !== "undefined") {
@@ -93,12 +93,12 @@ export default function DemoWelcomePage() {
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
             {complete
-              ? "This is allo running a real D2C brand's retention. Have a look around, nothing here touches a live store."
-              : "Watching allo do exactly what it does on day one: read the brand, group the customers, draft the work."}
+              ? "This is joon running a real D2C brand's retention. Have a look around, nothing here touches a live store."
+              : "Watching joon do exactly what it does on day one: read the brand, group the customers, draft the work."}
           </p>
         </div>
 
-        <ConsoleFrame title="allo activating · Vana Naturals">
+        <ConsoleFrame title="joon activating · Vana Naturals">
           {/* Header */}
           <div className="flex items-center gap-2.5 pb-4 mb-4 border-b border-border">
             <div className="w-8 h-8 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center shrink-0">
@@ -140,7 +140,7 @@ export default function DemoWelcomePage() {
             ))}
           </StreamOutput>
 
-          {/* What allo found */}
+          {/* What joon found */}
           {complete && (
             <motion.div
               initial={reduce ? false : { opacity: 0, y: 8 }}

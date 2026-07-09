@@ -108,7 +108,7 @@ export const emailsRouter = router({
         brandVoice: z.string().optional(),
         // Lane for a chip: "subject" → only the subject; "copy"/"tone" → only
         // existing-block copy edits; "visual" → only structure (add/remove/reorder
-        // + visual blocks). Omitted (free-text "tell allo") = no restriction.
+        // + visual blocks). Omitted (free-text "tell joon") = no restriction.
         scope: z.enum(["subject", "copy", "visual", "tone"]).optional(),
       }),
     )
@@ -127,7 +127,7 @@ export const emailsRouter = router({
         visual: "SCOPE: change ONLY the visual structure — add/remove/reorder blocks and edit visual blocks (image/hero/product/product_grid). Do NOT change the subject and do NOT rewrite body copy.",
       };
       const system = [
-        "You are allo, an expert email copywriter + designer for an Indian e-commerce brand.",
+        "You are joon, an expert email copywriter + designer for an Indian e-commerce brand.",
         "You receive the email as JSON blocks {id,type,props} and an instruction.",
         "Apply the instruction and return ONLY THE CHANGES as a compact JSON object —",
         "never the whole array. You can EDIT, ADD, REMOVE, and REORDER blocks.",
@@ -258,7 +258,7 @@ export const emailsRouter = router({
           changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject;
 
         if (!applied) {
-          return fail("allo didn't change anything — try rephrasing.");
+          return fail("joon didn't change anything — try rephrasing.");
         }
         return {
           applied: true,
@@ -268,7 +268,7 @@ export const emailsRouter = router({
         };
       } catch (err: any) {
         return fail(
-          err?.message ?? "allo is unavailable right now. Your email is unchanged.",
+          err?.message ?? "joon is unavailable right now. Your email is unchanged.",
         );
       }
     }),

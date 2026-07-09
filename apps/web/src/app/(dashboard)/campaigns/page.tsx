@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, Plus, Clock, Send, Check, XCircle, Users, DollarSign, MousePointerClick, Eye } from "lucide-react";
+import { Mail, Plus, Clock, Send, Check, XCircle, Users, DollarSign, MousePointerClick, Eye, Trash2, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 
 const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: string }> = {
@@ -21,6 +22,15 @@ export default function CampaignsPage() {
   const { data: campaigns, isLoading } = (trpc.campaigns.list as any).useQuery(
     statusFilter ? { status: statusFilter as any } : undefined
   ) as { data: any[] | undefined; isLoading: boolean };
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
+  const deleteMut = (trpc.campaigns.delete as any).useMutation({
+    onSuccess: () => {
+      utils.campaigns.list.invalidate();
+      toast("Draft deleted.", "info");
+    },
+    onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
+  }) as { mutate: (v: { id: string }) => void; isPending: boolean; variables?: { id: string } };
 
   const statuses = [
     { value: undefined, label: "All" },
@@ -132,6 +142,28 @@ export default function CampaignsPage() {
                     <StatusIcon className="w-3.5 h-3.5" />
                     <span className="text-[11px] font-sans font-bold">{statusCfg.label}</span>
                   </div>
+                  {campaign.status === "draft" && (
+                    <button
+                      aria-label="Delete draft"
+                      title="Delete draft"
+                      onClick={(e) => {
+                        // Inside the row Link — stop navigation before confirming.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (window.confirm(`Delete the draft "${campaign.name}"? This can't be undone.`)) {
+                          deleteMut.mutate({ id: campaign.id });
+                        }
+                      }}
+                      disabled={deleteMut.isPending && deleteMut.variables?.id === campaign.id}
+                      className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-transparent text-muted-foreground/60 hover:text-[var(--color-urgent)] hover:border-[var(--color-urgent)]/40 hover:bg-[var(--color-urgent)]/10 disabled:opacity-50 transition-all"
+                    >
+                      {deleteMut.isPending && deleteMut.variables?.id === campaign.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </Link>
             );
@@ -140,8 +172,8 @@ export default function CampaignsPage() {
       ) : (
         <SmartEmptyState
           icon={Mail}
-          title="No campaigns yet. Want allo to draft one?"
-          description="allo has spotted a few moments worth reaching out about."
+          title="No campaigns yet. Want joon to draft one?"
+          description="joon has spotted a few moments worth reaching out about."
           actions={[{ label: "Create a campaign", href: "/campaigns/new", primary: true }]}
         />
       )}

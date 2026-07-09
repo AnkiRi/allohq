@@ -37,7 +37,7 @@ function getNodeLabel(node: WorkflowNodeData): string {
 function getNodeStyle(type: WorkflowNodeType): string {
   // One quiet surface for every node — the icon and label carry the meaning, not
   // a rainbow. The two nodes that change WHO gets messaged are marked: a "wait"
-  // holds the line, a "silence_check" is allo deciding to leave someone alone.
+  // holds the line, a "silence_check" is joon deciding to leave someone alone.
   switch (type) {
     case "silence_check": return "bg-card border-l-2 border-l-[var(--color-warning)] border border-border text-foreground";
     case "wait": return "bg-muted border-dashed border-border text-muted-foreground";
@@ -255,7 +255,7 @@ export default function AutomationDetailPage() {
       <div className="border border-border rounded-xl bg-card overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-3">
           <Sparkles className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-bold text-foreground font-serif">Emails allo wrote</h2>
+          <h2 className="text-[13px] font-bold text-foreground font-serif">Emails joon wrote</h2>
         </div>
         {data.templates.length > 0 ? (
           <div className="divide-y divide-border">
@@ -281,7 +281,7 @@ export default function AutomationDetailPage() {
         ) : (
           <div className="p-16 text-center">
             <FileText className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-[13px] text-muted-foreground">Nothing written yet. allo is just getting started.</p>
+            <p className="text-[13px] text-muted-foreground">Nothing written yet. joon is just getting started.</p>
           </div>
         )}
       </div>
@@ -449,7 +449,7 @@ export default function AutomationDetailPage() {
             </div>
           )}
 
-          {/* Suppress reasons — allo's restraint, named */}
+          {/* Suppress reasons — joon's restraint, named */}
           {Object.keys(journeyStats.suppressReasons).length > 0 && (
             <div className="px-6 py-3 border-t border-border">
               <div className="text-[10px] font-sans text-muted-foreground uppercase mb-2">Left alone, and why</div>

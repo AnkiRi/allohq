@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, Plus, ShoppingCart, Layers } from "lucide-react";
+import { Users, ArrowUpRight, Plus, ShoppingCart, Layers, Trash2, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
 import {
   ConsoleFrame,
   StreamOutput,
@@ -33,6 +34,18 @@ export default function SegmentsPage() {
   const distribution = distQuery.data as any[] | undefined;
   const baskets = basketQuery.data as any[] | undefined;
   const segmentsLoading = segmentsQuery.isLoading;
+
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
+  const deleteMut = (trpc.segments.delete as any).useMutation({
+    onSuccess: () => {
+      utils.segments.list.invalidate();
+      utils.segments.distribution.invalidate();
+      toast("Segment deleted.", "info");
+    },
+    // The backend refuses built-in / in-use segments — surface its reason.
+    onError: (e: { message?: string }) => toast(e?.message ?? "We couldn't delete that segment.", "error"),
+  }) as { mutate: (v: { id: string }) => void; isPending: boolean; variables?: { id: string } };
   const distLoading = distQuery.isLoading;
   const basketsLoading = basketQuery.isLoading;
 
@@ -63,7 +76,7 @@ export default function SegmentsPage() {
           populatedSegments[0],
         )
       : null;
-  // Biggest at-risk cohort — the opportunity allo would point to.
+  // Biggest at-risk cohort — the opportunity joon would point to.
   const atRiskSegments = populatedSegments.filter((s: any) =>
     AT_RISK_SEGMENTS.has(s.name),
   );
@@ -93,7 +106,7 @@ export default function SegmentsPage() {
             The base
           </h1>
           <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            How allo reads your customers, grouped by how they shop, and what
+            How joon reads your customers, grouped by how they shop, and what
             they tend to buy together.
           </p>
         </div>
@@ -139,7 +152,7 @@ export default function SegmentsPage() {
 
       {/* RFM Segments tab */}
       {activeTab === "rfm" && (
-        <ConsoleFrame title="allo · segment view">
+        <ConsoleFrame title="joon · segment view">
           {/* Status line — pure counts. The "largest" and "watch" framing lives
               in the warm-voice stream just below, so it isn't said twice. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -156,7 +169,7 @@ export default function SegmentsPage() {
           {/* Warm-voice stream — N customers across M segments · opportunity */}
           {totalCustomers > 0 && (
             <StreamOutput
-              aria-label="how allo reads your base"
+              aria-label="how joon reads your base"
               className="mb-5"
             >
               <StreamRow tick="ok">
@@ -255,7 +268,33 @@ export default function SegmentsPage() {
                           {formatINR(seg.liveRevenue)}
                         </div>
 
-                        <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-[hsl(var(--accent))] transition-colors flex-shrink-0" />
+                        {/* Delete — only for custom (manual/conditions) segments; RFM
+                            cohorts are built-in and the backend refuses them. A wide
+                            36px target with its own hover state so it never mis-fires
+                            into the row's navigation. */}
+                        {seg.kind === "manual" || seg.kind === "conditions" ? (
+                          <button
+                            aria-label={`Delete segment ${seg.name}`}
+                            title="Delete segment"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (window.confirm(`Delete "${seg.name}"? This can't be undone.`)) {
+                                deleteMut.mutate({ id: seg.id });
+                              }
+                            }}
+                            disabled={deleteMut.isPending && deleteMut.variables?.id === seg.id}
+                            className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-transparent text-muted-foreground/50 hover:text-[var(--color-urgent)] hover:border-[var(--color-urgent)]/40 hover:bg-[var(--color-urgent)]/10 disabled:opacity-50 transition-all"
+                          >
+                            {deleteMut.isPending && deleteMut.variables?.id === seg.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-[hsl(var(--accent))] transition-colors flex-shrink-0" />
+                        )}
                       </div>
                     </Link>
                   );
@@ -279,7 +318,7 @@ export default function SegmentsPage() {
                 No segments yet.
               </p>
               <p className="text-[12px] text-muted-foreground font-sans mt-1 max-w-sm mx-auto">
-                Connect your store and allo will group your customers as it gets
+                Connect your store and joon will group your customers as it gets
                 to know them.
               </p>
             </div>
@@ -289,7 +328,7 @@ export default function SegmentsPage() {
 
       {/* Basket Patterns tab */}
       {activeTab === "baskets" && (
-        <ConsoleFrame title="allo · basket patterns">
+        <ConsoleFrame title="joon · basket patterns">
           {basketsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -309,7 +348,7 @@ export default function SegmentsPage() {
               </div>
 
               {/* Warm-voice stream */}
-              <StreamOutput aria-label="what allo found in baskets" className="mb-5">
+              <StreamOutput aria-label="what joon found in baskets" className="mb-5">
                 <StreamRow tick="ok">
                   found <b>{baskets.length}</b> product combinations your
                   customers tend to buy together
@@ -387,7 +426,7 @@ export default function SegmentsPage() {
                 No basket patterns yet.
               </p>
               <p className="text-[12px] text-muted-foreground font-sans mt-1 max-w-sm mx-auto">
-                allo spots the products your customers like to buy together.
+                joon spots the products your customers like to buy together.
                 Patterns show up once you have enough multi-item orders.
               </p>
             </div>

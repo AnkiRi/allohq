@@ -68,7 +68,7 @@ export function EmailStudio({
       (so the one editor can load ANY template, not just the demo seed). */
   brandKit?: BrandKit;
   previewVariables: Record<string, string>;
-  /** allo's short rationale for THIS draft, shown as a byline ("I wrote this for…"). */
+  /** joon's short rationale for THIS draft, shown as a byline ("I wrote this for…"). */
   reasoning?: string;
   /** When editing a saved template, its id — enables the persistent "Save changes". */
   templateId?: string;
@@ -197,11 +197,11 @@ export function EmailStudio({
             }
             setInstruction("");
           } else {
-            setPromptError(data.error ?? "allo could not apply that edit.");
+            setPromptError(data.error ?? "joon could not apply that edit.");
           }
         },
         onError: (e: { message?: string }) =>
-          setPromptError(e.message ?? "allo is unavailable right now."),
+          setPromptError(e.message ?? "joon is unavailable right now."),
       },
     );
   };
@@ -209,19 +209,19 @@ export function EmailStudio({
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-7rem)] min-h-[640px]">
-      {/* Framing header — allo authored this; you direct it (not a blank builder) */}
+      {/* Framing header — joon authored this; you direct it (not a blank builder) */}
       <header className="shrink-0">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-[var(--color-accent)]">
-              allo · drafted this for you
+              joon · drafted this for you
             </p>
             <div className="flex items-baseline gap-3 flex-wrap">
               <h1 className="text-2xl font-serif font-semibold text-foreground tracking-tight">
-                allo drafted this email.
+                joon drafted this email.
               </h1>
               <span className="text-[13px] font-sans text-muted-foreground">
-                Tell allo what to change — or fine-tune any block by hand.
+                Tell joon what to change — or fine-tune any block by hand.
               </span>
             </div>
           </div>
@@ -279,10 +279,10 @@ export function EmailStudio({
             <div className="flex items-center gap-2 mb-2">
               <Wand2 className="w-4 h-4 text-[var(--color-accent)]" />
               <h2 className="text-[11px] font-mono uppercase tracking-[0.14em] text-foreground">
-                Tell allo what to change
+                Tell joon what to change
               </h2>
             </div>
-            {/* Categorized chips — direct allo across dimensions; each runs a live edit */}
+            {/* Categorized chips — direct joon across dimensions; each runs a live edit */}
             <div className="space-y-2 mb-2.5">
               {(
                 [
@@ -363,7 +363,7 @@ export function EmailStudio({
                 ) : (
                   <Sparkles className="w-3.5 h-3.5" />
                 )}
-                {promptMut.isPending ? "allo is editing…" : "Ask allo"}
+                {promptMut.isPending ? "joon is editing…" : "Ask joon"}
               </button>
             </div>
             {promptError ? (

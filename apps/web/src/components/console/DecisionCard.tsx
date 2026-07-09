@@ -6,7 +6,7 @@ import { StreamOutput, StreamRow, type StreamTick } from "./StreamOutput";
 import { formatINR } from "./MetricReadout";
 
 // ---------------------------------------------------------------------------
-// DecisionCard — allo's decision in operator language. A one-line decision
+// DecisionCard — joon's decision in operator language. A one-line decision
 // (sans prose), a short mono reasoning block (what it found / held back /
 // drafted), an OpTag, an estimated ₹ impact, and inline Approve / Pass.
 // Calm, not busy.
@@ -17,7 +17,7 @@ export interface DecisionReasonLine {
   text: React.ReactNode;
 }
 
-// Track C — the consequence allo COMMITS to before acting. Upside is named, the
+// Track C — the consequence joon COMMITS to before acting. Upside is named, the
 // downside/risk is named too (never hidden — naming it is what makes this
 // judgment, not hype), and the basis is stated plainly: "estimate" until real
 // control data backs it, "calibrated" once it does.
@@ -30,7 +30,7 @@ export interface DecisionPrediction {
 }
 
 export interface DecisionCardProps {
-  /** The decision in one sans line, allo's warm voice. */
+  /** The decision in one sans line, joon's warm voice. */
   decision: React.ReactNode;
   /** Short reasoning, each line a mono StreamRow. */
   reasoning?: DecisionReasonLine[];
@@ -38,7 +38,7 @@ export interface DecisionCardProps {
   tags?: OpTagKind[];
   /** Estimated impact in ₹ (en-IN). Omitted if undefined/null. */
   impact?: number | null;
-  /** Track C — the predicted consequence allo commits to before acting. */
+  /** Track C — the predicted consequence joon commits to before acting. */
   prediction?: DecisionPrediction | null;
   /** Open the full draft / decision detail before deciding. */
   onView?: () => void;
@@ -99,7 +99,7 @@ export function DecisionCard({
         </StreamOutput>
       )}
 
-      {/* Track C — the predicted consequence allo commits to. Upside, NAMED
+      {/* Track C — the predicted consequence joon commits to. Upside, NAMED
           downside, confidence, and the honest basis (estimate vs calibrated). */}
       {prediction && (
         <div className="mt-3 rounded-lg border border-border bg-background/40 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed">

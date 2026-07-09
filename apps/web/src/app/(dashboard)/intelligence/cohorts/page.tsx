@@ -624,7 +624,7 @@ export default function CohortAnalysisPage() {
               No cohorts yet
             </h3>
             <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-              Sync your orders and run an analysis. allo will build your cohorts from there.
+              Sync your orders and run an analysis. joon will build your cohorts from there.
             </p>
           </div>
         )}

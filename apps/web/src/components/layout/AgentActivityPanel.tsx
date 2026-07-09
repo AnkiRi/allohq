@@ -131,7 +131,7 @@ export function AgentActivityPanel({ storeId }: { storeId: string | null }) {
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-semibold text-[#2C2C2C] truncate">
-                {isComplete ? "allo is ready" : "allo is working..."}
+                {isComplete ? "joon is ready" : "joon is working..."}
               </span>
               <span className="text-[11px] font-mono text-[#8B8074]">{progress}%</span>
             </div>

@@ -49,7 +49,7 @@ export default function NewCampaignPage() {
 
   const currentIdx = steps.findIndex((s) => s.key === step);
 
-  // What allo is about to do — its reasoning, the predicted upside, the named
+  // What joon is about to do — its reasoning, the predicted upside, the named
   // downside, and confidence. An ESTIMATE until control data backs it (no run yet).
   const selectedSegment = segmentId ? segments?.find((s) => s.id === segmentId) : undefined;
   const selectedTemplate = templates?.find((t) => t.id === templateId);
@@ -134,7 +134,7 @@ export default function NewCampaignPage() {
           <div className="flex-1">
             <p className="text-[13px] font-bold text-foreground">Let's set up your brand voice first</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Once allo knows how your brand sounds, everything it writes will feel like you.
+              Once joon knows how your brand sounds, everything it writes will feel like you.
             </p>
           </div>
           <Link
@@ -259,7 +259,7 @@ export default function NewCampaignPage() {
 
         {step === "schedule" && (
           <div className="space-y-4">
-            {/* What allo will do — reasoning + named downside, before you commit */}
+            {/* What joon will do — reasoning + named downside, before you commit */}
             <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
               <ReasoningReveal stories={[reviewStory]} />
             </div>

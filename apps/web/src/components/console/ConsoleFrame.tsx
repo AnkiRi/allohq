@@ -33,7 +33,7 @@ function LiveClock() {
 }
 
 export interface ConsoleFrameProps {
-  /** Mono title shown in the status bar, e.g. "allo — operator". */
+  /** Mono title shown in the status bar, e.g. "joon — operator". */
   title?: string;
   /** Whether the third lamp pulses (live). Defaults true. */
   live?: boolean;
@@ -44,7 +44,7 @@ export interface ConsoleFrameProps {
 }
 
 export function ConsoleFrame({
-  title = "allo · operator",
+  title = "joon · operator",
   live = true,
   clock = true,
   className,

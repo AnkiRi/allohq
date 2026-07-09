@@ -1,21 +1,21 @@
 /* ============================================================================
-   allo — THE SYNTHESIS ("v2")  ·  built with the Frontend Design plugin
+   joon, THE SYNTHESIS ("v2")  ·  built with the Frontend Design plugin
    ----------------------------------------------------------------------------
-   One operator-console landing that synthesizes the user-approved signatures —
+   One operator-console landing that synthesizes the user-approved signatures, 
    the kinetic hero (manifesto word-swap), the irreversible holdout, the self-
    itemizing bill, the scroll-scrubbed day rail, and the shared streaming
-   console — under ONE colour-switcher: three palettes on identical markup,
+   console, under ONE colour-switcher: three palettes on identical markup,
    driven by `data-pal` and CSS custom properties.
 
    Type: Hanken Grotesk (display + body), JetBrains Mono (data / console / IDs).
-   ALL selectors scoped under .opt-v2 — no global / :root / body / html rules.
+   ALL selectors scoped under .opt-v2, no global / :root / body / html rules.
    Tokens are defined per palette on .opt-v2[data-pal="…"]; every reused
    mechanic re-themes from these tokens (the holdout warming + clock sky are
    token/opacity-driven, never hardcoded hex).
    ========================================================================== */
 
 /* ── palette tokens (the switcher's whole job) ───────────────────────────── */
-/* DRENCHED — impeccable-drenched cobalt surface + warm-gold accent (default). */
+/* DRENCHED, impeccable-drenched cobalt surface + warm-gold accent (default). */
 .opt-v2[data-pal="drenched"] {
   --bg: oklch(0.3 0.16 266);
   --surface: oklch(0.345 0.155 266);
@@ -31,7 +31,7 @@
   --shadow: 0 28px 70px -34px oklch(0.16 0.12 266 / 0.9);
   color-scheme: dark;
 }
-/* LIGHT — very minimal, clean near-white; one restrained emerald accent. */
+/* LIGHT, very minimal, clean near-white; one restrained emerald accent. */
 .opt-v2[data-pal="light"] {
   --bg: #fafaf9;
   --surface: #ffffff;
@@ -50,7 +50,7 @@
   --shadow: 0 24px 52px -34px rgba(20, 30, 26, 0.28);
   color-scheme: light;
 }
-/* DARK — dark, emerald-forward ground. */
+/* DARK, dark, emerald-forward ground. */
 .opt-v2[data-pal="dark"] {
   --bg: #0b1210;
   --surface: #111a16;
@@ -244,7 +244,7 @@
   font-size: 24px;
   letter-spacing: -0.03em;
   margin-right: auto;
-  /* a slow, barely-there float — the wordmark feels alive, not static */
+  /* a slow, barely-there float, the wordmark feels alive, not static */
   animation: v2-brand-float 5.6s ease-in-out infinite;
   will-change: transform;
 }
@@ -258,7 +258,7 @@
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
   animation: v2-blip 2.4s ease-out infinite;
 }
-/* very subtle life on the wordmark: a faint sheen travelling across "allo".
+/* very subtle life on the wordmark: a faint sheen travelling across "joon".
    Motion only; reduced-motion renders it static and solid (see below). */
 .opt-v2 .v2-brand__word {
   background: linear-gradient(
@@ -320,9 +320,9 @@
   gap: 14px;
 }
 
-/* ── "allo keeps your hours" — the light-of-day control ─────────────────── */
+/* ── "joon keeps your hours", the light-of-day control ─────────────────── */
 /* Not a palette picker: a sun-cycle (dawn / day / night) that sets the light
-   allo is working in. Quiet by default, set off from the nav links by a faint
+   joon is working in. Quiet by default, set off from the nav links by a faint
    rule; the active hour glows in the accent. */
 .opt-v2 .v2-pal {
   display: inline-flex;
@@ -367,7 +367,7 @@
   padding-bottom: clamp(40px, 6vw, 76px);
   overflow: clip;
 }
-/* a single restrained aura behind the hero — depth, not decoration. Reads on
+/* a single restrained aura behind the hero, depth, not decoration. Reads on
    all three palettes because it's accent-soft over the page ground. */
 .opt-v2 .v2-hero__aura {
   position: absolute;
@@ -434,7 +434,7 @@
 }
 /* word-swap: both phrases live in ONE grid cell (stacked) and crossfade. The
    cell always sizes to the longest phrase ("every customer."), so swapping can
-   never change the headline height — no reflow, no collapse. */
+   never change the headline height, no reflow, no collapse. */
 .opt-v2 .v2-swap {
   display: grid;
 }
@@ -478,7 +478,7 @@
   color: var(--faint);
 }
 
-/* slim live proof strip — the store, right now */
+/* slim live proof strip, the store, right now */
 .opt-v2 .v2-proofstrip {
   display: flex;
   flex-wrap: wrap;
@@ -541,7 +541,7 @@
   box-shadow: var(--shadow), 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent) inset;
   min-width: 0;
 }
-/* inner accent glow at the top — gives the console depth + a "live" feel */
+/* inner accent glow at the top, gives the console depth + a "live" feel */
 .opt-v2 .v2-console::before {
   content: "";
   position: absolute;
@@ -633,7 +633,7 @@
   --rr-mono: var(--font-mono);
 }
 
-/* the live dot — used by the hero proof strip + console header */
+/* the live dot, used by the hero proof strip + console header */
 .opt-v2 .v2-live-dot {
   width: 7px;
   height: 7px;
@@ -648,7 +648,7 @@
 .opt-v2 .v2-section {
   padding-block: clamp(56px, 8vw, 104px);
 }
-/* tinted band — alternated down the page so half-page sections don't read as
+/* tinted band, alternated down the page so half-page sections don't read as
    one flat stack. Surface ground + hairline rules, re-themes per palette. */
 .opt-v2 .v2-section--alt {
   background: color-mix(in srgb, var(--surface) 58%, var(--bg));
@@ -670,7 +670,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(32px, 5vw, 72px);
-  align-items: center;
+  /* Anchor the art to the top of the row (aligned with the heading) instead of
+     centering it: when the copy column is taller, a centered graphic floats with
+     dead space above AND below. Top-aligned reads as intentional. */
+  align-items: start;
 }
 /* art gets a touch more room where the artifact is wide (holdout, bill) */
 .opt-v2 .v2-half--wide-art {
@@ -721,8 +724,84 @@
   max-width: 58ch;
 }
 
+/* "knows each one" section: the intro + scannable list sit beside the art (level
+   heights), and the rest flows full-width below via .v2-attend__more. Scoped. */
+.opt-v2 .v2-attend__beat {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+/* Full-width continuation under the half: the "stay quiet" beat + the closer,
+   sitting just below the half so there's no side gap. Readable width, not
+   full-bleed. */
+.opt-v2 .v2-attend__more {
+  margin-top: clamp(26px, 3.5vw, 44px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+/* Full-width two-column band: a bold "stay quiet" statement on the left, the
+   supporting copy filling the right, so it spans the width and stays short. */
+.opt-v2 .v2-attend__more-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.35fr);
+  gap: clamp(24px, 5vw, 64px);
+  align-items: start;
+}
+.opt-v2 .v2-attend__more-lead {
+  margin: 0;
+  font-size: clamp(20px, 2.5vw, 27px);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.opt-v2 .v2-attend__more .v2-section__lede {
+  max-width: none;
+}
+.opt-v2 .v2-attend__learns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 22px;
+  max-width: 46ch;
+}
+.opt-v2 .v2-attend__learns li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.opt-v2 .v2-attend__learns li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--accent);
+}
+.opt-v2 .v2-attend__punch {
+  margin: 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: clamp(18px, 2.2vw, 22px);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--ink);
+  max-width: 42ch;
+}
+@media (max-width: 640px) {
+  .opt-v2 .v2-attend__learns {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════════
-   MORNING BRIEF — reused from frontend-brief, re-themed via v2 tokens.
+   MORNING BRIEF, reused from frontend-brief, re-themed via v2 tokens.
    ════════════════════════════════════════════════════════════════════════ */
 .opt-v2 .v2-mb {
   background: var(--surface);
@@ -858,7 +937,7 @@
   border-color: var(--ink);
   color: var(--ink);
 }
-/* the control line — set apart; this is the moat being captured */
+/* the control line, set apart; this is the moat being captured */
 .opt-v2 .v2-mb__item-inner.is-control {
   align-items: center;
 }
@@ -901,7 +980,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   SWARM — reused from frontend-swarm/CustomerField, re-themed via v2 tokens.
+   SWARM, reused from frontend-swarm/CustomerField, re-themed via v2 tokens.
    ════════════════════════════════════════════════════════════════════════ */
 .opt-v2 .v2-swarm-frame {
   background: var(--surface);
@@ -1007,9 +1086,9 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   HOLDOUT — the original HoldoutField graphic, re-themed via v2 tokens.
+   HOLDOUT, the original HoldoutField graphic, re-themed via v2 tokens.
    Warming is class/token-driven (cool→.is-warm flips to var(--ink)), so it
-   works on LIGHT (ink-on-white) as well as both darks — no baked hex.
+   works on LIGHT (ink-on-white) as well as both darks, no baked hex.
    ════════════════════════════════════════════════════════════════════════ */
 .opt-v2 .v2-proof-card {
   background: var(--surface);
@@ -1315,7 +1394,7 @@
 .opt-v2 .v2-bill__amt.is-strike {
   color: var(--dim);
 }
-/* the proven lift — the single bold beat; the only place accent runs large */
+/* the proven lift, the single bold beat; the only place accent runs large */
 .opt-v2 .v2-bill__row--lift {
   margin-inline: -24px;
   padding: 20px 24px 18px;
@@ -1592,7 +1671,7 @@
   font-size: 13.5px;
 }
 
-/* consequence — upside / NAMED downside / confidence */
+/* consequence, upside / NAMED downside / confidence */
 .opt-v2 .v2-consequence {
   margin-top: 18px;
   border: 1px solid var(--line-2);
@@ -1856,6 +1935,10 @@
   .opt-v2 .v2-half--art-right .v2-half__art {
     order: -1;
   }
+  .opt-v2 .v2-attend__more-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
   .opt-v2 .v2-half__copy {
     max-width: 60ch;
   }
@@ -1922,7 +2005,7 @@
 }
 
 /* very narrow: the switcher (the deliverable) must stay reachable, so the
-   nav CTA steps aside — "Start free" is already prominent in the hero below. */
+   nav CTA steps aside, "Start free" is already prominent in the hero below. */
 @media (max-width: 440px) {
   .opt-v2 .v2-nav__right .v2-btn {
     display: none;
@@ -2036,7 +2119,7 @@
 }
 
 /* ============================================================================
-   REDUCED MOTION — everything present, static, fully readable; no reveal gates.
+   REDUCED MOTION, everything present, static, fully readable; no reveal gates.
    (The framer-motion leaves also short-circuit on prefers-reduced-motion; this
    is the CSS belt-and-braces.)
    ========================================================================== */
