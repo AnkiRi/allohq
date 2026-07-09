@@ -14,6 +14,18 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   const host = request.headers.get("host") || "";
 
+  // Domain migration: joonhq.com is primary; permanently redirect joonhq.ai (and
+  // any subdomain — apex / www / agent) to the .com equivalent, preserving the
+  // subdomain and the full path + query. Runs before the apex/agent routing below.
+  const hostname = request.nextUrl.hostname;
+  if (hostname.endsWith("joonhq.ai")) {
+    const url = request.nextUrl.clone();
+    url.protocol = "https:";
+    url.port = "";
+    url.hostname = hostname.replace(/joonhq\.ai$/, "joonhq.com");
+    return NextResponse.redirect(url, 308);
+  }
+
   const isRootDomain =
     !host.startsWith("agent.") &&
     !host.startsWith("localhost") &&

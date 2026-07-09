@@ -25,11 +25,20 @@ export async function createContext(opts: { req?: any; res?: any }) {
     try {
       const payload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY!,
+        // Accept both brands during the allohq → joonhq migration (agent subdomain
+        // + apex, .ai + .com), plus anything in ALLOWED_ORIGINS so this stays in
+        // sync with the API's CORS list from one env var. Drop the allohq entries
+        // once the cutover to joonhq is complete.
         authorizedParties: [
           "http://localhost:3000",
           "http://localhost:3001",
           "https://agent.allohq.ai",
           "https://allohq.ai",
+          "https://agent.joonhq.ai",
+          "https://joonhq.ai",
+          "https://agent.joonhq.com",
+          "https://joonhq.com",
+          ...(process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
         ],
       });
       userId = payload.sub;
