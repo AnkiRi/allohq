@@ -55,11 +55,17 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const { signOut } = useClerk();
-  // Sign-out returns to the landing (not a bare login box). In prod the app is
-  // on agent.allohq.ai, where "/" redirects back to sign-in, so point at the
-  // root marketing domain; in dev "/" IS the landing.
+  // Sign-out returns to the landing (not a bare login box). In prod the app is on
+  // agent.<apex>, where "/" redirects back to sign-in, so point at the root
+  // marketing domain — derived from the current host by dropping the "agent."
+  // prefix, so it's correct on whatever domain we're served from (allohq or
+  // joonhq). In dev "/" IS the landing.
   const signOutRedirect =
-    process.env.NODE_ENV === "production" ? "https://allohq.ai" : "/";
+    process.env.NODE_ENV === "production"
+      ? typeof window !== "undefined"
+        ? `${window.location.protocol}//${window.location.host.replace(/^agent\./, "")}`
+        : "https://joonhq.ai"
+      : "/";
   const { isOpen, close, collapsed, toggleCollapsed } = useMobileSidebar();
   const [moreOpen, setMoreOpen] = useState(true);
 
