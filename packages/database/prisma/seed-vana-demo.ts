@@ -81,7 +81,7 @@ async function main() {
   const workspace = await prisma.workspace.upsert({
     where: { slug: DEMO_WORKSPACE_SLUG },
     update: {},
-    create: { name: `${DEMO_STORE_NAME} (Demo)`, slug: DEMO_WORKSPACE_SLUG, defaultModel: "claude-sonnet-5" },
+    create: { name: `${DEMO_STORE_NAME} (Demo)`, slug: DEMO_WORKSPACE_SLUG, defaultModel: "claude-sonnet-4-6" },
   });
 
   // 3. Membership — upsert by (workspaceId, userId).
