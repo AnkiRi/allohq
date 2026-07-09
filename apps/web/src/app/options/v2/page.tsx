@@ -245,23 +245,32 @@ export function V2Landing({
                 <h2 className="v2-section__h">
                   4,820 customers. <em>Not one undifferentiated blast.</em>
                 </h2>
-                <p className="v2-section__lede">
-                  A human marketer can only truly know a handful of customers, so
-                  everyone else gets the same blast. joon knows each one. It learns
-                  who they are, what they want, when they want to hear from you, and
-                  how they like to be spoken to, and it reaches each customer that way.
-                </p>
-                <p className="v2-section__lede">
-                  Attention means knowing when to stay quiet, too. Blast your whole
-                  list and your best customers learn to mute, archive and unsubscribe.
-                  The audience you paid to build quietly stops opening. joon reaches
-                  each customer when it actually matters to them, and holds back when
-                  it doesn&rsquo;t. So every customer feels looked after, no one feels
-                  spammed, and your list stays healthy and keeps listening.
-                </p>
-                <p className="v2-section__lede">
-                  More revenue, from fewer, better messages.
-                </p>
+                <div className="v2-attend">
+                  <div className="v2-attend__beat">
+                    <p className="v2-section__lede">
+                      A human marketer can only truly know a handful of customers, so
+                      everyone else gets the same blast. joon knows each one, and reaches
+                      them the way each actually wants:
+                    </p>
+                    <ul className="v2-attend__learns">
+                      <li>who they are</li>
+                      <li>what they want</li>
+                      <li>when they want to hear from you</li>
+                      <li>how they like to be spoken to</li>
+                    </ul>
+                  </div>
+                  <p className="v2-section__lede">
+                    <strong className="v2-attend__lead">Attention means knowing when to stay quiet, too.</strong>{" "}
+                    Blast your whole list and your best customers learn to mute, archive
+                    and unsubscribe, until the audience you paid to build quietly stops
+                    opening. joon reaches each customer when it matters to them, and holds
+                    back when it doesn&rsquo;t, so everyone feels looked after and no one
+                    feels spammed.
+                  </p>
+                  <p className="v2-attend__punch">
+                    More revenue, from fewer, better messages.
+                  </p>
+                </div>
                 <p className="v2-half__aside mono">
                   // lapsed · loyal · at risk · new · every one a person, not a row
                 </p>
