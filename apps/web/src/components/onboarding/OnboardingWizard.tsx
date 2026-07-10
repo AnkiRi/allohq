@@ -363,7 +363,10 @@ function BackgroundAnalysisStep({
   ];
   const syncDone = syncRows.every((r) => r.done);
   const analysisDone = analysisRows.every((r) => r.done);
-  const canContinue = syncDone && analysisDone;
+  // Only the DATA SYNC gates Continue. The background analysis (brand voice, RFM,
+  // etc.) finishes on its own and can be re-run later from its page — so a single
+  // failed/slow analysis job must NOT trap the merchant in onboarding forever.
+  const canContinue = syncDone;
 
   return (
     <div className="space-y-6">
@@ -406,7 +409,7 @@ function BackgroundAnalysisStep({
         ))}
       </div>
       {syncDone && !analysisDone && (
-        <p className="text-xs text-[#8B8074]">Almost there. joon is just finishing up...</p>
+        <p className="text-xs text-[#8B8074]">Your data&apos;s in. joon is still learning your brand and scoring customers in the background — you can continue; it&apos;ll be ready shortly (and you can re-run it anytime from Brand Voice).</p>
       )}
       <div className="flex justify-end">
         <button onClick={onContinue} disabled={!canContinue || isAdvancing} className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
