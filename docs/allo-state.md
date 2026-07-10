@@ -10,7 +10,7 @@ story (3 customers through every table: enter → state → segment → campaign
 > new state doc — update this one. Build-gaps flip to ✅; pilot-gaps stay until a real pilot
 > closes them.
 
-_Last updated: 2026-07-07._
+_Last updated: 2026-07-10._
 
 ---
 
@@ -167,6 +167,12 @@ execution — more important than more measurement hardening.
   Outcomes page (concentrated-lift table, send vs hold, control-backed confidence line);
   `DecisionTracePanel` gains a per-campaign growth call. Seed reshaped to the honest 3-segment
   concentrated dataset (2 responsive-significant + 1 loyalist buy-anyway ~₹0/not-significant).
+- [x] ✅ **Go-live readiness (since 07-07)** — 2026-07-10. Domain migration allohq → **joonhq**
+  (primary joonhq.com, app on agent.joonhq.com, allohq.ai/.com → 301; Clerk + Google OAuth + CORS
+  cut over) shipped. Onboarding hardened (PR #24): hard-block removed (sync-only gate) + **stuck-step
+  watchdog + per-step retry** so a dead worker no longer traps the merchant with no signal. Demo
+  LLM-key isolation **reverted** (PR #24) → single prod key for demo + real (walkthrough-only demos;
+  DEMO_* keys retired); demo write-floor + per-IP/global cost cap kept intact.
 - [ ] **[NORTH STAR] Wire per-customer intelligence into the MAIN CAMPAIGN path** — today campaigns
   are segment-level, email-only; `getBestChannel`/`getOptimalSendTime`/skip-low-lift are **never
   called** there (only journeys use timing/channel). This is the CAM's real execution surface.
