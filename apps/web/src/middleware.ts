@@ -14,15 +14,16 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   const host = request.headers.get("host") || "";
 
-  // Domain migration: joonhq.com is primary; permanently redirect joonhq.ai (and
-  // any subdomain — apex / www / agent) to the .com equivalent, preserving the
-  // subdomain and the full path + query. Runs before the apex/agent routing below.
+  // Domain migration: joonhq.com is primary. Permanently redirect joonhq.ai AND the
+  // legacy allohq.ai (apex / www / agent) to the joonhq.com equivalent, preserving
+  // the subdomain and full path + query. (This is the web front door only — the API
+  // on api.allohq.ai is a separate Railway service and never routes through here.)
   const hostname = request.nextUrl.hostname;
-  if (hostname.endsWith("joonhq.ai")) {
+  if (hostname.endsWith("joonhq.ai") || hostname.endsWith("allohq.ai")) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.port = "";
-    url.hostname = hostname.replace(/joonhq\.ai$/, "joonhq.com");
+    url.hostname = hostname.replace(/(?:joonhq|allohq)\.ai$/, "joonhq.com");
     return NextResponse.redirect(url, 308);
   }
 
