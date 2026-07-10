@@ -4,7 +4,6 @@ import { prisma, DEMO_HEADER, getDemoWorkspaceId } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
 import { checkRateLimit, checkDemoLLMLimit } from "./middleware/rate-limit";
 import { verifyStoreAccess } from "./lib/storeAccess";
-import { llmRequestContext } from "@allohq/customer-intelligence";
 
 /**
  * Context creation for tRPC
@@ -255,13 +254,6 @@ export const workspaceProcedure = protectedProcedure
             : "You're moving quickly, give the demo a moment and try again.",
       });
     }
-  }
-  // Ambient demo flag for LLM provider key selection: demo-guest requests run their
-  // (in-request) LLM calls with the DEMO_* keys — falling back to prod keys if those
-  // aren't set — so demo spend/quota is isolated from prod. Real requests are
-  // unaffected. ALS propagates through the resolver + its awaited LLM calls.
-  if (ctx.isDemo) {
-    return llmRequestContext.run({ demo: true }, () => next());
   }
   return next();
 });

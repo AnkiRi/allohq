@@ -1,17 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { isDemoLlmRequest } from "./request-context";
-
-// Pick the API key for a provider: in a demo request, prefer the DEMO_* key so
-// demo traffic spends against a separate org/quota — falling back to the prod key
-// when no demo key is configured (so this is a no-op until DEMO_* keys are set).
-function apiKeyFor(provider: AIProvider): string | undefined {
-  const demo = isDemoLlmRequest();
-  if (provider === "anthropic") {
-    return (demo ? process.env["DEMO_ANTHROPIC_API_KEY"] : undefined) || process.env["ANTHROPIC_API_KEY"];
-  }
-  return (demo ? process.env["DEMO_OPENAI_API_KEY"] : undefined) || process.env["OPENAI_API_KEY"];
-}
 
 // ---------------------------------------------------------------------------
 // Provider-agnostic adapter layer.
@@ -71,7 +59,7 @@ class AnthropicProvider implements LlmProvider {
   async complete(req: ProviderRequest): Promise<ProviderResult> {
     // timeout: fail fast instead of hanging a worker; maxRetries: 1 so the gateway's
     // circuit-breaker handles cross-provider fallback rather than slow SDK retries.
-    const client = new Anthropic({ apiKey: apiKeyFor("anthropic"), timeout: 60_000, maxRetries: 1 });
+    const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"], timeout: 60_000, maxRetries: 1 });
 
     const response = await client.messages.create({
       model: req.model,
@@ -107,7 +95,7 @@ class OpenAIProvider implements LlmProvider {
   }
 
   async complete(req: ProviderRequest): Promise<ProviderResult> {
-    const client = new OpenAI({ apiKey: apiKeyFor("openai"), timeout: 60_000, maxRetries: 1 });
+    const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"], timeout: 60_000, maxRetries: 1 });
 
     const messages: { role: "system" | "user"; content: string }[] = [];
     if (req.system) messages.push({ role: "system", content: req.system });

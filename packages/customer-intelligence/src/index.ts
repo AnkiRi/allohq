@@ -1,5 +1,5 @@
 // AI Gateway — single entry point for all model calls
-export { complete, AI_MODELS, DEFAULT_MODEL, MODEL_COSTS, computeTokenCost, getProvider, llmRequestContext, isDemoLlmRequest } from "./ai";
+export { complete, AI_MODELS, DEFAULT_MODEL, MODEL_COSTS, computeTokenCost, getProvider } from "./ai";
 export type {
   AIModelId,
   AITask,
