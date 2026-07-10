@@ -27,7 +27,9 @@ export async function syncAllCustomers(
     // time `await` made big stores crawl (~93k serial round-trips). Concurrency
     // is bounded so we don't exhaust the DB connection pool. Upsert semantics
     // (works for first sync AND re-sync) and per-row error collection preserved.
-    const CONCURRENCY = 25;
+    // 12 (was 25) so two stores syncing in parallel (worker concurrency:2) keep
+    // peak DB connections ~flat (2×12 ≈ prior 1×25).
+    const CONCURRENCY = 12;
     for (let i = 0; i < response.data.length; i += CONCURRENCY) {
       const chunk = response.data.slice(i, i + CONCURRENCY);
       const results = await Promise.allSettled(

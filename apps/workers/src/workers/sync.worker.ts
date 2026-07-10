@@ -145,7 +145,11 @@ export const syncWorker = new Worker<SyncJobData>(
       collections: collectionResult,
     };
   },
-  { connection: redisConnection }
+  // concurrency:2 lets two stores sync in parallel (was serial, so a big store
+  // blocked the next onboarding). Kept modest + paired with a smaller per-page
+  // upsert batch (see customers sync) so peak DB connections stay ~flat. Raise
+  // both together only if the Prisma connection pool is sized for it.
+  { connection: redisConnection, concurrency: 2 }
 );
 
 syncWorker.on("completed", (job) => {
