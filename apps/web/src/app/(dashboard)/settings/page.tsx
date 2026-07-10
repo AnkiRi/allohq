@@ -35,6 +35,8 @@ const TOKEN_PERIODS = [
 ] as const;
 
 const MODEL_LABELS: Record<string, string> = {
+  "claude-sonnet-5": "Claude Sonnet 5",
+  "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
   "claude-sonnet-4-6": "Claude Sonnet 4.6",
   "gpt-4o": "GPT-4o",
   "gpt-4o-mini": "GPT-4o Mini",

@@ -28,7 +28,7 @@ export default function BrandProfilePage() {
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
-  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-4-6");
+  const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-5");
   const [analyzing, setAnalyzing] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -10,8 +10,9 @@ import type { AIProvider } from "./providers";
 // ---------------------------------------------------------------------------
 
 export type AIModelId =
+  | "claude-sonnet-5"
   | "claude-sonnet-4-6"
-  | "gpt-4o"
+  | "claude-haiku-4-5-20251001"
   | "gpt-4o-mini";
 
 export type ModelTier = "premium" | "standard" | "economy";
@@ -37,41 +38,56 @@ export interface AIModel {
   tier: ModelTier;
 }
 
+// NOTE: gpt-4o is deliberately NOT in this roster / the routing chains — its low
+// 30k-TPM tier caused a prod 429 storm when it became the fallback. Sonnet 4.6 is
+// the guaranteed-working backstop (your key has it) that every chain degrades to,
+// so a missing Sonnet-5/Haiku-4.5 access can't fall through to a rate-limited model.
+// New Claude prices are best-estimate — verify vs Anthropic pricing (display only).
 export const AI_MODELS: AIModel[] = [
   {
-    id: "claude-sonnet-4-6",
+    id: "claude-sonnet-5",
     provider: "anthropic",
-    label: "Claude Sonnet 4.6",
-    description: "Best quality — Anthropic's most capable model for creative content",
+    label: "Claude Sonnet 5",
+    description: "Best quality — Anthropic's most capable model for customer-facing copy",
     inputCostPerMillion: 3,
     outputCostPerMillion: 15,
     tier: "premium",
   },
   {
-    id: "gpt-4o",
-    provider: "openai",
-    label: "GPT-4o",
-    description: "High quality — OpenAI's flagship model",
-    inputCostPerMillion: 2.5,
-    outputCostPerMillion: 10,
+    id: "claude-sonnet-4-6",
+    provider: "anthropic",
+    label: "Claude Sonnet 4.6",
+    description: "High quality — reliable backstop for generation and reasoning",
+    inputCostPerMillion: 3,
+    outputCostPerMillion: 15,
     tier: "standard",
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    provider: "anthropic",
+    label: "Claude Haiku 4.5",
+    description: "Fast and affordable — great for high-volume, mechanical tasks",
+    inputCostPerMillion: 1,
+    outputCostPerMillion: 5,
+    tier: "economy",
   },
   {
     id: "gpt-4o-mini",
     provider: "openai",
     label: "GPT-4o Mini",
-    description: "Fast and affordable — good for quick iterations",
+    description: "Fast and affordable — OpenAI economy option (200k TPM)",
     inputCostPerMillion: 0.15,
     outputCostPerMillion: 0.6,
     tier: "economy",
   },
 ];
 
-export const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
+export const DEFAULT_MODEL: AIModelId = "claude-sonnet-5";
 
 /**
- * The working default provider. The OpenAI key is at quota (429), so Claude is
- * the reliable backstop — it appears in every degrade path.
+ * The working default that every task chain ends with — Sonnet 4.6, which the
+ * prod Anthropic key is known to have. Guarantees a viable model even if Sonnet 5
+ * / Haiku 4.5 access is missing, WITHOUT falling through to a rate-limited model.
  */
 export const WORKING_DEFAULT_MODEL: AIModelId = "claude-sonnet-4-6";
 
@@ -95,11 +111,11 @@ export const TASK_TIER: Record<AITask, ModelTier> = {
  * still resolves a viable model instead of hard-failing.
  */
 export const TIER_MODELS: Record<ModelTier, AIModelId[]> = {
-  // economy wants the cheap OpenAI model first, then falls through to Claude
-  // (the only currently-working provider) rather than failing.
-  economy: ["gpt-4o-mini", "gpt-4o", "claude-sonnet-4-6"],
-  standard: ["gpt-4o", "claude-sonnet-4-6", "gpt-4o-mini"],
-  premium: ["claude-sonnet-4-6", "gpt-4o", "gpt-4o-mini"],
+  // Every list degrades to Sonnet 4.6 (works on the prod key) before any low-limit
+  // model, so missing Sonnet-5/Haiku-4.5 access degrades gracefully, never 429s.
+  premium: ["claude-sonnet-5", "claude-sonnet-4-6", "gpt-4o-mini"],
+  standard: ["claude-sonnet-4-6", "gpt-4o-mini", "claude-sonnet-5"],
+  economy: ["claude-haiku-4-5-20251001", "gpt-4o-mini", "claude-sonnet-4-6"],
 };
 
 /**
@@ -107,9 +123,10 @@ export const TIER_MODELS: Record<ModelTier, AIModelId[]> = {
  * Preserves the legacy FALLBACK_CHAIN behaviour from client.ts.
  */
 export const FALLBACK_CHAIN: Record<AIModelId, AIModelId[]> = {
-  "claude-sonnet-4-6": ["gpt-4o", "gpt-4o-mini"],
-  "gpt-4o": ["claude-sonnet-4-6", "gpt-4o-mini"],
-  "gpt-4o-mini": ["gpt-4o", "claude-sonnet-4-6"],
+  "claude-sonnet-5": ["claude-sonnet-4-6", "gpt-4o-mini"],
+  "claude-sonnet-4-6": ["gpt-4o-mini", "claude-haiku-4-5-20251001"],
+  "claude-haiku-4-5-20251001": ["gpt-4o-mini", "claude-sonnet-4-6"],
+  "gpt-4o-mini": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
 };
 
 export function getModel(id: AIModelId): AIModel | undefined {
@@ -129,7 +146,10 @@ export function resolveModelChain(opts: {
   model?: AIModelId;
   task?: AITask;
 }): AIModelId[] {
-  if (opts.model) {
+  // Only honour an explicit model we still recognise. A legacy/stored id (e.g. a
+  // workspace default saved as gpt-4o before this change) falls through to
+  // task/default routing instead of dead-ending on a model no longer in the roster.
+  if (opts.model && getModel(opts.model)) {
     return dedupe([opts.model, ...(FALLBACK_CHAIN[opts.model] ?? [])]);
   }
   if (opts.task) {
