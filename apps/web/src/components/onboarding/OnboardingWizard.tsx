@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2,
   Check,
+  AlertTriangle,
+  RotateCw,
   Package,
   Users,
   ShoppingBag,
@@ -247,7 +249,7 @@ export function OnboardingWizard({
       <AnimatePresence mode="wait">
         {currentStep === 1 && (
           <StepWrapper key="step1">
-            <BackgroundAnalysisStep status={status} onContinue={() => advance.mutate({ storeId, step: 2 })} isAdvancing={advance.isPending} />
+            <BackgroundAnalysisStep status={status} storeId={storeId} onRefetch={() => refetchStatus()} onContinue={() => advance.mutate({ storeId, step: 2 })} isAdvancing={advance.isPending} />
           </StepWrapper>
         )}
         {currentStep === 2 && (
@@ -339,12 +341,23 @@ type StatusData = {
   baselineComplete: boolean;
 };
 
+// Watchdog thresholds: how long a step may run before we surface a "taking
+// longer than expected" retry. Non-destructive — retry just re-enqueues the job,
+// so these can be generous enough not to false-alarm a large store's first sync.
+const SYNC_STUCK_MS = 75_000;
+const ANALYSIS_STUCK_MS = 120_000;
+type RetryKey = "sync" | "brandVoice" | "brandVisual" | "productImages" | "rfm" | "baseline";
+
 function BackgroundAnalysisStep({
   status,
+  storeId,
+  onRefetch,
   onContinue,
   isAdvancing,
 }: {
   status: StatusData | undefined;
+  storeId: string;
+  onRefetch: () => void;
   onContinue: () => void;
   isAdvancing: boolean;
 }) {
@@ -354,12 +367,12 @@ function BackgroundAnalysisStep({
     { icon: Users, label: "Syncing customers", count: status?.counts.customers, done: (status?.counts.customers ?? 0) > 0 },
     { icon: ShoppingBag, label: "Syncing orders", count: status?.counts.orders, done: productsDone },
   ];
-  const analysisRows = [
-    { icon: MessageSquare, label: "Analyzing brand voice", done: status?.brandVoiceComplete ?? false },
-    { icon: Palette, label: "Extracting visual identity", done: status?.brandVisualComplete ?? false },
-    { icon: Image, label: "Processing product images", done: status?.productImagesComplete ?? false },
-    { icon: BarChart3, label: "Scoring customer health (RFM)", done: status?.rfmComplete ?? false },
-    { icon: Boxes, label: "Capturing baseline metrics", done: status?.baselineComplete ?? false },
+  const analysisRows: { key: RetryKey; icon: typeof MessageSquare; label: string; done: boolean }[] = [
+    { key: "brandVoice", icon: MessageSquare, label: "Analyzing brand voice", done: status?.brandVoiceComplete ?? false },
+    { key: "brandVisual", icon: Palette, label: "Extracting visual identity", done: status?.brandVisualComplete ?? false },
+    { key: "productImages", icon: Image, label: "Processing product images", done: status?.productImagesComplete ?? false },
+    { key: "rfm", icon: BarChart3, label: "Scoring customer health (RFM)", done: status?.rfmComplete ?? false },
+    { key: "baseline", icon: Boxes, label: "Capturing baseline metrics", done: status?.baselineComplete ?? false },
   ];
   const syncDone = syncRows.every((r) => r.done);
   const analysisDone = analysisRows.every((r) => r.done);
@@ -368,18 +381,94 @@ function BackgroundAnalysisStep({
   // failed/slow analysis job must NOT trap the merchant in onboarding forever.
   const canContinue = syncDone;
 
+  // --- Stuck-step watchdog -------------------------------------------------
+  // Steps only report "done" (DB row present) — never "failed". So a dead worker
+  // or a failed job just spins forever with no signal. We time each step from
+  // when it (re)started; past its threshold we surface a retry for THAT step,
+  // so a merchant can recover in place instead of restarting onboarding.
+  const startRef = useRef(Date.now());
+  const [retriedAt, setRetriedAt] = useState<Partial<Record<RetryKey, number>>>({});
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 4000);
+    return () => clearInterval(id);
+  }, []);
+
+  const retry = trpc.onboarding.retryStep.useMutation({ onSuccess: () => onRefetch() });
+  const baseFor = (key: RetryKey) => Math.max(startRef.current, retriedAt[key] ?? 0);
+  const isStuck = (key: RetryKey, done: boolean, thresholdMs: number) =>
+    !done && now - baseFor(key) > thresholdMs;
+
+  const syncStuck = isStuck("sync", syncDone, SYNC_STUCK_MS);
+  const handleRetry = (key: RetryKey) => {
+    // Retrying the sync re-runs the whole cascade, so reset every timer with it.
+    const keys: RetryKey[] =
+      key === "sync" ? ["sync", "brandVoice", "brandVisual", "productImages", "rfm", "baseline"] : [key];
+    const t = Date.now();
+    setRetriedAt((prev) => {
+      const next = { ...prev };
+      keys.forEach((k) => (next[k] = t));
+      return next;
+    });
+    retry.mutate({ storeId, step: key });
+  };
+  const retryingKey = retry.isPending ? (retry.variables?.step as RetryKey | undefined) : undefined;
+
+  const stuckSteps: { key: RetryKey; label: string; blocking: boolean }[] = [];
+  if (syncStuck) stuckSteps.push({ key: "sync", label: "Importing your store data", blocking: true });
+  analysisRows.forEach((r) => {
+    if (isStuck(r.key, r.done, ANALYSIS_STUCK_MS)) stuckSteps.push({ key: r.key, label: r.label, blocking: false });
+  });
+  const hasBlocking = stuckSteps.some((s) => s.blocking);
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">joon is getting to know your store</h2>
         <p className="text-sm text-[#8B8074]">We&apos;re bringing in your data and learning the details. This usually takes a minute or two.</p>
       </div>
+
+      {stuckSteps.length > 0 && (
+        <div className="sticky top-2 z-20 rounded-xl border border-amber-300/70 bg-amber-50/95 backdrop-blur-sm p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#2C2C2C]">This is taking longer than expected.</p>
+              <p className="text-xs text-[#8B7A55] mt-0.5">
+                {hasBlocking
+                  ? "Your store data hasn't finished importing yet. You can keep waiting, or retry just this step — no need to start over."
+                  : "A background step is running slow. You can continue and it'll keep trying, or retry it now."}
+              </p>
+              <div className="mt-3 space-y-2">
+                {stuckSteps.map((s) => (
+                  <div key={s.key} className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-[#5C5549] truncate">{s.label}</span>
+                    <button
+                      onClick={() => handleRetry(s.key)}
+                      disabled={retry.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#2C2C2C] text-white hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 shrink-0"
+                    >
+                      {retryingKey === s.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
+                      Retry
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="glass-card-static rounded-xl p-5 space-y-3">
         {syncRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
               <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
                 <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
+              </div>
+            ) : syncStuck ? (
+              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
               </div>
             ) : (
               <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
@@ -395,18 +484,35 @@ function BackgroundAnalysisStep({
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
         <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">What joon is learning {analysisDone ? "(done)" : "(in the background)"}</p>
-        {analysisRows.map((row) => (
-          <div key={row.label} className="flex items-center gap-3">
-            {row.done ? (
-              <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
-                <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
-              </div>
-            ) : (
-              <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
-            )}
-            <span className={`text-sm ${row.done ? "text-[#2C2C2C]" : "text-[#8B8074]"}`}>{row.label}</span>
-          </div>
-        ))}
+        {analysisRows.map((row) => {
+          const rowStuck = isStuck(row.key, row.done, ANALYSIS_STUCK_MS);
+          return (
+            <div key={row.label} className="flex items-center gap-3">
+              {row.done ? (
+                <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
+                  <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
+                </div>
+              ) : rowStuck ? (
+                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                </div>
+              ) : (
+                <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
+              )}
+              <span className={`text-sm flex-1 ${row.done ? "text-[#2C2C2C]" : "text-[#8B8074]"}`}>{row.label}</span>
+              {rowStuck && (
+                <button
+                  onClick={() => handleRetry(row.key)}
+                  disabled={retry.isPending}
+                  className="flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 transition-colors disabled:opacity-40 shrink-0"
+                >
+                  {retryingKey === row.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3" />}
+                  Retry
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
       {syncDone && !analysisDone && (
         <p className="text-xs text-[#8B8074]">Your data&apos;s in. joon is still learning your brand and scoring customers in the background — you can continue; it&apos;ll be ready shortly (and you can re-run it anytime from Brand Voice).</p>
