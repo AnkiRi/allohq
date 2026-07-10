@@ -7,6 +7,7 @@ import {
   AutonomyTier,
   ActionCategory,
 } from "@allohq/autonomy-engine";
+import { DEFAULT_MODEL } from "@allohq/customer-intelligence";
 import { Queue } from "bullmq";
 
 const redisConnection = {
@@ -14,6 +15,16 @@ const redisConnection = {
   port: Number(process.env["REDIS_PORT"] ?? 6379),
   password: process.env["REDIS_PASSWORD"],
 };
+
+// Step-1 background-job queues, mirroring the fan-out the sync worker performs.
+// A merchant can re-trigger a SINGLE stuck step from onboarding (below) instead
+// of restarting the whole flow.
+const retrySyncQueue = new Queue("sync", { connection: redisConnection });
+const retryBrandAnalysisQueue = new Queue("brand-analysis", { connection: redisConnection });
+const retryBrandKitQueue = new Queue("brand-kit", { connection: redisConnection });
+const retryRfmQueue = new Queue("rfm", { connection: redisConnection });
+const retryBaselineQueue = new Queue("baseline", { connection: redisConnection });
+const retryProductImageQueue = new Queue("product-image", { connection: redisConnection });
 
 export const onboardingRouter = router({
   /**
@@ -55,6 +66,77 @@ export const onboardingRouter = router({
         rfmComplete: rfmCount > 0,
         baselineComplete: !!storeBaseline,
       };
+    }),
+
+  /**
+   * Retry a SINGLE Step-1 background job that appears stuck — without restarting
+   * onboarding. Each key re-enqueues the exact job the sync worker fans out to,
+   * so the merchant recovers one step in place. `sync` re-runs the full import,
+   * which itself re-fans-out RFM / images / brand kit / baseline, so it also
+   * recovers everything downstream. Re-enqueues are non-destructive (workers
+   * upsert), and a 30s idempotency window collapses retry-storms into one job.
+   */
+  retryStep: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        step: z.enum(["sync", "brandVoice", "brandVisual", "productImages", "rfm", "baseline"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      const win = Math.floor(Date.now() / 30000); // 30s idempotency window
+
+      switch (input.step) {
+        case "sync":
+          await retrySyncQueue.add(
+            "full-sync",
+            {
+              storeId: store.id,
+              shopDomain: store.shopDomain,
+              accessToken: store.accessToken,
+              platform: store.platform,
+            },
+            { jobId: `retry-sync-${store.id}-${win}` },
+          );
+          break;
+        case "brandVoice":
+          await retryBrandAnalysisQueue.add(
+            "analyze-brand",
+            { storeId: store.id, model: DEFAULT_MODEL },
+            {
+              attempts: 2,
+              backoff: { type: "exponential", delay: 5000 },
+              jobId: `retry-brand-${store.id}-${win}`,
+            },
+          );
+          break;
+        case "brandVisual":
+          await retryBrandKitQueue.add("brand-kit", { storeId: store.id }, { jobId: `retry-kit-${store.id}-${win}` });
+          break;
+        case "rfm":
+          await retryRfmQueue.add("rfm-after-sync", { storeId: store.id }, { jobId: `retry-rfm-${store.id}-${win}` });
+          break;
+        case "baseline":
+          await retryBaselineQueue.add("baseline", { storeId: store.id }, { jobId: `retry-baseline-${store.id}-${win}` });
+          break;
+        case "productImages": {
+          const products = await ctx.prisma.product.findMany({
+            where: { storeId: store.id },
+            select: { id: true },
+          });
+          for (const p of products) {
+            await retryProductImageQueue.add("product-image", { storeId: store.id, productId: p.id });
+          }
+          break;
+        }
+      }
+
+      return { status: "queued" as const };
     }),
 
   /**
