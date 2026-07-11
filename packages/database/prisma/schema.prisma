@@ -937,6 +937,13 @@ model MessageLog {
   messageFeatures   Json? // structured features for ML: { channel, messageType, hasDiscount, discountPercent, subjectLineLength, sendHour, sendDayOfWeek, templateArchetype, brandTone }
   sendCost          Decimal?  @db.Decimal(10, 4) // per-message provider send cost (₹) by channel — brand-level messaging P&L alongside inference cost
 
+  // Offer / variant capture at send (North Star #2 — irreversible-if-missed).
+  // The concrete offer bound to THIS send + which content variant the customer got,
+  // so attribution/eval/decision-trace can tie an order back to the exact offer + copy.
+  discountCode     String? // real redeemable code bound to this send (null if no offer)
+  offerId          String? // Shopify price rule id (or offer identifier) backing the code
+  messageVariantId String? // per-customer content/tone variant id (Phase 3)
+
   // Causal-data moat: control-group assignment
   treatmentArm TreatmentArm? // CONTROL = withheld, TREATMENT = sent
   experimentId String? // which holdout experiment this row belongs to

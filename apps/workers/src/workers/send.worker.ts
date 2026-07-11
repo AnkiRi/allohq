@@ -3,6 +3,8 @@ import { prisma, buildWhereFromConditions, messagingCostFor } from "@allohq/data
 import { renderBrandedEmail, loadBrandKit } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
+import { shopify } from "@allohq/ecommerce-integrations";
+const { ShopifyClient, createDiscount } = shopify;
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
 import { checkAllRules } from "@allohq/communication-governor";
 import {
@@ -177,6 +179,44 @@ export const sendWorker = new Worker<SendJobData>(
     // Derive the store's BrandKit once — every email renders in this brand's look.
     const brandKit = await loadBrandKit(campaign.storeId);
 
+    // North Star #2 — make the offer REAL at the one send chokepoint. The draft
+    // decided the code string (baked into the copy); here we create the matching
+    // Shopify price rule ONCE so the code actually redeems at checkout, then bind
+    // it to each treatment MessageLog below. Idempotent (persisted offerId guards
+    // re-runs), demo-safe (the seeded demo store never hits Shopify), and graceful
+    // (a scope/API failure is logged, never crashes the send).
+    const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+    const discountPercent: number | null =
+      typeof proposal["discountPercent"] === "number" ? proposal["discountPercent"] : null;
+    const discountCode: string | null =
+      typeof proposal["discountCode"] === "string" ? proposal["discountCode"] : null;
+    let offerId: string | null =
+      typeof proposal["offerId"] === "string" ? proposal["offerId"] : null;
+    if (discountCode && !offerId && campaign.store?.shopDomain !== DEMO_STORE_DOMAIN && campaign.store?.accessToken) {
+      try {
+        const client = new ShopifyClient(campaign.store.shopDomain, campaign.store.accessToken);
+        const endsAt = new Date();
+        endsAt.setDate(endsAt.getDate() + 30);
+        const res = await createDiscount(client, {
+          code: discountCode,
+          valueType: "percentage",
+          value: discountPercent ?? 10,
+          title: `Joon: ${campaign.name}`,
+          oncePerCustomer: true,
+          endsAt,
+        });
+        offerId = String(res.priceRule.id);
+        // Persist so a re-run doesn't create a duplicate price rule.
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { agentProposal: { ...proposal, offerId } },
+        });
+        console.log(`[send-worker] Created Shopify discount ${discountCode} (priceRule ${offerId}) for campaign ${campaignId}`);
+      } catch (err: any) {
+        console.error(`[send-worker] Shopify discount creation failed for campaign ${campaignId} (code ${discountCode}) — copy still shows it; may need write_price_rules scope / store reconnect:`, err?.message ?? err);
+      }
+    }
+
     // Render and send each email
     let sentCount = 0;
     let failCount = 0;
@@ -276,6 +316,8 @@ export const sendWorker = new Worker<SendJobData>(
             treatmentArm: "TREATMENT",
             experimentId: experiment.id,
             customerStateSnap: stateSnap,
+            discountCode: discountCode ?? null,
+            offerId,
             error: `Suppressed: ${governorCheck.reason}`,
             metadata: { suppressed: true, rule: governorCheck.rule },
           },
@@ -299,6 +341,8 @@ export const sendWorker = new Worker<SendJobData>(
         days_since_purchase: customer.rfmScore?.lastOrderAt
           ? String(Math.floor((now.getTime() - customer.rfmScore.lastOrderAt.getTime()) / 86400000))
           : "N/A",
+        // Real, redeemable code for this campaign (empty when there's no offer).
+        discount_code: discountCode ?? "",
       };
 
       // Capture ML training features at send time
@@ -307,7 +351,9 @@ export const sendWorker = new Worker<SendJobData>(
       const messageFeatures = {
         channel: "email",
         messageType: "campaign",
-        hasDiscount: /discount|off|save|%/i.test(subjectLine),
+        // Real offer signal now that the offer is captured (was a subject-line regex).
+        hasDiscount: !!discountCode || /discount|off|save|%/i.test(subjectLine),
+        discountPercent: discountPercent ?? null,
         subjectLineLength: subjectLine.length,
         sendHour: sendTime.getHours(),
         sendDayOfWeek: sendTime.getDay(),
@@ -330,6 +376,8 @@ export const sendWorker = new Worker<SendJobData>(
           experimentId: experiment.id,
           customerStateSnap: stateSnap,
           messageFeatures,
+          discountCode: discountCode ?? null,
+          offerId,
           sendCost: messagingCostFor("email"), // per-message provider cost — brand messaging P&L
           metadata: abTestId ? { abTestId, abVariant } : undefined,
         },

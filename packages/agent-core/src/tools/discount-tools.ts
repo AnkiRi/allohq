@@ -4,9 +4,11 @@ const { ShopifyClient, createDiscount } = shopify;
 import type { ToolDefinition } from "../types";
 
 /**
- * Generate a random alphanumeric discount code.
+ * Generate a random alphanumeric discount code. Exported so the campaign path
+ * can decide the code at draft time (baked into copy) and the send worker can
+ * create the matching real Shopify price rule at send time.
  */
-function generateCode(prefix: string): string {
+export function generateCode(prefix: string): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = prefix ? prefix.toUpperCase() + "-" : "";
   for (let i = 0; i < 6; i++) {

@@ -176,9 +176,19 @@ execution — more important than more measurement hardening.
 - [ ] **[NORTH STAR] Wire per-customer intelligence into the MAIN CAMPAIGN path** — today campaigns
   are segment-level, email-only; `getBestChannel`/`getOptimalSendTime`/skip-low-lift are **never
   called** there (only journeys use timing/channel). This is the CAM's real execution surface.
-- [ ] **[NORTH STAR] Populate response telemetry + capture offer/variant at send** — `openedAt`/
-  `clickedAt`/`messageFeatures` only on real sends (empty in demo); no `discountCode`/`offerId` on
-  MessageLog (the `discountPercent` schema comment is never written). Can't-backfill once a send goes.
+- [x] ✅ **[NORTH STAR] Capture offer/variant + response telemetry at send** — 2026-07-11 (send-path
+  Phase 1). Additive `MessageLog.discountCode`/`offerId`/`messageVariantId` (migration
+  `add_messagelog_offer_capture`), written at the ONE send chokepoint on treatment + suppressed arms;
+  `messageFeatures` now carries a REAL `hasDiscount`/`discountPercent` (was a subject-line regex).
+  Open/click telemetry already wired (Resend webhook → `openedAt`/`clickedAt`/`outcome`). Verified:
+  columns live in DB + tsc clean (database/agent-core/workers). **Populates with real data only on a
+  real send** (pilot gap) — structural path proven, demo is hard-no-send.
+- [x] ✅ **Real Shopify discount on the campaign path** — 2026-07-11 (send-path Phase 1). Fixes the
+  fake-code bug: the campaign path created NO real code (percent → LLM tweak only). Now the draft
+  decides the code (baked into copy via `context.discount` + frozen on `agentProposal`) and the send
+  worker creates the matching **real, redeemable** Shopify price rule ONCE (idempotent via persisted
+  `offerId`, demo-safe, graceful on missing `write_price_rules` scope) + binds `discountCode`/`offerId`
+  to each `MessageLog`. Reuses existing `createDiscount` + already-requested scopes.
 - [ ] Broader evals suite (grounding, segment-intent, model-routing, reliability, cost regression, attribution correctness).
 - [ ] Sync reconciliation/backfill + webhook retry + store Shopify `created_at` + the zero-scopes config issue.
 - [ ] Security hardening (Clerk CVE, headers, npm highs, git-history scan) + **rotate the two exposed secrets**.

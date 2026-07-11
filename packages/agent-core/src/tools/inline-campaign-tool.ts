@@ -1,5 +1,6 @@
 import { prisma, buildWhereFromConditions } from "@allohq/database";
 import type { ToolDefinition } from "../types";
+import { generateCode } from "./discount-tools";
 
 export const inlineCampaignTools: ToolDefinition[] = [
   {
@@ -50,6 +51,13 @@ export const inlineCampaignTools: ToolDefinition[] = [
       const segmentFilter = params.segmentFilter ? String(params.segmentFilter) : undefined;
       const discountPercent = params.discountPercent ? Number(params.discountPercent) : undefined;
       const customInstructions = params.customInstructions ? String(params.customInstructions) : undefined;
+
+      // Decide the discount code at DRAFT time so the real code is baked into the
+      // copy; the send worker creates the matching REAL Shopify price rule at send
+      // time (avoids orphan codes for drafts that never go out — North Star #2).
+      const discountCode = discountPercent
+        ? generateCode(intent === "vip_reward" ? "VIP" : intent === "win_back" ? "WELCOME" : "JOON")
+        : undefined;
 
       // Find the store and workspace
       const store = await prisma.store.findFirst({
@@ -235,6 +243,10 @@ export const inlineCampaignTools: ToolDefinition[] = [
         intent: emailIntent as any,
         creativeIntensity: (brandProfile?.creativeIntensity as any) ?? "balanced",
         tweaks: tweakParts.length > 0 ? tweakParts.join(" ") : undefined,
+        // Bake the REAL code into the copy (the send worker makes it redeemable).
+        context: discountPercent && discountCode
+          ? { discount: { type: "percentage" as const, value: discountPercent, code: discountCode } }
+          : undefined,
         products: products.map((p) => ({
           id: p.id,
           title: p.title,
@@ -293,6 +305,8 @@ export const inlineCampaignTools: ToolDefinition[] = [
             channel: "email",
             intent,
             discountPercent: discountPercent ?? null,
+            discountCode: discountCode ?? null,
+            discountValueType: discountPercent ? "percentage" : null,
             scheduledAt: null,
             recipientCount,
           },
