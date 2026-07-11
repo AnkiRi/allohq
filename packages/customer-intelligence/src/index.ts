@@ -73,5 +73,9 @@ export type { ChurnModelInput, ChurnPrediction } from "./churn-model";
 export { getOptimalSendTime } from "./send-time-optimizer";
 export type { SendTimeResult } from "./send-time-optimizer";
 
+// Per-customer campaign delivery plan (skip / tone) — North Star #1
+export { planCustomerDelivery } from "./campaign-delivery-plan";
+export type { CustomerDeliverySignals, DeliveryDecision, ToneKey } from "./campaign-delivery-plan";
+
 export { hardChecks, judgeContent, evalContent, blocksToText } from "./eval/content-quality";
 export type { EvalContent, BrandContext, JudgeVerdict, ContentEvalResult } from "./eval/content-quality";

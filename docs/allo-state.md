@@ -184,9 +184,19 @@ execution — more important than more measurement hardening.
   only. Known residual (documented, not fixed here): a control customer who also received an unrelated
   campaign email in-window can have their baseline attributed to that email (per-experiment attribution
   is a larger design); orders older than the hourly window aren't back-filled.
-- [ ] **[NORTH STAR] Wire per-customer intelligence into the MAIN CAMPAIGN path** — today campaigns
-  are segment-level, email-only; `getBestChannel`/`getOptimalSendTime`/skip-low-lift are **never
-  called** there (only journeys use timing/channel). This is the CAM's real execution surface.
+- [x] ✅ **[NORTH STAR] Wire per-customer intelligence into the MAIN CAMPAIGN path** — 2026-07-11
+  (send-path Phase 3). The campaign send worker is now a **planner → per-customer delayed delivery**:
+  holdout arm assignment + CONTROL/withheld rows + decision-time `customerStateSnap` are UNCHANGED
+  (causal spine intact); for each treated customer it computes `getBestChannel` (recommended channel,
+  recorded), `getOptimalSendTime` (→ enqueues a `deliver-one` job at that customer's optimal hour;
+  delay capped 12h real / seconds on the demo store), and a **skip** decision (`planCustomerDelivery`
+  — send-less: hold back loyal-recent buyers a discount won't move; recorded as `status:"skipped"`,
+  `treatmentArm:NULL` so it's excluded from EVERY lift reader → zero change to the causal SQL) plus a
+  bounded **tone** profile (casual/warm/formal → greeting/emoji/sign-off slots, `messageVariantId`).
+  `deliver-one` reuses the exact render/send/update/fatigue/state path, demo-safe + idempotent.
+  Verified on isolated seed: planner (1 skipped, deferred delivery, control withheld), `deliverOne`
+  (row+tone recorded, idempotent 2nd call). Note: multi-channel content generation + email-body tone
+  regeneration deferred (channel/tone are recorded + slotted, campaign medium stays email).
 - [x] ✅ **[NORTH STAR] Capture offer/variant + response telemetry at send** — 2026-07-11 (send-path
   Phase 1). Additive `MessageLog.discountCode`/`offerId`/`messageVariantId` (migration
   `add_messagelog_offer_capture`), written at the ONE send chokepoint on treatment + suppressed arms;
