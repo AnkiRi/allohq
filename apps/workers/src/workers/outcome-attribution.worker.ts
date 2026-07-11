@@ -73,7 +73,7 @@ async function runHourlyAttribution() {
   return { totalOrdersAttributed, totalRevenueAttributed };
 }
 
-async function attributeOrdersForStore(storeId: string) {
+export async function attributeOrdersForStore(storeId: string) {
   // Causal-data moat: contribution margin used to derive outcomeMargin from
   // outcomeRevenue. Falls back to 0.6 when unset.
   const storeRow = await prisma.store.findUnique({
@@ -260,7 +260,7 @@ async function attributeOrdersForStore(storeId: string) {
  * $0). This is what makes the per-customer mean denominator the WHOLE arm — so
  * lift captures conversion-rate differences, not just buyers' AOV.
  */
-async function closeElapsedWindows(storeId: string): Promise<number> {
+export async function closeElapsedWindows(storeId: string): Promise<number> {
   const windowClosed = new Date(Date.now() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const res = await prisma.messageLog.updateMany({
     where: {

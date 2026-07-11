@@ -173,6 +173,17 @@ execution — more important than more measurement hardening.
   watchdog + per-step retry** so a dead worker no longer traps the merchant with no signal. Demo
   LLM-key isolation **reverted** (PR #24) → single prod key for demo + real (walkthrough-only demos;
   DEMO_* keys retired); demo write-floor + per-IP/global cost cap kept intact.
+- [x] ✅ **Attribution correctness — single owner** — 2026-07-11 (send-path Phase 2). Fixed a causal
+  data-corruption race: the order webhook eagerly wrote an `OrderAttribution` row, which made the
+  hourly outcome-attribution worker's `attribution: null` scan SKIP the order → the treatment
+  `MessageLog.outcome` never populated and the buyer was closed out as `ignored ₹0`, systematically
+  UNDERSTATING lift (the number we bill on). The webhook no longer attributes; the hourly worker is
+  the single owner (all channels + CONTROL baseline + window close-out + `Experiment.stats`). Verified
+  with the REAL `attributeOrdersForStore` on an isolated seeded scenario: treatment order →
+  outcome=purchased ₹1000, control order → baseline ₹500, `OrderAttribution` created for treatment
+  only. Known residual (documented, not fixed here): a control customer who also received an unrelated
+  campaign email in-window can have their baseline attributed to that email (per-experiment attribution
+  is a larger design); orders older than the hourly window aren't back-filled.
 - [ ] **[NORTH STAR] Wire per-customer intelligence into the MAIN CAMPAIGN path** — today campaigns
   are segment-level, email-only; `getBestChannel`/`getOptimalSendTime`/skip-low-lift are **never
   called** there (only journeys use timing/channel). This is the CAM's real execution surface.
