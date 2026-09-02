@@ -97,8 +97,6 @@ export const onboardingRouter = router({
             "full-sync",
             {
               storeId: store.id,
-              shopDomain: store.shopDomain,
-              accessToken: store.accessToken,
               platform: store.platform,
             },
             { jobId: `retry-sync-${store.id}-${win}` },

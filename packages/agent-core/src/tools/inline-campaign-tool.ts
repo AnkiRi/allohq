@@ -49,8 +49,16 @@ export const inlineCampaignTools: ToolDefinition[] = [
       const intent = String(params.intent ?? "promotion");
       const segmentId = params.segmentId ? String(params.segmentId) : undefined;
       const segmentFilter = params.segmentFilter ? String(params.segmentFilter) : undefined;
-      const discountPercent = params.discountPercent ? Number(params.discountPercent) : undefined;
+      let discountPercent = params.discountPercent ? Number(params.discountPercent) : undefined;
       const customInstructions = params.customInstructions ? String(params.customInstructions) : undefined;
+
+      // Guardrail (Phase 5): clamp the offer to the merchant's max-discount cap so
+      // joon can't propose a deeper discount than the store allows.
+      if (discountPercent != null) {
+        const cap = await prisma.guardrail.findFirst({ where: { storeId: ctx.storeId, ruleType: "max_discount", isActive: true }, select: { ruleValue: true } });
+        const maxPct = (cap?.ruleValue as { maxPercent?: number } | null)?.maxPercent;
+        if (typeof maxPct === "number" && discountPercent > maxPct) discountPercent = maxPct;
+      }
 
       // Decide the discount code at DRAFT time so the real code is baked into the
       // copy; the send worker creates the matching REAL Shopify price rule at send
