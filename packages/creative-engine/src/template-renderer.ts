@@ -6,6 +6,28 @@ import { DEFAULT_BRAND_TOKENS } from "./types";
 
 const TEMPLATES_DIR = path.join(__dirname, "..", "templates");
 
+function escapeXml(value: unknown): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeUrl(value: unknown): string {
+  const candidate = String(value ?? "").trim();
+  if (candidate === "#") return "#";
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? escapeXml(url.toString())
+      : "#";
+  } catch {
+    return "#";
+  }
+}
+
 /** All available template archetypes with metadata */
 export const TEMPLATE_ARCHETYPES: TemplateArchetype[] = [
   { id: "hero-story", name: "Hero Story", description: "Full-width hero image, big headline, short body, single CTA", bestFor: ["new_arrival", "seasonal", "newsletter"], requiredSlots: ["headline", "ctaText", "ctaUrl"], optionalSlots: ["heroImageUrl", "bodyText", "subheadline"] },
@@ -48,13 +70,20 @@ function substituteVariables(
 
   // Substitute brand tokens: {{token.primaryBackground}} etc.
   for (const [key, value] of Object.entries(tokens)) {
-    result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), String(value));
+    result = result.replace(
+      new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"),
+      escapeXml(value),
+    );
   }
 
   // Substitute content slots: {{slot.headline}} etc.
   for (const [key, value] of Object.entries(slots)) {
     if (typeof value === "string") {
-      result = result.replace(new RegExp(`\\{\\{slot\\.${key}\\}\\}`, "g"), value);
+      const safeValue = /url$/i.test(key) ? safeUrl(value) : escapeXml(value);
+      result = result.replace(
+        new RegExp(`\\{\\{slot\\.${key}\\}\\}`, "g"),
+        safeValue,
+      );
     } else if (typeof value === "number") {
       result = result.replace(new RegExp(`\\{\\{slot\\.${key}\\}\\}`, "g"), String(value));
     }
@@ -64,20 +93,20 @@ function substituteVariables(
   if (slots.products && slots.products.length > 0) {
     const productHtml = slots.products.map((p) => `
       <mj-column>
-        ${p.processedImageUrl || p.imageUrl ? `<mj-image src="${p.processedImageUrl || p.imageUrl}" alt="${p.title}" width="250px" border-radius="{{token.imageCornerRadius}}" />` : ""}
-        <mj-text font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" color="{{token.textPrimary}}" align="center" font-weight="600">${p.title}</mj-text>
+        ${p.processedImageUrl || p.imageUrl ? `<mj-image src="${safeUrl(p.processedImageUrl || p.imageUrl)}" alt="${escapeXml(p.title)}" width="250px" border-radius="{{token.imageCornerRadius}}" />` : ""}
+        <mj-text font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" color="{{token.textPrimary}}" align="center" font-weight="600">${escapeXml(p.title)}</mj-text>
         <mj-text font-family="{{token.bodyFont}}" font-size="{{token.captionSize}}" color="{{token.textSecondary}}" align="center">
-          ${p.compareAtPrice ? `<s>${p.compareAtPrice}</s> ` : ""}${p.price}
-          ${p.badge ? ` <span style="color: {{token.accentColor}}; font-weight: 700;">${p.badge}</span>` : ""}
+          ${p.compareAtPrice ? `<s>${escapeXml(p.compareAtPrice)}</s> ` : ""}${escapeXml(p.price)}
+          ${p.badge ? ` <span style="color: {{token.accentColor}}; font-weight: 700;">${escapeXml(p.badge)}</span>` : ""}
         </mj-text>
-        <mj-button background-color="{{token.ctaBackground}}" color="{{token.ctaTextColor}}" border-radius="{{token.ctaBorderRadius}}" font-family="{{token.bodyFont}}" href="${p.url}">Shop Now</mj-button>
+        <mj-button background-color="{{token.ctaBackground}}" color="{{token.ctaTextColor}}" border-radius="{{token.ctaBorderRadius}}" font-family="{{token.bodyFont}}" href="${safeUrl(p.url)}">Shop Now</mj-button>
       </mj-column>
     `).join("");
     result = result.replace(/\{\{slot\.productsHtml\}\}/g, productHtml);
 
     // Re-substitute any token refs inside product HTML
     for (const [key, value] of Object.entries(tokens)) {
-      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), String(value));
+      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), escapeXml(value));
     }
   }
 
@@ -86,16 +115,16 @@ function substituteVariables(
     const stepsHtml = slots.steps.map((step, i) => `
       <mj-section>
         <mj-column>
-          <mj-text font-family="{{token.headingFont}}" font-size="{{token.h2Size}}" color="{{token.accentColor}}" font-weight="700">${i + 1}. ${step.title}</mj-text>
-          <mj-text font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" color="{{token.textSecondary}}">${step.description}</mj-text>
-          ${step.imageUrl ? `<mj-image src="${step.imageUrl}" width="500px" border-radius="{{token.imageCornerRadius}}" />` : ""}
+          <mj-text font-family="{{token.headingFont}}" font-size="{{token.h2Size}}" color="{{token.accentColor}}" font-weight="700">${i + 1}. ${escapeXml(step.title)}</mj-text>
+          <mj-text font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" color="{{token.textSecondary}}">${escapeXml(step.description)}</mj-text>
+          ${step.imageUrl ? `<mj-image src="${safeUrl(step.imageUrl)}" width="500px" border-radius="{{token.imageCornerRadius}}" />` : ""}
         </mj-column>
       </mj-section>
     `).join("");
     result = result.replace(/\{\{slot\.stepsHtml\}\}/g, stepsHtml);
 
     for (const [key, value] of Object.entries(tokens)) {
-      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), String(value));
+      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), escapeXml(value));
     }
   }
 
@@ -103,14 +132,14 @@ function substituteVariables(
   if (slots.stats && slots.stats.length > 0) {
     const statsHtml = slots.stats.map((stat) => `
       <mj-column>
-        <mj-text font-family="{{token.headingFont}}" font-size="{{token.h1Size}}" color="{{token.accentColor}}" align="center" font-weight="700">${stat.value}</mj-text>
-        <mj-text font-family="{{token.bodyFont}}" font-size="{{token.captionSize}}" color="{{token.textMuted}}" align="center">${stat.label}</mj-text>
+        <mj-text font-family="{{token.headingFont}}" font-size="{{token.h1Size}}" color="{{token.accentColor}}" align="center" font-weight="700">${escapeXml(stat.value)}</mj-text>
+        <mj-text font-family="{{token.bodyFont}}" font-size="{{token.captionSize}}" color="{{token.textMuted}}" align="center">${escapeXml(stat.label)}</mj-text>
       </mj-column>
     `).join("");
     result = result.replace(/\{\{slot\.statsHtml\}\}/g, statsHtml);
 
     for (const [key, value] of Object.entries(tokens)) {
-      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), String(value));
+      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), escapeXml(value));
     }
   }
 
@@ -118,13 +147,13 @@ function substituteVariables(
   if (slots.testimonial) {
     const t = slots.testimonial;
     const testimonialHtml = `
-      <mj-text font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" color="{{token.textPrimary}}" font-style="italic" padding="20px 40px">"${t.text}"</mj-text>
-      <mj-text font-family="{{token.bodyFont}}" font-size="{{token.captionSize}}" color="{{token.textMuted}}" padding="0 40px">— ${t.author}</mj-text>
+      <mj-text font-family="{{token.bodyFont}}" font-size="{{token.bodySize}}" color="{{token.textPrimary}}" font-style="italic" padding="20px 40px">&quot;${escapeXml(t.text)}&quot;</mj-text>
+      <mj-text font-family="{{token.bodyFont}}" font-size="{{token.captionSize}}" color="{{token.textMuted}}" padding="0 40px">— ${escapeXml(t.author)}</mj-text>
     `;
     result = result.replace(/\{\{slot\.testimonialHtml\}\}/g, testimonialHtml);
 
     for (const [key, value] of Object.entries(tokens)) {
-      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), String(value));
+      result = result.replace(new RegExp(`\\{\\{token\\.${key}\\}\\}`, "g"), escapeXml(value));
     }
   }
 
@@ -148,7 +177,9 @@ export function renderMjmlTemplate(
 
   const result = mjml2html(populated, {
     validationLevel: "soft",
-    minify: true,
+    // Avoid html-minifier's unpatched ReDoS surface. Email size optimization
+    // belongs at the final trusted-output boundary, not inside template parsing.
+    minify: false,
   });
 
   if (result.errors.length > 0) {
