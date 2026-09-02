@@ -36,6 +36,9 @@ model Workspace {
   name         String
   slug         String   @unique
   defaultModel String?
+  // Merchant-configured routing policy: one model for every AI job, or
+  // workload-specific primary/fallback chains. Parsed defensively by the AI gateway.
+  modelHarness Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -54,6 +57,41 @@ model Workspace {
   notificationPreferences NotificationPreference[]
 
   @@map("workspaces")
+}
+
+/// Durable audit trail for Shopify's mandatory privacy webhooks. Requests are
+/// retained without depending on the Store row, because shop/redact deletes it.
+model PrivacyRequest {
+  id                 String    @id @default(cuid())
+  eventId            String    @unique
+  shopDomain         String
+  topic              String
+  customerExternalId String?
+  payload            Json
+  result             Json?
+  status             String    @default("pending") // pending | completed | failed
+  error              String?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([shopDomain, topic, createdAt])
+  @@map("privacy_requests")
+}
+
+/// Provider event inbox. A unique event ID prevents retries from double-counting
+/// opens/clicks or applying suppression twice.
+model ProviderWebhookEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String
+  eventType   String
+  status      String    @default("processing")
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, eventType, createdAt])
+  @@map("provider_webhook_events")
 }
 
 model WorkspaceMember {
@@ -140,14 +178,20 @@ model Experiment {
 // ============================================================================
 
 model Store {
-  id          String    @id @default(cuid())
-  workspaceId String
-  platform    String // shopify, woocommerce, bigcommerce
-  shopDomain  String
-  accessToken String // encrypted
-  isActive    Boolean   @default(true)
-  installedAt DateTime  @default(now())
-  lastSyncAt  DateTime?
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  platform              String // shopify, woocommerce, bigcommerce
+  shopDomain            String
+  accessToken           String // AES-256-GCM ciphertext; never expose outside trusted server code
+  accessTokenExpiresAt  DateTime?
+  refreshToken          String? // AES-256-GCM ciphertext
+  refreshTokenExpiresAt DateTime?
+  tokenScopes           String[]  @default([])
+  widgetPublicKey       String?   @unique
+  widgetAllowedOrigins  String[]  @default([])
+  isActive              Boolean   @default(true)
+  installedAt           DateTime  @default(now())
+  lastSyncAt            DateTime?
 
   // Shop metadata (synced from Shopify)
   storeName             String?
@@ -237,7 +281,8 @@ model Store {
   agentActivityLogs AgentActivityLog[]
 
   // Sprint 13: Real-Time Event Triggers
-  browseEvents BrowseEvent[]
+  browseEvents     BrowseEvent[]
+  storefrontEvents StorefrontEvent[]
 
   // Sprint 14B: Self-Optimizing Agent
   copyPerformance CopyPerformance[]
@@ -249,7 +294,9 @@ model Store {
   basketArchetypes BasketArchetype[]
 
   // Causal-data moat: holdout experiments
-  experiments Experiment[]
+  experiments         Experiment[]
+  contactConsents     ContactConsent[]
+  contactSuppressions ContactSuppression[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -375,11 +422,57 @@ model Customer {
   formSubmissions                FormSubmission[]
   customerProductRecommendations CustomerProductRecommendation[]
   proactiveOutreachLogs          ProactiveOutreachLog[]
+  contactConsents                ContactConsent[]
+  contactSuppressions            ContactSuppression[]
 
   @@unique([storeId, externalId])
   @@index([email])
   @@index([identityId])
   @@map("customers")
+}
+
+/// Evidence-bearing, channel-specific marketing permission. The legacy
+/// Customer.acceptsMarketing remains as a Shopify email compatibility mirror.
+model ContactConsent {
+  id          String    @id @default(cuid())
+  storeId     String
+  customerId  String
+  channel     String // email | sms | whatsapp | rcs
+  status      String // opted_in | opted_out | unknown
+  source      String // shopify | checkout | form | import | unsubscribe | provider
+  evidence    Json?
+  collectedAt DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, channel])
+  @@index([storeId, channel, status])
+  @@map("contact_consents")
+}
+
+/// Permanent or time-bounded delivery suppression. Provider complaints and hard
+/// bounces enter here before a later campaign can resolve its audience.
+model ContactSuppression {
+  id         String    @id @default(cuid())
+  storeId    String
+  customerId String
+  channel    String
+  reason     String // unsubscribe | complaint | hard_bounce | manual
+  source     String // joon | resend | shopify | merchant
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, channel])
+  @@index([storeId, channel, reason])
+  @@map("contact_suppressions")
 }
 
 // ============================================================================
@@ -662,7 +755,7 @@ model BrandProfile {
   storeId           String
   brandName         String
   brandDescription  String?
-  brandDocument     String?   @db.Text   // Raw brand guidelines pasted/uploaded by merchant
+  brandDocument     String? @db.Text // Raw brand guidelines pasted/uploaded by merchant
   toneAttributes    Json // { formality, humor, energy, warmth }
   vocabulary        Json // preferred words, phrases, CTA patterns
   visualStyle       Json // colors, font preferences, image style
@@ -907,6 +1000,7 @@ model AgentPipelineRun {
 
 model MessageLog {
   id           String    @id @default(cuid())
+  deliveryKey  String?   @unique // stable provider/idempotency key for one logical delivery
   workspaceId  String
   storeId      String
   customerId   String? // link to customer for attribution
@@ -1757,6 +1851,25 @@ model BrowseEvent {
   @@map("browse_events")
 }
 
+model StorefrontEvent {
+  id         String   @id @default(cuid())
+  storeId    String
+  type       String
+  visitorId  String?
+  sessionId  String?
+  customerId String?
+  data       Json
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, type, occurredAt])
+  @@index([storeId, visitorId, occurredAt])
+  @@index([storeId, sessionId, occurredAt])
+  @@map("storefront_events")
+}
+
 // ============================================================================
 // SPRINT 12: OVERNIGHT OPS + REVENUE ATTRIBUTION
 // ============================================================================
@@ -1811,20 +1924,20 @@ model CopyPerformance {
 // ============================================================================
 
 model ProductSegment {
-  id              String   @id @default(cuid())
-  storeId         String
-  name            String
-  slug            String
-  description     String?
-  segmentType     String   // "product_category", "basket_pattern", "behavior"
-  conditions      Json     // Rules that define this segment: { productTypes: [], minOrders: N, etc. }
-  customerCount   Int      @default(0)
-  totalRevenue    Decimal  @default(0) @db.Decimal(12, 2)
-  avgOrderValue   Decimal  @default(0) @db.Decimal(12, 2)
-  insights        Json?    // AI-generated insights about this segment
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  storeId       String
+  name          String
+  slug          String
+  description   String?
+  segmentType   String // "product_category", "basket_pattern", "behavior"
+  conditions    Json // Rules that define this segment: { productTypes: [], minOrders: N, etc. }
+  customerCount Int      @default(0)
+  totalRevenue  Decimal  @default(0) @db.Decimal(12, 2)
+  avgOrderValue Decimal  @default(0) @db.Decimal(12, 2)
+  insights      Json? // AI-generated insights about this segment
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   store   Store                  @relation(fields: [storeId], references: [id])
   members ProductSegmentMember[]
@@ -1854,16 +1967,16 @@ model ProductSegmentMember {
 model BasketArchetype {
   id              String   @id @default(cuid())
   storeId         String
-  name            String   // AI-generated name like "The Wellness Stack"
+  name            String // AI-generated name like "The Wellness Stack"
   slug            String
-  description     String?  // "Customers who buy protein powder + shaker + pre-workout together"
-  productIds      Json     // Array of product IDs in this basket pattern
-  productTitles   Json     // Array of product titles (for display without joins)
-  frequency       Int      @default(0)  // How many orders match this pattern
+  description     String? // "Customers who buy protein powder + shaker + pre-workout together"
+  productIds      Json // Array of product IDs in this basket pattern
+  productTitles   Json // Array of product titles (for display without joins)
+  frequency       Int      @default(0) // How many orders match this pattern
   avgOrderValue   Decimal  @default(0) @db.Decimal(12, 2)
-  customerCount   Int      @default(0)  // Unique customers who've ordered this combo
-  confidence      Float    @default(0)  // How strong this pattern is (0-1)
-  suggestedBundle Json?    // { bundleName, discount, reasoning } — AI suggestion
+  customerCount   Int      @default(0) // Unique customers who've ordered this combo
+  confidence      Float    @default(0) // How strong this pattern is (0-1)
+  suggestedBundle Json? // { bundleName, discount, reasoning } — AI suggestion
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

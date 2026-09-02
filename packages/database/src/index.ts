@@ -29,6 +29,17 @@ export { normalizeEmail, normalizePhone } from "./identity";
 export { buildWhereFromConditions, resolveSegmentWhere } from "./segments";
 export type { SegmentCondition, SegmentConditions } from "./segments";
 export { MESSAGING_RATES_INR, messagingCostFor } from "./messaging-rates";
+export {
+  encryptSecret,
+  decryptSecret,
+  isEncryptedSecret,
+  safeSecretEqual,
+} from "./secrets";
+export { getMarketingDeliveryPermission } from "./contact-policy";
+export type {
+  DeliveryPermission,
+  MarketingChannel,
+} from "./contact-policy";
 
 // Demo / sandbox mode (logged-out visitor → seeded Vana, read-mostly). Resolved
 // by STABLE slug/domain (portable across dev/prod), not hardcoded cuids.
