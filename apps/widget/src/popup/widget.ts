@@ -31,7 +31,10 @@ export class PopupWidget {
     try {
       const url = `${this.config.apiUrl}/widget/popups`;
       const res = await fetch(url, {
-        headers: { "X-Joon-Publishable-Key": this.config.apiKey },
+        headers: {
+          "X-Joon-Publishable-Key": this.config.apiKey,
+          Authorization: await this.config.visitorSession.authorization(),
+        },
       });
       if (!res.ok) return;
       this.popups = await res.json();
@@ -186,6 +189,7 @@ export class PopupWidget {
         headers: {
           "Content-Type": "application/json",
           "X-Joon-Publishable-Key": this.config.apiKey,
+          Authorization: await this.config.visitorSession.authorization(),
         },
         body: JSON.stringify({
           popupId,
@@ -224,14 +228,19 @@ export class PopupWidget {
     }
   }
 
-  private trackEvent(type: string, data: Record<string, unknown>): void {
+  private async trackEvent(type: string, data: Record<string, unknown>): Promise<void> {
     fetch(`${this.config.apiUrl}/v1/events`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Joon-Publishable-Key": this.config.apiKey,
+        Authorization: await this.config.visitorSession.authorization(),
       },
-      body: JSON.stringify({ type, data, timestamp: Date.now() }),
+      body: JSON.stringify({
+        type,
+        data: { ...data, visitorId: this.config.visitorSession.visitorId },
+        timestamp: Date.now(),
+      }),
     }).catch(() => {});
   }
 

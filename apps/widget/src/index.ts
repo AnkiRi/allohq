@@ -2,10 +2,12 @@ import type { WidgetConfig, WidgetEvent } from "./types";
 import { submitEvent } from "./api";
 import { ChatWidget } from "./chat/widget";
 import { PopupWidget } from "./popup/widget";
+import { VisitorSession } from "./visitor-session";
 
 let config: WidgetConfig | null = null;
 let chatWidget: ChatWidget | null = null;
 let popupWidget: PopupWidget | null = null;
+let visitorSession: VisitorSession | null = null;
 
 /** Initialize the AlloHQ widget */
 export function init(options: WidgetConfig): void {
@@ -15,6 +17,7 @@ export function init(options: WidgetConfig): void {
   }
 
   const apiUrl = options.apiUrl ?? "https://api.allohq.com";
+  visitorSession = new VisitorSession(options.apiKey, apiUrl);
 
   // Auto-mount chat if enabled (default: true)
   if (options.chat !== false) {
@@ -24,6 +27,7 @@ export function init(options: WidgetConfig): void {
       storeName: options.storeName,
       storeDomain: options.storeDomain,
       debug: options.debug,
+      visitorSession,
     });
 
     // Mount when DOM is ready
@@ -41,6 +45,7 @@ export function init(options: WidgetConfig): void {
       apiUrl,
       popupIds: options.popupIds ?? [],
       debug: options.debug,
+      visitorSession,
     });
 
     const initPopups = () => popupWidget!.init();
@@ -65,7 +70,8 @@ export function track(type: WidgetEvent["type"], data: Record<string, unknown> =
     console.log("[AlloHQ] Event tracked:", event);
   }
 
-  submitEvent(config.apiKey, event, config.apiUrl).catch((err) => {
+  if (!visitorSession) return;
+  submitEvent(config.apiKey, visitorSession, event, config.apiUrl).catch((err) => {
     if (config?.debug) {
       console.error("[AlloHQ] Failed to submit event:", err);
     }

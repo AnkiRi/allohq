@@ -12,6 +12,10 @@ import {
   isAllowedWidgetOrigin,
 } from "./widget-api";
 import { checkRateLimit } from "../middleware/rate-limit";
+import {
+  bearerToken,
+  verifyWidgetVisitorToken,
+} from "../security/widget-visitor-token";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -76,7 +80,7 @@ export async function handleWidgetPopups(
         ? { "Access-Control-Allow-Origin": preflightOrigin, Vary: "Origin" }
         : {}),
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, X-Joon-Publishable-Key",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Joon-Publishable-Key",
     });
     res.end();
     return;
@@ -101,9 +105,18 @@ export async function handleWidgetPopups(
   }
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-Joon-Publishable-Key",
+    "Authorization, Content-Type, X-Joon-Publishable-Key",
   );
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  const token = bearerToken(req.headers.authorization);
+  const visitor = token && origin
+    ? verifyWidgetVisitorToken(token, { storeId: store.id, origin })
+    : null;
+  if (!visitor) {
+    json(res, 401, { error: "Missing or invalid visitor token" });
+    return;
+  }
 
   const forwarded = req.headers["x-forwarded-for"];
   const ip =

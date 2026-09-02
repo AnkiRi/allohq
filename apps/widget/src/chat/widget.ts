@@ -1,6 +1,7 @@
 import { ChatConnection } from "./connection";
 import { ChatRenderer } from "./renderer";
 import { CHAT_STYLES } from "./styles";
+import type { VisitorSession } from "../visitor-session";
 
 export interface ChatWidgetConfig {
   apiKey: string;
@@ -8,6 +9,7 @@ export interface ChatWidgetConfig {
   storeName?: string;
   storeDomain?: string;
   debug?: boolean;
+  visitorSession: VisitorSession;
 }
 
 /**
@@ -23,7 +25,7 @@ export class ChatWidget {
 
   constructor(config: ChatWidgetConfig) {
     this.config = config;
-    this.connection = new ChatConnection(config.apiKey, config.apiUrl);
+    this.connection = new ChatConnection(config.apiKey, config.apiUrl, config.visitorSession);
   }
 
   /** Mount the widget to the DOM */
@@ -64,8 +66,7 @@ export class ChatWidget {
     try {
       // Ensure conversation is started
       if (!this.connection.conversationId) {
-        const visitorId = this.getVisitorId();
-        const data = await this.connection.startConversation(visitorId);
+        const data = await this.connection.startConversation(this.config.visitorSession.visitorId);
 
         // Render any existing messages from resumed conversation
         for (const msg of data.messages) {
@@ -144,18 +145,4 @@ export class ChatWidget {
     }
   }
 
-  /** Get or create a persistent visitor ID */
-  private getVisitorId(): string {
-    const key = "allohq_visitor_id";
-    let id = localStorage.getItem(key);
-    if (!id) {
-      id = "v_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      try {
-        localStorage.setItem(key, id);
-      } catch {
-        // localStorage may be unavailable
-      }
-    }
-    return id;
-  }
 }

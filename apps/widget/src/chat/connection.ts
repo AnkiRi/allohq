@@ -30,7 +30,11 @@ export class ChatConnection {
   private apiKey: string;
   public conversationId: string | null = null;
 
-  constructor(apiKey: string, apiUrl: string) {
+  constructor(
+    apiKey: string,
+    apiUrl: string,
+    private readonly visitorSession: VisitorSession,
+  ) {
     this.apiKey = apiKey;
     this.apiUrl = apiUrl;
   }
@@ -42,6 +46,7 @@ export class ChatConnection {
       headers: {
         "Content-Type": "application/json",
         "X-Joon-Publishable-Key": this.apiKey,
+        Authorization: await this.visitorSession.authorization(),
       },
       body: JSON.stringify({ channel: "widget", visitorId }),
     });
@@ -63,6 +68,7 @@ export class ChatConnection {
         headers: {
           "Content-Type": "application/json",
           "X-Joon-Publishable-Key": this.apiKey,
+          Authorization: await this.visitorSession.authorization(),
         },
         body: JSON.stringify({ message }),
       }
@@ -124,3 +130,4 @@ export class ChatConnection {
     }
   }
 }
+import type { VisitorSession } from "../visitor-session";

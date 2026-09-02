@@ -25,6 +25,11 @@ function encryptionKey(): Buffer {
   return key;
 }
 
+/** Validate deployment configuration before a process starts serving work. */
+export function assertDataEncryptionConfigured(): void {
+  encryptionKey();
+}
+
 export function isEncryptedSecret(value: string): boolean {
   return value.startsWith(`${PREFIX}:`);
 }

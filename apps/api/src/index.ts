@@ -12,10 +12,20 @@ import { handleGupshupWebhook } from "./webhooks/gupshup";
 import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
 import { handleWidgetPopups } from "./routes/widget-popups";
-import { prisma } from "@allohq/database";
+import { assertDataEncryptionConfigured, prisma } from "@allohq/database";
 
 // Load environment variables
 config();
+
+if (process.env.NODE_ENV === "production") {
+  assertDataEncryptionConfigured();
+  const widgetSigningSecret = process.env.WIDGET_VISITOR_SIGNING_SECRET;
+  if (!widgetSigningSecret || Buffer.byteLength(widgetSigningSecret) < 32) {
+    throw new Error(
+      "WIDGET_VISITOR_SIGNING_SECRET must contain at least 32 bytes in production",
+    );
+  }
+}
 
 const PORT = process.env.PORT || 3001;
 

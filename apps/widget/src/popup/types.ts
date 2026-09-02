@@ -21,4 +21,6 @@ export interface PopupWidgetConfig {
   apiUrl: string;
   popupIds: string[];
   debug?: boolean;
+  visitorSession: VisitorSession;
 }
+import type { VisitorSession } from "../visitor-session";

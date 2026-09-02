@@ -17,39 +17,31 @@ export async function GET(request: NextRequest) {
   const shop = searchParams.get("shop");
   const code = searchParams.get("code");
   const state = searchParams.get("state");
+  const integrationError = (code: string) =>
+    NextResponse.redirect(
+      new URL(`/integrations?shopify_error=${encodeURIComponent(code)}`, request.nextUrl.origin),
+    );
 
   // Validate CSRF state
   const savedState = request.cookies.get("shopify_oauth_state")?.value;
   if (!state || state !== savedState) {
-    return NextResponse.json(
-      { error: "Invalid state parameter" },
-      { status: 400 }
-    );
+    return integrationError("invalid_state");
   }
 
   if (!shop || !code) {
-    return NextResponse.json(
-      { error: "Missing shop or code parameter" },
-      { status: 400 }
-    );
+    return integrationError("missing_callback_parameters");
   }
 
   const apiKey = process.env.SHOPIFY_API_KEY;
   const apiSecret = process.env.SHOPIFY_API_SECRET;
   if (!apiKey || !apiSecret) {
-    return NextResponse.json(
-      { error: "Shopify credentials not configured" },
-      { status: 500 }
-    );
+    return integrationError("configuration_error");
   }
 
   try {
     const normalizedShop = normalizeShopDomain(shop);
     if (!verifyOAuthHmac(searchParams, apiSecret)) {
-      return NextResponse.json(
-        { error: "Invalid Shopify HMAC signature" },
-        { status: 401 },
-      );
+      return integrationError("invalid_signature");
     }
 
     const callbackTimestamp = Number(searchParams.get("timestamp"));
@@ -57,10 +49,7 @@ export async function GET(request: NextRequest) {
       !Number.isFinite(callbackTimestamp) ||
       Math.abs(Date.now() / 1000 - callbackTimestamp) > 10 * 60
     ) {
-      return NextResponse.json(
-        { error: "Expired Shopify OAuth callback" },
-        { status: 400 },
-      );
+      return integrationError("expired_callback");
     }
 
     // Exchange code for an offline access token, then encrypt it before it
@@ -133,10 +122,7 @@ export async function GET(request: NextRequest) {
 
     const workspaceId = user.workspaceMembers[0]?.workspaceId;
     if (!workspaceId) {
-      return NextResponse.json(
-        { error: "No workspace found for user" },
-        { status: 400 }
-      );
+      return integrationError("workspace_missing");
     }
 
     const existingStore = await prisma.store.findUnique({
@@ -230,13 +216,12 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Shopify OAuth callback error:", error);
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.redirect(
-      new URL(
-        `/integrations?error=${encodeURIComponent(message)}`,
-        request.nextUrl.origin
-      )
-    );
+    const message = error instanceof Error ? error.message : "";
+    const code = message.includes("DATA_ENCRYPTION_KEY")
+      ? "configuration_error"
+      : message.includes("required scopes")
+        ? "missing_scopes"
+        : "connection_failed";
+    return integrationError(code);
   }
 }

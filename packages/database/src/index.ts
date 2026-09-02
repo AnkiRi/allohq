@@ -34,6 +34,7 @@ export {
   decryptSecret,
   isEncryptedSecret,
   safeSecretEqual,
+  assertDataEncryptionConfigured,
 } from "./secrets";
 export { getMarketingDeliveryPermission } from "./contact-policy";
 export type {

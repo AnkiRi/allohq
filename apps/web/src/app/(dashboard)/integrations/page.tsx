@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Store, ShoppingBag, ArrowRight, Check, X, Loader2, Mail, BarChart3, MessageSquare, Bell } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -77,6 +77,23 @@ export default function IntegrationsPage() {
   const [shopDomain, setShopDomain] = useState("");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("shopify_error");
+    if (!code) return;
+    const messages: Record<string, string> = {
+      invalid_state: "The Shopify connection expired or was opened in another tab. Please try again.",
+      missing_callback_parameters: "Shopify did not return everything needed to connect. Please try again.",
+      invalid_signature: "We could not verify Shopify's response. Please restart the connection.",
+      expired_callback: "The Shopify connection took too long and expired. Please try again.",
+      configuration_error: "Shopify connections are temporarily unavailable. Our team has been notified.",
+      missing_scopes: "The required Shopify permissions were not granted. Please reconnect and approve them.",
+      workspace_missing: "We could not find your joon workspace. Please sign in again and retry.",
+      connection_failed: "We couldn't connect Shopify. No changes were made—please try again.",
+    };
+    setError(messages[code] ?? messages.connection_failed!);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   const { data: stores, isLoading } = trpc.stores.list.useQuery();
 

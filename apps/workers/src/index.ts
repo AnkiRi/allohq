@@ -8,6 +8,11 @@ import dns from "node:dns";
 import { Queue } from "bullmq";
 import { redisConnection, QUEUE_NAMES } from "./config";
 import { isScheduleAllowed, isV1ReleaseMode } from "@allohq/release-gate";
+import { assertDataEncryptionConfigured } from "@allohq/database";
+
+if (process.env.NODE_ENV === "production") {
+  assertDataEncryptionConfigured();
+}
 
 const resolver = new dns.Resolver();
 resolver.setServers(["8.8.8.8", "1.1.1.1"]);

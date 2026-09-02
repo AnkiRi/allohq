@@ -2,6 +2,11 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
 import { runCustomerAgent } from "@allohq/agent-core";
 import { checkRateLimit } from "../middleware/rate-limit";
+import {
+  bearerToken,
+  issueWidgetVisitorToken,
+  verifyWidgetVisitorToken,
+} from "../security/widget-visitor-token";
 
 /**
  * REST API endpoints for the customer-facing widget.
@@ -137,7 +142,7 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
     }
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, X-Joon-Publishable-Key",
+      "Authorization, Content-Type, X-Joon-Publishable-Key",
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.writeHead(204);
@@ -164,7 +169,7 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
   }
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-Joon-Publishable-Key",
+    "Authorization, Content-Type, X-Joon-Publishable-Key",
   );
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -182,6 +187,38 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
+    // The long-lived publishable key is accepted only to bootstrap an
+    // origin/store/visitor-bound token. Every operational request below uses
+    // the short-lived token, limiting replay and preventing visitor swapping.
+    if (url === "/v1/visitor-token" && method === "POST") {
+      if (!origin) {
+        json(res, 400, { error: "Origin is required" });
+        return;
+      }
+      const body = await parseBody(req, 4 * 1024);
+      const visitorId = shortString(body["visitorId"]);
+      if (!visitorId) {
+        json(res, 400, { error: "visitorId is required" });
+        return;
+      }
+      const issued = issueWidgetVisitorToken({
+        storeId: store.id,
+        origin,
+        visitorId,
+      });
+      json(res, 200, issued);
+      return;
+    }
+
+    const token = bearerToken(req.headers.authorization);
+    const visitor = token && origin
+      ? verifyWidgetVisitorToken(token, { storeId: store.id, origin })
+      : null;
+    if (!visitor) {
+      json(res, 401, { error: "Missing or invalid visitor token" });
+      return;
+    }
+
     // POST /v1/events — Persist the raw event ledger and mirror product views
     // into BrowseEvent for the existing real-time trigger pipeline.
     if (url === "/v1/events" && method === "POST") {
@@ -207,6 +244,10 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
           ? timestamp
           : now;
       const visitorId = shortString(data["visitorId"]);
+      if (visitorId && visitorId !== visitor.visitorId) {
+        json(res, 403, { error: "Visitor identity mismatch" });
+        return;
+      }
       const sessionId = shortString(data["sessionId"]);
       const productId = shortString(data["productId"]);
       const pageUrl = shortString(data["pageUrl"], 2_048);
@@ -251,7 +292,11 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
       const safeVisitorId =
         typeof visitorId === "string" && visitorId.length <= 128
           ? visitorId
-          : undefined;
+          : visitor.visitorId;
+      if (safeVisitorId !== visitor.visitorId) {
+        json(res, 403, { error: "Visitor identity mismatch" });
+        return;
+      }
 
       // A public browser must not be able to claim an arbitrary internal
       // customerId. Authenticated linking will use a signed server token.
@@ -313,7 +358,11 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
 
       // Verify conversation belongs to this store
       const conversation = await prisma.conversation.findFirst({
-        where: { id: conversationId, storeId: store.id },
+        where: {
+          id: conversationId,
+          storeId: store.id,
+          metadata: { path: ["visitorId"], equals: visitor.visitorId },
+        },
       });
 
       if (!conversation) {
