@@ -1,5 +1,8 @@
 import { Worker, Queue } from "bullmq";
-import { prisma } from "@allohq/database";
+import {
+  prisma,
+  getMarketingDeliveryPermission,
+} from "@allohq/database";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs } from "@allohq/messaging";
 import type { Channel } from "@allohq/messaging";
 import { renderBrandedEmail } from "@allohq/customer-intelligence";
@@ -174,6 +177,37 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
         select: { workspaceId: true },
       });
       const workspaceId = storeRecord?.workspaceId ?? storeId;
+      const permission = await getMarketingDeliveryPermission(
+        customerId,
+        channel,
+      );
+      if (!permission.allowed) {
+        await prisma.messageLog.create({
+          data: {
+            workspaceId,
+            storeId,
+            customerId,
+            channel,
+            to: channel === "email" ? customer.email : (customer.phone ?? ""),
+            automationId,
+            status: "suppressed",
+            error: `Contact permission: ${
+              permission.reason ?? "permission_denied"
+            }`,
+            metadata: {
+              source: "journey",
+              journeyId,
+              rule: "contact_permission",
+              reason: permission.reason ?? null,
+              detail: permission.detail ?? null,
+            } as any,
+          },
+        });
+        return {
+          status: "suppressed",
+          reason: permission.reason ?? "permission_denied",
+        };
+      }
 
       try {
         let sendResult: { status: string; externalId?: string; provider?: string; error?: string } = { status: "sent" };
@@ -217,6 +251,19 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
           },
         });
 
+        if (sendResult.status !== "sent") {
+          console.error(
+            `Journey ${journeyId} failed to send ${channel}: ${
+              sendResult.error ?? "provider failure"
+            }`,
+          );
+          return {
+            status: "delivery_failed",
+            channel,
+            reason: sendResult.error ?? "provider_failure",
+          };
+        }
+
         // Log fatigue
         await prisma.customerFatigueLog.create({
           data: {
@@ -240,6 +287,11 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
         console.log(`Journey ${journeyId} sent ${channel} to customer ${customerId}`);
       } catch (err: any) {
         console.error(`Journey ${journeyId} send failed:`, err.message);
+        return {
+          status: "delivery_failed",
+          channel,
+          reason: err.message,
+        };
       }
 
       // Queue next step

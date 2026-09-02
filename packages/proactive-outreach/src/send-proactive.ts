@@ -1,4 +1,7 @@
-import { prisma } from "@allohq/database";
+import {
+  prisma,
+  getMarketingDeliveryPermission,
+} from "@allohq/database";
 import { send } from "@allohq/messaging";
 import type { Channel } from "@allohq/messaging";
 import { checkAllRules } from "@allohq/communication-governor";
@@ -56,6 +59,41 @@ export async function sendProactiveMessage(
 
   // 3. Governor check — shipping updates are transactional (bypass fatigue)
   const messageType = outreachType === "shipping_update" ? "transactional" : "proactive";
+  if (messageType !== "transactional") {
+    const permission = await getMarketingDeliveryPermission(
+      customerId,
+      channel,
+    );
+    if (!permission.allowed) {
+      await prisma.messageLog.create({
+        data: {
+          workspaceId,
+          storeId,
+          customerId,
+          channel,
+          to: "",
+          status: "suppressed",
+          error: `Contact permission: ${
+            permission.reason ?? "permission_denied"
+          }`,
+          metadata: {
+            outreachType,
+            rule: "contact_permission",
+            reason: permission.reason ?? null,
+            detail: permission.detail ?? null,
+          },
+        },
+      });
+      return {
+        sent: false,
+        suppressed: true,
+        reason: `Contact permission: ${
+          permission.reason ?? "permission_denied"
+        }`,
+        channel,
+      };
+    }
+  }
   const govCheck = await checkAllRules({
     customerId,
     storeId,

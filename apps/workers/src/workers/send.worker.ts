@@ -1,13 +1,18 @@
 import { Worker, Queue } from "bullmq";
-import { prisma, buildWhereFromConditions, messagingCostFor } from "@allohq/database";
+import {
+  prisma,
+  buildWhereFromConditions,
+  messagingCostFor,
+  getMarketingDeliveryPermission,
+} from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit, getOptimalSendTime, planCustomerDelivery } from "@allohq/customer-intelligence";
 import { getBestChannel } from "@allohq/journey-orchestrator";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
-const { ShopifyClient, createDiscount } = shopify;
+const { createDiscount, getShopifyAdminClient } = shopify;
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
-import { checkAllRules } from "@allohq/communication-governor";
+import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-governor";
 import {
   learnFromResults,
   assignVariant as abAssignVariant,
@@ -97,8 +102,18 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
 
   const isDemo = campaign.store?.shopDomain === DEMO_STORE_DOMAIN;
 
-  // Recipients (same resolution + acceptsMarketing opt-in as preview/create).
-  const customerWhere: Record<string, unknown> = { storeId: campaign.storeId, acceptsMarketing: true };
+  // Pre-filter obvious opt-outs. Permission is checked again immediately before
+  // delivery because delayed jobs can outlive a consent change.
+  const customerWhere: Record<string, unknown> = {
+    storeId: campaign.storeId,
+    acceptsMarketing: true,
+    contactSuppressions: {
+      none: {
+        channel: "email",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+    },
+  };
   if (campaign.segmentId && campaign.segment) {
     const seg = campaign.segment;
     if (seg.kind === "manual") {
@@ -139,15 +154,15 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     segmentName: campaign.segment?.name ?? null,
   });
 
-  // North Star #2 — make the offer REAL once per campaign (idempotent, demo-safe,
-  // graceful). Unchanged from the inline version; the code was decided at draft.
+  // North Star #2 — make the offer real before any recipient is planned. A
+  // campaign must never mention a code that Shopify rejected.
   const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
   const discountPercent: number | null = typeof proposal["discountPercent"] === "number" ? proposal["discountPercent"] : null;
   const discountCode: string | null = typeof proposal["discountCode"] === "string" ? proposal["discountCode"] : null;
   let offerId: string | null = typeof proposal["offerId"] === "string" ? proposal["offerId"] : null;
   if (discountCode && !offerId && !isDemo && campaign.store?.accessToken) {
     try {
-      const client = new ShopifyClient(campaign.store.shopDomain, campaign.store.accessToken);
+      const client = await getShopifyAdminClient(campaign.storeId);
       const endsAt = new Date();
       endsAt.setDate(endsAt.getDate() + 30);
       const res = await createDiscount(client, { code: discountCode, valueType: "percentage", value: discountPercent ?? 10, title: `Joon: ${campaign.name}`, oncePerCustomer: true, endsAt });
@@ -155,7 +170,24 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       await prisma.campaign.update({ where: { id: campaignId }, data: { agentProposal: { ...proposal, offerId } } });
       console.log(`[send-worker] Created Shopify discount ${discountCode} (priceRule ${offerId}) for campaign ${campaignId}`);
     } catch (err: any) {
-      console.error(`[send-worker] Shopify discount creation failed for campaign ${campaignId} (code ${discountCode}) — copy still shows it; may need write_price_rules scope / store reconnect:`, err?.message ?? err);
+      const message = err?.message ?? String(err);
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: {
+          status: "draft",
+          agentProposal: {
+            ...proposal,
+            dispatchError: {
+              type: "discount_creation_failed",
+              message,
+              at: new Date().toISOString(),
+            },
+          },
+        },
+      });
+      throw new Error(
+        `Campaign blocked: Shopify could not create ${discountCode}: ${message}`,
+      );
     }
   }
   const hasDiscount = !!discountCode;
@@ -296,18 +328,24 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           reasoning: decision.reasoning,
         },
       } as DeliverOneData,
-      { delay: computeDelayMs(bestHour, isDemo), jobId: `deliver-${campaignId}-${customer.id}` },
+      {
+        delay: computeDelayMs(bestHour, isDemo),
+        jobId: `deliver-${campaignId}-${customer.id}`,
+        attempts: 5,
+        backoff: { type: "exponential", delay: 2_000 },
+        removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+        removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+      },
     );
     scheduledCount++;
   }
 
-  // Mark dispatched (status "sent" preserves existing UI expectations). recipientCount
-  // = the messaged (treatment) reach; control + skipped counts recorded for the roll-up.
+  // "sending" distinguishes a fully delivered campaign from delayed work.
   await prisma.campaign.update({
     where: { id: campaignId },
     data: {
-      status: "sent",
-      sentAt: new Date(),
+      status: "sending",
+      sentAt: null,
       recipientCount: scheduledCount,
       agentProposal: { ...proposal, offerId, dispatch: { scheduled: scheduledCount, control: controlCount, skipped: skippedCount, at: new Date().toISOString() } },
     },
@@ -333,13 +371,19 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
 export async function deliverOne(data: DeliverOneData) {
   const { campaignId, customerId, experimentId, effectiveSubject, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan } = data;
 
-  // Idempotency: if a treatment row already exists for (campaign, customer), a
-  // prior delivery handled it — never double-send / double-charge.
-  const existing = await prisma.messageLog.findFirst({
-    where: { campaignId, customerId, treatmentArm: "TREATMENT" },
+  const deliveryKey = `campaign:${campaignId}:customer:${customerId}:email:treatment`;
+  // Provider and database idempotency share one stable key. Failed rows are
+  // intentionally reused so BullMQ can retry without generating a second send.
+  const existing = await prisma.messageLog.findUnique({
+    where: { deliveryKey },
     select: { id: true, status: true },
   });
-  if (existing) return { skipped: true, reason: "already_delivered" };
+  if (
+    existing &&
+    !["failed", "queued"].includes(existing.status)
+  ) {
+    return { skipped: true, reason: "already_delivered" };
+  }
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -357,11 +401,68 @@ export async function deliverOne(data: DeliverOneData) {
   });
   if (!customer) return { skipped: true, reason: "customer_gone" };
 
-  // Governor check AT SEND TIME (Phase 5 will thread the merchant's own limits here).
-  const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId });
+  const permission = await getMarketingDeliveryPermission(customerId, "email");
+  if (!permission.allowed) {
+    const suppressionData = {
+      status: "suppressed",
+      error: `Suppressed: ${permission.reason ?? "permission_denied"}${
+        permission.detail ? ` (${permission.detail})` : ""
+      }`,
+      metadata: {
+        suppressed: true,
+        rule: "contact_permission",
+        permission: {
+          allowed: permission.allowed,
+          reason: permission.reason ?? null,
+          detail: permission.detail ?? null,
+        },
+        plan,
+      } as any,
+    } as const;
+    if (existing) {
+      await prisma.messageLog.update({
+        where: { id: existing.id },
+        data: suppressionData,
+      });
+    } else {
+      await prisma.messageLog.create({
+        data: {
+          deliveryKey,
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          customerId,
+          channel: "email",
+          to: customer.email,
+          subject: effectiveSubject,
+          campaignId,
+          treatmentArm: "TREATMENT",
+          experimentId,
+          customerStateSnap: stateSnap as any,
+          ...suppressionData,
+        },
+      });
+    }
+    return { suppressed: true, reason: permission.reason };
+  }
+
+  // Governor check AT SEND TIME — now honoring the merchant's OWN limits (weekly
+  // cap / quiet hours / timezone) from onboarding, not store-agnostic defaults.
+  const govConfig = await loadStoreGovernorConfig(campaign.storeId);
+  const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId, ...govConfig });
   if (!governorCheck.allowed) {
-    await prisma.messageLog.create({
-      data: {
+    const suppressionData = {
+      status: "suppressed",
+      error: `Suppressed: ${governorCheck.reason}`,
+      metadata: { suppressed: true, rule: governorCheck.rule, plan } as any,
+    } as const;
+    if (existing) {
+      await prisma.messageLog.update({
+        where: { id: existing.id },
+        data: suppressionData,
+      });
+    } else {
+      await prisma.messageLog.create({ data: {
+        deliveryKey,
         workspaceId: campaign.store.workspaceId,
         storeId: campaign.storeId,
         customerId,
@@ -369,17 +470,15 @@ export async function deliverOne(data: DeliverOneData) {
         to: customer.email,
         subject: effectiveSubject,
         campaignId,
-        status: "suppressed",
         treatmentArm: "TREATMENT",
         experimentId,
         customerStateSnap: stateSnap as any,
         discountCode: discountCode ?? null,
         offerId,
         messageVariantId: plan.toneKey,
-        error: `Suppressed: ${governorCheck.reason}`,
-        metadata: { suppressed: true, rule: governorCheck.rule, plan } as any,
-      },
-    });
+        ...suppressionData,
+      } });
+    }
     return { suppressed: true };
   }
 
@@ -421,8 +520,20 @@ export async function deliverOne(data: DeliverOneData) {
     segment: customer.rfmScore?.segment ?? null,
   };
 
-  const messageLog = await prisma.messageLog.create({
-    data: {
+  const messageLog = existing
+    ? await prisma.messageLog.update({
+        where: { id: existing.id },
+        data: {
+          status: "queued",
+          error: null,
+          metadata: {
+            plan,
+            ...(abTestId ? { abTestId, abVariant } : {}),
+          } as any,
+        },
+      })
+    : await prisma.messageLog.create({ data: {
+      deliveryKey,
       workspaceId: campaign.store.workspaceId,
       storeId: campaign.storeId,
       customerId,
@@ -441,8 +552,7 @@ export async function deliverOne(data: DeliverOneData) {
       messageVariantId: plan.toneKey,
       sendCost: messagingCostFor("email"),
       metadata: { plan, ...(abTestId ? { abTestId, abVariant } : {}) } as any,
-    },
-  });
+    } });
 
   // Blocks + products + brand kit for rendering.
   const blocks = campaign.template.blocks as unknown as EmailBlock[];
@@ -477,6 +587,16 @@ export async function deliverOne(data: DeliverOneData) {
   }
 
   const brandKit = await loadBrandKit(campaign.storeId);
+  // Sender identity (Phase 5): send from the brand's own from-name/email + reply-to
+  // when set, instead of the hardcoded noreply@allohq.com (a deliverability + brand fix).
+  const brandSender = await prisma.brandProfile.findFirst({
+    where: { storeId: campaign.storeId },
+    select: { fromName: true, fromEmail: true, replyToEmail: true },
+  });
+  const fromAddress =
+    brandSender?.fromName && brandSender?.fromEmail
+      ? `${brandSender.fromName} <${brandSender.fromEmail}>`
+      : brandSender?.fromEmail || process.env["RESEND_FROM_EMAIL"] || "noreply@allohq.com";
   const html = await renderBrandedEmail({
     storeId: campaign.storeId,
     brandKit,
@@ -498,8 +618,10 @@ export async function deliverOne(data: DeliverOneData) {
           to: customer.email,
           subject: effectiveSubject,
           html,
-          from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+          from: fromAddress,
+          replyTo: brandSender?.replyToEmail ?? undefined,
           headers: { "List-Unsubscribe": `<${variables.unsubscribe_url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+          idempotencyKey: deliveryKey,
         });
 
   if (result.status === "sent") {
@@ -513,13 +635,17 @@ export async function deliverOne(data: DeliverOneData) {
   }
   await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "failed", provider: result.provider ?? "resend", error: result.error } });
   console.error(`  [SEND] Failed for ${customer.email}: ${result.error}`);
-  return { failed: true };
+  throw new Error(result.error ?? "Email provider failed");
 }
 
 // ---------------------------------------------------------------------------
 // FINALIZE — close the performance-learning loop once deliveries have elapsed.
 // ---------------------------------------------------------------------------
 async function finalizeCampaign(campaignId: string, _job: unknown) {
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { status: "sent", sentAt: new Date() },
+  });
   try {
     await learnFromResults(campaignId);
   } catch (err: any) {

@@ -1,5 +1,8 @@
 import { Worker, Queue } from "bullmq";
-import { prisma } from "@allohq/database";
+import {
+  prisma,
+  getMarketingDeliveryPermission,
+} from "@allohq/database";
 import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
@@ -55,12 +58,6 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
       return;
     }
 
-    // Respect marketing opt-out
-    if (!customer.acceptsMarketing) {
-      console.log(`[automation-runner] Customer ${customerId} opted out, skipping`);
-      return;
-    }
-
     // Fetch store messaging config for per-store provider selection
     const storeForConfig = await prisma.store.findUnique({
       where: { id: automation.storeId },
@@ -72,9 +69,41 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
     for (let i = currentNodeIndex; i < nodes.length; i++) {
       const node = nodes[i]!;
+      const logPermissionSuppression = async (
+        channel: "email" | "sms" | "whatsapp" | "rcs",
+        to: string,
+      ) => {
+        const permission = await getMarketingDeliveryPermission(
+          customer.id,
+          channel,
+        );
+        if (permission.allowed) return false;
+        await prisma.messageLog.create({
+          data: {
+            workspaceId: automation.workspaceId,
+            storeId: automation.storeId,
+            customerId: customer.id,
+            channel,
+            to,
+            automationId,
+            status: "suppressed",
+            error: `Contact permission: ${
+              permission.reason ?? "permission_denied"
+            }`,
+            metadata: {
+              rule: "contact_permission",
+              reason: permission.reason ?? null,
+              detail: permission.detail ?? null,
+              nodeId: node.id,
+            } as any,
+          },
+        });
+        return true;
+      };
 
       switch (node.type) {
         case "send_email": {
+          if (await logPermissionSuppression("email", customer.email)) break;
           // Governor check before sending
           const emailGovCheck = await checkAllRules({
             customerId: customer.id,
@@ -230,11 +259,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "failed", provider: result.provider ?? "resend", error: result.error },
             });
             console.error(`[automation-runner] Failed to send email to ${customer.email}: ${result.error}`);
+            return {
+              status: "delivery_failed",
+              channel: "email",
+              error: result.error,
+            };
           }
           break;
         }
 
         case "send_sms": {
+          if (
+            await logPermissionSuppression("sms", customer.phone ?? "")
+          ) break;
           const smsGovCheck = await checkAllRules({
             customerId: customer.id,
             storeId: automation.storeId,
@@ -322,11 +359,22 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "failed", provider: smsResult.provider, error: smsResult.error },
             });
             console.error(`[automation-runner] Failed to send SMS to ${customer.phone}: ${smsResult.error}`);
+            return {
+              status: "delivery_failed",
+              channel: "sms",
+              error: smsResult.error,
+            };
           }
           break;
         }
 
         case "send_whatsapp": {
+          if (
+            await logPermissionSuppression(
+              "whatsapp",
+              customer.phone ?? "",
+            )
+          ) break;
           const waGovCheck = await checkAllRules({
             customerId: customer.id,
             storeId: automation.storeId,
@@ -400,11 +448,19 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "failed", provider: waResult.provider, error: waResult.error },
             });
             console.error(`[automation-runner] Failed to send WhatsApp to ${customer.phone}: ${waResult.error}`);
+            return {
+              status: "delivery_failed",
+              channel: "whatsapp",
+              error: waResult.error,
+            };
           }
           break;
         }
 
         case "send_rcs": {
+          if (
+            await logPermissionSuppression("rcs", customer.phone ?? "")
+          ) break;
           const rcsGovCheck = await checkAllRules({
             customerId: customer.id,
             storeId: automation.storeId,
@@ -490,6 +546,11 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "failed", provider: rcsResult.provider, error: rcsResult.error },
             });
             console.error(`[automation-runner] Failed to send RCS to ${customer.phone}: ${rcsResult.error}`);
+            return {
+              status: "delivery_failed",
+              channel: "rcs",
+              error: rcsResult.error,
+            };
           }
           break;
         }

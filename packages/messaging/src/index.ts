@@ -17,6 +17,20 @@ export type {
 } from "./types";
 export { getProvider, sendViaProvider } from "./provider";
 export type { StoreMessagingConfig } from "./provider";
+export {
+  createUnsubscribeToken,
+  verifyUnsubscribeToken,
+  getUnsubscribeUrl,
+} from "./unsubscribe";
+export type { UnsubscribeChannel } from "./unsubscribe";
+export {
+  getDeliveryModeDecision,
+  getMessagingSendMode,
+} from "./delivery-mode";
+export type {
+  DeliveryModeDecision,
+  MessagingSendMode,
+} from "./delivery-mode";
 
 // ── Unified send function ──────────────────────────────────────────────────
 

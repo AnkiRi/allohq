@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { randomUUID } from "node:crypto";
 import type { Message, SendResult } from "../../types";
+import { getDeliveryModeDecision } from "../../delivery-mode";
 
 /** Simple retry for transient API failures */
 async function withEmailRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
@@ -32,6 +33,16 @@ function getResendClient(): Resend {
 
 export async function sendEmail(message: Message): Promise<SendResult> {
   const messageId = randomUUID();
+  const delivery = getDeliveryModeDecision(message.to, "email");
+  if (!delivery.allowed) {
+    return {
+      messageId,
+      channel: "email",
+      status: "failed",
+      error: `Messaging ${delivery.reason} (mode: ${delivery.mode})`,
+      provider: "resend",
+    };
+  }
 
   try {
     const client = getResendClient();
@@ -39,15 +50,20 @@ export async function sendEmail(message: Message): Promise<SendResult> {
     const fromEmail =
       message.from || process.env.RESEND_FROM_EMAIL || "noreply@example.com";
 
+    const payload = {
+      from: fromEmail,
+      to: message.to,
+      subject: message.subject || "(No Subject)",
+      html: message.html || message.body || "",
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+      ...(message.headers ? { headers: message.headers } : {}),
+    };
     const { data, error } = await withEmailRetry(() =>
-      client.emails.send({
-        from: fromEmail,
-        to: message.to,
-        subject: message.subject || "(No Subject)",
-        html: message.html || message.body || "",
-        ...(message.replyTo ? { replyTo: message.replyTo } : {}),
-        ...(message.headers ? { headers: message.headers } : {}),
-      })
+      message.idempotencyKey
+        ? client.emails.send(payload, {
+            idempotencyKey: message.idempotencyKey,
+          })
+        : client.emails.send(payload)
     );
 
     if (error) {
@@ -64,6 +80,7 @@ export async function sendEmail(message: Message): Promise<SendResult> {
       channel: "email",
       status: "sent",
       externalId: data?.id,
+      provider: "resend",
     };
   } catch (err) {
     const errorMessage =
@@ -73,6 +90,7 @@ export async function sendEmail(message: Message): Promise<SendResult> {
       channel: "email",
       status: "failed",
       error: errorMessage,
+      provider: "resend",
     };
   }
 }

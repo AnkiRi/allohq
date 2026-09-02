@@ -2,7 +2,7 @@
 
 export type Channel = "email" | "sms" | "whatsapp" | "rcs";
 
-export type Provider = "twilio" | "gupshup";
+export type Provider = "twilio" | "gupshup" | "resend" | "demo";
 
 export type MessagingChannel = "sms" | "whatsapp" | "rcs";
 
@@ -27,6 +27,8 @@ export interface Message {
   replyTo?: string;
   // Email headers (e.g., List-Unsubscribe)
   headers?: Record<string, string>;
+  // Stable identifier for provider-side exactly-once protection.
+  idempotencyKey?: string;
   // RCS specific
   cardTitle?: string;
   cardImageUrl?: string;

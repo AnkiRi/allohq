@@ -1,12 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
+import { verifyUnsubscribeToken } from "@allohq/messaging";
 
 /**
  * Handle unsubscribe requests.
- * GET /unsubscribe?token=<base64url-encoded-customerId>
+ * GET /unsubscribe?token=<signed-channel-scoped-token>
  *
- * Decodes the token, validates the customer exists, and sets acceptsMarketing=false.
- * Idempotent — safe to call multiple times.
+ * Verifies the token, records channel-specific consent evidence and a permanent
+ * suppression. Idempotent — safe to call multiple times.
  */
 export async function handleUnsubscribe(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "GET" && req.method !== "POST") {
@@ -32,24 +33,17 @@ export async function handleUnsubscribe(req: IncomingMessage, res: ServerRespons
       return;
     }
 
-    let customerId: string;
-    try {
-      customerId = Buffer.from(token, "base64url").toString("utf-8");
-    } catch {
+    const claims = verifyUnsubscribeToken(token);
+    if (!claims) {
       res.writeHead(400, { "Content-Type": "text/html" });
-      res.end(renderPage("Invalid Request", "Invalid unsubscribe token."));
+      res.end(renderPage("Invalid Request", "This unsubscribe link is invalid or has expired."));
       return;
     }
-
-    if (!customerId) {
-      res.writeHead(400, { "Content-Type": "text/html" });
-      res.end(renderPage("Invalid Request", "Invalid unsubscribe token."));
-      return;
-    }
+    const { customerId, channel } = claims;
 
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
-      select: { id: true, acceptsMarketing: true },
+      select: { id: true, storeId: true, acceptsMarketing: true },
     });
 
     if (!customer) {
@@ -58,22 +52,60 @@ export async function handleUnsubscribe(req: IncomingMessage, res: ServerRespons
       return;
     }
 
-    if (!customer.acceptsMarketing) {
-      // Already unsubscribed — idempotent
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(renderPage("Already Unsubscribed", "You've already been unsubscribed from our emails."));
-      return;
-    }
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.contactConsent.upsert({
+        where: { customerId_channel: { customerId, channel } },
+        create: {
+          storeId: customer.storeId,
+          customerId,
+          channel,
+          status: "opted_out",
+          source: "unsubscribe",
+          evidence: { tokenVersion: 1, method: req.method },
+          revokedAt: now,
+        },
+        update: {
+          status: "opted_out",
+          source: "unsubscribe",
+          evidence: { tokenVersion: 1, method: req.method },
+          revokedAt: now,
+        },
+      }),
+      prisma.contactSuppression.upsert({
+        where: { customerId_channel: { customerId, channel } },
+        create: {
+          storeId: customer.storeId,
+          customerId,
+          channel,
+          reason: "unsubscribe",
+          source: "joon",
+        },
+        update: {
+          reason: "unsubscribe",
+          source: "joon",
+          expiresAt: null,
+        },
+      }),
+      ...(channel === "email"
+        ? [
+            prisma.customer.update({
+              where: { id: customerId },
+              data: { acceptsMarketing: false },
+            }),
+          ]
+        : []),
+    ]);
 
-    await prisma.customer.update({
-      where: { id: customerId },
-      data: { acceptsMarketing: false },
+    await prisma.messageLog.updateMany({
+      where: { customerId, channel, outcome: null },
+      data: { outcome: "unsubscribed", outcomeTimestamp: now },
     });
 
-    console.log(`[unsubscribe] Customer ${customerId} unsubscribed`);
+    console.log(`[unsubscribe] Customer ${customerId} unsubscribed from ${channel}`);
 
     res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(renderPage("Unsubscribed", "You've been successfully unsubscribed. You will no longer receive marketing emails from us."));
+    res.end(renderPage("Unsubscribed", `You've been unsubscribed from ${channel} marketing messages.`));
   } catch (err) {
     console.error("[unsubscribe] Error:", err);
     res.writeHead(500, { "Content-Type": "text/html" });
@@ -81,10 +113,19 @@ export async function handleUnsubscribe(req: IncomingMessage, res: ServerRespons
   }
 }
 
-function readRequestBody(req: IncomingMessage): Promise<string> {
+function readRequestBody(req: IncomingMessage, maxBytes = 8 * 1024): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    let bytes = 0;
+    req.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+        return;
+      }
+      body += chunk.toString();
+    });
     req.on("end", () => resolve(body));
     req.on("error", reject);
   });

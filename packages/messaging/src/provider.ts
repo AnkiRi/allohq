@@ -5,6 +5,8 @@ import type {
   ProviderSendFn,
   SendResult,
 } from "./types";
+import { getDeliveryModeDecision } from "./delivery-mode";
+import { randomUUID } from "node:crypto";
 
 // ── Store config type (matches Prisma's messagingConfig JSON) ───────────────
 
@@ -99,6 +101,16 @@ export async function sendViaProvider(
   storeConfig?: StoreMessagingConfig | null
 ): Promise<SendResult> {
   const provider = getProvider(channel, providerOverride, storeConfig);
+  const delivery = getDeliveryModeDecision(message.to, channel);
+  if (!delivery.allowed) {
+    return {
+      messageId: randomUUID(),
+      channel,
+      status: "failed",
+      error: `Messaging ${delivery.reason} (mode: ${delivery.mode})`,
+      provider,
+    };
+  }
   const sendFn = await resolveSendFn(provider, channel);
   return sendFn(message);
 }

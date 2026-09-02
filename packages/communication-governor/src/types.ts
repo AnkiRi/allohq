@@ -24,6 +24,12 @@ export interface GovernorCheckParams {
   channel: string;
   messageType: string; // campaign, automation, transactional
   campaignId?: string;
+  // Merchant-configured overrides (Phase 5). When absent, store-agnostic defaults
+  // apply — but when a merchant set a weekly cap / quiet window / timezone in
+  // onboarding, THOSE are honored instead of the hardcoded constants.
+  maxEmailsPerWeek?: number;
+  quietHours?: { startHour: number; endHour: number };
+  timezone?: string;
 }
 
 export const DEFAULT_FATIGUE_CONFIG: FatigueConfig = {
