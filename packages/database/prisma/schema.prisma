@@ -67,7 +67,7 @@ model PrivacyRequest {
   shopDomain         String
   topic              String
   customerExternalId String?
-  payload            Json
+  payload            Json?
   result             Json?
   status             String    @default("pending") // pending | completed | failed
   error              String?

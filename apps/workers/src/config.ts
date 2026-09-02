@@ -58,4 +58,5 @@ export const QUEUE_NAMES = {
   COPY_LEARNER: "copy-learner",
   BASKET_ANALYSIS: "basket-analysis",
   PRODUCT_SEGMENTS: "product-segments",
+  PRIVACY_RETENTION: "privacy-retention",
 } as const;

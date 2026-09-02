@@ -76,6 +76,7 @@ test("the schedules that generated unapproved work are blocked", () => {
 test("schedules required by the v1 contract keep running", () => {
   // Treatment/control reporting and customer-state upkeep are in scope.
   assert.equal(isScheduleAllowed("outcome-attribution-schedule", undefined), true);
+  assert.equal(isScheduleAllowed("privacy-retention-schedule", undefined), true);
   assert.equal(isScheduleAllowed("state-decay-schedule", undefined), true);
 });
 

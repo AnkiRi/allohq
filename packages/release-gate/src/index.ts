@@ -128,6 +128,7 @@ export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> =
   // --- inside v1: treatment/control reporting + customer state upkeep -------
   "outcome-attribution-schedule": null,
   "state-decay-schedule": null,
+  "privacy-retention-schedule": null,
 
   // --- outside v1 -----------------------------------------------------------
   "trigger-check-schedule": "automation_programs",

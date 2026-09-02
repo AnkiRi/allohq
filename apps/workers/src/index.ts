@@ -97,6 +97,7 @@ import { browseAbandonmentWorker } from "./workers/browse-abandonment.worker";
 import { copyLearnerWorker } from "./workers/copy-learner.worker";
 import { basketAnalysisWorker } from "./workers/basket-analysis.worker";
 import { productSegmentsWorker } from "./workers/product-segments.worker";
+import { privacyRetentionWorker } from "./workers/privacy-retention.worker";
 
 // Clean up stale Redis connections from previous ungraceful shutdowns.
 // When workers are force-killed (SIGKILL/kill -9), their blocking BullMQ
@@ -187,6 +188,7 @@ console.log(`  - browse-abandonment worker: ${browseAbandonmentWorker.name}`);
 console.log(`  - copy-learner worker: ${copyLearnerWorker.name}`);
 console.log(`  - basket-analysis worker: ${basketAnalysisWorker.name}`);
 console.log(`  - product-segments worker: ${productSegmentsWorker.name}`);
+console.log(`  - privacy-retention worker: ${privacyRetentionWorker.name}`);
 
 // Daily/weekly jobs are CLOCK-ALIGNED via cron patterns in the brand's timezone
 // (allo's market is Indian D2C — ₹/IST — so this makes "drafts before sunrise,
@@ -417,6 +419,16 @@ gatedSchedule(customerStateDecayQueue,
   { name: "state-decay", data: { type: "state_decay", customerId: "", storeId: "" } }
 ).catch((err) => {
   console.error("Failed to set up state decay schedule:", err.message);
+});
+
+// Minimize privacy-request payloads and expire webhook deduplication records.
+const privacyRetentionQueue = new Queue(QUEUE_NAMES.PRIVACY_RETENTION, { connection: redisConnection });
+gatedSchedule(privacyRetentionQueue,
+  "privacy-retention-schedule",
+  { pattern: "0 3 * * *", tz: BRIEFING_TZ },
+  { name: "privacy-retention", data: { type: "daily" } }
+).catch((err) => {
+  console.error("Failed to set up privacy retention schedule:", err.message);
 });
 
 // Schedule overnight ops (every 2 hours)
