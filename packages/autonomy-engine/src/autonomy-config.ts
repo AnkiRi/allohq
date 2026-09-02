@@ -1,5 +1,9 @@
 import { prisma } from "@allohq/database";
 import {
+  assertCapabilityAllowed,
+  isCapabilityAllowed,
+} from "@allohq/release-gate";
+import {
   AutonomyTier,
   ActionCategory,
   DEFAULT_AUTONOMY_MATRIX,
@@ -18,22 +22,33 @@ export async function getAutonomyTier(
     where: { storeId_category: { storeId, category } },
   });
 
-  if (config) {
-    return config.tier as AutonomyTier;
-  }
+  const tier = config
+    ? (config.tier as AutonomyTier)
+    : (DEFAULT_AUTONOMY_MATRIX[category] ?? AutonomyTier.COPILOT);
 
-  return DEFAULT_AUTONOMY_MATRIX[category] ?? AutonomyTier.COPILOT;
+  // v1 release boundary: autopilot is out of scope. Coerced on READ (not just
+  // on write) because stores configured before the boundary already carry
+  // AUTOPILOT rows, and every execution path funnels through this function.
+  if (tier === AutonomyTier.AUTOPILOT && !isCapabilityAllowed("autopilot")) {
+    return AutonomyTier.COPILOT;
+  }
+  return tier;
 }
 
 /**
  * Set the autonomy tier for a given store and action category.
  */
+/** Throws under the v1 boundary if AUTOPILOT is requested. */
 export async function setAutonomyTier(
   storeId: string,
   category: ActionCategory,
   tier: AutonomyTier,
   settings?: { confidenceThreshold?: number },
 ): Promise<AutonomyConfigData> {
+  if (tier === AutonomyTier.AUTOPILOT) {
+    assertCapabilityAllowed("autopilot", `${storeId}/${category}`);
+  }
+
   const config = await prisma.autonomyConfig.upsert({
     where: { storeId_category: { storeId, category } },
     create: {

@@ -6,6 +6,7 @@ import type {
   SendResult,
 } from "./types";
 import { getDeliveryModeDecision } from "./delivery-mode";
+import { isChannelAllowed } from "@allohq/release-gate";
 import { randomUUID } from "node:crypto";
 
 // ── Store config type (matches Prisma's messagingConfig JSON) ───────────────
@@ -100,6 +101,18 @@ export async function sendViaProvider(
   providerOverride?: Provider,
   storeConfig?: StoreMessagingConfig | null
 ): Promise<SendResult> {
+  // v1 release boundary: email is the only channel in scope. Checked before
+  // the provider is touched so an out-of-scope channel can never reach a
+  // provider, even if a caller bypasses the unified send() dispatcher.
+  if (!isChannelAllowed(channel)) {
+    return {
+      messageId: randomUUID(),
+      channel,
+      status: "failed",
+      error: `Blocked by the v1 release boundary: ${channel} is not in scope`,
+    };
+  }
+
   const provider = getProvider(channel, providerOverride, storeConfig);
   const delivery = getDeliveryModeDecision(message.to, channel);
   if (!delivery.allowed) {

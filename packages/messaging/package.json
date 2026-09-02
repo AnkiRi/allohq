@@ -9,6 +9,7 @@
     "test": "pnpm --dir ../../apps/api exec tsx --test ../../packages/messaging/src/*.test.ts"
   },
   "dependencies": {
+    "@allohq/release-gate": "workspace:*",
     "resend": "^4.1.0",
     "twilio": "^6.0.2"
   },

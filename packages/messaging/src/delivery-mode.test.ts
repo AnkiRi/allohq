@@ -53,3 +53,28 @@ test("live mode permits delivery", () => {
     true,
   );
 });
+
+test("the v1 release boundary blocks non-email channels at the provider", async () => {
+  // Proves the excluded channels cannot reach a provider even with delivery
+  // fully enabled and the recipient allowlisted.
+  const prevMode = process.env["MESSAGING_SEND_MODE"];
+  const prevV1 = process.env["V1_RELEASE_MODE"];
+  process.env["MESSAGING_SEND_MODE"] = "live";
+  delete process.env["V1_RELEASE_MODE"]; // unset must still fail closed
+  try {
+    const { sendViaProvider } = await import("./provider");
+    for (const channel of ["sms", "whatsapp", "rcs"] as const) {
+      const result = await sendViaProvider(channel, {
+        to: "+919000000000",
+        body: "test",
+        channel,
+      } as never);
+      assert.equal(result.status, "failed", `${channel} must not send`);
+      assert.match(String(result.error), /v1 release boundary/);
+    }
+  } finally {
+    if (prevMode === undefined) delete process.env["MESSAGING_SEND_MODE"];
+    else process.env["MESSAGING_SEND_MODE"] = prevMode;
+    if (prevV1 !== undefined) process.env["V1_RELEASE_MODE"] = prevV1;
+  }
+});

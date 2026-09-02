@@ -283,7 +283,7 @@ importers:
         version: 10.4.24(postcss@8.5.18)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@2.6.1)
+        version: 9.39.2(jiti@1.21.7)
       postcss:
         specifier: ^8.5.18
         version: 8.5.18
@@ -362,6 +362,9 @@ importers:
       '@allohq/product-recommendations':
         specifier: workspace:*
         version: link:../../packages/product-recommendations
+      '@allohq/release-gate':
+        specifier: workspace:*
+        version: link:../../packages/release-gate
       '@prisma/client':
         specifier: ^6.3.0
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
@@ -501,6 +504,9 @@ importers:
       '@allohq/database':
         specifier: workspace:*
         version: link:../database
+      '@allohq/release-gate':
+        specifier: workspace:*
+        version: link:../release-gate
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -824,6 +830,9 @@ importers:
 
   packages/messaging:
     dependencies:
+      '@allohq/release-gate':
+        specifier: workspace:*
+        version: link:../release-gate
       resend:
         specifier: ^4.1.0
         version: 4.8.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -879,6 +888,15 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  packages/release-gate:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/tsconfig: {}
 
   packages/ui:
@@ -922,7 +940,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@1.21.7)
+        version: 9.39.2(jiti@2.6.1)
       react:
         specifier: ^19.0.0
         version: 19.2.4

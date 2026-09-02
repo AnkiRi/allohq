@@ -7,6 +7,7 @@ import { fetch as undiciFetch, Agent, setGlobalDispatcher } from "undici";
 import dns from "node:dns";
 import { Queue } from "bullmq";
 import { redisConnection, QUEUE_NAMES } from "./config";
+import { isScheduleAllowed, isV1ReleaseMode } from "@allohq/release-gate";
 
 const resolver = new dns.Resolver();
 resolver.setServers(["8.8.8.8", "1.1.1.1"]);
@@ -193,9 +194,30 @@ console.log(`  - product-segments worker: ${productSegmentsWorker.name}`);
 // global; the worker already iterates all active stores.)
 const BRIEFING_TZ = "Asia/Kolkata";
 
+/**
+ * Register a repeatable schedule only if the v1 release boundary permits it.
+ *
+ * upsertJobScheduler persists the schedule in Redis under a stable id, so a
+ * schedule written by an earlier release keeps firing even when this process
+ * declines to register it. Blocked ids are therefore actively REMOVED, not
+ * merely skipped. Returns a promise so existing .catch() handlers still apply.
+ */
+function gatedSchedule(
+  queue: Queue,
+  id: string,
+  repeat: Parameters<Queue["upsertJobScheduler"]>[1],
+  job: Parameters<Queue["upsertJobScheduler"]>[2],
+): Promise<unknown> {
+  if (isScheduleAllowed(id)) return queue.upsertJobScheduler(id, repeat, job);
+  return queue.removeJobScheduler(id).then((removed) => {
+    if (removed) console.log(`[v1-gate] removed out-of-scope schedule: ${id}`);
+    return removed;
+  });
+}
+
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
-triggerCheckQueue.upsertJobScheduler(
+gatedSchedule(triggerCheckQueue,
   "trigger-check-schedule",
   { every: 5 * 60 * 1000 },
   { name: "trigger-check", data: { type: "cron" } }
@@ -205,7 +227,7 @@ triggerCheckQueue.upsertJobScheduler(
 
 // Schedule agent observation checks (every 6 hours)
 const agentObserveQueue = new Queue(QUEUE_NAMES.AGENT_OBSERVE, { connection: redisConnection });
-agentObserveQueue.upsertJobScheduler(
+gatedSchedule(agentObserveQueue,
   "agent-observe-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "agent-observe", data: { type: "cron" } }
@@ -215,7 +237,7 @@ agentObserveQueue.upsertJobScheduler(
 
 // Schedule abandoned cart checks (every 5 minutes)
 const abandonedCartQueue = new Queue(QUEUE_NAMES.ABANDONED_CART_CHECK, { connection: redisConnection });
-abandonedCartQueue.upsertJobScheduler(
+gatedSchedule(abandonedCartQueue,
   "abandoned-cart-check-schedule",
   { every: 5 * 60 * 1000 },
   { name: "abandoned-cart-check", data: { type: "cron" } }
@@ -225,7 +247,7 @@ abandonedCartQueue.upsertJobScheduler(
 
 // Schedule opportunity scanning (every 2 hours)
 const opportunityScanQueue = new Queue(QUEUE_NAMES.OPPORTUNITY_SCAN, { connection: redisConnection });
-opportunityScanQueue.upsertJobScheduler(
+gatedSchedule(opportunityScanQueue,
   "opportunity-scan-schedule",
   { every: 2 * 60 * 60 * 1000 },
   { name: "opportunity-scan", data: { type: "cron" } }
@@ -235,7 +257,7 @@ opportunityScanQueue.upsertJobScheduler(
 
 // Schedule product cycle analysis (daily)
 const productCyclesQueue = new Queue(QUEUE_NAMES.PRODUCT_CYCLES, { connection: redisConnection });
-productCyclesQueue.upsertJobScheduler(
+gatedSchedule(productCyclesQueue,
   "product-cycles-schedule",
   { pattern: "0 3 * * *", tz: BRIEFING_TZ },
   { name: "product-cycles", data: { type: "cron" } }
@@ -245,7 +267,7 @@ productCyclesQueue.upsertJobScheduler(
 
 // Schedule daily briefings (every 24 hours)
 const briefingQueue = new Queue(QUEUE_NAMES.MERCHANT_BRIEFING, { connection: redisConnection });
-briefingQueue.upsertJobScheduler(
+gatedSchedule(briefingQueue,
   "daily-briefing-schedule",
   { pattern: "30 5 * * *", tz: BRIEFING_TZ },
   { name: "daily-briefing", data: { type: "cron" } }
@@ -255,7 +277,7 @@ briefingQueue.upsertJobScheduler(
 
 // Schedule weekly reports (every 7 days)
 const weeklyReportQueue = new Queue(QUEUE_NAMES.WEEKLY_REPORT, { connection: redisConnection });
-weeklyReportQueue.upsertJobScheduler(
+gatedSchedule(weeklyReportQueue,
   "weekly-report-schedule",
   { pattern: "0 6 * * 1", tz: BRIEFING_TZ },
   { name: "weekly-report", data: { type: "cron" } }
@@ -265,7 +287,7 @@ weeklyReportQueue.upsertJobScheduler(
 
 // Schedule A/B test evaluation (every 6 hours)
 const abTestQueue = new Queue(QUEUE_NAMES.AB_TEST, { connection: redisConnection });
-abTestQueue.upsertJobScheduler(
+gatedSchedule(abTestQueue,
   "ab-test-evaluation-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "ab-test-evaluation", data: { type: "cron" } }
@@ -275,7 +297,7 @@ abTestQueue.upsertJobScheduler(
 
 // Schedule send time optimization (nightly)
 const sendTimeQueue = new Queue(QUEUE_NAMES.SEND_TIME, { connection: redisConnection });
-sendTimeQueue.upsertJobScheduler(
+gatedSchedule(sendTimeQueue,
   "send-time-optimization-schedule",
   { pattern: "0 2 * * *", tz: BRIEFING_TZ },
   { name: "send-time-optimization", data: { type: "cron" } }
@@ -285,7 +307,7 @@ sendTimeQueue.upsertJobScheduler(
 
 // Schedule revenue forecast (daily)
 const revenueForecastQueue = new Queue(QUEUE_NAMES.REVENUE_FORECAST, { connection: redisConnection });
-revenueForecastQueue.upsertJobScheduler(
+gatedSchedule(revenueForecastQueue,
   "revenue-forecast-schedule",
   { pattern: "0 4 * * *", tz: BRIEFING_TZ },
   { name: "revenue-forecast", data: { type: "cron" } }
@@ -295,7 +317,7 @@ revenueForecastQueue.upsertJobScheduler(
 
 // Schedule product recommendation affinity build (daily)
 const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, { connection: redisConnection });
-productRecommendationQueue.upsertJobScheduler(
+gatedSchedule(productRecommendationQueue,
   "product-recommendation-affinity-schedule",
   { pattern: "30 3 * * *", tz: BRIEFING_TZ },
   { name: "build-affinity", data: { type: "cron" } }
@@ -305,7 +327,7 @@ productRecommendationQueue.upsertJobScheduler(
 
 // Schedule repurchase reminders (every 6 hours)
 const repurchaseReminderQueue = new Queue(QUEUE_NAMES.REPURCHASE_REMINDER, { connection: redisConnection });
-repurchaseReminderQueue.upsertJobScheduler(
+gatedSchedule(repurchaseReminderQueue,
   "repurchase-reminder-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "repurchase-reminder", data: { type: "cron" } }
@@ -315,7 +337,7 @@ repurchaseReminderQueue.upsertJobScheduler(
 
 // Schedule inventory monitor (every 2 hours)
 const inventoryMonitorQueue = new Queue(QUEUE_NAMES.INVENTORY_MONITOR, { connection: redisConnection });
-inventoryMonitorQueue.upsertJobScheduler(
+gatedSchedule(inventoryMonitorQueue,
   "inventory-monitor-schedule",
   { every: 2 * 60 * 60 * 1000 },
   { name: "inventory-monitor", data: { type: "cron" } }
@@ -325,7 +347,7 @@ inventoryMonitorQueue.upsertJobScheduler(
 
 // Schedule outcome attribution (hourly)
 const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, { connection: redisConnection });
-outcomeAttributionQueue.upsertJobScheduler(
+gatedSchedule(outcomeAttributionQueue,
   "outcome-attribution-schedule",
   { every: 60 * 60 * 1000 },
   { name: "outcome-attribution", data: { type: "hourly" } }
@@ -334,7 +356,7 @@ outcomeAttributionQueue.upsertJobScheduler(
 });
 
 // Schedule daily revenue summary (every 24 hours)
-outcomeAttributionQueue.upsertJobScheduler(
+gatedSchedule(outcomeAttributionQueue,
   "daily-revenue-summary-schedule",
   { pattern: "0 6 * * *", tz: BRIEFING_TZ },
   { name: "daily-revenue-summary", data: { type: "daily-summary" } }
@@ -344,7 +366,7 @@ outcomeAttributionQueue.upsertJobScheduler(
 
 // Schedule churn intervention scan (every 6 hours — increased from daily for faster detection)
 const churnInterventionQueue = new Queue(QUEUE_NAMES.CHURN_INTERVENTION, { connection: redisConnection });
-churnInterventionQueue.upsertJobScheduler(
+gatedSchedule(churnInterventionQueue,
   "churn-intervention-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "churn-intervention", data: { type: "cron" } }
@@ -354,7 +376,7 @@ churnInterventionQueue.upsertJobScheduler(
 
 // Schedule benchmark aggregation (weekly)
 const benchmarkQueue = new Queue(QUEUE_NAMES.BENCHMARK_AGGREGATE, { connection: redisConnection });
-benchmarkQueue.upsertJobScheduler(
+gatedSchedule(benchmarkQueue,
   "benchmark-aggregate-schedule",
   { pattern: "0 23 * * 0", tz: BRIEFING_TZ },
   { name: "benchmark-aggregate", data: { type: "weekly" } }
@@ -364,7 +386,7 @@ benchmarkQueue.upsertJobScheduler(
 
 // Schedule customer voice synthesis (weekly — every Monday)
 const customerVoiceQueue = new Queue(QUEUE_NAMES.CUSTOMER_VOICE, { connection: redisConnection });
-customerVoiceQueue.upsertJobScheduler(
+gatedSchedule(customerVoiceQueue,
   "customer-voice-schedule",
   { pattern: "0 4 * * 1", tz: BRIEFING_TZ },
   { name: "customer-voice", data: { type: "weekly" } }
@@ -374,7 +396,7 @@ customerVoiceQueue.upsertJobScheduler(
 
 // Schedule daily revenue email (daily at ~8am — runs every 24 hours)
 const dailyRevenueEmailQueue = new Queue(QUEUE_NAMES.DAILY_REVENUE_EMAIL, { connection: redisConnection });
-dailyRevenueEmailQueue.upsertJobScheduler(
+gatedSchedule(dailyRevenueEmailQueue,
   "daily-revenue-email-schedule",
   { pattern: "0 7 * * *", tz: BRIEFING_TZ },
   { name: "daily-revenue-email", data: { type: "cron" } }
@@ -384,7 +406,7 @@ dailyRevenueEmailQueue.upsertJobScheduler(
 
 // Schedule customer state decay (daily — recomputes stale lifecycle stages)
 const customerStateDecayQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
-customerStateDecayQueue.upsertJobScheduler(
+gatedSchedule(customerStateDecayQueue,
   "state-decay-schedule",
   { pattern: "30 2 * * *", tz: BRIEFING_TZ },
   { name: "state-decay", data: { type: "state_decay", customerId: "", storeId: "" } }
@@ -394,7 +416,7 @@ customerStateDecayQueue.upsertJobScheduler(
 
 // Schedule overnight ops (every 2 hours)
 const overnightOpsQueue = new Queue(QUEUE_NAMES.OVERNIGHT_OPS, { connection: redisConnection });
-overnightOpsQueue.upsertJobScheduler(
+gatedSchedule(overnightOpsQueue,
   "overnight-ops-schedule",
   { every: 2 * 60 * 60 * 1000 },
   { name: "overnight-scan", data: { type: "cron" } }
@@ -404,7 +426,7 @@ overnightOpsQueue.upsertJobScheduler(
 
 // Schedule browse abandonment scan (every 30 minutes)
 const browseAbandonmentQueue = new Queue(QUEUE_NAMES.BROWSE_ABANDONMENT, { connection: redisConnection });
-browseAbandonmentQueue.upsertJobScheduler(
+gatedSchedule(browseAbandonmentQueue,
   "browse-abandonment-schedule",
   { every: 30 * 60 * 1000 },
   { name: "browse-abandonment", data: { type: "cron" } }
@@ -414,7 +436,7 @@ browseAbandonmentQueue.upsertJobScheduler(
 
 // Schedule copy learner (weekly)
 const copyLearnerQueue = new Queue(QUEUE_NAMES.COPY_LEARNER, { connection: redisConnection });
-copyLearnerQueue.upsertJobScheduler(
+gatedSchedule(copyLearnerQueue,
   "copy-learner-schedule",
   { pattern: "0 22 * * 0", tz: BRIEFING_TZ },
   { name: "copy-learner", data: { type: "weekly" } }
@@ -424,7 +446,7 @@ copyLearnerQueue.upsertJobScheduler(
 
 // Schedule basket analysis (daily)
 const basketAnalysisQueue = new Queue(QUEUE_NAMES.BASKET_ANALYSIS, { connection: redisConnection });
-basketAnalysisQueue.upsertJobScheduler(
+gatedSchedule(basketAnalysisQueue,
   "basket-analysis-schedule",
   { pattern: "15 3 * * *", tz: BRIEFING_TZ },
   { name: "basket-analysis", data: { type: "cron" } }
@@ -434,13 +456,19 @@ basketAnalysisQueue.upsertJobScheduler(
 
 // Schedule product segments analysis (daily)
 const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, { connection: redisConnection });
-productSegmentsQueue.upsertJobScheduler(
+gatedSchedule(productSegmentsQueue,
   "product-segments-schedule",
   { pattern: "45 3 * * *", tz: BRIEFING_TZ },
   { name: "product-segments", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up product segments schedule:", err.message);
 });
+
+console.log(
+  isV1ReleaseMode()
+    ? "[v1-gate] v1 release boundary ACTIVE — email-only, no autopilot/proactive schedules"
+    : "[v1-gate] v1 release boundary DISABLED (V1_RELEASE_MODE=false)",
+);
 
 // Graceful shutdown with timeout — if workers don't close in 5s, force exit.
 // This prevents zombie processes that hold Redis connections and block queues.
