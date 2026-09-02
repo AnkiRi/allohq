@@ -1,4 +1,5 @@
 import { complete, type AIModelId } from "../ai";
+import type { ModelHarnessConfig } from "../ai/model-harness";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,6 +24,8 @@ export interface ParsedInstruction {
     channels?: ("email" | "sms" | "whatsapp" | "rcs")[];
     campaignName?: string;
     targetSegment?: string;
+    audienceLimit?: number;
+    audienceSort?: "totalSpent" | "orderCount" | "predictedLtv" | "recent";
     scheduledAt?: string;
     templateType?: "email" | "sms" | "whatsapp" | "rcs";
     discount?: { type: string; value: number; code: string };
@@ -30,6 +33,83 @@ export interface ParsedInstruction {
     tone?: string;
   };
   reasoning: string;
+}
+
+const INSTRUCTION_INTENTS = new Set<InstructionIntent>([
+  "create_automation",
+  "create_campaign",
+  "create_template",
+  "create_segment",
+  "analyze_customers",
+  "modify_existing",
+]);
+
+/**
+ * Preserve concrete constraints from the merchant's words even when the model
+ * omits them. The model still owns intent/semantic interpretation; this layer
+ * only recovers unambiguous numbers and explicitly named channels.
+ */
+export function applyDeterministicInstructionConstraints(
+  instruction: string,
+  candidate: ParsedInstruction,
+): ParsedInstruction {
+  if (
+    !candidate ||
+    !INSTRUCTION_INTENTS.has(candidate.intent) ||
+    typeof candidate.params !== "object" ||
+    candidate.params === null
+  ) {
+    throw new Error("The instruction model returned an invalid action.");
+  }
+
+  const params: ParsedInstruction["params"] = { ...candidate.params };
+  const topCustomerMatch =
+    instruction.match(
+      /\btop\s+(\d{1,4})\s+(?:(?:most\s+)?(?:valuable|highest[- ]value|frequent|recent)\s+)?customers?\b/i,
+    ) ??
+    instruction.match(
+      /\b(\d{1,4})\s+(?:most\s+)?(?:valuable|highest[- ]value|frequent|recent)\s+customers?\b/i,
+    );
+
+  if (topCustomerMatch?.[1]) {
+    params.audienceLimit = Number(topCustomerMatch[1]);
+    if (/\b(?:frequent|frequency|most orders?)\b/i.test(instruction)) {
+      params.audienceSort = "orderCount";
+    } else if (/\b(?:predicted|lifetime value|ltv)\b/i.test(instruction)) {
+      params.audienceSort = "predictedLtv";
+    } else if (/\b(?:recent|latest)\b/i.test(instruction)) {
+      params.audienceSort = "recent";
+    } else {
+      params.audienceSort = "totalSpent";
+    }
+  }
+
+  const percentMatch = instruction.match(/\b(\d{1,3}(?:\.\d+)?)\s*%/);
+  if (
+    percentMatch?.[1] &&
+    /\b(?:discount|offer|coupon|promo(?:tion)?|off)\b/i.test(instruction)
+  ) {
+    const codeMatch = instruction.match(/\bcode\s+([a-z0-9-]{3,32})\b/i);
+    params.discount = {
+      type: "percentage",
+      value: Number(percentMatch[1]),
+      code: candidate.params.discount?.code || codeMatch?.[1] || "",
+    };
+  }
+
+  const explicitChannels: NonNullable<ParsedInstruction["params"]["channels"]> = [];
+  if (/\be-?mail\b/i.test(instruction)) explicitChannels.push("email");
+  if (/\bsms\b|\btext message\b/i.test(instruction)) explicitChannels.push("sms");
+  if (/\bwhats\s*app\b/i.test(instruction)) explicitChannels.push("whatsapp");
+  if (/\brcs\b/i.test(instruction)) explicitChannels.push("rcs");
+  if (explicitChannels.length > 0) params.channels = explicitChannels;
+
+  return {
+    ...candidate,
+    params,
+    reasoning:
+      typeof candidate.reasoning === "string" ? candidate.reasoning : "",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +149,12 @@ For segment criteria, map natural language to fields:
 - "at risk" → { field: "segment", op: "eq", value: "At Risk" }
 - "new customers" → { field: "segment", op: "eq", value: "New Customers" }
 - "inactive" → { field: "daysSinceLastOrder", op: "gt", value: 60 }
+- "top 20 customers" → audienceLimit: 20, audienceSort: "totalSpent"
+- "20 most frequent customers" → audienceLimit: 20, audienceSort: "orderCount"
+- "top 20 by predicted value" → audienceLimit: 20, audienceSort: "predictedLtv"
+
+An audienceLimit is a hard recipient snapshot size, not a vague segment label.
+Never silently drop the requested number.
 
 For automation types: welcome_series, abandoned_cart, post_purchase, win_back, re_engagement, vip_reward, browse_abandonment, seasonal
 For channels: default to ["email"] unless the user specifies others
@@ -80,6 +166,8 @@ OUTPUT FORMAT — Return valid JSON only:
     "automationType": "win_back",
     "channels": ["email", "sms"],
     "targetSegment": "inactive customers",
+    "audienceLimit": 20,
+    "audienceSort": "totalSpent",
     "segmentCriteria": {
       "conditions": [
         { "field": "daysSinceLastOrder", "op": "gt", "value": 30 },
@@ -109,12 +197,15 @@ export async function parseInstruction(
     existingAutomations: string[];
   },
   model?: AIModelId,
+  modelHarness?: ModelHarnessConfig | unknown,
 ): Promise<ParsedInstruction> {
   const prompt = buildParsePrompt(instruction, context);
 
   const result = await complete({
     model,
     task: "classification", // intent parsing is cheap/deterministic → economy tier
+    workload: "classification",
+    harness: modelHarness,
     prompt,
     temperature: 0.3,
     jsonMode: true,
@@ -122,5 +213,5 @@ export async function parseInstruction(
   });
 
   const parsed = JSON.parse(result.content) as ParsedInstruction;
-  return parsed;
+  return applyDeterministicInstructionConstraints(instruction, parsed);
 }

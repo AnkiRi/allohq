@@ -5,11 +5,16 @@ import {
   type ProviderResult,
 } from "./providers";
 import {
-  resolveModelChain,
   getModel,
   type AIModelId,
   type AITask,
 } from "./policy";
+import {
+  resolveHarnessRoute,
+  type AIWorkload,
+  type ModelHarnessConfig,
+  type ResolvedModelRoute,
+} from "./model-harness";
 import { cacheGet, cacheSet, isCacheable, type CacheKeyParts } from "./cache";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +36,10 @@ export interface CompletionRequest {
   model?: AIModelId;
   /** Declarative intent — drives task→tier routing when no model is given. */
   task?: AITask;
+  /** Product-level job used by a merchant-configured model harness. */
+  workload?: AIWorkload;
+  /** Persisted workspace harness. Untrusted JSON is normalized before use. */
+  harness?: ModelHarnessConfig | unknown;
   prompt: string;
   system?: string;
   temperature?: number;
@@ -50,6 +59,7 @@ export interface CompletionResult {
   cached: boolean;
   inputTokens: number;
   outputTokens: number;
+  routing: Pick<ResolvedModelRoute, "workload" | "source" | "candidates">;
 }
 
 const DEFAULT_TEMPERATURE = 0.7;
@@ -100,13 +110,19 @@ function isRecoverable(err: unknown): boolean {
 }
 
 export async function complete(request: CompletionRequest): Promise<CompletionResult> {
-  const temperature = request.temperature ?? DEFAULT_TEMPERATURE;
-  const maxTokens = request.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const route = resolveHarnessRoute({
+    model: request.model,
+    task: request.task,
+    workload: request.workload,
+    harness: request.harness,
+  });
+  const temperature = request.temperature ?? route.temperature ?? DEFAULT_TEMPERATURE;
+  const maxTokens = request.maxTokens ?? route.maxTokens ?? DEFAULT_MAX_TOKENS;
   const jsonMode = request.jsonMode ?? false;
   const system = request.system;
 
   // 1. Resolve candidate models from task→tier policy (or explicit model).
-  const candidates = resolveModelChain({ model: request.model, task: request.task });
+  const candidates = route.candidates;
 
   let lastError: Error | undefined;
   let attempted = 0;
@@ -155,6 +171,11 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
           cached: true,
           inputTokens: hit.inputTokens,
           outputTokens: hit.outputTokens,
+          routing: {
+            workload: route.workload,
+            source: route.source,
+            candidates,
+          },
         };
       }
     }
@@ -173,6 +194,11 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
         cached: false,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
+        routing: {
+          workload: route.workload,
+          source: route.source,
+          candidates,
+        },
       };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));

@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Store, User, Bell, CreditCard, Sparkles, Cpu, Check, Activity, MessageSquare, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Store, User, Bell, CreditCard, Sparkles, Check, Activity, MessageSquare, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { AppearanceSetting } from "@/components/settings/AppearanceSetting";
+import { ModelHarnessSettings } from "@/components/settings/ModelHarnessSettings";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -15,12 +16,6 @@ const containerVariants = {
 const itemVariants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
-
-const TIER_COLORS: Record<string, { color: string; label: string }> = {
-  premium: { color: "var(--color-accent)", label: "Premium" },
-  standard: { color: "var(--color-info)", label: "Standard" },
-  economy: { color: "var(--color-success)", label: "Economy" },
 };
 
 const TOKEN_PERIODS = [
@@ -709,19 +704,6 @@ export default function SettingsPage() {
     onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
   }) as { mutate: (input: { storeId: string; creativeIntensity: string }) => void; isPending: boolean };
 
-  // AI model settings
-  const { data: models } = trpc.ai.models.useQuery();
-  const { data: aiSettings } = (trpc.ai.getSettings as any).useQuery() as {
-    data: { defaultModel: string | null } | undefined;
-  };
-  const setDefaultModel = (trpc.ai.setDefaultModel as any).useMutation({
-    onSuccess: () => {
-      toast("Default model updated.", "success");
-      (utils.ai as any).getSettings.invalidate();
-    },
-    onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
-  }) as { mutate: (input: { model: string | null }) => void; isPending: boolean };
-
   return (
     <motion.div
       className="space-y-6"
@@ -869,67 +851,7 @@ export default function SettingsPage() {
         )}
       </motion.div>
 
-      {/* Default AI Model */}
-      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Cpu className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">Default AI model</h2>
-        </div>
-        <p className="text-[11px] text-muted-foreground mb-4">
-          Pick the model joon reaches for when it writes and creates for you
-        </p>
-        {models && models.length > 0 ? (
-          <div className="grid grid-cols-3 gap-3">
-            {models.map((model) => {
-              const isSelected = aiSettings?.defaultModel === model.id;
-              const tier = TIER_COLORS[(model as any).tier as string] ?? TIER_COLORS["standard"]!;
-              return (
-                <button
-                  key={model.id}
-                  onClick={() => setDefaultModel.mutate({ model: isSelected ? null : model.id })}
-                  disabled={setDefaultModel.isPending || !model.available}
-                  className={`relative text-left p-4 rounded-xl transition-all ${
-                    isSelected
-                      ? "glass-card-static shadow-[0_0_0_2px_var(--terracotta)]"
-                      : model.available
-                        ? "glass-card-static border-border hover:border-border"
-                        : "glass-card-static opacity-50 cursor-not-allowed"
-                  }`}
-                >
-                  {isSelected && (
-                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--olive)" }}>
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-[11px] font-bold text-foreground">{model.label}</p>
-                    <span className="text-[9px] font-sans text-muted-foreground">{model.provider}</span>
-                  </div>
-                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-sans font-bold mb-2" style={{ color: tier.color, backgroundColor: `color-mix(in srgb, ${tier.color} 12%, transparent)` }}>
-                    {tier.label}
-                  </span>
-                  <p className="text-[10px] text-muted-foreground mb-3">{model.description}</p>
-                  <div className="text-[10px] font-mono text-muted-foreground space-y-0.5">
-                    <p>Input: ${(model as any).inputCostPerMillion}/M tokens</p>
-                    <p>Output: ${(model as any).outputCostPerMillion}/M tokens</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 glass-skeleton rounded-xl" />
-            ))}
-          </div>
-        )}
-        {aiSettings?.defaultModel === null && models && (
-          <p className="text-[10px] text-muted-foreground/50 mt-3">
-            No default chosen. joon will use Claude Sonnet 4.6
-          </p>
-        )}
-      </motion.div>
+      <ModelHarnessSettings />
 
       {/* Token Usage */}
       <TokenUsageSection />

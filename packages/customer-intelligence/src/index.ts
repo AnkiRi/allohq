@@ -1,5 +1,19 @@
 // AI Gateway — single entry point for all model calls
-export { complete, AI_MODELS, DEFAULT_MODEL, MODEL_COSTS, computeTokenCost, getProvider } from "./ai";
+export {
+  complete,
+  AI_MODELS,
+  DEFAULT_MODEL,
+  MODEL_COSTS,
+  computeTokenCost,
+  getProvider,
+  getModel,
+  resolveModelChain,
+  AI_WORKLOADS,
+  DEFAULT_MODEL_HARNESS,
+  normalizeModelHarness,
+  resolveHarnessRoute,
+  describeHarness,
+} from "./ai";
 export type {
   AIModelId,
   AITask,
@@ -12,6 +26,11 @@ export type {
   ProviderResult,
   CompletionRequest,
   CompletionResult,
+  AIWorkload,
+  ModelHarnessMode,
+  ModelRoute,
+  ModelHarnessConfig,
+  ResolvedModelRoute,
 } from "./ai";
 
 // RFM
@@ -62,7 +81,11 @@ export { generateImage } from "./images";
 export type { GenerateImageInput, GenerateImageOutput } from "./images";
 
 // Natural Language Instructions
-export { parseInstruction, executeInstruction } from "./instruction";
+export {
+  applyDeterministicInstructionConstraints,
+  parseInstruction,
+  executeInstruction,
+} from "./instruction";
 export type { InstructionIntent, ParsedInstruction, ExecutionResult } from "./instruction";
 
 // Churn Prediction Model

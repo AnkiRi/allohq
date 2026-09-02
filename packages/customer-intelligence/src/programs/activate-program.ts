@@ -1,5 +1,6 @@
 import { generateEmail } from "../content/generate-email";
 import type { AIModelId } from "../ai";
+import type { ModelHarnessConfig } from "../ai/model-harness";
 import type { EmailIntent } from "../context/intent-mapper";
 import type { GenerateEmailOutput, CreativeIntensity } from "../content/generate-email";
 
@@ -8,6 +9,7 @@ export interface ActivateProgramInput {
   storeId: string;
   storeUrl?: string;
   model?: AIModelId;
+  modelHarness?: ModelHarnessConfig | unknown;
   creativeIntensity?: CreativeIntensity;
   brandProfile?: {
     brandName: string;
@@ -83,6 +85,7 @@ export async function activateProgram(
       storeUrl: input.storeUrl,
       tweaks: `Email theme: ${spec.subjectHint}`,
       model: input.model,
+      modelHarness: input.modelHarness,
       creativeIntensity: input.creativeIntensity,
     });
     results.push(result);

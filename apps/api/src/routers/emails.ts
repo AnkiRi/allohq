@@ -112,8 +112,12 @@ export const emailsRouter = router({
         scope: z.enum(["subject", "copy", "visual", "tone"]).optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const original = input.blocks as any[];
+      const workspaceAiSettings = await ctx.prisma.workspace.findUnique({
+        where: { id: ctx.workspaceId },
+        select: { modelHarness: true },
+      });
 
       // CONTRACT: the model returns ONLY the CHANGES (subject + per-block changed
       // props), keyed by block id — NOT the whole array. Small, targeted JSON is
@@ -181,6 +185,8 @@ export const emailsRouter = router({
 
       try {
         const result = await complete({
+          workload: "creative",
+          harness: workspaceAiSettings?.modelHarness,
           prompt,
           system,
           jsonMode: true,

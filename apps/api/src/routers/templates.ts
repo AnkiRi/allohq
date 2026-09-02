@@ -488,7 +488,11 @@ export const templatesRouter = router({
         brandVoice: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const workspaceAiSettings = await ctx.prisma.workspace.findUnique({
+        where: { id: ctx.workspaceId },
+        select: { modelHarness: true },
+      });
       const system = [
         "You are joon, an expert email subject-line writer for an Indian D2C brand.",
         "Write 4 alternative subject lines: warm, specific, on-brand. No hype, no",
@@ -504,7 +508,15 @@ export const templatesRouter = router({
         .filter(Boolean)
         .join("\n");
       try {
-        const result = await complete({ prompt, system, jsonMode: true, temperature: 0.8, maxTokens: 400 });
+        const result = await complete({
+          workload: "creative",
+          harness: workspaceAiSettings?.modelHarness,
+          prompt,
+          system,
+          jsonMode: true,
+          temperature: 0.8,
+          maxTokens: 400,
+        });
         const m = result.content.match(/\[[\s\S]*\]/);
         const parsed: unknown = m ? JSON.parse(m[0]) : [];
         const suggestions = Array.isArray(parsed)

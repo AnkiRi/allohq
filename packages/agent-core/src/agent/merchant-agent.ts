@@ -2,6 +2,7 @@ import { assembleContext, formatContextForPrompt } from "@allohq/agent-brain";
 import { runAgent } from "./base-agent";
 import { getMerchantTools } from "../tools";
 import type { AgentResult } from "../types";
+import type { ModelHarnessConfig } from "@allohq/customer-intelligence";
 
 const MERCHANT_SYSTEM_PROMPT = `You are Joon, the AI retention team for {{storeName}}. You are NOT a chatbot or assistant. You are an expert retention marketer who has already analyzed this store's data and has opinions and recommendations.
 
@@ -126,8 +127,9 @@ export async function runMerchantAgent(opts: {
   message: string;
   conversationHistory?: Array<{ role: string; content: string }>;
   storeContext?: string;
+  modelHarness?: ModelHarnessConfig | unknown;
 }): Promise<AgentResult> {
-  const { storeId, message, conversationHistory = [], storeContext } = opts;
+  const { storeId, message, conversationHistory = [], storeContext, modelHarness } = opts;
 
   // Assemble context (no specific customer, just store-level)
   const ctx = await assembleContext({
@@ -153,5 +155,7 @@ export async function runMerchantAgent(opts: {
     toolContext: { storeId },
     agentType: "retention_strategist",
     conversationHistory,
+    workload: "strategy",
+    modelHarness,
   });
 }

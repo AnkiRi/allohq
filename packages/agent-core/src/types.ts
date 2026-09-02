@@ -31,6 +31,10 @@ export interface AgentResult {
   }>;
   inputTokens: number;
   outputTokens: number;
+  /** Concrete route selected by the model harness. */
+  model?: string;
+  provider?: "anthropic" | "openai";
+  usedFallback?: boolean;
 }
 
 export type AgentType = "customer_assistant" | "retention_strategist";

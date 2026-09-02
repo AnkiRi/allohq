@@ -6,7 +6,6 @@ import {
   generateWhatsApp,
   generateRcs,
   generateWorkflow,
-  DEFAULT_MODEL,
 } from "@allohq/customer-intelligence";
 import type { AIModelId } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
@@ -55,20 +54,19 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
     const storeUrl = store ? `https://${store.shopDomain}` : undefined;
 
     // Resolve model
-    let resolvedModel = (job.data.model as AIModelId) || undefined;
-    if (!resolvedModel) {
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { defaultModel: true },
-      });
-      resolvedModel = (workspace?.defaultModel as AIModelId) || undefined;
-    }
-    // Prefer Claude for automation generation: when no explicit/workspace model
-    // is set, use the gateway default (Claude Sonnet) instead of passing
-    // undefined. The gateway's complete() additionally falls back through the
-    // chain to Claude on any provider error (e.g. OpenAI quota), so generation
-    // survives a quota outage rather than hanging/failing.
-    const aiModel = resolvedModel ?? DEFAULT_MODEL;
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { defaultModel: true, modelHarness: true },
+    });
+    const resolvedModel =
+      (job.data.model as AIModelId) ||
+      (!workspace?.modelHarness
+        ? (workspace?.defaultModel as AIModelId | null) ?? undefined
+        : undefined);
+    const modelHarness = workspace?.modelHarness;
+    // A call-level model remains an intentional one-off override. Otherwise the
+    // workspace harness selects the creative route and its fallback chain.
+    const aiModel = resolvedModel;
 
     const creativeIntensity = (brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? undefined;
 
@@ -127,6 +125,7 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       storeId,
       storeUrl,
       model: aiModel,
+      modelHarness,
       creativeIntensity,
       brandProfile: brandInput,
       segment,
@@ -190,6 +189,7 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
         segment,
         programType: automation.category,
         model: aiModel,
+        modelHarness,
       });
 
       const smsTemplate = await prisma.smsTemplate.create({
@@ -226,6 +226,7 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
         segment,
         programType: automation.category,
         model: aiModel,
+        modelHarness,
       });
 
       const waTemplate = await prisma.whatsAppTemplate.create({
@@ -264,6 +265,7 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
         segment,
         programType: automation.category,
         model: aiModel,
+        modelHarness,
       });
 
       const rcsTemplate = await prisma.rcsTemplate.create({

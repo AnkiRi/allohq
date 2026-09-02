@@ -1,6 +1,4 @@
 import { prisma } from "@allohq/database";
-import { shopify } from "@allohq/ecommerce-integrations";
-const { ShopifyClient } = shopify;
 import type { BrandDesignTokens, BrandAesthetic } from "./types";
 import { DEFAULT_BRAND_TOKENS } from "./types";
 
@@ -27,30 +25,15 @@ export async function extractBrandKit(storeId: string): Promise<void> {
     select: {
       id: true,
       shopDomain: true,
-      accessToken: true,
       storeLogoUrl: true,
       storeName: true,
     },
   });
 
-  const client = new ShopifyClient(store.shopDomain, store.accessToken);
-
-  // Fetch active theme
+  // Theme Admin APIs require an additional protected scope and aren't needed
+  // for the design-partner launch. Brand styling is derived from storefront
+  // metadata, the catalog imagery, and merchant-reviewed brand settings.
   let themeSettings: ShopifyThemeSettings = {};
-  try {
-    const themes = await client.getSingle<{ themes: { id: number; role: string }[] }>("themes.json");
-    const mainTheme = themes.themes.find((t: { id: number; role: string }) => t.role === "main");
-    if (mainTheme) {
-      const settings = await client.getSingle<{
-        asset: { value: string };
-      }>(`themes/${mainTheme.id}/assets.json?asset[key]=config/settings_data.json`);
-      const parsed = JSON.parse(settings.asset.value);
-      const current = parsed.current ?? parsed.presets?.[Object.keys(parsed.presets ?? {})[0] ?? ""] ?? {};
-      themeSettings = (current.settings ?? current) as ShopifyThemeSettings;
-    }
-  } catch (err) {
-    console.warn(`[brand-kit] Could not fetch theme settings for ${store.shopDomain}:`, err);
-  }
 
   // Extract colors
   const primaryColors = extractColors(themeSettings);

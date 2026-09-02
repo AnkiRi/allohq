@@ -1,4 +1,4 @@
-import { complete, type AIModelId } from "../ai";
+import { complete, type AIModelId, type ModelHarnessConfig } from "../ai";
 import type { EmailBlock } from "@allohq/email-builder";
 import type { EmailIntent } from "../context/intent-mapper";
 import { brandVoiceBlock, intentInstructions, formatProductsForPrompt } from "./prompt-templates";
@@ -50,6 +50,7 @@ export interface GenerateEmailInput {
   toneOverride?: string; // "more formal" | "more casual" | "more playful" | etc
   tweaks?: string;
   model?: AIModelId;
+  modelHarness?: ModelHarnessConfig | unknown;
 }
 
 export interface GenerateEmailOutput {
@@ -363,6 +364,8 @@ export async function generateEmail(input: GenerateEmailInput): Promise<Generate
   const result = await complete({
     model: input.model,
     task: "generation", // customer-facing copy → frontier when no explicit model is chosen
+    workload: "creative",
+    harness: input.modelHarness,
     prompt,
     temperature: 0.7,
     jsonMode: true,

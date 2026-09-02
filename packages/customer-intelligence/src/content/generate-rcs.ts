@@ -1,4 +1,4 @@
-import { complete, type AIModelId } from "../ai";
+import { complete, type AIModelId, type ModelHarnessConfig } from "../ai";
 import { brandVoiceBlock } from "./prompt-templates";
 import { generateImage } from "../images/generate-image";
 
@@ -15,6 +15,7 @@ export interface GenerateRcsInput {
   segment?: { name: string; description: string };
   programType: string;
   model?: AIModelId;
+  modelHarness?: ModelHarnessConfig | unknown;
 }
 
 export interface RcsAction {
@@ -109,6 +110,9 @@ export async function generateRcs(
 
   const result = await complete({
     model: input.model,
+    task: "generation",
+    workload: "creative",
+    harness: input.modelHarness,
     prompt,
     temperature: 0.7,
     jsonMode: true,

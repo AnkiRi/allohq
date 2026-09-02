@@ -11,8 +11,23 @@
 export { complete } from "./gateway";
 export type { CompletionRequest, CompletionResult } from "./gateway";
 
-export { AI_MODELS, DEFAULT_MODEL } from "./policy";
+export { AI_MODELS, DEFAULT_MODEL, getModel, resolveModelChain } from "./policy";
 export type { AIModelId, AITask, AIModel, ModelTier } from "./policy";
+
+export {
+  AI_WORKLOADS,
+  DEFAULT_MODEL_HARNESS,
+  normalizeModelHarness,
+  resolveHarnessRoute,
+  describeHarness,
+} from "./model-harness";
+export type {
+  AIWorkload,
+  ModelHarnessMode,
+  ModelRoute,
+  ModelHarnessConfig,
+  ResolvedModelRoute,
+} from "./model-harness";
 
 export type { AIProvider } from "./providers";
 

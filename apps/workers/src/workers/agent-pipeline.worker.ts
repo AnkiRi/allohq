@@ -60,15 +60,17 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
     const { pipelineRunId, storeId, workspaceId, model } = job.data;
 
     // Resolve model
-    let resolvedModel = (model as AIModelId) || undefined;
-    if (!resolvedModel) {
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { defaultModel: true },
-      });
-      resolvedModel = (workspace?.defaultModel as AIModelId) || undefined;
-    }
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { defaultModel: true, modelHarness: true },
+    });
+    const resolvedModel =
+      (model as AIModelId) ||
+      (!workspace?.modelHarness
+        ? (workspace?.defaultModel as AIModelId | null) ?? undefined
+        : undefined);
     const aiModel = resolvedModel;
+    const modelHarness = workspace?.modelHarness;
 
     console.log(`[agent-pipeline] Starting pipeline ${pipelineRunId}`);
 
@@ -215,6 +217,7 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
             storeId,
             storeUrl,
             model: aiModel,
+            modelHarness,
             creativeIntensity,
             brandProfile: brandInput,
             segment,
@@ -275,6 +278,7 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
               segment,
               programType: automation.category,
               model: aiModel,
+              modelHarness,
             });
 
             const smsTemplate = await prisma.smsTemplate.create({
@@ -318,6 +322,7 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
               segment,
               programType: automation.category,
               model: aiModel,
+              modelHarness,
             });
 
             const waTemplate = await prisma.whatsAppTemplate.create({
@@ -363,6 +368,7 @@ export const agentPipelineWorker = new Worker<AgentPipelineJobData>(
               segment,
               programType: automation.category,
               model: aiModel,
+              modelHarness,
             });
 
             const rcsTemplate = await prisma.rcsTemplate.create({

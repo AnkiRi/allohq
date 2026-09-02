@@ -3,6 +3,7 @@ import { router, workspaceProcedure, ownerProcedure } from "../trpc";
 import { buildHumanDecision } from "../lib/human-decision";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
+import type { AIModelId } from "@allohq/customer-intelligence";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -24,12 +25,37 @@ const STOP_WORDS = new Set([
   "orders", "revenue", "spent", "days", "month", "week", "year", "risk", "high", "low",
 ]);
 
-const aiModelSchema = z.enum([
+const aiModelIdSchema = z.enum([
   "claude-sonnet-5",
   "claude-sonnet-4-6",
   "claude-haiku-4-5-20251001",
   "gpt-4o-mini",
-]).optional();
+]);
+const aiModelSchema = aiModelIdSchema.optional();
+
+const aiWorkloadSchema = z.enum([
+  "strategy",
+  "creative",
+  "analysis",
+  "classification",
+  "evaluation",
+  "support",
+  "orchestration",
+]);
+
+const modelRouteSchema = z.object({
+  primary: aiModelIdSchema,
+  fallbacks: z.array(aiModelIdSchema).max(3).default([]),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().min(128).max(32_768).optional(),
+});
+
+const modelHarnessSchema = z.object({
+  version: z.literal(1).default(1),
+  mode: z.enum(["unified", "custom"]),
+  defaultRoute: modelRouteSchema,
+  routes: z.record(aiWorkloadSchema, modelRouteSchema).default({}),
+});
 
 const emailIntentSchema = z.enum([
   "welcome",
@@ -404,20 +430,81 @@ export const aiRouter = router({
   getSettings: workspaceProcedure.query(async ({ ctx }) => {
     const workspace = await ctx.prisma.workspace.findUnique({
       where: { id: ctx.workspaceId },
-      select: { defaultModel: true },
+      select: { defaultModel: true, modelHarness: true },
     });
-    return { defaultModel: workspace?.defaultModel ?? null };
+    const { normalizeModelHarness } = await import("@allohq/customer-intelligence");
+    return {
+      defaultModel: workspace?.defaultModel ?? null,
+      modelHarness: normalizeModelHarness(workspace?.modelHarness),
+    };
   }),
 
   /** Set workspace default AI model */
-  setDefaultModel: workspaceProcedure
-    .input(z.object({ model: z.string().nullable() }))
+  setDefaultModel: ownerProcedure
+    .input(z.object({ model: aiModelIdSchema.nullable() }))
     .mutation(async ({ ctx, input }) => {
+      const { normalizeModelHarness } = await import("@allohq/customer-intelligence");
+      const workspace = await ctx.prisma.workspace.findUnique({
+        where: { id: ctx.workspaceId },
+        select: { modelHarness: true },
+      });
+      const modelHarness = normalizeModelHarness(workspace?.modelHarness);
+      if (input.model) {
+        modelHarness.defaultRoute.primary = input.model;
+        modelHarness.defaultRoute.fallbacks =
+          modelHarness.defaultRoute.fallbacks.filter((id) => id !== input.model);
+      }
+
       await ctx.prisma.workspace.update({
         where: { id: ctx.workspaceId },
-        data: { defaultModel: input.model },
+        data: {
+          defaultModel: input.model,
+          ...(input.model ? { modelHarness: modelHarness as any } : {}),
+        },
       });
       return { success: true };
+    }),
+
+  /** Save the complete workspace model harness. Owner-only because it affects cost and behavior. */
+  setModelHarness: ownerProcedure
+    .input(modelHarnessSchema)
+    .mutation(async ({ ctx, input }) => {
+      const {
+        normalizeModelHarness,
+        describeHarness,
+      } = await import("@allohq/customer-intelligence");
+      const harness = normalizeModelHarness(input);
+
+      await ctx.prisma.workspace.update({
+        where: { id: ctx.workspaceId },
+        data: {
+          modelHarness: harness as any,
+          // Keep the legacy field synchronized for workers that have not yet
+          // migrated to workload-aware routing.
+          defaultModel: harness.defaultRoute.primary,
+        },
+      });
+
+      return {
+        success: true,
+        harness,
+        resolvedRoutes: describeHarness(harness),
+      };
+    }),
+
+  /** Resolve every route without calling a provider; used by the settings preview. */
+  previewModelHarness: ownerProcedure
+    .input(modelHarnessSchema)
+    .query(async ({ input }) => {
+      const {
+        normalizeModelHarness,
+        describeHarness,
+      } = await import("@allohq/customer-intelligence");
+      const harness = normalizeModelHarness(input);
+      return {
+        harness,
+        resolvedRoutes: describeHarness(harness),
+      };
     }),
 
   /** Explain the reasoning behind an AI recommendation, metric, or action */
@@ -437,7 +524,7 @@ export const aiRouter = router({
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const [segments, revenueAgg, customerCount, brandProfile] = await Promise.all([
+      const [segments, revenueAgg, customerCount, brandProfile, workspaceAiSettings] = await Promise.all([
         ctx.prisma.rfmScore.groupBy({
           by: ["segment"],
           where: { customer: { storeId: input.storeId } },
@@ -453,6 +540,10 @@ export const aiRouter = router({
         ctx.prisma.brandProfile.findFirst({
           where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
           select: { brandName: true },
+        }),
+        ctx.prisma.workspace.findUnique({
+          where: { id: ctx.workspaceId },
+          select: { modelHarness: true },
         }),
       ]);
 
@@ -473,6 +564,8 @@ export const aiRouter = router({
 
       const result = await complete({
         task: "reasoning",
+        workload: "strategy",
+        harness: workspaceAiSettings?.modelHarness,
         maxTokens: 256,
         temperature: 0.4,
         system:
@@ -526,6 +619,10 @@ export const aiRouter = router({
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
       const storeUrl = `https://${store.shopDomain}`;
+      const workspaceAiSettings = await ctx.prisma.workspace.findUnique({
+        where: { id: ctx.workspaceId },
+        select: { modelHarness: true },
+      });
 
       // Fetch brand profile (with hard params)
       const brandProfile = await ctx.prisma.brandProfile.findFirst({
@@ -574,6 +671,7 @@ export const aiRouter = router({
         brandSettings: brandSettingsForEmail,
         intent: input.intent,
         model: input.model,
+        modelHarness: workspaceAiSettings?.modelHarness,
         // Demo cost cap: never generate AI images on the public demo (most
         // expensive op) — text_heavy short-circuits image generation.
         creativeIntensity: ctx.isDemo ? "text_heavy" : ((brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? "balanced"),
@@ -646,7 +744,7 @@ export const aiRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Load existing template + generation context
-      const [template, existing, store, brandProfile] = await Promise.all([
+      const [template, existing, store, brandProfile, workspaceAiSettings] = await Promise.all([
         input.templateId
           ? ctx.prisma.emailTemplate.findFirst({
               where: { id: input.templateId, workspaceId: ctx.workspaceId },
@@ -663,6 +761,10 @@ export const aiRouter = router({
         }),
         ctx.prisma.brandProfile.findFirst({
           where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+        }),
+        ctx.prisma.workspace.findUnique({
+          where: { id: ctx.workspaceId },
+          select: { modelHarness: true },
         }),
       ]);
 
@@ -715,6 +817,7 @@ export const aiRouter = router({
         brandSettings: brandSettingsForEmail,
         intent: (existing?.intent as any) ?? "promotion",
         model: input.model,
+        modelHarness: workspaceAiSettings?.modelHarness,
         creativeIntensity: ctx.isDemo ? "text_heavy" : (input.creativeIntensity ?? (brandProfile?.creativeIntensity as any) ?? "balanced"),
         layoutTemplate: input.layoutTemplate,
         toneOverride: input.toneOverride,
@@ -1196,12 +1299,17 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       // 4. Call Agent (tool-calling LLM with real capabilities)
       // ---------------------------------------------------------------
       const { runMerchantAgent } = await import("@allohq/agent-core");
+      const workspaceAiSettings = await ctx.prisma.workspace.findUnique({
+        where: { id: ctx.workspaceId },
+        select: { modelHarness: true },
+      });
 
       const agentResult = await runMerchantAgent({
         storeId: input.storeId,
         message: processedMessage,
         conversationHistory: input.history,
         storeContext: scopedStoreContext,
+        modelHarness: workspaceAiSettings?.modelHarness,
       });
 
       // ---------------------------------------------------------------
@@ -1318,7 +1426,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       await ctx.prisma.tokenUsage.create({
         data: {
           workspaceId: ctx.workspaceId,
-          model: "claude-sonnet-5",
+          model: agentResult.model ?? "unknown",
           inputTokens: agentResult.inputTokens,
           outputTokens: agentResult.outputTokens,
           purpose: "chat",
@@ -1365,7 +1473,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
               role: "assistant",
               content: reply,
               highlights: highlights.length > 0 ? highlights : undefined,
-              model: "claude-sonnet-5",
+              model: agentResult.model ?? "unknown",
             },
           ],
         });
@@ -1408,7 +1516,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         highlights,
         suggestedFollowUps: suggestedFollowUps.slice(0, 4),
         action: actionResult,
-        model: "claude-sonnet-5",
+        model: agentResult.model ?? "unknown",
         toolCalls: agentResult.toolCalls.map((t) => t.name),
         campaignPreview,
       };
@@ -1428,7 +1536,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
       // Fetch context for the instruction parser
-      const [segments, automations, brandProfile] = await Promise.all([
+      const [segments, automations, brandProfile, workspaceAiSettings] = await Promise.all([
         ctx.prisma.customerSegment.findMany({
           where: { storeId: input.storeId },
           select: { name: true },
@@ -1439,6 +1547,10 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         }),
         ctx.prisma.brandProfile.findFirst({
           where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+        }),
+        ctx.prisma.workspace.findUnique({
+          where: { id: ctx.workspaceId },
+          select: { defaultModel: true, modelHarness: true },
         }),
       ]);
 
@@ -1452,6 +1564,10 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           existingSegments: segments.map((s) => s.name),
           existingAutomations: automations.map((a) => a.name),
         },
+        workspaceAiSettings?.modelHarness
+          ? undefined
+          : (workspaceAiSettings?.defaultModel as AIModelId | null) ?? undefined,
+        workspaceAiSettings?.modelHarness,
       );
 
       // Execute the parsed instruction
@@ -1468,6 +1584,11 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           sampleCopy: brandProfile.sampleCopy as string[],
           creativeIntensity: brandProfile.creativeIntensity ?? undefined,
         } : undefined,
+        model:
+          workspaceAiSettings?.modelHarness
+            ? undefined
+            : (workspaceAiSettings?.defaultModel as AIModelId | null) ?? undefined,
+        modelHarness: workspaceAiSettings?.modelHarness,
       });
 
       // Record token usage if any

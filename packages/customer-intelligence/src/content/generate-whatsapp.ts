@@ -1,4 +1,4 @@
-import { complete, type AIModelId } from "../ai";
+import { complete, type AIModelId, type ModelHarnessConfig } from "../ai";
 import { brandVoiceBlock } from "./prompt-templates";
 
 export interface GenerateWhatsAppInput {
@@ -14,6 +14,7 @@ export interface GenerateWhatsAppInput {
   segment?: { name: string; description: string };
   programType: string;
   model?: AIModelId;
+  modelHarness?: ModelHarnessConfig | unknown;
 }
 
 export interface GenerateWhatsAppOutput {
@@ -89,6 +90,9 @@ export async function generateWhatsApp(
 
   const result = await complete({
     model: input.model,
+    task: "generation",
+    workload: "creative",
+    harness: input.modelHarness,
     prompt,
     temperature: 0.7,
     jsonMode: true,

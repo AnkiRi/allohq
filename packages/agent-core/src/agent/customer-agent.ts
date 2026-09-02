@@ -2,6 +2,7 @@ import { assembleContext, formatContextForPrompt } from "@allohq/agent-brain";
 import { runAgent } from "./base-agent";
 import { getCustomerTools } from "../tools";
 import type { AgentResult } from "../types";
+import type { ModelHarnessConfig } from "@allohq/customer-intelligence";
 
 const CUSTOMER_SYSTEM_PROMPT = `You are the store assistant for {{storeName}}. You help customers with their questions, find products, check orders, and provide personalized recommendations.
 
@@ -32,6 +33,7 @@ export async function runCustomerAgent(opts: {
   message: string;
   /** Optional cross-channel history (from other conversations with the same customer) */
   conversationHistory?: Array<{ role: string; content: string }>;
+  modelHarness?: ModelHarnessConfig | unknown;
 }): Promise<AgentResult> {
   const { storeId, customerId, conversationId, message } = opts;
 
@@ -61,5 +63,7 @@ export async function runCustomerAgent(opts: {
     toolContext: { storeId, customerId, conversationId },
     agentType: "customer_assistant",
     conversationHistory: history,
+    workload: "support",
+    modelHarness: opts.modelHarness,
   });
 }

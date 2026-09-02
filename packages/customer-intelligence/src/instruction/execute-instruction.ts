@@ -1,4 +1,5 @@
 import type { AIModelId } from "../ai";
+import type { ModelHarnessConfig } from "../ai/model-harness";
 import type { ParsedInstruction, InstructionIntent } from "./parse-instruction";
 import { generateEmail } from "../content/generate-email";
 import { generateSms } from "../content/generate-sms";
@@ -6,6 +7,7 @@ import { generateWhatsApp } from "../content/generate-whatsapp";
 import { generateRcs } from "../content/generate-rcs";
 import { generateWorkflow } from "../programs/generate-workflow";
 import { buildWhereFromConditions } from "@allohq/database";
+import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,6 +40,7 @@ interface ExecutionDeps {
     creativeIntensity?: string;
   };
   model?: AIModelId;
+  modelHarness?: ModelHarnessConfig | unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,23 +89,62 @@ async function createSegmentFromCriteria(
     .map((c) => ({ field: FIELD_MAP[c.field] ?? c.field, op: OP_MAP[c.op] ?? "equals", value: c.value }))
     .filter((c) => c.value !== undefined && c.value !== null && c.value !== "");
 
-  // GUARDRAIL: never silently create a broad all-customers "Custom Segment" blob.
-  // A segment must have an explicit definition — otherwise refuse and ask.
-  if (conditions.length === 0) {
+  const requestedLimit = parsed.params.audienceLimit;
+  if (
+    requestedLimit !== undefined &&
+    (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 500)
+  ) {
+    throw new Error("Audience limit must be a whole number between 1 and 500.");
+  }
+  const audienceLimit = requestedLimit;
+
+  // GUARDRAIL: never silently create a broad all-customers "Custom Segment"
+  // blob. A hard "top N" request is itself an explicit definition.
+  if (conditions.length === 0 && !audienceLimit) {
     throw new Error(
       'I need a clear definition for that segment — e.g. "spent over ₹2,000" or "no order in 60 days". What should define it?',
     );
   }
 
-  const canonical = { operator: "AND" as const, conditions };
+  const canonical = {
+    operator: parsed.params.segmentCriteria?.operator ?? ("AND" as const),
+    conditions,
+  };
   // Respect the requested name; fall back to a description of the rules — never a generic blob name.
-  const segmentName = parsed.params.targetSegment?.trim() || describeConditions(conditions);
+  const segmentName =
+    parsed.params.targetSegment?.trim() ||
+    (audienceLimit
+      ? `Top ${audienceLimit} customers`
+      : describeConditions(conditions));
   const slug =
     segmentName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") +
     "-" + Date.now().toString(36);
 
   const where = buildWhereFromConditions(canonical, [deps.storeId]);
-  const customerCount = await (deps.prisma as any).customer.count({ where });
+  let customerCount: number;
+  let customerIds: string[] = [];
+
+  if (audienceLimit) {
+    const sort = parsed.params.audienceSort ?? "totalSpent";
+    const orderBy =
+      sort === "orderCount"
+        ? { rfmScore: { orderCount: "desc" } }
+        : sort === "predictedLtv"
+          ? { lifetimeValue: { predictedLtv: "desc" } }
+          : sort === "recent"
+            ? { rfmScore: { lastOrderAt: "desc" } }
+            : { rfmScore: { totalSpent: "desc" } };
+    const customers = await (deps.prisma as any).customer.findMany({
+      where,
+      select: { id: true },
+      orderBy,
+      take: audienceLimit,
+    });
+    customerIds = customers.map((customer: { id: string }) => customer.id);
+    customerCount = customerIds.length;
+  } else {
+    customerCount = await (deps.prisma as any).customer.count({ where });
+  }
 
   const segment = await (deps.prisma as any).customerSegment.create({
     data: {
@@ -110,8 +152,9 @@ async function createSegmentFromCriteria(
       name: segmentName,
       slug,
       description: parsed.reasoning,
-      kind: "conditions",
-      conditions: canonical,
+      kind: audienceLimit ? "manual" : "conditions",
+      conditions: audienceLimit ? undefined : canonical,
+      customerIds,
       customerCount,
       isSystem: false,
     },
@@ -149,7 +192,7 @@ async function executeCreateAutomation(
 
   // Create segment if criteria provided
   let segmentName = parsed.params.targetSegment;
-  if (parsed.params.segmentCriteria) {
+  if (parsed.params.segmentCriteria || parsed.params.audienceLimit) {
     const seg = await createSegmentFromCriteria(deps, parsed);
     segmentName = seg.segmentName;
   }
@@ -201,6 +244,7 @@ async function executeCreateAutomation(
       } : undefined,
       creativeIntensity: (deps.brandProfile?.creativeIntensity as any) ?? "balanced",
       model: deps.model,
+      modelHarness: deps.modelHarness,
     });
 
     const template = await (deps.prisma as any).emailTemplate.create({
@@ -227,6 +271,7 @@ async function executeCreateAutomation(
       segment: segmentName ? { name: segmentName, description: parsed.reasoning } : undefined,
       programType: category,
       model: deps.model,
+      modelHarness: deps.modelHarness,
     });
 
     const smsTemplate = await (deps.prisma as any).smsTemplate.create({
@@ -251,6 +296,7 @@ async function executeCreateAutomation(
       segment: segmentName ? { name: segmentName, description: parsed.reasoning } : undefined,
       programType: category,
       model: deps.model,
+      modelHarness: deps.modelHarness,
     });
 
     const waTemplate = await (deps.prisma as any).whatsAppTemplate.create({
@@ -277,6 +323,7 @@ async function executeCreateAutomation(
       segment: segmentName ? { name: segmentName, description: parsed.reasoning } : undefined,
       programType: category,
       model: deps.model,
+      modelHarness: deps.modelHarness,
     });
 
     const rcsTemplate = await (deps.prisma as any).rcsTemplate.create({
@@ -354,10 +401,36 @@ async function executeCreateCampaign(
   parsed: ParsedInstruction,
   deps: ExecutionDeps,
 ): Promise<ExecutionResult> {
+  let normalizedDiscount:
+    | { type: "percentage"; value: number; code: string }
+    | undefined;
+  if (parsed.params.discount) {
+    if (parsed.params.discount.type !== "percentage") {
+      throw new Error(
+        "Natural-language campaign creation currently supports percentage discounts only.",
+      );
+    }
+    const value = Number(parsed.params.discount.value);
+    if (!Number.isFinite(value) || value < 1 || value > 50) {
+      throw new Error("Discount percentage must be between 1% and 50%.");
+    }
+    const requestedCode = parsed.params.discount.code
+      ?.toUpperCase()
+      .replace(/[^A-Z0-9-]/g, "")
+      .slice(0, 32);
+    normalizedDiscount = {
+      type: "percentage",
+      value,
+      code:
+        requestedCode ||
+        `JOON${Math.round(value)}-${randomUUID().slice(0, 6).toUpperCase()}`,
+    };
+  }
+
   // Create segment if needed
   let segmentId: string | undefined;
   let segmentName = parsed.params.targetSegment;
-  if (parsed.params.segmentCriteria) {
+  if (parsed.params.segmentCriteria || parsed.params.audienceLimit) {
     const seg = await createSegmentFromCriteria(deps, parsed);
     segmentId = seg.segmentId;
     segmentName = seg.segmentName;
@@ -389,15 +462,16 @@ async function executeCreateCampaign(
       imageUrl: p.imageUrl ?? undefined, price: p.price, handle: p.handle,
     })),
     storeUrl,
-    context: parsed.params.discount ? {
+    context: normalizedDiscount ? {
       discount: {
-        type: parsed.params.discount.type as "percentage" | "fixed",
-        value: parsed.params.discount.value,
-        code: parsed.params.discount.code,
+        type: normalizedDiscount.type,
+        value: normalizedDiscount.value,
+        code: normalizedDiscount.code,
       },
     } : undefined,
     creativeIntensity: (deps.brandProfile?.creativeIntensity as any) ?? "balanced",
     model: deps.model,
+    modelHarness: deps.modelHarness,
   });
 
   const template = await (deps.prisma as any).emailTemplate.create({
@@ -422,6 +496,15 @@ async function executeCreateCampaign(
       segmentId: segmentId ?? null,
       status: "draft",
       scheduledAt: parsed.params.scheduledAt ? new Date(parsed.params.scheduledAt) : null,
+      agentProposal: {
+        source: "natural_language_instruction",
+        intent: "promotion",
+        segmentId: segmentId ?? null,
+        segmentName: segmentName ?? null,
+        channel: "email",
+        discountPercent: normalizedDiscount?.value ?? null,
+        discountCode: normalizedDiscount?.code ?? null,
+      },
     },
   });
 
@@ -466,6 +549,7 @@ async function executeCreateTemplate(
       storeUrl,
       creativeIntensity: (deps.brandProfile?.creativeIntensity as any) ?? "balanced",
       model: deps.model,
+      modelHarness: deps.modelHarness,
       tweaks: parsed.params.tone ? `Tone: ${parsed.params.tone}` : undefined,
     });
 
@@ -495,6 +579,7 @@ async function executeCreateTemplate(
       intent: parsed.params.theme ?? "promotion",
       programType: "custom",
       model: deps.model,
+      modelHarness: deps.modelHarness,
     });
 
     const template = await (deps.prisma as any).smsTemplate.create({

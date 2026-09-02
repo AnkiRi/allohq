@@ -56,6 +56,10 @@ export const customerVoiceWorker = new Worker<CustomerVoiceJobData>(
 );
 
 async function synthesizeVoiceReport(storeId: string): Promise<boolean> {
+  const storeAiSettings = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { workspace: { select: { modelHarness: true } } },
+  });
   // Calculate the start of the current week (Monday 00:00)
   const now = new Date();
   const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
@@ -116,6 +120,8 @@ async function synthesizeVoiceReport(storeId: string): Promise<boolean> {
   // unavailable) and the response cache applies at low temperature.
   const aiResponse = await complete({
     task: "analysis",
+    workload: "analysis",
+    harness: storeAiSettings?.workspace.modelHarness,
     maxTokens: 2000,
     temperature: 0.2,
     jsonMode: true,

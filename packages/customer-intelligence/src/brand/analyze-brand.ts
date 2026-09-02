@@ -1,4 +1,4 @@
-import { complete, type AIModelId } from "../ai";
+import { complete, type AIModelId, type ModelHarnessConfig } from "../ai";
 
 export interface StoreData {
   storeName: string;
@@ -112,7 +112,7 @@ Return ONLY valid JSON, no other text.`;
  */
 export async function analyzeBrandVoice(
   storeData: StoreData,
-  options?: { model?: AIModelId },
+  options?: { model?: AIModelId; modelHarness?: ModelHarnessConfig | unknown },
 ): Promise<BrandVoiceResult & { model: string; inputTokens: number; outputTokens: number }> {
   // Build product samples (max 15 products to keep prompt reasonable)
   const productSamples = storeData.products
@@ -134,6 +134,8 @@ export async function analyzeBrandVoice(
   const result = await complete({
     model: options?.model,
     task: "analysis", // brand VOICE — frontier: all customer-facing copy inherits it
+    workload: "analysis",
+    harness: options?.modelHarness,
     prompt,
     temperature: 0.3,
     jsonMode: true,
@@ -155,7 +157,7 @@ export async function analyzeBrandVoice(
 export async function analyzeBrandFromDocument(
   document: string,
   storeData?: Partial<StoreData>,
-  options?: { model?: AIModelId },
+  options?: { model?: AIModelId; modelHarness?: ModelHarnessConfig | unknown },
 ): Promise<BrandVoiceResult & { model: string; inputTokens: number; outputTokens: number }> {
   let productSamples = "";
   if (storeData?.products && storeData.products.length > 0) {
@@ -188,6 +190,8 @@ export async function analyzeBrandFromDocument(
   const result = await complete({
     model: options?.model,
     task: "analysis", // brand VOICE — frontier: all customer-facing copy inherits it
+    workload: "analysis",
+    harness: options?.modelHarness,
     prompt,
     temperature: 0.3,
     jsonMode: true,

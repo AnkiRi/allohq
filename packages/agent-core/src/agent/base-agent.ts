@@ -1,17 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { prisma } from "@allohq/database";
-import { getProvider, DEFAULT_MODEL as GATEWAY_DEFAULT_MODEL } from "@allohq/customer-intelligence";
+import {
+  getModel,
+  getProvider,
+  resolveHarnessRoute,
+  type AIModelId,
+  type AIWorkload,
+  type ModelHarnessConfig,
+} from "@allohq/customer-intelligence";
 import type { ToolDefinition, ToolContext, AgentResult, AgentType } from "../types";
 import { toAnthropicTools } from "../tools";
 
 const MAX_TOOL_ROUNDS = 5;
-// Default agent model comes from the gateway policy (single source of truth).
-const DEFAULT_MODEL = GATEWAY_DEFAULT_MODEL;
-
 /**
  * Run the agent loop: send messages to the LLM, execute tool calls, repeat.
- * Falls back to OpenAI if Anthropic is unavailable.
+ * The merchant harness supplies an ordered provider/model chain.
  */
 export async function runAgent(opts: {
   systemPrompt: string;
@@ -20,7 +24,9 @@ export async function runAgent(opts: {
   toolContext: ToolContext;
   agentType: AgentType;
   conversationHistory?: Array<{ role: string; content: string }>;
-  model?: string;
+  model?: AIModelId;
+  workload?: AIWorkload;
+  modelHarness?: ModelHarnessConfig | unknown;
   maxTokens?: number;
 }): Promise<AgentResult> {
   const {
@@ -30,7 +36,6 @@ export async function runAgent(opts: {
     toolContext,
     agentType,
     conversationHistory: rawHistory = [],
-    model = DEFAULT_MODEL,
     maxTokens = 4096,
   } = opts;
 
@@ -38,27 +43,62 @@ export async function runAgent(opts: {
   // most recent exchanges (last 12 messages ≈ 6 turns); older turns drop off.
   const conversationHistory = rawHistory.slice(-12);
 
-  // Try Anthropic first (the working default tier), fall back to OpenAI.
-  // Provider availability is sourced from the gateway's adapter registry so the
-  // graceful-degrade rules stay in one place.
-  try {
-    return await runAnthropicAgent({
-      systemPrompt, userMessage, tools, toolContext, agentType,
-      conversationHistory, model, maxTokens,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Agent] Anthropic failed: ${msg}. Falling back to OpenAI...`);
+  const route = resolveHarnessRoute({
+    model: opts.model,
+    workload: opts.workload ?? (agentType === "customer_assistant" ? "support" : "orchestration"),
+    harness: opts.modelHarness,
+    task: "reasoning",
+  });
 
-    if (!getProvider("openai").isAvailable()) {
-      throw new Error(`Anthropic API failed (${msg}) and no OpenAI provider available for fallback.`);
+  let lastError: Error | undefined;
+  let attempted = 0;
+
+  for (const modelId of route.candidates) {
+    const model = getModel(modelId);
+    if (!model || !getProvider(model.provider).isAvailable()) continue;
+    attempted++;
+
+    try {
+      const result =
+        model.provider === "anthropic"
+          ? await runAnthropicAgent({
+              systemPrompt,
+              userMessage,
+              tools,
+              toolContext,
+              agentType,
+              conversationHistory,
+              model: modelId,
+              maxTokens: route.maxTokens ?? maxTokens,
+            })
+          : await runOpenAIAgent({
+              systemPrompt,
+              userMessage,
+              tools,
+              toolContext,
+              agentType,
+              conversationHistory,
+              model: modelId,
+              maxTokens: route.maxTokens ?? maxTokens,
+            });
+
+      return {
+        ...result,
+        model: modelId,
+        provider: model.provider,
+        usedFallback: attempted > 1,
+      };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.error(
+        `[Agent] ${modelId} (${model.provider}) failed: ${lastError.message}. Falling back...`,
+      );
     }
-
-    return await runOpenAIAgent({
-      systemPrompt, userMessage, tools, toolContext, agentType,
-      conversationHistory, maxTokens,
-    });
   }
+
+  throw new Error(
+    `All tool-capable AI models failed or unavailable. Last error: ${lastError?.message ?? "no provider configured"}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -188,9 +228,10 @@ async function runOpenAIAgent(opts: {
   toolContext: ToolContext;
   agentType: AgentType;
   conversationHistory: Array<{ role: string; content: string }>;
+  model: string;
   maxTokens: number;
 }): Promise<AgentResult> {
-  const { systemPrompt, userMessage, tools, toolContext, agentType, conversationHistory, maxTokens } = opts;
+  const { systemPrompt, userMessage, tools, toolContext, agentType, conversationHistory, model, maxTokens } = opts;
 
   const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"], timeout: 60_000, maxRetries: 1 });
   const openaiTools = toOpenAITools(tools);
@@ -213,7 +254,7 @@ async function runOpenAIAgent(opts: {
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await client.chat.completions.create({
-      model: "gpt-4o",
+      model,
       max_tokens: maxTokens,
       messages,
       tools: openaiTools.length > 0 ? openaiTools : undefined,
