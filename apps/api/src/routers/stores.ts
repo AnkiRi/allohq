@@ -1,6 +1,25 @@
 import { z } from "zod";
-import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import {
+  router,
+  workspaceProcedure,
+  storeProcedure,
+  ownerProcedure,
+  ownerStoreProcedure,
+} from "../trpc";
 import { Queue } from "bullmq";
+import { randomBytes } from "node:crypto";
+
+const widgetOriginSchema = z.string().url().transform((value, ctx) => {
+  const url = new URL(value);
+  if (url.protocol !== "https:" && url.hostname !== "localhost") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Widget origins must use HTTPS",
+    });
+    return z.NEVER;
+  }
+  return url.origin;
+});
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -16,6 +35,56 @@ const brandAnalysisQueue = new Queue("brand-analysis", { connection: redisConnec
 const agentPipelineQueue = new Queue("agent-pipeline", { connection: redisConnection });
 
 export const storesRouter = router({
+  listPrivacyRequests: ownerProcedure.query(async ({ ctx }) => {
+    const stores = await ctx.prisma.store.findMany({
+      where: { workspaceId: ctx.workspaceId },
+      select: { shopDomain: true },
+    });
+    return ctx.prisma.privacyRequest.findMany({
+      where: {
+        shopDomain: { in: stores.map((store) => store.shopDomain) },
+      },
+      select: {
+        id: true,
+        eventId: true,
+        shopDomain: true,
+        topic: true,
+        customerExternalId: true,
+        status: true,
+        error: true,
+        completedAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+  }),
+
+  getPrivacyRequestExport: ownerProcedure
+    .input(z.object({ requestId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const stores = await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        select: { shopDomain: true },
+      });
+      const request = await ctx.prisma.privacyRequest.findFirst({
+        where: {
+          id: input.requestId,
+          shopDomain: { in: stores.map((store) => store.shopDomain) },
+          topic: "customers/data_request",
+        },
+        select: {
+          id: true,
+          shopDomain: true,
+          status: true,
+          result: true,
+          completedAt: true,
+        },
+      });
+      if (!request) throw new Error("Privacy request not found");
+      return request;
+    }),
+
   /**
    * List all active stores for the workspace with entity counts.
    */
@@ -341,9 +410,11 @@ export const storesRouter = router({
 
       await syncQueue.add("full-sync", {
         storeId: store.id,
-        shopDomain: store.shopDomain,
-        accessToken: store.accessToken,
         platform: store.platform,
+      }, {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5_000 },
+        jobId: `manual-sync-${store.id}-${Math.floor(Date.now() / 30_000)}`,
       });
 
       return { status: "queued" as const };
@@ -492,6 +563,49 @@ export const storesRouter = router({
       };
     }),
 
+  /** Publishable storefront key and exact browser origins for the widget. */
+  getWidgetConfig: storeProcedure.query(async ({ ctx, input }) => {
+    const store = await ctx.prisma.store.findUniqueOrThrow({
+      where: { id: input.storeId },
+      select: {
+        widgetPublicKey: true,
+        widgetAllowedOrigins: true,
+        shopDomain: true,
+      },
+    });
+
+    return {
+      publishableKey: store.widgetPublicKey,
+      allowedOrigins: store.widgetAllowedOrigins,
+      defaultOrigin: `https://${store.shopDomain}`,
+    };
+  }),
+
+  updateWidgetOrigins: ownerStoreProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        allowedOrigins: z.array(widgetOriginSchema).max(20),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const allowedOrigins = [...new Set(input.allowedOrigins)];
+      await ctx.prisma.store.update({
+        where: { id: input.storeId },
+        data: { widgetAllowedOrigins: allowedOrigins },
+      });
+      return { allowedOrigins };
+    }),
+
+  rotateWidgetKey: ownerStoreProcedure.mutation(async ({ ctx, input }) => {
+    const publishableKey = `pk_live_${randomBytes(24).toString("base64url")}`;
+    await ctx.prisma.store.update({
+      where: { id: input.storeId },
+      data: { widgetPublicKey: publishableKey },
+    });
+    return { publishableKey };
+  }),
+
   /**
    * Get the BrandVisualProfile for a store.
    */
@@ -571,8 +685,7 @@ export const storesRouter = router({
   /**
    * Disconnect a store — deletes all related data and soft-deletes the store.
    */
-  disconnect: workspaceProcedure
-    .input(z.object({ storeId: z.string() }))
+  disconnect: ownerStoreProcedure
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },

@@ -291,3 +291,11 @@ export const ownerProcedure = workspaceProcedure.use(async ({ ctx, next }) => {
   }
   return next();
 });
+
+/** Owner-only mutation/query scoped to one verified store. */
+export const ownerStoreProcedure = ownerProcedure
+  .input(z.object({ storeId: z.string() }))
+  .use(async ({ ctx, input, next }) => {
+    await verifyStoreAccess(ctx, (input as { storeId: string }).storeId);
+    return next();
+  });

@@ -1,21 +1,33 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
 import { runCustomerAgent } from "@allohq/agent-core";
+import { checkRateLimit } from "../middleware/rate-limit";
 
 /**
  * REST API endpoints for the customer-facing widget.
- * Auth: X-API-Key header with store API key (accessToken).
+ * Auth: X-Joon-Publishable-Key. This revocable storefront key has no
+ * Shopify privileges; the encrypted Admin token never crosses the server.
  *
  * Routes:
+ *   POST /v1/events                     — Record a validated storefront event
  *   POST /v1/conversations              — Start or resume a conversation
  *   POST /v1/conversations/:id/messages — Send a message (returns agent response via SSE)
  */
 
 /** Parse JSON body from request */
-function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+function parseBody(req: IncomingMessage, maxBytes = 32 * 1024): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (chunk) => (data += chunk));
+    let bytes = 0;
+    req.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+        return;
+      }
+      data += chunk.toString();
+    });
     req.on("end", () => {
       try {
         resolve(data ? JSON.parse(data) : {});
@@ -33,16 +45,72 @@ function json(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
-/** Authenticate via X-API-Key header — returns the store */
-async function authenticateStore(req: IncomingMessage) {
-  const apiKey = req.headers["x-api-key"] as string | undefined;
+/** Authenticate via the revocable publishable widget key. */
+export async function authenticateWidgetStore(req: IncomingMessage) {
+  const apiKey = req.headers["x-joon-publishable-key"] as string | undefined;
   if (!apiKey) return null;
 
   const store = await prisma.store.findFirst({
-    where: { accessToken: apiKey, isActive: true },
-    select: { id: true, workspaceId: true, storeName: true, shopDomain: true },
+    where: { widgetPublicKey: apiKey, isActive: true },
+    select: {
+      id: true,
+      workspaceId: true,
+      storeName: true,
+      shopDomain: true,
+      widgetAllowedOrigins: true,
+    },
   });
   return store;
+}
+
+export function isAllowedWidgetOrigin(
+  origin: string | undefined,
+  store: { shopDomain: string; widgetAllowedOrigins: string[] },
+): boolean {
+  if (!origin) return process.env["NODE_ENV"] !== "production";
+
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
+    return false;
+  }
+
+  const allowed = new Set([
+    `https://${store.shopDomain}`,
+    ...store.widgetAllowedOrigins.map((value) => value.replace(/\/$/, "")),
+    ...(process.env["WIDGET_ALLOWED_DEV_ORIGINS"]
+      ?.split(",")
+      .map((value) => value.trim().replace(/\/$/, ""))
+      .filter(Boolean) ?? []),
+  ]);
+  return allowed.has(parsed.origin);
+}
+
+function requestIp(req: IncomingMessage): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
+    return forwarded.split(",")[0]?.trim() ?? "unknown";
+  }
+  return req.socket.remoteAddress ?? "unknown";
+}
+
+const WIDGET_EVENT_TYPES = new Set([
+  "page_view",
+  "product_view",
+  "add_to_cart",
+  "purchase",
+  "form_submit",
+  "popup_view",
+]);
+
+function shortString(value: unknown, maxLength = 128): string | undefined {
+  return typeof value === "string" && value.length > 0 && value.length <= maxLength
+    ? value
+    : undefined;
 }
 
 /** Extract conversation ID from URL: /v1/conversations/:id/messages */
@@ -58,42 +126,142 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
   const url = req.url ?? "";
   const method = req.method ?? "GET";
 
-  // CORS for widget (allow any origin — it's embedded in merchant stores)
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-
+  // Browsers do not include the publishable key value on a CORS preflight.
+  // The actual request is still authenticated and origin-checked below.
   if (method === "OPTIONS") {
+    const preflightOrigin =
+      typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+    if (preflightOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", preflightOrigin);
+      res.setHeader("Vary", "Origin");
+    }
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, X-Joon-Publishable-Key",
+    );
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.writeHead(204);
     res.end();
     return;
   }
 
   // Authenticate
-  const store = await authenticateStore(req);
+  const store = await authenticateWidgetStore(req);
   if (!store) {
     json(res, 401, { error: "Invalid or missing API key" });
     return;
   }
 
+  const origin =
+    typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  if (!isAllowedWidgetOrigin(origin, store)) {
+    json(res, 403, { error: "Origin is not allowed for this store" });
+    return;
+  }
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Joon-Publishable-Key",
+  );
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+
+  const rateLimit = checkRateLimit(`widget:${store.id}:${requestIp(req)}`, {
+    maxRequests: 120,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    res.setHeader(
+      "Retry-After",
+      String(Math.max(1, Math.ceil(rateLimit.resetMs / 1_000))),
+    );
+    json(res, 429, { error: "Too many requests" });
+    return;
+  }
+
   try {
+    // POST /v1/events — Persist the raw event ledger and mirror product views
+    // into BrowseEvent for the existing real-time trigger pipeline.
+    if (url === "/v1/events" && method === "POST") {
+      const body = await parseBody(req);
+      const type = shortString(body["type"], 64);
+      const data =
+        body["data"] && typeof body["data"] === "object" && !Array.isArray(body["data"])
+          ? (body["data"] as Record<string, unknown>)
+          : {};
+      const timestamp = body["timestamp"];
+
+      if (!type || !WIDGET_EVENT_TYPES.has(type)) {
+        json(res, 400, { error: "Unsupported event type" });
+        return;
+      }
+
+      const now = Date.now();
+      const occurredAtMs =
+        typeof timestamp === "number" &&
+        Number.isFinite(timestamp) &&
+        timestamp > now - 7 * 24 * 60 * 60 * 1_000 &&
+        timestamp < now + 5 * 60 * 1_000
+          ? timestamp
+          : now;
+      const visitorId = shortString(data["visitorId"]);
+      const sessionId = shortString(data["sessionId"]);
+      const productId = shortString(data["productId"]);
+      const pageUrl = shortString(data["pageUrl"], 2_048);
+
+      const event = await prisma.storefrontEvent.create({
+        data: {
+          storeId: store.id,
+          type,
+          visitorId,
+          sessionId,
+          // A browser-provided identifier is never promoted to an internal
+          // customer ID without a signed identity-linking flow.
+          customerId: null,
+          data: data as any,
+          occurredAt: new Date(occurredAtMs),
+        },
+        select: { id: true },
+      });
+
+      if (type === "product_view" && sessionId && productId) {
+        await prisma.browseEvent.create({
+          data: {
+            storeId: store.id,
+            sessionId,
+            productId,
+            pageUrl,
+          },
+        });
+      }
+
+      json(res, 202, { id: event.id });
+      return;
+    }
+
     // POST /v1/conversations — Start or resume conversation
     if (url === "/v1/conversations" && method === "POST") {
       const body = await parseBody(req);
-      const { customerId, channel, visitorId } = body as {
-        customerId?: string;
+      const { channel, visitorId } = body as {
         channel?: string;
         visitorId?: string;
       };
+      const safeVisitorId =
+        typeof visitorId === "string" && visitorId.length <= 128
+          ? visitorId
+          : undefined;
 
-      // Try to find existing active conversation for this customer
+      // A public browser must not be able to claim an arbitrary internal
+      // customerId. Authenticated linking will use a signed server token.
       let conversation;
-      if (customerId) {
+      if (safeVisitorId) {
         conversation = await prisma.conversation.findFirst({
           where: {
             storeId: store.id,
-            customerId,
             status: { in: ["active", "waiting"] },
+            metadata: { path: ["visitorId"], equals: safeVisitorId },
           },
           orderBy: { updatedAt: "desc" },
         });
@@ -103,9 +271,9 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
         conversation = await prisma.conversation.create({
           data: {
             storeId: store.id,
-            customerId: customerId ?? null,
+            customerId: null,
             channel: (channel as string) ?? "widget",
-            metadata: visitorId ? { visitorId } : {},
+            metadata: safeVisitorId ? { visitorId: safeVisitorId } : {},
           },
         });
       }
@@ -138,8 +306,8 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
       const body = await parseBody(req);
       const { message } = body as { message?: string };
 
-      if (!message) {
-        json(res, 400, { error: "message is required" });
+      if (!message || typeof message !== "string" || message.length > 2_000) {
+        json(res, 400, { error: "message must be between 1 and 2000 characters" });
         return;
       }
 
@@ -173,7 +341,8 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
-        "Access-Control-Allow-Origin": "*",
+        ...(origin ? { "Access-Control-Allow-Origin": origin } : {}),
+        Vary: "Origin",
       });
 
       // Send "thinking" event
@@ -181,11 +350,16 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
 
       try {
         // Run the agent
+        const workspaceAiSettings = await prisma.workspace.findUnique({
+          where: { id: store.workspaceId },
+          select: { modelHarness: true },
+        });
         const result = await runCustomerAgent({
           storeId: store.id,
           customerId: conversation.customerId ?? undefined,
           conversationId,
           message,
+          modelHarness: workspaceAiSettings?.modelHarness,
         });
 
         // Save agent response

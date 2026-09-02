@@ -7,6 +7,11 @@ import {
   deliverIncentive,
 } from "@allohq/forms-and-popups";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
+import {
+  authenticateWidgetStore,
+  isAllowedWidgetOrigin,
+} from "./widget-api";
+import { checkRateLimit } from "../middleware/rate-limit";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -17,10 +22,22 @@ const redisConnection = {
 const customerStateQueue = new Queue("customer-state", { connection: redisConnection });
 
 /** Parse JSON body from request */
-function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+function parseBody(
+  req: IncomingMessage,
+  maxBytes = 32 * 1024,
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (chunk: string) => (data += chunk));
+    let bytes = 0;
+    req.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+        return;
+      }
+      data += chunk.toString();
+    });
     req.on("end", () => {
       try {
         resolve(data ? JSON.parse(data) : {});
@@ -36,9 +53,6 @@ function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
 function json(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Store-Id, X-API-Key",
   });
   res.end(JSON.stringify(data));
 }
@@ -46,7 +60,7 @@ function json(res: ServerResponse, status: number, data: unknown) {
 /**
  * Widget popup API routes.
  *
- * GET  /widget/popups?storeId=xxx       — Fetch active popup configs for a store
+ * GET  /widget/popups                   — Fetch active popup configs for a store
  * POST /widget/submit                    — Submit a form from a popup
  */
 export async function handleWidgetPopups(
@@ -55,33 +69,70 @@ export async function handleWidgetPopups(
 ): Promise<void> {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    const preflightOrigin =
+      typeof req.headers.origin === "string" ? req.headers.origin : undefined;
     res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
+      ...(preflightOrigin
+        ? { "Access-Control-Allow-Origin": preflightOrigin, Vary: "Origin" }
+        : {}),
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, X-Store-Id, X-API-Key",
+      "Access-Control-Allow-Headers": "Content-Type, X-Joon-Publishable-Key",
     });
     res.end();
     return;
   }
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+  const store = await authenticateWidgetStore(req);
+  if (!store) {
+    json(res, 401, { error: "Invalid or missing API key" });
+    return;
+  }
 
-  // GET /widget/popups?storeId=xxx
+  const origin =
+    typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  if (!isAllowedWidgetOrigin(origin, store)) {
+    json(res, 403, { error: "Origin is not allowed for this store" });
+    return;
+  }
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Joon-Publishable-Key",
+  );
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip =
+    typeof forwarded === "string"
+      ? forwarded.split(",")[0]?.trim() ?? "unknown"
+      : req.socket.remoteAddress ?? "unknown";
+  const rateLimit = checkRateLimit(`widget-popup:${store.id}:${ip}`, {
+    maxRequests: 60,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    res.setHeader(
+      "Retry-After",
+      String(Math.max(1, Math.ceil(rateLimit.resetMs / 1_000))),
+    );
+    json(res, 429, { error: "Too many requests" });
+    return;
+  }
+
+  // GET /widget/popups
   if (url.pathname === "/widget/popups" && req.method === "GET") {
-    const storeId = url.searchParams.get("storeId");
-    if (!storeId) {
-      json(res, 400, { error: "storeId required" });
-      return;
-    }
-
     const popups = await prisma.popup.findMany({
-      where: { storeId, status: "active" },
+      where: { storeId: store.id, status: "active" },
       include: { form: true },
     });
 
     // Load brand tokens for popup styling
     const brandVisualProfile = await prisma.brandVisualProfile.findUnique({
-      where: { storeId },
+      where: { storeId: store.id },
       select: { brandDesignTokens: true },
     });
     const brandTokens = brandVisualProfile?.brandDesignTokens as Record<string, string> | null;
@@ -124,13 +175,12 @@ export async function handleWidgetPopups(
   if (url.pathname === "/widget/submit" && req.method === "POST") {
     try {
       const body = await parseBody(req);
-      const storeId = body["storeId"] as string;
       const popupId = body["popupId"] as string;
       const data = body["data"] as Record<string, unknown>;
       const source = (body["source"] as string) ?? "popup";
 
-      if (!storeId || !data) {
-        json(res, 400, { error: "storeId and data required" });
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        json(res, 400, { error: "data required" });
         return;
       }
 
@@ -139,15 +189,18 @@ export async function handleWidgetPopups(
       if (popupId) {
         const popup = await prisma.popup.findUnique({
           where: { id: popupId },
-          select: { formId: true },
+          select: { formId: true, storeId: true, status: true },
         });
-        formId = popup?.formId ?? null;
+        formId =
+          popup?.storeId === store.id && popup.status === "active"
+            ? popup.formId
+            : null;
       }
 
       if (!formId) {
         // Try to find form from storeId
         const form = await prisma.form.findFirst({
-          where: { storeId, status: "active" },
+          where: { storeId: store.id, status: "active" },
           select: { id: true },
         });
         formId = form?.id ?? null;
@@ -162,9 +215,6 @@ export async function handleWidgetPopups(
       const consent: { email?: boolean; sms?: boolean; whatsapp?: boolean } = {};
       if (data["consent_email"] !== undefined) {
         consent.email = data["consent_email"] === "true" || data["consent_email"] === "on" || data["consent_email"] === true;
-      } else if (data["email"]) {
-        // Default: if they submitted an email without explicit consent checkbox, treat as opt-in
-        consent.email = true;
       }
       if (data["consent_sms"] !== undefined) {
         consent.sms = data["consent_sms"] === "true" || data["consent_sms"] === "on" || data["consent_sms"] === true;
@@ -176,7 +226,7 @@ export async function handleWidgetPopups(
       // Capture submission
       const result = await captureSubmission({
         formId,
-        storeId,
+        storeId: store.id,
         data,
         source,
         consent,
@@ -191,7 +241,7 @@ export async function handleWidgetPopups(
       let discountCode: string | null = null;
       const incentiveConfig = form?.incentiveConfig as unknown as IncentiveConfig | null;
       if (incentiveConfig) {
-        const incentiveResult = await deliverIncentive(storeId, incentiveConfig);
+        const incentiveResult = await deliverIncentive(store.id, incentiveConfig);
         discountCode = incentiveResult?.code ?? null;
       }
 
@@ -200,7 +250,7 @@ export async function handleWidgetPopups(
         await customerStateQueue.add("form-submission", {
           type: "form_submitted",
           customerId: result.customerId,
-          storeId,
+          storeId: store.id,
           data: { consent },
           timestamp: new Date().toISOString(),
         });

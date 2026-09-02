@@ -37,7 +37,7 @@ export function init(options: WidgetConfig): void {
   // Auto-mount popups if enabled (default: true when apiKey available)
   if (options.popups !== false && options.apiKey) {
     popupWidget = new PopupWidget({
-      storeId: options.apiKey, // apiKey doubles as storeId for widget
+      apiKey: options.apiKey,
       apiUrl,
       popupIds: options.popupIds ?? [],
       debug: options.debug,

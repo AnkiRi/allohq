@@ -12,7 +12,7 @@ export async function submitEvent(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": apiKey,
+      "X-Joon-Publishable-Key": apiKey,
     },
     body: JSON.stringify(event),
   });

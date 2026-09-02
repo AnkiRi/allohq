@@ -17,7 +17,7 @@ export interface PopupConfig {
 }
 
 export interface PopupWidgetConfig {
-  storeId: string;
+  apiKey: string;
   apiUrl: string;
   popupIds: string[];
   debug?: boolean;

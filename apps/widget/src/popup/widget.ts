@@ -29,8 +29,10 @@ export class PopupWidget {
 
   private async fetchPopups(): Promise<void> {
     try {
-      const url = `${this.config.apiUrl}/widget/popups?storeId=${this.config.storeId}`;
-      const res = await fetch(url);
+      const url = `${this.config.apiUrl}/widget/popups`;
+      const res = await fetch(url, {
+        headers: { "X-Joon-Publishable-Key": this.config.apiKey },
+      });
       if (!res.ok) return;
       this.popups = await res.json();
     } catch (err) {
@@ -181,9 +183,11 @@ export class PopupWidget {
     try {
       const res = await fetch(`${this.config.apiUrl}/widget/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Joon-Publishable-Key": this.config.apiKey,
+        },
         body: JSON.stringify({
-          storeId: this.config.storeId,
           popupId,
           data,
           source: "popup",
@@ -225,7 +229,7 @@ export class PopupWidget {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Store-Id": this.config.storeId,
+        "X-Joon-Publishable-Key": this.config.apiKey,
       },
       body: JSON.stringify({ type, data, timestamp: Date.now() }),
     }).catch(() => {});

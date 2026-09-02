@@ -1,6 +1,6 @@
 /** Configuration for the AlloHQ widget */
 export interface WidgetConfig {
-  /** Store API key */
+  /** Revocable pk_live_* storefront key. Never use a Shopify Admin token. */
   apiKey: string;
   /** API endpoint URL */
   apiUrl?: string;

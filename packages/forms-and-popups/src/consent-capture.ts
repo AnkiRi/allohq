@@ -1,4 +1,5 @@
 import { prisma } from "@allohq/database";
+import { randomUUID } from "node:crypto";
 import type { ConsentState } from "./types";
 
 /**
@@ -12,8 +13,16 @@ export async function captureSubmission(opts: {
   source: string;
   consent?: ConsentState;
 }): Promise<{ submissionId: string; customerId: string | null }> {
-  const email = opts.data["email"] as string | undefined;
-  const phone = opts.data["phone"] as string | undefined;
+  const rawEmail = opts.data["email"];
+  const email =
+    typeof rawEmail === "string" && rawEmail.length <= 320
+      ? rawEmail.trim().toLowerCase()
+      : undefined;
+  const rawPhone = opts.data["phone"];
+  const phone =
+    typeof rawPhone === "string" && rawPhone.length <= 32
+      ? rawPhone.trim()
+      : undefined;
   let customerId: string | null = null;
 
   // Find or create customer if email provided
@@ -25,11 +34,11 @@ export async function captureSubmission(opts: {
     if (existing) {
       customerId = existing.id;
 
-      // Update marketing consent if they opted in
-      if (opts.consent?.email) {
+      // Only explicit form consent changes the legacy email flag.
+      if (opts.consent?.email !== undefined) {
         await prisma.customer.update({
           where: { id: existing.id },
-          data: { acceptsMarketing: true },
+          data: { acceptsMarketing: opts.consent.email },
         });
       }
 
@@ -46,7 +55,7 @@ export async function captureSubmission(opts: {
       const customer = await prisma.customer.create({
         data: {
           storeId: opts.storeId,
-          externalId: `form-${Date.now()}`, // placeholder until Shopify sync
+          externalId: `form-${randomUUID()}`, // placeholder until Shopify sync
           email,
           phone: phone ?? undefined,
           firstName,
@@ -54,6 +63,45 @@ export async function captureSubmission(opts: {
         },
       });
       customerId = customer.id;
+    }
+  }
+
+  if (customerId && opts.consent) {
+    const consentEntries = (
+      ["email", "sms", "whatsapp"] as const
+    ).filter((channel) => opts.consent?.[channel] !== undefined);
+
+    for (const channel of consentEntries) {
+      const optedIn = opts.consent[channel] === true;
+      const now = new Date();
+      await prisma.contactConsent.upsert({
+        where: { customerId_channel: { customerId, channel } },
+        create: {
+          storeId: opts.storeId,
+          customerId,
+          channel,
+          status: optedIn ? "opted_in" : "opted_out",
+          source: "form",
+          evidence: { formId: opts.formId, source: opts.source },
+          collectedAt: optedIn ? now : null,
+          revokedAt: optedIn ? null : now,
+        },
+        update: {
+          status: optedIn ? "opted_in" : "opted_out",
+          source: "form",
+          evidence: { formId: opts.formId, source: opts.source },
+          collectedAt: optedIn ? now : null,
+          revokedAt: optedIn ? null : now,
+        },
+      });
+
+      // A fresh explicit opt-in can reverse a prior unsubscribe, but never a
+      // provider complaint or hard-bounce suppression.
+      if (optedIn) {
+        await prisma.contactSuppression.deleteMany({
+          where: { customerId, channel, reason: "unsubscribe" },
+        });
+      }
     }
   }
 

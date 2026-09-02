@@ -41,7 +41,7 @@ export class ChatConnection {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": this.apiKey,
+        "X-Joon-Publishable-Key": this.apiKey,
       },
       body: JSON.stringify({ channel: "widget", visitorId }),
     });
@@ -62,7 +62,7 @@ export class ChatConnection {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": this.apiKey,
+          "X-Joon-Publishable-Key": this.apiKey,
         },
         body: JSON.stringify({ message }),
       }

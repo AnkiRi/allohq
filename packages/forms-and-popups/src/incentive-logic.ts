@@ -28,12 +28,12 @@ export async function deliverIncentive(
 
   const store = await prisma.store.findUnique({
     where: { id: storeId },
-    select: { shopDomain: true, accessToken: true },
+    select: { id: true },
   });
 
   if (!store) return null;
 
-  const client = new shopify.ShopifyClient(store.shopDomain, store.accessToken);
+  const client = await shopify.getShopifyAdminClient(store.id);
   const code = config.code ?? generateCode();
 
   if (config.type === "freeShipping") {
