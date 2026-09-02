@@ -1,159 +1,139 @@
 import type { PrismaClient } from "@allohq/database";
 import { ShopifyClient } from "../client";
-import type { ShopifyCollection, ShopifyCollect, ShopifySyncResult } from "../types";
+import type { ShopifySyncResult } from "../types";
 
-/**
- * Sync all collections (custom + smart) and their product associations from Shopify.
- * Uses cursor-based pagination via Link header.
- */
+interface GraphqlCollection {
+  id: string;
+  title: string;
+  handle: string;
+  descriptionHtml: string;
+  sortOrder: string;
+  image: { url: string } | null;
+  products: { nodes: Array<{ id: string }> };
+}
+
+function legacyId(gid: string): string {
+  const value = gid.split("/").pop();
+  if (!value) throw new Error(`Invalid Shopify GID: ${gid}`);
+  return value;
+}
+
+/** Sync collections and membership exclusively through Admin GraphQL. */
 export async function syncAllCollections(
   shopDomain: string,
   accessToken: string,
   storeId: string,
-  prisma: PrismaClient
+  prisma: PrismaClient,
 ): Promise<ShopifySyncResult> {
   const client = new ShopifyClient(shopDomain, accessToken);
   let imported = 0;
   const errors: string[] = [];
-
-  // Sync custom collections
-  const customResult = await syncCollectionType(client, "custom_collections", "custom", storeId, prisma);
-  imported += customResult.imported;
-  errors.push(...customResult.errors);
-
-  // Sync smart collections
-  const smartResult = await syncCollectionType(client, "smart_collections", "smart", storeId, prisma);
-  imported += smartResult.imported;
-  errors.push(...smartResult.errors);
-
-  // Sync product-collection associations (collects)
-  await syncCollects(client, storeId, prisma);
-
-  return { imported, errors };
-}
-
-async function syncCollectionType(
-  client: ShopifyClient,
-  endpoint: string,
-  collectionType: string,
-  storeId: string,
-  prisma: PrismaClient
-): Promise<ShopifySyncResult> {
-  let imported = 0;
-  const errors: string[] = [];
-  let pageInfo: string | undefined;
+  let cursor: string | null = null;
 
   do {
-    const params: Record<string, string> = { limit: "250" };
-    if (pageInfo) params.page_info = pageInfo;
+    const response: {
+      collections: {
+        nodes: GraphqlCollection[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    } = await client.graphql(`
+      query JoonCollections($after: String) {
+        collections(first: 50, after: $after) {
+          nodes {
+            id
+            title
+            handle
+            descriptionHtml
+            sortOrder
+            image { url }
+            products(first: 250) { nodes { id } }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    `, { after: cursor });
 
-    const response = await client.get<ShopifyCollection>(endpoint, params);
-
-    // Bounded parallel chunks instead of one collection upsert at a time.
-    const COLLECTION_CONCURRENCY = 25;
-    for (let i = 0; i < response.data.length; i += COLLECTION_CONCURRENCY) {
-      const chunk = response.data.slice(i, i + COLLECTION_CONCURRENCY);
+    const collections = response.collections.nodes;
+    const concurrency = 12;
+    for (let i = 0; i < collections.length; i += concurrency) {
+      const chunk = collections.slice(i, i + concurrency);
       const results = await Promise.allSettled(
         chunk.map(async (collection) => {
-          await prisma.collection.upsert({
+          const upserted = await prisma.collection.upsert({
             where: {
               storeId_externalId: {
                 storeId,
-                externalId: String(collection.id),
+                externalId: legacyId(collection.id),
               },
             },
             create: {
               storeId,
-              externalId: String(collection.id),
+              externalId: legacyId(collection.id),
               title: collection.title,
               handle: collection.handle,
-              description: collection.body_html ?? undefined,
-              imageUrl: collection.image?.src ?? null,
-              sortOrder: collection.sort_order,
-              collectionType,
-              publishedAt: collection.published_at ? new Date(collection.published_at) : null,
+              description: collection.descriptionHtml || undefined,
+              imageUrl: collection.image?.url ?? null,
+              sortOrder: collection.sortOrder.toLowerCase(),
+              collectionType: "shopify",
             },
             update: {
               title: collection.title,
               handle: collection.handle,
-              description: collection.body_html ?? undefined,
-              imageUrl: collection.image?.src ?? null,
-              sortOrder: collection.sort_order,
-              collectionType,
-              publishedAt: collection.published_at ? new Date(collection.published_at) : null,
+              description: collection.descriptionHtml || undefined,
+              imageUrl: collection.image?.url ?? null,
+              sortOrder: collection.sortOrder.toLowerCase(),
+              collectionType: "shopify",
             },
           });
+
+          await Promise.all(
+            collection.products.nodes.map(async (productNode, position) => {
+              const product = await prisma.product.findUnique({
+                where: {
+                  storeId_externalId: {
+                    storeId,
+                    externalId: legacyId(productNode.id),
+                  },
+                },
+                select: { id: true },
+              });
+              if (!product) return;
+              await prisma.collectionProduct.upsert({
+                where: {
+                  collectionId_productId: {
+                    collectionId: upserted.id,
+                    productId: product.id,
+                  },
+                },
+                create: {
+                  collectionId: upserted.id,
+                  productId: product.id,
+                  position,
+                },
+                update: { position },
+              });
+            }),
+          );
           imported++;
         }),
       );
-      results.forEach((r, j) => {
-        if (r.status === "rejected") {
-          const msg =
-            r.reason instanceof Error ? r.reason.message : String(r.reason);
-          errors.push(`Collection ${chunk[j]?.id}: ${msg}`);
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          errors.push(
+            `Collection ${chunk[index]?.id}: ${
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+            }`,
+          );
         }
       });
     }
 
-    pageInfo = response.nextPageInfo;
-  } while (pageInfo);
+    cursor = response.collections.pageInfo.hasNextPage
+      ? response.collections.pageInfo.endCursor
+      : null;
+  } while (cursor);
 
   return { imported, errors };
-}
-
-async function syncCollects(
-  client: ShopifyClient,
-  storeId: string,
-  prisma: PrismaClient
-): Promise<void> {
-  let pageInfo: string | undefined;
-
-  do {
-    const params: Record<string, string> = { limit: "250" };
-    if (pageInfo) params.page_info = pageInfo;
-
-    const response = await client.get<ShopifyCollect>("collects", params);
-
-    // Bounded parallel chunks; individual collect errors skipped silently (as before).
-    const COLLECT_CONCURRENCY = 15;
-    for (let i = 0; i < response.data.length; i += COLLECT_CONCURRENCY) {
-      const chunk = response.data.slice(i, i + COLLECT_CONCURRENCY);
-      await Promise.allSettled(
-        chunk.map(async (collect) => {
-          // Find collection and product by external IDs
-          const [collection, product] = await Promise.all([
-            prisma.collection.findUnique({
-              where: { storeId_externalId: { storeId, externalId: String(collect.collection_id) } },
-              select: { id: true },
-            }),
-            prisma.product.findUnique({
-              where: { storeId_externalId: { storeId, externalId: String(collect.product_id) } },
-              select: { id: true },
-            }),
-          ]);
-
-          if (!collection || !product) return;
-
-          await prisma.collectionProduct.upsert({
-            where: {
-              collectionId_productId: {
-                collectionId: collection.id,
-                productId: product.id,
-              },
-            },
-            create: {
-              collectionId: collection.id,
-              productId: product.id,
-              position: collect.position,
-            },
-            update: {
-              position: collect.position,
-            },
-          });
-        }),
-      );
-    }
-
-    pageInfo = response.nextPageInfo;
-  } while (pageInfo);
 }

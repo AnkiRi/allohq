@@ -1,0 +1,51 @@
+# Copy this file to shopify.app.toml only after linking the local project to
+# the correct Shopify app with `shopify app config link`. Replace every
+# REPLACE_* value before deploying the configuration.
+
+client_id = "REPLACE_WITH_SHOPIFY_CLIENT_ID"
+name = "Joon"
+application_url = "https://REPLACE_WITH_WEB_APP_ORIGIN"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[access_scopes]
+scopes = "read_products,read_customers,read_orders,read_all_orders,read_checkouts,read_discounts,write_discounts,read_fulfillments,read_inventory"
+
+[auth]
+redirect_urls = [
+  "https://REPLACE_WITH_WEB_APP_ORIGIN/api/shopify/callback",
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = [
+  "products/create",
+  "products/update",
+  "products/delete",
+  "customers/create",
+  "customers/update",
+  "customers/delete",
+  "orders/create",
+  "orders/updated",
+  "checkouts/create",
+  "checkouts/update",
+  "collections/create",
+  "collections/update",
+  "collections/delete",
+  "fulfillments/create",
+  "fulfillments/update",
+  "app/uninstalled",
+]
+uri = "https://REPLACE_WITH_API_ORIGIN/webhooks/shopify"
+
+[[webhooks.subscriptions]]
+compliance_topics = [
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
+]
+uri = "https://REPLACE_WITH_API_ORIGIN/webhooks/shopify"

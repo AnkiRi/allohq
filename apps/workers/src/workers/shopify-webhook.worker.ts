@@ -14,20 +14,42 @@ interface WebhookJobData {
   topic: string;
   shopDomain: string;
   payload: Record<string, unknown>;
+  eventId?: string | null;
 }
 
 export const shopifyWebhookWorker = new Worker<WebhookJobData>(
   QUEUE_NAMES.SHOPIFY_WEBHOOK,
   async (job) => {
-    const { topic, shopDomain, payload } = job.data;
+    const { topic, shopDomain, payload, eventId } = job.data;
     console.log(`Processing webhook: ${topic} from ${shopDomain}`);
 
     // Find the store by shop domain
     const store = await prisma.store.findFirst({
-      where: { shopDomain, platform: "shopify", isActive: true },
+      where: { shopDomain, platform: "shopify" },
     });
 
-    if (!store) {
+    if (
+      topic === "customers/data_request" ||
+      topic === "customers/redact" ||
+      topic === "shop/redact"
+    ) {
+      await processPrivacyWebhook({
+        topic,
+        shopDomain,
+        payload,
+        eventId: eventId ?? String(job.id),
+        storeId: store?.id,
+        workspaceId: store?.workspaceId,
+      });
+      return;
+    }
+
+    if (store && !store.isActive && topic === "app/uninstalled") {
+      // Duplicate uninstall delivery after the first event is already satisfied.
+      return;
+    }
+
+    if (!store?.isActive) {
       console.warn(`No active store found for ${shopDomain}`);
       return;
     }
@@ -246,6 +268,192 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
   { connection: redisConnection }
 );
 
+async function processPrivacyWebhook(params: {
+  topic: string;
+  shopDomain: string;
+  payload: Record<string, unknown>;
+  eventId: string;
+  storeId?: string;
+  workspaceId?: string;
+}): Promise<void> {
+  const customer = params.payload.customer as
+    | { id?: number | string; email?: string; phone?: string }
+    | undefined;
+  const customerExternalId = customer?.id ? String(customer.id) : null;
+
+  await prisma.privacyRequest.upsert({
+    where: { eventId: params.eventId },
+    create: {
+      eventId: params.eventId,
+      shopDomain: params.shopDomain,
+      topic: params.topic,
+      customerExternalId,
+      payload: params.payload as any,
+      status: "pending",
+    },
+    update: {},
+  });
+
+  try {
+    if (params.topic === "customers/data_request") {
+      if (!params.storeId || !customerExternalId) {
+        throw new Error("Customer data request did not resolve a store/customer");
+      }
+      const result = await exportCustomerData(
+        params.storeId,
+        customerExternalId,
+      );
+      await prisma.privacyRequest.update({
+        where: { eventId: params.eventId },
+        data: {
+          result: JSON.parse(JSON.stringify(result)),
+          status: "completed",
+          completedAt: new Date(),
+          error: null,
+        },
+      });
+      return;
+    }
+
+    if (params.topic === "customers/redact") {
+      if (!params.storeId || !customerExternalId) {
+        throw new Error("Customer redaction did not resolve a store/customer");
+      }
+      await redactCustomer(params.storeId, customerExternalId);
+    }
+
+    if (params.topic === "shop/redact") {
+      if (params.storeId) {
+        await prisma.store.delete({ where: { id: params.storeId } });
+      }
+      if (params.workspaceId) {
+        const remainingStores = await prisma.store.count({
+          where: { workspaceId: params.workspaceId },
+        });
+        if (remainingStores === 0) {
+          await prisma.workspace.delete({
+            where: { id: params.workspaceId },
+          });
+        }
+      }
+    }
+
+    await prisma.privacyRequest.update({
+      where: { eventId: params.eventId },
+      data: { status: "completed", completedAt: new Date(), error: null },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await prisma.privacyRequest.update({
+      where: { eventId: params.eventId },
+      data: { status: "failed", error: message },
+    });
+    throw error;
+  }
+}
+
+async function exportCustomerData(
+  storeId: string,
+  externalId: string,
+): Promise<Record<string, unknown>> {
+  const customer = await prisma.customer.findUnique({
+    where: { storeId_externalId: { storeId, externalId } },
+    include: {
+      orders: { include: { items: true } },
+      memories: true,
+      conversations: { include: { messages: true } },
+      formSubmissions: true,
+      contactConsents: true,
+      contactSuppressions: true,
+      customerState: true,
+      customerJourneys: true,
+      retentionOutcomes: true,
+      abandonedCheckouts: true,
+    },
+  });
+  if (!customer) {
+    return {
+      customerExternalId: externalId,
+      found: false,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  const [messages, actions, outreach] = await Promise.all([
+    prisma.messageLog.findMany({ where: { customerId: customer.id } }),
+    prisma.agentAction.findMany({ where: { customerId: customer.id } }),
+    prisma.proactiveOutreachLog.findMany({
+      where: { customerId: customer.id },
+    }),
+  ]);
+
+  return {
+    found: true,
+    generatedAt: new Date().toISOString(),
+    customer,
+    messages,
+    agentActions: actions,
+    proactiveOutreach: outreach,
+  };
+}
+
+async function redactCustomer(
+  storeId: string,
+  externalId: string,
+): Promise<void> {
+  const customer = await prisma.customer.findUnique({
+    where: { storeId_externalId: { storeId, externalId } },
+    select: { id: true, identityId: true },
+  });
+  if (!customer) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.conversation.deleteMany({ where: { customerId: customer.id } });
+    await tx.customerMemory.deleteMany({ where: { customerId: customer.id } });
+    await tx.formSubmission.deleteMany({ where: { customerId: customer.id } });
+    await tx.proactiveOutreachLog.deleteMany({
+      where: { customerId: customer.id },
+    });
+    await tx.messageLog.updateMany({
+      where: { customerId: customer.id },
+      data: {
+        customerId: null,
+        to: "redacted",
+        metadata: {},
+      },
+    });
+    await tx.agentAction.updateMany({
+      where: { customerId: customer.id },
+      data: { customerId: null, input: {}, output: {} },
+    });
+    await tx.abandonedCheckout.updateMany({
+      where: { customerId: customer.id },
+      data: { email: null, phone: null, checkoutUrl: null },
+    });
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: {
+        email: `redacted+${customer.id}@deleted.invalid`,
+        phone: null,
+        firstName: null,
+        lastName: null,
+        acceptsMarketing: false,
+        tags: [],
+        identityId: null,
+      },
+    });
+
+    if (customer.identityId) {
+      const remainingLinks = await tx.customer.count({
+        where: { identityId: customer.identityId },
+      });
+      if (remainingLinks === 0) {
+        await tx.identity.delete({ where: { id: customer.identityId } });
+      }
+    }
+  });
+}
+
 async function upsertProduct(
   storeId: string,
   data: Record<string, unknown>
@@ -347,7 +555,12 @@ async function upsertCustomer(
     phone: string | null;
     first_name: string | null;
     last_name: string | null;
-    accepts_marketing: boolean;
+    accepts_marketing?: boolean;
+    email_marketing_consent?: {
+      state?: string;
+      opt_in_level?: string | null;
+      consent_updated_at?: string | null;
+    } | null;
     tags: string;
   };
 
@@ -355,6 +568,10 @@ async function upsertCustomer(
     ? c.tags.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
 
+  const shopifyState =
+    c.email_marketing_consent?.state ??
+    (c.accepts_marketing === true ? "subscribed" : "unknown");
+  const acceptsMarketing = shopifyState === "subscribed";
   const customer = await prisma.customer.upsert({
     where: {
       storeId_externalId: { storeId, externalId: String(c.id) },
@@ -366,7 +583,7 @@ async function upsertCustomer(
       phone: c.phone,
       firstName: c.first_name,
       lastName: c.last_name,
-      acceptsMarketing: c.accepts_marketing,
+      acceptsMarketing,
       tags,
     },
     update: {
@@ -374,8 +591,45 @@ async function upsertCustomer(
       phone: c.phone,
       firstName: c.first_name,
       lastName: c.last_name,
-      acceptsMarketing: c.accepts_marketing,
+      acceptsMarketing,
       tags,
+    },
+  });
+
+  const status =
+    shopifyState === "subscribed"
+      ? "opted_in"
+      : shopifyState === "unsubscribed"
+        ? "opted_out"
+        : "unknown";
+  const consentUpdatedAt =
+    c.email_marketing_consent?.consent_updated_at;
+  await prisma.contactConsent.upsert({
+    where: {
+      customerId_channel: { customerId: customer.id, channel: "email" },
+    },
+    create: {
+      storeId,
+      customerId: customer.id,
+      channel: "email",
+      status,
+      source: "shopify",
+      evidence: {
+        state: shopifyState,
+        optInLevel: c.email_marketing_consent?.opt_in_level ?? null,
+      },
+      collectedAt: consentUpdatedAt ? new Date(consentUpdatedAt) : null,
+      revokedAt: status === "opted_out" ? new Date() : null,
+    },
+    update: {
+      status,
+      source: "shopify",
+      evidence: {
+        state: shopifyState,
+        optInLevel: c.email_marketing_consent?.opt_in_level ?? null,
+      },
+      collectedAt: consentUpdatedAt ? new Date(consentUpdatedAt) : null,
+      revokedAt: status === "opted_out" ? new Date() : null,
     },
   });
 
@@ -399,6 +653,7 @@ async function upsertOrder(
   const o = data as {
     id: number;
     name: string;
+    created_at: string;
     customer: { id: number } | null;
     total_price: string;
     subtotal_price: string;
@@ -434,6 +689,10 @@ async function upsertOrder(
   const shipping = parseFloat(
     o.total_shipping_price_set?.shop_money?.amount ?? "0"
   );
+  const sourceCreatedAt =
+    o.created_at && !Number.isNaN(new Date(o.created_at).getTime())
+      ? new Date(o.created_at)
+      : undefined;
 
   const order = await prisma.order.upsert({
     where: {
@@ -450,6 +709,7 @@ async function upsertOrder(
       shipping,
       currency: o.currency,
       status,
+      ...(sourceCreatedAt ? { createdAt: sourceCreatedAt } : {}),
     },
     update: {
       customerId: customer.id,
@@ -460,6 +720,7 @@ async function upsertOrder(
       shipping,
       currency: o.currency,
       status,
+      ...(sourceCreatedAt ? { createdAt: sourceCreatedAt } : {}),
     },
   });
 

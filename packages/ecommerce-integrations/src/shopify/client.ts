@@ -1,142 +1,64 @@
 import { SHOPIFY_API_VERSION } from "./constants";
-import type { ShopifyPaginatedResponse } from "./types";
+import { decryptSecret } from "@allohq/database";
 
 /**
- * Lightweight REST client for Shopify Admin API.
- * Uses native fetch — no SDK dependency at runtime.
+ * Lightweight GraphQL client for Shopify Admin API.
  */
 export class ShopifyClient {
-  private baseUrl: string;
+  private graphqlUrl: string;
   private headers: Record<string, string>;
+  private encryptedAccessToken: string;
 
   constructor(shopDomain: string, accessToken: string) {
     // Ensure domain doesn't have protocol
     const domain = shopDomain.replace(/^https?:\/\//, "");
-    this.baseUrl = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}`;
+    this.encryptedAccessToken = accessToken;
+    this.graphqlUrl =
+      `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
     this.headers = {
-      "X-Shopify-Access-Token": accessToken,
+      "X-Shopify-Access-Token": decryptSecret(accessToken),
       "Content-Type": "application/json",
     };
   }
 
-  /**
-   * GET request with automatic cursor-based pagination support.
-   * Returns data array and optional next page cursor from Link header.
-   */
-  async get<T>(
-    endpoint: string,
-    params: Record<string, string> = {}
-  ): Promise<ShopifyPaginatedResponse<T>> {
-    const url = new URL(`${this.baseUrl}/${endpoint}.json`);
-    for (const [key, value] of Object.entries(params)) {
-      url.searchParams.set(key, value);
-    }
-
-    const response = await fetch(url.toString(), { headers: this.headers });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Shopify API error ${response.status}: ${body}`
-      );
-    }
-
-    const json = (await response.json()) as Record<string, T[]>;
-    // Shopify REST wraps in a key matching the endpoint (e.g. { products: [...] })
-    const dataKey = Object.keys(json)[0]!;
-    const data = json[dataKey] as T[];
-
-    // Parse Link header for cursor pagination
-    const linkHeader = response.headers.get("link");
-    const nextPageInfo = parseLinkHeader(linkHeader);
-
-    return { data, nextPageInfo };
+  getEncryptedAccessToken(): string {
+    return this.encryptedAccessToken;
   }
 
   /**
-   * GET request for single-object endpoints (e.g. shop.json).
-   * Returns the unwrapped object directly.
+   * Execute an Admin GraphQL operation and fail on either transport-level or
+   * top-level GraphQL errors. Mutation-specific userErrors remain in `data` so
+   * callers can present the precise merchant-actionable failure.
    */
-  async getSingle<T>(endpoint: string): Promise<T> {
-    const url = `${this.baseUrl}/${endpoint}.json`;
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Shopify API error ${response.status}: ${body}`);
-    }
-
-    const json = (await response.json()) as Record<string, T>;
-    const dataKey = Object.keys(json)[0]!;
-    return json[dataKey] as T;
-  }
-
-  /**
-   * POST request (used for webhook registration, etc.)
-   */
-  async post<T>(endpoint: string, body: unknown): Promise<T> {
-    const url = `${this.baseUrl}/${endpoint}.json`;
-    const response = await fetch(url, {
+  async graphql<T>(
+    query: string,
+    variables: Record<string, unknown> = {},
+  ): Promise<T> {
+    const response = await fetch(this.graphqlUrl, {
       method: "POST",
       headers: this.headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ query, variables }),
     });
+    const body = (await response.json().catch(() => null)) as {
+      data?: T;
+      errors?: Array<{ message?: string }>;
+    } | null;
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Shopify API error ${response.status}: ${text}`);
+      throw new Error(
+        `Shopify GraphQL error ${response.status}: ${JSON.stringify(body)}`,
+      );
     }
-
-    return response.json() as Promise<T>;
-  }
-
-  /**
-   * PUT request (used for updating resources)
-   */
-  async put<T>(endpoint: string, body: unknown): Promise<T> {
-    const url = `${this.baseUrl}/${endpoint}.json`;
-    const response = await fetch(url, {
-      method: "PUT",
-      headers: this.headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Shopify API error ${response.status}: ${text}`);
+    if (body?.errors?.length) {
+      throw new Error(
+        `Shopify GraphQL error: ${body.errors
+          .map((error) => error.message ?? "Unknown error")
+          .join("; ")}`,
+      );
     }
-
-    return response.json() as Promise<T>;
-  }
-
-  /**
-   * DELETE request
-   */
-  async delete(endpoint: string): Promise<void> {
-    const url = `${this.baseUrl}/${endpoint}.json`;
-    const response = await fetch(url, {
-      method: "DELETE",
-      headers: this.headers,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Shopify API error ${response.status}: ${text}`);
+    if (!body?.data) {
+      throw new Error("Shopify GraphQL response did not contain data");
     }
+    return body.data;
   }
-}
-
-/**
- * Parse the Link header to extract the `page_info` for the next page.
- * Shopify uses: `<url?page_info=xyz>; rel="next"`
- */
-function parseLinkHeader(header: string | null): string | undefined {
-  if (!header) return undefined;
-
-  const parts = header.split(",");
-  for (const part of parts) {
-    const match = part.match(/<[^>]*[?&]page_info=([^>&]*).*>;\s*rel="next"/);
-    if (match) return match[1];
-  }
-  return undefined;
 }

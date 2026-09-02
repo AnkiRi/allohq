@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { shopify } from "@allohq/ecommerce-integrations";
-const { exchangeCodeForToken } = shopify;
-import { prisma } from "@allohq/database";
+const { exchangeCodeForToken, normalizeShopDomain, verifyOAuthHmac } = shopify;
+import { encryptSecret, prisma } from "@allohq/database";
 import { auth } from "@clerk/nextjs/server";
 import { Queue } from "bullmq";
+import { randomBytes } from "node:crypto";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -43,13 +44,48 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Exchange code for permanent access token
-    const { accessToken } = await exchangeCodeForToken({
-      shopDomain: shop,
+    const normalizedShop = normalizeShopDomain(shop);
+    if (!verifyOAuthHmac(searchParams, apiSecret)) {
+      return NextResponse.json(
+        { error: "Invalid Shopify HMAC signature" },
+        { status: 401 },
+      );
+    }
+
+    const callbackTimestamp = Number(searchParams.get("timestamp"));
+    if (
+      !Number.isFinite(callbackTimestamp) ||
+      Math.abs(Date.now() / 1000 - callbackTimestamp) > 10 * 60
+    ) {
+      return NextResponse.json(
+        { error: "Expired Shopify OAuth callback" },
+        { status: 400 },
+      );
+    }
+
+    // Exchange code for an offline access token, then encrypt it before it
+    // reaches Prisma. Plaintext is kept only in this request's memory.
+    const token = await exchangeCodeForToken({
+      shopDomain: normalizedShop,
       apiKey,
       apiSecret,
       code,
     });
+    const grantedScopes = token.scope
+      .split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    const missingScopes = shopify.SHOPIFY_SCOPES.filter(
+      (scope) => !grantedScopes.includes(scope),
+    );
+    if (missingScopes.length > 0) {
+      throw new Error(
+        `Shopify did not grant required scopes: ${missingScopes.join(", ")}`,
+      );
+    }
+    const encryptedAccessToken = encryptSecret(token.accessToken);
+    const encryptedRefreshToken = encryptSecret(token.refreshToken);
+    const tokenIssuedAt = Date.now();
 
     // Get current user's workspace
     const { userId } = await auth();
@@ -74,8 +110,8 @@ export async function GET(request: NextRequest) {
       // Auto-provision user + default workspace on first Shopify connect
       const workspace = await prisma.workspace.create({
         data: {
-          name: shop.replace(".myshopify.com", ""),
-          slug: shop.replace(".myshopify.com", ""),
+          name: normalizedShop.replace(".myshopify.com", ""),
+          slug: normalizedShop.replace(".myshopify.com", ""),
         },
       });
       user = await prisma.user.create({
@@ -103,24 +139,57 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Upsert store record
+    const existingStore = await prisma.store.findUnique({
+      where: {
+        workspaceId_shopDomain: {
+          workspaceId,
+          shopDomain: normalizedShop,
+        },
+      },
+      select: { widgetPublicKey: true },
+    });
+    const widgetPublicKey =
+      existingStore?.widgetPublicKey ??
+      `pk_live_${randomBytes(24).toString("base64url")}`;
+
+    // Upsert store record. The storefront key is publishable and revocable; it
+    // is intentionally unrelated to the encrypted Shopify Admin token.
     const store = await prisma.store.upsert({
       where: {
         workspaceId_shopDomain: {
           workspaceId,
-          shopDomain: shop,
+          shopDomain: normalizedShop,
         },
       },
       create: {
         workspaceId,
         platform: "shopify",
-        shopDomain: shop,
-        accessToken,
+        shopDomain: normalizedShop,
+        accessToken: encryptedAccessToken,
+        accessTokenExpiresAt: new Date(
+          tokenIssuedAt + token.expiresIn * 1000,
+        ),
+        refreshToken: encryptedRefreshToken,
+        refreshTokenExpiresAt: new Date(
+          tokenIssuedAt + token.refreshTokenExpiresIn * 1000,
+        ),
+        tokenScopes: grantedScopes,
+        widgetPublicKey,
+        widgetAllowedOrigins: [`https://${normalizedShop}`],
         isActive: true,
         onboardingStep: 1,
       },
       update: {
-        accessToken,
+        accessToken: encryptedAccessToken,
+        accessTokenExpiresAt: new Date(
+          tokenIssuedAt + token.expiresIn * 1000,
+        ),
+        refreshToken: encryptedRefreshToken,
+        refreshTokenExpiresAt: new Date(
+          tokenIssuedAt + token.refreshTokenExpiresIn * 1000,
+        ),
+        tokenScopes: grantedScopes,
+        widgetPublicKey,
         isActive: true,
         onboardingStep: 1,
         onboardingCompletedAt: null,
@@ -132,9 +201,11 @@ export async function GET(request: NextRequest) {
       const syncQueue = new Queue("sync", { connection: redisConnection });
       await syncQueue.add("full-sync", {
         storeId: store.id,
-        shopDomain: shop,
-        accessToken,
         platform: "shopify",
+      }, {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5_000 },
+        jobId: `initial-sync-${store.id}`,
       });
       await syncQueue.close();
     } catch (syncError) {
@@ -145,8 +216,6 @@ export async function GET(request: NextRequest) {
       const brandKitQueue = new Queue("brand-analysis", { connection: redisConnection });
       await brandKitQueue.add("brand-kit", {
         storeId: store.id,
-        shopDomain: shop,
-        accessToken,
       }, { delay: 30_000 });
       await brandKitQueue.close();
     } catch {

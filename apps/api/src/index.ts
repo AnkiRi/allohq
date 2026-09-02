@@ -12,6 +12,7 @@ import { handleGupshupWebhook } from "./webhooks/gupshup";
 import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
 import { handleWidgetPopups } from "./routes/widget-popups";
+import { prisma } from "@allohq/database";
 
 // Load environment variables
 config();
@@ -45,6 +46,57 @@ const trpcHandler = createHTTPHandler({
  * - everything else → tRPC handler
  */
 const server = http.createServer((req, res) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=()",
+  );
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains",
+    );
+  }
+
+  if (req.url === "/healthz" && req.method === "GET") {
+    void (async () => {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            status: "ready",
+            database: "ok",
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      } catch {
+        res.writeHead(503, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            status: "not_ready",
+            database: "unavailable",
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      }
+    })();
+    return;
+  }
+
+  // Storefront widget routes authenticate their own publishable key and apply
+  // a per-store origin allowlist. They must not inherit the dashboard's CORS
+  // policy because every merchant storefront has a distinct origin.
+  if (req.url?.startsWith("/widget/")) {
+    void handleWidgetPopups(req, res);
+    return;
+  }
+  if (req.url?.startsWith("/v1/") && !req.url.startsWith("/v1/agent/")) {
+    void handleWidgetApi(req, res);
+    return;
+  }
+
   // Apply CORS middleware
   corsMiddleware(req, res, () => {
     if (req.url?.startsWith("/webhooks/shopify")) {
@@ -57,12 +109,8 @@ const server = http.createServer((req, res) => {
       handleGupshupWebhook(req, res);
     } else if (req.url?.startsWith("/unsubscribe")) {
       handleUnsubscribe(req, res);
-    } else if (req.url?.startsWith("/widget/")) {
-      handleWidgetPopups(req, res);
     } else if (req.url?.startsWith("/v1/agent/")) {
       handleAgentStream(req, res);
-    } else if (req.url?.startsWith("/v1/")) {
-      handleWidgetApi(req, res);
     } else {
       trpcHandler(req, res);
     }

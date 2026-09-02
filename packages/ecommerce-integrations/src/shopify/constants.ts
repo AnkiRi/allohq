@@ -1,22 +1,18 @@
-/** Shopify REST Admin API version */
-export const SHOPIFY_API_VERSION = "2024-01";
+/** Current stable Shopify Admin GraphQL API version. Review quarterly. */
+export const SHOPIFY_API_VERSION = "2026-07";
 
 /** OAuth scopes requested during install */
 export const SHOPIFY_SCOPES = [
   "read_products",
-  "write_products",
   "read_customers",
-  "write_customers",
   "read_orders",
-  "write_orders",
+  // Retention, LTV, repurchase cycles, and historical holdout baselines require
+  // more than Shopify's default recent-order window. Public distribution must
+  // justify and receive approval for this scope before review.
+  "read_all_orders",
   "read_checkouts",
   "read_discounts",
   "write_discounts",
-  // The discount tool creates coupons via the REST price_rules endpoint, which is
-  // gated by write_price_rules (write_discounts only covers the GraphQL Discounts
-  // API). Without these the REST call 403s. Requires a reconnect to take effect.
-  "read_price_rules",
-  "write_price_rules",
   "read_fulfillments",
   "read_inventory",
 ] as const;

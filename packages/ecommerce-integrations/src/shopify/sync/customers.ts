@@ -1,88 +1,167 @@
 import type { PrismaClient } from "@allohq/database";
 import { ShopifyClient } from "../client";
-import type { ShopifyCustomer, ShopifySyncResult } from "../types";
+import type { ShopifySyncResult } from "../types";
 
-/**
- * Sync all customers from Shopify to the database.
- * Uses cursor-based pagination via Link header.
- */
+interface GraphqlCustomer {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  tags: string[];
+  defaultEmailAddress: {
+    emailAddress: string;
+    marketingState: string;
+    marketingOptInLevel: string | null;
+    marketingUpdatedAt: string | null;
+  } | null;
+  defaultPhoneNumber: { phoneNumber: string } | null;
+}
+
+function legacyId(gid: string): string {
+  const value = gid.split("/").pop();
+  if (!value) throw new Error(`Invalid Shopify GID: ${gid}`);
+  return value;
+}
+
 export async function syncAllCustomers(
   shopDomain: string,
   accessToken: string,
   storeId: string,
-  prisma: PrismaClient
+  prisma: PrismaClient,
 ): Promise<ShopifySyncResult> {
   const client = new ShopifyClient(shopDomain, accessToken);
   let imported = 0;
   const errors: string[] = [];
-  let pageInfo: string | undefined;
+  let cursor: string | null = null;
 
   do {
-    const params: Record<string, string> = { limit: "250" };
-    if (pageInfo) params.page_info = pageInfo;
+    const response: {
+      customers: {
+        nodes: GraphqlCustomer[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    } = await client.graphql(`
+      query JoonCustomers($after: String) {
+        customers(first: 100, after: $after) {
+          nodes {
+            id
+            firstName
+            lastName
+            tags
+            defaultEmailAddress {
+              emailAddress
+              marketingState
+              marketingOptInLevel
+              marketingUpdatedAt
+            }
+            defaultPhoneNumber { phoneNumber }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    `, { after: cursor });
 
-    const response = await client.get<ShopifyCustomer>("customers", params);
-
-    // Upsert each page's rows in PARALLEL, in small chunks — the old one-at-a-
-    // time `await` made big stores crawl (~93k serial round-trips). Concurrency
-    // is bounded so we don't exhaust the DB connection pool. Upsert semantics
-    // (works for first sync AND re-sync) and per-row error collection preserved.
-    // 12 (was 25) so two stores syncing in parallel (worker concurrency:2) keep
-    // peak DB connections ~flat (2×12 ≈ prior 1×25).
-    const CONCURRENCY = 12;
-    for (let i = 0; i < response.data.length; i += CONCURRENCY) {
-      const chunk = response.data.slice(i, i + CONCURRENCY);
+    const customers = response.customers.nodes;
+    const concurrency = 12;
+    for (let i = 0; i < customers.length; i += concurrency) {
+      const chunk = customers.slice(i, i + concurrency);
       const results = await Promise.allSettled(
-        chunk.map((customer) => {
-          const tags = customer.tags
-            ? customer.tags.split(",").map((t) => t.trim()).filter(Boolean)
-            : [];
-          // Email marketing consent: prefer the current consent model
-          // (email_marketing_consent.state === "subscribed"), fall back to the
-          // legacy accepts_marketing boolean for older stores/API versions.
-          // Always a real boolean so a re-sync CORRECTS existing rows (passing
-          // undefined on update would leave them stale).
-          const acceptsMarketing =
-            customer.email_marketing_consent?.state === "subscribed" ||
-            customer.accepts_marketing === true;
-          return prisma.customer.upsert({
+        chunk.map(async (customer) => {
+          const emailAddress = customer.defaultEmailAddress;
+          if (!emailAddress?.emailAddress) {
+            throw new Error("no email address; skipped");
+          }
+          const shopifyState = emailAddress.marketingState.toLowerCase();
+          const status =
+            shopifyState === "subscribed"
+              ? "opted_in"
+              : shopifyState === "unsubscribed"
+                ? "opted_out"
+                : "unknown";
+          const acceptsMarketing = status === "opted_in";
+          const consentUpdatedAt = emailAddress.marketingUpdatedAt;
+
+          const syncedCustomer = await prisma.customer.upsert({
             where: {
-              storeId_externalId: { storeId, externalId: String(customer.id) },
+              storeId_externalId: {
+                storeId,
+                externalId: legacyId(customer.id),
+              },
             },
             create: {
               storeId,
-              externalId: String(customer.id),
-              email: customer.email,
-              phone: customer.phone,
-              firstName: customer.first_name,
-              lastName: customer.last_name,
+              externalId: legacyId(customer.id),
+              email: emailAddress.emailAddress,
+              phone: customer.defaultPhoneNumber?.phoneNumber ?? null,
+              firstName: customer.firstName,
+              lastName: customer.lastName,
               acceptsMarketing,
-              tags,
+              tags: customer.tags,
             },
             update: {
-              email: customer.email,
-              phone: customer.phone,
-              firstName: customer.first_name,
-              lastName: customer.last_name,
+              email: emailAddress.emailAddress,
+              phone: customer.defaultPhoneNumber?.phoneNumber ?? null,
+              firstName: customer.firstName,
+              lastName: customer.lastName,
               acceptsMarketing,
-              tags,
+              tags: customer.tags,
             },
           });
+
+          await prisma.contactConsent.upsert({
+            where: {
+              customerId_channel: {
+                customerId: syncedCustomer.id,
+                channel: "email",
+              },
+            },
+            create: {
+              storeId,
+              customerId: syncedCustomer.id,
+              channel: "email",
+              status,
+              source: "shopify",
+              evidence: {
+                state: shopifyState,
+                optInLevel: emailAddress.marketingOptInLevel,
+              },
+              collectedAt: consentUpdatedAt
+                ? new Date(consentUpdatedAt)
+                : null,
+              revokedAt: status === "opted_out" ? new Date() : null,
+            },
+            update: {
+              status,
+              source: "shopify",
+              evidence: {
+                state: shopifyState,
+                optInLevel: emailAddress.marketingOptInLevel,
+              },
+              collectedAt: consentUpdatedAt
+                ? new Date(consentUpdatedAt)
+                : null,
+              revokedAt: status === "opted_out" ? new Date() : null,
+            },
+          });
+          imported++;
         }),
       );
-      results.forEach((r, j) => {
-        if (r.status === "fulfilled") {
-          imported++;
-        } else {
-          const msg =
-            r.reason instanceof Error ? r.reason.message : String(r.reason);
-          errors.push(`Customer ${chunk[j]?.id}: ${msg}`);
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          errors.push(
+            `Customer ${chunk[index]?.id}: ${
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+            }`,
+          );
         }
       });
     }
 
-    pageInfo = response.nextPageInfo;
-  } while (pageInfo);
+    cursor = response.customers.pageInfo.hasNextPage
+      ? response.customers.pageInfo.endCursor
+      : null;
+  } while (cursor);
 
   return { imported, errors };
 }

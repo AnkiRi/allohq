@@ -1,6 +1,6 @@
 import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
-const { ShopifyClient, createDiscount } = shopify;
+const { ShopifyClient, createDiscount, getShopifyAdminClient } = shopify;
 import type { ToolDefinition } from "../types";
 
 /**
@@ -21,10 +21,10 @@ export function generateCode(prefix: string): string {
 async function getShopifyClient(storeId: string): Promise<InstanceType<typeof ShopifyClient> | null> {
   const store = await prisma.store.findFirst({
     where: { id: storeId },
-    select: { shopDomain: true, accessToken: true, platform: true },
+    select: { platform: true },
   });
   if (!store || store.platform !== "shopify") return null;
-  return new ShopifyClient(store.shopDomain, store.accessToken);
+  return getShopifyAdminClient(storeId);
 }
 
 export const discountTools: ToolDefinition[] = [

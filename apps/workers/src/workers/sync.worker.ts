@@ -1,7 +1,15 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
-const { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections, registerWebhooks } = shopify;
+const {
+  syncShopMetadata,
+  syncAllProducts,
+  syncAllCustomers,
+  syncAllOrders,
+  syncAllCollections,
+  registerWebhooks,
+  getShopifyAdminClient,
+} = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { rfmQueue } from "../queues";
 import { logActivity } from "@allohq/agent-core";
@@ -12,9 +20,7 @@ const baselineQueue = new Queue(QUEUE_NAMES.BASELINE, { connection: redisConnect
 
 interface SyncJobData {
   storeId: string;
-  shopDomain: string;
-  accessToken: string;
-  platform: string;
+  platform?: string;
 }
 
 interface SyncResult {
@@ -27,7 +33,19 @@ const EMPTY_RESULT: SyncResult = { imported: 0, errors: [] };
 export const syncWorker = new Worker<SyncJobData>(
   QUEUE_NAMES.SYNC,
   async (job) => {
-    const { storeId, shopDomain, accessToken, platform } = job.data;
+    const { storeId } = job.data;
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      select: {
+        shopDomain: true,
+        platform: true,
+        isActive: true,
+      },
+    });
+    if (!store?.isActive) {
+      throw new Error(`Active store ${storeId} not found`);
+    }
+    const { shopDomain, platform } = store;
 
     if (platform !== "shopify") {
       console.log(`Sync for platform "${platform}" not yet implemented`);
@@ -35,6 +53,11 @@ export const syncWorker = new Worker<SyncJobData>(
     }
 
     console.log(`Starting full sync for store ${storeId} (${shopDomain})`);
+    const adminClient = await getShopifyAdminClient(storeId);
+    // Sync functions still accept a token while the bulk GraphQL migration is
+    // completed. The refreshed client exposes only the current token to them.
+    const accessToken = adminClient.getEncryptedAccessToken();
+    const coreFailures: string[] = [];
 
     // 0. Sync shop metadata (name, address, currency, etc.)
     await job.updateProgress(5);
@@ -53,6 +76,7 @@ export const syncWorker = new Worker<SyncJobData>(
       console.log(`Products synced: ${productResult.imported} imported, ${productResult.errors.length} errors`);
     } catch (err: any) {
       console.warn(`Products sync skipped: ${err.message}`);
+      coreFailures.push(`products: ${err.message}`);
     }
 
     // 2. Sync customers
@@ -63,6 +87,7 @@ export const syncWorker = new Worker<SyncJobData>(
       console.log(`Customers synced: ${customerResult.imported} imported, ${customerResult.errors.length} errors`);
     } catch (err: any) {
       console.warn(`Customers sync skipped: ${err.message}`);
+      coreFailures.push(`customers: ${err.message}`);
     }
 
     // 3. Sync orders (depends on customers being synced)
@@ -73,6 +98,7 @@ export const syncWorker = new Worker<SyncJobData>(
       console.log(`Orders synced: ${orderResult.imported} imported, ${orderResult.errors.length} errors`);
     } catch (err: any) {
       console.warn(`Orders sync skipped: ${err.message}`);
+      coreFailures.push(`orders: ${err.message}`);
     }
 
     // 4. Sync collections
@@ -97,6 +123,13 @@ export const syncWorker = new Worker<SyncJobData>(
       }
     } else {
       console.warn("WEBHOOK_BASE_URL not set, skipping webhook registration");
+    }
+
+    // Never mark a partial onboarding sync as successful. A retry can safely
+    // upsert the same Shopify IDs, while downstream intelligence must not run
+    // against a store whose core commerce history failed to import.
+    if (coreFailures.length > 0) {
+      throw new Error(`Core Shopify sync failed (${coreFailures.join("; ")})`);
     }
 
     // 5. Update lastSyncAt

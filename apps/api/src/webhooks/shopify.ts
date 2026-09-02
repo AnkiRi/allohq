@@ -16,10 +16,17 @@ const shopifyWebhookQueue = new Queue("shopify-webhook", {
 /**
  * Read the raw body from an incoming HTTP request.
  */
-function readRawBody(req: IncomingMessage): Promise<string> {
+function readRawBody(req: IncomingMessage, maxBytes = 1024 * 1024): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = "";
+    let bytes = 0;
     req.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        reject(Object.assign(new Error("Shopify webhook body too large"), { status: 413 }));
+        req.destroy();
+        return;
+      }
       body += chunk.toString();
     });
     req.on("end", () => resolve(body));
@@ -40,6 +47,7 @@ export async function handleShopifyWebhook(
     const hmacHeader = req.headers["x-shopify-hmac-sha256"] as string;
     const topic = req.headers["x-shopify-topic"] as string;
     const shopDomain = req.headers["x-shopify-shop-domain"] as string;
+    const eventId = req.headers["x-shopify-event-id"] as string | undefined;
 
     if (!hmacHeader || !topic || !shopDomain) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -74,6 +82,13 @@ export async function handleShopifyWebhook(
       topic,
       shopDomain,
       payload,
+      eventId: eventId ?? null,
+    }, {
+      ...(eventId ? { jobId: `shopify-${eventId}` } : {}),
+      attempts: 5,
+      backoff: { type: "exponential", delay: 1_000 },
+      removeOnComplete: { age: 7 * 24 * 60 * 60, count: 50_000 },
+      removeOnFail: { age: 30 * 24 * 60 * 60, count: 50_000 },
     });
 
     console.log(`Shopify webhook received: ${topic} from ${shopDomain}`);
@@ -81,7 +96,14 @@ export async function handleShopifyWebhook(
     res.end(JSON.stringify({ ok: true }));
   } catch (error) {
     console.error("Webhook handler error:", error);
-    res.writeHead(500, { "Content-Type": "application/json" });
+    const status =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      typeof error.status === "number"
+        ? error.status
+        : 500;
+    res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Internal server error" }));
   }
 }

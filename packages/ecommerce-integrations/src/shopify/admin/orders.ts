@@ -2,62 +2,46 @@ import { ShopifyClient } from "../client";
 import type { ShopifyOrderDetail } from "../types";
 
 /**
- * Get full order details including fulfillments and refunds.
+ * Mutating order administration is intentionally not enabled for the
+ * design-partner release. Joon requests read_orders, never write_orders, and
+ * the customer-facing agent does not receive cancellation/refund tools.
  */
+function unsupported(): never {
+  throw new Error(
+    "Order mutation is not enabled; complete merchant approval and write_orders review first",
+  );
+}
+
 export async function getOrder(
-  client: ShopifyClient,
-  orderId: number
+  _client: ShopifyClient,
+  _orderId: number,
 ): Promise<ShopifyOrderDetail> {
-  return client.getSingle<ShopifyOrderDetail>(`orders/${orderId}`);
+  return unsupported();
 }
 
-/**
- * Cancel an order in Shopify.
- * Only works if the order is unfulfilled.
- */
 export async function cancelOrder(
-  client: ShopifyClient,
-  orderId: number,
-  opts?: {
+  _client: ShopifyClient,
+  _orderId: number,
+  _opts?: {
     reason?: "customer" | "fraud" | "inventory" | "declined" | "other";
-    email?: boolean; // notify customer
+    email?: boolean;
     restock?: boolean;
-  }
+  },
 ): Promise<ShopifyOrderDetail> {
-  const res = await client.post<{ order: ShopifyOrderDetail }>(
-    `orders/${orderId}/cancel`,
-    {
-      reason: opts?.reason ?? "other",
-      email: opts?.email ?? true,
-      restock: opts?.restock ?? true,
-    }
-  );
-  return res.order;
+  return unsupported();
 }
 
-/**
- * Close an order (mark as complete).
- */
 export async function closeOrder(
-  client: ShopifyClient,
-  orderId: number
+  _client: ShopifyClient,
+  _orderId: number,
 ): Promise<ShopifyOrderDetail> {
-  const res = await client.post<{ order: ShopifyOrderDetail }>(
-    `orders/${orderId}/close`,
-    {}
-  );
-  return res.order;
+  return unsupported();
 }
 
-/**
- * Add a note to an order.
- */
 export async function addOrderNote(
-  client: ShopifyClient,
-  orderId: number,
-  note: string
+  _client: ShopifyClient,
+  _orderId: number,
+  _note: string,
 ): Promise<void> {
-  await client.put(`orders/${orderId}`, {
-    order: { id: orderId, note },
-  });
+  unsupported();
 }

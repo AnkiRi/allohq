@@ -3,25 +3,24 @@ import { Prisma } from "@allohq/database";
 import { ShopifyClient } from "../client";
 
 interface ShopifyShop {
-  id: number;
   name: string;
   email: string;
+  contactEmail: string | null;
   phone: string | null;
-  domain: string;
-  address1: string | null;
-  address2: string | null;
-  city: string | null;
-  province: string | null;
-  zip: string | null;
-  country: string | null;
-  country_name: string | null;
-  currency: string;
-  iana_timezone: string;
-  description: string | null;
+  currencyCode: string;
+  ianaTimezone: string;
+  billingAddress: {
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    province: string | null;
+    zip: string | null;
+    country: string | null;
+  } | null;
 }
 
 /**
- * Sync shop metadata from Shopify's shop.json endpoint.
+ * Sync shop metadata through the GraphQL Admin API.
  * Populates store name, contact info, address, currency, and timezone.
  */
 export async function syncShopMetadata(
@@ -31,17 +30,43 @@ export async function syncShopMetadata(
   prisma: PrismaClient
 ): Promise<void> {
   const client = new ShopifyClient(shopDomain, accessToken);
-  const shop = await client.getSingle<ShopifyShop>("shop");
+  const response = await client.graphql<{ shop: ShopifyShop }>(`
+    query JoonShopMetadata {
+      shop {
+        name
+        email
+        contactEmail
+        phone
+        currencyCode
+        ianaTimezone
+        billingAddress {
+          address1
+          address2
+          city
+          province
+          zip
+          country
+        }
+      }
+    }
+  `);
+  const shop = response.shop;
 
-  const hasAddress = shop.address1 || shop.city || shop.province || shop.zip || shop.country;
+  const sourceAddress = shop.billingAddress;
+  const hasAddress =
+    sourceAddress?.address1 ||
+    sourceAddress?.city ||
+    sourceAddress?.province ||
+    sourceAddress?.zip ||
+    sourceAddress?.country;
   const address = hasAddress
     ? {
-        address1: shop.address1 ?? "",
-        address2: shop.address2 ?? "",
-        city: shop.city ?? "",
-        province: shop.province ?? "",
-        zip: shop.zip ?? "",
-        country: shop.country_name ?? shop.country ?? "",
+        address1: sourceAddress?.address1 ?? "",
+        address2: sourceAddress?.address2 ?? "",
+        city: sourceAddress?.city ?? "",
+        province: sourceAddress?.province ?? "",
+        zip: sourceAddress?.zip ?? "",
+        country: sourceAddress?.country ?? "",
       }
     : Prisma.JsonNull;
 
@@ -49,12 +74,11 @@ export async function syncShopMetadata(
     where: { id: storeId },
     data: {
       storeName: shop.name,
-      storeEmail: shop.email || null,
+      storeEmail: shop.contactEmail || shop.email || null,
       storePhone: shop.phone || null,
-      storeDescription: shop.description || null,
       address,
-      currency: shop.currency,
-      timezone: shop.iana_timezone,
+      currency: shop.currencyCode,
+      timezone: shop.ianaTimezone,
     },
   });
 
