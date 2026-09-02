@@ -5,7 +5,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm --dir ../../apps/api exec tsx --test ../../packages/customer-intelligence/src/**/*.test.ts"
   },
   "dependencies": {
     "@allohq/database": "workspace:*",

@@ -5,11 +5,12 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm --dir ../../apps/api exec tsx --test ../../packages/messaging/src/*.test.ts"
   },
   "dependencies": {
     "resend": "^4.1.0",
-    "twilio": "^5.5.0"
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
