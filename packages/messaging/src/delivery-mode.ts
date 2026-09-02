@@ -5,7 +5,7 @@ export type MessagingSendMode = "disabled" | "allowlist" | "live";
 export interface DeliveryModeDecision {
   allowed: boolean;
   mode: MessagingSendMode;
-  reason?: "delivery_disabled" | "recipient_not_allowlisted";
+  reason?: "delivery_disabled" | "recipient_not_allowlisted" | "global_kill_switch";
 }
 
 function normalizedRecipient(value: string): string {
@@ -34,11 +34,16 @@ export function getDeliveryModeDecision(
   env: {
     mode?: string;
     allowlist?: string;
+    killSwitch?: string;
   } = {},
 ): DeliveryModeDecision {
   const mode = getMessagingSendMode(
     env.mode ?? process.env["MESSAGING_SEND_MODE"],
   );
+  const killSwitch = env.killSwitch ?? process.env["GLOBAL_EMAIL_KILL_SWITCH"];
+  if (_channel === "email" && killSwitch?.trim().toLowerCase() === "true") {
+    return { allowed: false, mode, reason: "global_kill_switch" };
+  }
   if (mode === "disabled") {
     return { allowed: false, mode, reason: "delivery_disabled" };
   }

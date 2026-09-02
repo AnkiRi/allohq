@@ -54,6 +54,16 @@ test("live mode permits delivery", () => {
   );
 });
 
+test("global email kill switch overrides live mode", () => {
+  assert.deepEqual(
+    getDeliveryModeDecision("customer@example.com", "email", {
+      mode: "live",
+      killSwitch: "true",
+    }),
+    { allowed: false, mode: "live", reason: "global_kill_switch" },
+  );
+});
+
 test("the v1 release boundary blocks non-email channels at the provider", async () => {
   // Proves the excluded channels cannot reach a provider even with delivery
   // fully enabled and the recipient allowlisted.

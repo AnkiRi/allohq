@@ -208,6 +208,8 @@ model Store {
   onboardingCompletedAt DateTime? // set when merchant completes onboarding wizard
   activatedAt           DateTime? // timestamp when store activation completed
   activationLog         Json? // JSON field for tracking activation progress
+  emailSendingPausedAt  DateTime?
+  emailSendingPauseReason String?
   storeCategory         String? // fashion, beauty, food, electronics, home, health
 
   // Causal-data moat: default contribution margin used to derive outcomeMargin

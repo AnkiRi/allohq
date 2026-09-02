@@ -100,6 +100,11 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (!campaign.template) throw new Error(`Campaign ${campaignId} has no template`);
+  if (campaign.store.emailSendingPausedAt) {
+    throw new Error(
+      `Campaign blocked: store email delivery is paused (${campaign.store.emailSendingPauseReason ?? "manual or safety pause"})`,
+    );
+  }
 
   const currentChecksum = campaignApprovalChecksum({
     campaignId: campaign.id,
@@ -420,6 +425,9 @@ export async function deliverOne(data: DeliverOneData) {
     include: { template: true, store: true },
   });
   if (!campaign || !campaign.template) return { skipped: true, reason: "campaign_gone" };
+  if (campaign.store.emailSendingPausedAt) {
+    return { skipped: true, reason: "store_email_paused" };
+  }
 
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },

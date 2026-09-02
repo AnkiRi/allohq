@@ -606,6 +606,28 @@ export const storesRouter = router({
     return { publishableKey };
   }),
 
+  getEmailSendingStatus: storeProcedure.query(async ({ ctx, input }) => {
+    return ctx.prisma.store.findUniqueOrThrow({
+      where: { id: input.storeId },
+      select: { emailSendingPausedAt: true, emailSendingPauseReason: true },
+    });
+  }),
+
+  setEmailSendingPaused: ownerStoreProcedure
+    .input(z.object({ storeId: z.string(), paused: z.boolean(), reason: z.string().max(240).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.store.update({
+        where: { id: input.storeId },
+        data: input.paused
+          ? {
+              emailSendingPausedAt: new Date(),
+              emailSendingPauseReason: input.reason?.trim() || "Paused by workspace owner",
+            }
+          : { emailSendingPausedAt: null, emailSendingPauseReason: null },
+        select: { emailSendingPausedAt: true, emailSendingPauseReason: true },
+      });
+    }),
+
   /**
    * Get the BrandVisualProfile for a store.
    */

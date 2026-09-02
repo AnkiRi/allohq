@@ -34,3 +34,13 @@ Provider credentials (Shopify, Resend, Clerk, Redis, and database credentials)
 must be rotated in their provider consoles before onboarding an external store.
 Record owner, rotation date, and verification result in the release checklist;
 do not put secret values in tickets, logs, or this repository.
+
+## Emergency delivery controls
+
+- Set `GLOBAL_EMAIL_KILL_SWITCH=true` in every service that can call the email
+  provider to stop last-mile email delivery even when `MESSAGING_SEND_MODE=live`.
+- A workspace owner can pause an individual store through the store API. Joon
+  also applies this pause automatically when complaints reach three in seven
+  days, or 0.1% after at least 1,000 deliveries.
+- Clearing an automatic store pause requires an owner action after the sender,
+  audience, and complaint cause have been reviewed.

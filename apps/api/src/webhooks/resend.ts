@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
 import crypto from "crypto";
 import { Queue } from "bullmq";
+import { shouldPauseForComplaints } from "../lib/complaint-threshold";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -343,6 +344,38 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
               data: { acceptsMarketing: false },
             }),
           ]);
+        }
+
+        if (eventType === "email.complained") {
+          const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000);
+          const [complaints, delivered] = await Promise.all([
+            prisma.messageLog.count({
+              where: {
+                storeId: messageLog.storeId,
+                sentAt: { gte: since },
+                error: "spam_complaint",
+              },
+            }),
+            prisma.messageLog.count({
+              where: {
+                storeId: messageLog.storeId,
+                sentAt: { gte: since },
+                status: { in: ["sent", "delivered", "opened", "clicked", "bounced"] },
+              },
+            }),
+          ]);
+          if (shouldPauseForComplaints(complaints, delivered)) {
+            await prisma.store.update({
+              where: { id: messageLog.storeId },
+              data: {
+                emailSendingPausedAt: now,
+                emailSendingPauseReason: `Auto-paused: ${complaints} complaints across ${delivered} deliveries in 7 days`,
+              },
+            });
+            console.error(
+              `[resend-webhook] Auto-paused store ${messageLog.storeId}: complaints=${complaints} delivered=${delivered}`,
+            );
+          }
         }
       }
 
