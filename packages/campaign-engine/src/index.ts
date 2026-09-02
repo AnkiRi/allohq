@@ -61,5 +61,8 @@ export {
 
 export type { PatternRanking } from "./copy-learner";
 
+export { campaignApprovalChecksum } from "./approval-checksum";
+export type { CampaignApprovalSnapshot } from "./approval-checksum";
+
 // Benchmark Comparison
 export { getBenchmarkComparison } from "./benchmark-comparison";

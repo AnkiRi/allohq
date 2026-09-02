@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
+import { campaignApprovalChecksum } from "@allohq/campaign-engine";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -244,16 +245,59 @@ export const campaignsRouter = router({
           workspaceId: ctx.workspaceId,
           status: { in: ["draft", "scheduled"] },
         },
+        include: { template: true, segment: true },
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!campaign.template) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
+      }
+
+      const approvalChecksum = campaignApprovalChecksum({
+        campaignId: campaign.id,
+        storeId: campaign.storeId,
+        name: campaign.name,
+        scheduledAt: campaign.scheduledAt,
+        template: {
+          id: campaign.template.id,
+          subject: campaign.template.subject,
+          previewText: campaign.template.previewText,
+          blocks: campaign.template.blocks,
+          html: campaign.template.html,
+        },
+        segment: campaign.segment ? {
+          id: campaign.segment.id,
+          kind: campaign.segment.kind,
+          customerIds: campaign.segment.customerIds,
+          conditions: campaign.segment.conditions,
+          name: campaign.segment.name,
+        } : null,
+        agentProposal: campaign.agentProposal,
+      });
 
       await ctx.prisma.campaign.update({
         where: { id: input.id },
         // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
-        data: { status: "sending", humanDecision: buildHumanDecision(campaign) as object },
+        data: {
+          status: "sending",
+          humanDecision: buildHumanDecision(campaign) as object,
+          approvalChecksum,
+          approvedAt: new Date(),
+        },
       });
 
-      await emailSendQueue.add("campaign-send", { campaignId: input.id });
+      try {
+        await emailSendQueue.add(
+          "campaign-send",
+          { campaignId: input.id },
+          { jobId: `campaign-send-${input.id}` },
+        );
+      } catch (error) {
+        await ctx.prisma.campaign.update({
+          where: { id: input.id },
+          data: { status: "draft", approvalChecksum: null, approvedAt: null },
+        });
+        throw error;
+      }
 
       return { status: "sending" as const };
     }),

@@ -18,6 +18,7 @@ import {
   assignVariant as abAssignVariant,
   recordConversion,
   getActiveTestForStore,
+  campaignApprovalChecksum,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
@@ -99,6 +100,35 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (!campaign.template) throw new Error(`Campaign ${campaignId} has no template`);
+
+  const currentChecksum = campaignApprovalChecksum({
+    campaignId: campaign.id,
+    storeId: campaign.storeId,
+    name: campaign.name,
+    scheduledAt: campaign.scheduledAt,
+    template: {
+      id: campaign.template.id,
+      subject: campaign.template.subject,
+      previewText: campaign.template.previewText,
+      blocks: campaign.template.blocks,
+      html: campaign.template.html,
+    },
+    segment: campaign.segment ? {
+      id: campaign.segment.id,
+      kind: campaign.segment.kind,
+      customerIds: campaign.segment.customerIds,
+      conditions: campaign.segment.conditions,
+      name: campaign.segment.name,
+    } : null,
+    agentProposal: campaign.agentProposal,
+  });
+  if (!campaign.approvedAt || !campaign.approvalChecksum || campaign.approvalChecksum !== currentChecksum) {
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { status: "draft", approvalChecksum: null, approvedAt: null },
+    });
+    throw new Error("Campaign approval is missing or stale; merchant re-approval is required");
+  }
 
   const isDemo = campaign.store?.shopDomain === DEMO_STORE_DOMAIN;
 
