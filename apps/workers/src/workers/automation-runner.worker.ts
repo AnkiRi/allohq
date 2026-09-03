@@ -15,12 +15,14 @@ import {
   automationActivationChecksum,
   loadAutomationActivationSnapshot,
 } from "@allohq/campaign-engine";
+import { assignArm, getOrCreateExperiment } from "@allohq/customer-state";
 
 interface AutomationTriggerJobData {
   automationId: string;
   customerId: string;
   triggeredBy: string; // event name, schedule, or segment
   currentNodeIndex?: number; // for resuming after wait
+  executionId?: string; // stable across wait/resume jobs for delivery idempotency
 }
 
 interface WorkflowNode {
@@ -41,6 +43,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
   QUEUE_NAMES.AUTOMATION_TRIGGER,
   async (job) => {
     const { automationId, customerId, triggeredBy, currentNodeIndex = 0 } = job.data;
+    const executionId = job.data.executionId ?? String(job.id);
 
     console.log(`[automation-runner] Running automation ${automationId} for customer ${customerId} from node ${currentNodeIndex}`);
 
@@ -78,25 +81,75 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
     // Fetch store messaging config for per-store provider selection
     const storeForConfig = await prisma.store.findUnique({
       where: { id: automation.storeId },
-      select: { messagingConfig: true },
+      select: { messagingConfig: true, emailSendingPausedAt: true },
     });
+    if (storeForConfig?.emailSendingPausedAt) {
+      console.log(`[automation-runner] Store ${automation.storeId} email is paused, skipping`);
+      return { status: "store_email_paused" };
+    }
     const messagingConfig = (storeForConfig?.messagingConfig as StoreMessagingConfig | null) ?? null;
 
     const nodes = (automation.nodes as unknown as WorkflowNode[]) ?? [];
+
+    // One stable holdout assignment measures the incremental effect of the
+    // complete journey, not just an individual step. A control customer receives
+    // no step in this automation and leaves an auditable decision row instead.
+    const experiment = await getOrCreateExperiment(automation.storeId, {
+      label: `automation:${automation.id}:version:${automation.activeVersion}`,
+      source: "automation",
+      automationId: automation.id,
+      automationVersion: automation.activeVersion,
+    });
+    if (assignArm(experiment, customer.id) === "CONTROL") {
+      const firstEmailNode = nodes.find((candidate) => candidate.type === "send_email");
+      const templateId = firstEmailNode?.config.templateId as string | undefined;
+      const template = templateId
+        ? await prisma.emailTemplate.findUnique({ where: { id: templateId }, select: { subject: true } })
+        : null;
+      await prisma.messageLog.upsert({
+        where: { deliveryKey: `automation:${automationId}:version:${automation.activeVersion}:execution:${executionId}:control` },
+        create: {
+          deliveryKey: `automation:${automationId}:version:${automation.activeVersion}:execution:${executionId}:control`,
+          workspaceId: automation.workspaceId,
+          storeId: automation.storeId,
+          customerId: customer.id,
+          channel: "email",
+          to: customer.email,
+          subject: template?.subject,
+          templateId,
+          automationId,
+          status: "withheld",
+          treatmentArm: "CONTROL",
+          experimentId: experiment.id,
+          customerStateSnap: {
+            capturedAt: new Date().toISOString(),
+            segment: customer.rfmScore?.segment ?? null,
+            orderCount: customer.rfmScore?.orderCount ?? null,
+            totalSpent: customer.rfmScore?.totalSpent ?? null,
+            lastOrderAt: customer.rfmScore?.lastOrderAt?.toISOString() ?? null,
+            historicalLtv: customer.lifetimeValue?.historicalLtv ?? null,
+          },
+          metadata: { withheld: true, reason: "control_group", triggeredBy, executionId },
+        },
+        update: {},
+      });
+      return { status: "withheld_control" };
+    }
 
     for (let i = currentNodeIndex; i < nodes.length; i++) {
       const node = nodes[i]!;
       const logPermissionSuppression = async (
         channel: "email" | "sms" | "whatsapp" | "rcs",
         to: string,
+        deliveryKey?: string,
       ) => {
         const permission = await getMarketingDeliveryPermission(
           customer.id,
           channel,
         );
         if (permission.allowed) return false;
-        await prisma.messageLog.create({
-          data: {
+        const data = {
+            ...(deliveryKey ? { deliveryKey } : {}),
             workspaceId: automation.workspaceId,
             storeId: automation.storeId,
             customerId: customer.id,
@@ -113,14 +166,31 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               detail: permission.detail ?? null,
               nodeId: node.id,
             } as any,
-          },
-        });
+          };
+        if (deliveryKey) {
+          await prisma.messageLog.upsert({
+            where: { deliveryKey },
+            create: data,
+            update: { status: "suppressed", error: data.error, metadata: data.metadata },
+          });
+        } else {
+          await prisma.messageLog.create({ data });
+        }
         return true;
       };
 
       switch (node.type) {
         case "send_email": {
-          if (await logPermissionSuppression("email", customer.email)) break;
+          const deliveryKey = `automation:${automationId}:version:${automation.activeVersion}:execution:${executionId}:node:${node.id}:email`;
+          const existingDelivery = await prisma.messageLog.findUnique({
+            where: { deliveryKey },
+            select: { id: true, status: true },
+          });
+          if (existingDelivery && !["failed", "queued"].includes(existingDelivery.status)) {
+            console.log(`[automation-runner] Delivery ${deliveryKey} already resolved, skipping`);
+            break;
+          }
+          if (await logPermissionSuppression("email", customer.email, deliveryKey)) break;
           // Governor check before sending
           const emailGovCheck = await checkAllRules({
             customerId: customer.id,
@@ -130,8 +200,10 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           });
           if (!emailGovCheck.allowed) {
             console.log(`[automation-runner] Suppressed email to ${customer.email}: ${emailGovCheck.reason}`);
-            await prisma.messageLog.create({
-              data: {
+            await prisma.messageLog.upsert({
+              where: { deliveryKey },
+              create: {
+                deliveryKey,
                 workspaceId: automation.workspaceId,
                 storeId: automation.storeId,
                 customerId: customer.id,
@@ -139,9 +211,12 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
                 to: customer.email,
                 automationId,
                 status: "suppressed",
+                treatmentArm: "TREATMENT",
+                experimentId: experiment.id,
                 error: emailGovCheck.reason,
-                metadata: { rule: emailGovCheck.rule } as any,
+                metadata: { rule: emailGovCheck.rule, triggeredBy, executionId, nodeId: node.id } as any,
               },
+              update: { status: "suppressed", error: emailGovCheck.reason },
             });
             break;
           }
@@ -213,8 +288,13 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           };
 
           // Create MessageLog entry
-          const messageLog = await prisma.messageLog.create({
-            data: {
+          const messageLog = existingDelivery
+            ? await prisma.messageLog.update({
+                where: { id: existingDelivery.id },
+                data: { status: "queued", error: null },
+              })
+            : await prisma.messageLog.create({ data: {
+              deliveryKey,
               workspaceId: automation.workspaceId,
               storeId: automation.storeId,
               customerId: customer.id,
@@ -224,8 +304,31 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               templateId,
               automationId,
               status: "queued",
-            },
-          });
+              treatmentArm: "TREATMENT",
+              experimentId: experiment.id,
+              customerStateSnap: {
+                capturedAt: now.toISOString(),
+                segment: customer.rfmScore?.segment ?? null,
+                orderCount: customer.rfmScore?.orderCount ?? null,
+                totalSpent: customer.rfmScore?.totalSpent ?? null,
+                lastOrderAt: customer.rfmScore?.lastOrderAt?.toISOString() ?? null,
+                historicalLtv: customer.lifetimeValue?.historicalLtv ?? null,
+              },
+              messageFeatures: {
+                channel: "email",
+                messageType: "automation",
+                automationCategory: automation.category,
+                triggerType: automation.triggerType,
+                trigger: triggeredBy,
+                sendHour: now.getHours(),
+                sendDayOfWeek: now.getDay(),
+                subjectLineLength: template.subject.length,
+                hasDiscount: /discount|off|save|%/i.test(template.subject),
+                nodeIndex: i,
+              },
+              messageVariantId: (node.config.variantId as string | undefined) ?? templateId,
+              metadata: { triggeredBy, executionId, nodeId: node.id },
+            } });
 
           // Render email HTML — brand-styled via the store's BrandKit
           const html = await renderBrandedEmail({
@@ -256,6 +359,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               "List-Unsubscribe": `<${unsubscribeUrl}>`,
               "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             },
+            idempotencyKey: deliveryKey,
           });
 
           // Update MessageLog with result
@@ -592,6 +696,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               customerId,
               triggeredBy,
               currentNodeIndex: i + 1,
+              executionId,
             },
             { delay: delayMs }
           );
