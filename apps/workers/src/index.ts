@@ -9,9 +9,12 @@ import { Queue } from "bullmq";
 import { redisConnection, QUEUE_NAMES } from "./config";
 import { isScheduleAllowed, isV1ReleaseMode } from "@allohq/release-gate";
 import { assertDataEncryptionConfigured } from "@allohq/database";
+import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
 
 if (process.env.NODE_ENV === "production") {
   assertDataEncryptionConfigured();
+  assertUnsubscribeSigningConfigured();
+  assertEmailDeliveryConfigured();
 }
 
 const resolver = new dns.Resolver();

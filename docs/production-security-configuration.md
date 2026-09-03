@@ -6,6 +6,7 @@ secret manager. Never copy development values into staging or production.
 ```sh
 openssl rand -base64 32 # DATA_ENCRYPTION_KEY
 openssl rand -base64 48 # WIDGET_VISITOR_SIGNING_SECRET
+openssl rand -base64 48 # UNSUBSCRIBE_SIGNING_SECRET
 ```
 
 ## Required placement
@@ -14,12 +15,20 @@ openssl rand -base64 48 # WIDGET_VISITOR_SIGNING_SECRET
 | --- | --- | --- | --- |
 | `DATA_ENCRYPTION_KEY` | yes | yes | yes |
 | `WIDGET_VISITOR_SIGNING_SECRET` | no | yes | no |
+| `UNSUBSCRIBE_SIGNING_SECRET` | no | yes | yes |
+| `API_BASE_URL` (public HTTPS API origin) | no | yes | yes |
+| `RESEND_API_KEY` (when send mode is not disabled) | no | yes | yes |
 
 `DATA_ENCRYPTION_KEY` must be identical across the three services in one
 environment. Each environment must use a different pair of keys. The API and
 workers terminate during production startup when their required values are
 missing or malformed. The Shopify callback also shows merchants a safe
 configuration-error message rather than failing silently.
+
+Production startup also fails when unsubscribe signing/link configuration is
+missing, when a non-disabled delivery mode has no Resend credential, or when
+allowlist mode has no test recipients. `API_BASE_URL` must be the public HTTPS
+API origin so every email contains an actionable unsubscribe link.
 
 ## Rotation
 

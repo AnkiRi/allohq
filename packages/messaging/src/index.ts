@@ -21,6 +21,7 @@ export {
   createUnsubscribeToken,
   verifyUnsubscribeToken,
   getUnsubscribeUrl,
+  assertUnsubscribeSigningConfigured,
 } from "./unsubscribe";
 export type { UnsubscribeChannel } from "./unsubscribe";
 export { createSenderDomain, getSenderDomain, requestSenderDomainVerification } from "./sender-domains";
@@ -29,6 +30,7 @@ export { htmlToPlainText } from "./plain-text";
 export {
   getDeliveryModeDecision,
   getMessagingSendMode,
+  assertEmailDeliveryConfigured,
 } from "./delivery-mode";
 export type {
   DeliveryModeDecision,

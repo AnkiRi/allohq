@@ -167,7 +167,7 @@ identity does not yet replace Clerk for normal application requests.
 | 6C — Claim audit | Public landing states email-only, free v1, explicit approval and illustrative—not merchant—figures; merchant settings no longer offer autopilot and customer pages no longer expose dead direct SMS actions | Stage 6 | Public and primary authenticated control surfaces done in current slices; historical multichannel display adapters remain intentionally dormant behind the release gate |
 | 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (`cf81919`); broader copy audit remains in 6C |
 | 6D — First-run smart segments | Shopify taxonomy + catalog signals normalize into 20 verticals; verified purchase affinities and behavior segments refresh immediately after RFM | Stage 6 | Done (`1497757`); live-catalog validation remains in Stage 5 |
-| 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Pending/in parallel |
+| 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Startup now fails closed on encryption, unsubscribe URL/signing, enabled-delivery provider credentials and empty allowlists; environment separation, backups/restore, alerts and DLQ/replay remain |
 | 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Pending |
 
 ### Stage 1 authentication flow: before, now, and target

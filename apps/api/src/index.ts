@@ -13,12 +13,15 @@ import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
 import { handleWidgetPopups } from "./routes/widget-popups";
 import { assertDataEncryptionConfigured, prisma } from "@allohq/database";
+import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
 
 // Load environment variables
 config();
 
 if (process.env.NODE_ENV === "production") {
   assertDataEncryptionConfigured();
+  assertUnsubscribeSigningConfigured();
+  assertEmailDeliveryConfigured();
   const widgetSigningSecret = process.env.WIDGET_VISITOR_SIGNING_SECRET;
   if (!widgetSigningSecret || Buffer.byteLength(widgetSigningSecret) < 32) {
     throw new Error(

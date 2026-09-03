@@ -20,6 +20,20 @@ export function getMessagingSendMode(
   return value === "live" || value === "allowlist" ? value : "disabled";
 }
 
+export function assertEmailDeliveryConfigured(): void {
+  const mode = getMessagingSendMode();
+  if (mode === "disabled") return;
+  if (!process.env["RESEND_API_KEY"]?.trim()) {
+    throw new Error("RESEND_API_KEY must be configured when email delivery is enabled");
+  }
+  if (
+    mode === "allowlist" &&
+    !(process.env["MESSAGING_TEST_RECIPIENTS"] ?? "").split(",").some((value) => value.trim())
+  ) {
+    throw new Error("MESSAGING_TEST_RECIPIENTS must not be empty in allowlist mode");
+  }
+}
+
 /**
  * Global last-mile safety gate.
  *

@@ -19,6 +19,21 @@ function signingSecret(): string {
   return secret;
 }
 
+export function assertUnsubscribeSigningConfigured(): void {
+  signingSecret();
+  const baseUrl = process.env["API_BASE_URL"];
+  if (!baseUrl) throw new Error("API_BASE_URL must be configured for unsubscribe links");
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error("API_BASE_URL must be a valid absolute URL");
+  }
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+    throw new Error("API_BASE_URL must use HTTPS in production");
+  }
+}
+
 function signature(payload: string): string {
   return createHmac("sha256", signingSecret())
     .update(payload)
