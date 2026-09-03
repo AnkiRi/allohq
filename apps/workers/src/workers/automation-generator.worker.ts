@@ -9,6 +9,7 @@ import {
 } from "@allohq/customer-intelligence";
 import type { AIModelId } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { isV1ReleaseMode, assertV1EmailAutomation } from "@allohq/release-gate";
 
 interface AutomationGenerateJobData {
   automationId: string;
@@ -180,9 +181,11 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       });
     }
 
-    // -- 2. GENERATE SMS --
+    const emailOnly = isV1ReleaseMode();
+
+    // -- 2. GENERATE SMS (post-v1 only) --
     const smsTemplateIds: string[] = [];
-    try {
+    if (!emailOnly) try {
       const smsResult = await generateSms({
         brandProfile: brandInput,
         intent: automation.category,
@@ -217,9 +220,9 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       console.error(`[automation-generator] SMS generation failed for ${automation.name}:`, smsErr);
     }
 
-    // -- 3. GENERATE WHATSAPP --
+    // -- 3. GENERATE WHATSAPP (post-v1 only) --
     const whatsappTemplateIds: string[] = [];
-    try {
+    if (!emailOnly) try {
       const waResult = await generateWhatsApp({
         brandProfile: brandInput,
         intent: automation.category,
@@ -256,9 +259,9 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
       console.error(`[automation-generator] WhatsApp generation failed for ${automation.name}:`, waErr);
     }
 
-    // -- 4. GENERATE RCS --
+    // -- 4. GENERATE RCS (post-v1 only) --
     const rcsTemplateIds: string[] = [];
-    try {
+    if (!emailOnly) try {
       const rcsResult = await generateRcs({
         brandProfile: brandInput,
         intent: automation.category,
@@ -341,6 +344,12 @@ export const automationGeneratorWorker = new Worker<AutomationGenerateJobData>(
         return { ...node, config: { ...node.config, templateName: rcsNameMap.get(node.config.rcsTemplateId) ?? "RCS" } };
       }
       return node;
+    });
+    assertV1EmailAutomation({
+      nodes: enrichedNodes,
+      smsTemplateIds,
+      whatsappTemplateIds,
+      rcsTemplateIds,
     });
 
     // -- 6. UPDATE AUTOMATION WITH ALL GENERATED DATA --

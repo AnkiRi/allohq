@@ -27,6 +27,7 @@
     "@allohq/merchant-copilot": "workspace:*",
     "@allohq/messaging": "workspace:*",
     "@allohq/product-recommendations": "workspace:*",
+    "@allohq/release-gate": "workspace:*",
     "@clerk/backend": "^2.33.6",
     "@prisma/client": "^6.3.0",
     "@trpc/server": "^11.0.0",

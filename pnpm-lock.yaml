@@ -84,6 +84,9 @@ importers:
       '@allohq/product-recommendations':
         specifier: workspace:*
         version: link:../../packages/product-recommendations
+      '@allohq/release-gate':
+        specifier: workspace:*
+        version: link:../../packages/release-gate
       '@clerk/backend':
         specifier: ^2.33.6
         version: 2.33.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)

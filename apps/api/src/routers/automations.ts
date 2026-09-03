@@ -3,6 +3,7 @@ import { router, workspaceProcedure } from "../trpc";
 import { verifyWorkspaceObjectAccess } from "../lib/storeAccess";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
+import { assertV1EmailAutomation } from "@allohq/release-gate";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -203,6 +204,7 @@ export const automationsRouter = router({
           rcsTemplateIds: automation.rcsTemplateIds,
           triggerConfig: automation.triggerConfig as Record<string, unknown>,
         });
+        assertV1EmailAutomation({ ...automation, nodes: workflowDef.nodes });
 
         return ctx.prisma.automation.update({
           where: { id: input.id },
@@ -214,6 +216,8 @@ export const automationsRouter = router({
           },
         });
       }
+
+      assertV1EmailAutomation(automation);
 
       return ctx.prisma.automation.update({
         where: { id: input.id },
@@ -244,6 +248,7 @@ export const automationsRouter = router({
         where: { id: input.id, workspaceId: ctx.workspaceId, status: "paused" },
       });
       if (!automation) throw new TRPCError({ code: "NOT_FOUND", message: "Automation must be paused to resume" });
+      assertV1EmailAutomation(automation);
 
       return ctx.prisma.automation.update({
         where: { id: input.id },
@@ -270,6 +275,11 @@ export const automationsRouter = router({
         where: { id, workspaceId: ctx.workspaceId },
       });
       if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      assertV1EmailAutomation({
+        ...automation,
+        nodes: data.nodes ?? automation.nodes,
+      });
 
       return ctx.prisma.automation.update({
         where: { id },

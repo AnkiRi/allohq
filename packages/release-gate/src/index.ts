@@ -16,12 +16,12 @@
 export const V1_BLOCKED_CAPABILITIES = [
   /** Autonomy tiers / auto-execution of approved-by-nobody actions. */
   "autopilot",
-  /** Automation programs + triggered flows that can send on their own. */
-  "automation_programs",
+  /** Activation or mutation of an automation without merchant approval. */
+  "unapproved_automation_activation",
   /** Proactive outreach: opportunity scans, overnight ops, agent observation. */
   "proactive_outreach",
-  /** Journey orchestration and event reactors. */
-  "journeys",
+  /** Journey nodes that deliver through anything except email. */
+  "non_email_journey_nodes",
   /** Churn interventions (send on their own). */
   "churn_intervention",
   /** Scheduled outbound emails TO THE MERCHANT (daily/weekly digests). */
@@ -40,6 +40,57 @@ export type V1BlockedCapability = (typeof V1_BLOCKED_CAPABILITIES)[number];
 
 /** Delivery channels permitted in v1. */
 export const V1_ALLOWED_CHANNELS = ["email"] as const;
+
+export const V1_ALLOWED_AUTOMATION_NODE_TYPES = [
+  "send_email",
+  "wait",
+  "condition",
+  "silence_check",
+] as const;
+
+export interface AutomationReleaseShape {
+  nodes?: unknown;
+  smsTemplateIds?: string[];
+  whatsappTemplateIds?: string[];
+  rcsTemplateIds?: string[];
+}
+
+export function findV1AutomationViolations(
+  automation: AutomationReleaseShape,
+  releaseMode: string | undefined = process.env["V1_RELEASE_MODE"],
+): string[] {
+  if (!isV1ReleaseMode(releaseMode)) return [];
+  const violations: string[] = [];
+  if (automation.smsTemplateIds?.length) violations.push("sms templates");
+  if (automation.whatsappTemplateIds?.length) violations.push("WhatsApp templates");
+  if (automation.rcsTemplateIds?.length) violations.push("RCS templates");
+  const nodes = Array.isArray(automation.nodes) ? automation.nodes : [];
+  for (const node of nodes) {
+    const type = node && typeof node === "object"
+      ? (node as { type?: unknown }).type
+      : undefined;
+    if (
+      typeof type !== "string" ||
+      !(V1_ALLOWED_AUTOMATION_NODE_TYPES as readonly string[]).includes(type)
+    ) {
+      violations.push(`workflow node: ${String(type ?? "invalid")}`);
+    }
+  }
+  return [...new Set(violations)];
+}
+
+export function assertV1EmailAutomation(
+  automation: AutomationReleaseShape,
+  releaseMode: string | undefined = process.env["V1_RELEASE_MODE"],
+): void {
+  const violations = findV1AutomationViolations(automation, releaseMode);
+  if (violations.length) {
+    throw new ReleaseBoundaryError(
+      "non_email_journey_nodes",
+      violations.join(", "),
+    );
+  }
+}
 
 /**
  * True when the v1 boundary is being enforced.
@@ -131,11 +182,11 @@ export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> =
   "privacy-retention-schedule": null,
 
   // --- outside v1 -----------------------------------------------------------
-  "trigger-check-schedule": "automation_programs",
-  "abandoned-cart-check-schedule": "automation_programs",
-  "repurchase-reminder-schedule": "automation_programs",
-  "browse-abandonment-schedule": "automation_programs",
-  "inventory-monitor-schedule": "automation_programs",
+  "trigger-check-schedule": null,
+  "abandoned-cart-check-schedule": null,
+  "repurchase-reminder-schedule": null,
+  "browse-abandonment-schedule": null,
+  "inventory-monitor-schedule": null,
   "opportunity-scan-schedule": "proactive_outreach",
   "overnight-ops-schedule": "proactive_outreach",
   "agent-observe-schedule": "proactive_outreach",
