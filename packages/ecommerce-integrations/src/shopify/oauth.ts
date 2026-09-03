@@ -134,6 +134,37 @@ export async function exchangeCodeForToken(params: {
   return parseOfflineTokenResponse(await response.json());
 }
 
+/** Exchange a freshly verified App Bridge ID token for an expiring offline token. */
+export async function exchangeIdTokenForOfflineToken(params: {
+  shopDomain: string;
+  apiKey: string;
+  apiSecret: string;
+  idToken: string;
+}): Promise<ShopifyOfflineToken> {
+  const domain = normalizeShopDomain(params.shopDomain);
+  const response = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({
+      client_id: params.apiKey,
+      client_secret: params.apiSecret,
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      subject_token: params.idToken,
+      subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+      requested_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",
+      expiring: "1",
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Failed to exchange Shopify ID token: ${response.status} ${body}`);
+  }
+  return parseOfflineTokenResponse(await response.json());
+}
+
 export async function refreshOfflineAccessToken(params: {
   shopDomain: string;
   apiKey: string;

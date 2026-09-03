@@ -8,6 +8,7 @@ import {
 } from "@allohq/database";
 import {
   exchangeCodeForToken,
+  exchangeIdTokenForOfflineToken,
   normalizeShopDomain,
   refreshOfflineAccessToken,
   verifyOAuthHmac,
@@ -139,6 +140,37 @@ test("refresh uses Shopify's rotating refresh-token grant", async () => {
     assert.equal(body.get("grant_type"), "refresh_token");
     assert.equal(body.get("refresh_token"), "shprt_old");
     assert.equal(token.refreshToken, "shprt_rotated");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("embedded token exchange requests an expiring offline token", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody = "";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body);
+    return new Response(JSON.stringify({
+      access_token: "shpat_embedded",
+      refresh_token: "shprt_embedded",
+      expires_in: 3600,
+      refresh_token_expires_in: 7_776_000,
+      scope: "read_orders",
+    }), { status: 200 });
+  };
+
+  try {
+    await exchangeIdTokenForOfflineToken({
+      shopDomain: "example.myshopify.com",
+      apiKey: "key",
+      apiSecret: "secret",
+      idToken: "fresh-id-token",
+    });
+    const body = new URLSearchParams(requestBody);
+    assert.equal(body.get("grant_type"), "urn:ietf:params:oauth:grant-type:token-exchange");
+    assert.equal(body.get("subject_token"), "fresh-id-token");
+    assert.equal(body.get("requested_token_type"), "urn:shopify:params:oauth:token-type:offline-access-token");
+    assert.equal(body.get("expiring"), "1");
   } finally {
     globalThis.fetch = originalFetch;
   }

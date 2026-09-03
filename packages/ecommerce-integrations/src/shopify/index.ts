@@ -2,6 +2,7 @@ export { ShopifyClient } from "./client";
 export {
   generateAuthUrl,
   exchangeCodeForToken,
+  exchangeIdTokenForOfflineToken,
   refreshOfflineAccessToken,
   normalizeShopDomain,
   verifyOAuthHmac,
