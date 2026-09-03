@@ -10,7 +10,6 @@ import { KineticHeadline } from "./Kinetic";
 import { HoldoutField } from "./Holdout";
 import { SwarmField } from "./Swarm";
 import { MorningBrief } from "./Brief";
-import { BillStatement } from "./Bill";
 import {
   DayRail,
   SkyWash,
@@ -24,7 +23,7 @@ import {
 export const metadata: Metadata = {
   title: "joon · one marketer for every customer",
   description:
-    "joon grows retention revenue for consumer brands by sending less, not more. It learns who to message, when, on which channel, and who to skip, across email, WhatsApp and SMS, on your own accounts. A held-out control on every send is how it learns, and you only pay on proven lift.",
+    "joon helps Shopify brands send fewer, better emails. Build campaigns and journeys, approve every message, and measure treatment against a held-out control.",
 };
 
 /**
@@ -151,9 +150,9 @@ export function V2Landing({
                 </p>
                 <KineticHeadline />
                 <p className="v2-hero__sub">
-                  joon connects to your store, learns your brand, and reaches each
-                  customer individually across WhatsApp, email and SMS, so you grow
-                  revenue from the customers you already have, without burning your list.
+                  joon connects to Shopify, learns your brand, and helps you send
+                  fewer, better emails—with an explicit approval before anything
+                  leaves and a held-out control to measure what followed.
                 </p>
                 <div className="v2-hero__cta">
                   <a className="v2-btn v2-btn--primary v2-btn--lg" href={signUp}>
@@ -168,7 +167,7 @@ export function V2Landing({
                 <dl className="v2-proofstrip mono" aria-label="Live store, right now">
                   <div className="v2-proofstrip__cell v2-proofstrip__cell--live">
                     <span className="v2-live-dot" aria-hidden="true" />
-                    <dd className="v2-accent">live</dd>
+                    <dd className="v2-accent">example</dd>
                   </div>
                   <div className="v2-proofstrip__cell">
                     <dt>customers</dt>
@@ -186,7 +185,7 @@ export function V2Landing({
                   </div>
                 </dl>
                 <p className="v2-proofstrip__note mono">
-                  Figures representative while control measurement is wired up.
+                  Illustrative product walkthrough—not merchant results.
                 </p>
               </div>
 
@@ -207,7 +206,7 @@ export function V2Landing({
                 </div>
                 <div className="v2-console__foot mono" aria-hidden="true">
                   <span>reasoning · live</span>
-                  <span>email · whatsapp · sms</span>
+                  <span>email · treatment · control</span>
                 </div>
               </div>
             </div>
@@ -225,10 +224,9 @@ export function V2Landing({
                   Drafts before sunrise. <em>Approvals over coffee.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  You wake up; joon already worked. One short note of what it did
-                  overnight: who&rsquo;s slipping, what it drafted in your
-                  voice, what it held back. Read it, approve a line, finish your
-                  coffee.
+                  Ask for a campaign or activate a journey and joon prepares the
+                  audience, message and holdout. Read the reasoning, approve the
+                  exact version, finish your coffee.
                 </p>
                 <p className="v2-half__aside mono">
                   // nothing ships over your head · every line waits for your nod
@@ -249,13 +247,13 @@ export function V2Landing({
                   <p className="v2-section__lede">
                     A human marketer can only truly know a handful of customers, so
                     everyone else gets the same blast. joon knows each one, and reaches
-                    them the way each actually wants:
+                    each person from the evidence the store already has:
                   </p>
                   <ul className="v2-attend__learns">
                     <li>who they are</li>
                     <li>what they want</li>
                     <li>when they want to hear from you</li>
-                    <li>how they like to be spoken to</li>
+                    <li>which brand-approved message variant they received</li>
                   </ul>
                 </div>
                 <p className="v2-half__aside mono">
@@ -352,8 +350,8 @@ export function V2Landing({
                             Drafts written while you sleep.
                           </h3>
                           <p className="v2-event__detail">
-                            joon segments overnight and writes the day&rsquo;s
-                            sends in your voice, queued, not sent.
+                            A merchant-requested campaign is segmented and
+                            written in your voice, queued, not sent.
                           </p>
                           <p className="v2-event__meta mono">
                             3 drafts queued · awaiting sign-off
@@ -447,7 +445,7 @@ export function V2Landing({
                             The Diwali win-back goes out.
                           </h3>
                           <p className="v2-event__detail">
-                            187 lapsed buyers reached across their own channels,
+                            187 lapsed buyers included in an email campaign,
                             with{" "}
                             <span className="v2-noticed">22 held back</span> as a
                             control, so the lift is proven, not claimed.
@@ -488,26 +486,46 @@ export function V2Landing({
             </DayRail>
           </section>
 
-          {/* ── 7 · THE BILL, HALF page, visual-RIGHT ─────────────── */}
+          {/* ── 7 · FREE V1 ───────────────────────────────────────── */}
           <section className="v2-section" id="bill">
             <div className="v2-wrap v2-half v2-half--art-right v2-half--wide-art">
               <Rise className="v2-half__copy">
-                <p className="v2-eyebrow mono">base + performance</p>
+                <p className="v2-eyebrow mono">free public v1</p>
                 <h2 className="v2-section__h">
-                  You only pay when <em>you grow.</em>
+                  Start with the ledger. <em>Pay nothing.</em>
                 </h2>
                 <p className="v2-section__lede">
-                  A base fee to run retention, charged either way. Then a
-                  performance fee read straight off the held-out control, a
-                  share of the proven lift. Never your gross. Never a take-rate we
-                  picked.
+                  Joon is free at launch. There is no per-email charge and no
+                  performance fee in v1. We are earning the right to price the
+                  decision layer only after real holdout evidence exists.
                 </p>
                 <p className="v2-half__aside mono">
-                  Figures representative while control measurement is wired up.
+                  free plan · email only · merchant approval required
                 </p>
               </Rise>
               <Rise className="v2-half__art">
-                <BillStatement />
+                <div className="v2-bill" aria-label="Joon public v1 pricing">
+                  <div className="v2-bill__head">
+                    <div className="v2-bill__masthead">
+                      <span className="v2-bill__mark">joon</span>
+                      <span className="v2-bill__doc mono">Public v1</span>
+                    </div>
+                  </div>
+                  <div className="v2-bill__body">
+                    <div className="v2-bill__row v2-bill__row--lift">
+                      <span className="v2-bill__sign mono">=</span>
+                      <span className="v2-bill__k">
+                        Shopify email decision layer
+                        <span className="v2-bill__note">campaigns, journeys, approvals and holdouts</span>
+                      </span>
+                      <span className="v2-bill__amt v2-bill__amt--lift mono">₹0</span>
+                    </div>
+                  </div>
+                  <p className="v2-bill__foot">
+                    Delivery-provider costs, if any, remain between the merchant
+                    and their selected provider.
+                  </p>
+                </div>
               </Rise>
             </div>
           </section>
@@ -530,8 +548,8 @@ export function V2Landing({
                   <span className="v2-step__k mono">$ joon connect</span>
                   <h3 className="v2-step__h">It reads your store.</h3>
                   <p className="v2-step__p">
-                    One click into Shopify and your own email, WhatsApp and SMS.
-                    joon scans <strong>4,820</strong> customers and finds the{" "}
+                    One click into Shopify and your email sender. In this
+                    illustrative walkthrough, joon scans <strong>4,820</strong> customers and finds the{" "}
                     <strong>187</strong> lapsed buyers worth reaching, about{" "}
                     <strong>₹4.2L</strong> in past revenue.
                   </p>
@@ -550,9 +568,8 @@ export function V2Landing({
                   <h3 className="v2-step__h">It writes, then waits for your nod.</h3>
                   <p className="v2-step__p">
                     joon drafts <strong>3</strong> win-back variants in your
-                    voice and predicts the outcome before you approve:{" "}
-                    <strong>₹1.2L</strong> expected recovery, a named downside,
-                    and a confidence.
+                    voice, explains the evidence before you approve, and keeps
+                    <strong> 22</strong> customers silent as a control.
                   </p>
                 </Rise>
               </ol>
@@ -606,10 +623,10 @@ export function V2Landing({
               <Rise>
                 <p className="v2-position__eyebrow mono">what joon is</p>
                 <p className="v2-position__line">
-                  Retention tools give you software and a bill. joon gives you an{" "}
+                  Retention tools reward volume. joon gives you an{" "}
                   <span className="v2-accent">operator</span> that does the work,
-                  and only bills on the lift it proves against a control.{" "}
-                  <em>You pay for outcomes, not access.</em> Built for commerce,
+                  then measures the result against a control.{" "}
+                  <em>Free in public v1.</em> Built for commerce,
                   from India.
                 </p>
               </Rise>
@@ -667,7 +684,7 @@ export function V2Landing({
                     <span className="v2-cohort__cell" />
                   </div>
                   <p className="v2-cohort__foot mono">
-                    <b>3</b> of 8 onboarded · 5 spots left
+                    limited hands-on onboarding · join the queue
                   </p>
                 </div>
               </Rise>
@@ -683,7 +700,7 @@ export function V2Landing({
                 </p>
                 <h2 className="v2-final__h">
                   Try joon with your store.{" "}
-                  <em>Free for 14 days.</em>
+                  <em>Free in public v1.</em>
                 </h2>
                 <p className="v2-final__p">
                   Connect Shopify in one click. joon holds out its first control
@@ -706,7 +723,14 @@ export function V2Landing({
         <footer className="v2-footer">
           <div className="v2-wrap v2-footer__inner mono">
             <span className="v2-footer__brand">hand-built in bangalore</span>
-            <span>© 2026 joon</span>
+            <span className="v2-footer__links">
+              <Link href="/privacy">privacy</Link>
+              <Link href="/terms">terms</Link>
+              <Link href="/dpa">dpa</Link>
+              <Link href="/subprocessors">subprocessors</Link>
+              <Link href="/support">support</Link>
+              <span>© 2026 joon</span>
+            </span>
           </div>
         </footer>
       </div>

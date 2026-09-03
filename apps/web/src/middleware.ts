@@ -9,6 +9,11 @@ const isPublicRoute = createRouteMatcher([
   "/demo-emails(.*)",
   "/options(.*)",
   "/try(.*)", // private token-gated demo entry (token validated in the page)
+  "/privacy(.*)",
+  "/terms(.*)",
+  "/dpa(.*)",
+  "/subprocessors(.*)",
+  "/support(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -34,7 +39,7 @@ export default clerkMiddleware(async (auth, request) => {
 
   // Root domain (allohq.ai) — only serve landing page, redirect everything else
   if (isRootDomain) {
-    if (request.nextUrl.pathname === "/") {
+    if (["/", "/privacy", "/terms", "/dpa", "/subprocessors", "/support"].includes(request.nextUrl.pathname)) {
       return NextResponse.next();
     }
     const agentUrl = new URL(request.url);

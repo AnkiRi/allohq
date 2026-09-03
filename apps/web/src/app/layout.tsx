@@ -28,9 +28,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "joon · retention, handled",
+  title: "joon · fewer, better emails",
   description:
-    "joon runs retention and first-line customer service for consumer brands, and only gets paid when it works.",
+    "Build and approve Shopify email campaigns and journeys, hold back a control, and measure what followed.",
 };
 
 export default function RootLayout({
