@@ -99,6 +99,97 @@ Known caveats:
   enabled as written because its global job does not provide the store ID it
   expects.
 
+## 3A. Implementation phase tracker
+
+This section maps day-to-day engineering work to the release stages below.
+“Stage” describes the launch gate; “phase” describes the concrete sequence of
+changes used to complete that gate.
+
+### Current position
+
+We are currently in **Stage 1, implementation phase 1C**.
+
+The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
+
+- `76692d4` completed phase 1A: load Shopify's current App Bridge bootstrap in
+  the application shell and provide its public client ID/API origin.
+- `85eead5` completed phase 1B: verify Shopify's short-lived ID token on the
+  backend, including signature, expiry, activation time, intended app, issuer,
+  destination shop, and Shopify-domain checks.
+- Phase 1C is next: send the ID token with application API requests and map the
+  verified shop/staff identity to exactly one Joon store and workspace.
+
+App Bridge is therefore **started, not complete**. Loading the script and being
+able to verify a token creates the secure authentication foundation; Shopify
+identity does not yet replace Clerk for normal application requests.
+
+### Phase-to-stage map
+
+| Implementation phase | Concrete result | Launch stage | Status |
+| --- | --- | --- | --- |
+| 0A — Release boundary | Email-only provider gate; autopilot/proactive schedules fail closed | Stage 0 | Done (`ecdfa96`, `7e1fd6f`, `3042980`) |
+| 0B — Approved email journeys | Email automations remain usable; activation versions/checksums prevent unreviewed changes | Stage 0 | Done (`226955f`, `295cee0`) |
+| 0C — Product-surface boundary | SMS/WhatsApp/RCS writes blocked and creation/provider controls removed from v1 UI | Stage 0 | Done (`482d69f`, `c61a4a8`) |
+| 0D — Delivery safety base | Kill switches, store pause, complaint pause, campaign approval invalidation | Stages 0 and 4 | Done (`5a9d320`, `5d4ce32`) |
+| 0E — Journey causal ledger | Automation holdouts, treatment/control records, state snapshots, database/provider idempotency | Stages 3 and 5 | Foundation done (`aab5903`); full drills pending |
+| 1A — App Bridge bootstrap | Joon loads as an App Bridge-capable embedded document | Stage 1 | Done (`76692d4`) |
+| 1B — Shopify ID-token verification | Backend can reject forged, expired, wrong-app, and cross-shop tokens | Stage 1 | Done (`85eead5`) |
+| 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Next |
+| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; owner/staff roles and multi-store access are explicit | Stage 1 | Pending |
+| 1E — Shopify-origin install | Install/token exchange works from Shopify without typing a domain or requiring a Clerk session | Stage 1 | Pending |
+| 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
+| 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
+| 2A — Scope audit | Exhaustive GraphQL sweep; remove or justify `read_all_orders` and every protected field | Stage 2 | Pending |
+| 2B — Level 2 evidence | Data inventory, minimization, access logging, retention/deletion evidence and Dashboard request | Stage 2 | Pending; Dashboard submission is founder-owned |
+| 2C — Public trust surface | Privacy Policy, ToS, DPA, subprocessors and support policy published | Stage 2 | Pending |
+| 2D — Review/listing pack | Free plan, icon, screenshots, copy, reviewer store/instructions and screencast | Stage 2 | Pending |
+| 3A — Canonical audience resolver | Campaigns and automations use one eligibility/exclusion decision service | Stage 3 | Pending |
+| 3B — Dry-run report | Frozen audience, exclusions, treatment/control, sender, offer, cost and approval version shown before send | Stage 3 | Pending |
+| 3C — Margin-risk moment | Evidence-backed “already bought / margin at risk” recommendation appears before approval | Stage 3 and GTM | Pending |
+| 4A — Sender-domain onboarding | SPF/DKIM/DMARC states and verified sender identity gate live delivery | Stage 4 | Pending |
+| 4B — Distributed limits | Atomic daily caps, store concurrency, new-store ramp and provider throttles | Stage 4 | Pending |
+| 4C — Deliverability automation | Bounce/complaint/rejection/volume thresholds pause safely | Stage 4 | Partially done; complete after 4A/4B |
+| 5A — Failure harness | Repeatable provider, queue, database, webhook, approval and consent failure drills | Stage 5 | Pending |
+| 5B — Six journey fixtures | Welcome, cart, post-purchase, win-back, replenishment and anniversary validated end to end | Stage 5 | Pending |
+| 5C — Email-client matrix | Rendering and fallback validation across required clients and edge cases | Stage 5 | Pending |
+| 6A — Timing consolidation | One timezone-correct send-time learner with evidence thresholds and honest defaults | Stage 6 | Pending |
+| 6B — Content feedback loop | Approved experiment winners can influence later selection with an audit trail | Stage 6 | Pending |
+| 6C — Claim audit | Remove channel/tone-learning claims until implemented and proven | Stage 6 | Pending |
+| 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Pending/in parallel |
+| 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Pending |
+
+### Stage 1 authentication flow: before, now, and target
+
+Before phase 1A:
+
+`Clerk cookie/token -> Joon user -> workspace -> API`
+
+After phases 1A and 1B (current state):
+
+`Shopify Admin -> App Bridge can issue ID token -> Joon can verify token`
+
+The current flow still uses Clerk for application authorization; the verified
+Shopify identity has not yet been connected to tenant access.
+
+After phases 1C–1F (Stage 1 complete):
+
+`Shopify Admin -> fresh ID token -> verified shop + staff -> authorized Joon
+workspace/store -> API`
+
+The separate encrypted offline Shopify access token remains responsible for
+background GraphQL calls, sync, webhooks, and discount creation. An App Bridge
+ID token proves the current human identity; it is not an Admin API credential.
+
+### How progress will be recorded
+
+For every implementation commit:
+
+1. Update the applicable phase above from `Pending` to `In progress` or `Done`.
+2. Attach the commit hash and the verification performed.
+3. Mark the release stage complete only after its stated exit gate passes.
+4. Record external blockers explicitly instead of treating console/provider
+   configuration as engineering completion.
+
 ## 4. Release stages
 
 Stages are gates, not calendar promises. A stage completes only when its exit
