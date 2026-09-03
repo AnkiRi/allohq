@@ -49,6 +49,13 @@ const PROGRAM_EMAIL_SPECS: Record<string, { intent: EmailIntent; subjectHint: st
     { intent: "win_back", subjectHint: "We miss you" },
     { intent: "win_back", subjectHint: "Here's what you've been missing" },
   ],
+  replenishment: [
+    { intent: "post_purchase", subjectHint: "Ready for a refill?" },
+    { intent: "post_purchase", subjectHint: "A gentle reorder reminder" },
+  ],
+  customer_milestone: [
+    { intent: "vip_reward", subjectHint: "Thank you for being a loyal customer" },
+  ],
   browse_abandonment: [
     { intent: "browse_abandonment", subjectHint: "Still thinking about it?" },
   ],

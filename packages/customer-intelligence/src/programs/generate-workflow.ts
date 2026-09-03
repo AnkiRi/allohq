@@ -156,6 +156,22 @@ export function generateWorkflow(input: GenerateWorkflowInput): GenerateWorkflow
       };
     }
 
+    case "replenishment": {
+      return {
+        triggerType: "schedule",
+        triggerConfig: { schedule: "daily", audience: "reorder_due" },
+        nodes: [emailNode(t(0)), waitNode(3, "days"), conditionNode("has_purchased"), emailNode(t(1))],
+      };
+    }
+
+    case "customer_milestone": {
+      return {
+        triggerType: "segment_entry",
+        triggerConfig: { segmentName: "Loyal Customers" },
+        nodes: [emailNode(t(0))],
+      };
+    }
+
     // -----------------------------------------------------------------------
     // BROWSE ABANDONMENT — sms (quick nudge) → email
     // -----------------------------------------------------------------------

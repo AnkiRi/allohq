@@ -139,6 +139,26 @@ export const triggerListenerWorker = new Worker<TriggerCheckJobData>(
           const schedule = triggerConfig.schedule as string;
           if (!schedule || schedule === "manual") continue;
 
+          if (schedule === "daily" && triggerConfig.audience === "reorder_due") {
+            const due = await prisma.customerProductRecommendation.findMany({
+              where: { storeId: automation.storeId, strategy: "reorder", expiresAt: { gt: new Date() } },
+              distinct: ["customerId"],
+              select: { customerId: true },
+              take: 1_000,
+            });
+            const day = new Date().toISOString().slice(0, 10);
+            for (const candidate of due) {
+              await automationTriggerQueue.add("automation-trigger", {
+                automationId: automation.id,
+                customerId: candidate.customerId,
+                triggeredBy: `reorder_due:${day}`,
+                eventInstanceId: `reorder_due:${candidate.customerId}:${day}`,
+              }, { jobId: `${automation.id}-${candidate.customerId}-reorder-${day}`, attempts: 2 });
+            }
+            if (due.length > 0) console.log(`[trigger-listener] Queued ${due.length} evidence-backed replenishment triggers for "${automation.name}"`);
+            continue;
+          }
+
           // For scheduled automations, check if it's time to send
           // Parse cron-like schedule or specific datetime
           const scheduledAt = triggerConfig.scheduledAt as string;

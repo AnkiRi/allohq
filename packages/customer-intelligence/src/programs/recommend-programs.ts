@@ -9,6 +9,8 @@ export interface ProgramRecommendation {
     | "welcome_series"
     | "abandoned_cart"
     | "post_purchase"
+    | "replenishment"
+    | "customer_milestone"
     | "win_back"
     | "browse_abandonment"
     | "vip_reward"
@@ -102,6 +104,25 @@ export function recommendPrograms(store: StoreAnalysis): ProgramRecommendation[]
       description: `Reward your ${vipCount} most loyal customers with exclusive offers and early access.`,
       emailCount: 1,
       triggerConfig: { trigger: "segment_entered", segmentMatch: ["Champions", "Loyal Customers"], delay: [0], delayUnit: "days" },
+      priority: 5,
+    });
+    recommendations.push({
+      programType: "customer_milestone",
+      name: "Loyal Customer Milestone",
+      description: "Thank customers when they enter your loyal-customer segment.",
+      emailCount: 1,
+      triggerConfig: { trigger: "segment_entered", segmentMatch: ["Loyal Customers"] },
+      priority: 6,
+    });
+  }
+
+  if (store.productCount > 0) {
+    recommendations.push({
+      programType: "replenishment",
+      name: "Replenishment Reminder",
+      description: "Email customers when their own purchase history indicates a product may be due for reorder.",
+      emailCount: 2,
+      triggerConfig: { trigger: "reorder_due", frequency: "daily" },
       priority: 5,
     });
   }
