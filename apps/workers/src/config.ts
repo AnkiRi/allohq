@@ -58,4 +58,5 @@ export const QUEUE_NAMES = {
   BASKET_ANALYSIS: "basket-analysis",
   PRODUCT_SEGMENTS: "product-segments",
   PRIVACY_RETENTION: "privacy-retention",
+  DEAD_LETTER: "dead-letter",
 } as const;

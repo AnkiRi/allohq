@@ -10,6 +10,7 @@ import { redisConnection, QUEUE_NAMES } from "./config";
 import { isScheduleAllowed, isV1ReleaseMode } from "@allohq/release-gate";
 import { assertDataEncryptionConfigured } from "@allohq/database";
 import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
+import { startCriticalDeadLetterCapture } from "./dead-letter";
 
 if (process.env.NODE_ENV === "production") {
   assertDataEncryptionConfigured();
@@ -142,6 +143,7 @@ import Redis from "ioredis";
 })();
 
 console.log("Starting AlloHQ workers...");
+const criticalDeadLetterCapture = startCriticalDeadLetterCapture();
 console.log(`  - sync worker: ${syncWorker.name}`);
 console.log(`  - rfm worker: ${rfmWorker.name}`);
 console.log(`  - send worker: ${sendWorker.name}`);
@@ -535,6 +537,7 @@ const shutdown = async () => {
       copyLearnerWorker.close(),
       basketAnalysisWorker.close(),
       productSegmentsWorker.close(),
+      criticalDeadLetterCapture.close(),
     ]);
   } catch (err) {
     console.error("Error during shutdown:", (err as Error).message);
