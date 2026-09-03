@@ -38,6 +38,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const shopifyApiKey = process.env.SHOPIFY_API_KEY;
+  const apiOrigin = process.env.NEXT_PUBLIC_API_URL;
+
   return (
     <ClerkProvider>
       <html
@@ -46,6 +49,15 @@ export default function RootLayout({
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
       >
         <head>
+          {shopifyApiKey ? (
+            <>
+              <meta name="shopify-api-key" content={shopifyApiKey} />
+              {apiOrigin ? <meta name="shopify-app-origins" content={apiOrigin} /> : null}
+              {/* Shopify requires App Bridge before every other script. The CDN
+                  bootstrap supplies fresh ID tokens and embedded navigation. */}
+              <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
+            </>
+          ) : null}
           <ThemeScript />
         </head>
         <body>
