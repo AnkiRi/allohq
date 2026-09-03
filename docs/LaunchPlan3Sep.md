@@ -107,7 +107,7 @@ changes used to complete that gate.
 
 ### Current position
 
-We are currently in **Stage 1, implementation phase 1C**.
+We are currently in **Stage 1, implementation phase 1D**.
 
 The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
 
@@ -116,8 +116,11 @@ The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
 - `85eead5` completed phase 1B: verify Shopify's short-lived ID token on the
   backend, including signature, expiry, activation time, intended app, issuer,
   destination shop, and Shopify-domain checks.
-- Phase 1C is next: send the ID token with application API requests and map the
-  verified shop/staff identity to exactly one Joon store and workspace.
+- `a58ec1c` completed phase 1C: embedded API requests obtain a fresh ID token;
+  the API accepts it only for exactly one active installed shop and maps a newly
+  seen staff identity into that workspace as a non-owner member.
+- Phase 1D is in progress: establish installer ownership, explicit staff-role
+  behavior, multi-store rules, and cross-shop authorization tests.
 
 App Bridge is therefore **started, not complete**. Loading the script and being
 able to verify a token creates the secure authentication foundation; Shopify
@@ -134,8 +137,8 @@ identity does not yet replace Clerk for normal application requests.
 | 0E — Journey causal ledger | Automation holdouts, treatment/control records, state snapshots, database/provider idempotency | Stages 3 and 5 | Foundation done (`aab5903`); full drills pending |
 | 1A — App Bridge bootstrap | Joon loads as an App Bridge-capable embedded document | Stage 1 | Done (`76692d4`) |
 | 1B — Shopify ID-token verification | Backend can reject forged, expired, wrong-app, and cross-shop tokens | Stage 1 | Done (`85eead5`) |
-| 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Next |
-| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; owner/staff roles and multi-store access are explicit | Stage 1 | Pending |
+| 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Done (`a58ec1c`); live Shopify validation remains in 1F |
+| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; owner/staff roles and multi-store access are explicit | Stage 1 | In progress; safe member default implemented in `a58ec1c` |
 | 1E — Shopify-origin install | Install/token exchange works from Shopify without typing a domain or requiring a Clerk session | Stage 1 | Pending |
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
