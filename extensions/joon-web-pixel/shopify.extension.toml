@@ -1,0 +1,23 @@
+type = "web_pixel_extension"
+name = "Joon customer events"
+uid = "7c819f2d-4b31-4ab2-8918-034d3d4b69ef"
+runtime_context = "strict"
+
+[customer_privacy]
+analytics = true
+marketing = true
+preferences = false
+sale_of_data = "disabled"
+
+[settings]
+type = "object"
+
+[settings.fields.endpoint]
+name = "Joon event endpoint"
+description = "HTTPS endpoint that receives consented Shopify customer events"
+type = "single_line_text_field"
+
+[settings.fields.publishableKey]
+name = "Joon publishable key"
+description = "Revocable store identifier; it grants no Shopify Admin access"
+type = "single_line_text_field"

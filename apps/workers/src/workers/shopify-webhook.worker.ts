@@ -204,25 +204,9 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       case "checkouts/create":
       case "checkouts/update": {
         await upsertCheckout(store.id, payload);
-        // Queue cart_abandoned event for unified processing
-        const checkoutPayload = payload as { customer?: { id: number }; total_price?: string };
-        if (checkoutPayload.customer?.id) {
-          const checkoutCustomer = await prisma.customer.findUnique({
-            where: { storeId_externalId: { storeId: store.id, externalId: String(checkoutPayload.customer.id) } },
-            select: { id: true },
-          });
-          if (checkoutCustomer) {
-            await eventReactQueue.add("cart-abandoned", {
-              storeId: store.id,
-              eventType: "cart_abandoned",
-              customerId: checkoutCustomer.id,
-              payload: {
-                totalPrice: checkoutPayload.total_price,
-                source: "shopify_checkout_webhook",
-              },
-            });
-          }
-        }
+        // A created/updated checkout is not abandoned yet. The dedicated
+        // abandoned-cart worker waits for the inactivity threshold, marks the
+        // checkout abandoned, then invokes merchant-approved automations.
         break;
       }
 

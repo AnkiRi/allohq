@@ -15,6 +15,8 @@ export const SHOPIFY_SCOPES = [
   "write_discounts",
   "read_fulfillments",
   "read_inventory",
+  "write_pixels",
+  "read_customer_events",
 ] as const;
 
 /** Webhook topics to register after OAuth */

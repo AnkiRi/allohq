@@ -8,6 +8,7 @@ const {
   syncAllOrders,
   syncAllCollections,
   registerWebhooks,
+  registerWebPixel,
   getShopifyAdminClient,
 } = shopify;
 import { redisConnection, QUEUE_NAMES } from "../config";
@@ -40,6 +41,7 @@ export const syncWorker = new Worker<SyncJobData>(
         shopDomain: true,
         platform: true,
         isActive: true,
+        widgetPublicKey: true,
       },
     });
     if (!store?.isActive) {
@@ -120,6 +122,21 @@ export const syncWorker = new Worker<SyncJobData>(
         console.log(`Webhooks registered: ${webhookResult.registered.length}, errors: ${webhookResult.errors.length}`);
       } catch (err: any) {
         console.warn(`Webhook registration skipped: ${err.message}`);
+      }
+      if (store.widgetPublicKey) {
+        try {
+          const pixel = await registerWebPixel({
+            shopDomain,
+            accessToken,
+            endpoint: webhookBaseUrl,
+            publishableKey: store.widgetPublicKey,
+          });
+          console.log(`Shopify Web Pixel configured: ${pixel.id}`);
+        } catch (err: any) {
+          console.warn(`Shopify Web Pixel registration skipped: ${err.message}`);
+        }
+      } else {
+        console.warn("Shopify Web Pixel registration skipped: store has no publishable key");
       }
     } else {
       console.warn("WEBHOOK_BASE_URL not set, skipping webhook registration");

@@ -1899,6 +1899,8 @@ model BrowseEvent {
 model StorefrontEvent {
   id         String   @id @default(cuid())
   storeId    String
+  source     String   @default("widget")
+  externalEventId String?
   type       String
   visitorId  String?
   sessionId  String?
@@ -1910,6 +1912,7 @@ model StorefrontEvent {
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId, type, occurredAt])
+  @@unique([storeId, source, externalEventId])
   @@index([storeId, visitorId, occurredAt])
   @@index([storeId, sessionId, occurredAt])
   @@map("storefront_events")

@@ -9,7 +9,7 @@ export {
 } from "./oauth";
 export type { ShopifyOfflineToken } from "./oauth";
 export { getShopifyAdminClient } from "./token-manager";
-export { registerWebhooks, verifyWebhookHmac } from "./webhooks";
+export { registerWebhooks, registerWebPixel, verifyWebhookHmac } from "./webhooks";
 export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections } from "./sync";
 export {
   createDiscount, deleteDiscount, getDiscountCode,

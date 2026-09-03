@@ -67,6 +67,47 @@ export async function registerWebhooks(params: {
   return { registered, errors };
 }
 
+/** Create or refresh the consent-aware Shopify Web Pixel for a store. */
+export async function registerWebPixel(params: {
+  shopDomain: string;
+  accessToken: string;
+  endpoint: string;
+  publishableKey: string;
+}): Promise<{ id: string }> {
+  const client = new ShopifyClient(params.shopDomain, params.accessToken);
+  const mutation = `
+    mutation JoonWebPixelCreate($webPixel: WebPixelInput!) {
+      webPixelCreate(webPixel: $webPixel) {
+        webPixel { id }
+        userErrors { field message }
+      }
+    }
+  `;
+  const response = await client.graphql<{
+    webPixelCreate: {
+      webPixel: { id: string } | null;
+      userErrors: Array<{ message: string }>;
+    };
+  }>(mutation, {
+    webPixel: {
+      settings: JSON.stringify({
+        endpoint: params.endpoint.replace(/\/$/, ""),
+        publishableKey: params.publishableKey,
+      }),
+    },
+  });
+  const result = response.webPixelCreate;
+  if (result.userErrors.length) {
+    const message = result.userErrors.map((error) => error.message).join("; ");
+    // A store can have only one instance of an app pixel. Reinstall/sync is
+    // therefore already configured rather than a launch-blocking failure.
+    if (/already|one web pixel/i.test(message)) return { id: "existing" };
+    throw new Error(message);
+  }
+  if (!result.webPixel) throw new Error("Shopify created no web pixel");
+  return result.webPixel;
+}
+
 /**
  * Verify the HMAC signature of an incoming Shopify webhook.
  */

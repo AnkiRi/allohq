@@ -7,6 +7,7 @@ import {
   issueWidgetVisitorToken,
   verifyWidgetVisitorToken,
 } from "../security/widget-visitor-token";
+import { sanitizePixelValue, safePixelTimestamp, SHOPIFY_PIXEL_EVENT_TYPES } from "../storefront-events";
 
 /**
  * REST API endpoints for the customer-facing widget.
@@ -159,7 +160,8 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
 
   const origin =
     typeof req.headers.origin === "string" ? req.headers.origin : undefined;
-  if (!isAllowedWidgetOrigin(origin, store)) {
+  const isShopifyPixelEvent = url === "/v1/shopify-pixel/events";
+  if (!isShopifyPixelEvent && !isAllowedWidgetOrigin(origin, store)) {
     json(res, 403, { error: "Origin is not allowed for this store" });
     return;
   }
@@ -187,6 +189,33 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
+    // Web pixels run in Shopify's strict worker sandbox, where storefront
+    // Origin is unavailable. The revocable key identifies the store and the
+    // Shopify event id provides retry-safe idempotency.
+    if (url === "/v1/shopify-pixel/events" && method === "POST") {
+      const body = await parseBody(req, 64 * 1024);
+      const eventId = shortString(body["id"], 256);
+      const type = shortString(body["name"], 64);
+      const clientId = shortString(body["clientId"], 256);
+      if (!eventId || !type || !SHOPIFY_PIXEL_EVENT_TYPES.has(type)) {
+        json(res, 400, { error: "Invalid Shopify customer event" });
+        return;
+      }
+      const sanitized = sanitizePixelValue(body["data"] ?? {}) as Record<string, unknown>;
+      const event = await prisma.storefrontEvent.upsert({
+        where: { storeId_source_externalEventId: { storeId: store.id, source: "shopify_pixel", externalEventId: eventId } },
+        create: {
+          storeId: store.id, source: "shopify_pixel", externalEventId: eventId,
+          type, visitorId: clientId, sessionId: clientId, customerId: null,
+          data: sanitized as any, occurredAt: safePixelTimestamp(body["timestamp"]),
+        },
+        update: {},
+        select: { id: true },
+      });
+      json(res, 202, { id: event.id });
+      return;
+    }
+
     // The long-lived publishable key is accepted only to bootstrap an
     // origin/store/visitor-bound token. Every operational request below uses
     // the short-lived token, limiting replay and preventing visitor swapping.
