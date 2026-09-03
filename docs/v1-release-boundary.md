@@ -4,7 +4,8 @@ Status: adopted 2026-09-02
 
 ## Product contract
 
-Joon v1 is a free Shopify app for one-off email campaigns:
+Joon v1 is a free Shopify app for email campaigns and merchant-approved email
+automations and journeys:
 
 1. Shopify-origin install and store sync.
 2. Natural-language request becomes a structured draft.
@@ -20,7 +21,8 @@ Hiding navigation is not sufficient.
 ## Explicitly outside v1
 
 - Autopilot or autonomous campaign execution.
-- Automations, journeys, proactive outreach, and scheduled campaign generation.
+- Unapproved automations, legacy adaptive-channel journeys, proactive outreach,
+  and scheduled campaign generation.
 - SMS, WhatsApp, and RCS creation or delivery.
 - Cross-brand intelligence exposed to merchants.
 - Individual-outcome prediction claims.
@@ -64,9 +66,10 @@ Judge.me Email adapter are future options; they do not exist today.
 `V1_RELEASE_MODE=true` must enforce the boundary server-side:
 
 - Register only workers required for Shopify sync, privacy webhooks, approved
-  one-off email delivery, delivery events, and outcome attribution.
+  email campaign/automation delivery, delivery events, and outcome attribution.
 - Reject non-email dispatch at the final provider chokepoint.
-- Reject automation, journey, proactive, scheduled, and autopilot execution.
+- Reject unapproved automation, legacy adaptive-channel journey, proactive,
+  scheduled-generation, and autopilot execution.
 - Require an approval checksum covering content, frozen audience, sender, offer,
   schedule, and holdout configuration.
 - Invalidate approval after any covered field changes.
