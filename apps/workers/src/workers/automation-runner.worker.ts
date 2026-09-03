@@ -17,6 +17,7 @@ import {
   loadAutomationActivationSnapshot,
 } from "@allohq/campaign-engine";
 import { assignArm, getOrCreateExperiment } from "@allohq/customer-state";
+import { acquireEmailCapacity } from "../utils/email-capacity";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -83,7 +84,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
     // Fetch store messaging config for per-store provider selection
     const storeForConfig = await prisma.store.findUnique({
       where: { id: automation.storeId },
-      select: { messagingConfig: true, emailSendingPausedAt: true },
+      select: { messagingConfig: true, emailSendingPausedAt: true, installedAt: true },
     });
     if (storeForConfig?.emailSendingPausedAt) {
       console.log(`[automation-runner] Store ${automation.storeId} email is paused, skipping`);
@@ -360,19 +361,30 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
           // Send via Resend with List-Unsubscribe headers (RFC 2369 + RFC 8058)
           const unsubscribeUrl = variables.unsubscribe_url;
-          const result = await sendEmail({
-            channel: "email",
-            to: customer.email,
-            subject: template.subject,
-            html,
-            from: fromAddress,
-            replyTo: brandSender?.replyToEmail ?? undefined,
-            headers: {
-              "List-Unsubscribe": `<${unsubscribeUrl}>`,
-              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-            },
-            idempotencyKey: deliveryKey,
-          });
+          if (!storeForConfig) throw new Error("Store missing before email delivery");
+          const capacity = await acquireEmailCapacity(automation.storeId, storeForConfig.installedAt);
+          if (!capacity.allowed) {
+            await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${capacity.reason}` } });
+            throw new Error(`Email capacity unavailable: ${capacity.reason}`);
+          }
+          let result;
+          try {
+            result = await sendEmail({
+              channel: "email",
+              to: customer.email,
+              subject: template.subject,
+              html,
+              from: fromAddress,
+              replyTo: brandSender?.replyToEmail ?? undefined,
+              headers: {
+                "List-Unsubscribe": `<${unsubscribeUrl}>`,
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+              },
+              idempotencyKey: deliveryKey,
+            });
+          } finally {
+            await capacity.release();
+          }
 
           // Update MessageLog with result
           if (result.status === "sent") {

@@ -24,6 +24,7 @@ import { getRecommendations, resolveProducts } from "@allohq/product-recommendat
 import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
+import { acquireEmailCapacity } from "../utils/email-capacity";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
@@ -642,8 +643,16 @@ export async function deliverOne(data: DeliverOneData) {
   });
 
   // Demo/sandbox safety: the seeded demo store NEVER hits a real provider.
-  const result =
-    campaign.store?.shopDomain === DEMO_STORE_DOMAIN
+  const capacity = campaign.store?.shopDomain === DEMO_STORE_DOMAIN
+    ? null
+    : await acquireEmailCapacity(campaign.storeId, campaign.store.installedAt);
+  if (capacity && !capacity.allowed) {
+    await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${capacity.reason}` } });
+    throw new Error(`Email capacity unavailable: ${capacity.reason}`);
+  }
+  let result;
+  try {
+    result = campaign.store?.shopDomain === DEMO_STORE_DOMAIN
       ? ({ status: "sent", externalId: `demo-${messageLog.id}`, provider: "demo" } as any)
       : await sendEmail({
           channel: "email",
@@ -655,6 +664,9 @@ export async function deliverOne(data: DeliverOneData) {
           headers: { "List-Unsubscribe": `<${variables.unsubscribe_url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
           idempotencyKey: deliveryKey,
         });
+  } finally {
+    await capacity?.release();
+  }
 
   if (result.status === "sent") {
     await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "sent", externalId: result.externalId, provider: result.provider ?? "resend", sentAt: new Date() } });
