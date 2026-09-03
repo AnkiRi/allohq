@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Store, User, Bell, CreditCard, Sparkles, Check, Activity, MessageSquare, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Store, User, Bell, CreditCard, Sparkles, Activity, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -164,17 +164,6 @@ function TokenUsageSection() {
     </motion.div>
   );
 }
-
-const CHANNELS = [
-  { key: "smsProvider" as const, label: "SMS", desc: "Text messages" },
-  { key: "whatsappProvider" as const, label: "WhatsApp", desc: "WhatsApp Business messages" },
-  { key: "rcsProvider" as const, label: "RCS", desc: "Rich Communication Services" },
-];
-
-const PROVIDERS = [
-  { value: "twilio", label: "Twilio", desc: "Global coverage, US-based" },
-  { value: "gupshup", label: "Gupshup", desc: "India-optimized, DLT compliant" },
-];
 
 const KB_CATEGORIES = [
   { value: "policy", label: "Policy" },
@@ -357,102 +346,6 @@ function KnowledgeBaseSection({ storeId }: { storeId: string }) {
           </div>
         ))}
       </div>
-    </motion.div>
-  );
-}
-
-function MessagingConfigSection({ storeId }: { storeId: string }) {
-  const { toast } = useToast();
-  const utils = trpc.useUtils();
-
-  const { data: config, isLoading } = (trpc.stores as any).getMessagingConfig.useQuery(
-    { storeId },
-    { enabled: !!storeId }
-  ) as { data: { smsProvider: string | null; whatsappProvider: string | null; rcsProvider: string | null } | undefined; isLoading: boolean };
-
-  const updateConfig = (trpc.stores as any).updateMessagingConfig.useMutation({
-    onSuccess: () => {
-      toast("Messaging provider updated.", "success");
-      (utils.stores as any).getMessagingConfig.invalidate({ storeId });
-    },
-    onError: (err: { message?: string }) => toast(err.message || "Couldn't save that. Please try again.", "error"),
-  }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
-
-  if (!storeId) return null;
-
-  return (
-    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <MessageSquare className="w-4 h-4 text-muted-foreground" />
-        <h2 className="section-header accent-bar-left text-[13px]">Messaging providers</h2>
-      </div>
-      <p className="text-[11px] text-muted-foreground mb-5">
-        Pick who delivers each channel for this store. If you leave it on Default, joon uses Twilio.
-      </p>
-
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 glass-skeleton rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {CHANNELS.map((ch) => {
-            const current = config?.[ch.key] ?? null;
-            return (
-              <div key={ch.key}>
-                <label className="block text-[11px] text-muted-foreground font-sans mb-2">
-                  {ch.label} <span className="text-muted-foreground/50">· {ch.desc}</span>
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {/* Default (env/global) option */}
-                  <button
-                    onClick={() => updateConfig.mutate({ storeId, [ch.key]: null })}
-                    disabled={updateConfig.isPending}
-                    className={`relative text-left p-3 rounded-xl transition-all ${
-                      current === null
-                        ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-muted"
-                        : "border border-border bg-muted hover:border-border"
-                    }`}
-                  >
-                    {current === null && (
-                      <div className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--olive)" }}>
-                        <Check className="w-2.5 h-2.5 text-white" />
-                      </div>
-                    )}
-                    <p className="text-[11px] font-bold text-foreground">Default</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Let joon choose</p>
-                  </button>
-                  {PROVIDERS.map((prov) => {
-                    const isSelected = current === prov.value;
-                    return (
-                      <button
-                        key={prov.value}
-                        onClick={() => updateConfig.mutate({ storeId, [ch.key]: prov.value })}
-                        disabled={updateConfig.isPending}
-                        className={`relative text-left p-3 rounded-xl transition-all ${
-                          isSelected
-                            ? "border border-[var(--terracotta)] shadow-[0_0_0_1px_var(--terracotta)] bg-muted"
-                            : "border border-border bg-muted hover:border-border"
-                        }`}
-                      >
-                        {isSelected && (
-                          <div className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--olive)" }}>
-                            <Check className="w-2.5 h-2.5 text-white" />
-                          </div>
-                        )}
-                        <p className="text-[11px] font-bold text-foreground">{prov.label}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{prov.desc}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </motion.div>
   );
 }
@@ -800,7 +693,6 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Messaging Providers */}
-      {storeId && <MessagingConfigSection storeId={storeId} />}
 
       {/* Knowledge Base */}
       {storeId && <KnowledgeBaseSection storeId={storeId} />}

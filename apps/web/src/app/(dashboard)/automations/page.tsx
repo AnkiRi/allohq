@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, Phone, MessageSquare, Radio, FlaskConical, Pencil } from "lucide-react";
+import { Sparkles, Play, Pause, Zap, Loader2, Mail, Palette, FlaskConical, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -61,8 +61,7 @@ export default function AutomationsPage() {
   type Automation = {
     id: string; name: string; description: string | null; status: string;
     category: string; triggerType: string;
-    templateIds: string[]; whatsappTemplateIds: string[];
-    smsTemplateIds: string[]; rcsTemplateIds: string[];
+    templateIds: string[];
     storeId: string;
   };
   const { data: automations, isLoading } = (trpc.automations.list as any).useQuery(
@@ -124,7 +123,7 @@ export default function AutomationsPage() {
             <Sparkles className="w-5 h-5" /> Automations
           </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            {automations ? `${automations.filter((a) => a.status === "active").length} live, ${automations.filter((a) => a.status === "ready").length} ready to go, ${automations.filter((a) => a.status === "generating").length} being written` : "Always-on flows across every channel, handled by joon"}
+            {automations ? `${automations.filter((a) => a.status === "active").length} live, ${automations.filter((a) => a.status === "ready").length} ready to go, ${automations.filter((a) => a.status === "generating").length} being written` : "Email journeys that keep working after you approve them"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -180,7 +179,7 @@ export default function AutomationsPage() {
           <div>
             <p className="text-[13px] font-bold text-foreground">joon is writing your messages…</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-              Drafting email, SMS, WhatsApp, and RCS, usually 30 to 60 seconds per automation.
+              Drafting the emails and timing for this journey, usually 30 to 60 seconds per automation.
             </p>
             <p className="text-[10px] text-warm-gold mt-1">
               You'll see each one update here as it's done.
@@ -206,9 +205,6 @@ export default function AutomationsPage() {
           {automations.map((automation) => {
             const badge = STATUS_BADGES[automation.status] ?? STATUS_BADGES["recommended"]!;
             const emailCount = automation.templateIds.length;
-            const smsCount = automation.smsTemplateIds?.length ?? 0;
-            const whatsappCount = automation.whatsappTemplateIds?.length ?? 0;
-            const rcsCount = automation.rcsTemplateIds?.length ?? 0;
 
             return (
               <motion.div
@@ -228,30 +224,12 @@ export default function AutomationsPage() {
                       </span>
                     </div>
                   </div>
-                  {/* Channel counts + A/B link */}
+                  {/* Email count + experiment link */}
                   <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground font-mono flex-shrink-0 ml-3">
                     <span className="flex items-center gap-1" title="Email templates">
                       <Mail className="w-3 h-3" />
                       {emailCount}
                     </span>
-                    {smsCount > 0 && (
-                      <span className="flex items-center gap-1" title="SMS templates">
-                        <MessageSquare className="w-3 h-3" />
-                        {smsCount}
-                      </span>
-                    )}
-                    {whatsappCount > 0 && (
-                      <span className="flex items-center gap-1" title="WhatsApp templates">
-                        <Phone className="w-3 h-3" />
-                        {whatsappCount}
-                      </span>
-                    )}
-                    {rcsCount > 0 && (
-                      <span className="flex items-center gap-1" title="RCS templates">
-                        <Radio className="w-3 h-3" />
-                        {rcsCount}
-                      </span>
-                    )}
                     <Link
                       href={`/automations/${automation.id}/ab-test`}
                       title="A/B Tests"

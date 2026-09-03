@@ -55,12 +55,8 @@ const EVENT_OPTIONS = [
 
 const ACTION_OPTIONS: { type: WorkflowNode["type"]; label: string; description: string; icon: typeof Mail }[] = [
   { type: "send_email", label: "Send Email", description: "Send an email template", icon: Mail },
-  { type: "send_sms", label: "Send SMS", description: "Send an SMS message", icon: MessageSquare },
-  { type: "send_whatsapp", label: "Send WhatsApp", description: "Send a WhatsApp message", icon: Phone },
-  { type: "send_rcs", label: "Send RCS", description: "Send a rich RCS message", icon: Radio },
   { type: "wait", label: "Wait / Delay", description: "Wait before the next step", icon: Timer },
   { type: "condition", label: "Condition", description: "Branch based on a condition", icon: GitBranch },
-  { type: "webhook", label: "Webhook", description: "Call an external URL", icon: Webhook },
 ];
 
 // ---------------------------------------------------------------------------
@@ -581,18 +577,6 @@ export function WorkflowEditor({
               <div className="flex justify-between">
                 <span>Emails</span>
                 <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_email").length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SMS</span>
-                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_sms").length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>WhatsApp</span>
-                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_whatsapp").length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>RCS</span>
-                <span className="font-mono font-bold text-foreground">{nodes.filter((n) => n.type === "send_rcs").length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Waits</span>

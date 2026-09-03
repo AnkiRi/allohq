@@ -26,7 +26,7 @@ type ResultState = {
 const EXAMPLES: Record<string, string[]> = {
   automations: [
     "Create a win-back flow for inactive customers who spent over ₹500",
-    "Build a welcome series with email, SMS, and WhatsApp",
+    "Build a three-email welcome series",
     "Set up an abandoned cart automation with 20% discount",
   ],
   campaigns: [
@@ -36,7 +36,7 @@ const EXAMPLES: Record<string, string[]> = {
   ],
   templates: [
     "Design a thank-you email for post-purchase follow-up",
-    "Create an SMS template for flash sale notifications",
+    "Create a warm win-back email for dormant customers",
     "Build a promotional email with visual-heavy design",
   ],
   segments: [

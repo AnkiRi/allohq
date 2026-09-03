@@ -184,14 +184,11 @@ export default function AutomationDetailPage() {
       </div>
 
       {/* Automation info */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Category", value: data.category.replace(/_/g, " ").toUpperCase() },
           { label: "Status", value: data.status.toUpperCase() },
           { label: "Emails", value: data.templates.length.toString() },
-          { label: "SMS", value: (data.smsTemplates?.length ?? 0).toString() },
-          { label: "WhatsApp", value: (data.whatsappTemplates?.length ?? 0).toString() },
-          { label: "RCS", value: (data.rcsTemplates?.length ?? 0).toString() },
         ].map((item) => (
           <div key={item.label} className="border border-border rounded-xl p-5 bg-card">
             <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-1">{item.label}</div>

@@ -58,7 +58,7 @@ const WORKLOADS: Array<{
   {
     id: "creative",
     label: "Creative",
-    description: "Email, SMS, WhatsApp and campaign copy",
+    description: "Email subjects, content and campaign copy",
   },
   {
     id: "analysis",

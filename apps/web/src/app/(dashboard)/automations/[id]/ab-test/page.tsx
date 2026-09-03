@@ -34,7 +34,6 @@ const VARIABLE_OPTIONS = [
   { value: "subject_line", label: "Subject Line" },
   { value: "send_time", label: "Send Time" },
   { value: "discount_level", label: "Discount Level" },
-  { value: "channel", label: "Channel" },
   { value: "content", label: "Content" },
 ] as const;
 
