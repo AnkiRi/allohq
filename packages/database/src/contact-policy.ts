@@ -8,6 +8,21 @@ export interface DeliveryPermission {
   detail?: string;
 }
 
+export function marketingPermissionFromState(input: {
+  customerExists: boolean;
+  channel: MarketingChannel;
+  acceptsMarketing: boolean;
+  consent?: { status: string; source: string };
+  suppressionReason?: string;
+}): DeliveryPermission {
+  if (!input.customerExists) return { allowed: false, reason: "customer_missing" };
+  if (input.suppressionReason) return { allowed: false, reason: "suppressed", detail: input.suppressionReason };
+  if (input.consent?.status === "opted_out") return { allowed: false, reason: "opted_out", detail: input.consent.source };
+  if (input.consent?.status === "opted_in") return { allowed: true };
+  if (input.channel === "email" && input.acceptsMarketing) return { allowed: true };
+  return { allowed: false, reason: "consent_missing" };
+}
+
 /**
  * Resolve marketing permission at delivery time.
  *
@@ -40,28 +55,11 @@ export async function getMarketingDeliveryPermission(
     },
   });
 
-  if (!customer) return { allowed: false, reason: "customer_missing" };
-
-  const suppression = customer.contactSuppressions[0];
-  if (suppression) {
-    return {
-      allowed: false,
-      reason: "suppressed",
-      detail: suppression.reason,
-    };
-  }
-
-  const consent = customer.contactConsents[0];
-  if (consent?.status === "opted_out") {
-    return { allowed: false, reason: "opted_out", detail: consent.source };
-  }
-  if (consent?.status === "opted_in") return { allowed: true };
-
-  // Compatibility for pre-migration Shopify email rows only. This can be
-  // removed once every active store has completed a post-migration sync.
-  if (channel === "email" && customer.acceptsMarketing) {
-    return { allowed: true };
-  }
-
-  return { allowed: false, reason: "consent_missing" };
+  return marketingPermissionFromState({
+    customerExists: Boolean(customer),
+    channel,
+    acceptsMarketing: customer?.acceptsMarketing ?? false,
+    consent: customer?.contactConsents[0],
+    suppressionReason: customer?.contactSuppressions[0]?.reason,
+  });
 }
