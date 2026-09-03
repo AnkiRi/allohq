@@ -3,11 +3,11 @@ import { prisma } from "@allohq/database";
 import {
   evaluateTest,
   listAllRunningTests,
-  applyWinner,
   createFollowUpTest,
 } from "@allohq/campaign-engine";
 import { logActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { isV1ReleaseMode } from "@allohq/release-gate";
 
 interface ABTestJobData {
   storeId?: string;
@@ -57,12 +57,8 @@ export const abTestEvaluatorWorker = new Worker<ABTestJobData>(
             `A/B test ${test.id} (${test.name}) auto-concluded: winner=${evaluation.winner}, confidence=${(evaluation.confidence * 100).toFixed(1)}%`,
           );
 
-          // Apply the winning variant to the automation/template
-          try {
-            await applyWinner(test.id);
-          } catch (err: any) {
-            console.error(`Failed to apply winner for test ${test.id}:`, err.message);
-          }
+          // Evaluation may conclude a test, but v1 never mutates approved
+          // content automatically. The merchant applies a winner explicitly.
 
           // Check autonomy config for follow-up test creation
           try {
@@ -94,7 +90,7 @@ export const abTestEvaluatorWorker = new Worker<ABTestJobData>(
                 }
               }
 
-              if (tier === "autopilot") {
+              if (!isV1ReleaseMode() && tier === "autopilot") {
                 // Auto-start the next test
                 const followUp = await createFollowUpTest(
                   test.id,
@@ -152,7 +148,7 @@ export const abTestEvaluatorWorker = new Worker<ABTestJobData>(
                 await logActivity({
                   storeId: concludedTest.storeId,
                   activityType: "ab_test_concluded",
-                  summary: `A/B test "${test.name}" concluded (winner: ${evaluation.winner}). Applied winner and drafted follow-up test "${followUp.name}" for your review.`,
+                  summary: `A/B test "${test.name}" concluded (winner: ${evaluation.winner}). Winner awaits approval; follow-up test "${followUp.name}" was drafted for review.`,
                   category: "ab_testing",
                   tier,
                   actionTaken: "queued_for_review",

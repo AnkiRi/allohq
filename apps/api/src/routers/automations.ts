@@ -697,7 +697,7 @@ export const automationsRouter = router({
         storeId: z.string(),
         automationId: z.string(),
         name: z.string(),
-        variable: z.enum(["subject_line", "send_time", "discount_level", "channel", "content"]),
+        variable: z.literal("subject_line"),
         variantA: z.record(z.unknown()),
         variantB: z.record(z.unknown()),
         splitRatio: z.number().min(0.1).max(0.9).default(0.5),
@@ -705,12 +705,6 @@ export const automationsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (input.variable === "channel") {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Channel experiments are coming later. Email v1 supports subject, timing, offer, and content experiments.",
-        });
-      }
       // Verify the automation belongs to this workspace
       const automation = await ctx.prisma.automation.findFirst({
         where: { id: input.automationId, workspaceId: ctx.workspaceId, storeId: input.storeId },
@@ -800,6 +794,26 @@ export const automationsRouter = router({
 
       const { evaluateTest } = await import("@allohq/campaign-engine");
       return evaluateTest(input.id);
+    }),
+
+  /** Explicit merchant approval required before a winner changes a journey. */
+  applyABTestWinner: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const test = await ctx.prisma.aBTest.findFirst({
+        where: { id: input.id, status: "concluded", winner: { not: null } },
+        include: { store: { select: { workspaceId: true } } },
+      });
+      if (!test || test.store.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "NOT_FOUND" });
+      const { applyWinner } = await import("@allohq/campaign-engine");
+      await applyWinner(test.id);
+      if (test.automationId) {
+        await ctx.prisma.automation.update({
+          where: { id: test.automationId },
+          data: { status: "ready", activationChecksum: null, activatedAt: null },
+        });
+      }
+      return { applied: true, requiresReactivation: Boolean(test.automationId) };
     }),
 
   /** Delete an A/B test */

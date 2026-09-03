@@ -112,18 +112,10 @@ export async function applyWinner(testId: string): Promise<void> {
         });
         if (automation?.nodes) {
           const nodes = (automation.nodes as Array<Record<string, unknown>>) ?? [];
-          for (const node of nodes) {
-            if (node["type"] === "send" || node["type"] === "email") {
-              const nodeConfig = (node["config"] as Record<string, unknown>) ?? {};
-              nodeConfig["subject"] = winningValue;
-              node["config"] = nodeConfig;
-              break;
-            }
-          }
-          await prisma.automation.update({
-            where: { id: test.automationId },
-            data: { nodes: nodes as any },
-          });
+          const sendNode = nodes.find((node) => node["type"] === "send_email");
+          const templateId = (sendNode?.["config"] as Record<string, unknown> | undefined)?.["templateId"];
+          if (typeof templateId !== "string") throw new Error("Winning subject has no email template target");
+          await prisma.emailTemplate.update({ where: { id: templateId }, data: { subject: winningValue } });
         }
       }
       break;

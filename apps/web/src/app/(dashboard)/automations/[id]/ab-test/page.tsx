@@ -32,9 +32,6 @@ const itemVariants = {
 
 const VARIABLE_OPTIONS = [
   { value: "subject_line", label: "Subject Line" },
-  { value: "send_time", label: "Send Time" },
-  { value: "discount_level", label: "Discount Level" },
-  { value: "content", label: "Content" },
 ] as const;
 
 const CHANNEL_OPTIONS = ["email", "sms", "whatsapp", "rcs"];
@@ -311,6 +308,15 @@ export default function ABTestPage() {
     onError: (err: { message?: string }) => toast(err.message || "We couldn't delete that test. Mind trying again?", "error"),
   }) as { mutate: (input: any) => void; isPending: boolean };
 
+  const applyWinnerMut = (trpc.automations.applyABTestWinner as any).useMutation({
+    onSuccess: () => {
+      (utils.automations as any).listABTests.invalidate({ automationId });
+      (utils.automations as any).getById.invalidate({ id: automationId });
+      toast("Winner applied. Review and reactivate the journey before it sends.", "success");
+    },
+    onError: (err: { message?: string }) => toast(err.message || "We couldn't apply that winner.", "error"),
+  }) as { mutate: (input: { id: string }) => void; isPending: boolean };
+
   function resetForm() {
     setShowForm(false);
     setName("");
@@ -381,9 +387,7 @@ export default function ABTestPage() {
   }
 
   function handleApplyWinner(test: ABTestRecord) {
-    // Apply the winning variant config to the automation
-    // This is a placeholder - in production it would update the automation's trigger/node config
-    toast(`Variant ${test.winner?.toUpperCase()} is now the one you're sending.`, "success");
+    applyWinnerMut.mutate({ id: test.id });
   }
 
   function getOpenRate(r: { sent: number; opened: number }) {
@@ -1021,6 +1025,7 @@ export default function ABTestPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleApplyWinner(test)}
+                        disabled={applyWinnerMut.isPending}
                         className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
                       >
                         <CheckCircle className="w-3 h-3" />
