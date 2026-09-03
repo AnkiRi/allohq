@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Message, SendResult } from "../../types";
 import { getDeliveryModeDecision } from "../../delivery-mode";
 import { isTransientProviderError, withProviderRetry } from "../../provider-retry";
+import { htmlToPlainText } from "../../plain-text";
 
 let resendClient: Resend | null = null;
 
@@ -41,6 +42,7 @@ export async function sendEmail(message: Message): Promise<SendResult> {
       to: message.to,
       subject: message.subject || "(No Subject)",
       html: message.html || message.body || "",
+      text: message.text || htmlToPlainText(message.html || message.body || ""),
       ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       ...(message.headers ? { headers: message.headers } : {}),
     };

@@ -24,6 +24,7 @@ export interface Message {
   to: string;
   subject?: string; // email only
   html?: string; // email only
+  text?: string; // explicit plain-text alternative for email
   body?: string; // sms/whatsapp/rcs
   from?: string;
   replyTo?: string;
