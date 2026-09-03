@@ -10,6 +10,11 @@ import type { StoreMessagingConfig } from "@allohq/messaging";
 import { checkAllRules } from "@allohq/communication-governor";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
+import { assertV1EmailAutomation } from "@allohq/release-gate";
+import {
+  automationActivationChecksum,
+  loadAutomationActivationSnapshot,
+} from "@allohq/campaign-engine";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -46,6 +51,18 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
     if (!automation || automation.status !== "active") {
       console.log(`[automation-runner] Automation ${automationId} not active, skipping`);
       return;
+    }
+    assertV1EmailAutomation(automation);
+    const activationSnapshot = await loadAutomationActivationSnapshot(automation.id);
+    const currentChecksum = activationSnapshot
+      ? automationActivationChecksum(activationSnapshot)
+      : null;
+    if (!currentChecksum || currentChecksum !== automation.activationChecksum) {
+      await prisma.automation.update({
+        where: { id: automation.id },
+        data: { status: "paused", activationChecksum: null, activatedAt: null },
+      });
+      throw new Error("Automation changed after activation and was paused for merchant review");
     }
 
     const customer = await prisma.customer.findUnique({

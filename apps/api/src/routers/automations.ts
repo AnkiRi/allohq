@@ -4,6 +4,10 @@ import { verifyWorkspaceObjectAccess } from "../lib/storeAccess";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { assertV1EmailAutomation } from "@allohq/release-gate";
+import {
+  automationActivationChecksum,
+  loadAutomationActivationSnapshot,
+} from "@allohq/campaign-engine";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -206,10 +210,10 @@ export const automationsRouter = router({
         });
         assertV1EmailAutomation({ ...automation, nodes: workflowDef.nodes });
 
-        return ctx.prisma.automation.update({
+        await ctx.prisma.automation.update({
           where: { id: input.id },
           data: {
-            status: "active",
+            status: "ready",
             triggerType: workflowDef.triggerType,
             triggerConfig: workflowDef.triggerConfig as any,
             nodes: workflowDef.nodes as any,
@@ -217,11 +221,25 @@ export const automationsRouter = router({
         });
       }
 
-      assertV1EmailAutomation(automation);
-
-      return ctx.prisma.automation.update({
-        where: { id: input.id },
-        data: { status: "active" },
+      const current = await ctx.prisma.automation.findUniqueOrThrow({ where: { id: input.id } });
+      assertV1EmailAutomation(current);
+      const snapshot = await loadAutomationActivationSnapshot(input.id);
+      if (!snapshot) throw new TRPCError({ code: "NOT_FOUND" });
+      const activationChecksum = automationActivationChecksum(snapshot);
+      const version = current.activeVersion + 1;
+      return ctx.prisma.$transaction(async (tx) => {
+        await tx.automationVersion.create({
+          data: {
+            automationId: input.id,
+            version,
+            activationChecksum,
+            snapshot: snapshot as any,
+          },
+        });
+        return tx.automation.update({
+          where: { id: input.id },
+          data: { status: "active", activationChecksum, activatedAt: new Date(), activeVersion: version },
+        });
       });
     }),
 
@@ -250,6 +268,15 @@ export const automationsRouter = router({
       if (!automation) throw new TRPCError({ code: "NOT_FOUND", message: "Automation must be paused to resume" });
       assertV1EmailAutomation(automation);
 
+      const snapshot = await loadAutomationActivationSnapshot(input.id);
+      const checksum = snapshot ? automationActivationChecksum(snapshot) : null;
+      if (!checksum || checksum !== automation.activationChecksum) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This journey changed after approval. Review and activate it again.",
+        });
+      }
+
       return ctx.prisma.automation.update({
         where: { id: input.id },
         data: { status: "active" },
@@ -266,7 +293,9 @@ export const automationsRouter = router({
         triggerType: z.enum(["event", "schedule", "segment_entry", "segment_exit"]).optional(),
         triggerConfig: z.any().optional(),
         nodes: z.any().optional(),
-        status: z.enum(["draft", "ready", "active", "paused"]).optional(),
+        // Activation is deliberately available only through `activate`, which
+        // creates the immutable version snapshot and checksum.
+        status: z.enum(["draft", "ready", "paused"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -281,9 +310,15 @@ export const automationsRouter = router({
         nodes: data.nodes ?? automation.nodes,
       });
 
+      const materialChange = data.name !== undefined || data.nodes !== undefined || data.triggerType !== undefined || data.triggerConfig !== undefined;
       return ctx.prisma.automation.update({
         where: { id },
-        data,
+        data: {
+          ...data,
+          ...(materialChange
+            ? { status: "ready", activationChecksum: null, activatedAt: null }
+            : {}),
+        },
       });
     }),
 
