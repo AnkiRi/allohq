@@ -6,6 +6,7 @@ import { checkRateLimit, checkDemoLLMLimit } from "./middleware/rate-limit";
 import { verifyStoreAccess } from "./lib/storeAccess";
 import { verifyShopifyIdToken } from "./auth/shopify-id-token";
 import { resolveShopifyIdentity } from "./auth/resolve-shopify-identity";
+import { isProtectedDataRoute, protectedDataAuditRecord } from "./lib/protected-data-audit";
 
 /**
  * Context creation for tRPC
@@ -281,7 +282,13 @@ export const workspaceProcedure = protectedProcedure
       });
     }
   }
-  return next();
+  const result = await next();
+  if (result.ok && ctx.workspaceId && isProtectedDataRoute(path)) {
+    console.info(JSON.stringify(protectedDataAuditRecord({
+      path, userId: ctx.userId, workspaceId: ctx.workspaceId, authSource: ctx.authSource,
+    })));
+  }
+  return result;
 });
 
 /**
