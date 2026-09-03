@@ -672,6 +672,12 @@ export const automationsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.variable === "channel") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Channel experiments are coming later. Email v1 supports subject, timing, offer, and content experiments.",
+        });
+      }
       // Verify the automation belongs to this workspace
       const automation = await ctx.prisma.automation.findFirst({
         where: { id: input.automationId, workspaceId: ctx.workspaceId, storeId: input.storeId },

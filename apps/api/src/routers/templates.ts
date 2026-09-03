@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { assertChannelAllowed } from "@allohq/release-gate";
 import { renderBrandedEmail, complete } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
 
@@ -198,6 +199,7 @@ export const templatesRouter = router({
       variables: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertChannelAllowed("sms", "template creation");
       return ctx.prisma.smsTemplate.create({
         data: {
           workspaceId: ctx.workspaceId,
@@ -216,6 +218,7 @@ export const templatesRouter = router({
       variables: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertChannelAllowed("sms", "template update");
       const { id, ...rest } = input;
       const template = await ctx.prisma.smsTemplate.findFirst({
         where: { id, workspaceId: ctx.workspaceId },
@@ -265,6 +268,7 @@ export const templatesRouter = router({
       category: z.enum(["MARKETING", "UTILITY", "AUTHENTICATION"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertChannelAllowed("whatsapp", "template creation");
       return ctx.prisma.whatsAppTemplate.create({
         data: {
           workspaceId: ctx.workspaceId,
@@ -294,6 +298,7 @@ export const templatesRouter = router({
       variables: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertChannelAllowed("whatsapp", "template update");
       const { id, ...rest } = input;
       const template = await ctx.prisma.whatsAppTemplate.findFirst({
         where: { id, workspaceId: ctx.workspaceId },
@@ -348,6 +353,7 @@ export const templatesRouter = router({
       variables: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertChannelAllowed("rcs", "template creation");
       return ctx.prisma.rcsTemplate.create({
         data: {
           workspaceId: ctx.workspaceId,
@@ -372,6 +378,7 @@ export const templatesRouter = router({
       variables: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertChannelAllowed("rcs", "template update");
       const { id, ...rest } = input;
       const template = await ctx.prisma.rcsTemplate.findFirst({
         where: { id, workspaceId: ctx.workspaceId },
