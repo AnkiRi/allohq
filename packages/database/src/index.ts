@@ -37,6 +37,7 @@ export {
   assertDataEncryptionConfigured,
 } from "./secrets";
 export { getMarketingDeliveryPermission } from "./contact-policy";
+export { emailDomain, requireVerifiedSenderDomain } from "./sender-domain";
 export type {
   DeliveryPermission,
   MarketingChannel,

@@ -209,7 +209,9 @@ export default function CampaignDetailPage() {
               </div>
               <div className="mt-4 pt-4 border-t border-border flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Sender</span>
-                <span className="font-medium">{dryRun.sender ?? "Sending domain not configured"}</span>
+                <span className="font-medium">
+                  {dryRun.sender ?? "Sending address not configured"} · {dryRun.senderDomain?.status ?? "domain not configured"}
+                </span>
               </div>
             </>
           )}

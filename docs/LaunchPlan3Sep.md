@@ -91,8 +91,10 @@ Known caveats:
 - `shopify.app.example.toml` exists, but no linked/deployed
   `shopify.app.toml` exists.
 - `read_all_orders` remains requested and must be removed or justified.
-- Sending-domain onboarding is not implemented.
-- There is no canonical campaign-and-automation dry-run audience report.
+- Sending-domain onboarding and live-send verification are implemented in code;
+  provider DNS validation in a production environment remains.
+- Campaign preview and dispatch share a canonical audience resolver and dry-run
+  report. Automation preflight still needs to converge on the same report.
 - Tone is captured as a feature/variant; outcomes do not yet change future tone
   selection. Do not call this tone learning.
 - Two send-time implementations exist. The scheduled optimizer cannot be
@@ -141,8 +143,8 @@ identity does not yet replace Clerk for normal application requests.
 | 1A — App Bridge bootstrap | Joon loads as an App Bridge-capable embedded document | Stage 1 | Done (`76692d4`) |
 | 1B — Shopify ID-token verification | Backend can reject forged, expired, wrong-app, and cross-shop tokens | Stage 1 | Done (`85eead5`) |
 | 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Done (`a58ec1c`); live Shopify validation remains in 1F |
-| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; first verified session on a fresh install claims admin once, later staff default to member | Stage 1 | Code path done (pending commit); multi-store/live validation remains in 1F |
-| 1E — Shopify-origin install | OAuth callback creates/reuses the shop tenant without a Clerk cookie; token exchange and encrypted persistence work | Stage 1 | Code done (pending commit); live Shopify validation remains in 1F |
+| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; first verified session on a fresh install claims admin once, later staff default to member | Stage 1 | Code path done (`b1632f7`); multi-store/live validation remains in 1F |
+| 1E — Shopify-origin install | OAuth callback creates/reuses the shop tenant without a Clerk cookie; token exchange and encrypted persistence work | Stage 1 | Code done (`b1632f7`); live Shopify validation remains in 1F |
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
 | 1H — Customer-event pixel | Consent-aware Shopify Web Pixel captures page/product/collection/search/cart/checkout events with data minimization and event-id dedupe | Stages 1 and 3 | Code done (`bd00a2c`); Shopify-linked extension deploy/live validation remains in 1G/1F |
@@ -150,11 +152,11 @@ identity does not yet replace Clerk for normal application requests.
 | 2B — Level 2 evidence | Data inventory, minimization, access logging, retention/deletion evidence and Dashboard request | Stage 2 | Pending; Dashboard submission is founder-owned |
 | 2C — Public trust surface | Privacy Policy, ToS, DPA, subprocessors and support policy published | Stage 2 | Pending |
 | 2D — Review/listing pack | Free plan, icon, screenshots, copy, reviewer store/instructions and screencast | Stage 2 | Pending |
-| 3A — Canonical audience resolver | Campaign preview and campaign dispatch use one eligibility/exclusion decision service; automation converges at its delivery permission/governor boundary | Stage 3 | Campaign path done (pending commit); automation preflight remains |
-| 3B — Dry-run report | Requested/eligible audience, mutually exclusive exclusions with samples, treatment/control estimate and sender shown before send with zero provider calls | Stage 3 | Core API + merchant UI done (pending commit); frozen snapshot, offer/cost/domain state remain |
+| 3A — Canonical audience resolver | Campaign preview and campaign dispatch use one eligibility/exclusion decision service; automation converges at its delivery permission/governor boundary | Stage 3 | Campaign path done (`3a2025d`); automation preflight remains |
+| 3B — Dry-run report | Requested/eligible audience, mutually exclusive exclusions with samples, treatment/control estimate and sender shown before send with zero provider calls | Stage 3 | Core API + merchant UI done (`3a2025d`); frozen snapshot and offer/cost state remain |
 | 3C — Margin-risk moment | Evidence-backed “already bought / margin at risk” recommendation appears before approval | Stage 3 and GTM | Pending |
 | 3D — Event-trigger semantics | Identified Shopify events enter only active merchant-approved journeys; retries dedupe but genuinely later events can retrigger | Stage 3 | Done (`7d3fde4`); anonymous events remain analysis-only by design |
-| 4A — Sender-domain onboarding | SPF/DKIM/DMARC states and verified sender identity gate live delivery | Stage 4 | Pending |
+| 4A — Sender-domain onboarding | Provider DNS records/status are displayed and refreshed; campaign and automation workers require a verified From domain before live delivery | Stage 4 | Code done in current slice; production provider/DNS validation remains |
 | 4B — Distributed limits | Atomic daily caps, store concurrency, new-store ramp and provider throttles | Stage 4 | Pending |
 | 4C — Deliverability automation | Bounce/complaint/rejection/volume thresholds pause safely | Stage 4 | Partially done; complete after 4A/4B |
 | 5A — Failure harness | Repeatable provider, queue, database, webhook, approval and consent failure drills | Stage 5 | Pending |
@@ -163,7 +165,7 @@ identity does not yet replace Clerk for normal application requests.
 | 6A — Timing consolidation | One timezone-correct send-time learner with evidence thresholds and honest defaults | Stage 6 | Pending |
 | 6B — Content feedback loop | Approved experiment winners can influence later selection with an audit trail | Stage 6 | Pending |
 | 6C — Claim audit | Remove channel/tone-learning claims until implemented and proven | Stage 6 | Pending |
-| 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (pending commit); broader copy audit remains in 6C |
+| 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (`cf81919`); broader copy audit remains in 6C |
 | 6D — First-run smart segments | Shopify taxonomy + catalog signals normalize into 20 verticals; verified purchase affinities and behavior segments refresh immediately after RFM | Stage 6 | Done (`1497757`); live-catalog validation remains in Stage 5 |
 | 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Pending/in parallel |
 | 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Pending |

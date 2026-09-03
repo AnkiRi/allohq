@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Store, ShoppingBag, ArrowRight, Check, X, Loader2, Mail, BarChart3, MessageSquare, Bell } from "lucide-react";
+import { Store, ShoppingBag, ArrowRight, Check, X, Loader2, Mail, BarChart3, MessageSquare, Bell, RefreshCw, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 
@@ -71,6 +71,53 @@ const analyticsPlatforms = [
     status: "coming_soon" as const,
   },
 ];
+
+function SenderDomainSetup({ storeId }: { storeId: string }) {
+  const utils = trpc.useUtils();
+  // This router returns provider DNS JSON. Keep that untyped boundary local so
+  // tRPC does not recursively infer every provider record shape into the page.
+  const senderDomains = (trpc as any).senderDomains;
+  const [domain, setDomain] = useState("");
+  const { data, isLoading } = senderDomains.get.useQuery({ storeId });
+  const invalidate = () => (utils as any).senderDomains.get.invalidate({ storeId });
+  const configure = senderDomains.configure.useMutation({ onSuccess: invalidate });
+  const verify = senderDomains.verify.useMutation({ onSuccess: invalidate });
+  const refresh = senderDomains.refresh.useMutation({ onSuccess: invalidate });
+  const records = Array.isArray(data?.dnsRecords) ? data.dnsRecords as Array<Record<string, unknown>> : [];
+
+  return (
+    <div className="border border-border rounded-xl p-5 bg-card">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-[13px] font-semibold"><ShieldCheck className="w-4 h-4" /> Sending domain</div>
+          <p className="text-[11px] text-muted-foreground mt-1">Required before Joon can enter live delivery mode.</p>
+        </div>
+        {data && <span className="text-[10px] uppercase font-bold tracking-wide">{data.status.replaceAll("_", " ")}</span>}
+      </div>
+      {isLoading ? <Loader2 className="w-4 h-4 animate-spin mt-4" /> : !data ? (
+        <div className="flex gap-2 mt-4">
+          <input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="updates.yourbrand.com" className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-[12px]" />
+          <button disabled={!domain || configure.isPending} onClick={() => configure.mutate({ storeId, domain })} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-[11px] disabled:opacity-50">Set up DNS</button>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <div className="text-[12px] font-mono">{data.domain}</div>
+          {records.map((record, index) => (
+            <div key={`${String(record.name)}-${index}`} className="grid grid-cols-[70px_1fr_2fr] gap-3 text-[10px] font-mono border-t border-border pt-2">
+              <span>{String(record.type ?? record.record ?? "DNS")}</span>
+              <span className="break-all">{String(record.name ?? "")}</span>
+              <span className="break-all text-muted-foreground">{String(record.value ?? "")}</span>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => verify.mutate({ storeId })} disabled={verify.isPending || data.status === "verified"} className="px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-[11px] disabled:opacity-50">I added the records</button>
+            <button onClick={() => refresh.mutate({ storeId })} disabled={refresh.isPending} className="px-3 py-2 rounded-lg border border-border text-[11px] flex items-center gap-1.5"><RefreshCw className="w-3 h-3" /> Refresh</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function IntegrationsPage() {
   const [showDialog, setShowDialog] = useState(false);
@@ -153,8 +200,8 @@ export default function IntegrationsPage() {
             Connected Stores
           </h2>
           {connectedShopifyStores.map((store: any) => (
+            <div key={store.id} className="space-y-3">
             <motion.a
-              key={store.id}
               href="/integrations/shopify"
               className="flex items-center justify-between p-5 glass-card rounded-xl group"
               variants={itemVariants}
@@ -181,6 +228,8 @@ export default function IntegrationsPage() {
                 <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
               </div>
             </motion.a>
+            <SenderDomainSetup storeId={store.id} />
+            </div>
           ))}
         </motion.div>
       )}

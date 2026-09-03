@@ -142,6 +142,27 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
       }
     }
 
+    if (eventType === "domain.updated" && data?.id) {
+      const status = String(data.status ?? "pending");
+      await prisma.senderDomain.updateMany({
+        where: { externalId: String(data.id) },
+        data: {
+          status,
+          dnsRecords: Array.isArray(data.records) ? data.records : undefined,
+          lastCheckedAt: new Date(),
+          verifiedAt: status === "verified" ? new Date() : null,
+          error: status === "failed" || status === "temporary_failure" ? status : null,
+        },
+      });
+      await prisma.providerWebhookEvent.update({
+        where: { provider_eventId: { provider: "resend", eventId: svixId } },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      res.writeHead(200);
+      res.end("OK");
+      return;
+    }
+
     if (!data?.email_id) {
       await prisma.providerWebhookEvent.update({
         where: {

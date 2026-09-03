@@ -3,6 +3,7 @@ import {
   prisma,
   messagingCostFor,
   getMarketingDeliveryPermission,
+  requireVerifiedSenderDomain,
 } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit, getOptimalSendTime, planCustomerDelivery } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
@@ -627,6 +628,7 @@ export async function deliverOne(data: DeliverOneData) {
     brandSender?.fromName && brandSender?.fromEmail
       ? `${brandSender.fromName} <${brandSender.fromEmail}>`
       : brandSender?.fromEmail || process.env["RESEND_FROM_EMAIL"] || "noreply@allohq.com";
+  await requireVerifiedSenderDomain(campaign.storeId, fromAddress);
   const html = await renderBrandedEmail({
     storeId: campaign.storeId,
     brandKit,

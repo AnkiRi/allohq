@@ -20,7 +20,16 @@ export const campaignsRouter = router({
     .query(async ({ ctx, input }) => {
       const campaign = await ctx.prisma.campaign.findFirst({
         where: { id: input.id, workspaceId: ctx.workspaceId },
-        include: { template: { select: { subject: true, previewText: true } }, store: { select: { storeEmail: true, emailSendingPausedAt: true } } },
+        include: {
+          template: { select: { subject: true, previewText: true } },
+          store: {
+            select: {
+              storeEmail: true, emailSendingPausedAt: true,
+              senderDomain: { select: { domain: true, status: true } },
+              brandProfiles: { take: 1, select: { fromName: true, fromEmail: true } },
+            },
+          },
+        },
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
       if (!campaign.template) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
@@ -37,7 +46,8 @@ export const campaignsRouter = router({
         exclusionSamples: audience.samples,
         subject: campaign.template.subject,
         previewText: campaign.template.previewText,
-        sender: campaign.store.storeEmail,
+        sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,
+        senderDomain: campaign.store.senderDomain,
         storePaused: Boolean(campaign.store.emailSendingPausedAt),
       };
     }),

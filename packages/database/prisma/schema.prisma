@@ -314,6 +314,7 @@ model Store {
 
   // Product-Based Smart Segments
   productSegments ProductSegment[]
+  senderDomain SenderDomain?
 
   // Basket Intelligence
   basketArchetypes BasketArchetype[]
@@ -325,6 +326,24 @@ model Store {
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
+}
+
+model SenderDomain {
+  id            String    @id @default(cuid())
+  storeId       String    @unique
+  domain        String
+  provider      String    @default("resend")
+  externalId    String?   @unique
+  status        String    @default("not_started")
+  dnsRecords    Json      @default("[]")
+  error         String?
+  lastCheckedAt DateTime?
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@index([status])
+  @@map("sender_domains")
 }
 
 // ============================================================================

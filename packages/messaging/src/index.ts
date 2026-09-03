@@ -23,6 +23,7 @@ export {
   getUnsubscribeUrl,
 } from "./unsubscribe";
 export type { UnsubscribeChannel } from "./unsubscribe";
+export { createSenderDomain, getSenderDomain, requestSenderDomainVerification } from "./sender-domains";
 export {
   getDeliveryModeDecision,
   getMessagingSendMode,

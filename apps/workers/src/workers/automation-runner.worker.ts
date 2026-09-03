@@ -2,6 +2,7 @@ import { Worker, Queue } from "bullmq";
 import {
   prisma,
   getMarketingDeliveryPermission,
+  requireVerifiedSenderDomain,
 } from "@allohq/database";
 import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
@@ -348,6 +349,15 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             },
           });
 
+          const brandSender = await prisma.brandProfile.findFirst({
+            where: { storeId: automation.storeId },
+            select: { fromName: true, fromEmail: true, replyToEmail: true },
+          });
+          const fromAddress = brandSender?.fromName && brandSender?.fromEmail
+            ? `${brandSender.fromName} <${brandSender.fromEmail}>`
+            : brandSender?.fromEmail ?? process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com";
+          await requireVerifiedSenderDomain(automation.storeId, fromAddress);
+
           // Send via Resend with List-Unsubscribe headers (RFC 2369 + RFC 8058)
           const unsubscribeUrl = variables.unsubscribe_url;
           const result = await sendEmail({
@@ -355,7 +365,8 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             to: customer.email,
             subject: template.subject,
             html,
-            from: process.env["RESEND_FROM_EMAIL"] ?? "noreply@allohq.com",
+            from: fromAddress,
+            replyTo: brandSender?.replyToEmail ?? undefined,
             headers: {
               "List-Unsubscribe": `<${unsubscribeUrl}>`,
               "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
