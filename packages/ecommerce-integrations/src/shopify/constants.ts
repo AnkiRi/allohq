@@ -6,10 +6,6 @@ export const SHOPIFY_SCOPES = [
   "read_products",
   "read_customers",
   "read_orders",
-  // Retention, LTV, repurchase cycles, and historical holdout baselines require
-  // more than Shopify's default recent-order window. Public distribution must
-  // justify and receive approval for this scope before review.
-  "read_all_orders",
   "read_checkouts",
   "read_discounts",
   "write_discounts",

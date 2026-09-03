@@ -90,7 +90,8 @@ Known caveats:
   compliant Shopify-embedded identity flow.
 - `shopify.app.example.toml` exists, but no linked/deployed
   `shopify.app.toml` exists.
-- `read_all_orders` remains requested and must be removed or justified.
+- `read_all_orders` is removed for public v1; onboarding uses Shopify's standard
+  order window and Joon's longitudinal ledger compounds from installation.
 - Sending-domain onboarding and live-send verification are implemented in code;
   provider DNS validation in a production environment remains.
 - Campaign preview and dispatch share a canonical audience resolver and dry-run
@@ -147,7 +148,7 @@ identity does not yet replace Clerk for normal application requests.
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
 | 1H — Customer-event pixel | Consent-aware Shopify Web Pixel captures page/product/collection/search/cart/checkout events with data minimization and event-id dedupe | Stages 1 and 3 | Code done (`bd00a2c`); Shopify-linked extension deploy/live validation remains in 1G/1F |
-| 2A — Scope audit | Exhaustive GraphQL sweep; remove or justify `read_all_orders` and every protected field | Stage 2 | Pending |
+| 2A — Scope audit | Operational Shopify calls are GraphQL Admin 2026-07; `read_all_orders` and write access to orders/products/customers are excluded, with a scope regression test | Stage 2 | Code audit done in current slice; Partner Dashboard scope synchronization remains in 1G |
 | 2B — Level 2 evidence | Data inventory, minimization, access logging, retention/deletion evidence and Dashboard request | Stage 2 | Pending; Dashboard submission is founder-owned |
 | 2C — Public trust surface | Privacy Policy, ToS, DPA, subprocessors and support policy published | Stage 2 | Pending |
 | 2D — Review/listing pack | Free plan, icon, screenshots, copy, reviewer store/instructions and screencast | Stage 2 | Pending |
