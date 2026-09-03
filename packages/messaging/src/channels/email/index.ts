@@ -2,21 +2,7 @@ import { Resend } from "resend";
 import { randomUUID } from "node:crypto";
 import type { Message, SendResult } from "../../types";
 import { getDeliveryModeDecision } from "../../delivery-mode";
-
-/** Simple retry for transient API failures */
-async function withEmailRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
-  let lastError: Error | undefined;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt >= maxRetries) break;
-      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
-    }
-  }
-  throw lastError;
-}
+import { isTransientProviderError, withProviderRetry } from "../../provider-retry";
 
 let resendClient: Resend | null = null;
 
@@ -58,22 +44,17 @@ export async function sendEmail(message: Message): Promise<SendResult> {
       ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       ...(message.headers ? { headers: message.headers } : {}),
     };
-    const { data, error } = await withEmailRetry(() =>
-      message.idempotencyKey
+    const { data } = await withProviderRetry(async () => {
+      const response = await (message.idempotencyKey
         ? client.emails.send(payload, {
             idempotencyKey: message.idempotencyKey,
           })
-        : client.emails.send(payload)
-    );
-
-    if (error) {
-      return {
-        messageId,
-        channel: "email",
-        status: "failed",
-        error: error.message || "Unknown Resend error",
-      };
-    }
+        : client.emails.send(payload));
+      if (response.error) {
+        throw Object.assign(new Error(response.error.message || "Unknown Resend error"), { name: response.error.name });
+      }
+      return response;
+    });
 
     return {
       messageId,
@@ -91,6 +72,7 @@ export async function sendEmail(message: Message): Promise<SendResult> {
       status: "failed",
       error: errorMessage,
       provider: "resend",
+      retryable: isTransientProviderError(err),
     };
   }
 }

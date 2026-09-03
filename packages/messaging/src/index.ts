@@ -24,6 +24,7 @@ export {
 } from "./unsubscribe";
 export type { UnsubscribeChannel } from "./unsubscribe";
 export { createSenderDomain, getSenderDomain, requestSenderDomainVerification } from "./sender-domains";
+export { isTransientProviderError, withProviderRetry } from "./provider-retry";
 export {
   getDeliveryModeDecision,
   getMessagingSendMode,

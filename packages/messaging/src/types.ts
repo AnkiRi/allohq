@@ -13,6 +13,8 @@ export interface SendResult {
   externalId?: string;
   error?: string;
   provider?: Provider;
+  /** Whether a queue retry can plausibly succeed without changing the message. */
+  retryable?: boolean;
 }
 
 export type ProviderSendFn = (message: Message) => Promise<SendResult>;

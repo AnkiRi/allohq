@@ -679,7 +679,8 @@ export async function deliverOne(data: DeliverOneData) {
   }
   await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "failed", provider: result.provider ?? "resend", error: result.error } });
   console.error(`  [SEND] Failed for ${customer.email}: ${result.error}`);
-  throw new Error(result.error ?? "Email provider failed");
+  if (result.retryable) throw new Error(result.error ?? "Transient email provider failure");
+  return { sent: false, failed: true, retryable: false, error: result.error };
 }
 
 // ---------------------------------------------------------------------------
