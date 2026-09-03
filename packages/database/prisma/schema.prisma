@@ -27,8 +27,29 @@ model User {
   updatedAt DateTime @updatedAt
 
   workspaceMembers WorkspaceMember[]
+  shopifyIdentities ShopifyStaffIdentity[]
 
   @@map("users")
+}
+
+/// Maps a Shopify Admin staff identity to a Joon user inside one installed
+/// store. The App Bridge ID token supplies shopifyUserId; roles continue to
+/// live on WorkspaceMember so Shopify auth cannot bypass Joon authorization.
+model ShopifyStaffIdentity {
+  id            String   @id @default(cuid())
+  storeId       String
+  userId        String
+  shopifyUserId String
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, shopifyUserId])
+  @@index([userId])
+  @@map("shopify_staff_identities")
 }
 
 model Workspace {
@@ -217,6 +238,7 @@ model Store {
   defaultContributionMargin Float? @default(0.6)
 
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shopifyStaffIdentities ShopifyStaffIdentity[]
   products      Product[]
   customers     Customer[]
   orders        Order[]

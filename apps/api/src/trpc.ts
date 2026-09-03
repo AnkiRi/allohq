@@ -4,6 +4,8 @@ import { prisma, DEMO_HEADER, getDemoWorkspaceId } from "@allohq/database";
 import { verifyToken } from "@clerk/backend";
 import { checkRateLimit, checkDemoLLMLimit } from "./middleware/rate-limit";
 import { verifyStoreAccess } from "./lib/storeAccess";
+import { verifyShopifyIdToken } from "./auth/shopify-id-token";
+import { resolveShopifyIdentity } from "./auth/resolve-shopify-identity";
 
 /**
  * Context creation for tRPC
@@ -20,8 +22,29 @@ export async function createContext(opts: { req?: any; res?: any }) {
   let userId: string | null = null;
   let workspaceId: string | null = null;
   let isDemo = false;
+  let authSource: "clerk" | "shopify" | "demo" | null = null;
 
   if (token) {
+    const shopifyApiKey = process.env.SHOPIFY_API_KEY;
+    const shopifyApiSecret = process.env.SHOPIFY_API_SECRET;
+    if (shopifyApiKey && shopifyApiSecret) {
+      try {
+        const identity = verifyShopifyIdToken(token, {
+          apiKey: shopifyApiKey,
+          apiSecret: shopifyApiSecret,
+        });
+        const resolved = await resolveShopifyIdentity(identity);
+        userId = resolved.userId;
+        workspaceId = resolved.workspaceId;
+        authSource = "shopify";
+      } catch {
+        // Not a valid/authorized Shopify token. It may still be a Clerk token;
+        // Clerk verification below remains the standalone authentication path.
+      }
+    }
+  }
+
+  if (token && !userId) {
     try {
       const payload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY!,
@@ -42,6 +65,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
         ],
       });
       userId = payload.sub;
+      authSource = "clerk";
 
       // Get user's workspace (for now, just get the first one)
       let user = await prisma.user.findUnique({
@@ -106,6 +130,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
     // Resolve Vana by its STABLE slug (portable across dev/prod), not a cuid.
     workspaceId = await getDemoWorkspaceId(prisma);
     isDemo = true;
+    authSource = "demo";
   }
 
   // Best-effort client IP, for per-IP rate limiting of the demo's costly
@@ -121,6 +146,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
     userId,
     workspaceId,
     isDemo,
+    authSource,
     clientIp,
   };
 }

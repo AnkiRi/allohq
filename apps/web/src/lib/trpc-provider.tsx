@@ -5,6 +5,7 @@ import { httpBatchLink } from "@trpc/client";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { trpc } from "./trpc";
+import { getShopifyIdToken, isEmbeddedShopifyApp } from "./shopify-app-bridge";
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
   const { getToken, isSignedIn } = useAuth();
@@ -41,6 +42,15 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         httpBatchLink({
           url: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
           async headers() {
+            // Inside Shopify Admin, authenticate the current staff session with
+            // a fresh App Bridge ID token. Never cache it: Shopify tokens expire
+            // after roughly one minute.
+            if (isEmbeddedShopifyApp()) {
+              const shopifyToken = await getShopifyIdToken();
+              if (shopifyToken) {
+                return { authorization: `Bearer ${shopifyToken}` };
+              }
+            }
             // Auth status is the source of truth for demo vs real:
             //  • signed IN  → send the Bearer token only. NEVER the demo header,
             //    so an authenticated user is always real (never Vana), even with
