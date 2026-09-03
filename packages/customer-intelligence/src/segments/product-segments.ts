@@ -1,4 +1,5 @@
 import { prisma } from "@allohq/database";
+import { classifyCommerceCategory } from "./commerce-categories";
 
 export interface ProductSegmentDefinition {
   name: string;
@@ -35,7 +36,7 @@ export async function discoverProductSegments(storeId: string): Promise<{
   // 2. Get product metadata for category info
   const products = await prisma.product.findMany({
     where: { storeId },
-    select: { id: true, title: true, productType: true, vendor: true, price: true },
+    select: { id: true, title: true, productType: true, taxonomyCategoryName: true, vendor: true, price: true },
   });
 
   const productMap = new Map(products.map(p => [p.id, p]));
@@ -43,6 +44,7 @@ export async function discoverProductSegments(storeId: string): Promise<{
   // 3. Build customer purchase profiles
   const customerProfiles = new Map<string, {
     productTypes: Map<string, number>;
+    commerceCategories: Map<string, { label: string; quantity: number }>;
     productIds: Set<string>;
     orderCount: number;
     totalSpent: number;
@@ -58,6 +60,7 @@ export async function discoverProductSegments(storeId: string): Promise<{
     if (!profile) {
       profile = {
         productTypes: new Map(),
+        commerceCategories: new Map(),
         productIds: new Set(),
         orderCount: 0,
         totalSpent: 0,
@@ -79,6 +82,11 @@ export async function discoverProductSegments(storeId: string): Promise<{
         if (product?.productType) {
           const current = profile.productTypes.get(product.productType) || 0;
           profile.productTypes.set(product.productType, current + item.quantity);
+        }
+        const category = product && classifyCommerceCategory(product.taxonomyCategoryName, product.productType, product.title);
+        if (category) {
+          const current = profile.commerceCategories.get(category.key)?.quantity ?? 0;
+          profile.commerceCategories.set(category.key, { label: category.label, quantity: current + item.quantity });
         }
       }
     }
@@ -122,7 +130,27 @@ export async function discoverProductSegments(storeId: string): Promise<{
     memberships.set(slug, customerIds);
   }
 
-  // B) Behavior-based segments
+  // B) Normalized commerce-category affinities. Unlike merchant-entered
+  // product types, these names stay useful and comparable across catalogs.
+  const commerceCategoryCustomers = new Map<string, { label: string; customerIds: string[] }>();
+  for (const [customerId, profile] of customerProfiles) {
+    for (const [key, category] of profile.commerceCategories) {
+      const bucket = commerceCategoryCustomers.get(key) ?? { label: category.label, customerIds: [] };
+      bucket.customerIds.push(customerId);
+      commerceCategoryCustomers.set(key, bucket);
+    }
+  }
+  for (const [key, bucket] of commerceCategoryCustomers) {
+    const slug = `affinity_${key}`;
+    segments.push({
+      name: `${bucket.label} Buyers`, slug, segmentType: "product_category",
+      description: `Customers with a verified purchase in ${bucket.label.toLowerCase()}`,
+      conditions: { commerceCategory: key, minQuantity: 1, source: "shopify_taxonomy_and_catalog" },
+    });
+    memberships.set(slug, bucket.customerIds);
+  }
+
+  // C) Behavior-based segments
 
   // Single-product loyalists — buy same product repeatedly
   const singleProductLoyalists: string[] = [];

@@ -339,6 +339,8 @@ model Product {
   handle         String
   vendor         String?
   productType    String?
+  taxonomyCategoryId String?
+  taxonomyCategoryName String?
   imageUrl       String?
   price          Float
   compareAtPrice Float?

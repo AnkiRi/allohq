@@ -9,6 +9,7 @@ interface GraphqlProduct {
   handle: string;
   vendor: string;
   productType: string;
+  category: { id: string; fullName: string } | null;
   status: string;
   images: { nodes: Array<{ url: string }> };
   variants: {
@@ -63,6 +64,7 @@ export async function syncAllProducts(
             handle
             vendor
             productType
+            category { id fullName }
             status
             images(first: 1) { nodes { url } }
             variants(first: 250) {
@@ -104,6 +106,8 @@ export async function syncAllProducts(
               handle: product.handle,
               vendor: product.vendor || null,
               productType: product.productType || null,
+              taxonomyCategoryId: product.category?.id ?? null,
+              taxonomyCategoryName: product.category?.fullName ?? null,
               imageUrl: product.images.nodes[0]?.url ?? null,
               price: Number(firstVariant?.price ?? 0),
               compareAtPrice: firstVariant?.compareAtPrice
@@ -117,6 +121,8 @@ export async function syncAllProducts(
               handle: product.handle,
               vendor: product.vendor || null,
               productType: product.productType || null,
+              taxonomyCategoryId: product.category?.id ?? null,
+              taxonomyCategoryName: product.category?.fullName ?? null,
               imageUrl: product.images.nodes[0]?.url ?? null,
               price: Number(firstVariant?.price ?? 0),
               compareAtPrice: firstVariant?.compareAtPrice
