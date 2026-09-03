@@ -213,6 +213,18 @@ export default function CampaignDetailPage() {
                   {dryRun.sender ?? "Sending address not configured"} · {dryRun.senderDomain?.status ?? "domain not configured"}
                 </span>
               </div>
+              {dryRun.marginRisk.discountPercent > 0 && dryRun.marginRisk.recentBuyers > 0 && (
+                <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Margin worth reviewing</div>
+                  <p className="mt-1 text-[13px] font-medium">
+                    {dryRun.marginRisk.recentBuyers} currently eligible {dryRun.marginRisk.recentBuyers === 1 ? "customer has" : "customers have"} already purchased in the last 7 days.
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    They placed {dryRun.marginRisk.recentOrders} orders worth {dryRun.currency} {dryRun.marginRisk.observedRecentSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}. If equivalent baskets used this {dryRun.marginRisk.discountPercent}% offer, discount exposure would be about {dryRun.currency} {dryRun.marginRisk.illustrativeDiscountExposure.toLocaleString(undefined, { maximumFractionDigits: 2 })}.
+                  </p>
+                  <p className="mt-2 text-[10px] text-muted-foreground">This is an illustration from observed orders—not a prediction that these customers will purchase again.</p>
+                </div>
+              )}
             </>
           )}
         </div>

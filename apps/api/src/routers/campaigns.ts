@@ -24,7 +24,7 @@ export const campaignsRouter = router({
           template: { select: { subject: true, previewText: true } },
           store: {
             select: {
-              storeEmail: true, emailSendingPausedAt: true,
+              storeEmail: true, emailSendingPausedAt: true, currency: true,
               senderDomain: { select: { domain: true, status: true } },
               brandProfiles: { take: 1, select: { fromName: true, fromEmail: true } },
             },
@@ -34,6 +34,17 @@ export const campaignsRouter = router({
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
       if (!campaign.template) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
       const audience = await resolveCampaignAudience(campaign.id);
+      const proposal = (campaign.agentProposal ?? {}) as { discountPercent?: number };
+      const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
+      const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
+      const recentOrders = audience.eligible.length > 0
+        ? await ctx.prisma.order.findMany({
+            where: { customerId: { in: audience.eligible.map((customer) => customer.id) }, createdAt: { gte: recentSince }, status: { not: "cancelled" } },
+            select: { customerId: true, subtotal: true },
+          })
+        : [];
+      const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
+      const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
       const holdoutRate = 0.15;
       const control = Math.floor(audience.eligible.length * holdoutRate);
       return {
@@ -49,6 +60,16 @@ export const campaignsRouter = router({
         sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,
         senderDomain: campaign.store.senderDomain,
         storePaused: Boolean(campaign.store.emailSendingPausedAt),
+        currency: campaign.store.currency ?? "USD",
+        marginRisk: {
+          evidenceWindowDays: 7,
+          recentBuyers: recentBuyerIds.size,
+          recentOrders: recentOrders.length,
+          observedRecentSubtotal: recentOrderSubtotal,
+          discountPercent,
+          illustrativeDiscountExposure: recentOrderSubtotal * discountPercent / 100,
+          basis: "observed_recent_orders" as const,
+        },
       };
     }),
   list: workspaceProcedure
