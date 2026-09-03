@@ -426,11 +426,39 @@ export async function deliverOne(data: DeliverOneData) {
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { template: true, store: true },
+    include: { template: true, segment: true, store: true },
   });
   if (!campaign || !campaign.template) return { skipped: true, reason: "campaign_gone" };
   if (campaign.store.emailSendingPausedAt) {
     return { skipped: true, reason: "store_email_paused" };
+  }
+  const deliveryChecksum = campaignApprovalChecksum({
+    campaignId: campaign.id,
+    storeId: campaign.storeId,
+    name: campaign.name,
+    scheduledAt: campaign.scheduledAt,
+    template: {
+      id: campaign.template.id,
+      subject: campaign.template.subject,
+      previewText: campaign.template.previewText,
+      blocks: campaign.template.blocks,
+      html: campaign.template.html,
+    },
+    segment: campaign.segment ? {
+      id: campaign.segment.id,
+      kind: campaign.segment.kind,
+      customerIds: campaign.segment.customerIds,
+      conditions: campaign.segment.conditions,
+      name: campaign.segment.name,
+    } : null,
+    agentProposal: campaign.agentProposal,
+  });
+  if (!campaign.approvedAt || !campaign.approvalChecksum || campaign.approvalChecksum !== deliveryChecksum) {
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { status: "draft", approvalChecksum: null, approvedAt: null },
+    });
+    return { skipped: true, reason: "approval_changed_before_delivery" };
   }
 
   const customer = await prisma.customer.findUnique({

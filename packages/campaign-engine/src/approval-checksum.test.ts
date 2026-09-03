@@ -34,3 +34,12 @@ test("worker-written dispatch metadata does not invalidate approval", () => {
     }),
   );
 });
+
+test("a delayed delivery sees edits made after fan-out", () => {
+  const checksumStoredAtFanOut = campaignApprovalChecksum(snapshot);
+  const changedBeforeProviderCall = {
+    ...snapshot,
+    template: { ...snapshot.template, blocks: [{ type: "text", value: "Unapproved replacement" }] },
+  };
+  assert.notEqual(campaignApprovalChecksum(changedBeforeProviderCall), checksumStoredAtFanOut);
+});
