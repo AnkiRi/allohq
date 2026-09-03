@@ -139,7 +139,7 @@ identity does not yet replace Clerk for normal application requests.
 | 1B — Shopify ID-token verification | Backend can reject forged, expired, wrong-app, and cross-shop tokens | Stage 1 | Done (`85eead5`) |
 | 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Done (`a58ec1c`); live Shopify validation remains in 1F |
 | 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; owner/staff roles and multi-store access are explicit | Stage 1 | In progress; safe member default implemented in `a58ec1c` |
-| 1E — Shopify-origin install | Install/token exchange works from Shopify without typing a domain or requiring a Clerk session | Stage 1 | Pending |
+| 1E — Shopify-origin install | Install/token exchange works from Shopify without typing a domain or requiring a Clerk session | Stage 1 | In progress; tested expiring offline-token exchange primitive in `1c77d0c` |
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
 | 2A — Scope audit | Exhaustive GraphQL sweep; remove or justify `read_all_orders` and every protected field | Stage 2 | Pending |
