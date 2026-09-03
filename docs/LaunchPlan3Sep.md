@@ -107,7 +107,10 @@ changes used to complete that gate.
 
 ### Current position
 
-We are currently in **Stage 1, implementation phase 1D**.
+We are working in parallel across **Stage 1 (embedded lifecycle), Stage 3
+(event/audience safety), and Stage 6 (post-install intelligence)**. Storefront
+event capture and first-run category intelligence are implemented; the current
+critical-path engineering item remains Stage 1 lifecycle completion.
 
 The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
 
@@ -142,6 +145,7 @@ identity does not yet replace Clerk for normal application requests.
 | 1E — Shopify-origin install | Install/token exchange works from Shopify without typing a domain or requiring a Clerk session | Stage 1 | In progress; tested expiring offline-token exchange primitive in `1c77d0c` |
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
+| 1H — Customer-event pixel | Consent-aware Shopify Web Pixel captures page/product/collection/search/cart/checkout events with data minimization and event-id dedupe | Stages 1 and 3 | Code done (`bd00a2c`); Shopify-linked extension deploy/live validation remains in 1G/1F |
 | 2A — Scope audit | Exhaustive GraphQL sweep; remove or justify `read_all_orders` and every protected field | Stage 2 | Pending |
 | 2B — Level 2 evidence | Data inventory, minimization, access logging, retention/deletion evidence and Dashboard request | Stage 2 | Pending; Dashboard submission is founder-owned |
 | 2C — Public trust surface | Privacy Policy, ToS, DPA, subprocessors and support policy published | Stage 2 | Pending |
@@ -149,6 +153,7 @@ identity does not yet replace Clerk for normal application requests.
 | 3A — Canonical audience resolver | Campaigns and automations use one eligibility/exclusion decision service | Stage 3 | Pending |
 | 3B — Dry-run report | Frozen audience, exclusions, treatment/control, sender, offer, cost and approval version shown before send | Stage 3 | Pending |
 | 3C — Margin-risk moment | Evidence-backed “already bought / margin at risk” recommendation appears before approval | Stage 3 and GTM | Pending |
+| 3D — Event-trigger semantics | Identified Shopify events enter only active merchant-approved journeys; retries dedupe but genuinely later events can retrigger | Stage 3 | Done (`7d3fde4`); anonymous events remain analysis-only by design |
 | 4A — Sender-domain onboarding | SPF/DKIM/DMARC states and verified sender identity gate live delivery | Stage 4 | Pending |
 | 4B — Distributed limits | Atomic daily caps, store concurrency, new-store ramp and provider throttles | Stage 4 | Pending |
 | 4C — Deliverability automation | Bounce/complaint/rejection/volume thresholds pause safely | Stage 4 | Partially done; complete after 4A/4B |
@@ -158,6 +163,8 @@ identity does not yet replace Clerk for normal application requests.
 | 6A — Timing consolidation | One timezone-correct send-time learner with evidence thresholds and honest defaults | Stage 6 | Pending |
 | 6B — Content feedback loop | Approved experiment winners can influence later selection with an audit trail | Stage 6 | Pending |
 | 6C — Claim audit | Remove channel/tone-learning claims until implemented and proven | Stage 6 | Pending |
+| 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (pending commit); broader copy audit remains in 6C |
+| 6D — First-run smart segments | Shopify taxonomy + catalog signals normalize into 20 verticals; verified purchase affinities and behavior segments refresh immediately after RFM | Stage 6 | Done (`1497757`); live-catalog validation remains in Stage 5 |
 | 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Pending/in parallel |
 | 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Pending |
 
@@ -317,6 +324,47 @@ Add the launch-critical margin moment:
 
 This must be framed as an evidence-based recommendation, not a guaranteed
 counterfactual. The displayed arithmetic, inputs, and reason must be auditable.
+
+### Storefront and commerce event coverage
+
+Two Shopify sources are intentionally combined:
+
+- Admin webhooks are authoritative for products, customers, orders, checkouts,
+  collections, fulfillments, uninstall, and privacy lifecycle changes.
+- The consent-aware Web Pixel is authoritative for storefront behavior:
+  page views, product views, collection views, search, cart view/add/remove,
+  checkout start/contact/address/shipping/payment steps, and completion.
+
+Every pixel event uses Shopify's event ID as a store-scoped idempotency key.
+Direct contact, address, and payment fields are stripped before persistence.
+For a logged-in customer, only the Shopify customer ID is sent and resolved to
+an existing store-scoped customer server-side. Those identified events may
+enter an explicitly activated automation. Anonymous events are retained for
+aggregate/path analysis and cannot trigger an email until there is a safe,
+deterministic identity link.
+
+`cart_abandoned` is deliberately not a browser event. Checkout create/update
+opens or refreshes checkout state; the abandonment worker waits for the
+inactivity threshold, confirms no subsequent order, marks the checkout
+abandoned, and only then invokes an approved cart journey.
+
+### First-install intelligence after RFM
+
+The initial enrichment chain is now:
+
+`Shopify sync -> RFM + LTV -> taxonomy-aware product segments`
+
+The catalog stores Shopify Standard Product Taxonomy IDs/names. A stable
+20-vertical vocabulary covers apparel, footwear, jewellery, bags/accessories,
+skincare, makeup, haircare, personal care, fragrance, nutraceuticals,
+fitness/sports, food/pantry, beverages, home/decor, kitchen/dining,
+electronics, baby/kids, pet care, books/stationery, and garden/plants.
+
+Joon shows only segments supported by the merchant's own purchase evidence:
+normalized category buyers plus product loyalists, multi-category explorers,
+bundle buyers, one-time buyers, and high-value repeaters. It does not fabricate
+memberships or industry benchmarks for a new store. Empty/small catalogs still
+receive RFM segments and gain affinity segments as evidence arrives.
 
 Exit gate:
 

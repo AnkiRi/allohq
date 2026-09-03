@@ -6,7 +6,6 @@ import {
   getMarketingDeliveryPermission,
 } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit, getOptimalSendTime, planCustomerDelivery } from "@allohq/customer-intelligence";
-import { getBestChannel } from "@allohq/journey-orchestrator";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
@@ -35,7 +34,7 @@ const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (secon
 
 // Per-customer decision bundle carried from the planner to the delayed delivery job.
 interface DeliveryPlan {
-  channel: string; // CAM-recommended channel (recorded; campaign medium stays email)
+  channel: "email"; // v1 has no channel selection or channel-learning claim
   sendHour: number;
   toneKey: string;
   greeting: string;
@@ -292,7 +291,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       lastName: customer.lastName,
       hasDiscount,
     });
-    const recommendedChannel = (await getBestChannel(customer.id, campaign.storeId)) ?? "email";
+    const selectedChannel = "email" as const;
     let bestHour = 10;
     try {
       bestHour = (await getOptimalSendTime(customer.id, campaign.storeId)).bestHour;
@@ -320,8 +319,8 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           discountCode: discountCode ?? null,
           offerId,
           messageVariantId: decision.toneKey,
-          messageFeatures: { channel: recommendedChannel, messageType: "campaign", hasDiscount, discountPercent, segment: rfm?.segment ?? null, decision: "skip", skipReason: decision.skipReason },
-          metadata: { skipped: true, skipReason: decision.skipReason, reasoning: decision.reasoning, recommendedChannel, bestHour, toneKey: decision.toneKey },
+          messageFeatures: { channel: selectedChannel, messageType: "campaign", hasDiscount, discountPercent, segment: rfm?.segment ?? null, decision: "skip", skipReason: decision.skipReason },
+          metadata: { skipped: true, skipReason: decision.skipReason, reasoning: decision.reasoning, selectedChannel, bestHour, toneKey: decision.toneKey },
         },
       });
       continue;
@@ -354,7 +353,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
         discountPercent,
         stateSnap,
         plan: {
-          channel: recommendedChannel,
+          channel: selectedChannel,
           sendHour: bestHour,
           toneKey: decision.toneKey,
           greeting: decision.greeting,
@@ -546,7 +545,7 @@ export async function deliverOne(data: DeliverOneData) {
   const subjectLine = effectiveSubject ?? "";
   const messageFeatures = {
     channel: "email",
-    recommendedChannel: plan.channel,
+    selectedChannel: plan.channel,
     messageType: "campaign",
     hasDiscount: !!discountCode || /discount|off|save|%/i.test(subjectLine),
     discountPercent: discountPercent ?? null,
