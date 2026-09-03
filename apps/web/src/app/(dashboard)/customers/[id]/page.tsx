@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone, Tag, ShoppingBag, BarChart2, Sparkles, MessageSquare, Send } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Tag, ShoppingBag, BarChart2, Sparkles, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { ReasoningReveal, type ReasoningStory } from "@/components/console/ReasoningReveal";
@@ -251,14 +251,9 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
-              <Mail className="w-3.5 h-3.5" /> Send Email
-            </button>
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
-              <MessageSquare className="w-3.5 h-3.5" /> Send SMS
-            </button>
-          </div>
+          <Link href="/campaigns/new" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
+            <Mail className="w-3.5 h-3.5" /> Draft email campaign
+          </Link>
         </div>
       </motion.div>
 

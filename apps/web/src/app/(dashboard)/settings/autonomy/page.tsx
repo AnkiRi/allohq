@@ -1,6 +1,6 @@
 "use client";
 
-import { Shield, Zap, Eye, Bot } from "lucide-react";
+import { Shield, Eye, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -15,7 +15,6 @@ const itemVariants = {
 };
 
 const TIERS = [
-  { value: "autopilot", label: "Autopilot", icon: Zap, desc: "joon acts on its own when it's confident" },
   { value: "copilot", label: "Copilot", icon: Eye, desc: "joon drafts, you approve before it goes out" },
   { value: "advisor", label: "Advisor", icon: Bot, desc: "joon suggests, you make every call" },
 ] as const;
@@ -72,7 +71,7 @@ export default function AutonomySettingsPage() {
           Autonomy
         </h1>
         <p className="text-[13px] text-muted-foreground font-sans mt-1">
-          Decide how much joon can do on its own for each kind of action
+          Choose whether joon drafts or advises. Every send still requires your approval.
         </p>
       </motion.div>
 
@@ -111,7 +110,7 @@ export default function AutonomySettingsPage() {
             </div>
 
             {/* Header row */}
-            <div className="grid grid-cols-[1fr_repeat(3,120px)] gap-2 mb-3">
+            <div className="grid grid-cols-[1fr_repeat(2,120px)] gap-2 mb-3">
               <div />
               {TIERS.map((t) => (
                 <div key={t.value} className="text-center">
@@ -129,7 +128,7 @@ export default function AutonomySettingsPage() {
                 return (
                   <div
                     key={cat.value}
-                    className="grid grid-cols-[1fr_repeat(3,120px)] gap-2 items-center p-3 bg-muted rounded-lg"
+                    className="grid grid-cols-[1fr_repeat(2,120px)] gap-2 items-center p-3 bg-muted rounded-lg"
                   >
                     <div>
                       <p className="text-[11px] font-bold text-foreground">{cat.label}</p>
