@@ -97,9 +97,8 @@ Known caveats:
   report. Automation preflight still needs to converge on the same report.
 - Tone is captured as a feature/variant; outcomes do not yet change future tone
   selection. Do not call this tone learning.
-- Two send-time implementations exist. The scheduled optimizer cannot be
-  enabled as written because its global job does not provide the store ID it
-  expects.
+- Send-time selection is consolidated into one on-demand implementation with
+  explicit customer/store/default evidence labels and merchant-local hours.
 
 ## 3A. Implementation phase tracker
 
@@ -162,7 +161,7 @@ identity does not yet replace Clerk for normal application requests.
 | 5A — Failure harness | Production retry primitive now has deterministic drills for 429/5xx backoff, accepted-then-timeout idempotency and non-retryable validation failures; campaign queue retries preserve the provider classification | Stage 5 | Provider foundation done in current slice; queue/database/webhook/approval/consent drills remain |
 | 5B — Six journey fixtures | Welcome, cart, post-purchase, win-back, evidence-backed replenishment and loyal-customer milestone generate email-only workflows with executable triggers; replenishment runs only when merchant-activated and dedupes per customer/day | Stage 5 | Deterministic workflow fixtures pass 6/6 in current slice; live DB/queue/provider acceptance remains |
 | 5C — Email-client matrix | Rendering and fallback validation across required clients and edge cases | Stage 5 | Pending |
-| 6A — Timing consolidation | One timezone-correct send-time learner with evidence thresholds and honest defaults | Stage 6 | Pending |
+| 6A — Timing consolidation | Campaigns and journeys use one on-demand, store-timezone learner with customer/store evidence thresholds; every campaign decision records source and confidence, and obsolete scheduled state mutation is removed | Stage 6 | Code done in current slice; validate daylight-saving and live-event distributions in Stage 5 |
 | 6B — Content feedback loop | Approved experiment winners can influence later selection with an audit trail | Stage 6 | Pending |
 | 6C — Claim audit | Remove channel/tone-learning claims until implemented and proven | Stage 6 | Pending |
 | 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (`cf81919`); broader copy audit remains in 6C |

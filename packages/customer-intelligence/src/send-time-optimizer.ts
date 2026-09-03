@@ -9,7 +9,7 @@
 import { prisma } from "@allohq/database";
 
 export interface SendTimeResult {
-  /** Optimal hour of day (0-23, in UTC) */
+  /** Optimal hour of day (0-23, in the store timezone) */
   bestHour: number;
   /** Optimal day of week (0 = Sunday, 6 = Saturday) */
   bestDayOfWeek: number;
@@ -17,6 +17,7 @@ export interface SendTimeResult {
   confidence: number;
   /** Where the recommendation came from */
   source: "customer" | "store" | "default";
+  timezone: string;
   /** Top 3 hours ranked by engagement, with scores */
   topHours: { hour: number; score: number }[];
   /** Day-of-week scores (0-6) */
@@ -56,10 +57,22 @@ function extractTimestamps(rows: TimestampRow[]): Date[] {
 /**
  * Build an hour-of-day histogram from timestamps.
  */
-function buildHourHistogram(timestamps: Date[]): number[] {
+export function localHour(timestamp: Date, timezone: string): number {
+  return localPart(timestamp, timezone, "hour");
+}
+
+function localPart(timestamp: Date, timezone: string, part: "hour" | "weekday"): number {
+  try {
+    if (part === "hour") return Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hour12: false }).format(timestamp)) % 24;
+    const weekday = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(timestamp);
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
+  } catch { return part === "hour" ? timestamp.getUTCHours() : timestamp.getUTCDay(); }
+}
+
+function buildHourHistogram(timestamps: Date[], timezone: string): number[] {
   const histogram = new Array<number>(24).fill(0);
   for (const ts of timestamps) {
-    const hour = ts.getUTCHours();
+    const hour = localPart(ts, timezone, "hour");
     histogram[hour]!++;
   }
   return histogram;
@@ -68,10 +81,10 @@ function buildHourHistogram(timestamps: Date[]): number[] {
 /**
  * Build a day-of-week histogram from timestamps.
  */
-function buildDayHistogram(timestamps: Date[]): number[] {
+function buildDayHistogram(timestamps: Date[], timezone: string): number[] {
   const histogram = new Array<number>(7).fill(0);
   for (const ts of timestamps) {
-    const day = ts.getUTCDay();
+    const day = localPart(ts, timezone, "weekday");
     histogram[day]!++;
   }
   return histogram;
@@ -93,10 +106,13 @@ export async function getOptimalSendTime(
   customerId: string,
   storeId: string,
 ): Promise<SendTimeResult> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { timezone: true } });
+  const timezone = store?.timezone ?? "UTC";
   // 1. Try customer-level engagement events (opens + clicks from MessageLog)
   const customerLogs = await prisma.messageLog.findMany({
     where: {
       customerId,
+      storeId,
       OR: [
         { openedAt: { not: null } },
         { clickedAt: { not: null } },
@@ -109,7 +125,7 @@ export async function getOptimalSendTime(
 
   const customerTimestamps = extractTimestamps(customerLogs);
   if (customerTimestamps.length >= MIN_CUSTOMER_EVENTS) {
-    return buildResult(customerTimestamps, "customer");
+    return buildResult(customerTimestamps, "customer", timezone);
   }
 
   // 2. Fall back to store-level aggregates
@@ -128,7 +144,7 @@ export async function getOptimalSendTime(
 
   const storeTimestamps = extractTimestamps(storeLogs);
   if (storeTimestamps.length >= MIN_STORE_EVENTS) {
-    return buildResult(storeTimestamps, "store");
+    return buildResult(storeTimestamps, "store", timezone);
   }
 
   // 3. Fall back to industry defaults
@@ -137,6 +153,7 @@ export async function getOptimalSendTime(
     bestDayOfWeek: DEFAULT_DAY,
     confidence: 0.1,
     source: "default",
+    timezone,
     topHours: DEFAULT_HOURS.map((h, i) => ({ hour: h, score: 1 - i * 0.15 })),
     dayScores: [0, 1, 2, 3, 4, 5, 6].map((d) => ({
       day: d,
@@ -148,9 +165,10 @@ export async function getOptimalSendTime(
 function buildResult(
   timestamps: Date[],
   source: "customer" | "store",
+  timezone: string,
 ): SendTimeResult {
-  const hourHist = buildHourHistogram(timestamps);
-  const dayHist = buildDayHistogram(timestamps);
+  const hourHist = buildHourHistogram(timestamps, timezone);
+  const dayHist = buildDayHistogram(timestamps, timezone);
   const hourScores = normalizeHistogram(hourHist);
   const dayScores = normalizeHistogram(dayHist);
 
@@ -173,6 +191,7 @@ function buildResult(
     bestDayOfWeek: rankedDays[0]!.day,
     confidence,
     source,
+    timezone,
     topHours: rankedHours.slice(0, 3),
     dayScores: rankedDays,
   };

@@ -24,9 +24,6 @@ export {
 // Channel Selection
 export { selectChannel, getBestChannel } from "./channel-selector";
 
-// Timing Optimization
-export { getOptimalSendTime, recalculateSendTimes } from "./timing-optimizer";
-
 // Tone Adaptation
 export { getTone, adaptTone, extractToneMetadata } from "./tone-adapter";
 

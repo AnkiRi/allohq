@@ -76,7 +76,6 @@ import { baselineCaptureWorker } from "./workers/baseline-capture.worker";
 import { weeklyReportWorker } from "./workers/weekly-report.worker";
 import { journeyStepperWorker } from "./workers/journey-stepper.worker";
 import { abTestEvaluatorWorker } from "./workers/ab-test-evaluator.worker";
-import { sendTimeOptimizerWorker } from "./workers/send-time-optimizer.worker";
 import { revenueForecastWorker } from "./workers/revenue-forecaster.worker";
 import { productRecommendationWorker } from "./workers/product-recommendation.worker";
 import { shippingUpdateWorker } from "./workers/shipping-update.worker";
@@ -167,7 +166,6 @@ console.log(`  - baseline-capture worker: ${baselineCaptureWorker.name}`);
 console.log(`  - weekly-report worker: ${weeklyReportWorker.name}`);
 console.log(`  - journey-stepper worker: ${journeyStepperWorker.name}`);
 console.log(`  - ab-test-evaluator worker: ${abTestEvaluatorWorker.name}`);
-console.log(`  - send-time-optimizer worker: ${sendTimeOptimizerWorker.name}`);
 console.log(`  - revenue-forecaster worker: ${revenueForecastWorker.name}`);
 console.log(`  - product-recommendation worker: ${productRecommendationWorker.name}`);
 console.log(`  - shipping-update worker: ${shippingUpdateWorker.name}`);
@@ -300,16 +298,6 @@ gatedSchedule(abTestQueue,
   { name: "ab-test-evaluation", data: { type: "cron" } }
 ).catch((err) => {
   console.error("Failed to set up A/B test evaluation schedule:", err.message);
-});
-
-// Schedule send time optimization (nightly)
-const sendTimeQueue = new Queue(QUEUE_NAMES.SEND_TIME, { connection: redisConnection });
-gatedSchedule(sendTimeQueue,
-  "send-time-optimization-schedule",
-  { pattern: "0 2 * * *", tz: BRIEFING_TZ },
-  { name: "send-time-optimization", data: { type: "cron" } }
-).catch((err) => {
-  console.error("Failed to set up send time optimization schedule:", err.message);
 });
 
 // Schedule revenue forecast (daily)
@@ -524,7 +512,6 @@ const shutdown = async () => {
       weeklyReportWorker.close(),
       journeyStepperWorker.close(),
       abTestEvaluatorWorker.close(),
-      sendTimeOptimizerWorker.close(),
       revenueForecastWorker.close(),
       productRecommendationWorker.close(),
       shippingUpdateWorker.close(),

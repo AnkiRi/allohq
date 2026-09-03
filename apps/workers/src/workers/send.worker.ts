@@ -43,6 +43,8 @@ interface DeliveryPlan {
   emoji: string;
   signoff: string;
   reasoning: string;
+  timingSource: "customer" | "store" | "default";
+  timingConfidence: number;
 }
 interface SendJobData {
   campaignId: string;
@@ -67,8 +69,9 @@ interface FinalizeData {
 }
 
 /** ms until the next occurrence of `bestHour` (UTC), capped (demo = seconds). */
-function computeDelayMs(bestHour: number, isDemo: boolean): number {
-  const nowH = new Date().getUTCHours();
+function computeDelayMs(bestHour: number, isDemo: boolean, timezone = "UTC"): number {
+  let nowH = new Date().getUTCHours();
+  try { nowH = Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hour12: false }).format(new Date())) % 24; } catch { /* UTC fallback */ }
   let h = bestHour - nowH;
   if (h < 0) h += 24; // h === 0 → already in the optimal hour → send ~now
   const real = h * 60 * 60 * 1000;
@@ -276,8 +279,13 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     });
     const selectedChannel = "email" as const;
     let bestHour = 10;
+    let timingSource: DeliveryPlan["timingSource"] = "default";
+    let timingConfidence = 0;
     try {
-      bestHour = (await getOptimalSendTime(customer.id, campaign.storeId)).bestHour;
+      const timing = await getOptimalSendTime(customer.id, campaign.storeId);
+      bestHour = timing.bestHour;
+      timingSource = timing.source;
+      timingConfidence = timing.confidence;
     } catch { /* fall back to 10:00 */ }
 
     // SKIP (send-less): record the decision as a "skipped" row with treatmentArm
@@ -343,10 +351,12 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           emoji: decision.emoji,
           signoff: decision.signoff,
           reasoning: decision.reasoning,
+          timingSource,
+          timingConfidence,
         },
       } as DeliverOneData,
       {
-        delay: computeDelayMs(bestHour, isDemo),
+        delay: computeDelayMs(bestHour, isDemo, campaign.store.timezone ?? "UTC"),
         jobId: `deliver-${campaignId}-${customer.id}`,
         attempts: 5,
         backoff: { type: "exponential", delay: 2_000 },

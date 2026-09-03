@@ -9,7 +9,6 @@ import type {
   WorkflowNode,
 } from "./types";
 import { getBestChannel } from "./channel-selector";
-import { getOptimalSendTime } from "./timing-optimizer";
 import { getTone, adaptTone } from "./tone-adapter";
 import {
   getPersonalisationContext,
@@ -201,8 +200,9 @@ export async function executeJourneyStep(
     }
   }
 
-  // Determine timing
-  const sendAt = await getOptimalSendTime(customerId, storeId);
+  // The worker applies the canonical, timezone-aware timing recommendation
+  // immediately before queueing delivery. Keep orchestration deterministic.
+  const sendAt = new Date();
 
   // Determine tone
   const tone = await getTone(customerId);

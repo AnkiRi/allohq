@@ -127,7 +127,8 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
       if (!isTimeSensitive) {
         try {
           const sendTime = await getOptimalSendTime(customerId, storeId);
-          const currentHour = new Date().getUTCHours();
+          let currentHour = new Date().getUTCHours();
+          try { currentHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: sendTime.timezone, hour: "numeric", hour12: false }).format(new Date())) % 24; } catch { /* UTC fallback */ }
           const bestHours = sendTime.topHours.map((h) => h.hour);
 
           // Check if current hour is within the customer's optimal window (+/- 1 hour)
