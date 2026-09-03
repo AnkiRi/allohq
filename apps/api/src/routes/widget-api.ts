@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
+import { Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { runCustomerAgent } from "@allohq/agent-core";
 import { checkRateLimit } from "../middleware/rate-limit";
@@ -8,6 +9,14 @@ import {
   verifyWidgetVisitorToken,
 } from "../security/widget-visitor-token";
 import { sanitizePixelValue, safePixelTimestamp, SHOPIFY_PIXEL_EVENT_TYPES } from "../storefront-events";
+
+const automationTriggerQueue = new Queue("automation-trigger", {
+  connection: {
+    host: process.env["REDIS_HOST"] ?? "localhost",
+    port: Number(process.env["REDIS_PORT"] ?? 6379),
+    password: process.env["REDIS_PASSWORD"],
+  },
+});
 
 /**
  * REST API endpoints for the customer-facing widget.
@@ -197,21 +206,43 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
       const eventId = shortString(body["id"], 256);
       const type = shortString(body["name"], 64);
       const clientId = shortString(body["clientId"], 256);
+      const customerExternalId = shortString(body["customerExternalId"], 256)?.split("/").pop();
       if (!eventId || !type || !SHOPIFY_PIXEL_EVENT_TYPES.has(type)) {
         json(res, 400, { error: "Invalid Shopify customer event" });
         return;
       }
       const sanitized = sanitizePixelValue(body["data"] ?? {}) as Record<string, unknown>;
+      const customer = customerExternalId
+        ? await prisma.customer.findUnique({
+            where: { storeId_externalId: { storeId: store.id, externalId: customerExternalId } },
+            select: { id: true },
+          })
+        : null;
       const event = await prisma.storefrontEvent.upsert({
         where: { storeId_source_externalEventId: { storeId: store.id, source: "shopify_pixel", externalEventId: eventId } },
         create: {
           storeId: store.id, source: "shopify_pixel", externalEventId: eventId,
-          type, visitorId: clientId, sessionId: clientId, customerId: null,
+          type, visitorId: clientId, sessionId: clientId, customerId: customer?.id ?? null,
           data: sanitized as any, occurredAt: safePixelTimestamp(body["timestamp"]),
         },
         update: {},
         select: { id: true },
       });
+      if (customer) {
+        const automations = await prisma.automation.findMany({
+          where: { storeId: store.id, status: "active", triggerType: "event" },
+          select: { id: true, triggerConfig: true },
+        });
+        for (const automation of automations) {
+          const config = automation.triggerConfig as { event?: string } | null;
+          if (config?.event !== type) continue;
+          await automationTriggerQueue.add(
+            "automation-trigger",
+            { automationId: automation.id, customerId: customer.id, triggeredBy: type, eventInstanceId: eventId },
+            { jobId: `${automation.id}-${customer.id}-${eventId}`.replace(/[^a-zA-Z0-9_-]/g, "_") },
+          );
+        }
+      }
       json(res, 202, { id: event.id });
       return;
     }

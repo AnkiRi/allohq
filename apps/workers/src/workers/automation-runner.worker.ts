@@ -23,6 +23,7 @@ interface AutomationTriggerJobData {
   triggeredBy: string; // event name, schedule, or segment
   currentNodeIndex?: number; // for resuming after wait
   executionId?: string; // stable across wait/resume jobs for delivery idempotency
+  eventInstanceId?: string; // Shopify/customer-event id for repeat-safe triggers
 }
 
 interface WorkflowNode {

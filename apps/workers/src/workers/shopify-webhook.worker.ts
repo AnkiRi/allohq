@@ -152,13 +152,28 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       case "customers/create": {
         const customer = await upsertCustomer(store.id, payload);
         if (customer) {
-          await checkEventTriggers(store.id, "customer_created", customer.id);
+          await checkEventTriggers(store.id, "customer_created", customer.id, eventId ?? undefined);
         }
         break;
       }
-      case "customers/update":
-        await upsertCustomer(store.id, payload);
+      case "customers/update": {
+        const customerPayload = payload as { id?: number | string; tags?: string };
+        const before = customerPayload.id == null ? null : await prisma.customer.findUnique({
+          where: { storeId_externalId: { storeId: store.id, externalId: String(customerPayload.id) } },
+          select: { tags: true },
+        });
+        const customer = await upsertCustomer(store.id, payload);
+        const incomingTags = typeof customerPayload.tags === "string"
+          ? customerPayload.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+          : [];
+        if (customer && before) {
+          const addedTags = incomingTags.filter((tag) => !before.tags.includes(tag));
+          if (addedTags.length > 0) {
+            await checkEventTriggers(store.id, "tag_added", customer.id, `${eventId ?? job.id}:${addedTags.sort().join(",")}`);
+          }
+        }
         break;
+      }
       case "customers/delete":
         await deleteCustomer(store.id, payload);
         break;
@@ -167,7 +182,7 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       case "orders/create": {
         const order = await upsertOrder(store.id, payload);
         if (order?.customerId) {
-          await checkEventTriggers(store.id, "order_placed", order.customerId);
+          await checkEventTriggers(store.id, "order_placed", order.customerId, eventId ?? undefined);
           // Mark any open/abandoned checkouts as recovered
           await prisma.abandonedCheckout.updateMany({
             where: {

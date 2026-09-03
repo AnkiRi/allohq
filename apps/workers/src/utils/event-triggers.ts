@@ -1,15 +1,22 @@
 import { Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { eventTriggerJobId } from "./event-trigger-id";
 
 const automationTriggerQueue = new Queue(QUEUE_NAMES.AUTOMATION_TRIGGER, { connection: redisConnection });
 
 /**
  * Check for active automations with event triggers matching the given event,
  * then queue automation-trigger jobs for each match.
- * De-duplicates by checking if a MessageLog already exists for (automationId, customerId).
+ * De-duplicates one Shopify/customer event, while still allowing a customer to
+ * enter the same repeatable journey again after a later purchase or checkout.
  */
-export async function checkEventTriggers(storeId: string, eventName: string, customerId: string): Promise<void> {
+export async function checkEventTriggers(
+  storeId: string,
+  eventName: string,
+  customerId: string,
+  eventInstanceId?: string,
+): Promise<void> {
   try {
     const automations = await prisma.automation.findMany({
       where: {
@@ -23,25 +30,18 @@ export async function checkEventTriggers(storeId: string, eventName: string, cus
       const triggerConfig = automation.triggerConfig as { event?: string } | null;
       if (triggerConfig?.event !== eventName) continue;
 
-      // De-duplicate: skip if already triggered for this (automation, customer)
-      const existingLog = await prisma.messageLog.findFirst({
-        where: { automationId: automation.id, customerId },
-      });
-      if (existingLog) {
-        console.log(`[event-trigger] Skipping duplicate: automation ${automation.id} already triggered for customer ${customerId}`);
-        continue;
-      }
-
+      const instance = eventInstanceId ?? `${eventName}-${new Date().toISOString().slice(0, 10)}`;
       await automationTriggerQueue.add(
         "automation-trigger",
         {
           automationId: automation.id,
           customerId,
           triggeredBy: eventName,
+          eventInstanceId: instance,
         },
         {
           // BullMQ jobId as secondary dedup guard
-          jobId: `${automation.id}-${customerId}`,
+          jobId: eventTriggerJobId(automation.id, customerId, instance),
         }
       );
 

@@ -46,6 +46,10 @@ const EVENT_OPTIONS = [
   { value: "cart_abandoned", label: "Cart Abandoned" },
   { value: "customer_created", label: "New Customer" },
   { value: "product_viewed", label: "Product Viewed" },
+  { value: "collection_viewed", label: "Collection Viewed" },
+  { value: "search_submitted", label: "Search Submitted" },
+  { value: "product_added_to_cart", label: "Product Added to Cart" },
+  { value: "checkout_started", label: "Checkout Started" },
   { value: "tag_added", label: "Tag Added" },
 ];
 

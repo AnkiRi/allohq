@@ -56,7 +56,7 @@ export const abandonedCartWorker = new Worker(
 
       // Fire cart_abandoned event trigger for automations
       if (checkout.customerId) {
-        await checkEventTriggers(checkout.storeId, "cart_abandoned", checkout.customerId);
+        await checkEventTriggers(checkout.storeId, "cart_abandoned", checkout.customerId, checkout.id);
       }
     }
 
