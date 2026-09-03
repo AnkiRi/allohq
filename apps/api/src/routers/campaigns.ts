@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
-import { campaignApprovalChecksum } from "@allohq/campaign-engine";
+import { campaignApprovalChecksum, resolveCampaignAudience } from "@allohq/campaign-engine";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -15,6 +15,32 @@ const redisConnection = {
 const emailSendQueue = new Queue("email-send", { connection: redisConnection });
 
 export const campaignsRouter = router({
+  dryRun: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        include: { template: { select: { subject: true, previewText: true } }, store: { select: { storeEmail: true, emailSendingPausedAt: true } } },
+      });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!campaign.template) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
+      const audience = await resolveCampaignAudience(campaign.id);
+      const holdoutRate = 0.15;
+      const control = Math.floor(audience.eligible.length * holdoutRate);
+      return {
+        providerCalled: false,
+        requested: audience.requested,
+        eligibleBeforeHoldout: audience.eligible.length,
+        estimatedTreatment: audience.eligible.length - control,
+        estimatedControl: control,
+        exclusions: audience.exclusions,
+        exclusionSamples: audience.samples,
+        subject: campaign.template.subject,
+        previewText: campaign.template.previewText,
+        sender: campaign.store.storeEmail,
+        storePaused: Boolean(campaign.store.emailSendingPausedAt),
+      };
+    }),
   list: workspaceProcedure
     .input(
       z.object({

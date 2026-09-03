@@ -150,8 +150,8 @@ identity does not yet replace Clerk for normal application requests.
 | 2B — Level 2 evidence | Data inventory, minimization, access logging, retention/deletion evidence and Dashboard request | Stage 2 | Pending; Dashboard submission is founder-owned |
 | 2C — Public trust surface | Privacy Policy, ToS, DPA, subprocessors and support policy published | Stage 2 | Pending |
 | 2D — Review/listing pack | Free plan, icon, screenshots, copy, reviewer store/instructions and screencast | Stage 2 | Pending |
-| 3A — Canonical audience resolver | Campaigns and automations use one eligibility/exclusion decision service | Stage 3 | Pending |
-| 3B — Dry-run report | Frozen audience, exclusions, treatment/control, sender, offer, cost and approval version shown before send | Stage 3 | Pending |
+| 3A — Canonical audience resolver | Campaign preview and campaign dispatch use one eligibility/exclusion decision service; automation converges at its delivery permission/governor boundary | Stage 3 | Campaign path done (pending commit); automation preflight remains |
+| 3B — Dry-run report | Requested/eligible audience, mutually exclusive exclusions with samples, treatment/control estimate and sender shown before send with zero provider calls | Stage 3 | Core API + merchant UI done (pending commit); frozen snapshot, offer/cost/domain state remain |
 | 3C — Margin-risk moment | Evidence-backed “already bought / margin at risk” recommendation appears before approval | Stage 3 and GTM | Pending |
 | 3D — Event-trigger semantics | Identified Shopify events enter only active merchant-approved journeys; retries dedupe but genuinely later events can retrigger | Stage 3 | Done (`7d3fde4`); anonymous events remain analysis-only by design |
 | 4A — Sender-domain onboarding | SPF/DKIM/DMARC states and verified sender identity gate live delivery | Stage 4 | Pending |

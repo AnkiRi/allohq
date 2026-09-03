@@ -523,6 +523,9 @@ importers:
       '@allohq/autonomy-engine':
         specifier: workspace:*
         version: link:../autonomy-engine
+      '@allohq/communication-governor':
+        specifier: workspace:*
+        version: link:../communication-governor
       '@allohq/creative-engine':
         specifier: workspace:*
         version: link:../creative-engine

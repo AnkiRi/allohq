@@ -17,6 +17,10 @@ export default function CampaignDetailPage() {
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const { data: campaign, isLoading } = trpc.campaigns.getById.useQuery({ id: campaignId });
   const { data: stats } = trpc.campaigns.stats.useQuery({ id: campaignId });
+  const { data: dryRun, isLoading: dryRunLoading } = trpc.campaigns.dryRun.useQuery(
+    { id: campaignId },
+    { enabled: campaign?.status === "draft" || campaign?.status === "scheduled" },
+  );
 
   // Render preview from blocks if template has no pre-rendered HTML
   const templateBlocks = campaign?.template && !campaign.template.html
@@ -170,6 +174,47 @@ export default function CampaignDetailPage() {
           ))}
         </div>
       </div>
+
+      {(campaign.status === "draft" || campaign.status === "scheduled") && (
+        <div className="border border-border rounded-xl p-6 bg-card">
+          <div className="flex items-start justify-between gap-6 mb-5">
+            <div>
+              <p className="text-[10px] uppercase tracking-[1px] font-bold text-muted-foreground">Pre-send safety check</p>
+              <h2 className="text-[16px] font-semibold font-serif mt-1">Who will actually receive this</h2>
+              <p className="text-[11px] text-muted-foreground mt-1">A dry run only. No email provider has been called.</p>
+            </div>
+            {dryRunLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+          </div>
+          {dryRun && (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                {[
+                  ["Requested", dryRun.requested],
+                  ["Treatment estimate", dryRun.estimatedTreatment],
+                  ["Held out estimate", dryRun.estimatedControl],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg bg-muted/50 px-4 py-3">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+                    <div className="text-xl font-mono font-bold mt-1">{Number(value).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-1">
+                {Object.entries(dryRun.exclusions).filter(([, count]) => count > 0).map(([reason, count]) => (
+                  <div key={reason} className="flex justify-between py-2 border-b border-border text-[11px]">
+                    <span className="text-muted-foreground">{reason.replaceAll("_", " ")}</span>
+                    <span className="font-mono font-bold">-{count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border flex justify-between text-[11px]">
+                <span className="text-muted-foreground">Sender</span>
+                <span className="font-medium">{dryRun.sender ?? "Sending domain not configured"}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* How joon decided — the moat, made legible */}
       <DecisionTracePanel campaignId={campaignId} />

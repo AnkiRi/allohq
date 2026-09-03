@@ -9,6 +9,7 @@
     "@allohq/creative-engine": "workspace:*",
     "@allohq/autonomy-engine": "workspace:*",
     "@allohq/customer-state": "workspace:*"
+    ,"@allohq/communication-governor": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

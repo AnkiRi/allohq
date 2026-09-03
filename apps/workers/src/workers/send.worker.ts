@@ -1,7 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import {
   prisma,
-  buildWhereFromConditions,
   messagingCostFor,
   getMarketingDeliveryPermission,
 } from "@allohq/database";
@@ -18,6 +17,7 @@ import {
   recordConversion,
   getActiveTestForStore,
   campaignApprovalChecksum,
+  resolveCampaignAudience,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
@@ -136,31 +136,12 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
 
   const isDemo = campaign.store?.shopDomain === DEMO_STORE_DOMAIN;
 
-  // Pre-filter obvious opt-outs. Permission is checked again immediately before
-  // delivery because delayed jobs can outlive a consent change.
-  const customerWhere: Record<string, unknown> = {
-    storeId: campaign.storeId,
-    acceptsMarketing: true,
-    contactSuppressions: {
-      none: {
-        channel: "email",
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      },
-    },
-  };
-  if (campaign.segmentId && campaign.segment) {
-    const seg = campaign.segment;
-    if (seg.kind === "manual") {
-      customerWhere["id"] = { in: seg.customerIds ?? [] };
-    } else if (seg.kind === "conditions" && seg.conditions) {
-      Object.assign(customerWhere, buildWhereFromConditions(seg.conditions as any, [campaign.storeId]));
-    } else {
-      customerWhere["rfmScore"] = { segment: seg.name };
-    }
-  }
-
+  // Resolve the same eligibility contract shown in the merchant dry run.
+  // Permission/governor checks still run again immediately before delivery,
+  // because delayed jobs can outlive an unsubscribe or complaint.
+  const audience = await resolveCampaignAudience(campaignId);
   const customers = await prisma.customer.findMany({
-    where: customerWhere,
+    where: { id: { in: audience.eligible.map((customer) => customer.id) } },
     select: {
       id: true,
       email: true,
@@ -174,7 +155,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   });
 
   const activeSubjectTest = await getActiveTestForStore(campaign.storeId, "subject_line");
-  console.log(`Found ${customers.length} recipients for campaign ${campaign.name}`);
+  console.log(`Audience resolved for ${campaign.name}: ${audience.requested} requested, ${customers.length} eligible`, audience.exclusions);
 
   // Causal-data moat: get (or create) the holdout experiment for this cohort.
   const cohortLabel = campaign.segment
@@ -381,7 +362,19 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       status: "sending",
       sentAt: null,
       recipientCount: scheduledCount,
-      agentProposal: { ...proposal, offerId, dispatch: { scheduled: scheduledCount, control: controlCount, skipped: skippedCount, at: new Date().toISOString() } },
+      agentProposal: {
+        ...proposal,
+        offerId,
+        dispatch: {
+          requested: audience.requested,
+          eligible: audience.eligible.length,
+          exclusions: audience.exclusions,
+          scheduled: scheduledCount,
+          control: controlCount,
+          skipped: skippedCount,
+          at: new Date().toISOString(),
+        },
+      },
     },
   });
 
