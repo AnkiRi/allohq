@@ -42,6 +42,14 @@ journey failure, complaint/bounce/rejection auto-pause, disk/database saturation
 and anomalous AI/provider spend. Alerts and backup policies are configured in
 the hosting/provider consoles and require a real recipient and escalation test.
 
+## Deployment acceptance
+
+Run `pnpm launch:check` with the production environment loaded. It checks
+required configuration without printing secret values, verifies the v1 and
+delivery-mode boundaries, rejects an unlinked/placeholder Shopify config, probes
+API readiness and confirms every public trust URL. A failing result blocks
+submission and live delivery.
+
 ## Credential rotation
 
 Follow `docs/production-security-configuration.md`. Rotate provider-side

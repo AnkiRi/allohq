@@ -168,7 +168,7 @@ identity does not yet replace Clerk for normal application requests.
 | 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (`cf81919`); broader copy audit remains in 6C |
 | 6D — First-run smart segments | Shopify taxonomy + catalog signals normalize into 20 verticals; verified purchase affinities and behavior segments refresh immediately after RFM | Stage 6 | Done (`1497757`); live-catalog validation remains in Stage 5 |
 | 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Startup fails closed on critical email config; terminal critical-queue failures are indexed in a DLQ with exact-ID guarded retry and an operations runbook. Environment separation, provider alerts and managed backup/restore activation remain external |
-| 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Pending |
+| 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Repeatable `pnpm launch:check` gate done in current slice; deployed run, live Shopify walkthrough and submission remain external |
 
 ### Stage 1 authentication flow: before, now, and target
 

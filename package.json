@@ -10,14 +10,16 @@
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "launch:check": "tsx scripts/launch-readiness.ts"
   },
   "devDependencies": {
     "@turbo/gen": "^2.3.3",
     "@types/mjml": "^4.7.4",
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "tsx": "^4.21.0"
   },
   "packageManager": "pnpm@9.15.1",
   "engines": {
