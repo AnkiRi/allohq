@@ -89,10 +89,15 @@ test("merchant-approved email journeys remain in scope", () => {
   for (const id of [
     "trigger-check-schedule",
     "abandoned-cart-check-schedule",
+  ]) assert.equal(isScheduleAllowed(id), true, `${id} should run in email v1`);
+});
+
+test("legacy proactive scanners cannot bypass automation approval", () => {
+  for (const id of [
     "repurchase-reminder-schedule",
     "browse-abandonment-schedule",
     "inventory-monitor-schedule",
-  ]) assert.equal(isScheduleAllowed(id), true, `${id} should run in email v1`);
+  ]) assert.equal(isScheduleAllowed(id), false, `${id} must not run in email v1`);
 });
 
 test("non-email journey construction fails closed", () => {
