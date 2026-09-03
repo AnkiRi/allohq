@@ -158,7 +158,7 @@ identity does not yet replace Clerk for normal application requests.
 | 3D — Event-trigger semantics | Identified Shopify events enter only active merchant-approved journeys; retries dedupe but genuinely later events can retrigger | Stage 3 | Done (`7d3fde4`); anonymous events remain analysis-only by design |
 | 4A — Sender-domain onboarding | Provider DNS records/status are displayed and refreshed; campaign and automation workers require a verified From domain before live delivery | Stage 4 | Code done in current slice; production provider/DNS validation remains |
 | 4B — Distributed limits | One Redis-atomic admission gate protects campaign and automation provider calls with daily caps, expiring per-store concurrency leases, a seven-day new-store ramp and shared provider throttling | Stage 4 | Code done in current slice; production load validation remains in Stage 5 |
-| 4C — Deliverability automation | Bounce/complaint/rejection/volume thresholds pause safely | Stage 4 | Partially done; complete after 4A/4B |
+| 4C — Deliverability automation | Signed/idempotent provider events suppress affected contacts and auto-pause a store on complaint, hard-bounce or provider-rejection safety floors/rates; distributed admission caps anomalous volume | Stage 4 | Code done in current slice; production webhook validation remains in Stage 5 |
 | 5A — Failure harness | Repeatable provider, queue, database, webhook, approval and consent failure drills | Stage 5 | Pending |
 | 5B — Six journey fixtures | Welcome, cart, post-purchase, win-back, replenishment and anniversary validated end to end | Stage 5 | Pending |
 | 5C — Email-client matrix | Rendering and fallback validation across required clients and edge cases | Stage 5 | Pending |

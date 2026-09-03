@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
 import crypto from "crypto";
 import { Queue } from "bullmq";
-import { shouldPauseForComplaints } from "../lib/complaint-threshold";
+import { deliverabilityPauseReason } from "../lib/deliverability-threshold";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -238,6 +238,10 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
         updateData.status = "bounced";
         updateData.error = "spam_complaint";
         break;
+      case "email.failed":
+        updateData.status = "failed";
+        updateData.error = String(data.error ?? data.reason ?? "provider_rejected");
+        break;
       default:
         console.log(`[resend-webhook] Unhandled event type: ${eventType}`);
     }
@@ -367,9 +371,9 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
           ]);
         }
 
-        if (eventType === "email.complained") {
+        if (["email.complained", "email.bounced", "email.failed"].includes(eventType)) {
           const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000);
-          const [complaints, delivered] = await Promise.all([
+          const [complaints, hardBounces, rejections, attempted] = await Promise.all([
             prisma.messageLog.count({
               where: {
                 storeId: messageLog.storeId,
@@ -381,20 +385,36 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
               where: {
                 storeId: messageLog.storeId,
                 sentAt: { gte: since },
-                status: { in: ["sent", "delivered", "opened", "clicked", "bounced"] },
+                status: "bounced",
+                OR: [
+                  { error: { contains: "hard", mode: "insensitive" } },
+                  { error: { contains: "permanent", mode: "insensitive" } },
+                  { error: "bounced" },
+                ],
+              },
+            }),
+            prisma.messageLog.count({
+              where: { storeId: messageLog.storeId, sentAt: { gte: since }, status: "failed" },
+            }),
+            prisma.messageLog.count({
+              where: {
+                storeId: messageLog.storeId,
+                sentAt: { gte: since },
+                status: { in: ["sent", "delivered", "opened", "clicked", "bounced", "failed"] },
               },
             }),
           ]);
-          if (shouldPauseForComplaints(complaints, delivered)) {
-            await prisma.store.update({
-              where: { id: messageLog.storeId },
+          const reason = deliverabilityPauseReason({ complaints, hardBounces, rejections, attempted });
+          if (reason) {
+            await prisma.store.updateMany({
+              where: { id: messageLog.storeId, emailSendingPausedAt: null },
               data: {
                 emailSendingPausedAt: now,
-                emailSendingPauseReason: `Auto-paused: ${complaints} complaints across ${delivered} deliveries in 7 days`,
+                emailSendingPauseReason: `Auto-paused for ${reason}: ${complaints} complaints, ${hardBounces} hard bounces, ${rejections} provider rejections across ${attempted} attempts in 7 days`,
               },
             });
             console.error(
-              `[resend-webhook] Auto-paused store ${messageLog.storeId}: complaints=${complaints} delivered=${delivered}`,
+              `[resend-webhook] Auto-paused store ${messageLog.storeId}: reason=${reason} complaints=${complaints} hardBounces=${hardBounces} rejections=${rejections} attempted=${attempted}`,
             );
           }
         }
