@@ -110,3 +110,59 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
   }
   return { requested: customers.length, eligible, exclusions, samples };
 }
+
+/**
+ * Current sendable pool for an event-triggered journey. This is a preflight,
+ * not a promise that every store customer will enter the journey: the trigger
+ * still selects one customer and the runner rechecks these rules at send time.
+ */
+export async function resolveAutomationAudience(automationId: string, now = new Date()): Promise<AudienceResolution> {
+  const automation = await prisma.automation.findUnique({
+    where: { id: automationId },
+    include: { store: { select: { id: true, emailSendingPausedAt: true, timezone: true } } },
+  });
+  if (!automation) throw new Error(`Automation ${automationId} not found`);
+  const [customers, governorConfig] = await Promise.all([
+    prisma.customer.findMany({
+      where: { storeId: automation.storeId },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, acceptsMarketing: true,
+        contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
+        contactSuppressions: {
+          where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          take: 1, select: { reason: true },
+        },
+      },
+    }),
+    loadStoreGovernorConfig(automation.storeId),
+  ]);
+  const exclusions = Object.fromEntries(AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])) as Record<AudienceExclusionReason, number>;
+  const samples: AudienceResolution["samples"] = {};
+  const eligible: AudienceResolution["eligible"] = [];
+  const exclude = (reason: AudienceExclusionReason, customer: { id: string; email: string }) => {
+    exclusions[reason]++;
+    if ((samples[reason]?.length ?? 0) < 3) (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
+  };
+  for (const customer of customers) {
+    const reason = staticAudienceExclusion({
+      email: customer.email,
+      consentStatus: customer.contactConsents[0]?.status,
+      acceptsMarketing: customer.acceptsMarketing,
+      suppressionReason: customer.contactSuppressions[0]?.reason,
+      alreadyProcessed: false,
+      storePaused: Boolean(automation.store.emailSendingPausedAt),
+      globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
+    });
+    if (reason) { exclude(reason, customer); continue; }
+    const decision = await checkAllRules({
+      customerId: customer.id, storeId: automation.storeId, channel: "email",
+      messageType: "automation",
+      timezone: governorConfig.timezone ?? automation.store.timezone ?? "UTC",
+      quietHours: governorConfig.quietHours,
+      maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
+    });
+    if (!decision.allowed) { exclude(governorReason(decision.rule), customer); continue; }
+    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName });
+  }
+  return { requested: customers.length, eligible, exclusions, samples };
+}

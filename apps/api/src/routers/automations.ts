@@ -7,6 +7,7 @@ import { assertV1EmailAutomation } from "@allohq/release-gate";
 import {
   automationActivationChecksum,
   loadAutomationActivationSnapshot,
+  resolveAutomationAudience,
 } from "@allohq/campaign-engine";
 
 const redisConnection = {
@@ -21,6 +22,38 @@ const agentPipelineQueue = new Queue("agent-pipeline", { connection: redisConnec
 const aiModelSchema = z.string().optional();
 
 export const automationsRouter = router({
+  dryRun: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const automation = await ctx.prisma.automation.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        include: {
+          store: {
+            select: {
+              emailSendingPausedAt: true,
+              senderDomain: { select: { domain: true, status: true } },
+              brandProfiles: { take: 1, select: { fromName: true, fromEmail: true } },
+            },
+          },
+        },
+      });
+      if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
+      const audience = await resolveAutomationAudience(automation.id);
+      const control = Math.floor(audience.eligible.length * 0.15);
+      return {
+        providerCalled: false,
+        scope: "current_sendable_store_pool" as const,
+        requested: audience.requested,
+        eligibleBeforeHoldout: audience.eligible.length,
+        estimatedTreatment: audience.eligible.length - control,
+        estimatedControl: control,
+        exclusions: audience.exclusions,
+        exclusionSamples: audience.samples,
+        sender: automation.store.brandProfiles[0]?.fromEmail ?? null,
+        senderDomain: automation.store.senderDomain,
+        storePaused: Boolean(automation.store.emailSendingPausedAt),
+      };
+    }),
   /** List automations with optional filters */
   list: workspaceProcedure
     .input(

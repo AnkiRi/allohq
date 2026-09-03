@@ -77,6 +77,7 @@ export default function AutomationDetailPage() {
   };
 
   const { data, isLoading } = (trpc.automations.getById as any).useQuery({ id: automationId }) as { data: AutomationDetail | undefined; isLoading: boolean };
+  const { data: preflight } = (trpc.automations.dryRun as any).useQuery({ id: automationId }) as { data: any };
   const utils = trpc.useUtils();
 
   const activateMut = (trpc.automations.activate as any).useMutation({
@@ -182,6 +183,33 @@ export default function AutomationDetailPage() {
           )}
         </div>
       </div>
+      {preflight && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold text-foreground">Delivery preflight</div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Current sendable pool; customers still enter only when this journey’s trigger occurs.</p>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">No email sent</span>
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-3">
+            {[
+              ["Store customers", preflight.requested],
+              ["Currently eligible", preflight.eligibleBeforeHoldout],
+              ["Estimated treatment", preflight.estimatedTreatment],
+              ["Estimated control", preflight.estimatedControl],
+            ].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-muted p-3"><div className="text-lg font-semibold">{value}</div><div className="text-[10px] text-muted-foreground">{label}</div></div>)}
+          </div>
+          <div className="mt-3 text-[11px] text-muted-foreground">
+            Sender: {preflight.sender ?? "Not configured"} · Domain: {preflight.senderDomain?.status ?? "not configured"}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(preflight.exclusions as Record<string, number>).filter(([, count]) => count > 0).map(([reason, count]) => (
+              <span key={reason} className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">{reason.replaceAll("_", " ")}: {count}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Automation info */}
       <div className="grid grid-cols-3 gap-4">
