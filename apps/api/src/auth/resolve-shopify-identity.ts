@@ -58,9 +58,17 @@ export async function resolveShopifyIdentity(identity: VerifiedShopifyIdentity) 
       create: { clerkId: authId, email },
       update: {},
     });
+    // A Shopify-origin install can complete without a Clerk cookie. The first
+    // verified staff session reaching that fresh installation becomes its Joon
+    // administrator exactly once; all later staff default to member.
+    const claimed = await tx.store.updateMany({
+      where: { id: store.id, shopifyInstallerClaimedAt: null },
+      data: { shopifyInstallerClaimedAt: new Date() },
+    });
+    const role = claimed.count === 1 ? "admin" : "member";
     await tx.workspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId: store.workspaceId, userId: user.id } },
-      create: { workspaceId: store.workspaceId, userId: user.id, role: "member" },
+      create: { workspaceId: store.workspaceId, userId: user.id, role },
       update: {},
     });
     await tx.shopifyStaffIdentity.upsert({

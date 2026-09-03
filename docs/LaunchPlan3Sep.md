@@ -122,8 +122,8 @@ The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
 - `a58ec1c` completed phase 1C: embedded API requests obtain a fresh ID token;
   the API accepts it only for exactly one active installed shop and maps a newly
   seen staff identity into that workspace as a non-owner member.
-- Phase 1D is in progress: establish installer ownership, explicit staff-role
-  behavior, multi-store rules, and cross-shop authorization tests.
+- Phase 1D now has a one-time installer-admin claim and safe member default;
+  multi-store and cross-shop live validation remain.
 
 App Bridge is therefore **started, not complete**. Loading the script and being
 able to verify a token creates the secure authentication foundation; Shopify
@@ -141,8 +141,8 @@ identity does not yet replace Clerk for normal application requests.
 | 1A — App Bridge bootstrap | Joon loads as an App Bridge-capable embedded document | Stage 1 | Done (`76692d4`) |
 | 1B — Shopify ID-token verification | Backend can reject forged, expired, wrong-app, and cross-shop tokens | Stage 1 | Done (`85eead5`) |
 | 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Done (`a58ec1c`); live Shopify validation remains in 1F |
-| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; owner/staff roles and multi-store access are explicit | Stage 1 | In progress; safe member default implemented in `a58ec1c` |
-| 1E — Shopify-origin install | Install/token exchange works from Shopify without typing a domain or requiring a Clerk session | Stage 1 | In progress; tested expiring offline-token exchange primitive in `1c77d0c` |
+| 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; first verified session on a fresh install claims admin once, later staff default to member | Stage 1 | Code path done (pending commit); multi-store/live validation remains in 1F |
+| 1E — Shopify-origin install | OAuth callback creates/reuses the shop tenant without a Clerk cookie; token exchange and encrypted persistence work | Stage 1 | Code done (pending commit); live Shopify validation remains in 1F |
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
 | 1H — Customer-event pixel | Consent-aware Shopify Web Pixel captures page/product/collection/search/cart/checkout events with data minimization and event-id dedupe | Stages 1 and 3 | Code done (`bd00a2c`); Shopify-linked extension deploy/live validation remains in 1G/1F |

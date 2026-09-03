@@ -210,6 +210,7 @@ model Store {
   tokenScopes           String[]  @default([])
   widgetPublicKey       String?   @unique
   widgetAllowedOrigins  String[]  @default([])
+  shopifyInstallerClaimedAt DateTime?
   isActive              Boolean   @default(true)
   installedAt           DateTime  @default(now())
   lastSyncAt            DateTime?

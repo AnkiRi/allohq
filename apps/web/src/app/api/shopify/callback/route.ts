@@ -76,16 +76,12 @@ export async function GET(request: NextRequest) {
     const encryptedRefreshToken = encryptSecret(token.refreshToken);
     const tokenIssuedAt = Date.now();
 
-    // Get current user's workspace
+    // A Shopify App Store install must not depend on a third-party Clerk
+    // cookie. If one exists, preserve the standalone user's workspace;
+    // otherwise create/reuse the tenant deterministically from the verified
+    // shop. The first verified App Bridge staff session claims admin once.
     const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.redirect(
-        new URL("/sign-in", request.nextUrl.origin)
-      );
-    }
-
-    // Find or auto-create user and workspace
-    let user = await prisma.user.findUnique({
+    let user = userId ? await prisma.user.findUnique({
       where: { clerkId: userId },
       include: {
         workspaceMembers: {
@@ -93,9 +89,9 @@ export async function GET(request: NextRequest) {
           select: { workspaceId: true },
         },
       },
-    });
+    }) : null;
 
-    if (!user) {
+    if (userId && !user) {
       // Auto-provision user + default workspace on first Shopify connect
       const workspace = await prisma.workspace.create({
         data: {
@@ -119,8 +115,23 @@ export async function GET(request: NextRequest) {
         },
       });
     }
-
-    const workspaceId = user.workspaceMembers[0]?.workspaceId;
+    const existingInstallation = await prisma.store.findFirst({
+      where: { shopDomain: normalizedShop, platform: "shopify" },
+      select: { workspaceId: true },
+    });
+    // A shop is one tenant. Reconnects from another browser/account must reuse
+    // it rather than create a duplicate mapping that embedded auth rejects.
+    let workspaceId = existingInstallation?.workspaceId ?? user?.workspaceMembers[0]?.workspaceId;
+    if (!workspaceId) {
+        const baseSlug = `shopify-${normalizedShop.replace(".myshopify.com", "")}`;
+        const workspace = await prisma.workspace.create({
+          data: {
+            name: normalizedShop.replace(".myshopify.com", ""),
+            slug: `${baseSlug}-${randomBytes(4).toString("hex")}`,
+          },
+        });
+        workspaceId = workspace.id;
+    }
     if (!workspaceId) {
       return integrationError("workspace_missing");
     }
@@ -132,7 +143,7 @@ export async function GET(request: NextRequest) {
           shopDomain: normalizedShop,
         },
       },
-      select: { widgetPublicKey: true },
+      select: { widgetPublicKey: true, isActive: true },
     });
     const widgetPublicKey =
       existingStore?.widgetPublicKey ??
@@ -179,6 +190,9 @@ export async function GET(request: NextRequest) {
         isActive: true,
         onboardingStep: 1,
         onboardingCompletedAt: null,
+        // Only a genuine reinstall resets the one-time installer claim. A
+        // routine scope reconnect must never promote the next staff visitor.
+        ...(!existingStore?.isActive ? { shopifyInstallerClaimedAt: null } : {}),
       },
     });
 
