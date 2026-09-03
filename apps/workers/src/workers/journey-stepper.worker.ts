@@ -16,6 +16,7 @@ import type { WorkflowNode, JourneyStepInput } from "@allohq/journey-orchestrato
 import { getOptimalSendTime } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
+import { isV1ReleaseMode } from "@allohq/release-gate";
 
 // Time-sensitive automation categories that should not be delayed
 const TIME_SENSITIVE_CATEGORIES = ["cart_recovery", "abandoned_cart", "shipping_updates"];
@@ -39,6 +40,13 @@ const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: r
 export const journeyStepperWorker = new Worker<JourneyStepJobData>(
   QUEUE_NAMES.JOURNEY_STEP,
   async (job) => {
+    // This is the legacy adaptive-channel journey engine. Merchant-approved
+    // email journeys execute through automation-runner, where activation
+    // checksums, holdouts and delivery idempotency are enforced.
+    if (isV1ReleaseMode()) {
+      console.log(`[journey-stepper] Ignoring legacy journey job ${job.id} in email v1`);
+      return { status: "blocked_by_v1_boundary" };
+    }
     const { journeyId, customerId, storeId, automationId, stepIndex, nodes } = job.data;
 
     console.log(`Journey step ${stepIndex} for journey ${journeyId}, customer ${customerId}`);

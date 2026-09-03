@@ -9,6 +9,7 @@ import {
   escalateConversation,
   onConversationOpened,
 } from "@allohq/conversation-engine";
+import { isV1ReleaseMode } from "@allohq/release-gate";
 
 interface ConversationJobData {
   storeId: string;
@@ -28,6 +29,10 @@ interface ConversationJobData {
  */
 async function processConversation(job: Job<ConversationJobData>) {
   const { storeId, conversationId, customerId, channel, from, message } = job.data;
+  if (isV1ReleaseMode() && (channel === "sms" || channel === "whatsapp")) {
+    console.log(`[conversation] Ignoring ${channel} job ${job.id} in email v1`);
+    return;
+  }
   console.log(`[conversation] Processing ${channel} message from ${from}`);
 
   // Save inbound message
