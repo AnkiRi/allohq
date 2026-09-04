@@ -409,6 +409,12 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  extensions/joon-web-pixel:
+    dependencies:
+      '@shopify/web-pixels-extension':
+        specifier: ^2.0.0
+        version: 2.18.0
+
   packages/agent-brain:
     dependencies:
       '@allohq/database':
@@ -2632,6 +2638,9 @@ packages:
 
   '@shopify/storefront-api-client@1.0.9':
     resolution: {integrity: sha512-vgc0ZczMvrbsQQFYcIIONnIiqiafpcMyq5osI8X6PB65DhnmCQEp3kSlXKOjBPzyAWYvp28nLHS0+r4xsp4yQA==}
+
+  '@shopify/web-pixels-extension@2.18.0':
+    resolution: {integrity: sha512-qHp93QKdxJ8UREzkYOje6343An2wvXLUF71uduahiTjBfYXQ7VqIAXoHCwzCnP3Kss1AXLpz7XPaKCRC0ONOTw==}
 
   '@stablelib/base64@1.0.1':
     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
@@ -6963,6 +6972,8 @@ snapshots:
   '@shopify/storefront-api-client@1.0.9':
     dependencies:
       '@shopify/graphql-client': 1.4.1
+
+  '@shopify/web-pixels-extension@2.18.0': {}
 
   '@stablelib/base64@1.0.1': {}
 

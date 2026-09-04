@@ -1,0 +1,26 @@
+client_id = "b4fa0acb3b8560b7b9cbf61307b93723"
+name = "Joon"
+application_url = "https://agent.joonhq.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+scopes = "read_products,read_customers,read_orders,read_checkouts,read_discounts,write_discounts,read_fulfillments,read_inventory,write_pixels,read_customer_events"
+
+[auth]
+redirect_urls = [
+  "https://agent.joonhq.com/api/shopify/callback",
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+compliance_topics = [
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
+]
+uri = "https://api.allohq.ai/webhooks/shopify"

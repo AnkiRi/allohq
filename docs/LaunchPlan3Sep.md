@@ -117,6 +117,49 @@ critical path has moved to linked/deployed validation: production Shopify app
 configuration, live embedded lifecycle acceptance, provider/DNS setup, failure
 drills against real services, legal/operator approval, and submission.
 
+Production configuration audit on **4 September 2026**:
+
+- Shopify version `Joon-Email-V1` is released with the intended minimal scopes
+  and Webhooks API `2026-07`. The version currently changes the merchant-facing
+  app name to `Joon-Email-V1`; the next version must restore the app name to
+  `Joon` while using `Joon-Email-V1` only as the version label.
+- The released version still contains localhost and legacy `agent.allohq.ai`
+  callback URLs. The checked-in production config retains only
+  `https://agent.joonhq.com/api/shopify/callback`.
+- `https://agent.joonhq.com` is the embedded web application.
+- `https://api.allohq.ai` is the current API host. `/webhooks/shopify` and
+  `/webhooks/resend` reach their handlers. `/healthz` remains 404 until the
+  launch-ready API build is deployed; the route exists on `send-path`.
+- Operational Shopify webhooks remain shop-specific and are registered during
+  sync. The app config declares only the three mandatory compliance topics to
+  avoid duplicate operational deliveries.
+- The Web Pixel extension is now part of the pnpm workspace and app source, but
+  it does not become active for installed shops until a Shopify CLI app version
+  containing the extension is deployed and released.
+- Protected Customer Data is still a draft. Phone and address are excluded;
+  name and email remain because an email product cannot operate without them.
+
+### Level 2 protected-customer-data controls
+
+Name and email are Level 2 fields. Shopify requires both the Level 1 and Level
+2 safeguards for public apps that use them. These are launch requirements, not
+optional questionnaire optimizations: an unsupported “Yes” can fail evidence
+review, while “No” can prevent Joon receiving the data it needs.
+
+| Control | Required operating evidence | Current status |
+| --- | --- | --- |
+| Encrypted backups | Managed encrypted backups/PITR, retention setting, and a recorded restore test | External setup and restore drill pending |
+| Separate test and production data | Separate app/services/database/Redis/provider credentials; no copied production PII in test | External staging environment pending |
+| Data-loss prevention | Data inventory, least privilege, log redaction, controlled exports/egress, deletion and alerting | Code controls partly done; operating policy/evidence pending |
+| Staff access restrictions | Named need-to-know access, MFA, role assignment and periodic access review across Shopify, Railway, GitHub, Clerk and providers | Founder/operator setup and evidence pending |
+| Strong passwords | SSO/MFA or provider-enforced strong-password controls for every privileged account | Provider configuration evidence pending |
+| Personal-data access logging | Tenant, actor, purpose/action and timestamp logs with protected retention and review | Code done; production deployment/retention/review proof pending |
+| Incident-response policy | Named owner, severity/escalation rules, containment, merchant/Shopify notification and a tabletop exercise | Runbook exists; owner approval and exercise pending |
+
+Do not submit the protected-data request until every row can be answered
+truthfully and backed by a screenshot, configuration export, log sample, policy,
+or drill record.
+
 The checked-in gates are now executable rather than documentary:
 
 - `pnpm test` discovers all repository unit tests (33 files, 94 tests at this
@@ -162,7 +205,7 @@ embedded requests authenticate with fresh Shopify ID tokens.
 | 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; first verified session on a fresh install claims admin once, later staff default to member | Stage 1 | Code path done (`b1632f7`); multi-store/live validation remains in 1F |
 | 1E — Shopify-origin install | OAuth callback creates/reuses the shop tenant without a Clerk cookie; token exchange and encrypted persistence work | Stage 1 | Code done (`b1632f7`); live Shopify validation remains in 1F |
 | 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Code paths done; blocked on live linked-app acceptance |
-| 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
+| 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Source config now prepared for app `325227249665`; Shopify CLI validation/deploy/release remains external |
 | 1H — Customer-event pixel | Consent-aware Shopify Web Pixel captures page/product/collection/search/cart/checkout events with data minimization and event-id dedupe | Stages 1 and 3 | Code done (`bd00a2c`); Shopify-linked extension deploy/live validation remains in 1G/1F |
 | 2A — Scope audit | Operational Shopify calls are GraphQL Admin 2026-07; `read_all_orders` and write access to orders/products/customers are excluded, with a scope regression test | Stage 2 | Code audit done in current slice; Partner Dashboard scope synchronization remains in 1G |
 | 2B — Level 2 evidence | Data inventory, minimization, access logging, retention/deletion evidence and Dashboard request | Stage 2 | Engineering evidence pack and structured tenant/actor access logs done in current slice; production log-retention proof and Dashboard submission remain external |
