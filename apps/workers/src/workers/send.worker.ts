@@ -25,6 +25,7 @@ import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { acquireEmailCapacity } from "../utils/email-capacity";
+import { providerJobFailure } from "../utils/provider-job-failure";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
@@ -717,8 +718,7 @@ export async function deliverOne(data: DeliverOneData) {
   }
   await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "failed", provider: result.provider ?? "resend", error: result.error } });
   console.error(`  [SEND] Failed for ${customer.email}: ${result.error}`);
-  if (result.retryable) throw new Error(result.error ?? "Transient email provider failure");
-  return { sent: false, failed: true, retryable: false, error: result.error };
+  throw providerJobFailure(result);
 }
 
 // ---------------------------------------------------------------------------

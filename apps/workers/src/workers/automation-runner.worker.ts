@@ -18,6 +18,7 @@ import {
 } from "@allohq/campaign-engine";
 import { assignArm, getOrCreateExperiment } from "@allohq/customer-state";
 import { acquireEmailCapacity } from "../utils/email-capacity";
+import { providerJobFailure } from "../utils/provider-job-failure";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -404,11 +405,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               data: { status: "failed", provider: result.provider ?? "resend", error: result.error },
             });
             console.error(`[automation-runner] Failed to send email to ${customer.email}: ${result.error}`);
-            return {
-              status: "delivery_failed",
-              channel: "email",
-              error: result.error,
-            };
+            throw providerJobFailure(result);
           }
           break;
         }

@@ -21,10 +21,6 @@ export function deadLetterJobId(record: Pick<DeadLetterRecord, "sourceQueue" | "
   return `${record.sourceQueue}-${record.sourceJobId}-${record.attemptsMade}`.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-export function isTerminalAttempt(attemptsMade: number, configuredAttempts?: number): boolean {
-  return attemptsMade >= (configuredAttempts ?? 1);
-}
-
 export function startCriticalDeadLetterCapture() {
   const deadLetterQueue = new Queue<DeadLetterRecord>(QUEUE_NAMES.DEAD_LETTER, {
     connection: redisConnection,
@@ -36,7 +32,10 @@ export function startCriticalDeadLetterCapture() {
       try {
         const job = await sourceQueue.getJob(jobId);
         if (!job) return;
-        if (!isTerminalAttempt(job.attemptsMade, job.opts.attempts)) return;
+        // A failed event can also be emitted before BullMQ schedules a retry.
+        // Capture only jobs that actually remain in the terminal failed set;
+        // this also recognizes UnrecoverableError on its first attempt.
+        if ((await job.getState()) !== "failed") return;
         const record: DeadLetterRecord = {
           sourceQueue: sourceQueue.name,
           sourceJobId: String(job.id),
