@@ -7,7 +7,6 @@ export const SHOPIFY_SCOPES = [
   "read_customers",
   "read_orders",
   "read_checkouts",
-  "read_discounts",
   "write_discounts",
   "read_fulfillments",
   "read_inventory",
