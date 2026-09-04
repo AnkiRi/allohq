@@ -7,9 +7,11 @@ import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext"
 import { OnboardingGate } from "@/components/layout/OnboardingGate";
 import { Footer } from "@/components/layout/Footer";
 import { CommandPaletteProvider, CommandPalette } from "@/components/ui/CommandPalette";
+import { ShopifyBootstrapBoundary } from "@/components/shopify/ShopifyBootstrapBoundary";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
+    <ShopifyBootstrapBoundary>
     <CommandPaletteProvider>
     <MobileSidebarProvider>
       <div className="flex h-screen canvas-noise relative">
@@ -42,5 +44,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     </MobileSidebarProvider>
     </CommandPaletteProvider>
+    </ShopifyBootstrapBoundary>
   );
 }

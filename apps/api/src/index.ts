@@ -12,6 +12,7 @@ import { handleGupshupWebhook } from "./webhooks/gupshup";
 import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
 import { handleWidgetPopups } from "./routes/widget-popups";
+import { handleShopifyBootstrap } from "./routes/shopify-bootstrap";
 import { assertDataEncryptionConfigured, prisma } from "@allohq/database";
 import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
 
@@ -103,6 +104,12 @@ const server = http.createServer((req, res) => {
   // policy because every merchant storefront has a distinct origin.
   if (req.url?.startsWith("/widget/")) {
     void handleWidgetPopups(req, res);
+    return;
+  }
+  if (req.url?.startsWith("/v1/shopify/bootstrap")) {
+    corsMiddleware(req, res, () => {
+      void handleShopifyBootstrap(req, res);
+    });
     return;
   }
   if (req.url?.startsWith("/v1/") && !req.url.startsWith("/v1/agent/")) {
