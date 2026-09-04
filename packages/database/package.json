@@ -10,7 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx src/seed.ts",
-    "lint": "eslint ./src",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint ./src",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
