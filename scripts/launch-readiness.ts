@@ -1,5 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { configurationChecks, type Check, summarize } from "./launch-readiness-lib";
+
+const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
+const shopifyConfigPath = fileURLToPath(
+  new URL("../shopify.app.toml", import.meta.url),
+);
 
 async function endpointCheck(name: string, url: string, expectedText?: string): Promise<Check> {
   try {
@@ -13,9 +19,9 @@ async function endpointCheck(name: string, url: string, expectedText?: string): 
 
 async function main() {
   const checks = configurationChecks(process.env);
-  if (!existsSync("shopify.app.toml")) checks.push({ name: "linked Shopify config", ok: false, detail: "shopify.app.toml missing; run Shopify config link" });
+  if (!existsSync(shopifyConfigPath)) checks.push({ name: "linked Shopify config", ok: false, detail: `shopify.app.toml missing from ${repositoryRoot}; run Shopify config link` });
   else {
-    const config = readFileSync("shopify.app.toml", "utf8");
+    const config = readFileSync(shopifyConfigPath, "utf8");
     checks.push({ name: "linked Shopify config", ok: !config.includes("REPLACE_WITH_"), detail: config.includes("REPLACE_WITH_") ? "contains placeholders" : "present" });
   }
 
