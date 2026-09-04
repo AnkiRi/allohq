@@ -53,6 +53,10 @@ export default function RootLayout({
             <>
               <meta name="shopify-api-key" content={shopifyApiKey} />
               {apiOrigin ? <meta name="shopify-app-origins" content={apiOrigin} /> : null}
+              {/* Joon obtains a fresh App Bridge ID token itself immediately
+                  before each API call. Disable the CDN fetch interceptor so it
+                  does not wrap the cross-origin API request a second time. */}
+              <meta name="shopify-disabled-features" content="fetch" />
               {/* Shopify requires App Bridge before every other script. The CDN
                   bootstrap supplies fresh ID tokens and embedded navigation. */}
               <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
