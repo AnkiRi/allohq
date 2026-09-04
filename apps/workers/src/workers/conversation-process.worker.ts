@@ -33,7 +33,7 @@ async function processConversation(job: Job<ConversationJobData>) {
     console.log(`[conversation] Ignoring ${channel} job ${job.id} in email v1`);
     return;
   }
-  console.log(`[conversation] Processing ${channel} message from ${from}`);
+  console.log(`[conversation] Processing ${channel} message for customer ${customerId}`);
 
   // Save inbound message
   await prisma.conversationMessage.create({
@@ -146,7 +146,7 @@ async function processConversation(job: Job<ConversationJobData>) {
     data: { status: "waiting" },
   });
 
-  console.log(`[conversation] Responded to ${from} via ${channel} (confidence: ${result.confidence})`);
+  console.log(`[conversation] Responded to customer ${customerId} via ${channel} (confidence: ${result.confidence})`);
 }
 
 export const conversationProcessWorker = new Worker<ConversationJobData>(

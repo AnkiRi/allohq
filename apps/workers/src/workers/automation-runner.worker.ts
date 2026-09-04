@@ -204,7 +204,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             messageType: "automation",
           });
           if (!emailGovCheck.allowed) {
-            console.log(`[automation-runner] Suppressed email to ${customer.email}: ${emailGovCheck.reason}`);
+            console.log(`[automation-runner] Suppressed email for customer ${customer.id}: ${emailGovCheck.reason}`);
             await prisma.messageLog.upsert({
               where: { deliveryKey },
               create: {
@@ -394,7 +394,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "sent", externalId: result.externalId, provider: result.provider ?? "resend", sentAt: new Date() },
             });
-            console.log(`[automation-runner] Sent email to ${customer.email} (template: ${templateId})`);
+            console.log(`[automation-runner] Sent email for customer ${customer.id} (template: ${templateId})`);
             // Log fatigue + queue state update
             await prisma.customerFatigueLog.create({
               data: { customerId: customer.id, storeId: automation.storeId, channel: "email", messageType: "automation", automationId },
@@ -405,7 +405,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "failed", provider: result.provider ?? "resend", error: result.error },
             });
-            console.error(`[automation-runner] Failed to send email to ${customer.email}: ${result.error}`);
+            console.error(`[automation-runner] Failed to send email for customer ${customer.id}: ${result.error}`);
             throw providerJobFailure(result);
           }
           break;
@@ -422,7 +422,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             messageType: "automation",
           });
           if (!smsGovCheck.allowed) {
-            console.log(`[automation-runner] Suppressed SMS to ${customer.phone}: ${smsGovCheck.reason}`);
+            console.log(`[automation-runner] Suppressed SMS for customer ${customer.id}: ${smsGovCheck.reason}`);
             await prisma.messageLog.create({
               data: {
                 workspaceId: automation.workspaceId,
@@ -445,7 +445,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           // Validate phone number
           const smsPhone = normalizePhone(customer.phone);
           if (!isValidE164(smsPhone)) {
-            console.warn(`[automation-runner] Invalid phone for SMS: ${customer.phone} (customer ${customer.id})`);
+            console.warn(`[automation-runner] Invalid phone for SMS customer ${customer.id}`);
             break;
           }
 
@@ -491,7 +491,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "sent", externalId: smsResult.externalId, provider: smsResult.provider, sentAt: new Date() },
             });
-            console.log(`[automation-runner] Sent SMS to ${customer.phone} via ${smsResult.provider}`);
+            console.log(`[automation-runner] Sent SMS for customer ${customer.id} via ${smsResult.provider}`);
             await prisma.customerFatigueLog.create({
               data: { customerId: customer.id, storeId: automation.storeId, channel: "sms", messageType: "automation", automationId },
             });
@@ -501,7 +501,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "failed", provider: smsResult.provider, error: smsResult.error },
             });
-            console.error(`[automation-runner] Failed to send SMS to ${customer.phone}: ${smsResult.error}`);
+            console.error(`[automation-runner] Failed to send SMS for customer ${customer.id}: ${smsResult.error}`);
             return {
               status: "delivery_failed",
               channel: "sms",
@@ -525,7 +525,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             messageType: "automation",
           });
           if (!waGovCheck.allowed) {
-            console.log(`[automation-runner] Suppressed WhatsApp to ${customer.phone}: ${waGovCheck.reason}`);
+            console.log(`[automation-runner] Suppressed WhatsApp for customer ${customer.id}: ${waGovCheck.reason}`);
             await prisma.messageLog.create({
               data: {
                 workspaceId: automation.workspaceId,
@@ -547,7 +547,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
           const waPhone = normalizePhone(customer.phone);
           if (!isValidE164(waPhone)) {
-            console.warn(`[automation-runner] Invalid phone for WhatsApp: ${customer.phone} (customer ${customer.id})`);
+            console.warn(`[automation-runner] Invalid phone for WhatsApp customer ${customer.id}`);
             break;
           }
 
@@ -580,7 +580,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "sent", externalId: waResult.externalId, provider: waResult.provider, sentAt: new Date() },
             });
-            console.log(`[automation-runner] Sent WhatsApp to ${customer.phone} via ${waResult.provider}`);
+            console.log(`[automation-runner] Sent WhatsApp for customer ${customer.id} via ${waResult.provider}`);
             await prisma.customerFatigueLog.create({
               data: { customerId: customer.id, storeId: automation.storeId, channel: "whatsapp", messageType: "automation", automationId },
             });
@@ -590,7 +590,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "failed", provider: waResult.provider, error: waResult.error },
             });
-            console.error(`[automation-runner] Failed to send WhatsApp to ${customer.phone}: ${waResult.error}`);
+            console.error(`[automation-runner] Failed to send WhatsApp for customer ${customer.id}: ${waResult.error}`);
             return {
               status: "delivery_failed",
               channel: "whatsapp",
@@ -611,7 +611,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             messageType: "automation",
           });
           if (!rcsGovCheck.allowed) {
-            console.log(`[automation-runner] Suppressed RCS to ${customer.phone}: ${rcsGovCheck.reason}`);
+            console.log(`[automation-runner] Suppressed RCS for customer ${customer.id}: ${rcsGovCheck.reason}`);
             await prisma.messageLog.create({
               data: {
                 workspaceId: automation.workspaceId,
@@ -633,7 +633,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
 
           const rcsPhone = normalizePhone(customer.phone);
           if (!isValidE164(rcsPhone)) {
-            console.warn(`[automation-runner] Invalid phone for RCS: ${customer.phone} (customer ${customer.id})`);
+            console.warn(`[automation-runner] Invalid phone for RCS customer ${customer.id}`);
             break;
           }
 
@@ -678,7 +678,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "sent", externalId: rcsResult.externalId, provider: rcsResult.provider, sentAt: new Date() },
             });
-            console.log(`[automation-runner] Sent RCS to ${customer.phone} via ${rcsResult.provider}`);
+            console.log(`[automation-runner] Sent RCS for customer ${customer.id} via ${rcsResult.provider}`);
             await prisma.customerFatigueLog.create({
               data: { customerId: customer.id, storeId: automation.storeId, channel: "rcs", messageType: "automation", automationId },
             });
@@ -688,7 +688,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               where: { id: messageLog.id },
               data: { status: "failed", provider: rcsResult.provider, error: rcsResult.error },
             });
-            console.error(`[automation-runner] Failed to send RCS to ${customer.phone}: ${rcsResult.error}`);
+            console.error(`[automation-runner] Failed to send RCS for customer ${customer.id}: ${rcsResult.error}`);
             return {
               status: "delivery_failed",
               channel: "rcs",

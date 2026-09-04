@@ -725,7 +725,7 @@ export async function deliverOne(data: DeliverOneData) {
     return { sent: true };
   }
   await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "failed", provider: result.provider ?? "resend", error: result.error } });
-  console.error(`  [SEND] Failed for ${customer.email}: ${result.error}`);
+  console.error(`  [SEND] Failed for customer ${customer.id}: ${result.error}`);
   throw providerJobFailure(result);
 }
 

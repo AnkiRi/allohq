@@ -22,8 +22,8 @@ longitudinal decision/outcome ledger begins at installation.
 
 | Data | Stored fields | V1 purpose |
 | --- | --- | --- |
-| Shop | domain, name, contact email/phone, address, currency, timezone | tenant, locale, sender setup, reporting |
-| Customer | Shopify ID, email, optional phone, name, tags, timestamps | consent lookup, email personalization, segmentation, deletion lookup |
+| Shop | domain, name, contact email, business address, currency, timezone | tenant, locale, sender setup, reporting and compliant footer defaults |
+| Customer | Shopify ID, email, name, tags, timestamps | consent lookup, email personalization, segmentation, deletion lookup |
 | Consent | customer, email channel, state, opt-in level/source, update time | fail-closed eligibility |
 | Order | ID/number, customer, totals, tax/shipping, currency, status, time | RFM/LTV, restraint and outcomes |
 | Line item | product/variant IDs, title, quantity, price | category affinity, replenishment evidence, margin analysis |
@@ -31,8 +31,7 @@ longitudinal decision/outcome ledger begins at installation.
 | Storefront event | event ID/type, pseudonymous visitor/session/customer IDs, minimized data, time | activated behavior journeys and aggregate paths |
 | Delivery event | provider/message ID, status, time | idempotency, reporting and suppression |
 
-Phone data may arrive with Shopify customer/checkout records but is never used
-for v1 delivery. The Web Pixel rejects direct email, phone, name, address,
+Phone and customer-address fields are not requested in v1. The Web Pixel rejects direct email, phone, name, address,
 billing, shipping, credit-card and payment-detail keys before persistence.
 Anonymous events cannot trigger email; identified events resolve only to an
 existing customer inside the same store.
@@ -73,6 +72,14 @@ See `docs/privacy-retention-policy.md`.
   before provider delivery.
 - Critical terminal failures enter a DLQ index; replay requires an exact ID and
   retries only the retained failed original.
+
+Joon's operating policies and evidence templates are maintained in:
+
+- `docs/security/data-loss-prevention-policy.md`
+- `docs/security/incident-response-policy.md`
+- `docs/security/privileged-access-policy.md`
+- `docs/security/backup-and-restore-policy.md`
+- `docs/security/evidence/`
 
 ## Evidence locations
 

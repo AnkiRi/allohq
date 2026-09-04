@@ -118,7 +118,7 @@ export async function handleTwilioWebhook(req: IncomingMessage, res: ServerRespo
 async function handleInboundSms(from: string, message: string) {
   const normalizedPhone = from.replace(/^\+/, "");
 
-  console.log(`[twilio-webhook] Inbound SMS from ${from}: "${message.substring(0, 50)}..."`);
+  console.log("[twilio-webhook] Received inbound SMS message");
 
   // Find customer by phone number
   const customer = await prisma.customer.findFirst({
@@ -127,7 +127,7 @@ async function handleInboundSms(from: string, message: string) {
   });
 
   if (!customer) {
-    console.log(`[twilio-webhook] No customer found for phone ${from}`);
+    console.log("[twilio-webhook] No customer found for incoming sender");
     return;
   }
 

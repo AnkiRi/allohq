@@ -154,7 +154,7 @@ ${transcripts}`,
     parsed = JSON.parse(cleaned);
   } catch (err) {
     console.error(`[customer-voice] Failed to parse AI response for store ${storeId}:`, (err as Error).message);
-    console.error(`[customer-voice] Raw response:`, responseText.slice(0, 500));
+    console.error(`[customer-voice] Provider response could not be parsed (${responseText.length} characters)`);
     return false;
   }
 

@@ -164,6 +164,36 @@ Do not submit the protected-data request until every row can be answered
 truthfully and backed by a screenshot, configuration export, log sample, policy,
 or drill record.
 
+### Shopify entry and full-screen product decision (4 September 2026)
+
+Joon will use the mature email-platform pattern rather than placing the entire
+workspace inside the Shopify iframe:
+
+1. Shopify installation and managed permission grant.
+2. A compact embedded Joon surface verifies the Shopify staff session and shows
+   installation, sync, tracking, sender and service health.
+3. New merchants create or link a Joon account through Clerk. Returning
+   merchants sign in and connect the verified Shopify installation.
+4. Full-screen onboarding collects only product-relevant configuration:
+   business category, current email tool/migration intent, email-only channel
+   selection, Shopify-to-Joon consent sync preference, sender name/email,
+   sending-domain status, brand assets and an optional business address required
+   for compliant email footers. Customer phone/address are not requested from
+   Shopify for v1.
+5. The user verifies their account email and selects the free plan.
+6. Shopify's Joon entry opens the full-screen workspace after a short-lived,
+   one-time authenticated handoff. It must not ask an already linked staff user
+   to sign in again.
+7. The embedded surface remains available for setup, integration health,
+   simplified reporting and emergency pause; campaigns, email design,
+   automations, journeys, segments and advanced reporting use the full viewport.
+
+Merchant staff access is explicit. Shopify controls which staff roles may open
+Joon; Joon separately controls what those people may do. The initial role model
+is Owner, Admin, Marketer, Approver, Analyst and Content Creator. A newly seen
+Shopify staff identity is pending until an Owner/Admin grants a Joon role. Only
+Owner, Admin and Approver may approve or initiate real customer delivery.
+
 The checked-in gates are now executable rather than documentary:
 
 - `pnpm test` discovers all repository unit tests (33 files, 94 tests at this

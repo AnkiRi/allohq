@@ -165,7 +165,7 @@ async function handleInboundMessage(body: Record<string, unknown>) {
     return;
   }
 
-  console.log(`[gupshup-webhook] Inbound ${channel} from ${source}: "${messageText.substring(0, 50)}..."`);
+  console.log(`[gupshup-webhook] Received inbound ${channel} message`);
 
   // Find customer by phone number
   const customer = await prisma.customer.findFirst({
@@ -174,7 +174,7 @@ async function handleInboundMessage(body: Record<string, unknown>) {
   });
 
   if (!customer) {
-    console.log(`[gupshup-webhook] No customer found for phone ${source}`);
+    console.log("[gupshup-webhook] No customer found for incoming sender");
     return;
   }
 
