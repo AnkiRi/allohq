@@ -56,10 +56,10 @@ enemy. Joon must never compete on cents per thousand emails or earn more by
 sending more. V1 is free. A future paid model should price decision value only
 after attribution is proven.
 
-## 3. Verified state at plan creation
+## 3. Verified state
 
-Branch `send-path` was synchronized with `origin/send-path` at `3042980` before
-this document was written.
+Branch `send-path` was synchronized with `origin/send-path` at `72854a5` before
+this closure update. Earlier planning began at `3042980`.
 
 Implemented and verified:
 
@@ -84,18 +84,21 @@ Implemented and verified:
 - Phone-channel template/editor/provider controls removed from the v1 UI.
 - Model harness with unified and workload-specific routing.
 
-Known caveats:
+Known caveats requiring a deployed environment or external decision:
 
-- The current dashboard is Clerk-authenticated and standalone. It is not yet a
-  compliant Shopify-embedded identity flow.
+- App Bridge request authentication, Shopify staff mapping, and Shopify-origin
+  tenant creation are implemented. Their incognito, staff, uninstall/reinstall,
+  and multi-store lifecycle still needs validation inside a real linked Shopify
+  app.
 - `shopify.app.example.toml` exists, but no linked/deployed
   `shopify.app.toml` exists.
 - `read_all_orders` is removed for public v1; onboarding uses Shopify's standard
   order window and Joon's longitudinal ledger compounds from installation.
 - Sending-domain onboarding and live-send verification are implemented in code;
   provider DNS validation in a production environment remains.
-- Campaign preview and dispatch share a canonical audience resolver and dry-run
-  report. Automation preflight still needs to converge on the same report.
+- Campaign and automation preflight share the canonical audience rules. Campaign
+  approval freezes the eligible IDs and dispatch intersects that snapshot with
+  a fresh safety check, so approval cannot silently expand its audience.
 - Tone is captured as a feature/variant; outcomes do not yet change future tone
   selection. Do not call this tone learning.
 - Send-time selection is consolidated into one on-demand implementation with
@@ -109,10 +112,21 @@ changes used to complete that gate.
 
 ### Current position
 
-We are working in parallel across **Stage 1 (embedded lifecycle), Stage 3
-(event/audience safety), and Stage 6 (post-install intelligence)**. Storefront
-event capture and first-run category intelligence are implemented; the current
-critical-path engineering item remains Stage 1 lifecycle completion.
+The repository-only launch work is complete as of **4 September 2026**. The
+critical path has moved to linked/deployed validation: production Shopify app
+configuration, live embedded lifecycle acceptance, provider/DNS setup, failure
+drills against real services, legal/operator approval, and submission.
+
+The checked-in gates are now executable rather than documentary:
+
+- `pnpm test` discovers all repository unit tests (33 files, 94 tests at this
+  checkpoint) instead of only packages that happened to expose a test script.
+- `pnpm lint` runs on ESLint 9 and passes with zero errors; warning-level legacy
+  debt remains visible.
+- `pnpm typecheck` passes all 18 workspaces.
+- API, web, and worker production builds pass.
+- `pnpm launch:check` runs and intentionally remains red until production
+  credentials, deployed URLs, and a linked `shopify.app.toml` are supplied.
 
 The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
 
@@ -127,9 +141,11 @@ The App Bridge work belongs to **Stage 1 — Shopify embedded foundation**:
 - Phase 1D now has a one-time installer-admin claim and safe member default;
   multi-store and cross-shop live validation remain.
 
-App Bridge is therefore **started, not complete**. Loading the script and being
-able to verify a token creates the secure authentication foundation; Shopify
-identity does not yet replace Clerk for normal application requests.
+App Bridge engineering is complete through tenant/role mapping and
+Shopify-origin installation. Stage 1 remains open because its exit gate is a
+live Shopify lifecycle test, not because another repository-only auth component
+is known to be missing. Clerk remains available for standalone development;
+embedded requests authenticate with fresh Shopify ID tokens.
 
 ### Phase-to-stage map
 
@@ -145,7 +161,7 @@ identity does not yet replace Clerk for normal application requests.
 | 1C — Shopify request authentication | Frontend API calls carry fresh ID tokens; API resolves shop and staff identity without Clerk cookies | Stage 1 | Done (`a58ec1c`); live Shopify validation remains in 1F |
 | 1D — Tenant and role mapping | One verified Shopify shop maps to one Joon store/workspace; first verified session on a fresh install claims admin once, later staff default to member | Stage 1 | Code path done (`b1632f7`); multi-store/live validation remains in 1F |
 | 1E — Shopify-origin install | OAuth callback creates/reuses the shop tenant without a Clerk cookie; token exchange and encrypted persistence work | Stage 1 | Code done (`b1632f7`); live Shopify validation remains in 1F |
-| 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Pending |
+| 1F — Lifecycle recovery | Refresh, incognito, staff access, uninstall, reinstall, expired/revoked access and errors work safely | Stage 1 | Code paths done; blocked on live linked-app acceptance |
 | 1G — Linked Shopify configuration | Real `shopify.app.toml`, URLs, scopes and webhooks are linked and deployed | Stage 1 | Blocked on Shopify app/client IDs and URLs |
 | 1H — Customer-event pixel | Consent-aware Shopify Web Pixel captures page/product/collection/search/cart/checkout events with data minimization and event-id dedupe | Stages 1 and 3 | Code done (`bd00a2c`); Shopify-linked extension deploy/live validation remains in 1G/1F |
 | 2A — Scope audit | Operational Shopify calls are GraphQL Admin 2026-07; `read_all_orders` and write access to orders/products/customers are excluded, with a scope regression test | Stage 2 | Code audit done in current slice; Partner Dashboard scope synchronization remains in 1G |
@@ -153,7 +169,7 @@ identity does not yet replace Clerk for normal application requests.
 | 2C — Public trust surface | Stable public Privacy Policy, ToS, DPA, subprocessors and support routes, linked from the landing page | Stage 2 | Code draft done in current slice; operator details, deployed-vendor inventory and counsel/founder approval remain external |
 | 2D — Review/listing pack | Free plan, icon, screenshots, copy, reviewer store/instructions and screencast | Stage 2 | Shopify-compliant copy, media brief and deterministic reviewer walkthrough drafted in current slice; Dashboard configuration, final assets, credentials and screencast remain external |
 | 3A — Canonical audience resolver | Campaign preview/dispatch and automation preflight share consent, suppression, pause and governor exclusion semantics; automation execution rechecks the same permission/governor boundaries at each delivery | Stage 3 | Code done (`3a2025d` + current slice); live journey validation remains in Stage 5 |
-| 3B — Dry-run report | Campaign and automation pages show requested/currently-sendable, mutually exclusive exclusions, estimated treatment/control and sender/domain state with zero provider calls | Stage 3 | Campaign approval now freezes sorted eligible IDs inside the checksummed proposal, dispatch intersects that set with fresh safety eligibility, and UI exposes provider-cost state. Offer inputs remain covered by the same checksum; done in current slice |
+| 3B — Dry-run report | Campaign and automation pages show requested/currently-sendable, mutually exclusive exclusions, estimated treatment/control and sender/domain state with zero provider calls | Stage 3 | Done (`3d6f431`): approval freezes sorted eligible IDs inside the checksummed proposal; dispatch intersects them with fresh safety eligibility; UI exposes provider-cost state |
 | 3C — Margin-risk moment | Campaign preflight surfaces eligible customers who purchased in the prior seven days, their observed order subtotal and explicitly illustrative discount exposure; copy disclaims any repurchase prediction | Stage 3 and GTM | Code done in current slice; validate wording/currency with live fixtures in Stage 5 |
 | 3D — Event-trigger semantics | Identified Shopify events enter only active merchant-approved journeys; retries dedupe but genuinely later events can retrigger | Stage 3 | Done (`7d3fde4`); anonymous events remain analysis-only by design |
 | 4A — Sender-domain onboarding | Provider DNS records/status are displayed and refreshed; campaign and automation workers require a verified From domain before live delivery | Stage 4 | Code done in current slice; production provider/DNS validation remains |
@@ -168,7 +184,7 @@ identity does not yet replace Clerk for normal application requests.
 | 6C.1 — Email-only decision capture | Campaign planning records email as the selected medium and performs no unusable per-customer channel recommendation query | Stage 6 | Done (`cf81919`); broader copy audit remains in 6C |
 | 6D — First-run smart segments | Shopify taxonomy + catalog signals normalize into 20 verticals; verified purchase affinities and behavior segments refresh immediately after RFM | Stage 6 | Done (`1497757`); live-catalog validation remains in Stage 5 |
 | 7A — Production operations | Separate environments, backups/restore, alerts, DLQ/replay, runbooks and credential rotation | Stage 7 | Startup fails closed on critical email config; terminal critical-queue failures are indexed in a DLQ with exact-ID guarded retry and an operations runbook. Environment separation, provider alerts and managed backup/restore activation remain external |
-| 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Repeatable `pnpm launch:check` gate done in current slice; deployed run, live Shopify walkthrough and submission remain external |
+| 7B — Submission | Final automated/manual acceptance run and Shopify review submission | Stage 7 | Automated gate and complete test/lint entrypoints done (`1cd9041`, `d75d5d4`, `437c327`, `72854a5`); deployed run, live Shopify walkthrough and submission remain external |
 
 ### Stage 1 authentication flow: before, now, and target
 
@@ -176,14 +192,11 @@ Before phase 1A:
 
 `Clerk cookie/token -> Joon user -> workspace -> API`
 
-After phases 1A and 1B (current state):
+After phases 1A and 1B:
 
 `Shopify Admin -> App Bridge can issue ID token -> Joon can verify token`
 
-The current flow still uses Clerk for application authorization; the verified
-Shopify identity has not yet been connected to tenant access.
-
-After phases 1C–1F (Stage 1 complete):
+After phases 1C–1E (current code state):
 
 `Shopify Admin -> fresh ID token -> verified shop + staff -> authorized Joon
 workspace/store -> API`
