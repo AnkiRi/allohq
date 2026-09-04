@@ -213,6 +213,11 @@ export default function CampaignDetailPage() {
                   {dryRun.sender ?? "Sending address not configured"} · {dryRun.senderDomain?.status ?? "domain not configured"}
                 </span>
               </div>
+              <div className="mt-2 flex justify-between text-[11px]">
+                <span className="text-muted-foreground">Estimated provider cost</span>
+                <span className="font-medium">{dryRun.estimatedProviderCostCurrency} {dryRun.estimatedProviderCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">The eligible customer set freezes when you approve. Consent, suppression, pauses and delivery limits are checked again immediately before every email.</p>
               {dryRun.marginRisk.discountPercent > 0 && dryRun.marginRisk.recentBuyers > 0 && (
                 <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Margin worth reviewing</div>

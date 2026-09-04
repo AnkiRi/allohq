@@ -3,8 +3,8 @@ import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
-import { DEMO_STORE_DOMAIN } from "@allohq/database";
-import { campaignApprovalChecksum, resolveCampaignAudience } from "@allohq/campaign-engine";
+import { DEMO_STORE_DOMAIN, messagingCostFor } from "@allohq/database";
+import { campaignApprovalChecksum, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -53,6 +53,9 @@ export const campaignsRouter = router({
         eligibleBeforeHoldout: audience.eligible.length,
         estimatedTreatment: audience.eligible.length - control,
         estimatedControl: control,
+        estimatedProviderCost: (audience.eligible.length - control) * messagingCostFor("email"),
+        estimatedProviderCostCurrency: "INR" as const,
+        audienceFreezesOnApproval: true,
         exclusions: audience.exclusions,
         exclusionSamples: audience.samples,
         subject: campaign.template.subject,
@@ -309,6 +312,8 @@ export const campaignsRouter = router({
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
       }
 
+      const audience = await resolveCampaignAudience(campaign.id);
+      const approvedProposal = withCampaignAudienceSnapshot(campaign.agentProposal, audience);
       const approvalChecksum = campaignApprovalChecksum({
         campaignId: campaign.id,
         storeId: campaign.storeId,
@@ -328,7 +333,7 @@ export const campaignsRouter = router({
           conditions: campaign.segment.conditions,
           name: campaign.segment.name,
         } : null,
-        agentProposal: campaign.agentProposal,
+        agentProposal: approvedProposal,
       });
 
       await ctx.prisma.campaign.update({
@@ -337,6 +342,7 @@ export const campaignsRouter = router({
         data: {
           status: "sending",
           humanDecision: buildHumanDecision(campaign) as object,
+          agentProposal: approvedProposal as object,
           approvalChecksum,
           approvedAt: new Date(),
         },

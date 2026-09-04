@@ -66,6 +66,8 @@ export type { CampaignApprovalSnapshot } from "./approval-checksum";
 export { automationActivationChecksum, loadAutomationActivationSnapshot } from "./automation-activation-checksum";
 export type { AutomationActivationSnapshot } from "./automation-activation-checksum";
 export { resolveCampaignAudience, resolveAutomationAudience, AUDIENCE_EXCLUSION_REASONS } from "./audience-resolver";
+export { withCampaignAudienceSnapshot, campaignAudienceSnapshot } from "./audience-snapshot";
+export type { CampaignAudienceSnapshot } from "./audience-snapshot";
 export type { AudienceResolution, AudienceExclusionReason } from "./audience-resolver";
 
 // Benchmark Comparison

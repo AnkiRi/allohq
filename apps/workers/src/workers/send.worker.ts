@@ -19,6 +19,7 @@ import {
   getActiveTestForStore,
   campaignApprovalChecksum,
   resolveCampaignAudience,
+  campaignAudienceSnapshot,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
@@ -145,7 +146,15 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   // Resolve the same eligibility contract shown in the merchant dry run.
   // Permission/governor checks still run again immediately before delivery,
   // because delayed jobs can outlive an unsubscribe or complaint.
-  const audience = await resolveCampaignAudience(campaignId);
+  const currentAudience = await resolveCampaignAudience(campaignId);
+  const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+  const approvedAudience = campaignAudienceSnapshot(proposal);
+  if (!approvedAudience) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "draft", approvalChecksum: null, approvedAt: null } });
+    throw new Error("Campaign audience was not frozen at approval; merchant re-approval is required");
+  }
+  const approvedIds = new Set(approvedAudience.customerIds);
+  const audience = { ...currentAudience, eligible: currentAudience.eligible.filter((customer) => approvedIds.has(customer.id)) };
   const customers = await prisma.customer.findMany({
     where: { id: { in: audience.eligible.map((customer) => customer.id) } },
     select: {
@@ -177,7 +186,6 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
 
   // North Star #2 — make the offer real before any recipient is planned. A
   // campaign must never mention a code that Shopify rejected.
-  const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
   const discountPercent: number | null = typeof proposal["discountPercent"] === "number" ? proposal["discountPercent"] : null;
   const discountCode: string | null = typeof proposal["discountCode"] === "string" ? proposal["discountCode"] : null;
   let offerId: string | null = typeof proposal["offerId"] === "string" ? proposal["offerId"] : null;
