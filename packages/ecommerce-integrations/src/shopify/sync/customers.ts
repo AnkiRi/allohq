@@ -13,7 +13,6 @@ interface GraphqlCustomer {
     marketingOptInLevel: string | null;
     marketingUpdatedAt: string | null;
   } | null;
-  defaultPhoneNumber: { phoneNumber: string } | null;
 }
 
 function legacyId(gid: string): string {
@@ -53,7 +52,6 @@ export async function syncAllCustomers(
               marketingOptInLevel
               marketingUpdatedAt
             }
-            defaultPhoneNumber { phoneNumber }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -91,7 +89,8 @@ export async function syncAllCustomers(
               storeId,
               externalId: legacyId(customer.id),
               email: emailAddress.emailAddress,
-              phone: customer.defaultPhoneNumber?.phoneNumber ?? null,
+              // Email-only v1 deliberately does not request protected phone data.
+              phone: null,
               firstName: customer.firstName,
               lastName: customer.lastName,
               acceptsMarketing,
@@ -99,7 +98,7 @@ export async function syncAllCustomers(
             },
             update: {
               email: emailAddress.emailAddress,
-              phone: customer.defaultPhoneNumber?.phoneNumber ?? null,
+              phone: null,
               firstName: customer.firstName,
               lastName: customer.lastName,
               acceptsMarketing,

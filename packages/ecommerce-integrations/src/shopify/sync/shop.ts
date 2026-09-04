@@ -6,7 +6,6 @@ interface ShopifyShop {
   name: string;
   email: string;
   contactEmail: string | null;
-  phone: string | null;
   currencyCode: string;
   ianaTimezone: string;
   billingAddress: {
@@ -36,7 +35,6 @@ export async function syncShopMetadata(
         name
         email
         contactEmail
-        phone
         currencyCode
         ianaTimezone
         billingAddress {
@@ -75,7 +73,7 @@ export async function syncShopMetadata(
     data: {
       storeName: shop.name,
       storeEmail: shop.contactEmail || shop.email || null,
-      storePhone: shop.phone || null,
+      storePhone: null,
       address,
       currency: shop.currencyCode,
       timezone: shop.ianaTimezone,
