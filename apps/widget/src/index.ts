@@ -1,5 +1,5 @@
 import type { WidgetConfig, WidgetEvent } from "./types";
-import { submitEvent } from "./api";
+import { DEFAULT_API_URL, submitEvent } from "./api";
 import { ChatWidget } from "./chat/widget";
 import { PopupWidget } from "./popup/widget";
 import { VisitorSession } from "./visitor-session";
@@ -16,7 +16,7 @@ export function init(options: WidgetConfig): void {
     console.log("[AlloHQ] Widget initialized", { apiUrl: config.apiUrl });
   }
 
-  const apiUrl = options.apiUrl ?? "https://api.allohq.com";
+  const apiUrl = options.apiUrl ?? DEFAULT_API_URL;
   visitorSession = new VisitorSession(options.apiKey, apiUrl);
 
   // Auto-mount chat if enabled (default: true)

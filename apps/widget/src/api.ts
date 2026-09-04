@@ -1,7 +1,8 @@
 import type { WidgetEvent } from "./types";
 import type { VisitorSession } from "./visitor-session";
 
-const DEFAULT_API_URL = "https://api.allohq.com";
+/** Working production API origin. Prefer an explicit apiUrl in embeds. */
+export const DEFAULT_API_URL = "https://api.allohq.ai";
 
 /** Submit tracked events to the AlloHQ API */
 export async function submitEvent(

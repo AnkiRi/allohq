@@ -130,6 +130,10 @@ Production configuration audit on **4 September 2026**:
 - `https://api.allohq.ai` is the current API host. `/webhooks/shopify` and
   `/webhooks/resend` reach their handlers. `/healthz` remains 404 until the
   launch-ready API build is deployed; the route exists on `send-path`.
+- The storefront widget's invalid `api.allohq.com` fallback was corrected to
+  the working `.ai` host. Before submission, add `api.joonhq.com` to the same
+  Railway service, migrate environment/config references, verify both domains,
+  and retain the `.ai` domain during the transition.
 - Operational Shopify webhooks remain shop-specific and are registered during
   sync. The app config declares only the three mandatory compliance topics to
   avoid duplicate operational deliveries.
