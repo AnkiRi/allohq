@@ -16,6 +16,37 @@ const isPublicRoute = createRouteMatcher([
   "/support(.*)",
 ]);
 
+// Embedded Shopify pages are an authenticated *client shell*: their API calls
+// carry a fresh, signed App Bridge ID token and the API resolves that token to
+// exactly one installed store. Clerk is only the standalone-login path. Keep
+// these pages renderable without a Clerk cookie so installs work in browsers
+// that block third-party cookies; no merchant data is exposed by rendering the
+// shell because every protected tRPC procedure still requires Clerk or Shopify
+// token authentication.
+const isShopifyAppShellRoute = createRouteMatcher([
+  "/dashboard(.*)",
+  "/activity(.*)",
+  "/actions(.*)",
+  "/outcomes(.*)",
+  "/analytics(.*)",
+  "/settings(.*)",
+  "/customers(.*)",
+  "/segments(.*)",
+  "/campaigns(.*)",
+  "/templates(.*)",
+  "/emails(.*)",
+  "/automations(.*)",
+  "/forms(.*)",
+  "/intelligence(.*)",
+  "/conversations(.*)",
+  "/integrations(.*)",
+  "/onboarding(.*)",
+  "/products(.*)",
+  "/orders(.*)",
+  "/creative-studio(.*)",
+  "/agent(.*)",
+]);
+
 export default clerkMiddleware(async (auth, request) => {
   const host = request.headers.get("host") || "";
 
@@ -54,7 +85,7 @@ export default clerkMiddleware(async (auth, request) => {
   // visitor holding a VALID demo-token cookie (set by the /try gate) may reach the
   // app as the Vana demo. Data is server-guarded (demo-guest + write-floor + caps
   // + cross-tenant guards) regardless, so this only opens the read-only sandbox.
-  if (!isPublicRoute(request)) {
+  if (!isPublicRoute(request) && !isShopifyAppShellRoute(request)) {
     const { userId } = await auth();
     if (!userId) {
       const demoToken = request.cookies.get(DEMO_COOKIE)?.value;

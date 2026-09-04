@@ -12,7 +12,14 @@ declare global {
 export function isEmbeddedShopifyApp(): boolean {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
-  return params.get("embedded") === "1" || (!!params.get("host") && window.self !== window.top);
+  if (params.get("embedded") === "1" || (!!params.get("host") && window.self !== window.top)) {
+    return true;
+  }
+
+  // Next.js client navigation does not necessarily retain Shopify's original
+  // `host`/`embedded` query parameters. App Bridge remains initialized in the
+  // iframe, so use its token API as the durable signal for later navigations.
+  return window.self !== window.top && typeof window.shopify?.idToken === "function";
 }
 
 /** App Bridge ID tokens are short lived; always request one immediately before use. */
