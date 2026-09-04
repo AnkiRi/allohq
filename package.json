@@ -7,11 +7,12 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "pnpm test:launch-readiness && turbo run test",
+    "test:launch-readiness": "pnpm --filter @allohq/api exec tsx --test ../../scripts/launch-readiness.test.ts",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "typecheck": "turbo run typecheck",
-    "launch:check": "tsx scripts/launch-readiness.ts"
+    "launch:check": "pnpm --filter @allohq/api exec tsx ../../scripts/launch-readiness.ts"
   },
   "devDependencies": {
     "@turbo/gen": "^2.3.3",
