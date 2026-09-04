@@ -119,13 +119,20 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
     const syncQueue = new Queue("sync", { connection: redisConnection });
     const brandQueue = new Queue("brand-analysis", { connection: redisConnection });
     try {
+      const syncJobId = `initial-sync-${store.id}`;
+      const existingSyncJob = await syncQueue.getJob(syncJobId);
+      if (existingSyncJob && (await existingSyncJob.getState()) === "failed") {
+        // A corrected deployment must be able to recover onboarding without
+        // requiring the merchant to uninstall and reinstall the app.
+        await existingSyncJob.remove();
+      }
       await syncQueue.add(
         "full-sync",
         { storeId: store.id, platform: "shopify" },
         {
           attempts: 3,
           backoff: { type: "exponential", delay: 5_000 },
-          jobId: `initial-sync-${store.id}`,
+          jobId: syncJobId,
         },
       );
       await brandQueue.add(
