@@ -1,6 +1,6 @@
 # Wednesday demo runbook — allo (growth-intelligence thesis)
 
-**URL:** https://agent.allohq.ai (incognito → `/try/<token>`) · **Brand:** Vana Naturals (seeded demo) · **Width:** works at ~390px (phone-safe)
+**URL:** https://agent.joonhq.com (incognito → `/try/<token>`) · **Brand:** Vana Naturals (seeded demo) · **Width:** works at ~390px (phone-safe)
 
 > **Open with the thesis:** *"Everyone else grows by sending MORE. allo grows by sending LESS —
 > it learns who to message, when, on which channel, and crucially **who to skip**, so you make more

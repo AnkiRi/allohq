@@ -23,4 +23,4 @@ compliance_topics = [
   "customers/redact",
   "shop/redact",
 ]
-uri = "https://api.allohq.ai/webhooks/shopify"
+uri = "https://api.joonhq.com/webhooks/shopify"

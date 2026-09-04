@@ -127,13 +127,13 @@ Production configuration audit on **4 September 2026**:
   callback URLs. The checked-in production config retains only
   `https://agent.joonhq.com/api/shopify/callback`.
 - `https://agent.joonhq.com` is the embedded web application.
-- `https://api.allohq.ai` is the current API host. `/webhooks/shopify` and
+- `https://api.allohq.ai` is the legacy API host. `/webhooks/shopify` and
   `/webhooks/resend` reach their handlers. `/healthz` remains 404 until the
   launch-ready API build is deployed; the route exists on `send-path`.
-- The storefront widget's invalid `api.allohq.com` fallback was corrected to
-  the working `.ai` host. Before submission, add `api.joonhq.com` to the same
-  Railway service, migrate environment/config references, verify both domains,
-  and retain the `.ai` domain during the transition.
+- `api.joonhq.com` was added to the same Railway API service on 4 September
+  2026, with the required GoDaddy CNAME and Railway verification record. Source
+  configuration and the storefront widget now use the Joon domain. Keep the
+  `.ai` domain active during the deployment transition.
 - Operational Shopify webhooks remain shop-specific and are registered during
   sync. The app config declares only the three mandatory compliance topics to
   avoid duplicate operational deliveries.
