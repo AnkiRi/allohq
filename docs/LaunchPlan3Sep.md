@@ -164,6 +164,13 @@ Do not submit the protected-data request until every row can be answered
 truthfully and backed by a screenshot, configuration export, log sample, policy,
 or drill record.
 
+Production backup progress (4 September 2026): Railway Postgres PITR has been
+enabled, live restore coverage is visible, and daily plus weekly volume-backup schedules have been saved. The
+pre-change manual backup is retained. This satisfies configuration, not recovery
+proof: wait for PITR coverage to become healthy, then restore into an isolated
+temporary service with delivery disabled, validate it, record evidence, and
+delete the temporary service.
+
 ### Shopify entry and full-screen product decision (4 September 2026)
 
 Joon will use the mature email-platform pattern rather than placing the entire
@@ -187,6 +194,42 @@ workspace inside the Shopify iframe:
 7. The embedded surface remains available for setup, integration health,
    simplified reporting and emergency pause; campaigns, email design,
    automations, journeys, segments and advanced reporting use the full viewport.
+
+The existing brand onboarding is retained. It already scans the storefront and
+lets the merchant correct tone, vocabulary, aesthetic, colors, typography,
+sender identity and brand guidelines. The email renderer now treats explicit
+onboarding design tokens as authoritative over inferred storefront values.
+Business category, current email platform and the business mailing address are
+collected in the same review rather than adding another long wizard. Shopify
+email consent continues to sync automatically; selecting a previous platform is
+context for future migration help and does not silently connect or import it.
+
+### API, MCP and migration roadmap
+
+Judge.me's priorities are directionally right, but they are ordered for an
+established product rather than Joon's App Store launch:
+
+1. **API parity is an architectural target now.** The dashboard already uses
+   typed API routers across campaigns, automations, customers, segments,
+   templates, analytics, products, events and settings. New capabilities must
+   land in server procedures first, with the UI as a client. Document an
+   authorization-aware capability inventory and close API-only gaps as each
+   launch flow is tested.
+2. **MCP is post-launch, not a review blocker.** Build it as a thin adapter over
+   the same services only after roles, approvals, dry runs, idempotency and audit
+   logs are enforced centrally. An agent may draft and inspect broadly, but
+   approval and sending remain explicit privileged operations. “100% coverage”
+   means every safe product capability is callable—not that security controls
+   can be bypassed.
+3. **Feature requests follow observed merchant impact.** For v1, depth in email
+   campaigns, automations, journeys, measurement and deliverability beats adding
+   another channel.
+4. **Klaviyo migration starts as concierge support.** First define and manually
+   validate imports for profiles/consent, lists/segments, templates and selected
+   flows with reconciliation reports. Never import historical suppression as
+   sendable consent. Automate the middle layer only after several successful
+   migrations, then expose self-service. This is valuable go-to-market work but
+   does not block the first Shopify listing.
 
 Merchant staff access is explicit. Shopify controls which staff roles may open
 Joon; Joon separately controls what those people may do. The initial role model

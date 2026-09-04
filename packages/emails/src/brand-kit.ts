@@ -290,10 +290,24 @@ export function buildBrandKit(
     ? (bp.visualStyle["suggestedColors"] ?? bp.visualStyle["colors"] ?? bp.visualStyle["palette"])
     : undefined;
 
+  // Onboarding edits live in brandDesignTokens. Prefer those explicit merchant
+  // choices over colors/fonts inferred during the initial storefront scan.
+  const designTokens = vp?.brandDesignTokens;
+  const tokenPrimary = designTokens
+    ? firstHex(
+        designTokens["ctaBackground"],
+        designTokens["primaryColor"],
+        designTokens["accentColor"],
+      )
+    : undefined;
+  const tokenSecondary = designTokens
+    ? firstHex(designTokens["accentColor"], designTokens["secondaryColor"])
+    : undefined;
+
   const primary =
-    firstHex(vp?.primaryColors, visualStyleColors) ?? d.colors.primary;
+    tokenPrimary ?? firstHex(vp?.primaryColors, visualStyleColors) ?? d.colors.primary;
   const secondaryRaw =
-    firstHex(vp?.accentColors) ?? mix(primary, "#000000", 0.18);
+    tokenSecondary ?? firstHex(vp?.accentColors) ?? mix(primary, "#000000", 0.18);
 
   // Keep the secondary readable as a link color on light surfaces.
   const secondary = luminance(secondaryRaw) > 0.55 ? shade(secondaryRaw, -0.35) : secondaryRaw;
@@ -322,8 +336,20 @@ export function buildBrandKit(
 
   // --- Fonts --------------------------------------------------------------
   const fonts: BrandKitFonts = {
-    serif: fontStack(vp?.fontFamily, "serif") ?? d.fonts.serif,
-    sans: fontStack(vp?.bodyFontFamily, "sans") ?? d.fonts.sans,
+    serif:
+      fontStack(
+        typeof designTokens?.["headingFont"] === "string"
+          ? designTokens["headingFont"]
+          : vp?.fontFamily,
+        "serif",
+      ) ?? d.fonts.serif,
+    sans:
+      fontStack(
+        typeof designTokens?.["bodyFont"] === "string"
+          ? designTokens["bodyFont"]
+          : vp?.bodyFontFamily,
+        "sans",
+      ) ?? d.fonts.sans,
   };
 
   // --- Voice / name -------------------------------------------------------

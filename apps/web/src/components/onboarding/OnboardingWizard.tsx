@@ -12,7 +12,7 @@ import {
   ShoppingBag,
   MessageSquare,
   Palette,
-  Image,
+  Image as ImageIcon,
   BarChart3,
   Boxes,
   Sparkles,
@@ -126,6 +126,39 @@ const COLOR_TOKENS = [
   { key: "textPrimary", label: "Text Primary" },
   { key: "textSecondary", label: "Text Secondary" },
 ];
+
+const STORE_CATEGORIES = [
+  ["apparel", "Apparel & fashion"],
+  ["jewellery", "Jewellery & accessories"],
+  ["beauty", "Beauty & cosmetics"],
+  ["skincare", "Skincare"],
+  ["personal_care", "Personal care"],
+  ["health_wellness", "Health & wellness"],
+  ["nutraceuticals", "Supplements & nutraceuticals"],
+  ["food_beverage", "Food & beverage"],
+  ["home_living", "Home & living"],
+  ["electronics", "Electronics & gadgets"],
+  ["fitness", "Fitness & sports"],
+  ["baby_kids", "Baby & kids"],
+  ["pets", "Pets"],
+  ["footwear", "Footwear"],
+  ["bags_luggage", "Bags & luggage"],
+  ["gifts", "Gifts & stationery"],
+  ["art_crafts", "Art & crafts"],
+  ["books_media", "Books & media"],
+  ["automotive", "Automotive"],
+  ["other", "Other"],
+] as const;
+
+const EMAIL_PLATFORMS = [
+  ["none", "Not using one yet"],
+  ["shopify_email", "Shopify Email"],
+  ["klaviyo", "Klaviyo"],
+  ["omnisend", "Omnisend"],
+  ["mailchimp", "Mailchimp"],
+  ["judgeme_email", "Judge.me Email"],
+  ["other", "Another platform"],
+] as const;
 
 const TONE_DIMENSIONS = [
   {
@@ -635,6 +668,7 @@ function BrandReviewStep({
 
   const bp = reviewData?.brandProfile;
   const vp = reviewData?.visualProfile;
+  const storeSetup = reviewData?.storeSetup;
 
   const [tone, setTone] = useState<Record<string, string>>({
     formality: "casual",
@@ -645,12 +679,18 @@ function BrandReviewStep({
 
   const [tokens, setTokens] = useState<Record<string, string>>({});
   const [aesthetic, setAesthetic] = useState("clean_minimal");
+  const [logoUrl, setLogoUrl] = useState("");
   const [bannedWords, setBannedWords] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [brandDocument, setBrandDocument] = useState("");
   const [fromName, setFromName] = useState("");
   const [fromEmail, setFromEmail] = useState("");
   const [replyTo, setReplyTo] = useState("");
+  const [storeCategory, setStoreCategory] = useState("");
+  const [currentEmailPlatform, setCurrentEmailPlatform] = useState("");
+  const [businessAddress, setBusinessAddress] = useState({
+    address1: "", address2: "", city: "", province: "", zip: "", country: "",
+  });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisDone, setAnalysisDone] = useState(false);
 
@@ -675,10 +715,17 @@ function BrandReviewStep({
         const t = (vp.brandDesignTokens as Record<string, string>) ?? {};
         setTokens(t);
         setAesthetic(vp.aestheticClassification ?? "clean_minimal");
+        setLogoUrl(vp.logoUrl ?? "");
+      }
+      const setup = storeSetup;
+      if (setup?.category) setStoreCategory(setup.category);
+      if (setup?.currentEmailPlatform) setCurrentEmailPlatform(setup.currentEmailPlatform);
+      if (setup?.address && typeof setup.address === "object") {
+        setBusinessAddress((prev) => ({ ...prev, ...(setup.address as Record<string, string>) }));
       }
       setInitialized(true);
     }
-  }, [bp, vp, initialized]);
+  }, [bp, vp, storeSetup, initialized]);
 
   // Load existing brand document
   useEffect(() => {
@@ -744,6 +791,10 @@ function BrandReviewStep({
       fromName: fromName || undefined,
       fromEmail: fromEmail || undefined,
       replyToEmail: replyTo || undefined,
+      storeCategory: storeCategory || undefined,
+      currentEmailPlatform: currentEmailPlatform || undefined,
+      businessAddress,
+      logoUrl: logoUrl || undefined,
     });
   };
 
@@ -805,6 +856,32 @@ function BrandReviewStep({
 
       {/* Sending & sender */}
       <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
+        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Your business</h3>
+        <p className="text-sm text-[#8B8074] mb-4">
+          This helps joon choose useful starter segments and understand whether you may want migration help later.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[#8B8074] mb-1 block">Business category</label>
+            <select value={storeCategory} onChange={(e) => setStoreCategory(e.target.value)} className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white">
+              <option value="">Choose a category</option>
+              {STORE_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[#8B8074] mb-1 block">Current email platform</label>
+            <select value={currentEmailPlatform} onChange={(e) => setCurrentEmailPlatform(e.target.value)} className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white">
+              <option value="">Choose a platform</option>
+              {EMAIL_PLATFORMS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+        </div>
+        <p className="text-xs text-[#8B8074] mt-3">
+          Joon imports Shopify email consent automatically. Selecting another platform does not connect or copy data from it.
+        </p>
+      </div>
+
+      <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Sending &amp; sender</h3>
         <p className="text-sm text-[#8B8074] mb-4">
           Who do your emails come from? You can change this anytime.
@@ -822,6 +899,19 @@ function BrandReviewStep({
             <label className="text-xs text-[#8B8074] mb-1 block">Reply-to email</label>
             <input type="email" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder="care@yourbrand.com" className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30" />
           </div>
+        </div>
+        <div className="mt-5 pt-5 border-t border-[#E8E4DE]">
+          <label className="text-xs text-[#8B8074] mb-2 block">Business address shown in the email footer</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {([
+              ["address1", "Street address"], ["address2", "Address line 2"],
+              ["city", "City"], ["province", "State / province"],
+              ["zip", "Postal code"], ["country", "Country"],
+            ] as const).map(([key, label]) => (
+              <input key={key} value={businessAddress[key]} onChange={(e) => setBusinessAddress((prev) => ({ ...prev, [key]: e.target.value }))} placeholder={label} className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30" />
+            ))}
+          </div>
+          <p className="text-xs text-[#8B8074] mt-2">We prefill this from your Shopify store. It is your business address, not a customer address.</p>
         </div>
       </div>
 
@@ -981,6 +1071,24 @@ function BrandReviewStep({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Logo asset */}
+      <div className="glass-card-static rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <ImageIcon className="w-4 h-4 text-[#8B8074]" />
+          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">Logo asset</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-xl border border-[#EDE7DB] bg-white p-2 flex items-center justify-center shrink-0">
+            {logoUrl ? <img src={logoUrl} alt="Brand logo preview" className="max-w-full max-h-full object-contain" /> : <span className="text-[10px] text-[#A09888] text-center">Text logo fallback</span>}
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-[#5C5549] block mb-1">Logo URL</label>
+            <input type="url" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://cdn.shopify.com/..." className="w-full px-3 py-2 text-xs rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]" />
+            <p className="text-[10px] text-[#8B8074] mt-1">Prefilled from your Shopify theme when available. Leave empty to use your brand name.</p>
+          </div>
         </div>
       </div>
 

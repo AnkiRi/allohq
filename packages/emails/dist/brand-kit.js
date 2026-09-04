@@ -37,11 +37,11 @@ exports.DEFAULT_BRAND_KIT = {
         sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     },
     logo: {
-        wordmark: "Allo",
-        alt: "Allo",
+        wordmark: "Joon",
+        alt: "Joon",
     },
     voice: {
-        brandName: "Allo",
+        brandName: "Joon",
         bannedWords: [],
     },
     footer: {},
@@ -158,8 +158,17 @@ function buildBrandKit(brandProfile, brandVisualProfile, extras) {
     const visualStyleColors = bp?.visualStyle
         ? (bp.visualStyle["suggestedColors"] ?? bp.visualStyle["colors"] ?? bp.visualStyle["palette"])
         : undefined;
-    const primary = firstHex(vp?.primaryColors, visualStyleColors) ?? d.colors.primary;
-    const secondaryRaw = firstHex(vp?.accentColors) ?? mix(primary, "#000000", 0.18);
+    // Onboarding edits live in brandDesignTokens. Prefer those explicit merchant
+    // choices over colors/fonts inferred during the initial storefront scan.
+    const designTokens = vp?.brandDesignTokens;
+    const tokenPrimary = designTokens
+        ? firstHex(designTokens["ctaBackground"], designTokens["primaryColor"], designTokens["accentColor"])
+        : undefined;
+    const tokenSecondary = designTokens
+        ? firstHex(designTokens["accentColor"], designTokens["secondaryColor"])
+        : undefined;
+    const primary = tokenPrimary ?? firstHex(vp?.primaryColors, visualStyleColors) ?? d.colors.primary;
+    const secondaryRaw = tokenSecondary ?? firstHex(vp?.accentColors) ?? mix(primary, "#000000", 0.18);
     // Keep the secondary readable as a link color on light surfaces.
     const secondary = luminance(secondaryRaw) > 0.55 ? shade(secondaryRaw, -0.35) : secondaryRaw;
     const primaryDeep = shade(primary, -0.28);
@@ -184,8 +193,12 @@ function buildBrandKit(brandProfile, brandVisualProfile, extras) {
     };
     // --- Fonts --------------------------------------------------------------
     const fonts = {
-        serif: fontStack(vp?.fontFamily, "serif") ?? d.fonts.serif,
-        sans: fontStack(vp?.bodyFontFamily, "sans") ?? d.fonts.sans,
+        serif: fontStack(typeof designTokens?.["headingFont"] === "string"
+            ? designTokens["headingFont"]
+            : vp?.fontFamily, "serif") ?? d.fonts.serif,
+        sans: fontStack(typeof designTokens?.["bodyFont"] === "string"
+            ? designTokens["bodyFont"]
+            : vp?.bodyFontFamily, "sans") ?? d.fonts.sans,
     };
     // --- Voice / name -------------------------------------------------------
     const brandName = bp?.brandName || extras?.storeName || d.voice.brandName;

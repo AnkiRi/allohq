@@ -158,6 +158,9 @@ export const onboardingRouter = router({
             toneAttributes: true,
             vocabulary: true,
             sampleCopy: true,
+            fromName: true,
+            fromEmail: true,
+            replyToEmail: true,
           },
         }),
         ctx.prisma.brandVisualProfile.findFirst({
@@ -171,7 +174,16 @@ export const onboardingRouter = router({
         }),
       ]);
 
-      return { brandProfile, visualProfile, products };
+      return {
+        brandProfile,
+        visualProfile,
+        products,
+        storeSetup: {
+          category: store.storeCategory,
+          currentEmailPlatform: store.currentEmailPlatform,
+          address: store.address,
+        },
+      };
     }),
 
   /**
@@ -339,12 +351,23 @@ export const onboardingRouter = router({
         fontFamily: z.string().optional(),
         aestheticClassification: z.string().optional(),
         brandDesignTokens: z.any().optional(),
+        logoUrl: z.string().url().optional(),
         toneAttributes: z.record(z.string()).optional(),
         bannedWords: z.array(z.string()).optional(),
         sendingFrequency: z.string().optional(),
         fromName: z.string().optional(),
         fromEmail: z.string().optional(),
         replyToEmail: z.string().optional(),
+        storeCategory: z.string().max(80).optional(),
+        currentEmailPlatform: z.string().max(80).optional(),
+        businessAddress: z.object({
+          address1: z.string().max(200).optional(),
+          address2: z.string().max(200).optional(),
+          city: z.string().max(100).optional(),
+          province: z.string().max(100).optional(),
+          zip: z.string().max(30).optional(),
+          country: z.string().max(100).optional(),
+        }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -356,7 +379,19 @@ export const onboardingRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Not on brand review step" });
       }
 
-      const { storeId, toneAttributes, bannedWords, sendingFrequency, fromName, fromEmail, replyToEmail, ...visualData } = input;
+      const {
+        storeId,
+        toneAttributes,
+        bannedWords,
+        sendingFrequency,
+        fromName,
+        fromEmail,
+        replyToEmail,
+        storeCategory,
+        currentEmailPlatform,
+        businessAddress,
+        ...visualData
+      } = input;
 
       // Update BrandVisualProfile
       await ctx.prisma.brandVisualProfile.upsert({
@@ -394,7 +429,12 @@ export const onboardingRouter = router({
       // Advance step 3 → 4
       return ctx.prisma.store.update({
         where: { id: storeId },
-        data: { onboardingStep: 4 },
+        data: {
+          onboardingStep: 4,
+          ...(storeCategory !== undefined && { storeCategory }),
+          ...(currentEmailPlatform !== undefined && { currentEmailPlatform }),
+          ...(businessAddress !== undefined && { address: businessAddress }),
+        },
       });
     }),
 
