@@ -25,7 +25,15 @@ export function ShopifyBootstrapBoundary({ children }: { children: React.ReactNo
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      if (!response.ok) throw new Error(`Installation bootstrap returned ${response.status}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as
+          | { error?: string; missingScopes?: string[] }
+          | null;
+        const missing = body?.missingScopes?.length
+          ? ` Missing: ${body.missingScopes.join(", ")}.`
+          : "";
+        throw new Error(`${body?.error || `Installation bootstrap returned ${response.status}`}.${missing}`);
+      }
       setState("ready");
     } catch (reason) {
       console.error("[shopify] Installation bootstrap failed", reason);

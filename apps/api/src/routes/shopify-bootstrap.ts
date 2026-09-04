@@ -60,6 +60,9 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
       (scope) => !grantedScopes.includes(scope),
     );
     if (missingScopes.length > 0) {
+      console.warn(
+        `Shopify managed-install token is missing required scopes for ${identity.shopDomain}: ${missingScopes.join(",")}`,
+      );
       json(res, 403, { error: "Required Shopify permissions were not granted", missingScopes });
       return;
     }
