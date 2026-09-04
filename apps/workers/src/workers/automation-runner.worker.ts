@@ -19,6 +19,7 @@ import {
 import { assignArm, getOrCreateExperiment } from "@allohq/customer-state";
 import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
+import { automationContinuationJobId } from "../utils/automation-continuation";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -718,8 +719,16 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               triggeredBy,
               currentNodeIndex: i + 1,
               executionId,
+              eventInstanceId: job.data.eventInstanceId,
             },
-            { delay: delayMs }
+            {
+              delay: delayMs,
+              jobId: automationContinuationJobId({ automationId, executionId, nextNodeIndex: i + 1 }),
+              attempts: 5,
+              backoff: { type: "exponential", delay: 2_000 },
+              removeOnComplete: { age: 7 * 24 * 60 * 60, count: 50_000 },
+              removeOnFail: { age: 30 * 24 * 60 * 60, count: 50_000 },
+            }
           );
 
           console.log(`[automation-runner] Waiting ${duration} ${unit} before next node`);
