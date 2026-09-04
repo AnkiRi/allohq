@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Store, User, Bell, CreditCard, Sparkles, Activity, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Store, User, Users, Bell, CreditCard, Sparkles, Activity, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -51,6 +51,48 @@ function getCostComparison(cost: number): string {
   if (cost < 5.00) return "About the price of a coffee";
   if (cost < 20.00) return "Less than a nice lunch";
   return "joon has been hard at work for you";
+}
+
+const TEAM_ROLES = [
+  ["admin", "Admin"], ["marketer", "Marketer"], ["approver", "Approver"],
+  ["analyst", "Analyst"], ["content_creator", "Content creator"],
+] as const;
+
+function TeamAccessSection() {
+  const { toast } = useToast();
+  const team = (trpc as any).team;
+  const { data, error, refetch } = team.list.useQuery(undefined, { retry: false });
+  const setRole = team.setRole.useMutation({
+    onSuccess: () => { toast("Team access updated.", "success"); refetch(); },
+    onError: (err: { message?: string }) => toast(err.message || "Could not update access.", "error"),
+  });
+  if (error?.data?.code === "FORBIDDEN") return null;
+  const members = (data ?? []) as Array<{ id: string; role: string; name: string | null; email: string | null; isCurrentUser: boolean; shopifyIdentities: Array<{ shopifyUserId: string }> }>;
+  return (
+    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+      <div className="flex items-center gap-3 mb-2">
+        <Users className="w-4 h-4 text-muted-foreground" />
+        <h2 className="section-header accent-bar-left text-[13px]">Team access</h2>
+      </div>
+      <p className="text-[11px] text-muted-foreground mb-4">Shopify decides who can open the app. You decide what each person can do inside Joon.</p>
+      <div className="divide-y divide-border">
+        {members.map((member) => (
+          <div key={member.id} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-medium text-foreground">{member.name || member.email || `Shopify staff ${member.shopifyIdentities[0]?.shopifyUserId.slice(-6) ?? "member"}`}{member.isCurrentUser ? " · You" : ""}</p>
+              <p className="text-[10px] text-muted-foreground">{member.role === "pending" || member.role === "member" ? "Waiting for access" : member.role.replaceAll("_", " ")}</p>
+            </div>
+            {member.role === "owner" ? <span className="text-[11px] font-medium">Owner</span> : (
+              <select value={member.role === "pending" || member.role === "member" ? "" : member.role} onChange={(event) => setRole.mutate({ memberId: member.id, role: event.target.value })} disabled={setRole.isPending} className="rounded-lg border border-border bg-background px-3 py-2 text-[11px]">
+                <option value="" disabled>Assign access</option>
+                {TEAM_ROLES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            )}
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
 }
 
 function TokenUsageSection() {
@@ -691,6 +733,8 @@ export default function SettingsPage() {
           </p>
         )}
       </motion.div>
+
+      <TeamAccessSection />
 
       {/* Messaging Providers */}
 

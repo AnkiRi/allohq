@@ -24,6 +24,7 @@ import { conversationsRouter } from "./conversations";
 import { eventsRouter } from "./events";
 import { activityRouter } from "./activity";
 import { senderDomainsRouter } from "./sender-domains";
+import { teamRouter } from "./team";
 
 /**
  * Root tRPC router
@@ -54,6 +55,7 @@ export const appRouter = router({
   events: eventsRouter,
   activity: activityRouter,
   senderDomains: senderDomainsRouter,
+  team: teamRouter,
 });
 
 export type AppRouter = typeof appRouter;

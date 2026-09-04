@@ -404,7 +404,7 @@ function BackgroundAnalysisStep({
   const analysisRows: { key: RetryKey; icon: typeof MessageSquare; label: string; done: boolean }[] = [
     { key: "brandVoice", icon: MessageSquare, label: "Analyzing brand voice", done: status?.brandVoiceComplete ?? false },
     { key: "brandVisual", icon: Palette, label: "Extracting visual identity", done: status?.brandVisualComplete ?? false },
-    { key: "productImages", icon: Image, label: "Processing product images", done: status?.productImagesComplete ?? false },
+    { key: "productImages", icon: ImageIcon, label: "Processing product images", done: status?.productImagesComplete ?? false },
     { key: "rfm", icon: BarChart3, label: "Scoring customer health (RFM)", done: status?.rfmComplete ?? false },
     { key: "baseline", icon: Boxes, label: "Capturing baseline metrics", done: status?.baselineComplete ?? false },
   ];

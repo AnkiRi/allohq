@@ -251,6 +251,21 @@ export const workspaceProcedure = protectedProcedure
     },
   });
 }).use(async ({ ctx, type, path, next }) => {
+  if (!ctx.isDemo && ctx.workspaceId) {
+    const { canUseWorkspacePath } = await import("./auth/workspace-role-policy");
+    const member = await prisma.workspaceMember.findFirst({
+      where: { workspaceId: ctx.workspaceId, user: { clerkId: ctx.userId } },
+      select: { role: true },
+    });
+    if (!canUseWorkspacePath(member?.role, type, path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: member?.role === "pending" || member?.role === "member"
+          ? "Your Joon workspace owner needs to assign your access."
+          : "Your Joon role does not allow this action.",
+      });
+    }
+  }
   // STRUCTURAL demo write-floor (B1): a demo-guest may not perform ANY mutation
   // that persists to / sends from the shared sandbox. Enforced HERE so every
   // mutation — including ones added later — inherits the block automatically
@@ -319,7 +334,7 @@ export const ownerProcedure = workspaceProcedure.use(async ({ ctx, next }) => {
     where: { workspaceId: ctx.workspaceId, user: { clerkId: ctx.userId } },
     select: { role: true },
   });
-  if (!member || member.role !== "admin") {
+  if (!member || !["owner", "admin"].includes(member.role)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Owner-only." });
   }
   return next();

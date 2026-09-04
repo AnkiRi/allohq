@@ -41,11 +41,12 @@ export async function resolveShopifyIdentity(identity: VerifiedShopifyIdentity) 
       where: { id: existing.id },
       data: { lastSeenAt: new Date() },
     });
-    return { userId: existing.user.id, workspaceId: store.workspaceId, storeId: store.id };
+    return { userId: existing.user.clerkId, workspaceId: store.workspaceId, storeId: store.id };
   }
 
-  // Phase 1E will explicitly promote the installing identity to admin. A staff
-  // identity first encountered on an existing installation starts as member.
+  // The first verified staff identity claims ownership exactly once. Every
+  // later Shopify staff identity is pending until an owner/admin assigns a
+  // Joon role; Shopify access alone never grants customer-data access in Joon.
   const stableIdentity = createHash("sha256")
     .update(`${identity.shopDomain}:${identity.staffSubject}`)
     .digest("hex");
@@ -65,7 +66,7 @@ export async function resolveShopifyIdentity(identity: VerifiedShopifyIdentity) 
       where: { id: store.id, shopifyInstallerClaimedAt: null },
       data: { shopifyInstallerClaimedAt: new Date() },
     });
-    const role = claimed.count === 1 ? "admin" : "member";
+    const role = claimed.count === 1 ? "owner" : "pending";
     await tx.workspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId: store.workspaceId, userId: user.id } },
       create: { workspaceId: store.workspaceId, userId: user.id, role },
@@ -85,6 +86,6 @@ export async function resolveShopifyIdentity(identity: VerifiedShopifyIdentity) 
       },
       update: { lastSeenAt: new Date() },
     });
-    return { userId: user.id, workspaceId: store.workspaceId, storeId: store.id };
+    return { userId: user.clerkId, workspaceId: store.workspaceId, storeId: store.id };
   });
 }
