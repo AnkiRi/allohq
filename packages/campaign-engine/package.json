@@ -8,6 +8,7 @@
     "@allohq/database": "workspace:*",
     "@allohq/creative-engine": "workspace:*",
     "@allohq/autonomy-engine": "workspace:*",
+    "@allohq/customer-intelligence": "workspace:*",
     "@allohq/customer-state": "workspace:*"
     ,"@allohq/communication-governor": "workspace:*"
   },

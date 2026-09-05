@@ -65,12 +65,16 @@ test("the schedules that generated unapproved work are blocked", () => {
   // drafts and a merchant summary email with no human involved.
   for (const id of [
     "overnight-ops-schedule",
-    "opportunity-scan-schedule",
     "daily-revenue-email-schedule",
     "churn-intervention-schedule",
   ]) {
     assert.equal(isScheduleAllowed(id, undefined), false, `${id} must not run`);
   }
+});
+
+test("safe analysis and approval-only drafting remain active in v1", () => {
+  assert.equal(isScheduleAllowed("opportunity-scan-schedule", undefined), true);
+  assert.equal(isScheduleAllowed("product-segments-schedule", undefined), true);
 });
 
 test("merchant-approved email journeys remain in scope", () => {

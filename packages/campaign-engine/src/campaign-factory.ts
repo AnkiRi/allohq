@@ -4,6 +4,8 @@ import type { ContentSlots, BrandDesignTokens, TemplateArchetypeId } from "@allo
 import { DEFAULT_BRAND_TOKENS } from "@allohq/creative-engine";
 import { routeAction, ActionCategory } from "@allohq/autonomy-engine";
 import type { CampaignOpportunity, CampaignDraft } from "./types";
+import { generateEmail, renderBrandedEmail } from "@allohq/customer-intelligence";
+import type { EmailIntent } from "@allohq/customer-intelligence";
 
 /**
  * Generate a campaign draft from a detected opportunity.
@@ -51,22 +53,55 @@ export async function generateCampaignDraft(
   // Load store for domain
   const store = await prisma.store.findUniqueOrThrow({
     where: { id: storeId },
-    select: { shopDomain: true, storeName: true },
+    select: { shopDomain: true, storeName: true, workspaceId: true },
   });
 
   // Build content slots (with processed product images)
   const contentSlots = buildContentSlots(type, opportunity, products, store, brandTokens, processedImageMap);
 
   // Generate campaign name and subject
-  const { name, subject } = generateCampaignMeta(type, opportunity, store.storeName ?? "Store");
+  const { name, subject: fallbackSubject } = generateCampaignMeta(type, opportunity, store.storeName ?? "Store");
+  let subject = fallbackSubject;
+  let generatedBlocks: unknown[] | undefined;
 
   // Calculate confidence score based on opportunity quality
   const confidenceScore = calculateConfidence(opportunity);
 
   // Render MJML template to responsive HTML
   let html: string | undefined;
+  // Nightly suggestions must be as brand-aware as merchant-requested emails.
+  // Generate copy from the full voice profile; retain deterministic copy only
+  // as a fail-safe so analysis can still produce a reviewable draft during a
+  // provider outage.
   try {
-    html = renderMjmlTemplate(archetypeId as TemplateArchetypeId, brandTokens, contentSlots);
+    const [brandProfile, workspace] = await Promise.all([
+      prisma.brandProfile.findFirst({ where: { storeId, workspaceId: store.workspaceId } }),
+      prisma.workspace.findUnique({ where: { id: store.workspaceId }, select: { defaultModel: true, modelHarness: true } }),
+    ]);
+    const generated = await generateEmail({
+      intent: opportunityIntent(type),
+      brandProfile: brandProfile ? {
+        brandName: brandProfile.brandName,
+        brandDescription: brandProfile.brandDescription,
+        toneAttributes: brandProfile.toneAttributes as Record<string, string>,
+        vocabulary: brandProfile.vocabulary as Record<string, string[]>,
+        visualStyle: brandProfile.visualStyle as Record<string, string | string[]>,
+        sampleCopy: brandProfile.sampleCopy as string[],
+      } : undefined,
+      segment: { name: opportunity.segmentName ?? type, description: opportunity.reasoning },
+      products: products.map((p) => ({ id: p.id, title: p.title, description: undefined, imageUrl: p.imageUrl ?? undefined, price: p.price, handle: p.handle })),
+      storeUrl: `https://${store.shopDomain}`,
+      model: workspace?.defaultModel as any,
+      modelHarness: workspace?.modelHarness,
+    });
+    subject = generated.subject;
+    generatedBlocks = generated.blocks;
+    html = await renderBrandedEmail({ storeId, blocks: generated.blocks, subject, previewText: generated.previewText, previewMode: true });
+  } catch (err: any) {
+    console.warn(`[campaign-factory] Brand-voice generation failed; using safe fallback: ${err.message}`);
+  }
+  try {
+    html ??= renderMjmlTemplate(archetypeId as TemplateArchetypeId, brandTokens, contentSlots);
   } catch (err: any) {
     console.warn(`[campaign-factory] MJML render failed for ${archetypeId}: ${err.message}`);
   }
@@ -97,6 +132,7 @@ export async function generateCampaignDraft(
       draft,
       archetypeId,
       contentSlots,
+      generatedBlocks,
       subject,
       customerCount,
       name,
@@ -107,6 +143,18 @@ export async function generateCampaignDraft(
   });
 
   return draft;
+}
+
+function opportunityIntent(type: string): EmailIntent {
+  switch (type) {
+    case "at_risk_winback": return "win_back";
+    case "repurchase_window": return "re_engagement";
+    case "new_arrival": return "promotion";
+    case "seasonal": return "seasonal";
+    case "vip_milestone": return "vip_reward";
+    case "re_engagement": return "re_engagement";
+    default: return "promotion";
+  }
 }
 
 function buildContentSlots(

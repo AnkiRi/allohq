@@ -54,7 +54,9 @@ export default function NewCampaignPage() {
   const selectedSegment = segmentId ? segments?.find((s) => s.id === segmentId) : undefined;
   const selectedTemplate = templates?.find((t) => t.id === templateId);
   const reach = selectedSegment?.customerCount;
-  const holdout = reach ? Math.max(1, Math.round(reach * 0.1)) : undefined;
+  // Keep the review estimate aligned with the server-side experiment policy.
+  // The final dry run remains authoritative after consent/suppression checks.
+  const holdout = reach ? Math.floor(reach * 0.15) : undefined;
   const willMessage = reach && holdout ? reach - holdout : undefined;
   const reviewStory: ReasoningStory = {
     lead: name || "this campaign",

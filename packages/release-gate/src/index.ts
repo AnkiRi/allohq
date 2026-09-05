@@ -189,7 +189,9 @@ export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> =
   "repurchase-reminder-schedule": "proactive_outreach",
   "browse-abandonment-schedule": "proactive_outreach",
   "inventory-monitor-schedule": "proactive_outreach",
-  "opportunity-scan-schedule": "proactive_outreach",
+  // Safe v1 intelligence: this scanner only creates approval-queue drafts. It
+  // never activates a campaign or touches a messaging provider.
+  "opportunity-scan-schedule": null,
   "overnight-ops-schedule": "proactive_outreach",
   "agent-observe-schedule": "proactive_outreach",
   "churn-intervention-schedule": "churn_intervention",
@@ -205,7 +207,9 @@ export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> =
   "product-recommendation-affinity-schedule": "background_analysis",
   "copy-learner-schedule": "background_analysis",
   "basket-analysis-schedule": "background_analysis",
-  "product-segments-schedule": "background_analysis",
+  // Category/affinity segments are read-only analysis and are useful from the
+  // first RFM run onward. They cannot dispatch messages.
+  "product-segments-schedule": null,
   "benchmark-aggregate-schedule": "cross_brand_benchmarks",
 };
 
