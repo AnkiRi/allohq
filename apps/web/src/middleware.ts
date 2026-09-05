@@ -14,6 +14,10 @@ const isPublicRoute = createRouteMatcher([
   "/dpa(.*)",
   "/subprocessors(.*)",
   "/support(.*)",
+  // Carries only a short-lived, single-use opaque handoff. The page itself
+  // must render while signed out so Clerk can present sign-up/sign-in; the API
+  // redeems it only after a valid Clerk session exists.
+  "/shopify/continue(.*)",
 ]);
 
 // Embedded Shopify pages are an authenticated *client shell*: their API calls
