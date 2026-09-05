@@ -7,7 +7,7 @@ export const privacyRetentionWorker = new Worker(
   QUEUE_NAMES.PRIVACY_RETENTION,
   async () => {
     const cutoffs = privacyRetentionCutoffs();
-    const [scrubbed, deleted, providerEventsDeleted] = await prisma.$transaction([
+    const [scrubbed, deleted, providerEventsDeleted, handoffsDeleted] = await prisma.$transaction([
       prisma.privacyRequest.updateMany({
         where: {
           createdAt: { lt: cutoffs.scrubBefore },
@@ -31,13 +31,16 @@ export const privacyRetentionWorker = new Worker(
       prisma.providerWebhookEvent.deleteMany({
         where: { createdAt: { lt: cutoffs.providerEventDeleteBefore } },
       }),
+      prisma.shopifyWorkspaceHandoff.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      }),
     ]);
 
     console.log(
-      `[privacy-retention] scrubbed=${scrubbed.count} audit_deleted=${deleted.count} provider_events_deleted=${providerEventsDeleted.count}`,
+      `[privacy-retention] scrubbed=${scrubbed.count} audit_deleted=${deleted.count} provider_events_deleted=${providerEventsDeleted.count} expired_handoffs_deleted=${handoffsDeleted.count}`
     );
   },
-  { connection: redisConnection },
+  { connection: redisConnection }
 );
 
 privacyRetentionWorker.on("failed", (job, error) => {

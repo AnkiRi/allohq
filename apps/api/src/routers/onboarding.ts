@@ -27,6 +27,152 @@ const retryBaselineQueue = new Queue("baseline", { connection: redisConnection }
 const retryProductImageQueue = new Queue("product-image", { connection: redisConnection });
 
 export const onboardingRouter = router({
+  readiness: workspaceProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        include: { senderDomain: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+      const [
+        products,
+        customers,
+        orders,
+        consentRows,
+        brand,
+        rfm,
+        productSegments,
+        pixelEvents,
+        linkedIdentity,
+        migrationRequest,
+      ] = await Promise.all([
+        ctx.prisma.product.count({ where: { storeId: store.id } }),
+        ctx.prisma.customer.count({ where: { storeId: store.id } }),
+        ctx.prisma.order.count({ where: { storeId: store.id } }),
+        ctx.prisma.contactConsent.count({ where: { storeId: store.id, channel: "email" } }),
+        ctx.prisma.brandProfile.findFirst({
+          where: { storeId: store.id },
+          select: { id: true, fromName: true, fromEmail: true },
+        }),
+        ctx.prisma.rfmScore.count({ where: { storeId: store.id } }),
+        ctx.prisma.productSegment.count({ where: { storeId: store.id, isActive: true } }),
+        ctx.prisma.storefrontEvent.count({ where: { storeId: store.id, source: "shopify_pixel" } }),
+        ctx.prisma.shopifyStaffIdentity.findFirst({
+          where: { storeId: store.id, user: { clerkId: ctx.userId! } },
+          select: { id: true },
+        }),
+        ctx.prisma.migrationAssistanceRequest.findFirst({
+          where: { storeId: store.id },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+      // An empty but successfully synchronized development/new store is still
+      // synchronized. Counts describe the result; lastSyncAt proves the run.
+      const syncReady = Boolean(store.lastSyncAt);
+      const consentReady = customers === 0 || consentRows > 0;
+      const brandReady = Boolean(brand?.fromName && brand.fromEmail);
+      const senderReady = store.senderDomain?.status === "verified";
+      const trackingRegistered = store.webPixelStatus === "registered";
+      const intelligenceReady = customers === 0 || rfm > 0;
+      const deliveryMode = process.env.MESSAGING_SEND_MODE ?? "disabled";
+      return {
+        checks: {
+          account: {
+            ready: Boolean(linkedIdentity),
+            detail: linkedIdentity
+              ? "Shopify staff linked to this Joon account"
+              : "Open Joon from Shopify to link this account",
+          },
+          sync: {
+            ready: syncReady,
+            detail: `${products} products · ${customers} customers · ${orders} orders`,
+          },
+          consent: {
+            ready: consentReady,
+            detail: `${consentRows} email consent records synchronized`,
+          },
+          brand: {
+            ready: brandReady,
+            detail: brandReady
+              ? `${brand!.fromName} <${brand!.fromEmail}>`
+              : "Sender identity and brand review required",
+          },
+          tracking: {
+            ready: trackingRegistered,
+            observed: pixelEvents > 0,
+            detail: trackingRegistered
+              ? pixelEvents > 0
+                ? `${pixelEvents} storefront events received`
+                : "Pixel registered; waiting for the first storefront visit"
+              : (store.webPixelError ?? "Web Pixel is not registered"),
+          },
+          intelligence: {
+            ready: intelligenceReady,
+            detail: `${rfm} customers scored · ${productSegments} smart segments`,
+          },
+          senderDomain: {
+            ready: senderReady,
+            detail: store.senderDomain
+              ? `${store.senderDomain.domain} · ${store.senderDomain.status}`
+              : "Sending domain not configured",
+          },
+          suppression: {
+            ready: true,
+            detail: "Unsubscribes, complaints and hard bounces are enforced before delivery",
+          },
+          delivery: {
+            ready: deliveryMode !== "disabled" && !store.emailSendingPausedAt,
+            detail: store.emailSendingPausedAt
+              ? `Paused: ${store.emailSendingPauseReason ?? "merchant safety pause"}`
+              : `Delivery mode: ${deliveryMode}`,
+          },
+        },
+        readyForAllowlistTest: Boolean(
+          linkedIdentity &&
+          syncReady &&
+          consentReady &&
+          brandReady &&
+          trackingRegistered &&
+          intelligenceReady &&
+          senderReady
+        ),
+        currentEmailPlatform: store.currentEmailPlatform,
+        migrationRequest,
+      };
+    }),
+
+  requestMigrationAssistance: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        sourcePlatform: z.string().trim().min(1).max(80),
+        requestedItems: z
+          .array(z.enum(["profiles_and_consent", "segments", "templates", "selected_flows"]))
+          .min(1),
+        notes: z.string().trim().max(2000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+      const existing = await ctx.prisma.migrationAssistanceRequest.findFirst({
+        where: { storeId: store.id, status: { in: ["requested", "contacted", "in_progress"] } },
+      });
+      if (existing) return existing;
+      return ctx.prisma.migrationAssistanceRequest.create({
+        data: {
+          storeId: store.id,
+          workspaceId: store.workspaceId,
+          sourcePlatform: input.sourcePlatform,
+          requestedItems: input.requestedItems,
+          notes: input.notes,
+          requestedBy: ctx.userId!,
+        },
+      });
+    }),
   /**
    * Get onboarding status: current step + background job flags + counts.
    */
@@ -48,11 +194,20 @@ export const onboardingRouter = router({
       // Background job flags
       const [brandProfile, brandVisualProfile, processedImageCount, rfmCount, storeBaseline] =
         await Promise.all([
-          ctx.prisma.brandProfile.findFirst({ where: { storeId: input.storeId }, select: { id: true } }),
-          ctx.prisma.brandVisualProfile.findFirst({ where: { storeId: input.storeId }, select: { id: true } }),
+          ctx.prisma.brandProfile.findFirst({
+            where: { storeId: input.storeId },
+            select: { id: true },
+          }),
+          ctx.prisma.brandVisualProfile.findFirst({
+            where: { storeId: input.storeId },
+            select: { id: true },
+          }),
           ctx.prisma.processedProductImage.count({ where: { storeId: input.storeId } }),
           ctx.prisma.rfmScore.count({ where: { storeId: input.storeId } }),
-          ctx.prisma.storeBaseline.findFirst({ where: { storeId: input.storeId }, select: { id: true } }),
+          ctx.prisma.storeBaseline.findFirst({
+            where: { storeId: input.storeId },
+            select: { id: true },
+          }),
         ]);
 
       return {
@@ -81,7 +236,7 @@ export const onboardingRouter = router({
       z.object({
         storeId: z.string(),
         step: z.enum(["sync", "brandVoice", "brandVisual", "productImages", "rfm", "baseline"]),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
@@ -99,7 +254,7 @@ export const onboardingRouter = router({
               storeId: store.id,
               platform: store.platform,
             },
-            { jobId: `retry-sync-${store.id}-${win}` },
+            { jobId: `retry-sync-${store.id}-${win}` }
           );
           break;
         case "brandVoice":
@@ -110,17 +265,29 @@ export const onboardingRouter = router({
               attempts: 2,
               backoff: { type: "exponential", delay: 5000 },
               jobId: `retry-brand-${store.id}-${win}`,
-            },
+            }
           );
           break;
         case "brandVisual":
-          await retryBrandKitQueue.add("brand-kit", { storeId: store.id }, { jobId: `retry-kit-${store.id}-${win}` });
+          await retryBrandKitQueue.add(
+            "brand-kit",
+            { storeId: store.id },
+            { jobId: `retry-kit-${store.id}-${win}` }
+          );
           break;
         case "rfm":
-          await retryRfmQueue.add("rfm-after-sync", { storeId: store.id }, { jobId: `retry-rfm-${store.id}-${win}` });
+          await retryRfmQueue.add(
+            "rfm-after-sync",
+            { storeId: store.id },
+            { jobId: `retry-rfm-${store.id}-${win}` }
+          );
           break;
         case "baseline":
-          await retryBaselineQueue.add("baseline", { storeId: store.id }, { jobId: `retry-baseline-${store.id}-${win}` });
+          await retryBaselineQueue.add(
+            "baseline",
+            { storeId: store.id },
+            { jobId: `retry-baseline-${store.id}-${win}` }
+          );
           break;
         case "productImages": {
           const products = await ctx.prisma.product.findMany({
@@ -128,7 +295,10 @@ export const onboardingRouter = router({
             select: { id: true },
           });
           for (const p of products) {
-            await retryProductImageQueue.add("product-image", { storeId: store.id, productId: p.id });
+            await retryProductImageQueue.add("product-image", {
+              storeId: store.id,
+              productId: p.id,
+            });
           }
           break;
         }
@@ -270,19 +440,16 @@ export const onboardingRouter = router({
       // Run analysis inline so we can return results immediately
       const { analyzeBrandFromDocument } = await import("@allohq/customer-intelligence");
 
-      const result = await analyzeBrandFromDocument(
-        input.document,
-        {
-          storeName: store.storeName || store.shopDomain.replace(".myshopify.com", ""),
-          products: store.products.map((p) => ({
-            title: p.title,
-            description: p.description ?? undefined,
-            productType: p.productType ?? undefined,
-            vendor: p.vendor ?? undefined,
-            price: p.price,
-          })),
-        },
-      );
+      const result = await analyzeBrandFromDocument(input.document, {
+        storeName: store.storeName || store.shopDomain.replace(".myshopify.com", ""),
+        products: store.products.map((p) => ({
+          title: p.title,
+          description: p.description ?? undefined,
+          productType: p.productType ?? undefined,
+          vendor: p.vendor ?? undefined,
+          price: p.price,
+        })),
+      });
 
       // Record token usage
       await ctx.prisma.tokenUsage.create({
@@ -360,15 +527,17 @@ export const onboardingRouter = router({
         replyToEmail: z.string().optional(),
         storeCategory: z.string().max(80).optional(),
         currentEmailPlatform: z.string().max(80).optional(),
-        businessAddress: z.object({
-          address1: z.string().max(200).optional(),
-          address2: z.string().max(200).optional(),
-          city: z.string().max(100).optional(),
-          province: z.string().max(100).optional(),
-          zip: z.string().max(30).optional(),
-          country: z.string().max(100).optional(),
-        }).optional(),
-      }),
+        businessAddress: z
+          .object({
+            address1: z.string().max(200).optional(),
+            address2: z.string().max(200).optional(),
+            city: z.string().max(100).optional(),
+            province: z.string().max(100).optional(),
+            zip: z.string().max(30).optional(),
+            country: z.string().max(100).optional(),
+          })
+          .optional(),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
@@ -406,7 +575,14 @@ export const onboardingRouter = router({
       });
 
       // Update BrandProfile tone/banned words + send/sender settings if provided
-      if (toneAttributes || bannedWords || sendingFrequency || fromName || fromEmail || replyToEmail) {
+      if (
+        toneAttributes ||
+        bannedWords ||
+        sendingFrequency ||
+        fromName ||
+        fromEmail ||
+        replyToEmail
+      ) {
         const brandProfile = await ctx.prisma.brandProfile.findFirst({ where: { storeId } });
         if (brandProfile) {
           const updateData: Record<string, unknown> = {};
@@ -449,9 +625,9 @@ export const onboardingRouter = router({
           z.object({
             category: z.nativeEnum(ActionCategory),
             tier: z.nativeEnum(AutonomyTier),
-          }),
+          })
         ),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
@@ -489,7 +665,7 @@ export const onboardingRouter = router({
         quietHoursStart: z.number().int().min(0).max(23).optional(),
         quietHoursEnd: z.number().int().min(0).max(23).optional(),
         skip: z.boolean().optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({

@@ -52,6 +52,23 @@ model ShopifyStaffIdentity {
   @@map("shopify_staff_identities")
 }
 
+/// Single-use bridge from a verified Shopify Admin session to Joon's
+/// full-screen Clerk-authenticated workspace. Only a SHA-256 digest is stored.
+model ShopifyWorkspaceHandoff {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  storeId       String
+  shopifyUserId String
+  expiresAt     DateTime
+  redeemedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, expiresAt])
+  @@map("shopify_workspace_handoffs")
+}
+
 model Workspace {
   id           String   @id @default(cuid())
   name         String
@@ -234,6 +251,10 @@ model Store {
   emailSendingPauseReason String?
   storeCategory         String? // fashion, beauty, food, electronics, home, health
   currentEmailPlatform  String? // migration/onboarding context; never implies credentials were connected
+  webPixelId           String?
+  webPixelStatus       String    @default("not_configured") // not_configured | registered | error
+  webPixelError        String?
+  webPixelCheckedAt    DateTime?
 
   // Causal-data moat: default contribution margin used to derive outcomeMargin
   // from outcomeRevenue when product-level COGS is unavailable.
@@ -241,6 +262,7 @@ model Store {
 
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   shopifyStaffIdentities ShopifyStaffIdentity[]
+  shopifyWorkspaceHandoffs ShopifyWorkspaceHandoff[]
   products      Product[]
   customers     Customer[]
   orders        Order[]
@@ -316,6 +338,7 @@ model Store {
   // Product-Based Smart Segments
   productSegments ProductSegment[]
   senderDomain SenderDomain?
+  migrationAssistanceRequests MigrationAssistanceRequest[]
 
   // Basket Intelligence
   basketArchetypes BasketArchetype[]
@@ -327,6 +350,25 @@ model Store {
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
+}
+
+model MigrationAssistanceRequest {
+  id              String   @id @default(cuid())
+  storeId         String
+  workspaceId     String
+  sourcePlatform  String
+  requestedItems  String[] @default([])
+  notes            String?
+  status           String   @default("requested")
+  requestedBy      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([storeId, createdAt])
+  @@map("migration_assistance_requests")
 }
 
 model SenderDomain {

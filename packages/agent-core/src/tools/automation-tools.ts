@@ -1,5 +1,20 @@
 import { prisma } from "@allohq/database";
 import type { ToolDefinition } from "../types";
+import { Queue } from "bullmq";
+import {
+  automationActivationChecksum,
+  loadAutomationActivationSnapshot,
+} from "@allohq/campaign-engine";
+import { assertV1EmailAutomation } from "@allohq/release-gate";
+import { buildDefaultNodes } from "./automation-skeleton";
+
+const automationGenerateQueue = new Queue("automation-generate", {
+  connection: {
+    host: process.env.REDIS_HOST ?? "localhost",
+    port: Number(process.env.REDIS_PORT ?? 6379),
+    password: process.env.REDIS_PASSWORD,
+  },
+});
 
 export const automationTools: ToolDefinition[] = [
   {
@@ -10,16 +25,19 @@ export const automationTools: ToolDefinition[] = [
       name: { type: "string", description: "Automation name (e.g. 'Win-Back Flow')" },
       category: {
         type: "string",
-        description: "Category: 'welcome_series', 'abandoned_cart', 'win_back', 'post_purchase', 'birthday', 'browse_abandonment', 'vip_reward', 'custom'",
+        description:
+          "Category: 'welcome_series', 'abandoned_cart', 'win_back', 'post_purchase', 'birthday', 'browse_abandonment', 'vip_reward', 'custom'",
       },
       description: { type: "string", description: "What this automation does" },
       triggerType: {
         type: "string",
-        description: "Trigger type: 'event' (e.g. order placed), 'schedule' (time-based), 'segment_entry' (customer enters segment), 'segment_exit' (customer leaves segment)",
+        description:
+          "Trigger type: 'event' (e.g. order placed), 'schedule' (time-based), 'segment_entry' (customer enters segment), 'segment_exit' (customer leaves segment)",
       },
       triggerConfig: {
         type: "object",
-        description: "Trigger configuration — e.g. { event: 'order.created' } or { segment: 'At Risk' } or { schedule: 'daily' }",
+        description:
+          "Trigger configuration — e.g. { event: 'order.created' } or { segment: 'At Risk' } or { schedule: 'daily' }",
       },
     },
     handler: async (params, ctx) => {
@@ -53,6 +71,19 @@ export const automationTools: ToolDefinition[] = [
         },
       });
 
+      // The skeleton defines timing only. The generator creates every email
+      // from the merchant's current BrandProfile and replaces these nodes with
+      // template-backed, email-only steps before activation is possible.
+      await automationGenerateQueue.add(
+        "generate",
+        { automationId: automation.id, storeId: ctx.storeId },
+        {
+          attempts: 2,
+          backoff: { type: "exponential", delay: 5000 },
+          jobId: `brand-automation-${automation.id}`,
+        }
+      );
+
       // Log action
       await prisma.agentAction.create({
         data: {
@@ -83,7 +114,10 @@ export const automationTools: ToolDefinition[] = [
     description:
       "Get full details about an automation — its workflow steps, trigger, status, and associated templates. Use this when the merchant asks to preview, view, or see details about an automation.",
     parameters: {
-      automationName: { type: "string", description: "Name (or partial name) of the automation to look up" },
+      automationName: {
+        type: "string",
+        description: "Name (or partial name) of the automation to look up",
+      },
     },
     handler: async (params, ctx) => {
       const automationName = String(params.automationName ?? "");
@@ -170,10 +204,63 @@ export const automationTools: ToolDefinition[] = [
 
       let newStatus: string;
       switch (action) {
-        case "activate":
-        case "resume":
+        case "activate": {
+          if (automation.status !== "ready") {
+            return {
+              success: false,
+              message: `Automation "${automation.name}" must finish brand generation and be ready before activation.`,
+            };
+          }
+          assertV1EmailAutomation(automation);
+          const snapshot = await loadAutomationActivationSnapshot(automation.id);
+          if (!snapshot)
+            return {
+              success: false,
+              message: "Automation activation snapshot could not be created.",
+            };
+          const activationChecksum = automationActivationChecksum(snapshot);
+          const version = automation.activeVersion + 1;
+          await prisma.$transaction(async (tx) => {
+            await tx.automationVersion.create({
+              data: {
+                automationId: automation.id,
+                version,
+                activationChecksum,
+                snapshot: snapshot as any,
+              },
+            });
+            await tx.automation.update({
+              where: { id: automation.id },
+              data: {
+                status: "active",
+                activationChecksum,
+                activatedAt: new Date(),
+                activeVersion: version,
+              },
+            });
+          });
           newStatus = "active";
           break;
+        }
+        case "resume": {
+          if (automation.status !== "paused") {
+            return {
+              success: false,
+              message: `Automation "${automation.name}" must be paused before it can resume.`,
+            };
+          }
+          assertV1EmailAutomation(automation);
+          const snapshot = await loadAutomationActivationSnapshot(automation.id);
+          const checksum = snapshot ? automationActivationChecksum(snapshot) : null;
+          if (!checksum || checksum !== automation.activationChecksum) {
+            return {
+              success: false,
+              message: "This journey changed after approval. Review and activate it again.",
+            };
+          }
+          newStatus = "active";
+          break;
+        }
         case "pause":
           newStatus = "paused";
           break;
@@ -187,10 +274,12 @@ export const automationTools: ToolDefinition[] = [
           return { success: false, message: `Unknown action: ${action}` };
       }
 
-      await prisma.automation.update({
-        where: { id: automation.id },
-        data: { status: newStatus },
-      });
+      if (action !== "activate") {
+        await prisma.automation.update({
+          where: { id: automation.id },
+          data: { status: newStatus },
+        });
+      }
 
       // Log action
       await prisma.agentAction.create({
@@ -223,7 +312,8 @@ export const automationTools: ToolDefinition[] = [
       nodeId: { type: "string", description: "ID of the node to edit (e.g. '1', '2', '3')" },
       updates: {
         type: "object",
-        description: "Updates to apply: { type?: string, config?: { days?: number, hours?: number, subject?: string, message?: string, check?: string } }",
+        description:
+          "Updates to apply: { type?: string, config?: { days?: number, hours?: number, subject?: string, message?: string, check?: string } }",
       },
     },
     handler: async (params, ctx) => {
@@ -233,17 +323,20 @@ export const automationTools: ToolDefinition[] = [
           name: { contains: String(params.automationName ?? ""), mode: "insensitive" },
         },
       });
-      if (!automation) return { success: false, message: `Automation "${params.automationName}" not found` };
+      if (!automation)
+        return { success: false, message: `Automation "${params.automationName}" not found` };
 
       const nodes = (automation.nodes as any[]) ?? [];
       const nodeId = String(params.nodeId);
       const nodeIndex = nodes.findIndex((n) => n.id === nodeId);
-      if (nodeIndex === -1) return { success: false, message: `Node "${nodeId}" not found in automation` };
+      if (nodeIndex === -1)
+        return { success: false, message: `Node "${nodeId}" not found in automation` };
 
       const updates = (params.updates as Record<string, unknown>) ?? {};
       const node = { ...nodes[nodeIndex] };
       if (updates.type) node.type = updates.type;
-      if (updates.config) node.config = { ...node.config, ...(updates.config as Record<string, unknown>) };
+      if (updates.config)
+        node.config = { ...node.config, ...(updates.config as Record<string, unknown>) };
 
       nodes[nodeIndex] = node;
 
@@ -273,45 +366,3 @@ export const automationTools: ToolDefinition[] = [
     },
   },
 ];
-
-/** Build default workflow nodes based on automation category */
-function buildDefaultNodes(category: string): unknown[] {
-  switch (category) {
-    case "win_back":
-      return [
-        { id: "1", type: "delay", config: { days: 0 }, next: "2" },
-        { id: "2", type: "send_email", config: { subject: "We miss you!" }, next: "3" },
-        { id: "3", type: "delay", config: { days: 3 }, next: "4" },
-        { id: "4", type: "condition", config: { check: "opened_email" }, nextYes: "5", nextNo: "6" },
-        { id: "5", type: "send_email", config: { subject: "Special offer just for you" }, next: null },
-        { id: "6", type: "send_sms", config: { message: "We have a special offer for you" }, next: null },
-      ];
-    case "welcome_series":
-      return [
-        { id: "1", type: "send_email", config: { subject: "Welcome!" }, next: "2" },
-        { id: "2", type: "delay", config: { days: 2 }, next: "3" },
-        { id: "3", type: "send_email", config: { subject: "Here are our bestsellers" }, next: "4" },
-        { id: "4", type: "delay", config: { days: 5 }, next: "5" },
-        { id: "5", type: "send_email", config: { subject: "Your exclusive welcome offer" }, next: null },
-      ];
-    case "abandoned_cart":
-      return [
-        { id: "1", type: "delay", config: { hours: 1 }, next: "2" },
-        { id: "2", type: "send_email", config: { subject: "You left something behind" }, next: "3" },
-        { id: "3", type: "delay", config: { days: 1 }, next: "4" },
-        { id: "4", type: "send_email", config: { subject: "Your cart is waiting" }, next: null },
-      ];
-    case "post_purchase":
-      return [
-        { id: "1", type: "delay", config: { days: 3 }, next: "2" },
-        { id: "2", type: "send_email", config: { subject: "How's your order?" }, next: "3" },
-        { id: "3", type: "delay", config: { days: 14 }, next: "4" },
-        { id: "4", type: "send_email", config: { subject: "We'd love your review" }, next: null },
-      ];
-    default:
-      return [
-        { id: "1", type: "delay", config: { days: 0 }, next: "2" },
-        { id: "2", type: "send_email", config: { subject: "Hello" }, next: null },
-      ];
-  }
-}

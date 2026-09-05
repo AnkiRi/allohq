@@ -75,7 +75,9 @@ export const syncWorker = new Worker<SyncJobData>(
     let productResult: SyncResult = EMPTY_RESULT;
     try {
       productResult = await syncAllProducts(shopDomain, accessToken, storeId, prisma);
-      console.log(`Products synced: ${productResult.imported} imported, ${productResult.errors.length} errors`);
+      console.log(
+        `Products synced: ${productResult.imported} imported, ${productResult.errors.length} errors`
+      );
     } catch (err: any) {
       console.warn(`Products sync skipped: ${err.message}`);
       coreFailures.push(`products: ${err.message}`);
@@ -86,7 +88,9 @@ export const syncWorker = new Worker<SyncJobData>(
     let customerResult: SyncResult = EMPTY_RESULT;
     try {
       customerResult = await syncAllCustomers(shopDomain, accessToken, storeId, prisma);
-      console.log(`Customers synced: ${customerResult.imported} imported, ${customerResult.errors.length} errors`);
+      console.log(
+        `Customers synced: ${customerResult.imported} imported, ${customerResult.errors.length} errors`
+      );
     } catch (err: any) {
       console.warn(`Customers sync skipped: ${err.message}`);
       coreFailures.push(`customers: ${err.message}`);
@@ -97,7 +101,9 @@ export const syncWorker = new Worker<SyncJobData>(
     let orderResult: SyncResult = EMPTY_RESULT;
     try {
       orderResult = await syncAllOrders(shopDomain, accessToken, storeId, prisma);
-      console.log(`Orders synced: ${orderResult.imported} imported, ${orderResult.errors.length} errors`);
+      console.log(
+        `Orders synced: ${orderResult.imported} imported, ${orderResult.errors.length} errors`
+      );
     } catch (err: any) {
       console.warn(`Orders sync skipped: ${err.message}`);
       coreFailures.push(`orders: ${err.message}`);
@@ -108,7 +114,9 @@ export const syncWorker = new Worker<SyncJobData>(
     let collectionResult: SyncResult = EMPTY_RESULT;
     try {
       collectionResult = await syncAllCollections(shopDomain, accessToken, storeId, prisma);
-      console.log(`Collections synced: ${collectionResult.imported} imported, ${collectionResult.errors.length} errors`);
+      console.log(
+        `Collections synced: ${collectionResult.imported} imported, ${collectionResult.errors.length} errors`
+      );
     } catch (err: any) {
       console.warn(`Collections sync skipped: ${err.message}`);
     }
@@ -119,7 +127,9 @@ export const syncWorker = new Worker<SyncJobData>(
     if (webhookBaseUrl) {
       try {
         const webhookResult = await registerWebhooks({ shopDomain, accessToken, webhookBaseUrl });
-        console.log(`Webhooks registered: ${webhookResult.registered.length}, errors: ${webhookResult.errors.length}`);
+        console.log(
+          `Webhooks registered: ${webhookResult.registered.length}, errors: ${webhookResult.errors.length}`
+        );
       } catch (err: any) {
         console.warn(`Webhook registration skipped: ${err.message}`);
       }
@@ -131,8 +141,25 @@ export const syncWorker = new Worker<SyncJobData>(
             endpoint: webhookBaseUrl,
             publishableKey: store.widgetPublicKey,
           });
+          await prisma.store.update({
+            where: { id: storeId },
+            data: {
+              webPixelId: pixel.id,
+              webPixelStatus: "registered",
+              webPixelError: null,
+              webPixelCheckedAt: new Date(),
+            },
+          });
           console.log(`Shopify Web Pixel configured: ${pixel.id}`);
         } catch (err: any) {
+          await prisma.store.update({
+            where: { id: storeId },
+            data: {
+              webPixelStatus: "error",
+              webPixelError: err.message,
+              webPixelCheckedAt: new Date(),
+            },
+          });
           console.warn(`Shopify Web Pixel registration skipped: ${err.message}`);
         }
       } else {

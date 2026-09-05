@@ -13,8 +13,12 @@ import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
 import { handleWidgetPopups } from "./routes/widget-popups";
 import { handleShopifyBootstrap } from "./routes/shopify-bootstrap";
+import { handleShopifyHandoff, handleShopifyHandoffRedeem } from "./routes/shopify-handoff";
 import { assertDataEncryptionConfigured, prisma } from "@allohq/database";
-import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
+import {
+  assertEmailDeliveryConfigured,
+  assertUnsubscribeSigningConfigured,
+} from "@allohq/messaging";
 
 // Load environment variables
 config();
@@ -25,9 +29,7 @@ if (process.env.NODE_ENV === "production") {
   assertEmailDeliveryConfigured();
   const widgetSigningSecret = process.env.WIDGET_VISITOR_SIGNING_SECRET;
   if (!widgetSigningSecret || Buffer.byteLength(widgetSigningSecret) < 32) {
-    throw new Error(
-      "WIDGET_VISITOR_SIGNING_SECRET must contain at least 32 bytes in production",
-    );
+    throw new Error("WIDGET_VISITOR_SIGNING_SECRET must contain at least 32 bytes in production");
   }
 }
 
@@ -36,10 +38,9 @@ const PORT = process.env.PORT || 3001;
 const corsMiddleware = cors({
   // Trim each entry so a stray space in ALLOWED_ORIGINS (e.g. "a, b") can't
   // silently break origin matching — the origin compare is exact.
-  origin: process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) || [
-    "http://localhost:3000",
-    "http://localhost:3001",
-  ],
+  origin: process.env.ALLOWED_ORIGINS?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) || ["http://localhost:3000", "http://localhost:3001"],
   allowedHeaders: ["Authorization", "Content-Type", "x-allo-demo"],
   credentials: true,
 });
@@ -62,15 +63,9 @@ const trpcHandler = createHTTPHandler({
 const server = http.createServer((req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
-  res.setHeader(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()",
-  );
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
   if (process.env.NODE_ENV === "production") {
-    res.setHeader(
-      "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains",
-    );
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
 
   if (req.url === "/healthz" && req.method === "GET") {
@@ -83,7 +78,7 @@ const server = http.createServer((req, res) => {
             status: "ready",
             database: "ok",
             timestamp: new Date().toISOString(),
-          }),
+          })
         );
       } catch {
         res.writeHead(503, { "Content-Type": "application/json" });
@@ -92,7 +87,7 @@ const server = http.createServer((req, res) => {
             status: "not_ready",
             database: "unavailable",
             timestamp: new Date().toISOString(),
-          }),
+          })
         );
       }
     })();
@@ -109,6 +104,18 @@ const server = http.createServer((req, res) => {
   if (req.url?.startsWith("/v1/shopify/bootstrap")) {
     corsMiddleware(req, res, () => {
       void handleShopifyBootstrap(req, res);
+    });
+    return;
+  }
+  if (req.url?.startsWith("/v1/shopify/handoff/redeem")) {
+    corsMiddleware(req, res, () => {
+      void handleShopifyHandoffRedeem(req, res);
+    });
+    return;
+  }
+  if (req.url?.startsWith("/v1/shopify/handoff")) {
+    corsMiddleware(req, res, () => {
+      void handleShopifyHandoff(req, res);
     });
     return;
   }

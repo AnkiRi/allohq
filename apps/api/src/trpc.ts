@@ -62,7 +62,9 @@ export async function createContext(opts: { req?: any; res?: any }) {
           "https://joonhq.ai",
           "https://agent.joonhq.com",
           "https://joonhq.com",
-          ...(process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
+          ...(process.env.ALLOWED_ORIGINS?.split(",")
+            .map((s) => s.trim())
+            .filter(Boolean) ?? []),
         ],
       });
       userId = payload.sub;
@@ -74,6 +76,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
         include: {
           workspaceMembers: {
             take: 1,
+            orderBy: { createdAt: "desc" as const },
             include: { workspace: true },
           },
         },
@@ -102,6 +105,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
           include: {
             workspaceMembers: {
               take: 1,
+              orderBy: { createdAt: "desc" as const },
               include: { workspace: true },
             },
           },
@@ -227,84 +231,92 @@ export const workspaceProcedure = protectedProcedure
     return result;
   })
   .use(async ({ ctx, next }) => {
-  // Rate limit: 100 requests per minute per user
-  const { allowed, remaining } = checkRateLimit(ctx.userId, { maxRequests: 100, windowMs: 60_000 });
-  if (!allowed) {
-    throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: `Rate limit exceeded. Try again in a moment. (${remaining} remaining)`,
+    // Rate limit: 100 requests per minute per user
+    const { allowed, remaining } = checkRateLimit(ctx.userId, {
+      maxRequests: 100,
+      windowMs: 60_000,
     });
-  }
-
-  return next({ ctx });
-}).use(async ({ ctx, next }) => {
-  if (!ctx.workspaceId) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "No workspace access",
-    });
-  }
-  return next({
-    ctx: {
-      ...ctx,
-      workspaceId: ctx.workspaceId,
-    },
-  });
-}).use(async ({ ctx, type, path, next }) => {
-  if (!ctx.isDemo && ctx.workspaceId) {
-    const { canUseWorkspacePath } = await import("./auth/workspace-role-policy");
-    const member = await prisma.workspaceMember.findFirst({
-      where: { workspaceId: ctx.workspaceId, user: { clerkId: ctx.userId } },
-      select: { role: true },
-    });
-    if (!canUseWorkspacePath(member?.role, type, path)) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: member?.role === "pending" || member?.role === "member"
-          ? "Your Joon workspace owner needs to assign your access."
-          : "Your Joon role does not allow this action.",
-      });
-    }
-  }
-  // STRUCTURAL demo write-floor (B1): a demo-guest may not perform ANY mutation
-  // that persists to / sends from the shared sandbox. Enforced HERE so every
-  // mutation — including ones added later — inherits the block automatically
-  // (NOT a per-resolver isDemo checklist, which is how holes appear). A small
-  // allowlist keeps the demo interactive (chat / draft / approve); those paths
-  // are themselves ephemeral or no-op when isDemo.
-  if (
-    ctx.isDemo &&
-    type === "mutation" &&
-    !DEMO_INTERACTIVE_MUTATIONS.has(path)
-  ) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message:
-        "This is a live demo, so changes aren't saved. Sign up to run it for real.",
-    });
-  }
-  // B2 cost cap: gate the public demo's LLM endpoints — per-IP minute window +
-  // a global daily ceiling (hard money bound). Graceful, not an error.
-  if (ctx.isDemo && DEMO_LLM_PATHS.has(path)) {
-    const cap = checkDemoLLMLimit(ctx.clientIp);
-    if (!cap.allowed) {
+    if (!allowed) {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
-        message:
-          cap.reason === "global"
-            ? "joon's demo is resting for today, it's been a busy day. Come back tomorrow, or sign up to run it for real."
-            : "You're moving quickly, give the demo a moment and try again.",
+        message: `Rate limit exceeded. Try again in a moment. (${remaining} remaining)`,
       });
     }
-  }
-  const result = await next();
-  if (result.ok && ctx.workspaceId && isProtectedDataRoute(path)) {
-    console.info(JSON.stringify(protectedDataAuditRecord({
-      path, userId: ctx.userId, workspaceId: ctx.workspaceId, authSource: ctx.authSource,
-    })));
-  }
-  return result;
-});
+
+    return next({ ctx });
+  })
+  .use(async ({ ctx, next }) => {
+    if (!ctx.workspaceId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "No workspace access",
+      });
+    }
+    return next({
+      ctx: {
+        ...ctx,
+        workspaceId: ctx.workspaceId,
+      },
+    });
+  })
+  .use(async ({ ctx, type, path, next }) => {
+    if (!ctx.isDemo && ctx.workspaceId) {
+      const { canUseWorkspacePath } = await import("./auth/workspace-role-policy");
+      const member = await prisma.workspaceMember.findFirst({
+        where: { workspaceId: ctx.workspaceId, user: { clerkId: ctx.userId } },
+        select: { role: true },
+      });
+      if (!canUseWorkspacePath(member?.role, type, path)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            member?.role === "pending" || member?.role === "member"
+              ? "Your Joon workspace owner needs to assign your access."
+              : "Your Joon role does not allow this action.",
+        });
+      }
+    }
+    // STRUCTURAL demo write-floor (B1): a demo-guest may not perform ANY mutation
+    // that persists to / sends from the shared sandbox. Enforced HERE so every
+    // mutation — including ones added later — inherits the block automatically
+    // (NOT a per-resolver isDemo checklist, which is how holes appear). A small
+    // allowlist keeps the demo interactive (chat / draft / approve); those paths
+    // are themselves ephemeral or no-op when isDemo.
+    if (ctx.isDemo && type === "mutation" && !DEMO_INTERACTIVE_MUTATIONS.has(path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This is a live demo, so changes aren't saved. Sign up to run it for real.",
+      });
+    }
+    // B2 cost cap: gate the public demo's LLM endpoints — per-IP minute window +
+    // a global daily ceiling (hard money bound). Graceful, not an error.
+    if (ctx.isDemo && DEMO_LLM_PATHS.has(path)) {
+      const cap = checkDemoLLMLimit(ctx.clientIp);
+      if (!cap.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message:
+            cap.reason === "global"
+              ? "joon's demo is resting for today, it's been a busy day. Come back tomorrow, or sign up to run it for real."
+              : "You're moving quickly, give the demo a moment and try again.",
+        });
+      }
+    }
+    const result = await next();
+    if (result.ok && ctx.workspaceId && isProtectedDataRoute(path)) {
+      console.info(
+        JSON.stringify(
+          protectedDataAuditRecord({
+            path,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            authSource: ctx.authSource,
+          })
+        )
+      );
+    }
+    return result;
+  });
 
 /**
  * Store procedure — workspace access PLUS a cross-tenant guard: the `storeId` in
