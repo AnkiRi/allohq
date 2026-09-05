@@ -30,6 +30,7 @@ export type { GroupStat, LiftStats } from "./lift-stats";
 export {
   getOrCreateExperiment,
   assignArm,
+  assignCohortArms,
   assignmentValue,
 } from "./experiments";
 export type { Arm, CohortDefinition } from "./experiments";

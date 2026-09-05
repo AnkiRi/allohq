@@ -95,3 +95,23 @@ export function assignArm(
   const value = assignmentValue(experiment.assignmentSeed, customerId);
   return value < experiment.splitRatio ? "CONTROL" : "TREATMENT";
 }
+
+/**
+ * Assign an exact control quota for a finite campaign audience.
+ *
+ * Ranking by the experiment's deterministic hash preserves auditability while
+ * avoiding surprising small-cohort outcomes (for example 0 held out from 50).
+ * Callers must pass the frozen approved audience, not a changing live segment.
+ */
+export function assignCohortArms(
+  experiment: Pick<Experiment, "assignmentSeed" | "splitRatio">,
+  customerIds: string[],
+): Map<string, Arm> {
+  const uniqueIds = [...new Set(customerIds)];
+  const controlCount = Math.floor(uniqueIds.length * experiment.splitRatio);
+  const ranked = uniqueIds
+    .map((customerId) => ({ customerId, value: assignmentValue(experiment.assignmentSeed, customerId) }))
+    .sort((a, b) => a.value - b.value || a.customerId.localeCompare(b.customerId));
+  const controls = new Set(ranked.slice(0, controlCount).map((entry) => entry.customerId));
+  return new Map(uniqueIds.map((customerId) => [customerId, controls.has(customerId) ? "CONTROL" : "TREATMENT"]));
+}

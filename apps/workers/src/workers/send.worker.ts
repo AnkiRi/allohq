@@ -22,7 +22,7 @@ import {
   campaignAudienceSnapshot,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
-import { getOrCreateExperiment, assignArm } from "@allohq/customer-state";
+import { getOrCreateExperiment, assignCohortArms } from "@allohq/customer-state";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { acquireEmailCapacity } from "../utils/email-capacity";
@@ -173,9 +173,9 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   console.log(`Audience resolved for ${campaign.name}: ${audience.requested} requested, ${customers.length} eligible`, audience.exclusions);
 
   // Causal-data moat: get (or create) the holdout experiment for this cohort.
-  const cohortLabel = campaign.segment
-    ? `campaign-segment:${campaign.segmentId}`
-    : `campaign-allmarketing:${campaign.storeId}`;
+  // Every campaign is a fresh randomized trial. Reusing a segment-level seed
+  // would leave the same customer permanently held out across campaigns.
+  const cohortLabel = `campaign:${campaignId}`;
   const experiment = await getOrCreateExperiment(campaign.storeId, {
     label: cohortLabel,
     source: "campaign",
@@ -231,6 +231,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   let scheduledCount = 0;
   let controlCount = 0;
   let skippedCount = 0;
+  const campaignArms = assignCohortArms(experiment, customers.map((customer) => customer.id));
 
   for (const customer of customers) {
     if (processedCustomerIds.has(customer.id)) continue;
@@ -253,7 +254,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     };
 
     // Causal-data moat: deterministic control-group assignment (UNCHANGED).
-    const arm = assignArm(experiment, customer.id);
+    const arm = campaignArms.get(customer.id) ?? "TREATMENT";
     if (arm === "CONTROL") {
       controlCount++;
       await prisma.messageLog.create({
