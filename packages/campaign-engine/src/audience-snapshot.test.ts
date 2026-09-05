@@ -11,9 +11,10 @@ test("approval freezes a deterministic eligible customer set", () => {
       { id: "customer-b", email: "b@example.com", firstName: null, lastName: null },
       { id: "customer-a", email: "a@example.com", firstName: null, lastName: null },
     ], exclusions, samples: {},
-  }, new Date("2026-09-04T00:00:00.000Z"));
+  }, new Date("2026-09-04T00:00:00.000Z"), { experimentId: "exp-1", splitRatio: .15, assignments: { "customer-a": "CONTROL", "customer-b": "TREATMENT" } });
   assert.deepEqual(campaignAudienceSnapshot(proposal)?.customerIds, ["customer-a", "customer-b"]);
   assert.equal(proposal.discountPercent, 20);
+  assert.equal(campaignAudienceSnapshot(proposal)?.holdout?.assignments["customer-a"], "CONTROL");
 });
 
 test("malformed snapshots fail closed", () => {

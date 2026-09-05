@@ -382,7 +382,7 @@ export default function CustomerDetailPage() {
               </div>
               {/* Churn bar */}
               <div>
-                <div className="text-[11px] text-muted-foreground font-sans mb-2">CHURN PROBABILITY</div>
+                <div className="text-[11px] text-muted-foreground font-sans mb-2">CHURN RISK ESTIMATE · HEURISTIC</div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-destructive rounded-full"

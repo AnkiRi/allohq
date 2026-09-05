@@ -67,7 +67,9 @@ export default function NewCampaignPage() {
       selectedTemplate ? { text: `writing in your voice · "${selectedTemplate.subject}"` } : { text: "writing in your voice" },
       holdout
         ? { text: `holding back ${holdout.toLocaleString("en-IN")} as control · left alone to measure lift`, beat: true }
-        : { text: "a slice held back as control · so lift is real, not guessed", beat: true },
+        : reach && reach < 7
+          ? { text: "small cohort · no holdout, so this run will be labelled unmeasured", beat: true }
+          : { text: "a slice held back as control · so lift is real, not guessed", beat: true },
       { text: "estimate: upside before fees · projected unsub under 0.4% · confidence moderate" },
       {
         text: willMessage

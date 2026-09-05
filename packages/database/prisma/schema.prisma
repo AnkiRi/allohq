@@ -363,6 +363,7 @@ model MigrationAssistanceRequest {
   requestedBy      String
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  dedupeKey        String   @unique
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 

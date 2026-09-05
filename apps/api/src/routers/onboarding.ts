@@ -158,19 +158,19 @@ export const onboardingRouter = router({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
-      const existing = await ctx.prisma.migrationAssistanceRequest.findFirst({
-        where: { storeId: store.id, status: { in: ["requested", "contacted", "in_progress"] } },
-      });
-      if (existing) return existing;
-      return ctx.prisma.migrationAssistanceRequest.create({
-        data: {
+      const dedupeKey = `${store.id}:${input.sourcePlatform.trim().toLowerCase()}`;
+      return ctx.prisma.migrationAssistanceRequest.upsert({
+        where: { dedupeKey },
+        create: {
           storeId: store.id,
           workspaceId: store.workspaceId,
           sourcePlatform: input.sourcePlatform,
           requestedItems: input.requestedItems,
           notes: input.notes,
           requestedBy: ctx.userId!,
+          dedupeKey,
         },
+        update: { requestedItems: input.requestedItems, notes: input.notes, requestedBy: ctx.userId!, status: "requested" },
       });
     }),
   /**

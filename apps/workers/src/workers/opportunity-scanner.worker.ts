@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
-import { scanOpportunities } from "@allohq/campaign-engine";
+import { opportunityJobId, scanOpportunities } from "@allohq/campaign-engine";
 import { logAgentActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
 
@@ -40,8 +40,10 @@ export const opportunityScannerWorker = new Worker<OpportunityScanJobData>(
         totalOpportunities += opportunities.length;
 
         for (const opp of opportunities) {
-          await campaignFactoryQueue.add("generate-draft", {
-            opportunity: opp,
+          await campaignFactoryQueue.add("generate-draft", { opportunity: opp }, {
+            jobId: opportunityJobId(opp),
+            removeOnComplete: { age: 48 * 60 * 60 },
+            removeOnFail: { age: 7 * 24 * 60 * 60 },
           });
         }
 

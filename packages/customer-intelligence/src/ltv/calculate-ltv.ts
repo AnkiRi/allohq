@@ -25,7 +25,7 @@ export function calculateCustomerLtv(
   const purchaseFrequency = sortedOrders.length / lifespanMonths;
   const daysSinceLastOrder =
     (now.getTime() - lastOrder.getTime()) / (1000 * 60 * 60 * 24);
-  // Simple churn probability: higher if longer since last order
+  // Legacy field name; this is a simple, uncalibrated churn risk estimate.
   const churnProbability = Math.min(1, daysSinceLastOrder / 180);
   // Simple predicted LTV: AOV * frequency * expected remaining months
   const expectedRemainingMonths = Math.max(0, 12 * (1 - churnProbability));

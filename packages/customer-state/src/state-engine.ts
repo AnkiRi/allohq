@@ -5,7 +5,7 @@ import { classifyLifecycleStage } from "./lifecycle-classifier";
 import { computeChannelPreference } from "./channel-preference";
 import { computeFatigueState } from "./fatigue-tracker";
 import { detectIntent } from "./intent-detector";
-import { computeChurnProbability } from "./churn-prediction";
+import { computeChurnRiskEstimate } from "./churn-prediction";
 
 /**
  * Compute full customer state from all available data sources.
@@ -71,7 +71,7 @@ export async function computeFullState(
   });
 
   const totalSpend = orders.reduce((s, o) => s + o.totalPrice, 0);
-  const churnRisk = await computeChurnProbability(customerId, storeId, {
+  const churnRisk = await computeChurnRiskEstimate(customerId, storeId, {
     daysSinceLastOrder,
     orderCount,
     totalSpend,

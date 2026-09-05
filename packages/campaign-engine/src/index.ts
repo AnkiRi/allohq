@@ -10,6 +10,7 @@ export type {
 
 // Opportunity Scanner
 export { scanOpportunities } from "./opportunity-scanner";
+export { opportunityJobId } from "./opportunity-dedupe";
 
 // Campaign Factory
 export { generateCampaignDraft } from "./campaign-factory";

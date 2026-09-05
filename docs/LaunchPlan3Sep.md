@@ -4,6 +4,8 @@ Status: active source of truth
 Release: free, fully visible Shopify App Store listing  
 Initial product: Shopify + email campaigns + merchant-approved email automations and journeys
 
+> 5 September addendum: canonical tests, worker migration ordering, explicit small-cohort policy, approval-time frozen arm maps, atomic migration-request dedupe, daily opportunity dedupe and consolidated churn-risk language are now part of the repository. See `JoonArchitectureIntelligenceAndRoadmap-2026-09-05.md` for the authoritative intelligence and holdout contract.
+
 ## 1. Launch decision
 
 Joon launches as a complete email decision product, not as an unfinished

@@ -5,6 +5,7 @@ import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
 import { DEMO_STORE_DOMAIN, messagingCostFor } from "@allohq/database";
 import { campaignApprovalChecksum, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
+import { assignCohortArms, campaignMeasurementPolicy, getOrCreateExperiment } from "@allohq/customer-state";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -46,13 +47,15 @@ export const campaignsRouter = router({
       const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
       const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
       const holdoutRate = 0.15;
-      const control = Math.floor(audience.eligible.length * holdoutRate);
+      const measurement = campaignMeasurementPolicy(audience.eligible.length, holdoutRate);
+      const control = measurement.control;
       return {
         providerCalled: false,
         requested: audience.requested,
         eligibleBeforeHoldout: audience.eligible.length,
         estimatedTreatment: audience.eligible.length - control,
         estimatedControl: control,
+        measurement,
         estimatedProviderCost: (audience.eligible.length - control) * messagingCostFor("email"),
         estimatedProviderCostCurrency: "INR" as const,
         audienceFreezesOnApproval: true,
@@ -313,7 +316,19 @@ export const campaignsRouter = router({
       }
 
       const audience = await resolveCampaignAudience(campaign.id);
-      const approvedProposal = withCampaignAudienceSnapshot(campaign.agentProposal, audience);
+      const experiment = await getOrCreateExperiment(campaign.storeId, {
+        label: `campaign:${campaign.id}`,
+        source: "campaign",
+        campaignId: campaign.id,
+        segmentId: campaign.segmentId ?? null,
+        segmentName: campaign.segment?.name ?? null,
+      });
+      const arms = assignCohortArms(experiment, audience.eligible.map((customer) => customer.id));
+      const approvedProposal = withCampaignAudienceSnapshot(campaign.agentProposal, audience, new Date(), {
+        experimentId: experiment.id,
+        splitRatio: experiment.splitRatio,
+        assignments: Object.fromEntries(arms),
+      });
       const approvalChecksum = campaignApprovalChecksum({
         campaignId: campaign.id,
         storeId: campaign.storeId,

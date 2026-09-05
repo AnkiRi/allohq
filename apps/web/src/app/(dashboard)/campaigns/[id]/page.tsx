@@ -199,6 +199,14 @@ export default function CampaignDetailPage() {
                   </div>
                 ))}
               </div>
+              {dryRun.measurement.warning && (
+                <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    {dryRun.measurement.tier === "unmeasured" ? "Unmeasured small cohort" : "Directional measurement"}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{dryRun.measurement.warning}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1">
                 {Object.entries(dryRun.exclusions).filter(([, count]) => count > 0).map(([reason, count]) => (
                   <div key={reason} className="flex justify-between py-2 border-b border-border text-[11px]">
@@ -217,7 +225,7 @@ export default function CampaignDetailPage() {
                 <span className="text-muted-foreground">Estimated provider cost</span>
                 <span className="font-medium">{dryRun.estimatedProviderCostCurrency} {dryRun.estimatedProviderCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">The eligible customer set freezes when you approve. Consent, suppression, pauses and delivery limits are checked again immediately before every email.</p>
+              <p className="mt-2 text-[10px] text-muted-foreground">The eligible customer set and complete treatment/control assignment freeze when you approve. Consent, suppression, pauses and delivery limits are checked again immediately before every email.</p>
               {dryRun.marginRisk.discountPercent > 0 && dryRun.marginRisk.recentBuyers > 0 && (
                 <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Margin worth reviewing</div>

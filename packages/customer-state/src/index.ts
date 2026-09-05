@@ -21,8 +21,10 @@ export { computeChannelPreference } from "./channel-preference";
 export { computeFatigueState, isOverFatigueLimit } from "./fatigue-tracker";
 export { predictReorderTiming } from "./reorder-predictor";
 export { computeFullState, updateStateOnEvent, decayStaleStates } from "./state-engine";
-export { computeChurnProbability } from "./churn-prediction";
+export { computeChurnRiskEstimate, computeChurnProbability } from "./churn-prediction";
 export type { ChurnSignals } from "./churn-prediction";
+export { estimateChurnRisk } from "./churn-risk";
+export type { ChurnRiskInput, ChurnRiskEstimate } from "./churn-risk";
 export { computeLiftStats, varianceFromAggregates } from "./lift-stats";
 export type { GroupStat, LiftStats } from "./lift-stats";
 
@@ -32,5 +34,8 @@ export {
   assignArm,
   assignCohortArms,
   assignmentValue,
+  campaignMeasurementPolicy,
 } from "./experiments";
-export type { Arm, CohortDefinition } from "./experiments";
+export type { Arm, CohortDefinition, MeasurementTier, CampaignMeasurementPolicy } from "./experiments";
+export { upliftReadiness } from "./uplift-readiness";
+export type { UpliftTrainingExample, UpliftReadinessTier } from "./uplift-readiness";

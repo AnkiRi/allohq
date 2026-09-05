@@ -22,7 +22,6 @@ import {
   campaignAudienceSnapshot,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
-import { getOrCreateExperiment, assignCohortArms } from "@allohq/customer-state";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { acquireEmailCapacity } from "../utils/email-capacity";
@@ -175,14 +174,13 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   // Causal-data moat: get (or create) the holdout experiment for this cohort.
   // Every campaign is a fresh randomized trial. Reusing a segment-level seed
   // would leave the same customer permanently held out across campaigns.
-  const cohortLabel = `campaign:${campaignId}`;
-  const experiment = await getOrCreateExperiment(campaign.storeId, {
-    label: cohortLabel,
-    source: "campaign",
-    campaignId,
-    segmentId: campaign.segmentId ?? null,
-    segmentName: campaign.segment?.name ?? null,
-  });
+  const frozenHoldout = approvedAudience.holdout;
+  if (!frozenHoldout || Object.keys(frozenHoldout.assignments).length !== approvedAudience.customerIds.length) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "draft", approvalChecksum: null, approvedAt: null } });
+    throw new Error("Campaign holdout map was not frozen at approval; merchant re-approval is required");
+  }
+  const experiment = await prisma.experiment.findFirst({ where: { id: frozenHoldout.experimentId, storeId: campaign.storeId } });
+  if (!experiment) throw new Error("Frozen campaign experiment no longer exists");
 
   // North Star #2 — make the offer real before any recipient is planned. A
   // campaign must never mention a code that Shopify rejected.
@@ -231,7 +229,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   let scheduledCount = 0;
   let controlCount = 0;
   let skippedCount = 0;
-  const campaignArms = assignCohortArms(experiment, customers.map((customer) => customer.id));
+  const campaignArms = new Map(Object.entries(frozenHoldout.assignments));
 
   for (const customer of customers) {
     if (processedCustomerIds.has(customer.id)) continue;

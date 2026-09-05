@@ -635,6 +635,9 @@ importers:
 
   packages/customer-intelligence:
     dependencies:
+      '@allohq/customer-state':
+        specifier: workspace:*
+        version: link:../customer-state
       '@allohq/database':
         specifier: workspace:*
         version: link:../database

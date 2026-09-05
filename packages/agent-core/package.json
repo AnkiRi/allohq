@@ -4,6 +4,7 @@
   "private": true,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "scripts": { "test": "pnpm --dir ../../apps/api exec tsx --test ../../packages/agent-core/src/**/*.test.ts" },
   "dependencies": {
     "@allohq/agent-brain": "workspace:*",
     "@allohq/autonomy-engine": "workspace:*",

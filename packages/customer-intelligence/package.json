@@ -9,6 +9,7 @@
     "test": "pnpm --dir ../../apps/api exec tsx --test ../../packages/customer-intelligence/src/**/*.test.ts"
   },
   "dependencies": {
+    "@allohq/customer-state": "workspace:*",
     "@allohq/database": "workspace:*",
     "@allohq/email-builder": "workspace:*",
     "@allohq/emails": "workspace:^",

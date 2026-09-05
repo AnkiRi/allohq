@@ -17,6 +17,33 @@ import type { Experiment } from "@allohq/database";
 
 export type Arm = "CONTROL" | "TREATMENT";
 
+export type MeasurementTier = "empty" | "unmeasured" | "directional" | "measurement_ready";
+export interface CampaignMeasurementPolicy {
+  tier: MeasurementTier;
+  eligible: number;
+  control: number;
+  treatment: number;
+  holdoutRate: number;
+  canEstimateLift: boolean;
+  warning: string | null;
+}
+
+/**
+ * Product policy for finite campaign cohorts. A segment may contain one person,
+ * but 15% of fewer than seven people rounds to zero controls and must never be
+ * presented as a measured experiment. Thirty controls is the conservative
+ * reporting floor used by lift-stats, which requires 200 eligible people at 15%.
+ */
+export function campaignMeasurementPolicy(eligible: number, holdoutRate = 0.15): CampaignMeasurementPolicy {
+  const n = Math.max(0, Math.floor(eligible));
+  const control = Math.floor(n * holdoutRate);
+  const treatment = n - control;
+  if (n === 0) return { tier: "empty", eligible: n, control, treatment, holdoutRate, canEstimateLift: false, warning: "No eligible recipients." };
+  if (control === 0) return { tier: "unmeasured", eligible: n, control, treatment, holdoutRate, canEstimateLift: false, warning: "Fewer than 7 eligible recipients: everyone will receive the campaign and incremental lift cannot be measured." };
+  if (control < 30 || treatment < 30) return { tier: "directional", eligible: n, control, treatment, holdoutRate, canEstimateLift: true, warning: "This holdout is directional. Joon will not call the result statistically reliable until both arms have at least 30 observed outcomes." };
+  return { tier: "measurement_ready", eligible: n, control, treatment, holdoutRate, canEstimateLift: true, warning: null };
+}
+
 /** Shape describing a cohort an experiment governs. Stored as JSON. */
 export type CohortDefinition = Record<string, unknown> & {
   /** Stable, human-readable label used to de-dup experiments per store/cohort. */
@@ -108,7 +135,7 @@ export function assignCohortArms(
   customerIds: string[],
 ): Map<string, Arm> {
   const uniqueIds = [...new Set(customerIds)];
-  const controlCount = Math.floor(uniqueIds.length * experiment.splitRatio);
+  const controlCount = campaignMeasurementPolicy(uniqueIds.length, experiment.splitRatio).control;
   const ranked = uniqueIds
     .map((customerId) => ({ customerId, value: assignmentValue(experiment.assignmentSeed, customerId) }))
     .sort((a, b) => a.value - b.value || a.customerId.localeCompare(b.customerId));
