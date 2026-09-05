@@ -49,6 +49,7 @@ const SHOPIFY_APP_SHELL_ROOTS = new Set([
   "/orders",
   "/creative-studio",
   "/agent",
+  "/shopify",
 ]);
 
 function isShopifyAppShellPath(pathname: string): boolean {
