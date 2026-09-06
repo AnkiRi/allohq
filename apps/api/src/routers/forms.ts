@@ -11,9 +11,11 @@ const fieldSchema = z.object({
   required: z.boolean(),
   placeholder: z.string().optional(),
   options: z.array(z.string()).optional(),
+  step: z.number().int().min(1).max(5).optional(),
+  traitKey: z.string().trim().max(80).regex(/^[a-zA-Z][a-zA-Z0-9_.-]*$/).optional(),
 });
 
-function assertSendableEmailForm(fields: FormField[]) {
+function assertSendableAcquisitionForm(fields: FormField[]) {
   const email = fields.find((field) => field.name === "email" && field.type === "email");
   const consent = fields.find(
     (field) => field.name === "consent_email" && field.type === "checkbox" && field.required,
@@ -24,11 +26,10 @@ function assertSendableEmailForm(fields: FormField[]) {
       message: "Email signup forms require a mandatory email field and an explicit email-consent checkbox.",
     });
   }
-  if (fields.some((field) => field.type === "phone" || field.name === "phone")) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Phone capture is unavailable while Joon is email-only.",
-    });
+  const hasPhone = fields.some((field) => field.type === "phone" && field.name === "phone");
+  const smsConsent = fields.find((field) => field.name === "consent_sms" && field.type === "checkbox");
+  if (hasPhone && !smsConsent) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Phone capture requires a separate SMS-consent checkbox." });
   }
 }
 
@@ -40,6 +41,9 @@ const stylingSchema = z.object({
   buttonText: z.string().optional(),
   borderRadius: z.string().optional(),
   fontFamily: z.string().optional(),
+  consentVersion: z.string().trim().min(1).max(40).optional(),
+  market: z.enum(["global", "eu_uk", "us", "canada", "australia"]).optional(),
+  smsDisclosure: z.string().trim().min(20).max(1000).optional(),
 }).optional();
 
 const incentiveSchema = z.object({
@@ -90,7 +94,7 @@ export const formsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      assertSendableEmailForm(input.fields as FormField[]);
+      assertSendableAcquisitionForm(input.fields as FormField[]);
       return ctx.prisma.form.create({
         data: {
           storeId: input.storeId,
@@ -123,7 +127,7 @@ export const formsRouter = router({
       const { formId, ...data } = input;
       const current = await ctx.prisma.form.findUniqueOrThrow({ where: { id: formId }, select: { fields: true } });
       if (data.status === "active" || data.fields) {
-        assertSendableEmailForm((data.fields ?? current.fields) as unknown as FormField[]);
+        assertSendableAcquisitionForm((data.fields ?? current.fields) as unknown as FormField[]);
       }
       return ctx.prisma.form.update({
         where: { id: formId },
@@ -250,7 +254,7 @@ export const formsRouter = router({
         if (popup.form.status !== "active") {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Activate the signup form before its popup." });
         }
-        assertSendableEmailForm(popup.form.fields as unknown as FormField[]);
+        assertSendableAcquisitionForm(popup.form.fields as unknown as FormField[]);
       }
       return ctx.prisma.popup.update({
         where: { id: popupId },

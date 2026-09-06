@@ -262,15 +262,24 @@ export async function handleWidgetPopups(
       }
 
       const configuredFields = (popup.form.fields as unknown as FormField[]) ?? [];
+      const formStyling = (popup.form.styling as unknown as FormStyling) ?? {};
       const sanitizedData: Record<string, unknown> = {};
       for (const field of configuredFields) {
-        if (field.type === "phone" || field.name === "phone") continue;
         const value = data[field.name];
         if (field.type === "checkbox") {
           sanitizedData[field.name] = value === "true" || value === "on" || value === true;
         } else if (typeof value === "string") {
           sanitizedData[field.name] = value.trim().slice(0, field.type === "email" ? 320 : 500);
         }
+      }
+      const rawPhone = sanitizedData["phone"];
+      if (rawPhone !== undefined) {
+        const normalizedPhone = typeof rawPhone === "string" ? rawPhone.replace(/[\s().-]/g, "") : "";
+        if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) {
+          json(res, 400, { error: "Use an international phone number such as +14155552671" });
+          return;
+        }
+        sanitizedData["phone"] = normalizedPhone;
       }
       const email = sanitizedData["email"];
       if (typeof email !== "string" || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -303,6 +312,16 @@ export async function handleWidgetPopups(
       // Extract consent from form data (checkboxes named consent_email, consent_sms, consent_whatsapp)
       const consent: { email?: boolean; sms?: boolean; whatsapp?: boolean } = {};
       consent.email = true;
+      const hasSmsConsent = configuredFields.some(
+        (field) => field.name === "consent_sms" && field.type === "checkbox",
+      );
+      consent.sms = hasSmsConsent && sanitizedData["phone"]
+        ? sanitizedData["consent_sms"] === true
+        : undefined;
+      if (sanitizedData["phone"] && consent.sms !== true) {
+        json(res, 400, { error: "SMS consent is required to submit a phone number" });
+        return;
+      }
 
       // Capture submission
       const result = await captureSubmission({
@@ -311,6 +330,14 @@ export async function handleWidgetPopups(
         data: sanitizedData,
         source,
         consent,
+        consentEvidence: {
+          disclosureVersion: formStyling.consentVersion ?? "global-v1",
+          market: formStyling.market ?? "global",
+          privacyPolicyUrl: formStyling.privacyPolicyUrl,
+          locale: req.headers["accept-language"]?.split(",")[0]?.slice(0, 16) ?? "unknown",
+          capturedAt: new Date().toISOString(),
+          popupId,
+        },
       });
 
       // Check for incentive

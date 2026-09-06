@@ -102,15 +102,18 @@ export function renderFormHtml(
       }
 
       const inputType = field.type === "phone" ? "tel" : field.type;
+      const phoneAttrs = field.type === "phone" ? 'autocomplete="tel" inputmode="tel" pattern="\\+[1-9][0-9]{7,14}"' : "";
       return `<div class="allo-field">
         <label>${escapeHtml(field.label)}</label>
-        <input type="${inputType}" name="${escapeHtml(field.name)}" ${placeholderAttr} ${requiredAttr} />
+        <input type="${inputType}" name="${escapeHtml(field.name)}" ${phoneAttrs} ${placeholderAttr} ${requiredAttr} />
       </div>`;
     })
     .join("\n");
 
+  const hasSms = fields.some((field) => field.name === "consent_sms");
+  const defaultSmsDisclosure = "By opting into texts, you agree to receive recurring automated marketing messages. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to opt out.";
   const privacy = s.privacyPolicyUrl
-    ? `<p class="allo-privacy">By subscribing, you agree to receive marketing email. See the <a href="${escapeHtml(s.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">privacy policy</a>. Unsubscribe anytime.</p>`
+    ? `<p class="allo-privacy">By subscribing, you agree to the choices selected above. ${hasSms ? escapeHtml(s.smsDisclosure ?? defaultSmsDisclosure) : ""} See the <a href="${escapeHtml(s.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">privacy policy</a>. You can withdraw consent at any time.</p>`
     : "";
 
   const html = `<form class="allo-form" data-allo-form>

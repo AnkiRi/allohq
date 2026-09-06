@@ -6,6 +6,8 @@ export interface FormField {
   required: boolean;
   placeholder?: string;
   options?: string[]; // for select fields
+  step?: number;
+  traitKey?: string;
 }
 
 /** Styling configuration for forms */
@@ -18,6 +20,9 @@ export interface FormStyling {
   borderRadius?: string;
   fontFamily?: string;
   privacyPolicyUrl?: string;
+  consentVersion?: string;
+  market?: "global" | "eu_uk" | "us" | "canada" | "australia";
+  smsDisclosure?: string;
 }
 
 /** Incentive configuration for form submissions */

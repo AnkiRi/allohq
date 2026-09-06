@@ -12,6 +12,7 @@ export async function captureSubmission(opts: {
   data: Record<string, unknown>;
   source: string;
   consent?: ConsentState;
+  consentEvidence?: Record<string, unknown>;
 }): Promise<{ submissionId: string; customerId: string | null }> {
   const rawEmail = opts.data["email"];
   const email =
@@ -82,14 +83,14 @@ export async function captureSubmission(opts: {
           channel,
           status: optedIn ? "opted_in" : "opted_out",
           source: "form",
-          evidence: { formId: opts.formId, source: opts.source },
+          evidence: { formId: opts.formId, source: opts.source, ...opts.consentEvidence },
           collectedAt: optedIn ? now : null,
           revokedAt: optedIn ? null : now,
         },
         update: {
           status: optedIn ? "opted_in" : "opted_out",
           source: "form",
-          evidence: { formId: opts.formId, source: opts.source },
+          evidence: { formId: opts.formId, source: opts.source, ...opts.consentEvidence },
           collectedAt: optedIn ? now : null,
           revokedAt: optedIn ? null : now,
         },

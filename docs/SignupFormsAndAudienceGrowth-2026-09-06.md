@@ -45,7 +45,9 @@ References:
 
 ## V1 policy
 
-Email-only means email-only at acquisition too. Joon does not collect phone/SMS/WhatsApp consent until those channels, their provider setup and compliance programs ship. Essential fields are email and explicit consent; first name and one or two preference fields are optional. Acquisition forms are not a send-readiness hard gate, because a merchant may already have a valid subscriber list, but their state is visible in Setup Readiness.
+Joon can build an SMS audience before SMS delivery launches. Phone capture is optional, normalized to international E.164 format, and always paired with a separate unchecked SMS choice. Email consent and SMS consent are independent; declining texts cannot prevent email signup or an advertised email incentive. Each consent record carries its form, source, disclosure version, configured market, policy URL, locale and capture time. SMS delivery remains fail-closed until provider and jurisdictional readiness are complete. Shopify protected-customer-data access must include phone before merchants enable phone capture publicly.
+
+The market selector supplies conservative disclosure presets and evidence labeling; it is not a claim that software configuration replaces merchant legal advice. Global forms must preserve purpose limitation, data minimization, demonstrable consent, easy withdrawal, deletion/export and channel-specific suppression. The merchant remains the controller of its collection purpose and campaign, while Joon operates the consent tooling and processor controls.
 
 ## Next strength layer
 

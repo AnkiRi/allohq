@@ -15,17 +15,19 @@ import { trpc } from "@/lib/trpc";
 
 interface FormField {
   name: string;
-  type: "text" | "email" | "checkbox";
+  type: "text" | "email" | "phone" | "checkbox";
   label: string;
   required: boolean;
   placeholder?: string;
   options?: string[];
+  step?: number;
 }
 
 const fieldTypeLabels: Record<string, string> = {
   text: "Text",
   email: "Email",
   checkbox: "Checkbox",
+  phone: "Phone",
 };
 
 const defaultFields: FormField[] = [
@@ -54,6 +56,9 @@ export default function NewFormPage() {
     buttonTextColor: "#ffffff",
     buttonText: "Subscribe",
     borderRadius: "8px",
+    consentVersion: "global-v1",
+    market: "global" as "global" | "eu_uk" | "us" | "canada" | "australia",
+    smsDisclosure: "By opting into texts, you agree to receive recurring automated marketing messages. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to opt out.",
   });
   const [incentiveEnabled, setIncentiveEnabled] = useState(false);
   const [incentive, setIncentive] = useState({
@@ -115,6 +120,18 @@ export default function NewFormPage() {
     ]);
   };
 
+  const toggleSmsCapture = () => {
+    if (fields.some((field) => field.name === "phone")) {
+      setFields(fields.filter((field) => field.name !== "phone" && field.name !== "consent_sms"));
+      return;
+    }
+    setFields([
+      ...fields,
+      { name: "phone", type: "phone", label: "Mobile number", required: false, placeholder: "+14155552671", step: 2 },
+      { name: "consent_sms", type: "checkbox", label: styling.smsDisclosure, required: false, step: 2 },
+    ]);
+  };
+
   const removeField = (index: number) => {
     setFields(fields.filter((_, i) => i !== index));
   };
@@ -169,16 +186,21 @@ export default function NewFormPage() {
 
       {/* Fields */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">
             Fields
           </label>
-          <button
+          <button className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-sans font-bold text-foreground bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
             onClick={addField}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-sans font-bold text-foreground bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
           >
             <Plus className="w-3 h-3" />
             Add Field
+          </button>
+          <button
+            onClick={toggleSmsCapture}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-sans font-bold text-foreground bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
+          >
+            {fields.some((field) => field.name === "phone") ? "Remove phone capture" : <><Plus className="w-3 h-3" /> Phone + SMS consent</>}
           </button>
         </div>
 
@@ -199,7 +221,7 @@ export default function NewFormPage() {
                 />
                 <select
                   value={field.type}
-                  disabled={field.name === "email" || field.name === "consent_email"}
+                  disabled={["email", "consent_email", "phone", "consent_sms"].includes(field.name)}
                   onChange={(e) => updateField(i, { type: e.target.value as FormField["type"] })}
                   className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 >
@@ -226,7 +248,7 @@ export default function NewFormPage() {
               </div>
               <button
                 onClick={() => removeField(i)}
-                disabled={field.name === "email" || field.name === "consent_email"}
+                disabled={["email", "consent_email", "phone", "consent_sms"].includes(field.name)}
                 className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors mt-1"
                 title={field.name === "email" || field.name === "consent_email" ? "Required for consent-safe email signup" : "Remove field"}
               >
@@ -234,6 +256,24 @@ export default function NewFormPage() {
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-[11px] font-sans font-bold text-muted-foreground uppercase tracking-[1px]">Consent policy</label>
+        <div className="space-y-3 p-4 bg-card border border-border rounded-lg">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1 text-[10px] text-muted-foreground">Primary market
+              <select value={styling.market} onChange={(e) => setStyling({ ...styling, market: e.target.value as typeof styling.market })} className="block w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground">
+                <option value="global">Global / conservative</option><option value="eu_uk">EU / UK</option><option value="us">United States</option><option value="canada">Canada</option><option value="australia">Australia</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-[10px] text-muted-foreground">Disclosure version
+              <input value={styling.consentVersion} onChange={(e) => setStyling({ ...styling, consentVersion: e.target.value })} className="block w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground" />
+            </label>
+          </div>
+          {fields.some((field) => field.name === "phone") && <textarea value={styling.smsDisclosure} onChange={(e) => { const smsDisclosure=e.target.value; setStyling({ ...styling, smsDisclosure }); setFields(fields.map((field) => field.name === "consent_sms" ? { ...field, label: smsDisclosure } : field)); }} rows={4} className="w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground" aria-label="SMS consent disclosure" />}
+          <p className="text-[11px] leading-5 text-muted-foreground">Email and SMS choices stay independent. SMS delivery remains disabled; this form only builds an auditable consented audience.</p>
         </div>
       </div>
 

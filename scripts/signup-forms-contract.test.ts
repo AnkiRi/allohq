@@ -6,16 +6,18 @@ import { resolve } from "node:path";
 const root = resolve(process.cwd(), "../..");
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 
-test("email v1 signup forms require explicit consent and reject phone capture", () => {
+test("acquisition forms require separate email and SMS consent", () => {
   const router = read("apps/api/src/routers/forms.ts");
   assert.match(router, /consent_email/);
-  assert.match(router, /Phone capture is unavailable while Joon is email-only/);
+  assert.match(router, /Phone capture requires a separate SMS-consent checkbox/);
 });
 
-test("storefront submission resolves the exact active popup and strips phone", () => {
+test("storefront submission resolves the exact active popup and validates international phone", () => {
   const route = read("apps/api/src/routes/widget-popups.ts");
   assert.match(route, /Never fall back to another form/);
-  assert.match(route, /field\.type === "phone"/);
+  assert.match(route, /international phone number/);
+  assert.match(route, /disclosureVersion/);
+  assert.match(route, /consent\.sms/);
   assert.match(route, /Explicit email consent is required/);
 });
 
