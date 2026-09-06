@@ -440,6 +440,8 @@ export const storesRouter = router({
           currency: true,
           timezone: true,
           shopDomain: true,
+          storeCategory: true,
+          currentEmailPlatform: true,
         },
       });
       if (!store) throw new Error("Store not found");
@@ -480,6 +482,8 @@ export const storesRouter = router({
           .optional(),
         currency: z.string().optional(),
         timezone: z.string().optional(),
+        storeCategory: z.string().max(80).optional(),
+        currentEmailPlatform: z.string().max(80).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

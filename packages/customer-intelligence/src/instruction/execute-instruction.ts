@@ -414,6 +414,14 @@ async function executeCreateCampaign(
     if (!Number.isFinite(value) || value < 1 || value > 50) {
       throw new Error("Discount percentage must be between 1% and 50%.");
     }
+    const discountGuardrail = await (deps.prisma as any).guardrail.findFirst({
+      where: { storeId: deps.storeId, ruleType: "max_discount", isActive: true },
+      select: { ruleValue: true },
+    });
+    const maximum = (discountGuardrail?.ruleValue as { maxPercent?: number } | undefined)?.maxPercent;
+    if (typeof maximum === "number" && value > maximum) {
+      throw new Error(`Requested discount ${value}% exceeds the merchant guardrail of ${maximum}%.`);
+    }
     const requestedCode = parsed.params.discount.code
       ?.toUpperCase()
       .replace(/[^A-Z0-9-]/g, "")

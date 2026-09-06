@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Store, User, Users, Bell, CreditCard, Sparkles, Activity, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
@@ -57,6 +57,59 @@ const TEAM_ROLES = [
   ["admin", "Admin"], ["marketer", "Marketer"], ["approver", "Approver"],
   ["analyst", "Analyst"], ["content_creator", "Content creator"],
 ] as const;
+
+const BUSINESS_CATEGORIES = [
+  ["apparel", "Apparel & fashion"], ["jewellery", "Jewellery & accessories"],
+  ["beauty", "Beauty & cosmetics"], ["skincare", "Skincare"],
+  ["personal_care", "Personal care"], ["health_wellness", "Health & wellness"],
+  ["nutraceuticals", "Supplements & nutraceuticals"], ["food_beverage", "Food & beverage"],
+  ["home_living", "Home & living"], ["electronics", "Electronics & gadgets"],
+  ["fitness", "Fitness & sports"], ["baby_kids", "Baby & kids"], ["pets", "Pets"],
+  ["footwear", "Footwear"], ["bags_luggage", "Bags & luggage"], ["gifts", "Gifts & stationery"],
+  ["art_crafts", "Art & crafts"], ["books_media", "Books & media"], ["automotive", "Automotive"],
+  ["other", "Other"],
+] as const;
+
+function BusinessProfileSection({ storeId }: { storeId: string }) {
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
+  const metadata = (trpc.stores.getMetadata as any).useQuery({ storeId });
+  const [category, setCategory] = useState("");
+  const [address, setAddress] = useState({ address1: "", address2: "", city: "", province: "", zip: "", country: "" });
+  const [initialized, setInitialized] = useState(false);
+  useEffect(() => {
+    if (!initialized && metadata.data) {
+      setCategory(metadata.data.storeCategory ?? "");
+      if (metadata.data.address && typeof metadata.data.address === "object") {
+        setAddress((current) => ({ ...current, ...metadata.data.address }));
+      }
+      setInitialized(true);
+    }
+  }, [initialized, metadata.data]);
+  const update = (trpc.stores.updateMetadata as any).useMutation({
+    onSuccess: () => {
+      toast("Business profile updated.", "success");
+      (utils.stores.getMetadata as any).invalidate({ storeId });
+    },
+    onError: (error: { message?: string }) => toast(error.message || "Could not update the business profile.", "error"),
+  });
+  return (
+    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+      <div className="mb-2 flex items-center gap-3"><Store className="size-4 text-muted-foreground" /><h2 className="section-header accent-bar-left text-[13px]">Business profile</h2></div>
+      <p className="mb-4 text-[11px] text-muted-foreground">Category shapes starter segments and benchmarks. The postal address appears in compliant email footers.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-[12px]">
+          <option value="">Choose a business category</option>
+          {BUSINESS_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        {(["address1", "address2", "city", "province", "zip", "country"] as const).map((key) => (
+          <input key={key} value={address[key]} onChange={(event) => setAddress((current) => ({ ...current, [key]: event.target.value }))} placeholder={{ address1: "Street address", address2: "Address line 2", city: "City", province: "State / province", zip: "Postal code", country: "Country" }[key]} className="rounded-lg border border-border bg-background px-3 py-2 text-[12px]" />
+        ))}
+      </div>
+      <div className="mt-4 flex justify-end"><button disabled={update.isPending || !category || !address.address1 || !address.city || !address.zip || !address.country} onClick={() => update.mutate({ storeId, storeCategory: category, address })} className="rounded-lg bg-foreground px-4 py-2 text-[11px] font-medium text-background disabled:opacity-40">{update.isPending ? "Saving..." : "Save business profile"}</button></div>
+    </motion.div>
+  );
+}
 
 function TeamAccessSection() {
   const { toast } = useToast();
@@ -733,6 +786,8 @@ export default function SettingsPage() {
           </p>
         )}
       </motion.div>
+
+      {storeId && <BusinessProfileSection storeId={storeId} />}
 
       <TeamAccessSection />
 

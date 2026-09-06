@@ -70,6 +70,7 @@ export { resolveCampaignAudience, resolveAutomationAudience, AUDIENCE_EXCLUSION_
 export { withCampaignAudienceSnapshot, campaignAudienceSnapshot } from "./audience-snapshot";
 export type { CampaignAudienceSnapshot } from "./audience-snapshot";
 export type { AudienceResolution, AudienceExclusionReason } from "./audience-resolver";
+export { findBannedTerms } from "./content-policy";
 
 // Benchmark Comparison
 export { getBenchmarkComparison } from "./benchmark-comparison";

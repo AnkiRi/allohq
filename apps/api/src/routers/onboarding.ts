@@ -523,8 +523,8 @@ export const onboardingRouter = router({
         bannedWords: z.array(z.string()).optional(),
         sendingFrequency: z.string().optional(),
         fromName: z.string().optional(),
-        fromEmail: z.string().optional(),
-        replyToEmail: z.string().optional(),
+        fromEmail: z.string().email().optional(),
+        replyToEmail: z.string().email().optional(),
         storeCategory: z.string().max(80).optional(),
         currentEmailPlatform: z.string().max(80).optional(),
         businessAddress: z
@@ -574,33 +574,35 @@ export const onboardingRouter = router({
         update: visualData,
       });
 
-      // Update BrandProfile tone/banned words + send/sender settings if provided
-      if (
-        toneAttributes ||
-        bannedWords ||
-        sendingFrequency ||
-        fromName ||
-        fromEmail ||
-        replyToEmail
-      ) {
-        const brandProfile = await ctx.prisma.brandProfile.findFirst({ where: { storeId } });
-        if (brandProfile) {
-          const updateData: Record<string, unknown> = {};
-          if (toneAttributes) updateData.toneAttributes = toneAttributes;
-          if (bannedWords) {
-            const existing = (brandProfile.vocabulary as Record<string, unknown>) ?? {};
-            updateData.vocabulary = { ...existing, bannedWords };
-          }
-          if (sendingFrequency !== undefined) updateData.sendingFrequency = sendingFrequency;
-          if (fromName !== undefined) updateData.fromName = fromName;
-          if (fromEmail !== undefined) updateData.fromEmail = fromEmail;
-          if (replyToEmail !== undefined) updateData.replyToEmail = replyToEmail;
-          await ctx.prisma.brandProfile.update({
-            where: { id: brandProfile.id },
-            data: updateData,
-          });
-        }
-      }
+      // Persist merchant-reviewed voice and sender even when automatic brand
+      // analysis produced no profile. A visible onboarding field must never be
+      // silently discarded because a background job failed.
+      const existingProfile = await ctx.prisma.brandProfile.findFirst({ where: { storeId } });
+      const existingVocabulary = (existingProfile?.vocabulary as Record<string, unknown>) ?? {};
+      await ctx.prisma.brandProfile.upsert({
+        where: { workspaceId_storeId: { workspaceId: ctx.workspaceId, storeId } },
+        create: {
+          workspaceId: ctx.workspaceId,
+          storeId,
+          brandName: store.storeName || store.shopDomain.replace(".myshopify.com", ""),
+          toneAttributes: toneAttributes ?? { formality: "casual", energy: "moderate", warmth: "friendly", humor: "light" },
+          vocabulary: { ...existingVocabulary, bannedWords: bannedWords ?? [] },
+          visualStyle: {},
+          sampleCopy: [],
+          sendingFrequency,
+          fromName,
+          fromEmail,
+          replyToEmail,
+        },
+        update: {
+          ...(toneAttributes !== undefined && { toneAttributes }),
+          ...(bannedWords !== undefined && { vocabulary: { ...existingVocabulary, bannedWords } }),
+          ...(sendingFrequency !== undefined && { sendingFrequency }),
+          ...(fromName !== undefined && { fromName }),
+          ...(fromEmail !== undefined && { fromEmail }),
+          ...(replyToEmail !== undefined && { replyToEmail }),
+        },
+      });
 
       // Advance step 3 → 4
       return ctx.prisma.store.update({
@@ -703,7 +705,13 @@ export const onboardingRouter = router({
           });
         }
         if (guardrails.length > 0) {
-          await ctx.prisma.guardrail.createMany({ data: guardrails });
+          const managedTypes = guardrails.map((rule) => rule.ruleType);
+          await ctx.prisma.$transaction([
+            ctx.prisma.guardrail.deleteMany({
+              where: { storeId: input.storeId, ruleType: { in: managedTypes } },
+            }),
+            ctx.prisma.guardrail.createMany({ data: guardrails }),
+          ]);
         }
       }
 

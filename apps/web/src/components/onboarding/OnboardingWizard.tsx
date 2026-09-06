@@ -309,6 +309,25 @@ export function OnboardingWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, storeId]);
 
+  // Model routing is an advanced workspace preference, available in Settings.
+  // V1 autonomy is a server-enforced policy, not a merchant choice. Skip both
+  // former pseudo-choice screens while still persisting the safe defaults.
+  const automaticSteps = useRef(new Set<number>());
+  useEffect(() => {
+    if (currentStep === 2 && !automaticSteps.current.has(2)) {
+      automaticSteps.current.add(2);
+      advance.mutate({ storeId, step: 3 });
+    }
+    if (currentStep === 4 && !automaticSteps.current.has(4)) {
+      automaticSteps.current.add(4);
+      saveAutonomySetup.mutate({
+        storeId,
+        configs: AUTONOMY_CATEGORIES.map(({ key }) => ({ category: key, tier: "copilot" })) as any,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, storeId]);
+
   // Loading
   if (currentStep === null) {
     return (
@@ -333,29 +352,12 @@ export function OnboardingWizard({
             />
           </StepWrapper>
         )}
-        {currentStep === 2 && (
-          <StepWrapper key="step2">
-            <ModelSelectionStep
-              onContinue={() => advance.mutate({ storeId, step: 3 })}
-              isAdvancing={advance.isPending}
-            />
-          </StepWrapper>
-        )}
         {currentStep === 3 && (
           <StepWrapper key="step3">
             <BrandReviewStep
               storeId={storeId}
               onSave={saveBrandReview}
               onBack={() => goBack.mutate({ storeId, step: 2 })}
-            />
-          </StepWrapper>
-        )}
-        {currentStep === 4 && (
-          <StepWrapper key="step4">
-            <AutonomyStep
-              storeId={storeId}
-              onSave={saveAutonomySetup}
-              onBack={() => goBack.mutate({ storeId, step: 3 })}
             />
           </StepWrapper>
         )}
@@ -816,6 +818,10 @@ function ModelSelectionStep({
     </div>
   );
 }
+
+// Retained temporarily for backward-compatible source history; no longer
+// rendered in onboarding. Model routing lives in Settings.
+void ModelSelectionStep;
 
 // ---------------------------------------------------------------------------
 // Step 3: Brand Review
@@ -1556,6 +1562,10 @@ function AutonomyStep({
     </div>
   );
 }
+
+// Retained temporarily for backward-compatible source history; no longer
+// rendered in onboarding. Email v1 persists co-pilot automatically.
+void AutonomyStep;
 
 // ---------------------------------------------------------------------------
 // Step 5: Guardrails

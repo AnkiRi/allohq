@@ -319,18 +319,22 @@ export function buildBrandKit(
   const paper = mix(d.colors.paper, primary, 0.03);
   const line = mix(d.colors.line, primary, 0.08);
 
+  const explicitPaper = firstHex(designTokens?.["primaryBackground"]);
+  const explicitInk = firstHex(designTokens?.["textPrimary"]);
+  const explicitBody = firstHex(designTokens?.["textSecondary"]);
+  const explicitOnPrimary = firstHex(designTokens?.["ctaTextColor"]);
   const colors: BrandKitColors = {
-    paper,
+    paper: explicitPaper ?? paper,
     surface: d.colors.surface,
     accent,
     line,
     primary,
     primaryDeep,
     secondary,
-    ink: d.colors.ink,
-    body: d.colors.body,
+    ink: explicitInk ?? d.colors.ink,
+    body: explicitBody ?? d.colors.body,
     muted: d.colors.muted,
-    onPrimary: readableOn(primary, d.colors.onPrimary, d.colors.ink),
+    onPrimary: explicitOnPrimary ?? readableOn(primary, d.colors.onPrimary, d.colors.ink),
     onPrimaryMuted: readableOn(primary, d.colors.onPrimaryMuted, d.colors.muted),
   };
 

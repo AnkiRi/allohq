@@ -133,7 +133,8 @@ STRUCTURE:
 TONE: Exclusive, appreciative, luxurious. Make them feel elite.`,
   };
 
-  return instructions[intent];
+  return `${instructions[intent]}
+VOICE PRIORITY: The merchant's BRAND VOICE above always wins over generic intent tone guidance. Do not add urgency, humor, intimacy, or hype beyond the selected brand settings.`;
 }
 
 /** Product formatting for prompts */

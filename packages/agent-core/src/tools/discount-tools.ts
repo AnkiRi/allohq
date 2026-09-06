@@ -56,11 +56,21 @@ export const discountTools: ToolDefinition[] = [
     },
     handler: async (params, ctx) => {
       const discountType = String(params.type ?? "percentage") as "percentage" | "fixed_amount";
-      const value = Number(params.value ?? 10);
+      let value = Number(params.value ?? 10);
       const prefix = String(params.prefix ?? "ALLO");
       const reason = String(params.reason ?? "Agent-generated discount");
       const expiresInDays = Number(params.expiresInDays ?? 30);
       const code = generateCode(prefix);
+
+      if (discountType === "percentage") {
+        const cap = await prisma.guardrail.findFirst({
+          where: { storeId: ctx.storeId, ruleType: "max_discount", isActive: true },
+          orderBy: { createdAt: "desc" },
+          select: { ruleValue: true },
+        });
+        const maximum = (cap?.ruleValue as { maxPercent?: number } | null)?.maxPercent;
+        if (typeof maximum === "number" && value > maximum) value = maximum;
+      }
 
       const client = await getShopifyClient(ctx.storeId);
 

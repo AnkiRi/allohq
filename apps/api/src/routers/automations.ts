@@ -8,6 +8,7 @@ import {
   automationActivationChecksum,
   loadAutomationActivationSnapshot,
   resolveAutomationAudience,
+  findBannedTerms,
 } from "@allohq/campaign-engine";
 
 const redisConnection = {
@@ -258,6 +259,12 @@ export const automationsRouter = router({
       assertV1EmailAutomation(current);
       const snapshot = await loadAutomationActivationSnapshot(input.id);
       if (!snapshot) throw new TRPCError({ code: "NOT_FOUND" });
+      const brand = await ctx.prisma.brandProfile.findFirst({ where: { storeId: automation.storeId }, select: { vocabulary: true } });
+      const bannedTerms = ((brand?.vocabulary as Record<string, unknown> | null)?.bannedWords ?? []) as string[];
+      const violations = findBannedTerms(snapshot, bannedTerms);
+      if (violations.length > 0) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Journey contains words your brand forbids: ${violations.join(", ")}. Edit the copy before activation.` });
+      }
       const activationChecksum = automationActivationChecksum(snapshot);
       const version = current.activeVersion + 1;
       return ctx.prisma.$transaction(async (tx) => {

@@ -186,6 +186,21 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   // campaign must never mention a code that Shopify rejected.
   const discountPercent: number | null = typeof proposal["discountPercent"] === "number" ? proposal["discountPercent"] : null;
   const discountCode: string | null = typeof proposal["discountCode"] === "string" ? proposal["discountCode"] : null;
+  if (discountPercent != null) {
+    const cap = await prisma.guardrail.findFirst({
+      where: { storeId: campaign.storeId, ruleType: "max_discount", isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: { ruleValue: true },
+    });
+    const maximum = (cap?.ruleValue as { maxPercent?: number } | null)?.maxPercent;
+    if (typeof maximum === "number" && discountPercent > maximum) {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: "draft", approvalChecksum: null, approvedAt: null },
+      });
+      throw new Error(`Campaign blocked: ${discountPercent}% exceeds the current ${maximum}% discount guardrail`);
+    }
+  }
   let offerId: string | null = typeof proposal["offerId"] === "string" ? proposal["offerId"] : null;
   if (discountCode && !offerId && !isDemo && campaign.store?.accessToken) {
     try {

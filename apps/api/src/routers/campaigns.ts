@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
 import { DEMO_STORE_DOMAIN, messagingCostFor } from "@allohq/database";
-import { campaignApprovalChecksum, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
+import { campaignApprovalChecksum, findBannedTerms, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
 import { assignCohortArms, campaignMeasurementPolicy, getOrCreateExperiment } from "@allohq/customer-state";
 
 const redisConnection = {
@@ -313,6 +313,18 @@ export const campaignsRouter = router({
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
       if (!campaign.template) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
+      }
+      const brand = await ctx.prisma.brandProfile.findFirst({
+        where: { storeId: campaign.storeId },
+        select: { vocabulary: true },
+      });
+      const bannedTerms = ((brand?.vocabulary as Record<string, unknown> | null)?.bannedWords ?? []) as string[];
+      const violations = findBannedTerms(campaign.template, bannedTerms);
+      if (violations.length > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Email contains words your brand forbids: ${violations.join(", ")}. Edit the copy before approval.`,
+        });
       }
 
       const audience = await resolveCampaignAudience(campaign.id);
