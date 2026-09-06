@@ -24,6 +24,7 @@ This is different from Joon’s **Disconnect** button. Disconnect resets Joon da
 - [ ] Confirm Shopify loads `https://agent.joonhq.com` with `shop`, `host`, and `embedded=1`.
 - [ ] Confirm the compact Shopify surface opens without a Clerk cookie.
 - [ ] Choose “Open Joon”; signed-out user reaches Clerk signup/login.
+- [ ] After Clerk authentication, confirm the browser returns to the same `/shopify/continue?token=…` URL before entering `/dashboard`.
 - [ ] Confirm the five-minute handoff redeems once, links the Shopify staff identity and opens the full-screen workspace.
 - [ ] Repeat in incognito and with third-party cookies blocked.
 - [ ] Repeat with an existing Clerk account.

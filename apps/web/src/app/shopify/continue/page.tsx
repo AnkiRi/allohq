@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useAuth, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { shopifyHandoffReturnPath } from "@/lib/shopify-handoff";
 
 export default function ShopifyContinuePage() {
   return (
@@ -29,10 +30,11 @@ function ShopifyContinue() {
   const params = useSearchParams();
   const router = useRouter();
   const [error, setError] = useState("");
+  const handoff = params.get("token");
+  const authReturnUrl = shopifyHandoffReturnPath(handoff);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
-    const handoff = params.get("token");
     if (!handoff) {
       setError("This Shopify handoff link is incomplete.");
       return;
@@ -77,12 +79,12 @@ function ShopifyContinue() {
           the full workspace.
         </p>
         <div className="mt-6 flex gap-3">
-          <SignUpButton mode="modal">
+          <SignUpButton mode="modal" forceRedirectUrl={authReturnUrl}>
             <button className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">
               Create account
             </button>
           </SignUpButton>
-          <SignInButton mode="modal">
+          <SignInButton mode="modal" forceRedirectUrl={authReturnUrl}>
             <button className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold">
               Sign in
             </button>
