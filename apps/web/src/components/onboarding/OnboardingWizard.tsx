@@ -119,10 +119,6 @@ const AUTONOMY_CATEGORIES = [
 // v1 is approval-only: every send waits for a human. Autopilot is outside the
 // v1 boundary and is rejected server-side (see @allohq/release-gate), so it is
 // not offered here either.
-const TIER_OPTIONS = [
-  { value: "copilot", label: "Co-pilot", desc: "joon suggests, you approve" },
-] as const;
-
 const COLOR_TOKENS = [
   { key: "primaryBackground", label: "Primary BG" },
   { key: "accentColor", label: "Accent" },
@@ -384,7 +380,7 @@ export function OnboardingWizard({
         )}
         {currentStep === 7 && (
           <StepWrapper key="step7">
-            <FirstActionsStep
+            <LaunchReadinessPanel
               storeId={storeId}
               onComplete={() => complete.mutate({ storeId })}
               isCompleting={complete.isPending}
@@ -1500,41 +1496,30 @@ function AutonomyStep({
   onSave: { mutate: (input: any) => void; isPending: boolean };
   onBack?: () => void;
 }) {
-  const [tiers, setTiers] = useState<Record<string, string>>({
-    cart_recovery: "autopilot",
-    win_back: "copilot",
-    post_purchase: "autopilot",
-    vip: "copilot",
-  });
-
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">
-          How much should joon do on its own?
+          You stay in control
         </h2>
         <p className="text-sm text-[#8B8074]">
-          Set this for each kind of action. You can change it anytime.
+          In email v1, Joon prepares the work and you decide what is activated.
         </p>
       </div>
       <div className="space-y-3">
         {AUTONOMY_CATEGORIES.map(({ key, label, desc }) => (
           <div key={key} className="glass-card-static rounded-xl p-4">
-            <div className="mb-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1F7A4F]/10">
+                <Check className="size-3.5 text-[#1F7A4F]" />
+              </div>
+              <div>
               <span className="text-sm font-medium text-[#2C2C2C]">{label}</span>
               <p className="text-xs text-[#8B8074]">{desc}</p>
-            </div>
-            <div className="flex gap-2">
-              {TIER_OPTIONS.map((tier) => (
-                <button
-                  key={tier.value}
-                  onClick={() => setTiers((prev) => ({ ...prev, [key]: tier.value }))}
-                  className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${tiers[key] === tier.value ? "border-[#1F7A4F] bg-[#1F7A4F]/10 text-[#1F7A4F] font-medium" : "border-[#EDE7DB] text-[#5C5549] hover:bg-[#EDE7DB]/40"}`}
-                >
-                  <div className="font-medium">{tier.label}</div>
-                  <div className="text-[10px] mt-0.5 opacity-70">{tier.desc}</div>
-                </button>
-              ))}
+                <p className="mt-1 text-[11px] font-medium text-[#1F7A4F]">
+                  Co-pilot · Joon drafts, you review and activate
+                </p>
+              </div>
             </div>
           </div>
         ))}
@@ -1554,7 +1539,7 @@ function AutonomyStep({
           onClick={() =>
             onSave.mutate({
               storeId,
-              configs: Object.entries(tiers).map(([category, tier]) => ({ category, tier })),
+              configs: AUTONOMY_CATEGORIES.map(({ key }) => ({ category: key, tier: "copilot" })),
             })
           }
           disabled={onSave.isPending}
@@ -1565,7 +1550,7 @@ function AutonomyStep({
           ) : (
             <ChevronRight className="w-4 h-4" />
           )}
-          Save & Continue
+          Continue
         </button>
       </div>
     </div>
@@ -1832,15 +1817,15 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 // Step 7: First Actions
 // ---------------------------------------------------------------------------
 
-function FirstActionsStep({
+export function LaunchReadinessPanel({
   storeId,
   onComplete,
   isCompleting,
   onBack,
 }: {
   storeId: string;
-  onComplete: () => void;
-  isCompleting: boolean;
+  onComplete?: () => void;
+  isCompleting?: boolean;
   onBack?: () => void;
 }) {
   const utils = trpc.useUtils();
@@ -1893,6 +1878,7 @@ function FirstActionsStep({
     ["templates", "Templates"],
     ["selected_flows", "Selected flows"],
   ] as const;
+  const remainingLaunchChecks = rows.filter(([, check]) => !check.ready).length;
 
   const toggleMigrationItem = (item: string) =>
     setMigrationItems((current) =>
@@ -2085,7 +2071,7 @@ function FirstActionsStep({
           {[
             { icon: Zap, text: "Approved email journeys remain under your control" },
             { icon: Sparkles, text: "Joon prepares brand-aware campaign opportunities for review" },
-            { icon: Boxes, text: "Every campaign uses a measurable control holdout" },
+            { icon: Boxes, text: "Eligible campaign cohorts use a frozen control holdout; small cohorts are clearly marked unmeasured" },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-3">
               <Icon className="size-4 shrink-0 text-[#1F7A4F]" />
@@ -2106,19 +2092,24 @@ function FirstActionsStep({
         ) : (
           <div />
         )}
-        <button
-          onClick={onComplete}
-          disabled={isCompleting}
-          className="flex items-center gap-2 px-6 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40"
-        >
-          {isCompleting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
-          Finish setup
-        </button>
+        {onComplete ? (
+          <button
+            onClick={onComplete}
+            disabled={isCompleting}
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40"
+          >
+            {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+            {remainingLaunchChecks > 0 ? "Continue to dashboard" : "Finish setup"}
+          </button>
+        ) : <div />}
       </div>
+      {remainingLaunchChecks > 0 && (
+        <p className="text-right text-xs leading-5 text-[#70685d]">
+          {remainingLaunchChecks} launch {remainingLaunchChecks === 1 ? "check remains" : "checks remain"}.
+          You can return here from <span className="font-medium text-[#2C2C2C]">Setup readiness</span>;
+          live sending stays blocked until the required checks pass.
+        </p>
+      )}
     </div>
   );
 }

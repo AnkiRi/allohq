@@ -196,6 +196,20 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Reclaiming an uninstalled store through a fresh, verified Shopify OAuth
+    // grant must also make that store visible to the signed-in Joon account.
+    // Active installations are deliberately excluded: a staff member with
+    // install permission must not silently promote themselves into an existing
+    // tenant. Embedded App Bridge handles those staff identities as pending.
+    if (user && !existingStore?.isActive) {
+      await prisma.$transaction(async (tx) => {
+        await tx.workspaceMember.deleteMany({ where: { workspaceId, userId: user.id } });
+        await tx.workspaceMember.create({
+          data: { workspaceId, userId: user.id, role: "admin" },
+        });
+      });
+    }
+
     // Queue sync and brand kit jobs via BullMQ
     try {
       const syncQueue = new Queue("sync", { connection: redisConnection });

@@ -25,6 +25,7 @@ const routeLabels: Record<string, string> = {
   "/integrations": "Integrations",
   "/integrations/shopify": "Shopify",
   "/settings": "Settings",
+  "/settings/readiness": "Setup readiness",
 };
 
 function getBreadcrumb(pathname: string): string[] {

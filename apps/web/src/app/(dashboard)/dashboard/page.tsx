@@ -321,6 +321,10 @@ export default function DashboardPage() {
   // hanging on "loading" after entering the demo.
   const onboardingDone = demo || !!store?.onboardingCompletedAt;
   const [justCompletedOnboarding, setJustCompletedOnboarding] = useState(false);
+  const { data: launchReadiness } = (trpc.onboarding.readiness as any).useQuery(
+    { storeId },
+    { enabled: !!storeId && onboardingDone && !demo, refetchInterval: 30000 },
+  ) as { data: { readyForAllowlistTest?: boolean; checks?: Record<string, { ready: boolean }> } | undefined };
 
   const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
     { storeId },
@@ -726,6 +730,18 @@ export default function DashboardPage() {
   // --- State 3: Operator console ---
   return (
     <div className="w-full max-w-4xl mx-auto">
+      {!demo && launchReadiness && !launchReadiness.readyForAllowlistTest && (
+        <Link
+          href="/settings/readiness"
+          className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-sm transition-colors hover:bg-amber-50"
+        >
+          <span>
+            <span className="font-medium text-amber-950">Complete launch setup</span>
+            <span className="ml-2 text-amber-800">Sending remains protected while required checks are pending.</span>
+          </span>
+          <span className="shrink-0 font-medium text-amber-950">Review setup →</span>
+        </Link>
+      )}
       {/* The ask: heading + command line read as one prompt unit */}
       <div className="space-y-4">
         {/* Heading — prose, no motion */}

@@ -24,6 +24,7 @@ import {
   Brain,
   Target,
   Library,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
@@ -36,6 +37,7 @@ const primaryNav = [
   { name: "Actions", href: "/actions", icon: ListChecks, showBadge: true },
   { name: "Outcomes", href: "/outcomes", icon: Target },
   { name: "Performance", href: "/analytics", icon: BarChart3 },
+  { name: "Setup readiness", href: "/settings/readiness", icon: ShieldCheck },
   { name: "Settings", href: "/settings", icon: Settings },
 ] as const;
 
