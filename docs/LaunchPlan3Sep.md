@@ -6,6 +6,8 @@ Initial product: Shopify + email campaigns + merchant-approved email automations
 
 > 5 September addendum: canonical tests, worker migration ordering, explicit small-cohort policy, approval-time frozen arm maps, atomic migration-request dedupe, daily opportunity dedupe and consolidated churn-risk language are now part of the repository. See `JoonArchitectureIntelligenceAndRoadmap-2026-09-05.md` for the authoritative intelligence and holdout contract.
 
+> 6 September acquisition addendum: signup forms are part of the email-v1 baseline. Joon now includes explicit-consent email forms, modal/flyout/bar popups, behavioral triggers, guarded Shopify discount incentives, welcome-journey handoff and a Shopify theme app embed. See `SignupFormsAndAudienceGrowth-2026-09-06.md`. Live acceptance still requires deploying the extension, enabling it on a test theme and observing a real submission.
+
 ## 1. Launch decision
 
 Joon launches as a complete email decision product, not as an unfinished
@@ -17,6 +19,7 @@ In scope:
 - Store, customer, product, order, consent, and outcome synchronization.
 - Natural-language request to a structured campaign draft.
 - Reusable email templates and brand-aware email generation.
+- Storefront email signup forms and behavioral popups with explicit consent.
 - One-off email campaigns.
 - Merchant-created or Joon-drafted email automations and multi-step journeys.
 - Explicit merchant approval of the exact campaign or automation version.

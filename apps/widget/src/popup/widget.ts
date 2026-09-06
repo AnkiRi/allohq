@@ -2,7 +2,7 @@ import type { PopupConfig, PopupWidgetConfig } from "./types";
 import { POPUP_STYLES } from "./styles";
 import { setupTrigger } from "./triggers";
 
-const DISMISSED_KEY = "allo_popup_dismissed";
+const DISMISSED_KEY = "joon_popup_dismissed";
 
 /**
  * Popup widget — fetches popup configs from API and displays them
@@ -38,11 +38,7 @@ export class PopupWidget {
       });
       if (!res.ok) return;
       this.popups = await res.json();
-    } catch (err) {
-      if (this.config.debug) {
-        console.error("[AlloHQ Popup] Failed to fetch popups:", err);
-      }
-    }
+    } catch {}
   }
 
   private createShadowHost(): void {
@@ -67,7 +63,7 @@ export class PopupWidget {
   private registerTriggers(): void {
     for (const popup of this.popups) {
       // Skip if already dismissed by user
-      if (this.isDismissed(popup.popupId)) continue;
+      if (this.isDismissed(popup.popupId, popup.triggerConfig.frequencyDays ?? 7)) continue;
 
       const cleanup = setupTrigger(
         popup.trigger,
@@ -110,6 +106,8 @@ export class PopupWidget {
     const closeBtn = document.createElement("button");
     closeBtn.className = "allo-popup-close";
     closeBtn.innerHTML = "&#x2715;";
+    closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Close signup form");
     closeBtn.addEventListener("click", () => this.hide());
     container.appendChild(closeBtn);
 
@@ -150,9 +148,6 @@ export class PopupWidget {
     // Track view
     this.trackEvent("popup_view", { popupId: popup.popupId });
 
-    if (this.config.debug) {
-      console.log("[AlloHQ Popup] Showing popup:", popup.popupId);
-    }
   }
 
   private hide(): void {
@@ -199,6 +194,9 @@ export class PopupWidget {
       });
 
       const result = await res.json();
+      if (!res.ok) {
+        throw Error(typeof result?.error === "string" ? result.error : "Failed");
+      }
 
       // Show success state
       const body = container.querySelector(".allo-popup-body");
@@ -217,13 +215,17 @@ export class PopupWidget {
       }
 
       // Track submission
-      this.trackEvent("form_submit", { popupId, email: data["email"] });
+      // Do not duplicate submitted PII into the behavioral event ledger.
+      this.trackEvent("form_submit", { popupId });
 
       // Auto-hide after 3 seconds
       setTimeout(() => this.hide(), 3000);
-    } catch (err) {
-      if (this.config.debug) {
-        console.error("[AlloHQ Popup] Submit failed:", err);
+    } catch {
+      if (!form.querySelector("[role=alert]")) {
+        const error = document.createElement("p");
+        error.setAttribute("role", "alert");
+        error.textContent = "Please try again.";
+        form.appendChild(error);
       }
     }
   }
@@ -244,12 +246,11 @@ export class PopupWidget {
     }).catch(() => {});
   }
 
-  private isDismissed(popupId: string): boolean {
+  private isDismissed(popupId: string, frequencyDays: number): boolean {
     try {
-      const dismissed = JSON.parse(
-        sessionStorage.getItem(DISMISSED_KEY) ?? "[]"
-      );
-      return Array.isArray(dismissed) && dismissed.includes(popupId);
+      const dismissed = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "{}");
+      const dismissedAt = typeof dismissed?.[popupId] === "number" ? dismissed[popupId] : 0;
+      return frequencyDays > 0 && Date.now() - dismissedAt < frequencyDays * 86_400_000;
     } catch {
       return false;
     }
@@ -257,22 +258,12 @@ export class PopupWidget {
 
   private setDismissed(popupId: string): void {
     try {
-      const dismissed = JSON.parse(
-        sessionStorage.getItem(DISMISSED_KEY) ?? "[]"
-      );
-      if (!dismissed.includes(popupId)) {
-        dismissed.push(popupId);
-        sessionStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissed));
-      }
+      const dismissed = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "{}");
+      dismissed[popupId] = Date.now();
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissed));
     } catch {
-      // sessionStorage unavailable
+      // Storage unavailable
     }
   }
 
-  destroy(): void {
-    for (const cleanup of this.cleanups) cleanup();
-    this.cleanups = [];
-    const host = document.getElementById("allohq-popup");
-    if (host) host.remove();
-  }
 }

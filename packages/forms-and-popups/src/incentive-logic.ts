@@ -33,21 +33,24 @@ export async function deliverIncentive(
 
   if (!store) return null;
 
+  if (config.type === "freeShipping") {
+    throw new Error("Free-shipping signup incentives are not supported yet");
+  }
+
+  if (config.discountType === "percentage") {
+    const cap = await prisma.guardrail.findFirst({
+      where: { storeId, ruleType: "max_discount", isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: { ruleValue: true },
+    });
+    const maximum = (cap?.ruleValue as { maxPercent?: number } | null)?.maxPercent;
+    if (typeof maximum === "number" && (config.discountValue ?? 10) > maximum) {
+      throw new Error(`Signup incentive exceeds the merchant's ${maximum}% discount guardrail`);
+    }
+  }
+
   const client = await shopify.getShopifyAdminClient(store.id);
   const code = config.code ?? generateCode();
-
-  if (config.type === "freeShipping") {
-    // Free shipping uses a 0% discount with free shipping flag
-    // For now, create a percentage discount as a placeholder
-    await shopify.createDiscount(client, {
-      code,
-      valueType: "percentage",
-      value: 0,
-      title: `Joon Signup - Free Shipping - ${code}`,
-      oncePerCustomer: true,
-    });
-    return { code, type: "freeShipping" };
-  }
 
   // Percentage or fixed discount
   await shopify.createDiscount(client, {

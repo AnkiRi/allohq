@@ -46,6 +46,9 @@ export const onboardingRouter = router({
         pixelEvents,
         linkedIdentity,
         migrationRequest,
+        activeForms,
+        activePopups,
+        signupEmbedEvents,
       ] = await Promise.all([
         ctx.prisma.product.count({ where: { storeId: store.id } }),
         ctx.prisma.customer.count({ where: { storeId: store.id } }),
@@ -66,6 +69,9 @@ export const onboardingRouter = router({
           where: { storeId: store.id },
           orderBy: { createdAt: "desc" },
         }),
+        ctx.prisma.form.count({ where: { storeId: store.id, status: "active" } }),
+        ctx.prisma.popup.count({ where: { storeId: store.id, status: "active", form: { status: "active" } } }),
+        ctx.prisma.storefrontEvent.count({ where: { storeId: store.id, type: "signup_embed_loaded" } }),
       ]);
       // An empty but successfully synchronized development/new store is still
       // synchronized. Counts describe the result; lastSyncAt proves the run.
@@ -110,6 +116,18 @@ export const onboardingRouter = router({
           intelligence: {
             ready: intelligenceReady,
             detail: `${rfm} customers scored · ${productSegments} smart segments`,
+          },
+          acquisition: {
+            ready: activeForms > 0 && activePopups > 0 && signupEmbedEvents > 0,
+            observed: signupEmbedEvents > 0,
+            detail:
+              activeForms === 0
+                ? "No active email signup form"
+                : activePopups === 0
+                  ? `${activeForms} active form${activeForms === 1 ? "" : "s"}; no active popup`
+                  : signupEmbedEvents > 0
+                    ? `${activeForms} active form${activeForms === 1 ? "" : "s"} · storefront embed observed`
+                    : `${activeForms} active form${activeForms === 1 ? "" : "s"} · enable the theme app embed`,
           },
           senderDomain: {
             ready: senderReady,

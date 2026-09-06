@@ -20,7 +20,7 @@ export interface WidgetConfig {
 
 /** Events emitted by the widget */
 export interface WidgetEvent {
-  type: "page_view" | "product_view" | "add_to_cart" | "purchase" | "form_submit" | "popup_view";
+  type: "page_view" | "product_view" | "add_to_cart" | "purchase" | "form_submit" | "popup_view" | "signup_embed_loaded";
   data: Record<string, unknown>;
   timestamp: number;
 }

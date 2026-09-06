@@ -1,16 +1,36 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 
 const fieldSchema = z.object({
-  name: z.string(),
+  name: z.string().trim().min(1).max(80).regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),
   type: z.enum(["text", "email", "phone", "select", "checkbox"]),
-  label: z.string(),
+  label: z.string().trim().min(1).max(240),
   required: z.boolean(),
   placeholder: z.string().optional(),
   options: z.array(z.string()).optional(),
 });
+
+function assertSendableEmailForm(fields: FormField[]) {
+  const email = fields.find((field) => field.name === "email" && field.type === "email");
+  const consent = fields.find(
+    (field) => field.name === "consent_email" && field.type === "checkbox" && field.required,
+  );
+  if (!email?.required || !consent) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Email signup forms require a mandatory email field and an explicit email-consent checkbox.",
+    });
+  }
+  if (fields.some((field) => field.type === "phone" || field.name === "phone")) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Phone capture is unavailable while Joon is email-only.",
+    });
+  }
+}
 
 const stylingSchema = z.object({
   backgroundColor: z.string().optional(),
@@ -23,10 +43,10 @@ const stylingSchema = z.object({
 }).optional();
 
 const incentiveSchema = z.object({
-  type: z.enum(["discount", "freeShipping"]),
+  type: z.literal("discount"),
   discountType: z.enum(["percentage", "fixed_amount"]).optional(),
-  discountValue: z.number().optional(),
-  code: z.string().optional(),
+  discountValue: z.number().positive().max(1_000_000).optional(),
+  code: z.string().trim().min(3).max(40).regex(/^[A-Z0-9-]+$/).optional(),
 }).optional();
 
 export const formsRouter = router({
@@ -70,6 +90,7 @@ export const formsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertSendableEmailForm(input.fields as FormField[]);
       return ctx.prisma.form.create({
         data: {
           storeId: input.storeId,
@@ -100,6 +121,10 @@ export const formsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await verifyStoreScopedAccess(ctx, "form", input.formId);
       const { formId, ...data } = input;
+      const current = await ctx.prisma.form.findUniqueOrThrow({ where: { id: formId }, select: { fields: true } });
+      if (data.status === "active" || data.fields) {
+        assertSendableEmailForm((data.fields ?? current.fields) as unknown as FormField[]);
+      }
       return ctx.prisma.form.update({
         where: { id: formId },
         data: {
@@ -158,6 +183,7 @@ export const formsRouter = router({
           scrollPercent: z.number().optional(),
           delayMs: z.number().optional(),
           pageUrl: z.string().optional(),
+          frequencyDays: z.number().int().min(0).max(365).optional(),
         }).optional(),
         styling: z.object({
           position: z.enum(["center", "bottom-left", "bottom-right", "top-bar"]).optional(),
@@ -168,6 +194,13 @@ export const formsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const form = await ctx.prisma.form.findFirst({
+        where: { id: input.formId, storeId: input.storeId },
+        select: { id: true },
+      });
+      if (!form) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Form does not belong to this store" });
+      }
       return ctx.prisma.popup.create({
         data: {
           storeId: input.storeId,
@@ -195,6 +228,7 @@ export const formsRouter = router({
           scrollPercent: z.number().optional(),
           delayMs: z.number().optional(),
           pageUrl: z.string().optional(),
+          frequencyDays: z.number().int().min(0).max(365).optional(),
         }).optional(),
         styling: z.object({
           position: z.enum(["center", "bottom-left", "bottom-right", "top-bar"]).optional(),
@@ -208,6 +242,16 @@ export const formsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await verifyStoreScopedAccess(ctx, "popup", input.popupId);
       const { popupId, ...data } = input;
+      if (data.status === "active") {
+        const popup = await ctx.prisma.popup.findUniqueOrThrow({
+          where: { id: popupId },
+          include: { form: { select: { fields: true, status: true } } },
+        });
+        if (popup.form.status !== "active") {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Activate the signup form before its popup." });
+        }
+        assertSendableEmailForm(popup.form.fields as unknown as FormField[]);
+      }
       return ctx.prisma.popup.update({
         where: { id: popupId },
         data: {
@@ -288,28 +332,27 @@ export const formsRouter = router({
   getEmbedCode: storeProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findUniqueOrThrow({
+        where: { id: input.storeId },
+        select: { shopDomain: true },
+      });
       const popups = await ctx.prisma.popup.findMany({
         where: { storeId: input.storeId, status: "active" },
         select: { id: true },
       });
 
-      const apiUrl = process.env["API_URL"] ?? "https://api.joon.so";
+      const apiUrl = process.env["API_URL"] ?? "https://api.joonhq.com";
       const popupIds = popups.map((p) => p.id);
 
-      const script = `<!-- Joon Popup Widget -->
-<script>
-(function() {
-  var s = document.createElement('script');
-  s.src = '${apiUrl}/widget/popup.js';
-  s.async = true;
-  s.dataset.storeId = '${input.storeId}';
-  s.dataset.popups = '${popupIds.join(",")}';
-  s.dataset.apiUrl = '${apiUrl}';
-  document.head.appendChild(s);
-})();
-</script>`;
-
-      return { script, popupIds };
+      const clientId = process.env["SHOPIFY_API_KEY"];
+      if (!clientId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Shopify theme activation is not configured for this environment.",
+        });
+      }
+      const activationUrl = `https://${store.shopDomain}/admin/themes/current/editor?context=apps&activateAppId=${clientId}/signup-forms`;
+      return { activationUrl, popupIds, apiUrl };
     }),
 
   // ── Public endpoint for widget to fetch popup config ──

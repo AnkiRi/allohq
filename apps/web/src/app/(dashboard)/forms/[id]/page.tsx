@@ -5,8 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Copy,
-  Check,
+  ArrowUpRight,
   Loader2,
   MousePointerClick,
   Calendar,
@@ -39,8 +38,7 @@ function triggerLabel(trigger: string) {
 export default function FormDetailPage() {
   const params = useParams();
   const formId = params?.id as string;
-  const [copied, setCopied] = useState(false);
-  const [tab, setTab] = useState<"submissions" | "embed">("submissions");
+  const [tab, setTab] = useState<"submissions" | "storefront">("submissions");
 
   const { data: stores } = (trpc as any).stores.list.useQuery();
   const store = stores?.[0];
@@ -63,7 +61,7 @@ export default function FormDetailPage() {
 
   const { data: embedData } = (trpc as any).forms.getEmbedCode.useQuery(
     { storeId: storeId ?? "" },
-    { enabled: !!storeId && tab === "embed" }
+    { enabled: !!storeId && tab === "storefront" }
   );
 
   const utils = trpc.useUtils();
@@ -73,14 +71,9 @@ export default function FormDetailPage() {
   const deletePopupMut = (trpc as any).forms.deletePopup.useMutation({
     onSuccess: () => (utils as any).forms.getForm.invalidate(),
   });
-
-  const copyEmbed = () => {
-    if (embedData?.script) {
-      navigator.clipboard.writeText(embedData.script);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  const updatePopupMut = (trpc as any).forms.updatePopup.useMutation({
+    onSuccess: () => (utils as any).forms.getForm.invalidate(),
+  });
 
   if (isLoading || !form) {
     return (
@@ -198,16 +191,26 @@ export default function FormDetailPage() {
                     {popup.status}
                   </span>
                 </div>
-                <button
-                  onClick={() => {
-                    if (confirm("Delete this popup? This can't be undone.")) {
-                      deletePopupMut.mutate({ popupId: popup.id });
-                    }
-                  }}
-                  className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => updatePopupMut.mutate({ popupId: popup.id, status: popup.status === "active" ? "paused" : "active" })}
+                    disabled={form.status !== "active" || updatePopupMut.isPending}
+                    className="rounded-lg border border-border px-3 py-1.5 text-[10px] font-bold text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    title={form.status !== "active" ? "Activate the form first" : undefined}
+                  >
+                    {popup.status === "active" ? "Pause" : "Activate"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm("Delete this popup? This can't be undone.")) {
+                        deletePopupMut.mutate({ popupId: popup.id });
+                      }
+                    }}
+                    className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -216,7 +219,7 @@ export default function FormDetailPage() {
 
       {/* Tabs */}
       <div className="flex border-b border-border">
-        {(["submissions", "embed"] as const).map((t) => (
+        {(["submissions", "storefront"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -226,7 +229,7 @@ export default function FormDetailPage() {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "submissions" ? "Submissions" : "Embed Code"}
+            {t === "submissions" ? "Submissions" : "Storefront setup"}
           </button>
         ))}
       </div>
@@ -327,29 +330,20 @@ export default function FormDetailPage() {
         </motion.div>
       )}
 
-      {/* Embed Tab */}
-      {tab === "embed" && (
-        <div className="space-y-4">
-          <p className="text-[13px] text-muted-foreground">
-            Drop this code into your Shopify theme&apos;s &lt;head&gt; section and your popups go live.
+      {tab === "storefront" && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="text-[14px] font-semibold text-foreground">Enable signup forms in your Shopify theme</h2>
+          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-muted-foreground">
+            Joon uses a Shopify theme app embed. It does not edit theme code. Open the editor,
+            switch on “Signup forms,” and save. Joon will detect the first storefront load.
           </p>
-          <div className="relative">
-            <pre className="p-4 bg-card border border-border rounded-lg text-[11px] font-mono text-foreground overflow-x-auto whitespace-pre-wrap">
-              {embedData?.script ?? "No popups are live yet. Activate one to get your embed code."}
-            </pre>
-            {embedData?.script && (
-              <button
-                onClick={copyEmbed}
-                className="absolute top-3 right-3 p-2 bg-muted border border-border rounded-lg hover:border-foreground/30 transition-colors"
-              >
-                {copied ? (
-                  <Check className="w-3.5 h-3.5 text-[var(--color-success)]" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                )}
-              </button>
-            )}
-          </div>
+          {embedData?.activationUrl ? (
+            <a href={embedData.activationUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-[12px] font-bold text-background">
+              Open theme editor <ArrowUpRight className="size-3.5" />
+            </a>
+          ) : (
+            <p className="mt-4 text-[12px] text-muted-foreground">Activate a popup first, then return here.</p>
+          )}
         </div>
       )}
     </div>

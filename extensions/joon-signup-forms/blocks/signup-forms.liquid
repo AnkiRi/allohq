@@ -1,0 +1,33 @@
+<script>
+  window.JoonSignupForms = {
+    apiUrl: "https://api.joonhq.com",
+    shop: {{ shop.permanent_domain | json }}
+  };
+
+  (function bootJoonSignupForms(attempt) {
+    if (!window.JoonSignup) {
+      if (attempt < 100) window.setTimeout(function () { bootJoonSignupForms(attempt + 1); }, 50);
+      return;
+    }
+    var config = window.JoonSignupForms;
+    fetch(config.apiUrl + "/widget/bootstrap?shop=" + encodeURIComponent(config.shop))
+      .then(function (response) { return response.ok ? response.json() : Promise.reject(new Error("Joon bootstrap failed")); })
+      .then(function (session) {
+        window.JoonSignup.init({
+          apiKey: session.publishableKey,
+          apiUrl: config.apiUrl,
+          debug: false
+        });
+      })
+      .catch(function () {});
+  })(0);
+</script>
+
+{% schema %}
+{
+  "name": "Signup forms",
+  "target": "body",
+  "javascript": "joon-widget.js",
+  "settings": []
+}
+{% endschema %}

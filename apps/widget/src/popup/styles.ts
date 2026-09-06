@@ -26,6 +26,13 @@ export const POPUP_STYLES = `
   }
   .allo-popup-overlay.pos-top-bar {
     align-items: flex-start;
+    background: transparent !important;
+  }
+  .allo-popup-overlay.pos-top-bar .allo-popup-container {
+    max-width: none;
+    width: 100%;
+    border-radius: 0;
+    max-height: min(70vh, 520px);
   }
   .allo-popup-container {
     position: relative;
@@ -110,5 +117,14 @@ export const POPUP_STYLES = `
     font-weight: 700;
     letter-spacing: 2px;
     color: #16a34a;
+  }
+  @media (max-width: 520px) {
+    .allo-popup-overlay.pos-bottom-left,
+    .allo-popup-overlay.pos-bottom-right { padding: 12px; }
+    .allo-popup-container { max-height: calc(100vh - 24px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .allo-popup-overlay,
+    .allo-popup-container { transition: none !important; }
   }
 `;

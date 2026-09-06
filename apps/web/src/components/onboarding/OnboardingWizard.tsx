@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2,
@@ -29,6 +30,7 @@ import {
   Circle,
   RefreshCw,
   ArrowUpRight,
+  MousePointerClick,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
@@ -1877,6 +1879,7 @@ export function LaunchReadinessPanel({
         ["Brand and sender", checks.brand!],
         ["Storefront tracking", checks.tracking!],
         ["Customer intelligence", checks.intelligence!],
+        ["Audience growth", checks.acquisition!],
         ["Sending domain", checks.senderDomain!],
         ["Suppression safety", checks.suppression!],
         ["Delivery", checks.delivery!],
@@ -2004,6 +2007,22 @@ export function LaunchReadinessPanel({
             )}
           </div>
         )}
+      </section>
+
+      <section className="rounded-xl bg-[#FAF9F7] p-5">
+        <div className="flex items-start gap-3">
+          <MousePointerClick className="mt-0.5 size-5 text-[#1F7A4F]" />
+          <div>
+            <h3 className="text-sm font-semibold text-[#2C2C2C]">Grow a consented email audience</h3>
+            <p className="mt-1 text-xs leading-5 text-[#70685d]">
+              Create a branded signup form, activate its popup, then enable Joon&apos;s Shopify theme
+              app embed. New subscribers enter the welcome journey only with explicit consent.
+            </p>
+          </div>
+        </div>
+        <Link href="/forms" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#1F7A4F]">
+          Set up signup forms <ArrowUpRight className="size-3" />
+        </Link>
       </section>
 
       <section className="rounded-xl bg-[#FAF9F7] p-5">

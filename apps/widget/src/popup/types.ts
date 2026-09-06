@@ -7,6 +7,7 @@ export interface PopupConfig {
     scrollPercent?: number;
     delayMs?: number;
     pageUrl?: string;
+    frequencyDays?: number;
   };
   styling: {
     position?: "center" | "bottom-left" | "bottom-right" | "top-bar";

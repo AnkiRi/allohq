@@ -15,6 +15,13 @@ export function setupTrigger(
 
   switch (trigger) {
     case "exit_intent": {
+      // Exit intent has no meaningful touch equivalent. On coarse pointers,
+      // use a restrained ten-second fallback instead of never showing.
+      if (window.matchMedia("(pointer: coarse)").matches) {
+        const timer = setTimeout(onTrigger, Math.max(config.delayMs ?? 10_000, 6_000));
+        cleanup = () => clearTimeout(timer);
+        break;
+      }
       const handler = (e: MouseEvent) => {
         if (e.clientY <= 5) {
           onTrigger();

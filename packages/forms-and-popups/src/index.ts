@@ -8,7 +8,6 @@ export type {
   ConsentState,
   RenderedForm,
   PopupWidgetConfig,
-  EmbedCode,
 } from "./types";
 
 // Form builder
@@ -38,9 +37,3 @@ export {
   getCustomerConsent,
   listSubmissions,
 } from "./consent-capture";
-
-// Embed generator
-export {
-  generateEmbedCode,
-  generateFormEmbedCode,
-} from "./embed-generator";

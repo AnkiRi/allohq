@@ -120,6 +120,7 @@ const WIDGET_EVENT_TYPES = new Set([
   "purchase",
   "form_submit",
   "popup_view",
+  "signup_embed_loaded",
 ]);
 
 function shortString(value: unknown, maxLength = 128): string | undefined {

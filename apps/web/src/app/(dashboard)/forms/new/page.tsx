@@ -15,7 +15,7 @@ import { trpc } from "@/lib/trpc";
 
 interface FormField {
   name: string;
-  type: "text" | "email" | "phone" | "select" | "checkbox";
+  type: "text" | "email" | "checkbox";
   label: string;
   required: boolean;
   placeholder?: string;
@@ -25,13 +25,17 @@ interface FormField {
 const fieldTypeLabels: Record<string, string> = {
   text: "Text",
   email: "Email",
-  phone: "Phone",
-  select: "Dropdown",
   checkbox: "Checkbox",
 };
 
 const defaultFields: FormField[] = [
   { name: "email", type: "email", label: "Email", required: true, placeholder: "your@email.com" },
+  {
+    name: "consent_email",
+    type: "checkbox",
+    label: "Yes, email me offers and updates. I can unsubscribe at any time.",
+    required: true,
+  },
 ];
 
 export default function NewFormPage() {
@@ -53,7 +57,7 @@ export default function NewFormPage() {
   });
   const [incentiveEnabled, setIncentiveEnabled] = useState(false);
   const [incentive, setIncentive] = useState({
-    type: "discount" as "discount" | "freeShipping",
+    type: "discount" as const,
     discountType: "percentage" as "percentage" | "fixed_amount",
     discountValue: 10,
   });
@@ -64,6 +68,7 @@ export default function NewFormPage() {
   const [popupTrigger, setPopupTrigger] = useState<"exit_intent" | "scroll" | "timer" | "page_load">("exit_intent");
   const [popupDelay, setPopupDelay] = useState(5000);
   const [popupScroll, setPopupScroll] = useState(50);
+  const [popupPosition, setPopupPosition] = useState<"center" | "bottom-left" | "bottom-right" | "top-bar">("center");
 
   const createFormMut = (trpc as any).forms.createForm.useMutation({
     onSuccess: (form: any) => {
@@ -74,8 +79,15 @@ export default function NewFormPage() {
           formId: form.id,
           trigger: popupTrigger,
           triggerConfig: {
+            frequencyDays: 7,
             ...(popupTrigger === "timer" ? { delayMs: popupDelay } : {}),
             ...(popupTrigger === "scroll" ? { scrollPercent: popupScroll } : {}),
+          },
+          styling: {
+            position: popupPosition,
+            overlayColor: popupPosition === "center" ? "rgba(0,0,0,0.52)" : "rgba(0,0,0,0)",
+            animation: popupPosition === "top-bar" ? "slide-down" : popupPosition === "center" ? "scale" : "slide-up",
+            width: popupPosition === "top-bar" ? "100%" : "420px",
           },
         });
       } else {
@@ -181,12 +193,13 @@ export default function NewFormPage() {
                 <input
                   type="text"
                   value={field.label}
-                  onChange={(e) => updateField(i, { label: e.target.value, name: e.target.value.toLowerCase().replace(/\s+/g, "_") })}
+                  onChange={(e) => updateField(i, { label: e.target.value })}
                   placeholder="Label"
                   className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 />
                 <select
                   value={field.type}
+                  disabled={field.name === "email" || field.name === "consent_email"}
                   onChange={(e) => updateField(i, { type: e.target.value as FormField["type"] })}
                   className="px-3 py-2 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 >
@@ -213,7 +226,9 @@ export default function NewFormPage() {
               </div>
               <button
                 onClick={() => removeField(i)}
+                disabled={field.name === "email" || field.name === "consent_email"}
                 className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors mt-1"
+                title={field.name === "email" || field.name === "consent_email" ? "Required for consent-safe email signup" : "Remove field"}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -274,16 +289,8 @@ export default function NewFormPage() {
           <div className="grid grid-cols-3 gap-3 p-4 bg-card border border-border rounded-lg">
             <div className="space-y-1">
               <span className="text-[10px] font-sans text-muted-foreground">Type</span>
-              <select
-                value={incentive.type}
-                onChange={(e) => setIncentive({ ...incentive, type: e.target.value as "discount" | "freeShipping" })}
-                className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
-              >
-                <option value="discount">Discount</option>
-                <option value="freeShipping">Free Shipping</option>
-              </select>
+              <div className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-sans">Discount code</div>
             </div>
-            {incentive.type === "discount" && (
               <>
                 <div className="space-y-1">
                   <span className="text-[10px] font-sans text-muted-foreground">Discount Type</span>
@@ -306,7 +313,6 @@ export default function NewFormPage() {
                   />
                 </div>
               </>
-            )}
           </div>
         )}
       </div>
@@ -334,6 +340,19 @@ export default function NewFormPage() {
                   placeholder={`${name || "Form"} Popup`}
                   className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans focus:outline-none focus:border-foreground/30"
                 />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-sans text-muted-foreground">Format</span>
+                <select
+                  value={popupPosition}
+                  onChange={(e) => setPopupPosition(e.target.value as typeof popupPosition)}
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
+                >
+                  <option value="center">Modal popup</option>
+                  <option value="bottom-right">Bottom-right flyout</option>
+                  <option value="bottom-left">Bottom-left flyout</option>
+                  <option value="top-bar">Announcement bar</option>
+                </select>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] font-sans text-muted-foreground">Trigger</span>
@@ -402,6 +421,11 @@ export default function NewFormPage() {
           Cancel
         </Link>
       </div>
+      {(createFormMut.error || createPopupMut.error) && (
+        <p role="alert" className="text-[12px] text-destructive">
+          {createFormMut.error?.message ?? createPopupMut.error?.message}
+        </p>
+      )}
     </div>
   );
 }

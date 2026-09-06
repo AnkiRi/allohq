@@ -17,6 +17,7 @@ export interface FormStyling {
   buttonText?: string;
   borderRadius?: string;
   fontFamily?: string;
+  privacyPolicyUrl?: string;
 }
 
 /** Incentive configuration for form submissions */
@@ -32,6 +33,7 @@ export interface PopupTriggerConfig {
   scrollPercent?: number; // 0-100 — trigger at this scroll depth
   delayMs?: number; // milliseconds to wait before showing
   pageUrl?: string; // only show on specific pages (glob pattern)
+  frequencyDays?: number; // minimum days before showing again after dismissal
 }
 
 /** Popup styling configuration */
@@ -64,10 +66,4 @@ export interface PopupWidgetConfig {
   trigger: string;
   triggerConfig: PopupTriggerConfig;
   styling: PopupStyling;
-}
-
-/** Embed code output */
-export interface EmbedCode {
-  script: string;
-  popupIds: string[];
 }

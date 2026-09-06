@@ -109,9 +109,14 @@ export function renderFormHtml(
     })
     .join("\n");
 
+  const privacy = s.privacyPolicyUrl
+    ? `<p class="allo-privacy">By subscribing, you agree to receive marketing email. See the <a href="${escapeHtml(s.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">privacy policy</a>. Unsubscribe anytime.</p>`
+    : "";
+
   const html = `<form class="allo-form" data-allo-form>
   ${fieldHtml}
   <button type="submit" class="allo-submit">${escapeHtml(s.buttonText ?? "Subscribe")}</button>
+  ${privacy}
 </form>`;
 
   const css = `.allo-form {
@@ -173,6 +178,18 @@ export function renderFormHtml(
 }
 .allo-submit:hover {
   opacity: 0.9;
+}
+.allo-privacy {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: ${s.textColor};
+  opacity: .72;
+}
+.allo-privacy a { color: inherit; text-decoration: underline; }
+.allo-submit:focus-visible, .allo-field input:focus-visible, .allo-field select:focus-visible {
+  outline: 2px solid ${s.buttonColor};
+  outline-offset: 2px;
 }`;
 
   return { html, css, fields };

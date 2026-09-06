@@ -24,6 +24,7 @@ const redisConnection = {
 };
 
 const customerStateQueue = new Queue("customer-state", { connection: redisConnection });
+const automationTriggerQueue = new Queue("automation-trigger", { connection: redisConnection });
 
 /** Parse JSON body from request */
 function parseBody(
@@ -87,6 +88,34 @@ export async function handleWidgetPopups(
   }
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+
+  // The publishable key is intentionally public. Resolve it only when the
+  // requesting storefront Origin matches the claimed shop, so theme app
+  // embeds can bootstrap without asking a merchant to paste credentials.
+  if (url.pathname === "/widget/bootstrap" && req.method === "GET") {
+    const shop = url.searchParams.get("shop")?.trim().toLowerCase();
+    const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+    if (!shop || !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) {
+      json(res, 400, { error: "Valid shop domain required" });
+      return;
+    }
+    const bootstrapStore = await prisma.store.findFirst({
+      where: { shopDomain: shop, isActive: true },
+      select: { widgetPublicKey: true, shopDomain: true, widgetAllowedOrigins: true },
+    });
+    if (!bootstrapStore?.widgetPublicKey || !isAllowedWidgetOrigin(origin, bootstrapStore)) {
+      json(res, 403, { error: "Storefront origin is not allowed" });
+      return;
+    }
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+    res.setHeader("Cache-Control", "no-store");
+    json(res, 200, { publishableKey: bootstrapStore.widgetPublicKey });
+    return;
+  }
+
   const store = await authenticateWidgetStore(req);
   if (!store) {
     json(res, 401, { error: "Invalid or missing API key" });
@@ -138,6 +167,26 @@ export async function handleWidgetPopups(
 
   // GET /widget/popups
   if (url.pathname === "/widget/popups" && req.method === "GET") {
+    await prisma.storefrontEvent.upsert({
+      where: {
+        storeId_source_externalEventId: {
+          storeId: store.id,
+          source: "joon_signup_embed",
+          externalEventId: `embed-${store.id}`,
+        },
+      },
+      create: {
+          storeId: store.id,
+          source: "joon_signup_embed",
+          externalEventId: `embed-${store.id}`,
+          type: "signup_embed_loaded",
+          visitorId: visitor.visitorId,
+          sessionId: visitor.visitorId,
+          data: {},
+          occurredAt: new Date(),
+      },
+      update: {},
+    });
     const popups = await prisma.popup.findMany({
       where: { storeId: store.id, status: "active" },
       include: { form: true },
@@ -162,6 +211,8 @@ export async function handleWidgetPopups(
         formStyling.buttonTextColor = formStyling.buttonTextColor ?? brandTokens["ctaTextColor"];
         formStyling.fontFamily = formStyling.fontFamily ?? brandTokens["bodyFont"];
       }
+      formStyling.privacyPolicyUrl =
+        formStyling.privacyPolicyUrl ?? `https://${store.shopDomain}/policies/privacy-policy`;
 
       const rendered = renderFormHtml(fields, formStyling);
 
@@ -197,63 +248,75 @@ export async function handleWidgetPopups(
         return;
       }
 
-      // Find the popup's form
-      let formId: string | null = null;
-      if (popupId) {
-        const popup = await prisma.popup.findUnique({
-          where: { id: popupId },
-          select: { formId: true, storeId: true, status: true },
-        });
-        formId =
-          popup?.storeId === store.id && popup.status === "active"
-            ? popup.formId
-            : null;
-      }
-
-      if (!formId) {
-        // Try to find form from storeId
-        const form = await prisma.form.findFirst({
-          where: { storeId: store.id, status: "active" },
-          select: { id: true },
-        });
-        formId = form?.id ?? null;
-      }
-
-      if (!formId) {
-        json(res, 404, { error: "No active form found" });
+      // A submission must resolve to the exact active popup and active form.
+      // Never fall back to another form in the store.
+      const popup = popupId
+        ? await prisma.popup.findFirst({
+            where: { id: popupId, storeId: store.id, status: "active", form: { status: "active" } },
+            include: { form: true },
+          })
+        : null;
+      if (!popup) {
+        json(res, 404, { error: "Active signup form not found" });
         return;
       }
 
+      const configuredFields = (popup.form.fields as unknown as FormField[]) ?? [];
+      const sanitizedData: Record<string, unknown> = {};
+      for (const field of configuredFields) {
+        if (field.type === "phone" || field.name === "phone") continue;
+        const value = data[field.name];
+        if (field.type === "checkbox") {
+          sanitizedData[field.name] = value === "true" || value === "on" || value === true;
+        } else if (typeof value === "string") {
+          sanitizedData[field.name] = value.trim().slice(0, field.type === "email" ? 320 : 500);
+        }
+      }
+      const email = sanitizedData["email"];
+      if (typeof email !== "string" || !/^\S+@\S+\.\S+$/.test(email)) {
+        json(res, 400, { error: "A valid email address is required" });
+        return;
+      }
+      const emailConsentField = configuredFields.some(
+        (field) => field.name === "consent_email" && field.type === "checkbox" && field.required,
+      );
+      if (!emailConsentField || sanitizedData["consent_email"] !== true) {
+        json(res, 400, { error: "Explicit email consent is required" });
+        return;
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const existingCustomer = await prisma.customer.findFirst({
+        where: { storeId: store.id, email: normalizedEmail },
+        select: {
+          id: true,
+          contactConsents: {
+            where: { channel: "email" },
+            select: { status: true },
+            take: 1,
+          },
+        },
+      });
+      const isNewEmailSubscriber =
+        !existingCustomer || existingCustomer.contactConsents[0]?.status !== "opted_in";
+
       // Extract consent from form data (checkboxes named consent_email, consent_sms, consent_whatsapp)
       const consent: { email?: boolean; sms?: boolean; whatsapp?: boolean } = {};
-      if (data["consent_email"] !== undefined) {
-        consent.email = data["consent_email"] === "true" || data["consent_email"] === "on" || data["consent_email"] === true;
-      }
-      if (data["consent_sms"] !== undefined) {
-        consent.sms = data["consent_sms"] === "true" || data["consent_sms"] === "on" || data["consent_sms"] === true;
-      }
-      if (data["consent_whatsapp"] !== undefined) {
-        consent.whatsapp = data["consent_whatsapp"] === "true" || data["consent_whatsapp"] === "on" || data["consent_whatsapp"] === true;
-      }
+      consent.email = true;
 
       // Capture submission
       const result = await captureSubmission({
-        formId,
+        formId: popup.formId,
         storeId: store.id,
-        data,
+        data: sanitizedData,
         source,
         consent,
       });
 
       // Check for incentive
-      const form = await prisma.form.findUnique({
-        where: { id: formId },
-        select: { incentiveConfig: true },
-      });
-
       let discountCode: string | null = null;
-      const incentiveConfig = form?.incentiveConfig as unknown as IncentiveConfig | null;
-      if (incentiveConfig) {
+      const incentiveConfig = popup.form.incentiveConfig as unknown as IncentiveConfig | null;
+      if (incentiveConfig && isNewEmailSubscriber) {
         const incentiveResult = await deliverIncentive(store.id, incentiveConfig);
         discountCode = incentiveResult?.code ?? null;
       }
@@ -267,6 +330,27 @@ export async function handleWidgetPopups(
           data: { consent },
           timestamp: new Date().toISOString(),
         });
+        const welcomeAutomations = isNewEmailSubscriber ? await prisma.automation.findMany({
+          where: {
+            storeId: store.id,
+            status: "active",
+            category: "welcome_series",
+            triggerType: "event",
+          },
+          select: { id: true },
+        }) : [];
+        for (const automation of welcomeAutomations) {
+          await automationTriggerQueue.add(
+            "automation-trigger",
+            {
+              automationId: automation.id,
+              customerId: result.customerId,
+              triggeredBy: "form_submitted",
+              eventInstanceId: result.submissionId,
+            },
+            { jobId: `${automation.id}-${result.customerId}-${result.submissionId}` },
+          );
+        }
       }
 
       json(res, 200, {
