@@ -14,7 +14,6 @@ export class PopupWidget {
   private activePopupId: string | null = null;
   private shadow: ShadowRoot | null = null;
   private overlay: HTMLDivElement | null = null;
-  private cleanups: (() => void)[] = [];
 
   constructor(config: PopupWidgetConfig) {
     this.config = config;
@@ -65,12 +64,11 @@ export class PopupWidget {
       // Skip if already dismissed by user
       if (this.isDismissed(popup.popupId, popup.triggerConfig.frequencyDays ?? 7)) continue;
 
-      const cleanup = setupTrigger(
+      setupTrigger(
         popup.trigger,
         popup.triggerConfig,
         () => this.show(popup)
       );
-      this.cleanups.push(cleanup);
     }
   }
 
