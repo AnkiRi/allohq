@@ -353,51 +353,70 @@ Unrelated pre-existing untracked files were left untouched.
 
 Inspect the repository rather than trusting this document. Return `VERIFIED`, `VERIFIED WITH GAPS`, or `NOT READY`, with direct file/line evidence.
 
-Challenge these areas:
+Focus especially on:
 
-1. Can a visitor forge or switch popup experiment assignment?
-2. Does control assignment represent a genuine opportunity to see the popup?
-3. Is one active experiment per popup safe under concurrent activation?
-4. Can variant configuration mutate after exposure and corrupt interpretation?
-5. Can a submission attach to another store's popup or experiment?
-6. Is one-play protection atomic under concurrency?
-7. Can failed discount creation leave an unrecoverable pending grant?
-8. Can confirmation succeed while reward issuance fails without recovery?
-9. Is incentive eligibility frozen correctly across double opt-in?
-10. Are currency and percentage units correct?
-11. Do no-prize outcomes and the visible wheel behavior meet expectations?
-12. Do all form formats use the same consent policy?
-13. Can hosted forms submit undeclared fields?
-14. Is consent evidence sufficient for supported markets?
-15. Does redaction cover anonymous exposures that later become identifiable?
-16. Is two-year acquisition-evidence retention justified?
-17. Can order retries double-attribute purchases, and does cancellation reverse everything?
-18. Are experiment denominators and the 100-per-arm label defensible?
-19. Are campaign and journey holdouts correct for finite versus streaming cohorts?
-20. Can any background path send without current merchant approval?
-21. Does every journey really use the current brand voice?
-22. Which onboarding inputs are unused, misleading or not editable later?
-23. Can staff permissions be bypassed via direct API calls?
-24. Does requested Shopify access match actual v1 necessity?
-25. Does the migration exactly match the Prisma schema, and are workers schema-safe?
-26. Which of the 145 tests are behavioral versus source-string contracts?
-27. What important flows still need database integration tests?
-28. What baseline feature expected from Klaviyo, Omnisend or Attentive is still missing?
-29. Which product claims are safe today and which are misleading?
-30. What are the smallest remaining fix sets before Shopify submission and before live delivery?
+1. Can a visitor forge or switch a popup experiment assignment?
+2. Does control exposure represent a genuine opportunity to see the popup, or merely a config request?
+3. Is one active experiment per popup guaranteed under concurrent activation?
+4. Can experiment configuration change after exposure and make reporting uninterpretable?
+5. Can a submission be attached to another store’s experiment or popup?
+6. Is repeat-play protection truly atomic under concurrent requests?
+7. Can a failed Shopify discount creation leave a permanent pending grant?
+8. Can confirmation succeed but incentive issuance fail without a recovery path?
+9. Is known-customer/recent-buyer eligibility frozen correctly before double opt-in?
+10. Could a merchant override discount suppression accidentally or without sufficient warning?
+11. Are percentage/fixed discount units correct across currencies?
+12. Do no-prize spin outcomes behave correctly?
+13. Does the widget visually behave like a real wheel, or merely present a randomized result?
+14. Are all form formats genuinely using the same consent policy?
+15. Can a hosted form submit fields not defined by the merchant?
+16. Is consent evidence complete enough for EU/UK, CASL, TCPA and Australian requirements?
+17. Should every market require double opt-in, or is the current policy appropriate?
+18. Does GDPR redaction cover anonymous visitor exposures that later become identifiable?
+19. Is two-year acquisition evidence retention justified?
+20. Can order webhook retries double-attribute a purchase?
+21. Does order cancellation cleanly reverse all form and experiment records?
+22. Are form experiment reporting denominators correct?
+23. Is the 100-per-arm threshold statistically defensible or merely a product label?
+24. Are campaign holdouts and journey holdouts implemented consistently with their different cohort shapes?
+25. Are small campaigns sufficiently prevented from making lift claims?
+26. Is treatment/control analysis robust to refunds, cancellations and delayed purchases?
+27. Can background agents create duplicate or low-quality opportunities?
+28. Can any background path still send without merchant approval?
+29. Does every fixed journey actually use the current brand voice?
+30. Is any onboarding input stored but unused?
+31. Is any onboarding input impossible to edit later?
+32. Are any settings presented as functional when they have no downstream effect?
+33. Can staff roles be bypassed through direct tRPC calls?
+34. Does the full-screen handoff introduce account-confusion or store-linking risks?
+35. Does the Shopify permission request match actual v1 necessity?
+36. Do the new Prisma migration and generated schema match exactly?
+37. Do workers safely wait for schema readiness?
+38. Do the 145 tests actually exercise behavior, or are important ones only source-code string assertions?
+39. Which flows need integration tests with a real database?
+40. Which external tests are mandatory before a real merchant is allowed to send?
+41. What major baseline feature expected from Klaviyo/Omnisend/Attentive is still missing?
+42. Is Joon’s current decision ledger genuinely differentiated, or mostly reporting infrastructure?
+43. Which product claims are safe today, and which would be misleading?
+44. What is the smallest set of fixes required before Shopify submission?
+45. What is the smallest set of fixes required before enabling live delivery?
 
 Requested output:
 
-- Executive verdict.
-- Claims matrix with direct evidence.
+- Verdict: `VERIFIED`, `VERIFIED WITH GAPS`, or `NOT READY`.
+- Claims matrix with evidence and file references.
 - P0/P1/P2 security findings.
-- Functional, consent/privacy, statistical and experimentation gaps.
-- Shopify-review and real-send blockers.
-- Unsupported claims.
-- Commands/tests executed and results.
+- Functional gaps.
+- Consent/privacy gaps.
+- Holdout/statistical gaps.
+- Experimentation gaps.
+- Shopify-review blockers.
+- Real-send blockers.
+- Misleading or unsupported claims.
+- Tests you executed and results.
 - Exact repository state.
-- Smallest corrective plan.
-- Direct answers to:
+- Smallest corrective implementation plan.
+- A clear answer to:
   - Is repository-only work complete?
   - Is external acceptance testing safe to begin?
-  - What still requires founder or provider intervention?
+  - What still requires founder/provider intervention?
