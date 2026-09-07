@@ -78,7 +78,10 @@ test("store credentials encrypt with authenticated encryption", () => {
     assert.notEqual(encrypted, plaintext);
     assert.equal(decryptSecret(encrypted), plaintext);
 
-    const tampered = `${encrypted.slice(0, -1)}${encrypted.endsWith("A") ? "B" : "A"}`;
+    const parts = encrypted.split(":");
+    const ciphertext = parts.at(-1)!;
+    parts[parts.length - 1] = `${ciphertext.startsWith("A") ? "B" : "A"}${ciphertext.slice(1)}`;
+    const tampered = parts.join(":");
     assert.throws(() => decryptSecret(tampered));
   } finally {
     if (previous === undefined) delete process.env["DATA_ENCRYPTION_KEY"];

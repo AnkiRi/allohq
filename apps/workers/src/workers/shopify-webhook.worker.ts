@@ -227,6 +227,16 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
                 convertedAt: order.createdAt,
               },
             });
+            await prisma.formExperimentExposure.updateMany({
+              where: { submissionId: submission.id, convertedAt: null },
+              data: { convertedAt: order.createdAt, orderId: order.id, revenue: order.totalPrice },
+            });
+            if (submission.incentiveCode && exactCode) {
+              await prisma.formIncentiveGrant.updateMany({
+                where: { code: { equals: submission.incentiveCode, mode: "insensitive" }, status: "issued" },
+                data: { status: "redeemed", redeemedAt: order.createdAt, orderId: order.id },
+              });
+            }
           }
           await checkEventTriggers(store.id, "order_placed", order.customerId, eventId ?? undefined);
           // Mark any open/abandoned checkouts as recovered
@@ -272,6 +282,8 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
                 convertedAt: null,
               },
             }),
+            prisma.formExperimentExposure.updateMany({ where: { orderId: order.id }, data: { orderId: null, revenue: null, convertedAt: null } }),
+            prisma.formIncentiveGrant.updateMany({ where: { orderId: order.id }, data: { orderId: null, redeemedAt: null, status: "issued" } }),
           ]);
         }
         break;
@@ -424,6 +436,9 @@ async function exportCustomerData(
       memories: true,
       conversations: { include: { messages: true } },
       formSubmissions: true,
+      formIncentiveGrants: true,
+      traits: true,
+      consentConfirmations: true,
       contactConsents: true,
       contactSuppressions: true,
       customerState: true,
@@ -440,12 +455,14 @@ async function exportCustomerData(
     };
   }
 
-  const [messages, actions, outreach] = await Promise.all([
+  const [messages, actions, outreach, experimentExposures, experimentOutcomes] = await Promise.all([
     prisma.messageLog.findMany({ where: { customerId: customer.id } }),
     prisma.agentAction.findMany({ where: { customerId: customer.id } }),
     prisma.proactiveOutreachLog.findMany({
       where: { customerId: customer.id },
     }),
+    prisma.formExperimentExposure.findMany({ where: { submissionId: { in: customer.formSubmissions.map((row) => row.id) } } }),
+    prisma.experimentOrderOutcome.findMany({ where: { customerId: customer.id } }),
   ]);
 
   return {
@@ -455,6 +472,8 @@ async function exportCustomerData(
     messages,
     agentActions: actions,
     proactiveOutreach: outreach,
+    formExperimentExposures: experimentExposures,
+    experimentOrderOutcomes: experimentOutcomes,
   };
 }
 
@@ -469,6 +488,12 @@ async function redactCustomer(
   if (!customer) return;
 
   await prisma.$transaction(async (tx) => {
+    const submissions = await tx.formSubmission.findMany({ where: { customerId: customer.id }, select: { id: true } });
+    await tx.formExperimentExposure.deleteMany({ where: { submissionId: { in: submissions.map((row) => row.id) } } });
+    await tx.formIncentiveGrant.deleteMany({ where: { customerId: customer.id } });
+    await tx.consentConfirmation.deleteMany({ where: { customerId: customer.id } });
+    await tx.customerTrait.deleteMany({ where: { customerId: customer.id } });
+    await tx.experimentOrderOutcome.deleteMany({ where: { customerId: customer.id } });
     await tx.conversation.deleteMany({ where: { customerId: customer.id } });
     await tx.customerMemory.deleteMany({ where: { customerId: customer.id } });
     await tx.formSubmission.deleteMany({ where: { customerId: customer.id } });

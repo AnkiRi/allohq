@@ -1,0 +1,20 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { assignFormExperimentArm } from "./experiment-assignment";
+import { chooseWeightedOutcome } from "./incentive-logic";
+import { consentPreset } from "./consent-presets";
+import { shouldSuppressKnownCustomerIncentive } from "./acquisition-policy";
+
+test("experiment assignment is deterministic",()=>assert.equal(assignFormExperimentArm({experimentId:"e",assignmentSalt:"s",visitorId:"v",controlRatio:.1,splitRatio:.5}),assignFormExperimentArm({experimentId:"e",assignmentSalt:"s",visitorId:"v",controlRatio:.1,splitRatio:.5})));
+test("experiment assignment returns only valid arms",()=>{for(let i=0;i<100;i++)assert.ok(["CONTROL","A","B"].includes(assignFormExperimentArm({experimentId:"e",assignmentSalt:"s",visitorId:String(i),controlRatio:.1,splitRatio:.5})))});
+test("zero control produces treatment arms",()=>{for(let i=0;i<50;i++)assert.notEqual(assignFormExperimentArm({experimentId:"e",assignmentSalt:"s",visitorId:String(i),controlRatio:0,splitRatio:.5}),"CONTROL")});
+test("weighted boundary selects first outcome",()=>assert.equal(chooseWeightedOutcome([{label:"a",weight:2,discountValue:1},{label:"b",weight:1,discountValue:0}],0).label,"a"));
+test("weighted boundary selects last outcome",()=>assert.equal(chooseWeightedOutcome([{label:"a",weight:2,discountValue:1},{label:"b",weight:1,discountValue:0}],2).label,"b"));
+test("weighted outcomes reject one option",()=>assert.throws(()=>chooseWeightedOutcome([{label:"a",weight:1}],0)));
+test("weighted outcomes reject nonpositive weights",()=>assert.throws(()=>chooseWeightedOutcome([{label:"a",weight:0},{label:"b",weight:1}],0)));
+test("EU preset requires double opt in",()=>assert.equal(consentPreset("eu_uk").doubleOptInEmail,true));
+test("US preset permits single opt in",()=>assert.equal(consentPreset("us").doubleOptInEmail,false));
+test("unknown market falls back conservatively",()=>assert.equal(consentPreset("unknown").version,"global-conservative-v2"));
+test("known subscriber incentives are suppressed",()=>assert.equal(shouldSuppressKnownCustomerIncentive({isNewSubscriber:false,hasRecentOrder:false}).reason,"already_subscribed"));
+test("recent-buyer incentives are suppressed",()=>assert.equal(shouldSuppressKnownCustomerIncentive({isNewSubscriber:true,hasRecentOrder:true}).reason,"recent_customer"));
+test("explicit merchant override permits known buyers",()=>assert.equal(shouldSuppressKnownCustomerIncentive({isNewSubscriber:false,hasRecentOrder:true,allowKnownCustomers:true}).allowed,true));

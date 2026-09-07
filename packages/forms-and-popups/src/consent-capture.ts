@@ -14,8 +14,11 @@ export async function captureSubmission(opts: {
   popupId?: string;
   visitorId?: string;
   sessionId?: string;
+  experimentId?: string;
+  experimentVariant?: string;
   consent?: ConsentState;
   consentEvidence?: Record<string, unknown>;
+  pendingEmailConfirmation?: boolean;
 }): Promise<{ submissionId: string; customerId: string | null }> {
   const rawEmail = opts.data["email"];
   const email =
@@ -39,7 +42,7 @@ export async function captureSubmission(opts: {
       customerId = existing.id;
 
       // Only explicit form consent changes the legacy email flag.
-      if (opts.consent?.email !== undefined) {
+      if (opts.consent?.email !== undefined && !opts.pendingEmailConfirmation) {
         await prisma.customer.update({
           where: { id: existing.id },
           data: { acceptsMarketing: opts.consent.email },
@@ -63,7 +66,7 @@ export async function captureSubmission(opts: {
           email,
           phone: phone ?? undefined,
           firstName,
-          acceptsMarketing: opts.consent?.email ?? false,
+          acceptsMarketing: opts.pendingEmailConfirmation ? false : (opts.consent?.email ?? false),
         },
       });
       customerId = customer.id;
@@ -77,6 +80,7 @@ export async function captureSubmission(opts: {
 
     for (const channel of consentEntries) {
       const optedIn = opts.consent[channel] === true;
+      const pending = channel === "email" && optedIn && opts.pendingEmailConfirmation === true;
       const now = new Date();
       await prisma.contactConsent.upsert({
         where: { customerId_channel: { customerId, channel } },
@@ -84,24 +88,24 @@ export async function captureSubmission(opts: {
           storeId: opts.storeId,
           customerId,
           channel,
-          status: optedIn ? "opted_in" : "opted_out",
+          status: pending ? "pending" : optedIn ? "opted_in" : "opted_out",
           source: "form",
           evidence: { formId: opts.formId, source: opts.source, ...opts.consentEvidence },
-          collectedAt: optedIn ? now : null,
+          collectedAt: pending ? null : optedIn ? now : null,
           revokedAt: optedIn ? null : now,
         },
         update: {
-          status: optedIn ? "opted_in" : "opted_out",
+          status: pending ? "pending" : optedIn ? "opted_in" : "opted_out",
           source: "form",
           evidence: { formId: opts.formId, source: opts.source, ...opts.consentEvidence },
-          collectedAt: optedIn ? now : null,
+          collectedAt: pending ? null : optedIn ? now : null,
           revokedAt: optedIn ? null : now,
         },
       });
 
       // A fresh explicit opt-in can reverse a prior unsubscribe, but never a
       // provider complaint or hard-bounce suppression.
-      if (optedIn) {
+      if (optedIn && !pending) {
         await prisma.contactSuppression.deleteMany({
           where: { customerId, channel, reason: "unsubscribe" },
         });
@@ -117,6 +121,8 @@ export async function captureSubmission(opts: {
       popupId: opts.popupId,
       visitorId: opts.visitorId,
       sessionId: opts.sessionId,
+      experimentId: opts.experimentId,
+      experimentVariant: opts.experimentVariant,
       data: JSON.parse(JSON.stringify(opts.data)),
       source: opts.source,
       consentGiven: opts.consent

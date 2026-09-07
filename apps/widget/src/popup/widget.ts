@@ -159,7 +159,7 @@ export class PopupWidget {
     });
 
     // Track view
-    this.trackEvent("popup_view", { popupId: popup.popupId });
+    this.trackEvent("popup_view", { popupId: popup.popupId, experimentId: popup.experimentId, experimentVariant: popup.experimentVariant });
 
   }
 
@@ -201,6 +201,8 @@ export class PopupWidget {
         },
         body: JSON.stringify({
           popupId,
+          experimentId: this.popups.find((popup) => popup.popupId === popupId)?.experimentId,
+          experimentVariant: this.popups.find((popup) => popup.popupId === popupId)?.experimentVariant,
           data,
           source: "popup",
         }),
@@ -214,22 +216,18 @@ export class PopupWidget {
       // Show success state
       const body = container.querySelector(".allo-popup-body");
       if (body) {
-        let successHtml = `<div class="allo-popup-success">
-          <h3>Thank you!</h3>
-          <p>You've been successfully subscribed.</p>`;
-
-        if (result.discountCode) {
-          successHtml += `<div class="allo-popup-discount">${result.discountCode}</div>
-          <p style="margin-top:8px;font-size:12px;color:#666">Use this code at checkout</p>`;
-        }
-
-        successHtml += `</div>`;
-        body.innerHTML = successHtml;
+        body.innerHTML = "";
+        const success = document.createElement("div"); success.className = "allo-popup-success";
+        const title = document.createElement("h3"); title.textContent = result.confirmationRequired ? "Check your inbox" : (result.incentiveLabel ?? "Thank you!"); success.appendChild(title);
+        const message = document.createElement("p"); message.textContent = result.confirmationRequired ? "Confirm your email to complete signup and reveal any reward." : "You’ve been successfully subscribed."; success.appendChild(message);
+        if (result.discountCode) { const code = document.createElement("div"); code.className = "allo-popup-discount"; code.textContent = result.discountCode; success.appendChild(code); const note=document.createElement("p"); note.textContent="Use this code at checkout"; note.style.cssText="margin-top:8px;font-size:12px;color:#666"; success.appendChild(note); }
+        else if (result.incentiveLabel && !result.confirmationRequired) { const outcome=document.createElement("p"); outcome.textContent=result.incentiveLabel; outcome.style.fontWeight="600"; success.appendChild(outcome); }
+        body.appendChild(success);
       }
 
       // Track submission
       // Do not duplicate submitted PII into the behavioral event ledger.
-      this.trackEvent("form_submit", { popupId });
+      this.trackEvent("form_submit", { popupId, experimentId: result.experimentId, experimentVariant: result.experimentVariant });
 
       // Auto-hide after 3 seconds
       setTimeout(() => this.hide(), 3000);

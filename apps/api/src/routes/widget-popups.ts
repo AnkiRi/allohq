@@ -5,7 +5,12 @@ import {
   renderFormHtml,
   captureSubmission,
   deliverIncentive,
+  assignFormExperimentArm,
+  consentPreset,
+  shouldSuppressKnownCustomerIncentive,
+  createConsentConfirmation,
 } from "@allohq/forms-and-popups";
+import { sendEmail } from "@allohq/messaging";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 import {
   authenticateWidgetStore,
@@ -191,6 +196,10 @@ export async function handleWidgetPopups(
       where: { storeId: store.id, status: "active" },
       include: { form: true },
     });
+    const experiments = await prisma.formExperiment.findMany({
+      where: { popupId: { in: popups.map((popup) => popup.id) }, status: "active" },
+      orderBy: { startedAt: "desc" },
+    });
 
     // Load brand tokens for popup styling
     const brandVisualProfile = await prisma.brandVisualProfile.findUnique({
@@ -199,7 +208,24 @@ export async function handleWidgetPopups(
     });
     const brandTokens = brandVisualProfile?.brandDesignTokens as Record<string, string> | null;
 
-    const configs = popups.map((popup) => {
+    const configs = (await Promise.all(popups.map(async (popup) => {
+      const experiment = experiments.find((row) => row.popupId === popup.id);
+      const variant = experiment ? assignFormExperimentArm({
+        experimentId: experiment.id,
+        assignmentSalt: experiment.assignmentSalt,
+        visitorId: visitor.visitorId,
+        controlRatio: experiment.controlRatio,
+        splitRatio: experiment.splitRatio,
+      }) : null;
+      if (experiment && variant) {
+        await prisma.formExperimentExposure.upsert({
+          where: { experimentId_visitorId: { experimentId: experiment.id, visitorId: visitor.visitorId } },
+          create: { experimentId: experiment.id, visitorId: visitor.visitorId, variant, viewedAt: variant === "CONTROL" ? new Date() : null },
+          update: {},
+        });
+      }
+      if (variant === "CONTROL") return null;
+      const override = (variant === "B" ? experiment?.variantB : experiment?.variantA) as { triggerConfig?: PopupTriggerConfig; styling?: PopupStyling } | undefined;
       const fields = (popup.form.fields as unknown as FormField[]) ?? [];
       const formStyling = (popup.form.styling as unknown as FormStyling) ?? {};
 
@@ -218,18 +244,22 @@ export async function handleWidgetPopups(
 
       return {
         popupId: popup.id,
+        experimentId: experiment?.id ?? null,
+        experimentVariant: variant,
+        incentiveMode: (popup.form.incentiveConfig as unknown as IncentiveConfig | null)?.mode ?? "fixed",
+        spinLabels: ((popup.form.incentiveConfig as unknown as IncentiveConfig | null)?.spinOutcomes ?? []).map((outcome) => outcome.label),
         formHtml: rendered.html,
         formCss: rendered.css,
         trigger: popup.trigger,
-        triggerConfig: (popup.triggerConfig as unknown as PopupTriggerConfig) ?? {},
-        styling: (popup.styling as unknown as PopupStyling) ?? {
+        triggerConfig: { ...((popup.triggerConfig as unknown as PopupTriggerConfig) ?? {}), ...(override?.triggerConfig ?? {}) },
+        styling: { ...((popup.styling as unknown as PopupStyling) ?? {
           position: "center",
           overlayColor: "rgba(0,0,0,0.5)",
           width: "420px",
           animation: "fade",
-        },
+        }), ...(override?.styling ?? {}) },
       };
-    });
+    }))).filter(Boolean);
 
     json(res, 200, configs);
     return;
@@ -258,6 +288,7 @@ export async function handleWidgetPopups(
       const formId = body["formId"] as string;
       const data = body["data"] as Record<string, unknown>;
       const source = (body["source"] as string) ?? "popup";
+      const requestedExperimentId = typeof body["experimentId"] === "string" ? body["experimentId"] : null;
 
       if (!data || typeof data !== "object" || Array.isArray(data)) {
         json(res, 400, { error: "data required" });
@@ -280,9 +311,16 @@ export async function handleWidgetPopups(
         json(res, 404, { error: "Active signup form not found" });
         return;
       }
+      const exposure = requestedExperimentId && popup
+        ? await prisma.formExperimentExposure.findFirst({
+            where: { experimentId: requestedExperimentId, visitorId: visitor.visitorId, experiment: { popupId: popup.id, status: "active" }, variant: { in: ["A", "B"] } },
+            select: { id: true, experimentId: true, variant: true },
+          })
+        : null;
 
       const configuredFields = (resolvedForm.fields as unknown as FormField[]) ?? [];
       const formStyling = (resolvedForm.styling as unknown as FormStyling) ?? {};
+      const preset = consentPreset(formStyling.market);
       const sanitizedData: Record<string, unknown> = {};
       for (const field of configuredFields) {
         const value = data[field.name];
@@ -352,7 +390,10 @@ export async function handleWidgetPopups(
         popupId: popupId || undefined,
         visitorId: visitor.visitorId,
         sessionId: visitor.visitorId,
+        experimentId: exposure?.experimentId,
+        experimentVariant: exposure?.variant,
         consent,
+        pendingEmailConfirmation: preset.doubleOptInEmail,
         consentEvidence: {
           disclosureVersion: formStyling.consentVersion ?? "global-v1",
           market: formStyling.market ?? "global",
@@ -362,6 +403,7 @@ export async function handleWidgetPopups(
           popupId: popupId || undefined,
         },
       });
+      if (exposure) await prisma.formExperimentExposure.update({ where: { id: exposure.id }, data: { submittedAt: new Date(), submissionId: result.submissionId } });
 
       if (result.customerId) {
         for (const field of configuredFields) {
@@ -378,15 +420,34 @@ export async function handleWidgetPopups(
 
       // Check for incentive
       let discountCode: string | null = null;
+      let incentiveLabel: string | null = null;
+      let incentiveSuppressedReason: string | null = null;
       const incentiveConfig = resolvedForm.incentiveConfig as unknown as IncentiveConfig | null;
-      if (incentiveConfig && isNewEmailSubscriber) {
-        const incentiveResult = await deliverIncentive(store.id, incentiveConfig);
+      const recentOrder = result.customerId ? await prisma.order.findFirst({ where: { customerId: result.customerId, status: { not: "cancelled" }, createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } }, select: { id: true } }) : null;
+      const incentivePolicy = shouldSuppressKnownCustomerIncentive({ isNewSubscriber: isNewEmailSubscriber, hasRecentOrder: Boolean(recentOrder), allowKnownCustomers: incentiveConfig?.allowKnownCustomers });
+      if (incentiveConfig && result.customerId && incentivePolicy.allowed && !preset.doubleOptInEmail) {
+        const incentiveResult = await deliverIncentive(store.id, incentiveConfig, { formId: resolvedForm.id, customerId: result.customerId });
         discountCode = incentiveResult?.code ?? null;
+        incentiveLabel = incentiveResult?.label ?? null;
         if (discountCode) {
           await prisma.formSubmission.update({
             where: { id: result.submissionId },
             data: { incentiveCode: discountCode, incentiveIssuedAt: new Date() },
           });
+        }
+      } else if (incentiveConfig) {
+        incentiveSuppressedReason = incentivePolicy.reason;
+      }
+
+      let confirmationRequired = false;
+      if (preset.doubleOptInEmail && result.customerId) {
+        const confirmationToken = await createConsentConfirmation(result.customerId, store.id, "email", result.submissionId);
+        const appOrigin = process.env["WEB_APP_URL"] ?? "https://agent.joonhq.com";
+        const delivery = await sendEmail({ channel: "email", to: normalizedEmail, subject: `Confirm your subscription to ${store.storeName ?? "this store"}`, html: `<p>Confirm that you want to receive marketing email.</p><p><a href="${appOrigin}/confirm/${confirmationToken}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`, idempotencyKey: `consent-${result.customerId}-${confirmationToken.slice(0,12)}` });
+        confirmationRequired = delivery.status === "sent";
+        if (!confirmationRequired) {
+          json(res, 503, { error: "Confirmation could not be sent. Please try again later." });
+          return;
         }
       }
 
@@ -427,6 +488,11 @@ export async function handleWidgetPopups(
         submissionId: result.submissionId,
         customerId: result.customerId,
         discountCode,
+        incentiveLabel,
+        incentiveSuppressedReason,
+        confirmationRequired,
+        experimentId: exposure?.experimentId ?? null,
+        experimentVariant: exposure?.variant ?? null,
       });
     } catch (err) {
       console.error("[Widget Popup] Submit error:", err);

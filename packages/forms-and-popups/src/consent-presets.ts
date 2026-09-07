@@ -1,0 +1,9 @@
+export type ConsentMarket="global"|"eu_uk"|"us"|"canada"|"australia";
+export const CONSENT_PRESETS:Record<ConsentMarket,{version:string;doubleOptInEmail:boolean;emailLabel:string;smsLabel:string;requiresSeparateChannels:true}>={
+ global:{version:"global-conservative-v2",doubleOptInEmail:true,requiresSeparateChannels:true,emailLabel:"Yes, email me offers and updates. I can unsubscribe at any time.",smsLabel:"Yes, send me recurring automated marketing texts. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to opt out."},
+ eu_uk:{version:"eu-uk-explicit-v2",doubleOptInEmail:true,requiresSeparateChannels:true,emailLabel:"Yes, I want marketing emails. I can withdraw consent at any time.",smsLabel:"Yes, I want marketing text messages. This choice is separate from email and I can withdraw it at any time."},
+ us:{version:"us-email-tcpa-v2",doubleOptInEmail:false,requiresSeparateChannels:true,emailLabel:"Yes, email me offers and updates. I can unsubscribe at any time.",smsLabel:"By checking this box, I agree to receive recurring automated marketing texts. Consent is not a condition of purchase. Message frequency varies. Message and data rates may apply. Reply STOP to opt out."},
+ canada:{version:"canada-casl-v2",doubleOptInEmail:true,requiresSeparateChannels:true,emailLabel:"Yes, send me commercial emails. I can unsubscribe at any time.",smsLabel:"Yes, send me commercial text messages. I can withdraw consent at any time."},
+ australia:{version:"australia-spam-act-v2",doubleOptInEmail:true,requiresSeparateChannels:true,emailLabel:"Yes, send me marketing emails. I can unsubscribe at any time.",smsLabel:"Yes, send me marketing text messages. I can unsubscribe at any time."},
+};
+export function consentPreset(market:string|undefined){return CONSENT_PRESETS[(market&&market in CONSENT_PRESETS?market:"global") as ConsentMarket]}

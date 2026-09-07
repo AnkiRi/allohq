@@ -28,9 +28,12 @@ export interface FormStyling {
 /** Incentive configuration for form submissions */
 export interface IncentiveConfig {
   type: "discount" | "freeShipping";
+  mode?: "fixed" | "spin";
   discountType?: "percentage" | "fixed_amount";
   discountValue?: number;
   code?: string; // auto-generated if not provided
+  allowKnownCustomers?: boolean;
+  spinOutcomes?: Array<{ label: string; weight: number; discountType?: "percentage" | "fixed_amount"; discountValue?: number }>;
 }
 
 /** Popup trigger configuration */
@@ -66,6 +69,8 @@ export interface RenderedForm {
 /** Popup configuration for the widget */
 export interface PopupWidgetConfig {
   popupId: string;
+  experimentId?: string | null;
+  experimentVariant?: "A" | "B" | null;
   formHtml: string;
   formCss: string;
   trigger: string;

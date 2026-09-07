@@ -64,9 +64,13 @@ export default function NewFormPage() {
   const [incentiveEnabled, setIncentiveEnabled] = useState(false);
   const [incentive, setIncentive] = useState({
     type: "discount" as const,
+    mode: "fixed" as "fixed" | "spin",
+    allowKnownCustomers: false,
     discountType: "percentage" as "percentage" | "fixed_amount",
     discountValue: 10,
+    spinOutcomes: [{label:"10% off",weight:60,discountType:"percentage" as const,discountValue:10},{label:"15% off",weight:30,discountType:"percentage" as const,discountValue:15},{label:"No prize this time",weight:10,discountValue:0}],
   });
+  const [experimentEnabled,setExperimentEnabled]=useState(false);
 
   // Popup settings
   const [createPopup, setCreatePopup] = useState(true);
@@ -103,10 +107,13 @@ export default function NewFormPage() {
   });
 
   const createPopupMut = (trpc as any).forms.createPopup.useMutation({
-    onSuccess: (_popup: any, variables: any) => {
-      router.push(`/forms/${variables.formId}`);
+    onSuccess: (popup: any, variables: any) => {
+      if(experimentEnabled) createExperimentMut.mutate({storeId:storeId!,formId:variables.formId,popupId:popup.id,name:`${popupName||name} popup test`,controlRatio:0.1,splitRatio:0.5,variantA:{},variantB:{triggerConfig:{delayMs:Math.max(1000,popupDelay+3000)}}});
+      else router.push(`/forms/${variables.formId}`);
     },
   });
+  const createExperimentMut=(trpc as any).forms.createExperiment.useMutation({onSuccess:(experiment:any)=>{activateExperimentMut.mutate({experimentId:experiment.id,status:"active"})}});
+  const activateExperimentMut=(trpc as any).forms.setExperimentStatus.useMutation({onSuccess:()=>router.push(`/forms/${(createPopupMut.variables as any)?.formId}`)});
 
   const addField = () => {
     setFields([
@@ -132,6 +139,12 @@ export default function NewFormPage() {
       { name: "consent_sms", type: "checkbox", label: styling.smsDisclosure, required: false, step: 2 },
     ]);
   };
+  const applyMarket = (market: typeof styling.market) => {
+    const emailLabel = market === "us" ? "Yes, send me marketing emails. I can unsubscribe at any time." : "I agree to receive marketing emails. I can withdraw consent at any time.";
+    const smsDisclosure = market === "canada" ? "I expressly agree to receive recurring marketing text messages. Consent is optional. Message and data rates may apply. Reply STOP to opt out." : styling.smsDisclosure;
+    setStyling({ ...styling, market, consentVersion: `${market}-v1`, smsDisclosure });
+    setFields(fields.map(field => field.name === "consent_email" ? { ...field, label: emailLabel } : field.name === "consent_sms" ? { ...field, label: smsDisclosure } : field));
+  };
 
   const removeField = (index: number) => {
     setFields(fields.filter((_, i) => i !== index));
@@ -153,7 +166,7 @@ export default function NewFormPage() {
     });
   };
 
-  const isPending = createFormMut.isPending || createPopupMut.isPending;
+  const isPending = createFormMut.isPending || createPopupMut.isPending || createExperimentMut.isPending || activateExperimentMut.isPending;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -271,7 +284,7 @@ export default function NewFormPage() {
         <div className="space-y-3 p-4 bg-card border border-border rounded-lg">
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1 text-[10px] text-muted-foreground">Primary market
-              <select value={styling.market} onChange={(e) => setStyling({ ...styling, market: e.target.value as typeof styling.market })} className="block w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground">
+              <select value={styling.market} onChange={(e) => applyMarket(e.target.value as typeof styling.market)} className="block w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground">
                 <option value="global">Global / conservative</option><option value="eu_uk">EU / UK</option><option value="us">United States</option><option value="canada">Canada</option><option value="australia">Australia</option>
               </select>
             </label>
@@ -338,7 +351,8 @@ export default function NewFormPage() {
               <span className="text-[10px] font-sans text-muted-foreground">Type</span>
               <div className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-sans">Discount code</div>
             </div>
-              <>
+              <div className="space-y-1"><span className="text-[10px] text-muted-foreground">Format</span><select value={incentive.mode} onChange={e=>setIncentive({...incentive,mode:e.target.value as "fixed"|"spin"})} className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px]"><option value="fixed">Fixed reward</option><option value="spin">Spin-to-win</option></select></div>
+              {incentive.mode==="fixed"&&<>
                 <div className="space-y-1">
                   <span className="text-[10px] font-sans text-muted-foreground">Discount Type</span>
                   <select
@@ -359,7 +373,9 @@ export default function NewFormPage() {
                     className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-[12px] font-sans"
                   />
                 </div>
-              </>
+              </>}
+              {incentive.mode==="spin"&&<div className="col-span-3 space-y-2"><p className="text-[11px] text-muted-foreground">The server chooses one weighted outcome using cryptographic randomness. Visitors can play once per form.</p>{incentive.spinOutcomes.map((outcome,index)=><div key={index} className="grid grid-cols-[1fr_90px_90px] gap-2"><input value={outcome.label} onChange={e=>setIncentive({...incentive,spinOutcomes:incentive.spinOutcomes.map((o,i)=>i===index?{...o,label:e.target.value}:o)})} className="rounded-md border border-border bg-background px-3 py-2 text-[12px]"/><input aria-label="Weight" type="number" min="1" value={outcome.weight} onChange={e=>setIncentive({...incentive,spinOutcomes:incentive.spinOutcomes.map((o,i)=>i===index?{...o,weight:Number(e.target.value)}:o)})} className="rounded-md border border-border bg-background px-3 py-2 text-[12px]"/><input aria-label="Discount" type="number" min="0" value={outcome.discountValue} onChange={e=>setIncentive({...incentive,spinOutcomes:incentive.spinOutcomes.map((o,i)=>i===index?{...o,discountValue:Number(e.target.value)}:o)})} className="rounded-md border border-border bg-background px-3 py-2 text-[12px]"/></div>)}</div>}
+              <label className="col-span-3 flex items-center gap-2 text-[11px] text-muted-foreground"><input type="checkbox" checked={incentive.allowKnownCustomers} onChange={e=>setIncentive({...incentive,allowKnownCustomers:e.target.checked})}/>Also reward already-subscribed or recent buyers (normally suppressed)</label>
           </div>
         )}
       </div>
@@ -445,6 +461,7 @@ export default function NewFormPage() {
             )}
           </div>
         )}
+        {createPopup&&<label className="flex items-start gap-2 rounded-lg border border-border bg-card p-4 text-[12px]"><input type="checkbox" checked={experimentEnabled} onChange={e=>setExperimentEnabled(e.target.checked)} className="mt-0.5"/><span><strong>Start with a randomized popup test</strong><br/><span className="text-muted-foreground">10% see no popup; the rest split between the default and a delayed variant. Reporting stays marked early until each arm has enough exposure.</span></span></label>}
       </div>
 
       {/* Actions */}

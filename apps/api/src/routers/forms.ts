@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
-import { verifyStoreScopedAccess } from "../lib/storeAccess";
+import { verifyStoreAccess, verifyStoreScopedAccess } from "../lib/storeAccess";
+import { randomBytes } from "node:crypto";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 
 const fieldSchema = z.object({
@@ -44,13 +45,27 @@ const stylingSchema = z.object({
   consentVersion: z.string().trim().min(1).max(40).optional(),
   market: z.enum(["global", "eu_uk", "us", "canada", "australia"]).optional(),
   smsDisclosure: z.string().trim().min(20).max(1000).optional(),
+  privacyPolicyUrl: z.string().url().optional(),
 }).optional();
 
+const spinOutcomeSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  weight: z.number().int().positive().max(1_000_000),
+  discountType: z.enum(["percentage", "fixed_amount"]).optional(),
+  discountValue: z.number().min(0).max(1_000_000).optional(),
+});
 const incentiveSchema = z.object({
   type: z.literal("discount"),
+  mode: z.enum(["fixed", "spin"]).default("fixed"),
+  allowKnownCustomers: z.boolean().default(false),
   discountType: z.enum(["percentage", "fixed_amount"]).optional(),
   discountValue: z.number().positive().max(1_000_000).optional(),
   code: z.string().trim().min(3).max(40).regex(/^[A-Z0-9-]+$/).optional(),
+  spinOutcomes: z.array(spinOutcomeSchema).min(2).max(12).optional(),
+}).superRefine((value, ctx) => {
+  if (value.mode === "spin" && !value.spinOutcomes) ctx.addIssue({ code: "custom", message: "Spin-to-win needs 2–12 weighted outcomes" });
+  if (value.mode === "fixed" && (!value.discountType || !value.discountValue)) ctx.addIssue({ code: "custom", message: "Fixed incentives need a discount type and value" });
+  for (const outcome of value.spinOutcomes ?? []) if (outcome.discountType === "percentage" && (outcome.discountValue ?? 0) > 100) ctx.addIssue({ code: "custom", message: "Percentage discounts cannot exceed 100" });
 }).optional();
 
 export const formsRouter = router({
@@ -77,6 +92,7 @@ export const formsRouter = router({
         where: { id: input.formId },
         include: {
           popups: true,
+          experiments: { include: { exposures: true }, orderBy: { createdAt: "desc" } },
           _count: { select: { submissions: true } },
         },
       });
@@ -278,6 +294,45 @@ export const formsRouter = router({
       await verifyStoreScopedAccess(ctx, "popup", input.popupId);
       await ctx.prisma.popup.delete({ where: { id: input.popupId } });
       return { success: true };
+    }),
+
+  // ── Popup experiments ──
+  createExperiment: storeProcedure
+    .input(z.object({
+      storeId: z.string(), formId: z.string(), popupId: z.string(), name: z.string().trim().min(1).max(120),
+      controlRatio: z.number().min(0).max(0.5).default(0.1), splitRatio: z.number().min(0).max(1).default(0.5),
+      variantA: z.record(z.string(), z.unknown()).default({}), variantB: z.record(z.string(), z.unknown()).default({}),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const popup = await ctx.prisma.popup.findFirst({ where: { id: input.popupId, formId: input.formId, storeId: input.storeId }, select: { id: true } });
+      if (!popup) throw new TRPCError({ code: "BAD_REQUEST", message: "Popup and form must belong to this store" });
+      return ctx.prisma.formExperiment.create({ data: { ...input, variantA: JSON.parse(JSON.stringify(input.variantA)), variantB: JSON.parse(JSON.stringify(input.variantB)), assignmentSalt: randomBytes(24).toString("hex") } });
+    }),
+
+  setExperimentStatus: workspaceProcedure
+    .input(z.object({ experimentId: z.string(), status: z.enum(["draft", "active", "paused", "concluded"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const experiment = await ctx.prisma.formExperiment.findUniqueOrThrow({ where: { id: input.experimentId }, select: { storeId: true, popupId: true } });
+      await verifyStoreAccess(ctx, experiment.storeId);
+      return ctx.prisma.$transaction(async (tx) => {
+        if (input.status === "active" && experiment.popupId) await tx.formExperiment.updateMany({ where: { popupId: experiment.popupId, status: "active", id: { not: input.experimentId } }, data: { status: "paused" } });
+        return tx.formExperiment.update({ where: { id: input.experimentId }, data: { status: input.status, ...(input.status === "active" ? { startedAt: new Date(), endedAt: null } : {}), ...(input.status === "concluded" ? { endedAt: new Date() } : {}) } });
+      });
+    }),
+
+  experimentReport: workspaceProcedure
+    .input(z.object({ experimentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const experiment = await ctx.prisma.formExperiment.findUniqueOrThrow({ where: { id: input.experimentId }, include: { exposures: true } });
+      await verifyStoreAccess(ctx, experiment.storeId);
+      const variants = (["CONTROL", "A", "B"] as const).map((variant) => {
+        const rows = experiment.exposures.filter((row) => row.variant === variant);
+        const assigned = rows.length, viewed = rows.filter((row) => row.viewedAt).length, submissions = rows.filter((row) => row.submittedAt).length, purchases = rows.filter((row) => row.convertedAt).length;
+        return { variant, assigned, viewed, submissions, purchases, revenue: rows.reduce((sum, row) => sum + Number(row.revenue ?? 0), 0), signupRate: assigned ? submissions / assigned : null, purchaseRate: assigned ? purchases / assigned : null };
+      });
+      const control = variants[0], treatments = variants.slice(1);
+      const sufficientlyPowered = control!.assigned >= 100 && treatments.every((row) => row.assigned >= 100);
+      return { experiment: { id: experiment.id, name: experiment.name, status: experiment.status, startedAt: experiment.startedAt, endedAt: experiment.endedAt }, variants, sufficientlyPowered, evidenceLabel: sufficientlyPowered ? "Randomized directional evidence" : "Early data — wait for at least 100 assignments per arm" };
     }),
 
   // ── Submissions ──

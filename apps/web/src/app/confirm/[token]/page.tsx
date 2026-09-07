@@ -1,7 +1,10 @@
-import { redeemConsentConfirmation } from "@allohq/forms-and-popups";
+import { redeemConsentConfirmation, deliverIncentive, shouldSuppressKnownCustomerIncentive } from "@allohq/forms-and-popups";
+import { prisma } from "@allohq/database";
 
 export const dynamic="force-dynamic";
 export default async function ConfirmPage({params}:{params:Promise<{token:string}>}){
   const {token}=await params; const result=/^[A-Za-z0-9_-]{40,60}$/.test(token)?await redeemConsentConfirmation(token):null;
-  return <main className="grid min-h-screen place-items-center px-5"><section className="max-w-md text-center"><h1 className="text-4xl font-semibold tracking-[-.03em]">{result?"You’re subscribed":"This link is no longer valid"}</h1><p className="mt-4 text-base text-black/65">{result?"Your email consent is confirmed. You can unsubscribe at any time.":"It may have expired or already been used."}</p></section></main>;
+  let code:string|null=null; let label:string|null=null;
+  if(result?.submissionId){const submission=await prisma.formSubmission.findUnique({where:{id:result.submissionId},include:{form:true,customer:{select:{id:true,createdAt:true}}}});const config=submission?.form.incentiveConfig as any;if(submission?.customer&&config){const recent=await prisma.order.findFirst({where:{customerId:submission.customer.id,status:{not:"cancelled"},createdAt:{gte:new Date(Date.now()-30*86_400_000)}},select:{id:true}});const createdForSignup=submission.customer.createdAt.getTime()>=submission.capturedAt.getTime()-5000;const policy=shouldSuppressKnownCustomerIncentive({isNewSubscriber:createdForSignup,hasRecentOrder:Boolean(recent),allowKnownCustomers:config.allowKnownCustomers});if(policy.allowed){const grant=await deliverIncentive(result.storeId,config,{formId:submission.formId,customerId:submission.customer.id});code=grant?.code??null;label=grant?.label??null;if(code)await prisma.formSubmission.update({where:{id:submission.id},data:{incentiveCode:code,incentiveIssuedAt:new Date()}})}}}
+  return <main className="grid min-h-screen place-items-center px-5"><section className="max-w-md text-center"><h1 className="text-4xl font-semibold tracking-[-.03em]">{result?"You’re subscribed":"This link is no longer valid"}</h1><p className="mt-4 text-base text-black/65">{result?"Your email consent is confirmed. You can unsubscribe at any time.":"It may have expired or already been used."}</p>{result&&label&&<p className="mt-5 text-lg font-medium">{label}{code?<> · <strong>{code}</strong></>:null}</p>}</section></main>;
 }

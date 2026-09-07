@@ -328,6 +328,17 @@ export async function handleWidgetApi(req: IncomingMessage, res: ServerResponse)
         select: { id: true },
       });
 
+      if (type === "popup_view") {
+        const experimentId = shortString(data["experimentId"]);
+        const experimentVariant = shortString(data["experimentVariant"], 16);
+        if (experimentId && visitorId && (experimentVariant === "A" || experimentVariant === "B")) {
+          await prisma.formExperimentExposure.updateMany({
+            where: { experimentId, visitorId, variant: experimentVariant, experiment: { storeId: store.id } },
+            data: { viewedAt: new Date(occurredAtMs) },
+          });
+        }
+      }
+
       if (type === "product_view" && sessionId && productId) {
         await prisma.browseEvent.create({
           data: {

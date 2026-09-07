@@ -1,5 +1,9 @@
 export interface PopupConfig {
   popupId: string;
+  experimentId?: string | null;
+  experimentVariant?: "A" | "B" | null;
+  incentiveMode?: "fixed" | "spin";
+  spinLabels?: string[];
   formHtml: string;
   formCss: string;
   trigger: "exit_intent" | "scroll" | "timer" | "page_load";

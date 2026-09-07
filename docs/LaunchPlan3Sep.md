@@ -8,6 +8,8 @@ Initial product: Shopify + email campaigns + merchant-approved email automations
 
 > 6 September acquisition addendum: signup forms are part of the email-v1 baseline. Joon now includes explicit-consent email forms, modal/flyout/bar popups, behavioral triggers, guarded Shopify discount incentives, welcome-journey handoff and a Shopify theme app embed. See `SignupFormsAndAudienceGrowth-2026-09-06.md`. Live acceptance still requires deploying the extension, enabling it on a test theme and observing a real submission.
 
+> 7 September acquisition experimentation addendum: popup delivery now has deterministic randomized control/A/B assignment; impressions, submissions, issued incentives and Shopify purchases remain joined to the frozen exposure. Spin outcomes use server-side cryptographic weighted selection and an atomic one-grant-per-form/customer constraint. Known subscribers and 30-day buyers are suppressed from rewards by default. Market presets and double opt-in apply consistently to popup, inline and hosted capture. GDPR export/redaction and the two-year acquisition-evidence retention policy include the new ledgers. The canonical suite is `pnpm test` (145 passing at implementation time); live storefront, DNS and provider acceptance remain external checks.
+
 ## 1. Launch decision
 
 Joon launches as a complete email decision product, not as an unfinished

@@ -224,6 +224,15 @@ export default function FormDetailPage() {
         </div>
       )}
 
+      {form.experiments?.length > 0 && <section className="space-y-3">
+        <h2 className="text-[11px] font-serif font-bold text-muted-foreground uppercase tracking-[1px]">Popup experiments</h2>
+        <div className="grid gap-3 lg:grid-cols-2">{form.experiments.map((experiment:any)=><div key={experiment.id} className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between"><div><p className="text-[13px] font-semibold">{experiment.name}</p><p className="text-[10px] uppercase tracking-[1px] text-muted-foreground">{experiment.status}</p></div><span className="text-[11px] text-muted-foreground">{experiment.exposures.length} assigned</span></div>
+          <div className="mt-4 grid grid-cols-3 gap-2">{(["CONTROL","A","B"] as const).map(variant=>{const rows=experiment.exposures.filter((row:any)=>row.variant===variant);const signups=rows.filter((row:any)=>row.submittedAt).length;const purchases=rows.filter((row:any)=>row.convertedAt).length;return <div key={variant} className="rounded-lg bg-muted/60 p-3"><p className="text-[10px] font-bold">{variant}</p><p className="mt-1 font-mono text-lg">{rows.length?`${(signups/rows.length*100).toFixed(1)}%`:"—"}</p><p className="text-[10px] text-muted-foreground">signup · {purchases} buys</p></div>})}</div>
+          <p className="mt-3 text-[10px] text-muted-foreground">{experiment.exposures.filter((row:any)=>row.variant==="CONTROL").length>=100?"Directional randomized evidence":"Early data — wait for 100 control assignments before choosing a winner."}</p>
+        </div>)}</div>
+      </section>}
+
       {/* Tabs */}
       <div className="flex border-b border-border">
         {(["submissions", "storefront"] as const).map((t) => (
