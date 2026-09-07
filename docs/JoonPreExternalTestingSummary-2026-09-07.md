@@ -104,13 +104,15 @@ The key boundary is:
 
 Missing or malformed release configuration keeps the restrictions active.
 
-## 6. Campaign creation, approval and audience safety
+## 6. Campaign creation and approval
 
 Natural-language requests are translated into structured audience, offer, channel, objective and timing constraints. Top-N instructions freeze ranked customer IDs rather than leaving a mutable segment query.
 
 The campaign workflow can create a structured draft, frozen audience, Shopify discount, brand-aware email, dry-run report, approval record, treatment/control map and idempotent delivery jobs.
 
 Approval checksums cover merchant-visible content, audience, offer and timing. Changes invalidate approval. The worker rechecks the checksum before delivery. The eligible audience and complete arm map are frozen before fan-out, so retry or restart cannot reassign recipients.
+
+## 7. Canonical audience resolution and send safety
 
 The canonical sendable audience is:
 
@@ -131,7 +133,7 @@ Other controls include consent rechecking, global and store kill switches, compl
 
 Delivery modes are `disabled`, `allowlist` and `live`. Production should stay disabled or allowlist until acceptance testing is complete.
 
-## 7. Holdouts
+## 8. Holdout implementation
 
 ### Finite campaigns
 
@@ -161,7 +163,7 @@ Journey populations arrive over time, so there is no finite cohort to quota upfr
 
 The assignment infrastructure is strong. Individualized “who not to send” prediction remains early because it is not yet driven by a validated uplift model.
 
-## 8. Attribution and analytics
+## 9. Attribution and outcome reporting
 
 Campaign reporting persists frozen arms, deliveries, exposures, treatment/control orders, conversion rates, revenue and lift evidence. Marketing attribution and causal evidence are kept separate:
 
@@ -172,7 +174,7 @@ Form acquisition reporting tracks popup assignment, control/A/B variant, impress
 
 Exact discount-code matches take precedence. A fallback can associate the latest eligible signup within the attribution window, but it is labelled associated conversion—not incremental lift. Order cancellation reverses form conversion, experiment outcome, revenue and incentive redemption.
 
-## 9. Forms and audience growth
+## 10. Forms and audience growth
 
 Implemented formats and capabilities:
 
@@ -192,7 +194,7 @@ Hosted signup pages are public shareable form destinations for social links, cre
 
 Active email forms require a mandatory email field and explicit email-consent checkbox. Phone capture requires its own SMS-consent checkbox and an international phone format. SMS consent can be collected even though SMS delivery is blocked in v1.
 
-## 10. Consent presets and double opt-in
+## 11. Consent presets and double opt-in
 
 Market presets exist for global/conservative, EU/UK, United States, Canada and Australia. They define disclosure version, email/SMS language, independent channel requirements and double-opt-in policy.
 
@@ -209,7 +211,7 @@ Double opt-in works across popup, inline and hosted forms:
 
 Consent evidence includes form, source, market, disclosure version, policy URL, locale, capture time and popup where relevant. These are conservative defaults, not a replacement for jurisdiction-specific legal review.
 
-## 11. Incentives and spin-to-win
+## 12. Incentives and unnecessary-discount suppression
 
 Fixed incentives use Shopify GraphQL discount creation, once-per-customer configuration, merchant discount guardrails, generated codes, a durable grant ledger and redemption tracking.
 
@@ -217,7 +219,7 @@ By default, Joon suppresses acquisition rewards for an already opted-in subscrib
 
 Spin-to-win supports 2–12 weighted outcomes, discount and no-prize results, maximum percentage validation, server-side cryptographic random selection and a database uniqueness constraint allowing one grant per form/customer. The browser never selects the winner. Concurrent repeat attempts resolve to the same durable grant.
 
-## 12. Popup experiments
+## 13. Form experiments
 
 Experiments support no-popup control, variant A and variant B, configurable control and split ratios, random salts, deterministic assignment and one exposure per experiment/visitor. Activating one experiment pauses another active experiment on the same popup.
 
@@ -227,25 +229,35 @@ The form detail UI reports assignment counts, signup rates and purchases for con
 
 The current creation UI offers a simple initial test: 10% no-popup control, then a split between the default and a delayed popup. The API can hold broader variant configuration.
 
-## 13. Customer intelligence, brand and models
+## 14. Form analytics
+
+Implemented reporting covers popup impressions, signups, signup rate, incentives issued, purchases, purchase rate, associated revenue, associated redeemed discounts, today's submissions, seven-day submissions, submission source, captured consent channels and experiment arm. Labels distinguish associated acquisition revenue from causal incrementality.
+
+## 15. Customer traits, segmentation and onboarding intelligence
 
 Initial sync creates RFM analytics, customer state and initial smart segments. Category classification uses Shopify taxonomy, product type, title and collections to support vertical-aware segmentation for common Shopify categories. Form answers can create customer traits such as skin type, product interest, size and replenishment preference.
+
+## 16. Email journeys and automations
+
+Email journeys include welcome, abandoned checkout, post-purchase, win-back, replenishment and customer milestone/anniversary. They require merchant activation, use activation checksums, freeze workflow/creative state, enforce holdouts and idempotency, and recheck consent/suppression at execution.
+
+## 17. Brand voice and creative generation
 
 Brand onboarding captures identity, category, assets, colors, typography, sender identity, mailing address, tone, formality, humor, energy, emoji preference, banned language and discount guardrails. Brand tokens flow into email rendering; creative generation uses the brand profile; banned terms have a hard check; HTML content is escaped; and plain-text fallbacks exist.
 
 Brand tone is applied but not autonomously learned. A true tone-learning loop still requires variant → exposure → outcome → evidence threshold → changed future selection.
 
+## 18. Model router
+
 A model harness supports one model for everything, workload-specific models, safe defaults and explicit one-off overrides. The exact production model is environment-configured rather than hard-wired.
 
-## 14. Journeys, automations and background agents
-
-Email journeys include welcome, abandoned checkout, post-purchase, win-back, replenishment and customer milestone/anniversary. They require merchant activation, use activation checksums, freeze workflow/creative state, enforce holdouts and idempotency, and recheck consent/suppression at execution.
+## 19. Background agents and nightly work
 
 Background systems refresh customer state and segments, detect evidence-backed opportunities, deduplicate them, and generate brand-aware drafts for review. They cannot autonomously send or use non-email channels in v1.
 
 Current background-agent maturity is moderate: useful deterministic evidence plus LLM drafting, not a trained autonomous retention policy.
 
-## 15. Current ML maturity
+## 20. Current ML and decisioning maturity
 
 | Capability | Current maturity | Why |
 |---|---:|---|
@@ -262,7 +274,7 @@ Current background-agent maturity is moderate: useful deterministic evidence plu
 
 An uplift training schema and graduation thresholds exist. Data volume alone cannot activate automated individualized decisions; calibration, leakage, stability, holdout validation, category generalization and business-safety thresholds are also required.
 
-## 16. Privacy and retention
+## 21. Privacy, GDPR and retention for forms
 
 GDPR export includes form submissions, consent records and confirmations, customer traits, incentive grants, connected form-experiment exposures and experiment order outcomes.
 
@@ -270,21 +282,27 @@ Redaction removes or anonymizes form submissions, connected exposures, grants, c
 
 Acquisition exposures and grants currently use a two-year retention window. That should be reconciled with the final published policy and merchant contracts.
 
-## 17. Operational readiness
+## 22. Operational readiness work
 
 Implemented infrastructure includes retries/backoff, dead letters, delivery idempotency, store quotas, global/store kill switches, complaint auto-pause, fail-closed delivery, health checks, migration-on-deploy, protected-data auditing, DLP-oriented log tests and schema-readiness handling.
 
 Still external/operational: PITR restore drill, real seed-inbox matrix, provider failure drills, DNS verification, alert-delivery confirmation, support operations and incident-response rehearsal.
 
-## 18. Onboarding, readiness and migration assistance
+## 23. Onboarding and readiness
 
 Onboarding covers store link/sync, business/category, assets, colors/type, voice, sender identity, mailing address, guardrails, migration platform, consent, tracking, sender domain and final readiness.
 
 The readiness screen reports account linkage, synchronized commerce data, consent, RFM, brand review, sender identity/domain, Web Pixel registration and observation, suppression enforcement and delivery mode. External tasks remain visible after guided onboarding; underlying gates still block unsafe sending.
 
+## 24. Migration assistance
+
 Migration-assistance intake is durable and store-scoped with database-atomic active-request deduplication. It is currently an assisted workflow, not a complete self-service Klaviyo importer.
 
-## 19. Landing-page previews
+## 25. API/MCP direction
+
+The long-term direction is that anything available in Joon's UI should eventually be possible through a secure API or MCP surface. Coverage is not yet 100%. The current priority is the safe Shopify email launch and consistent internal interfaces before exposing the complete external surface.
+
+## 26. Landing-page work
 
 The production homepage was not replaced. Three exploratory routes use the actual product decision moment without fabricated customers, logos or metrics:
 
@@ -292,7 +310,7 @@ The production homepage was not replaced. Three exploratory routes use the actua
 - [Night operator](https://agent.joonhq.com/options/acquisition-lab?theme=night)
 - [Decision journal](https://agent.joonhq.com/options/acquisition-lab?theme=editorial)
 
-## 20. Verification status
+## 27. Verification status
 
 Implementation commit: `6b9e170 Complete acquisition experiments and consent flows`  
 Production marker: `6a8fd45 Trigger production deployment`
@@ -312,7 +330,7 @@ At verification:
 
 Unrelated pre-existing untracked files were left untouched.
 
-## 21. External acceptance tests still required
+## 28. What has not yet been externally tested
 
 1. Clean-store install and Shopify → Clerk → Joon handoff.
 2. Incognito, privacy-restricted, staff, multi-store and reinstall cases.
@@ -331,7 +349,7 @@ Unrelated pre-existing untracked files were left untouched.
 15. Execute provider, duplicate-webhook, restart, unsubscribe and revoked-token failure drills.
 16. Complete protected-data, legal, support, listing and distribution submission work.
 
-## 22. Adversarial audit request for Claude Code
+## 29. Questions for Claude's adversarial audit
 
 Inspect the repository rather than trusting this document. Return `VERIFIED`, `VERIFIED WITH GAPS`, or `NOT READY`, with direct file/line evidence.
 
