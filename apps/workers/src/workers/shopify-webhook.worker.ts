@@ -182,6 +182,52 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       case "orders/create": {
         const order = await upsertOrder(store.id, payload);
         if (order?.customerId) {
+          // Acquisition attribution: prefer an exact issued-code match, then
+          // associate the order with the customer's latest signup in 30 days.
+          // This is labelled associated conversion, not causal incremental lift.
+          const orderPayload = payload as {
+            discount_codes?: Array<{ code?: string }>;
+            total_discounts?: string | number;
+          };
+          const discountCodes = (orderPayload.discount_codes ?? [])
+            .map((entry) => entry.code?.trim().toUpperCase())
+            .filter((code): code is string => Boolean(code));
+          const signupWindowStart = new Date(order.createdAt.getTime() - 30 * 86_400_000);
+          const baseSubmissionWhere = {
+            customerId: order.customerId,
+            attributedOrderId: null,
+            capturedAt: { gte: signupWindowStart, lte: order.createdAt },
+            form: { storeId: store.id },
+          };
+          const exactSubmission = discountCodes.length > 0
+            ? await prisma.formSubmission.findFirst({
+                where: { ...baseSubmissionWhere, incentiveCode: { in: discountCodes, mode: "insensitive" as const } },
+                orderBy: { capturedAt: "desc" },
+                select: { id: true, incentiveCode: true },
+              })
+            : null;
+          const submission = exactSubmission ?? await prisma.formSubmission.findFirst({
+            where: {
+              ...baseSubmissionWhere,
+              incentiveCode: null,
+            },
+            orderBy: { capturedAt: "desc" },
+            select: { id: true, incentiveCode: true },
+          });
+          if (submission) {
+            const exactCode = submission.incentiveCode
+              ? discountCodes.includes(submission.incentiveCode.toUpperCase())
+              : false;
+            await prisma.formSubmission.updateMany({
+              where: { id: submission.id, attributedOrderId: null },
+              data: {
+                attributedOrderId: order.id,
+                attributedRevenue: order.totalPrice,
+                attributedDiscount: exactCode ? Number(orderPayload.total_discounts ?? 0) : 0,
+                convertedAt: order.createdAt,
+              },
+            });
+          }
           await checkEventTriggers(store.id, "order_placed", order.customerId, eventId ?? undefined);
           // Mark any open/abandoned checkouts as recovered
           await prisma.abandonedCheckout.updateMany({
@@ -211,9 +257,25 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         }
         break;
       }
-      case "orders/updated":
-        await upsertOrder(store.id, payload);
+      case "orders/updated": {
+        const order = await upsertOrder(store.id, payload);
+        if (order?.status === "cancelled") {
+          await prisma.$transaction([
+            prisma.orderAttribution.deleteMany({ where: { orderId: order.id } }),
+            prisma.experimentOrderOutcome.deleteMany({ where: { orderId: order.id } }),
+            prisma.formSubmission.updateMany({
+              where: { attributedOrderId: order.id },
+              data: {
+                attributedOrderId: null,
+                attributedRevenue: null,
+                attributedDiscount: null,
+                convertedAt: null,
+              },
+            }),
+          ]);
+        }
         break;
+      }
 
       // --- Checkouts (abandoned cart detection) ---
       case "checkouts/create":
@@ -648,7 +710,7 @@ async function deleteCustomer(
 async function upsertOrder(
   storeId: string,
   data: Record<string, unknown>
-): Promise<{ id: string; customerId: string } | null> {
+): Promise<{ id: string; customerId: string; totalPrice: number; createdAt: Date; status: string } | null> {
   const o = data as {
     id: number;
     name: string;
@@ -748,7 +810,13 @@ async function upsertOrder(
   // freshness (≤1h lag) is not worth corrupting the causal outcome. See Phase 2 /
   // docs/allo-state.md.
 
-  return { id: order.id, customerId: customer.id };
+  return {
+    id: order.id,
+    customerId: customer.id,
+    totalPrice: order.totalPrice,
+    createdAt: order.createdAt,
+    status: order.status,
+  };
 }
 
 async function upsertCheckout(

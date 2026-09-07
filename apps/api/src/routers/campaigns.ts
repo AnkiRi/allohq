@@ -100,13 +100,19 @@ export const campaignsRouter = router({
       // Batch-fetch revenue attribution for sent campaigns
       const sentIds = campaigns.filter((c) => c.status === "sent").map((c) => c.id);
       const revenueMap: Record<string, { revenue: number; orders: number }> = {};
+      const deliveryMap: Record<string, { sent: number; opened: number; clicked: number }> = {};
       if (sentIds.length > 0) {
-        const attributions = await ctx.prisma.orderAttribution.groupBy({
-          by: ["campaignId"],
-          where: { campaignId: { in: sentIds } },
-          _sum: { revenue: true },
-          _count: true,
-        });
+        const [attributions, sentRows, openedRows, clickedRows] = await Promise.all([
+          ctx.prisma.orderAttribution.groupBy({
+            by: ["campaignId"],
+            where: { campaignId: { in: sentIds } },
+            _sum: { revenue: true },
+            _count: true,
+          }),
+          ctx.prisma.messageLog.groupBy({ by: ["campaignId"], where: { campaignId: { in: sentIds }, sentAt: { not: null } }, _count: true }),
+          ctx.prisma.messageLog.groupBy({ by: ["campaignId"], where: { campaignId: { in: sentIds }, openedAt: { not: null } }, _count: true }),
+          ctx.prisma.messageLog.groupBy({ by: ["campaignId"], where: { campaignId: { in: sentIds }, clickedAt: { not: null } }, _count: true }),
+        ]);
         for (const a of attributions) {
           if (a.campaignId) {
             revenueMap[a.campaignId] = {
@@ -115,12 +121,23 @@ export const campaignsRouter = router({
             };
           }
         }
+        for (const id of sentIds) deliveryMap[id] = { sent: 0, opened: 0, clicked: 0 };
+        for (const row of sentRows) if (row.campaignId) deliveryMap[row.campaignId]!.sent = row._count;
+        for (const row of openedRows) if (row.campaignId) deliveryMap[row.campaignId]!.opened = row._count;
+        for (const row of clickedRows) if (row.campaignId) deliveryMap[row.campaignId]!.clicked = row._count;
       }
 
       return campaigns.map((c) => ({
         ...c,
-        openRate: c.recipientCount > 0 ? c.openCount / c.recipientCount : 0,
-        clickRate: c.recipientCount > 0 ? c.clickCount / c.recipientCount : 0,
+        recipientCount: deliveryMap[c.id]?.sent ?? c.recipientCount,
+        openCount: deliveryMap[c.id]?.opened ?? c.openCount,
+        clickCount: deliveryMap[c.id]?.clicked ?? c.clickCount,
+        openRate: (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
+          ? (deliveryMap[c.id]?.opened ?? c.openCount) / (deliveryMap[c.id]?.sent ?? c.recipientCount)
+          : 0,
+        clickRate: (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
+          ? (deliveryMap[c.id]?.clicked ?? c.clickCount) / (deliveryMap[c.id]?.sent ?? c.recipientCount)
+          : 0,
         attributedRevenue: revenueMap[c.id]?.revenue ?? 0,
         attributedOrders: revenueMap[c.id]?.orders ?? 0,
       }));
@@ -465,7 +482,7 @@ export const campaignsRouter = router({
   stats: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const [campaign, attribution] = await Promise.all([
+      const [campaign, attribution, arms, deliveredCount, openedCount, clickedCount] = await Promise.all([
         ctx.prisma.campaign.findFirst({
           where: { id: input.id, workspaceId: ctx.workspaceId },
           select: {
@@ -474,6 +491,7 @@ export const campaignsRouter = router({
             clickCount: true,
             status: true,
             sentAt: true,
+            store: { select: { currency: true } },
           },
         }),
         ctx.prisma.orderAttribution.aggregate({
@@ -481,19 +499,63 @@ export const campaignsRouter = router({
           _sum: { revenue: true },
           _count: true,
         }),
+        ctx.prisma.messageLog.groupBy({
+          by: ["treatmentArm", "experimentId"],
+          where: {
+            campaignId: input.id,
+            treatmentArm: { not: null },
+            experimentId: { not: null },
+          },
+          _count: true,
+        }),
+        ctx.prisma.messageLog.count({
+          where: { campaignId: input.id, sentAt: { not: null } },
+        }),
+        ctx.prisma.messageLog.count({
+          where: { campaignId: input.id, openedAt: { not: null } },
+        }),
+        ctx.prisma.messageLog.count({
+          where: { campaignId: input.id, clickedAt: { not: null } },
+        }),
       ]);
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
 
       const attributedRevenue = attribution._sum.revenue ?? 0;
       const attributedOrders = attribution._count;
+      const experimentId = arms.find((row) => row.experimentId)?.experimentId ?? null;
+      const experiment = experimentId
+        ? await ctx.prisma.experiment.findUnique({
+            where: { id: experimentId },
+            select: { stats: true, splitRatio: true, startAt: true, endAt: true },
+          })
+        : null;
+      const controlAssigned = arms
+        .filter((row) => row.treatmentArm === "CONTROL")
+        .reduce((sum, row) => sum + row._count, 0);
+      const treatmentAssigned = arms
+        .filter((row) => row.treatmentArm === "TREATMENT")
+        .reduce((sum, row) => sum + row._count, 0);
 
       return {
         ...campaign,
-        openRate: campaign.recipientCount > 0 ? campaign.openCount / campaign.recipientCount : 0,
-        clickRate: campaign.recipientCount > 0 ? campaign.clickCount / campaign.recipientCount : 0,
+        recipientCount: deliveredCount,
+        openCount: openedCount,
+        clickCount: clickedCount,
+        openRate: deliveredCount > 0 ? openedCount / deliveredCount : 0,
+        clickRate: deliveredCount > 0 ? clickedCount / deliveredCount : 0,
         attributedRevenue: Math.round(attributedRevenue * 100) / 100,
         attributedOrders,
-        conversionRate: campaign.recipientCount > 0 ? attributedOrders / campaign.recipientCount : 0,
+        currency: campaign.store.currency ?? "USD",
+        conversionRate: deliveredCount > 0 ? attributedOrders / deliveredCount : 0,
+        holdout: {
+          experimentId,
+          controlAssigned,
+          treatmentAssigned,
+          splitRatio: experiment?.splitRatio ?? null,
+          startAt: experiment?.startAt ?? null,
+          endAt: experiment?.endAt ?? null,
+          stats: experiment?.stats ?? null,
+        },
       };
     }),
 });

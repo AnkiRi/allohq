@@ -255,13 +255,15 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
 
       // Update campaign aggregated stats
       if (messageLog.campaignId) {
-        if (eventType === "email.opened") {
+        // Provider can emit more than one open/click event for the same email.
+        // Campaign counters represent unique recipients, not raw event volume.
+        if (eventType === "email.opened" && !messageLog.openedAt) {
           await prisma.campaign.update({
             where: { id: messageLog.campaignId },
             data: { openCount: { increment: 1 } },
           }).catch(() => {});
         }
-        if (eventType === "email.clicked") {
+        if (eventType === "email.clicked" && !messageLog.clickedAt) {
           await prisma.campaign.update({
             where: { id: messageLog.campaignId },
             data: { clickCount: { increment: 1 } },
@@ -424,8 +426,8 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
       if (messageLog.automationId) {
         const automationUpdate: Record<string, unknown> = {};
         if (eventType === "email.sent") automationUpdate.sentCount = { increment: 1 };
-        if (eventType === "email.opened") automationUpdate.openCount = { increment: 1 };
-        if (eventType === "email.clicked") automationUpdate.clickCount = { increment: 1 };
+        if (eventType === "email.opened" && !messageLog.openedAt) automationUpdate.openCount = { increment: 1 };
+        if (eventType === "email.clicked" && !messageLog.clickedAt) automationUpdate.clickCount = { increment: 1 };
         if (eventType === "email.bounced" || eventType === "email.complained") automationUpdate.bounceCount = { increment: 1 };
         if (Object.keys(automationUpdate).length > 0) {
           await prisma.automation.update({

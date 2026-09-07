@@ -82,22 +82,25 @@ export async function attributeOrdersForStore(storeId: string) {
   });
   const marginRate = storeRow?.defaultContributionMargin ?? 0.6;
 
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const windowStart = new Date(
-    Date.now() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-  );
+  // Re-scan a full day so a deploy/provider interruption cannot create a silent
+  // measurement hole. Both causal and marketing ledgers are database-idempotent.
+  const lookbackStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  // Find orders created in the last hour that do NOT already have attribution
+  // Causal outcomes and marketing attribution are deliberately different:
+  // control purchases belong in the experiment ledger, but never get credited
+  // to a message that was not sent.
   const recentOrders = await prisma.order.findMany({
     where: {
       storeId,
-      createdAt: { gte: oneHourAgo },
-      attribution: null, // skip already-attributed orders (dedup)
+      createdAt: { gte: lookbackStart },
+      status: { not: "cancelled" },
     },
     select: {
       id: true,
       customerId: true,
       totalPrice: true,
+      createdAt: true,
+      attribution: { select: { id: true } },
     },
   });
 
@@ -105,12 +108,70 @@ export async function attributeOrdersForStore(storeId: string) {
   let revenueAttributed = 0;
 
   for (const order of recentOrders) {
+    // Record the purchase against every experiment assignment whose seven-day
+    // outcome window contains it. The unique (experiment, order) ledger key
+    // makes retries harmless, including for CONTROL customers.
+    const assignmentWindowStart = new Date(
+      order.createdAt.getTime() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const assignments = await prisma.messageLog.findMany({
+      where: {
+        storeId,
+        customerId: order.customerId,
+        experimentId: { not: null },
+        treatmentArm: { not: null },
+        createdAt: { gte: assignmentWindowStart, lte: order.createdAt },
+      },
+      select: { id: true, experimentId: true, treatmentArm: true },
+    });
+
+    for (const assignment of assignments) {
+      if (!assignment.experimentId || !assignment.treatmentArm) continue;
+      const inserted = await prisma.experimentOrderOutcome.createMany({
+        data: [{
+          experimentId: assignment.experimentId,
+          orderId: order.id,
+          customerId: order.customerId,
+          messageLogId: assignment.id,
+          treatmentArm: assignment.treatmentArm,
+          revenue: order.totalPrice,
+          margin: order.totalPrice * marginRate,
+          occurredAt: order.createdAt,
+        }],
+        skipDuplicates: true,
+      });
+      // CONTROL has no sent message and therefore no operational last-touch
+      // record; mirror its causal purchase onto the assignment row for the
+      // human-readable decision trace. Treatment truth lives in the immutable
+      // experiment ledger and its sent-message field remains last-touch only.
+      if (inserted.count === 1 && assignment.treatmentArm === "CONTROL") {
+        const prior = await prisma.messageLog.findUnique({
+          where: { id: assignment.id },
+          select: { outcomeRevenue: true },
+        });
+        const cumulativeRevenue = Number(prior?.outcomeRevenue ?? 0) + order.totalPrice;
+        await prisma.messageLog.update({
+          where: { id: assignment.id },
+          data: {
+            outcome: "purchased",
+            outcomeRevenue: cumulativeRevenue,
+            outcomeMargin: cumulativeRevenue * marginRate,
+            outcomeTimestamp: order.createdAt,
+          },
+        });
+      }
+    }
+
+    // The immutable experiment ledger above is independent of last-touch
+    // marketing attribution. An already-attributed order needs no second pass.
+    if (order.attribution) continue;
+
     // Find MessageLog entries sent to this customer within the attribution window
     const messages = await prisma.messageLog.findMany({
       where: {
         customerId: order.customerId,
         storeId,
-        sentAt: { gte: windowStart },
+        sentAt: { gte: assignmentWindowStart, lte: order.createdAt },
         status: { in: ["sent", "delivered", "opened", "clicked"] },
       },
       orderBy: { sentAt: "asc" },
@@ -124,42 +185,7 @@ export async function attributeOrdersForStore(storeId: string) {
       },
     });
 
-    if (messages.length === 0) {
-      // No treatment message — but the customer may be in a CONTROL holdout and
-      // ordered ANYWAY. Record that on their CONTROL row as the causal BASELINE
-      // (no OrderAttribution — nothing we sent caused it; this is the counterfactual
-      // that makes lift = treatment − control real, not treatment − nothing).
-      const controlRow = await prisma.messageLog.findFirst({
-        where: {
-          customerId: order.customerId,
-          storeId,
-          treatmentArm: "CONTROL",
-          createdAt: { gte: windowStart },
-        },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, outcomeRevenue: true },
-      });
-      if (controlRow) {
-        const existing = controlRow.outcomeRevenue ? Number(controlRow.outcomeRevenue) : 0;
-        await prisma.messageLog.update({
-          where: { id: controlRow.id },
-          data: {
-            outcome: "purchased",
-            outcomeRevenue: existing + order.totalPrice,
-            outcomeMargin: (existing + order.totalPrice) * marginRate,
-            outcomeTimestamp: new Date(),
-          },
-        });
-        revenueAttributed += order.totalPrice;
-      }
-      continue;
-    }
-
-    // Filter to only messages sent BEFORE the order was created
-    // (we don't have order.createdAt in select, but orders are from the last hour
-    //  and messages are from the last 7 days, so all messages predate or overlap)
-    // For safety, re-fetch order createdAt is unnecessary since we already filtered
-    // messages to be within the window, and orders are very recent.
+    if (messages.length === 0) continue;
 
     // Determine touch type from the most recent message's status
     const lastMessage = messages[messages.length - 1]!;
@@ -186,66 +212,23 @@ export async function attributeOrdersForStore(storeId: string) {
       },
     });
 
-    // --- Update MessageLog outcomes for all three models ---
-
-    // Last-touch: 100% to most recent message
+    // MessageLog carries the operational last-touch outcome. Alternative
+    // attribution models are reconstructed from the complete touch sequence by
+    // @allohq/analytics; mixing several models into one field corrupts training.
+    const lastExisting = await prisma.messageLog.findUnique({
+      where: { id: lastMessage.id },
+      select: { outcomeRevenue: true },
+    });
+    const lastRevenue = Number(lastExisting?.outcomeRevenue ?? 0) + order.totalPrice;
     await prisma.messageLog.update({
       where: { id: lastMessage.id },
       data: {
         outcome: "purchased",
-        outcomeRevenue: (order.totalPrice),
-        outcomeMargin: (order.totalPrice * marginRate),
-        outcomeTimestamp: new Date(),
+        outcomeRevenue: lastRevenue,
+        outcomeMargin: lastRevenue * marginRate,
+        outcomeTimestamp: order.createdAt,
       },
     });
-
-    // First-touch: 100% to first message (if different from last)
-    const firstMessage = messages[0]!;
-    if (firstMessage.id !== lastMessage.id) {
-      // Only set outcome if not already set to "purchased" (don't overwrite
-      // a higher-value attribution from a different order)
-      const existing = await prisma.messageLog.findUnique({
-        where: { id: firstMessage.id },
-        select: { outcome: true, outcomeRevenue: true },
-      });
-      const existingRevenue = existing?.outcomeRevenue
-        ? Number(existing.outcomeRevenue)
-        : 0;
-      await prisma.messageLog.update({
-        where: { id: firstMessage.id },
-        data: {
-          outcome: "purchased",
-          outcomeRevenue: (existingRevenue + order.totalPrice),
-          outcomeMargin: ((existingRevenue + order.totalPrice) * marginRate),
-          outcomeTimestamp: new Date(),
-        },
-      });
-    }
-
-    // Linear: split revenue equally across all messages
-    if (messages.length > 1) {
-      const share = order.totalPrice / messages.length;
-      // Skip first and last — they were already updated above
-      const middleMessages = messages.slice(1, -1);
-      for (const msg of middleMessages) {
-        const existing = await prisma.messageLog.findUnique({
-          where: { id: msg.id },
-          select: { outcome: true, outcomeRevenue: true },
-        });
-        const existingRevenue = existing?.outcomeRevenue
-          ? Number(existing.outcomeRevenue)
-          : 0;
-        await prisma.messageLog.update({
-          where: { id: msg.id },
-          data: {
-            outcome: "purchased",
-            outcomeRevenue: (existingRevenue + share),
-            outcomeMargin: ((existingRevenue + share) * marginRate),
-            outcomeTimestamp: new Date(),
-          },
-        });
-      }
-    }
 
     ordersAttributed++;
     revenueAttributed += order.totalPrice;
@@ -280,21 +263,33 @@ export async function closeElapsedWindows(storeId: string): Promise<number> {
  * experiment's trace by confidence rather than treating a 60-customer lift like a 5,000 one.
  */
 async function persistExperimentStats(storeId: string): Promise<void> {
+  const closedBefore = new Date(Date.now() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const rows = await prisma.$queryRaw<
     Array<{ experimentId: string; arm: "CONTROL" | "TREATMENT"; withOutcome: number; mean: number; sumsq: number }>
   >`
-    SELECT "experimentId", "treatmentArm" AS arm,
-           COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END)::int AS "withOutcome",
-           COALESCE(
-             SUM(COALESCE("outcomeMargin", "outcomeRevenue", 0)) FILTER (WHERE "outcome" IS NOT NULL)
-             / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0), 0
-           )::float AS mean,
-           COALESCE(
-             SUM(POWER(COALESCE("outcomeMargin", "outcomeRevenue", 0), 2)) FILTER (WHERE "outcome" IS NOT NULL), 0
-           )::float AS sumsq
-    FROM "message_logs"
-    WHERE "storeId" = ${storeId} AND "experimentId" IS NOT NULL AND "treatmentArm" IS NOT NULL
-    GROUP BY "experimentId", "treatmentArm"
+    WITH assignments AS (
+      SELECT DISTINCT ON ("experimentId", "customerId")
+        "experimentId", "customerId", "treatmentArm"
+      FROM "message_logs"
+      WHERE "storeId" = ${storeId}
+        AND "experimentId" IS NOT NULL
+        AND "customerId" IS NOT NULL
+        AND "treatmentArm" IS NOT NULL
+        AND "createdAt" <= ${closedBefore}
+      ORDER BY "experimentId", "customerId", "createdAt" ASC
+    ), customer_outcomes AS (
+      SELECT "experimentId", "customerId", SUM("margin")::float AS value
+      FROM "experiment_order_outcomes"
+      GROUP BY "experimentId", "customerId"
+    )
+    SELECT a."experimentId", a."treatmentArm" AS arm,
+           COUNT(*)::int AS "withOutcome",
+           AVG(COALESCE(o.value, 0))::float AS mean,
+           SUM(POWER(COALESCE(o.value, 0), 2))::float AS sumsq
+    FROM assignments a
+    LEFT JOIN customer_outcomes o
+      ON o."experimentId" = a."experimentId" AND o."customerId" = a."customerId"
+    GROUP BY a."experimentId", a."treatmentArm"
   `;
 
   const byExp = new Map<string, { c?: (typeof rows)[number]; t?: (typeof rows)[number] }>();

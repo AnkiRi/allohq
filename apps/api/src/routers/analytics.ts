@@ -369,35 +369,38 @@ export const analyticsRouter = router({
       const MIN_CONTROL_WITH_OUTCOME = 30; // threshold for "meaningful"
 
       const since = new Date(Date.now() - input.days * 86_400_000);
+      const closedBefore = new Date(Date.now() - 7 * 86_400_000);
 
       // Per-customer measured outcome by arm, over the window. Prefer margin;
       // fall back to revenue. One row per arm with count + mean + members.
       const rows = await ctx.prisma.$queryRaw<
         Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number; sumsq: number }>
       >`
-        SELECT "treatmentArm" AS arm,
+        WITH assignments AS (
+          SELECT DISTINCT ON ("experimentId", "customerId")
+            "experimentId", "customerId", "treatmentArm"
+          FROM "message_logs"
+          WHERE "storeId" = ${input.storeId}
+            AND "experimentId" IS NOT NULL
+            AND "customerId" IS NOT NULL
+            AND "treatmentArm" IS NOT NULL
+            AND "createdAt" >= ${since}
+            AND "createdAt" <= ${closedBefore}
+          ORDER BY "experimentId", "customerId", "createdAt" ASC
+        ), customer_outcomes AS (
+          SELECT "experimentId", "customerId", SUM("margin")::float AS value
+          FROM "experiment_order_outcomes"
+          GROUP BY "experimentId", "customerId"
+        )
+        SELECT a."treatmentArm" AS arm,
                COUNT(*)::bigint AS n,
-               -- OBSERVED customers (window closed → outcome recorded: purchased OR ignored)
-               COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END)::bigint AS "withOutcome",
-               -- PER-OBSERVED-CUSTOMER mean (non-buyers = $0) → group-size-normalized,
-               -- causal lift that captures conversion-rate lift, not just buyers' AOV.
-               COALESCE(
-                 SUM(COALESCE("outcomeMargin", "outcomeRevenue", 0))
-                   FILTER (WHERE "outcome" IS NOT NULL)
-                 / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0),
-                 0
-               )::float AS mean,
-               -- Σx² of the per-customer outcome → sample variance for the CI / significance test.
-               COALESCE(
-                 SUM(POWER(COALESCE("outcomeMargin", "outcomeRevenue", 0), 2))
-                   FILTER (WHERE "outcome" IS NOT NULL),
-                 0
-               )::float AS sumsq
-        FROM "message_logs"
-        WHERE "storeId" = ${input.storeId}
-          AND "treatmentArm" IS NOT NULL
-          AND "createdAt" >= ${since}
-        GROUP BY "treatmentArm"
+               COUNT(*)::bigint AS "withOutcome",
+               AVG(COALESCE(o.value, 0))::float AS mean,
+               SUM(POWER(COALESCE(o.value, 0), 2))::float AS sumsq
+        FROM assignments a
+        LEFT JOIN customer_outcomes o
+          ON o."experimentId" = a."experimentId" AND o."customerId" = a."customerId"
+        GROUP BY a."treatmentArm"
       `;
 
       const control = rows.find((r) => r.arm === "CONTROL");
@@ -422,15 +425,8 @@ export const analyticsRouter = router({
       );
 
       // Whether the per-customer figures are margin (preferred) or revenue.
-      const marginUsed = await ctx.prisma.messageLog.count({
-        where: {
-          storeId: input.storeId,
-          treatmentArm: { not: null },
-          outcomeMargin: { not: null },
-          createdAt: { gte: since },
-        },
-      });
-      const basis: "margin" | "revenue" = marginUsed > 0 ? "margin" : "revenue";
+      // New causal outcomes are always recorded in contribution-margin terms.
+      const basis: "margin" | "revenue" = "margin";
 
       const liftPerCustomer = treatmentMean - controlMean;
       // Incremental total = per-customer lift applied across the treated cohort.

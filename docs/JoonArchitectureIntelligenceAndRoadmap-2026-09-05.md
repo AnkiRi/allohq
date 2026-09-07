@@ -33,6 +33,19 @@ Segments may contain any number, including one. Measurement policy is separate:
 
 Finite campaigns use exact-quota assignment. Journeys have streaming entrants, so each entrant gets a stable hash-based arm; the long-run fraction approaches 15%, but an early batch need not be exact.
 
+## Email attribution and campaign reporting
+
+Joon keeps two ledgers because they answer different questions:
+
+1. **Marketing association:** a Shopify order is associated to the most recent Joon email sent to that customer before the order, inside a seven-day window. The campaign report shows unique delivered/opened/clicked recipients, associated orders, revenue and conversion rate. This is useful operational reporting, but it is not called incremental lift.
+2. **Causal outcome:** every eligible campaign member has a frozen treatment/control assignment. Each Shopify order inside that experiment's seven-day window creates one immutable `ExperimentOrderOutcome`, unique on `(experimentId, orderId)`. A control purchase is therefore captured without pretending an email caused it, and retries cannot count it twice. After the complete window closes, non-buyers contribute zero; treatment and control are compared on mean contribution margin per assigned customer with a 95% interval and an underpowered flag.
+
+The policy-eligibility decision is evaluated before acting on the frozen arm, identically for both arms. That prevents Joon's rule-based “skip” decision from selectively removing only treatment customers. Concurrent experiments may each observe the same order; this measures each campaign against its own randomized counterfactual, while future power/interference controls remain roadmap work.
+
+The dashboard intentionally labels three different states: **window open**, **directional/underpowered**, and **measured**. It never converts last-touch associated revenue into a causal lift claim.
+
+Signup-form reporting is separate again: popup views → signups → incentives issued → first associated Shopify purchase within 30 days. An exact issued discount-code redemption takes precedence; otherwise the latest non-incentivized signup is used. This is explicitly labelled associated acquisition revenue, not incremental lift.
+
 ## Intelligence maturity
 
 | Capability | Today | What makes it strong |

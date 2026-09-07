@@ -26,7 +26,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspaceMembers WorkspaceMember[]
+  workspaceMembers  WorkspaceMember[]
   shopifyIdentities ShopifyStaffIdentity[]
 
   @@map("users")
@@ -204,8 +204,9 @@ model Experiment {
   stats            Json?
   createdAt        DateTime  @default(now())
 
-  store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messageLogs MessageLog[]
+  store         Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messageLogs   MessageLog[]
+  orderOutcomes ExperimentOrderOutcome[]
 
   @@index([storeId])
   @@map("experiments")
@@ -216,61 +217,61 @@ model Experiment {
 // ============================================================================
 
 model Store {
-  id                    String    @id @default(cuid())
-  workspaceId           String
-  platform              String // shopify, woocommerce, bigcommerce
-  shopDomain            String
-  accessToken           String // AES-256-GCM ciphertext; never expose outside trusted server code
-  accessTokenExpiresAt  DateTime?
-  refreshToken          String? // AES-256-GCM ciphertext
-  refreshTokenExpiresAt DateTime?
-  tokenScopes           String[]  @default([])
-  widgetPublicKey       String?   @unique
-  widgetAllowedOrigins  String[]  @default([])
+  id                        String    @id @default(cuid())
+  workspaceId               String
+  platform                  String // shopify, woocommerce, bigcommerce
+  shopDomain                String
+  accessToken               String // AES-256-GCM ciphertext; never expose outside trusted server code
+  accessTokenExpiresAt      DateTime?
+  refreshToken              String? // AES-256-GCM ciphertext
+  refreshTokenExpiresAt     DateTime?
+  tokenScopes               String[]  @default([])
+  widgetPublicKey           String?   @unique
+  widgetAllowedOrigins      String[]  @default([])
   shopifyInstallerClaimedAt DateTime?
-  isActive              Boolean   @default(true)
-  installedAt           DateTime  @default(now())
-  lastSyncAt            DateTime?
+  isActive                  Boolean   @default(true)
+  installedAt               DateTime  @default(now())
+  lastSyncAt                DateTime?
 
   // Shop metadata (synced from Shopify)
-  storeName             String?
-  storeEmail            String?
-  storePhone            String?
-  storeLogoUrl          String?
-  storeDescription      String?
-  address               Json? // { address1, address2, city, province, zip, country }
-  socialLinks           Json? // { instagram?, facebook?, twitter?, tiktok?, pinterest?, youtube? }
-  currency              String?
-  timezone              String?
-  messagingConfig       Json? // per-store messaging provider config (future use)
-  onboardingStep        Int       @default(0)
-  onboardingCompletedAt DateTime? // set when merchant completes onboarding wizard
-  activatedAt           DateTime? // timestamp when store activation completed
-  activationLog         Json? // JSON field for tracking activation progress
-  emailSendingPausedAt  DateTime?
+  storeName               String?
+  storeEmail              String?
+  storePhone              String?
+  storeLogoUrl            String?
+  storeDescription        String?
+  address                 Json? // { address1, address2, city, province, zip, country }
+  socialLinks             Json? // { instagram?, facebook?, twitter?, tiktok?, pinterest?, youtube? }
+  currency                String?
+  timezone                String?
+  messagingConfig         Json? // per-store messaging provider config (future use)
+  onboardingStep          Int       @default(0)
+  onboardingCompletedAt   DateTime? // set when merchant completes onboarding wizard
+  activatedAt             DateTime? // timestamp when store activation completed
+  activationLog           Json? // JSON field for tracking activation progress
+  emailSendingPausedAt    DateTime?
   emailSendingPauseReason String?
-  storeCategory         String? // fashion, beauty, food, electronics, home, health
-  currentEmailPlatform  String? // migration/onboarding context; never implies credentials were connected
-  webPixelId           String?
-  webPixelStatus       String    @default("not_configured") // not_configured | registered | error
-  webPixelError        String?
-  webPixelCheckedAt    DateTime?
+  storeCategory           String? // fashion, beauty, food, electronics, home, health
+  currentEmailPlatform    String? // migration/onboarding context; never implies credentials were connected
+  webPixelId              String?
+  webPixelStatus          String    @default("not_configured") // not_configured | registered | error
+  webPixelError           String?
+  webPixelCheckedAt       DateTime?
 
   // Causal-data moat: default contribution margin used to derive outcomeMargin
   // from outcomeRevenue when product-level COGS is unavailable.
   defaultContributionMargin Float? @default(0.6)
 
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  shopifyStaffIdentities ShopifyStaffIdentity[]
+  workspace                Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shopifyStaffIdentities   ShopifyStaffIdentity[]
   shopifyWorkspaceHandoffs ShopifyWorkspaceHandoff[]
-  products      Product[]
-  customers     Customer[]
-  orders        Order[]
-  collections   Collection[]
-  campaigns     Campaign[]
-  brandProfiles BrandProfile[]
-  automations   Automation[]
-  brandAssets   BrandAsset[]
+  products                 Product[]
+  customers                Customer[]
+  orders                   Order[]
+  collections              Collection[]
+  campaigns                Campaign[]
+  brandProfiles            BrandProfile[]
+  automations              Automation[]
+  brandAssets              BrandAsset[]
 
   aiChats            AiChat[]
   conversations      Conversation[]
@@ -336,8 +337,8 @@ model Store {
   copyPerformance CopyPerformance[]
 
   // Product-Based Smart Segments
-  productSegments ProductSegment[]
-  senderDomain SenderDomain?
+  productSegments             ProductSegment[]
+  senderDomain                SenderDomain?
   migrationAssistanceRequests MigrationAssistanceRequest[]
 
   // Basket Intelligence
@@ -353,17 +354,17 @@ model Store {
 }
 
 model MigrationAssistanceRequest {
-  id              String   @id @default(cuid())
-  storeId         String
-  workspaceId     String
-  sourcePlatform  String
-  requestedItems  String[] @default([])
-  notes            String?
-  status           String   @default("requested")
-  requestedBy      String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  dedupeKey        String   @unique
+  id             String   @id @default(cuid())
+  storeId        String
+  workspaceId    String
+  sourcePlatform String
+  requestedItems String[] @default([])
+  notes          String?
+  status         String   @default("requested")
+  requestedBy    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  dedupeKey      String   @unique
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -385,7 +386,8 @@ model SenderDomain {
   verifiedAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@index([status])
   @@map("sender_domains")
 }
@@ -395,23 +397,23 @@ model SenderDomain {
 // ============================================================================
 
 model Product {
-  id             String   @id @default(cuid())
-  storeId        String
-  externalId     String // Shopify product ID
-  title          String
-  description    String?
-  handle         String
-  vendor         String?
-  productType    String?
-  taxonomyCategoryId String?
+  id                   String   @id @default(cuid())
+  storeId              String
+  externalId           String // Shopify product ID
+  title                String
+  description          String?
+  handle               String
+  vendor               String?
+  productType          String?
+  taxonomyCategoryId   String?
   taxonomyCategoryName String?
-  imageUrl       String?
-  price          Float
-  compareAtPrice Float?
-  costPrice      Decimal? @db.Decimal(12, 2) // COGS — for margin-based outcome accounting
-  status         String   @default("active")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  imageUrl             String?
+  price                Float
+  compareAtPrice       Float?
+  costPrice            Decimal? @db.Decimal(12, 2) // COGS — for margin-based outcome accounting
+  status               String   @default("active")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   variants           ProductVariant[]
@@ -636,15 +638,40 @@ model Order {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  store        Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer     Customer          @relation(fields: [customerId], references: [id])
-  items        OrderItem[]
-  attribution  OrderAttribution?
-  fulfillments Fulfillment[]
+  store              Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer           Customer                 @relation(fields: [customerId], references: [id])
+  items              OrderItem[]
+  attribution        OrderAttribution?
+  experimentOutcomes ExperimentOrderOutcome[]
+  fulfillments       Fulfillment[]
 
   @@unique([storeId, externalId])
   @@index([customerId])
   @@map("orders")
+}
+
+/// Immutable, idempotent purchase evidence for one experiment. This is separate
+/// from marketing attribution: a control customer can create causal evidence even
+/// though no message was sent, and one order may inform multiple active experiments.
+model ExperimentOrderOutcome {
+  id           String       @id @default(cuid())
+  experimentId String
+  orderId      String
+  customerId   String
+  messageLogId String
+  treatmentArm TreatmentArm
+  revenue      Decimal      @db.Decimal(12, 2)
+  margin       Decimal      @db.Decimal(12, 2)
+  occurredAt   DateTime
+  createdAt    DateTime     @default(now())
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, orderId])
+  @@index([experimentId, treatmentArm])
+  @@index([customerId, occurredAt])
+  @@map("experiment_order_outcomes")
 }
 
 model OrderAttribution {
@@ -844,28 +871,28 @@ model EmailTemplate {
 }
 
 model Campaign {
-  id             String         @id @default(cuid())
-  workspaceId    String
-  storeId        String
-  name           String
-  templateId     String?
-  segmentId      String?
-  status         CampaignStatus @default(draft)
-  scheduledAt    DateTime?
-  sentAt         DateTime?
-  recipientCount Int            @default(0)
-  openCount      Int            @default(0)
-  clickCount     Int            @default(0)
+  id               String         @id @default(cuid())
+  workspaceId      String
+  storeId          String
+  name             String
+  templateId       String?
+  segmentId        String?
+  status           CampaignStatus @default(draft)
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  recipientCount   Int            @default(0)
+  openCount        Int            @default(0)
+  clickCount       Int            @default(0)
   // Human-in-the-loop judgment signal (can't-backfill). agentProposal = the action
   // bundle allo proposed at draft time (segment/discount/channel/timing/intent), frozen.
   // humanDecision = structured agent_proposed → human_final diff on those action
   // variables, computed at approval + a content-edit magnitude flag + approval state.
-  agentProposal  Json?
-  humanDecision  Json?
+  agentProposal    Json?
+  humanDecision    Json?
   approvalChecksum String?
   approvedAt       DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -935,33 +962,33 @@ model BrandAsset {
 }
 
 model Automation {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   workspaceId         String
   storeId             String
   name                String
   description         String?
   category            String // welcome_series, abandoned_cart, etc.
-  status              String   @default("recommended") // recommended|generating|draft|ready|active|paused
-  triggerType         String   @default("event") // event|schedule|segment_entry|segment_exit
-  triggerConfig       Json     @default("{}")
-  nodes               Json     @default("[]") // WorkflowNode[] DAG
-  templateIds         String[] @default([])
-  smsTemplateIds      String[] @default([])
-  whatsappTemplateIds String[] @default([])
-  rcsTemplateIds      String[] @default([])
+  status              String    @default("recommended") // recommended|generating|draft|ready|active|paused
+  triggerType         String    @default("event") // event|schedule|segment_entry|segment_exit
+  triggerConfig       Json      @default("{}")
+  nodes               Json      @default("[]") // WorkflowNode[] DAG
+  templateIds         String[]  @default([])
+  smsTemplateIds      String[]  @default([])
+  whatsappTemplateIds String[]  @default([])
+  rcsTemplateIds      String[]  @default([])
   // Performance stats (incremented by resend webhook)
-  sentCount           Int      @default(0)
-  openCount           Int      @default(0)
-  clickCount          Int      @default(0)
-  bounceCount         Int      @default(0)
+  sentCount           Int       @default(0)
+  openCount           Int       @default(0)
+  clickCount          Int       @default(0)
+  bounceCount         Int       @default(0)
   activationChecksum  String?
   activatedAt         DateTime?
-  activeVersion       Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  activeVersion       Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  store     Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   versions  AutomationVersion[]
 
   @@index([workspaceId])
@@ -1742,13 +1769,22 @@ model Popup {
 }
 
 model FormSubmission {
-  id           String   @id @default(cuid())
-  formId       String
-  customerId   String?
-  data         Json // submitted field values { email, phone, name, ... }
-  source       String   @default("popup") // popup, embed, api
-  consentGiven Json? // { email?: bool, sms?: bool, whatsapp?: bool }
-  capturedAt   DateTime @default(now())
+  id                 String    @id @default(cuid())
+  formId             String
+  customerId         String?
+  popupId            String?
+  visitorId          String?
+  sessionId          String?
+  data               Json // submitted field values { email, phone, name, ... }
+  source             String    @default("popup") // popup, embed, hosted, api
+  consentGiven       Json? // { email?: bool, sms?: bool, whatsapp?: bool }
+  incentiveCode      String?
+  incentiveIssuedAt  DateTime?
+  attributedOrderId  String?   @unique
+  attributedRevenue  Decimal?  @db.Decimal(12, 2)
+  attributedDiscount Decimal?  @db.Decimal(12, 2)
+  convertedAt        DateTime?
+  capturedAt         DateTime  @default(now())
 
   form     Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id])
@@ -1756,6 +1792,8 @@ model FormSubmission {
   @@index([formId])
   @@index([customerId])
   @@index([capturedAt])
+  @@index([incentiveCode])
+  @@index([formId, convertedAt])
   @@map("form_submissions")
 }
 
@@ -2000,22 +2038,22 @@ model BrowseEvent {
 }
 
 model StorefrontEvent {
-  id         String   @id @default(cuid())
-  storeId    String
-  source     String   @default("widget")
+  id              String   @id @default(cuid())
+  storeId         String
+  source          String   @default("widget")
   externalEventId String?
-  type       String
-  visitorId  String?
-  sessionId  String?
-  customerId String?
-  data       Json
-  occurredAt DateTime
-  receivedAt DateTime @default(now())
+  type            String
+  visitorId       String?
+  sessionId       String?
+  customerId      String?
+  data            Json
+  occurredAt      DateTime
+  receivedAt      DateTime @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  @@index([storeId, type, occurredAt])
   @@unique([storeId, source, externalEventId])
+  @@index([storeId, type, occurredAt])
   @@index([storeId, visitorId, occurredAt])
   @@index([storeId, sessionId, occurredAt])
   @@map("storefront_events")

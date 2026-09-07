@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2 } from "lucide-react";
+import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2, ShoppingBag, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -16,7 +16,9 @@ export default function CampaignDetailPage() {
 
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const { data: campaign, isLoading } = trpc.campaigns.getById.useQuery({ id: campaignId });
-  const { data: stats } = trpc.campaigns.stats.useQuery({ id: campaignId });
+  // The nested causal-statistics payload exceeds TypeScript's practical tRPC
+  // inference depth in this already-large page; the server procedure remains typed.
+  const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
   const { data: dryRun, isLoading: dryRunLoading } = trpc.campaigns.dryRun.useQuery(
     { id: campaignId },
     { enabled: campaign?.status === "draft" || campaign?.status === "scheduled" },
@@ -70,6 +72,22 @@ export default function CampaignDetailPage() {
   if (!campaign) {
     return <div className="text-[13px] text-muted-foreground font-sans">We couldn't find this campaign.</div>;
   }
+
+  const causal = stats?.holdout.stats as null | undefined | {
+    lift?: number;
+    ciLow?: number;
+    ciHigh?: number;
+    significant?: boolean;
+    underpowered?: boolean;
+    confidence?: number;
+    nTreatment?: number;
+    nControl?: number;
+  };
+  const money = (value: number) => new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: stats?.currency ?? "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
 
   return (
     <div className="space-y-6">
@@ -134,12 +152,14 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {[
-          { icon: Mail, label: "SENT", value: stats?.recipientCount?.toLocaleString() ?? "0" },
+          { icon: Mail, label: "TREATED", value: stats?.holdout.treatmentAssigned.toLocaleString() ?? "0" },
+          { icon: Users, label: "HELD OUT", value: stats?.holdout.controlAssigned.toLocaleString() ?? "0" },
           { icon: Mail, label: "OPENED", value: stats ? `${(stats.openRate * 100).toFixed(1)}%` : "0%" },
           { icon: MousePointerClick, label: "CLICKED", value: stats ? `${(stats.clickRate * 100).toFixed(1)}%` : "0%" },
-          { icon: Users, label: "RECIPIENTS", value: campaign.recipientCount.toLocaleString() },
+          { icon: ShoppingBag, label: "ATTRIBUTED ORDERS", value: stats?.attributedOrders.toLocaleString() ?? "0" },
+          { icon: TrendingUp, label: "ASSOCIATED REVENUE", value: money(stats?.attributedRevenue ?? 0) },
         ].map((kpi) => (
           <div
             key={kpi.label}
@@ -151,6 +171,44 @@ export default function CampaignDetailPage() {
           </div>
         ))}
       </div>
+
+      {stats?.holdout.experimentId && (
+        <section className="border border-border rounded-xl bg-card px-5 py-5 sm:px-6" aria-labelledby="holdout-result-title">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-2xl">
+              <h2 id="holdout-result-title" className="text-[15px] font-semibold text-foreground">Incremental result versus holdout</h2>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                Associated revenue is last-touch reporting. This result is different: it compares every treated customer with customers Joon deliberately did not email.
+              </p>
+            </div>
+            <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${causal && !causal.underpowered ? "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))]" : "bg-muted text-muted-foreground"}`}>
+              {causal ? (causal.underpowered ? "DIRECTIONAL" : causal.significant ? "MEASURED" : "NO PROVEN LIFT") : "WINDOW OPEN"}
+            </span>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4 border-t border-border pt-4">
+            <div>
+              <div className="text-[11px] text-muted-foreground">Treatment / control</div>
+              <div className="mt-1 font-mono text-[18px] font-bold">{stats.holdout.treatmentAssigned} / {stats.holdout.controlAssigned}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-muted-foreground">Incremental margin per treated customer</div>
+              <div className="mt-1 font-mono text-[18px] font-bold">{causal ? money(causal.lift ?? 0) : "Measuring…"}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-muted-foreground">95% confidence interval</div>
+              <div className="mt-1 font-mono text-[18px] font-bold">{causal ? `${money(causal.ciLow ?? 0)} to ${money(causal.ciHigh ?? 0)}` : "Available after 7 days"}</div>
+            </div>
+          </div>
+          <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
+            {causal?.underpowered
+              ? `Directional only: ${causal.nControl ?? 0} closed control observations and ${causal.nTreatment ?? 0} treatment observations. Joon does not call this proven lift yet.`
+              : causal
+                ? "The full seven-day outcome window has closed. Non-buyers remain in the denominator at zero, so this includes conversion-rate differences—not only buyers’ order values."
+                : "The cohort is frozen. Purchases are recorded for both arms, including full-price orders from held-out customers."}
+          </p>
+        </section>
+      )}
 
       {/* Campaign details */}
       <div className="border border-border rounded-xl p-6 bg-card">

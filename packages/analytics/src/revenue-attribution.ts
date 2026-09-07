@@ -1,6 +1,17 @@
 import { prisma } from "@allohq/database";
 import type { AttributionModel, AttributionResult } from "./types";
 
+export function attributionWeights(count: number, model: AttributionModel): number[] {
+  if (count <= 0) return [];
+  if (model === "first_touch") return Array.from({ length: count }, (_, index) => index === 0 ? 1 : 0);
+  if (model === "last_touch") return Array.from({ length: count }, (_, index) => index === count - 1 ? 1 : 0);
+  const raw = Array.from({ length: count }, (_, index) =>
+    model === "linear" ? 1 : Math.pow(0.7, count - 1 - index),
+  );
+  const total = raw.reduce((sum, value) => sum + value, 0);
+  return raw.map((value) => value / total);
+}
+
 /**
  * Compute multi-touch attribution for a store's orders.
  * Supports first-touch, last-touch, linear, and time-decay models.
@@ -12,11 +23,13 @@ export async function computeAttribution(
 ): Promise<AttributionResult[]> {
   const since = new Date(Date.now() - daysBack * 86400000);
 
-  // Get all attributed orders
+  // OrderAttribution is the durable marker that an order occurred after at
+  // least one Joon message. Reconstruct the eligible touch sequence per order
+  // so first/linear/time-decay are real models, not labels over last-touch rows.
   const attributions = await prisma.orderAttribution.findMany({
     where: { storeId, attributedAt: { gte: since } },
     include: {
-      order: { select: { totalPrice: true } },
+      order: { select: { totalPrice: true, customerId: true, createdAt: true } },
     },
   });
 
@@ -32,57 +45,51 @@ export async function computeAttribution(
   }>();
 
   for (const attr of attributions) {
-    const sourceId = attr.campaignId ?? attr.automationId ?? "direct";
-    const sourceType = attr.campaignId ? "campaign" : "automation";
-    const key = `${sourceType}:${sourceId}`;
+    const windowStart = new Date(attr.order.createdAt.getTime() - attr.windowDays * 86_400_000);
+    const touches = await prisma.messageLog.findMany({
+      where: {
+        storeId,
+        customerId: attr.order.customerId,
+        sentAt: { gte: windowStart, lte: attr.order.createdAt },
+        status: { in: ["sent", "delivered", "opened", "clicked"] },
+        OR: [{ campaignId: { not: null } }, { automationId: { not: null } }],
+      },
+      orderBy: { sentAt: "asc" },
+      select: { campaignId: true, automationId: true, channel: true },
+    });
+    if (touches.length === 0) continue;
 
-    const existing = sourceMap.get(key);
-    if (existing) {
-      existing.revenues.push(attr.revenue);
-      existing.orderCount++;
-    } else {
-      sourceMap.set(key, {
-        sourceType: sourceType as "campaign" | "automation",
-        sourceId,
-        channel: attr.channel,
-        revenues: [attr.revenue],
-        orderCount: 1,
-      });
+    const weights = attributionWeights(touches.length, model);
+    const selected = touches
+      .map((touch, index) => ({ touch, weight: weights[index] ?? 0 }))
+      .filter((item) => item.weight > 0);
+    const creditedSources = new Set<string>();
+    for (const { touch, weight } of selected) {
+      const sourceId = touch.campaignId ?? touch.automationId;
+      if (!sourceId) continue;
+      const sourceType = touch.campaignId ? "campaign" : "automation";
+      const key = `${sourceType}:${sourceId}`;
+      const credit = attr.order.totalPrice * weight;
+      const existing = sourceMap.get(key);
+      if (existing) {
+        existing.revenues.push(credit);
+        if (!creditedSources.has(key)) existing.orderCount++;
+      } else {
+        sourceMap.set(key, {
+          sourceType,
+          sourceId,
+          channel: touch.channel,
+          revenues: [credit],
+          orderCount: 1,
+        });
+      }
+      creditedSources.add(key);
     }
   }
 
-  // Apply attribution model weighting
   const results: AttributionResult[] = [];
   for (const [, source] of sourceMap) {
-    let revenue: number;
-
-    switch (model) {
-      case "first_touch":
-        // All credit to first interaction
-        revenue = source.revenues[0] ?? 0;
-        break;
-      case "last_touch":
-        // All credit to last interaction (default — same as current)
-        revenue = source.revenues.reduce((s, r) => s + r, 0);
-        break;
-      case "linear":
-        // Equal credit across all touchpoints
-        revenue = source.revenues.reduce((s, r) => s + r, 0);
-        break;
-      case "time_decay": {
-        // More recent touchpoints get more credit (decay factor 0.7)
-        const decay = 0.7;
-        let totalWeight = 0;
-        let weightedRevenue = 0;
-        for (let i = 0; i < source.revenues.length; i++) {
-          const weight = Math.pow(decay, source.revenues.length - 1 - i);
-          weightedRevenue += (source.revenues[i] ?? 0) * weight;
-          totalWeight += weight;
-        }
-        revenue = totalWeight > 0 ? weightedRevenue : 0;
-        break;
-      }
-    }
+    const revenue = source.revenues.reduce((sum, value) => sum + value, 0);
 
     // Look up source name
     let sourceName = source.sourceId;

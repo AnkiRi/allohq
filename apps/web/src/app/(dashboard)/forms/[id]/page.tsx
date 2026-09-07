@@ -136,11 +136,14 @@ export default function FormDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {[
-          { label: "TOTAL", value: stats?.total ?? 0, icon: MousePointerClick },
-          { label: "TODAY", value: stats?.today ?? 0, icon: Calendar },
-          { label: "THIS WEEK", value: stats?.thisWeek ?? 0, icon: Calendar },
+          { label: "POPUP VIEWS", value: stats?.impressions ?? 0, icon: Eye },
+          { label: "SIGNUPS", value: stats?.total ?? 0, icon: MousePointerClick },
+          { label: "SIGNUP RATE", value: stats?.signupRate == null ? "—" : `${(stats.signupRate * 100).toFixed(1)}%`, icon: Calendar },
+          { label: "INCENTIVES", value: stats?.incentives ?? 0, icon: Calendar },
+          { label: "PURCHASES", value: stats?.converted ?? 0, icon: User },
+          { label: "ASSOCIATED REVENUE", value: stats ? stats.attributedRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0", icon: ArrowUpRight },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -153,11 +156,15 @@ export default function FormDetailPage() {
               <stat.icon className="w-4 h-4 text-muted-foreground/50" />
             </div>
             <div className="text-[28px] font-bold text-foreground font-mono tabular-nums">
-              {stat.value.toLocaleString()}
+              {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
             </div>
           </div>
         ))}
       </div>
+      <p className="text-[11px] leading-5 text-muted-foreground">
+        {stats?.attributionLabel ?? "Purchases are associated after Shopify reports the order."}
+        {stats?.attributedDiscount > 0 ? ` · ${stats.attributedDiscount.toLocaleString()} in redeemed signup discounts.` : ""}
+      </p>
 
       {/* Popups */}
       {form.popups && form.popups.length > 0 && (

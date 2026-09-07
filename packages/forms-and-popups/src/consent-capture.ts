@@ -11,6 +11,9 @@ export async function captureSubmission(opts: {
   storeId: string;
   data: Record<string, unknown>;
   source: string;
+  popupId?: string;
+  visitorId?: string;
+  sessionId?: string;
   consent?: ConsentState;
   consentEvidence?: Record<string, unknown>;
 }): Promise<{ submissionId: string; customerId: string | null }> {
@@ -111,6 +114,9 @@ export async function captureSubmission(opts: {
     data: {
       formId: opts.formId,
       customerId,
+      popupId: opts.popupId,
+      visitorId: opts.visitorId,
+      sessionId: opts.sessionId,
       data: JSON.parse(JSON.stringify(opts.data)),
       source: opts.source,
       consentGiven: opts.consent

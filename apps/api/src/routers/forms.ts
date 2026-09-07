@@ -311,24 +311,49 @@ export const formsRouter = router({
     .input(z.object({ formId: z.string() }))
     .query(async ({ ctx, input }) => {
       await verifyStoreScopedAccess(ctx, "form", input.formId);
-      const total = await ctx.prisma.formSubmission.count({
-        where: { formId: input.formId },
+      const form = await ctx.prisma.form.findUniqueOrThrow({
+        where: { id: input.formId },
+        select: { storeId: true, popups: { select: { id: true } } },
       });
-      const today = await ctx.prisma.formSubmission.count({
-        where: {
-          formId: input.formId,
-          capturedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-        },
-      });
-      const thisWeek = await ctx.prisma.formSubmission.count({
-        where: {
-          formId: input.formId,
-          capturedAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-      });
-      return { total, today, thisWeek };
+      const popupIds = form.popups.map((popup) => popup.id);
+      const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+      const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [total, today, thisWeek, converted, incentives, sums, impressionRows] = await Promise.all([
+        ctx.prisma.formSubmission.count({ where: { formId: input.formId } }),
+        ctx.prisma.formSubmission.count({ where: { formId: input.formId, capturedAt: { gte: todayStart } } }),
+        ctx.prisma.formSubmission.count({ where: { formId: input.formId, capturedAt: { gte: weekStart } } }),
+        ctx.prisma.formSubmission.count({ where: { formId: input.formId, convertedAt: { not: null } } }),
+        ctx.prisma.formSubmission.count({ where: { formId: input.formId, incentiveIssuedAt: { not: null } } }),
+        ctx.prisma.formSubmission.aggregate({
+          where: { formId: input.formId },
+          _sum: { attributedRevenue: true, attributedDiscount: true },
+        }),
+        popupIds.length === 0
+          ? Promise.resolve(0)
+          : ctx.prisma.storefrontEvent.count({
+              where: {
+                storeId: form.storeId,
+                type: "popup_view",
+                OR: popupIds.map((popupId) => ({ data: { path: ["popupId"], equals: popupId } })),
+              },
+            }),
+      ]);
+      const impressions = impressionRows;
+      const attributedRevenue = Number(sums._sum.attributedRevenue ?? 0);
+      const attributedDiscount = Number(sums._sum.attributedDiscount ?? 0);
+      return {
+        total,
+        today,
+        thisWeek,
+        impressions,
+        converted,
+        incentives,
+        attributedRevenue,
+        attributedDiscount,
+        signupRate: impressions > 0 ? total / impressions : null,
+        purchaseRate: total > 0 ? converted / total : null,
+        attributionLabel: "Associated within 30 days; exact discount-code matches take precedence",
+      };
     }),
 
   // ── Embed Code ──

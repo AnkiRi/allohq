@@ -266,28 +266,9 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       churnProbability: ltv?.churnProbability ?? null,
     };
 
-    // Causal-data moat: deterministic control-group assignment (UNCHANGED).
+    // Read the frozen arm now, but apply it only after the pre-treatment policy
+    // eligibility decision below. CONTROL and TREATMENT must pass the same rule.
     const arm = campaignArms.get(customer.id) ?? "TREATMENT";
-    if (arm === "CONTROL") {
-      controlCount++;
-      await prisma.messageLog.create({
-        data: {
-          workspaceId: campaign.store.workspaceId,
-          storeId: campaign.storeId,
-          customerId: customer.id,
-          channel: "email",
-          to: customer.email,
-          subject: campaign.template.subject,
-          campaignId,
-          status: "withheld",
-          treatmentArm: "CONTROL",
-          experimentId: experiment.id,
-          customerStateSnap: stateSnap,
-          metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
-        },
-      });
-      continue;
-    }
 
     // --- Per-customer plan (North Star #1) ---
     const recencyDays = rfm?.lastOrderAt ? Math.floor((Date.now() - rfm.lastOrderAt.getTime()) / 86400000) : null;
@@ -335,6 +316,30 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           messageVariantId: decision.toneKey,
           messageFeatures: { channel: selectedChannel, messageType: "campaign", hasDiscount, discountPercent, segment: rfm?.segment ?? null, decision: "skip", skipReason: decision.skipReason },
           metadata: { skipped: true, skipReason: decision.skipReason, reasoning: decision.reasoning, selectedChannel, bestHour, toneKey: decision.toneKey },
+        },
+      });
+      continue;
+    }
+
+    // Causal-data moat: only policy-eligible customers enter the experiment.
+    // The skip rule above is computed without looking at arm assignment, so the
+    // measured comparison remains symmetric and randomized.
+    if (arm === "CONTROL") {
+      controlCount++;
+      await prisma.messageLog.create({
+        data: {
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          customerId: customer.id,
+          channel: "email",
+          to: customer.email,
+          subject: campaign.template.subject,
+          campaignId,
+          status: "withheld",
+          treatmentArm: "CONTROL",
+          experimentId: experiment.id,
+          customerStateSnap: stateSnap,
+          metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
         },
       });
       continue;

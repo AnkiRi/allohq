@@ -349,6 +349,9 @@ export async function handleWidgetPopups(
         storeId: store.id,
         data: sanitizedData,
         source,
+        popupId: popupId || undefined,
+        visitorId: visitor.visitorId,
+        sessionId: visitor.visitorId,
         consent,
         consentEvidence: {
           disclosureVersion: formStyling.consentVersion ?? "global-v1",
@@ -379,6 +382,12 @@ export async function handleWidgetPopups(
       if (incentiveConfig && isNewEmailSubscriber) {
         const incentiveResult = await deliverIncentive(store.id, incentiveConfig);
         discountCode = incentiveResult?.code ?? null;
+        if (discountCode) {
+          await prisma.formSubmission.update({
+            where: { id: result.submissionId },
+            data: { incentiveCode: discountCode, incentiveIssuedAt: new Date() },
+          });
+        }
       }
 
       // Queue CustomerState update for consent/channel preferences
