@@ -41,3 +41,12 @@ test("inline and multi-step forms persist zero-party traits", () => {
   assert.match(route, /customerTrait\.upsert/);
   assert.match(block, /joon-inline\.js/);
 });
+
+test("hosted forms require single-use expiring confirmation before consent", () => {
+  const confirmation = read("packages/forms-and-popups/src/confirmation.ts");
+  const submit = read("apps/web/src/app/api/public/forms/[formId]/submit/route.ts");
+  assert.match(confirmation, /randomBytes\(32\)/);
+  assert.match(confirmation, /pending_confirmation/);
+  assert.match(confirmation, /usedAt: null, expiresAt: \{ gt: now \}/);
+  assert.match(submit, /Check your inbox to confirm/);
+});

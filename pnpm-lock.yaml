@@ -160,6 +160,12 @@ importers:
       '@allohq/emails':
         specifier: workspace:*
         version: link:../../packages/emails
+      '@allohq/forms-and-popups':
+        specifier: workspace:*
+        version: link:../../packages/forms-and-popups
+      '@allohq/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@allohq/ui':
         specifier: workspace:*
         version: link:../../packages/ui

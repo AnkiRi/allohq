@@ -515,6 +515,7 @@ model Customer {
   contactConsents                ContactConsent[]
   contactSuppressions            ContactSuppression[]
   traits                         CustomerTrait[]
+  consentConfirmations           ConsentConfirmation[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -562,6 +563,22 @@ model CustomerTrait {
   @@unique([customerId, key])
   @@index([storeId, key])
   @@map("customer_traits")
+}
+
+model ConsentConfirmation {
+  id         String    @id @default(cuid())
+  storeId    String
+  customerId String
+  channel    String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, channel, expiresAt])
+  @@map("consent_confirmations")
 }
 
 /// Permanent or time-bounded delivery suppression. Provider complaints and hard

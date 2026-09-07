@@ -30,6 +30,7 @@ export {
 
 // Incentive logic
 export { deliverIncentive } from "./incentive-logic";
+export { createConsentConfirmation, redeemConsentConfirmation } from "./confirmation";
 
 // Consent capture
 export {

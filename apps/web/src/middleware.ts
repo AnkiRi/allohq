@@ -14,6 +14,9 @@ const isPublicRoute = createRouteMatcher([
   "/dpa(.*)",
   "/subprocessors(.*)",
   "/support(.*)",
+  "/join(.*)",
+  "/confirm(.*)",
+  "/api/public/forms(.*)",
   // Carries only a short-lived, single-use opaque handoff. The page itself
   // must render while signed out so Clerk can present sign-up/sign-in; the API
   // redeems it only after a valid Clerk session exists.

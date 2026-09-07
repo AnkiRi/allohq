@@ -41,7 +41,7 @@ References:
 | Embedded section/footer form | Ready in code | Shopify app block renders any active form by ID; live theme acceptance remains |
 | Multi-step form | Ready in code | Up to five steps with per-step validation and keyboard focus progression |
 | Spin-to-win | Pending by design | Requires server-selected weighted prizes, odds disclosure, per-visitor eligibility, abuse protection and jurisdiction review. A decorative wheel with a predetermined result will not be shipped |
-| Dedicated signup landing page | Pending | Useful for social and paid acquisition; not required for first design partners |
+| Dedicated signup landing page | Ready in code | Shareable `/join/{formId}` page uses merchant branding and double opt-in |
 
 ## V1 policy
 
