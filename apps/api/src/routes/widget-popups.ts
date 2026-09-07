@@ -9,8 +9,10 @@ import {
   consentPreset,
   shouldSuppressKnownCustomerIncentive,
   createConsentConfirmation,
+  canSendConsentConfirmation,
+  consentRequestEvidence,
 } from "@allohq/forms-and-popups";
-import { sendEmail } from "@allohq/messaging";
+import { sendTransactionalEmail } from "@allohq/messaging";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 import {
   authenticateWidgetStore,
@@ -401,6 +403,7 @@ export async function handleWidgetPopups(
           locale: req.headers["accept-language"]?.split(",")[0]?.slice(0, 16) ?? "unknown",
           capturedAt: new Date().toISOString(),
           popupId: popupId || undefined,
+          ...consentRequestEvidence({ ip, userAgent: req.headers["user-agent"], secret: process.env["WIDGET_VISITOR_TOKEN_SECRET"] }),
         },
       });
       if (exposure) await prisma.formExperimentExposure.update({ where: { id: exposure.id }, data: { submittedAt: new Date(), submissionId: result.submissionId } });
@@ -425,6 +428,10 @@ export async function handleWidgetPopups(
       const incentiveConfig = resolvedForm.incentiveConfig as unknown as IncentiveConfig | null;
       const recentOrder = result.customerId ? await prisma.order.findFirst({ where: { customerId: result.customerId, status: { not: "cancelled" }, createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } }, select: { id: true } }) : null;
       const incentivePolicy = shouldSuppressKnownCustomerIncentive({ isNewSubscriber: isNewEmailSubscriber, hasRecentOrder: Boolean(recentOrder), allowKnownCustomers: incentiveConfig?.allowKnownCustomers });
+      if (incentiveConfig) await prisma.formSubmission.update({
+        where: { id: result.submissionId },
+        data: { incentiveEligible: incentivePolicy.allowed, incentiveSuppressionReason: incentivePolicy.reason },
+      });
       if (incentiveConfig && result.customerId && incentivePolicy.allowed && !preset.doubleOptInEmail) {
         const incentiveResult = await deliverIncentive(store.id, incentiveConfig, { formId: resolvedForm.id, customerId: result.customerId });
         discountCode = incentiveResult?.code ?? null;
@@ -441,9 +448,13 @@ export async function handleWidgetPopups(
 
       let confirmationRequired = false;
       if (preset.doubleOptInEmail && result.customerId) {
+        if (!(await canSendConsentConfirmation(result.customerId))) {
+          json(res, 422, { error: "This address cannot receive a confirmation email." });
+          return;
+        }
         const confirmationToken = await createConsentConfirmation(result.customerId, store.id, "email", result.submissionId);
         const appOrigin = process.env["WEB_APP_URL"] ?? "https://agent.joonhq.com";
-        const delivery = await sendEmail({ channel: "email", to: normalizedEmail, subject: `Confirm your subscription to ${store.storeName ?? "this store"}`, html: `<p>Confirm that you want to receive marketing email.</p><p><a href="${appOrigin}/confirm/${confirmationToken}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`, idempotencyKey: `consent-${result.customerId}-${confirmationToken.slice(0,12)}` });
+        const delivery = await sendTransactionalEmail({ channel: "email", to: normalizedEmail, subject: `Confirm your subscription to ${store.storeName ?? "this store"}`, html: `<p>Confirm that you want to receive marketing email.</p><p><a href="${appOrigin}/confirm/${confirmationToken}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`, idempotencyKey: `consent-${result.customerId}-${confirmationToken.slice(0,12)}` });
         confirmationRequired = delivery.status === "sent";
         if (!confirmationRequired) {
           json(res, 503, { error: "Confirmation could not be sent. Please try again later." });

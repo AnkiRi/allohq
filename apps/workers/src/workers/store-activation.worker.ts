@@ -10,6 +10,7 @@ import { scanOpportunities } from "@allohq/campaign-engine";
 import { generateDailyBriefing } from "@allohq/merchant-copilot";
 import { logAgentActivity, logActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { enqueueCampaignOpportunities } from "../utils/enqueue-opportunities";
 
 const automationGenerateQueue = new Queue(QUEUE_NAMES.AUTOMATION_GENERATE, {
   connection: redisConnection,
@@ -374,11 +375,7 @@ export const storeActivationWorker = new Worker<StoreActivationJobData>(
       const opportunities = await scanOpportunities(storeId);
       opportunitiesFound = opportunities.length;
 
-      for (const opp of opportunities) {
-        await campaignFactoryQueue.add("generate-draft", {
-          opportunity: opp,
-        });
-      }
+      await enqueueCampaignOpportunities(campaignFactoryQueue, opportunities);
 
       console.log(
         `[store-activation] Found ${opportunitiesFound} opportunities for store ${storeId}`,

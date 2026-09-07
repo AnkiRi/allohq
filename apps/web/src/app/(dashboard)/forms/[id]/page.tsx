@@ -74,6 +74,9 @@ export default function FormDetailPage() {
   const updatePopupMut = (trpc as any).forms.updatePopup.useMutation({
     onSuccess: () => (utils as any).forms.getForm.invalidate(),
   });
+  const retryGrantMut = (trpc as any).forms.retryIncentiveGrant.useMutation({
+    onSuccess: () => (utils as any).forms.getForm.invalidate(),
+  });
 
   if (isLoading || !form) {
     return (
@@ -231,6 +234,12 @@ export default function FormDetailPage() {
           <div className="mt-4 grid grid-cols-3 gap-2">{(["CONTROL","A","B"] as const).map(variant=>{const rows=experiment.exposures.filter((row:any)=>row.variant===variant);const signups=rows.filter((row:any)=>row.submittedAt).length;const purchases=rows.filter((row:any)=>row.convertedAt).length;return <div key={variant} className="rounded-lg bg-muted/60 p-3"><p className="text-[10px] font-bold">{variant}</p><p className="mt-1 font-mono text-lg">{rows.length?`${(signups/rows.length*100).toFixed(1)}%`:"—"}</p><p className="text-[10px] text-muted-foreground">signup · {purchases} buys</p></div>})}</div>
           <p className="mt-3 text-[10px] text-muted-foreground">{experiment.exposures.filter((row:any)=>row.variant==="CONTROL").length>=100?"Directional randomized evidence":"Early data — wait for 100 control assignments before choosing a winner."}</p>
         </div>)}</div>
+      </section>}
+
+      {form.incentiveGrants?.length > 0 && <section className="rounded-xl border border-[hsl(var(--warning)/.35)] bg-[hsl(var(--warning)/.08)] p-4">
+        <h2 className="text-[13px] font-semibold">Rewards requiring attention</h2>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Consent remains valid. Retry only the Shopify reward issuance; the customer is never asked to subscribe again.</p>
+        <div className="mt-3 space-y-2">{form.incentiveGrants.map((grant:any)=><div key={grant.id} className="flex items-center justify-between gap-3 rounded-lg bg-card px-3 py-2"><div><p className="text-[12px] font-medium">{grant.label}</p><p className="text-[10px] text-muted-foreground">{grant.lastError||"Issuance was interrupted"} · {grant.attemptCount} attempts</p></div><button onClick={()=>retryGrantMut.mutate({grantId:grant.id})} disabled={retryGrantMut.isPending} className="rounded-lg border border-border bg-background px-3 py-1.5 text-[10px] font-bold disabled:opacity-50">Retry reward</button></div>)}</div>
       </section>}
 
       {/* Tabs */}

@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import type { Prisma } from "@allohq/database";
+import { redactAcquisitionEvidence } from "./acquisition-privacy";
 
-const root=process.cwd().endsWith("apps/workers")?process.cwd():process.cwd().endsWith("apps/api")?resolve(process.cwd(),"../workers"):resolve(process.cwd(),"apps/workers");
-const worker=readFileSync(resolve(root,"src/workers/shopify-webhook.worker.ts"),"utf8");
-const retention=readFileSync(resolve(root,"src/workers/privacy-retention.worker.ts"),"utf8");
-
-test("customer export includes acquisition evidence",()=>{for(const model of ["formIncentiveGrants","consentConfirmations","formExperimentExposures","experimentOrderOutcomes"])assert.match(worker,new RegExp(model))});
-test("redaction deletes acquisition identifiers",()=>{for(const model of ["formExperimentExposure.deleteMany","formIncentiveGrant.deleteMany","consentConfirmation.deleteMany","customerTrait.deleteMany","experimentOrderOutcome.deleteMany"])assert.ok(worker.includes(model))});
-test("retention removes old experiment exposures and grants",()=>{assert.ok(retention.includes("formExperimentExposure.deleteMany"));assert.ok(retention.includes("formIncentiveGrant.deleteMany"))});
+test("redaction executes each acquisition deletion using linked submissions",async()=>{
+  const calls:Array<[string,unknown]>=[];
+  const method=(name:string,result:unknown={count:1})=>async(args:unknown)=>{calls.push([name,args]);return result};
+  const tx={formSubmission:{findMany:method("submissions",[{id:"s1"},{id:"s2"}])},formExperimentExposure:{deleteMany:method("exposures")},formIncentiveGrant:{deleteMany:method("grants")},consentConfirmation:{deleteMany:method("confirmations")},customerTrait:{deleteMany:method("traits")},experimentOrderOutcome:{deleteMany:method("outcomes")}} as unknown as Prisma.TransactionClient;
+  const result=await redactAcquisitionEvidence(tx,"customer-1");
+  assert.deepEqual(result.submissionIds,["s1","s2"]);
+  assert.deepEqual(calls.map(([name])=>name),["submissions","exposures","grants","confirmations","traits","outcomes"]);
+  assert.deepEqual(calls[1]?.[1],{where:{submissionId:{in:["s1","s2"]}}});
+});

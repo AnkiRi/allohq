@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { verifyStoreAccess, verifyStoreScopedAccess } from "../lib/storeAccess";
 import { randomBytes } from "node:crypto";
+import { deliverIncentive } from "@allohq/forms-and-popups";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 
 const fieldSchema = z.object({
@@ -93,6 +94,7 @@ export const formsRouter = router({
         include: {
           popups: true,
           experiments: { include: { exposures: true }, orderBy: { createdAt: "desc" } },
+          incentiveGrants: { where: { status: { in: ["failed", "pending", "processing"] } }, orderBy: { updatedAt: "desc" }, take: 20 },
           _count: { select: { submissions: true } },
         },
       });
@@ -333,6 +335,23 @@ export const formsRouter = router({
       const control = variants[0], treatments = variants.slice(1);
       const sufficientlyPowered = control!.assigned >= 100 && treatments.every((row) => row.assigned >= 100);
       return { experiment: { id: experiment.id, name: experiment.name, status: experiment.status, startedAt: experiment.startedAt, endedAt: experiment.endedAt }, variants, sufficientlyPowered, evidenceLabel: sufficientlyPowered ? "Randomized directional evidence" : "Early data — wait for at least 100 assignments per arm" };
+    }),
+
+  retryIncentiveGrant: workspaceProcedure
+    .input(z.object({ grantId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const grant = await ctx.prisma.formIncentiveGrant.findUniqueOrThrow({ where: { id: input.grantId }, include: { form: true } });
+      await verifyStoreScopedAccess(ctx, "form", grant.formId);
+      const config = grant.form.incentiveConfig as unknown as IncentiveConfig | null;
+      if (!config) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This form no longer has an incentive configuration" });
+      const result = await deliverIncentive(grant.form.storeId, config, { formId: grant.formId, customerId: grant.customerId });
+      if (result && (!result.repeated || result.code)) {
+        await ctx.prisma.formSubmission.updateMany({
+          where: { formId: grant.formId, customerId: grant.customerId },
+          data: { incentiveCode: result.code, incentiveIssuedAt: new Date() },
+        });
+      }
+      return result;
     }),
 
   // ── Submissions ──

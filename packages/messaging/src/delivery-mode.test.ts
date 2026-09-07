@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDeliveryModeDecision, getMessagingSendMode } from "./delivery-mode";
+import { getDeliveryModeDecision, getEmailDeliveryDecision, getMessagingSendMode } from "./delivery-mode";
 
 test("delivery is disabled unless a mode is explicitly configured", () => {
   assert.equal(getMessagingSendMode(undefined), "disabled");
@@ -62,6 +62,20 @@ test("global email kill switch overrides live mode", () => {
     }),
     { allowed: false, mode: "live", reason: "global_kill_switch" },
   );
+});
+
+test("transactional consent email is independent from marketing delivery controls", () => {
+  assert.equal(getEmailDeliveryDecision("new@example.com", "marketing", {
+    mode: "disabled",
+  }).allowed, false);
+  assert.deepEqual(getEmailDeliveryDecision("new@example.com", "transactional", {
+    mode: "disabled",
+    killSwitch: "true",
+  }), { allowed: true, mode: "disabled" });
+  assert.deepEqual(getEmailDeliveryDecision("new@example.com", "transactional", {
+    mode: "live",
+    transactionalKillSwitch: "true",
+  }), { allowed: false, mode: "live", reason: "global_kill_switch" });
 });
 
 test("the v1 release boundary blocks non-email channels at the provider", async () => {

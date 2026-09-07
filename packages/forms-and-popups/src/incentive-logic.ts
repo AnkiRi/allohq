@@ -14,6 +14,10 @@ function generateCode(prefix: string = "ALLO"): string {
   return `${prefix}-${code}`;
 }
 
+export function incentiveGrantIsClaimable(status: string, updatedAt: Date, now = new Date()): boolean {
+  return status === "failed" || status === "pending" || (status === "processing" && updatedAt.getTime() < now.getTime() - 5 * 60_000);
+}
+
 export function chooseWeightedOutcome(outcomes: NonNullable<IncentiveConfig["spinOutcomes"]>, draw?: number) {
   if (outcomes.length < 2 || outcomes.length > 12) throw new Error("Spin-to-win requires 2–12 outcomes");
   const weights = outcomes.map((outcome) => Math.floor(outcome.weight));
@@ -52,21 +56,33 @@ export async function deliverIncentive(
     throw new Error("Free-shipping signup incentives are not supported yet");
   }
 
-  const selected = config.mode === "spin"
+  let selected = config.mode === "spin"
     ? chooseWeightedOutcome(config.spinOutcomes ?? [])
     : { label: `${config.discountValue ?? 10}${config.discountType === "fixed_amount" ? " off" : "% off"}`, discountType: config.discountType, discountValue: config.discountValue };
-  const selectedType = selected.discountType ?? "percentage";
-  const selectedValue = selected.discountValue ?? 0;
+  let selectedType = selected.discountType ?? "percentage";
+  let selectedValue = selected.discountValue ?? 0;
 
   if (identity) {
     const existing = await prisma.formIncentiveGrant.findUnique({ where: { formId_customerId: identity } });
-    if (existing) return { code: existing.code, type: existing.kind, label: existing.label, repeated: true };
-    try {
-      await prisma.formIncentiveGrant.create({ data: { ...identity, kind: selectedValue > 0 ? "discount" : "no_prize", label: selected.label, value: selectedValue } });
-    } catch {
-      const winner = await prisma.formIncentiveGrant.findUnique({ where: { formId_customerId: identity } });
-      if (winner) return { code: winner.code, type: winner.kind, label: winner.label, repeated: true };
-      throw new Error("Could not reserve incentive grant");
+    if (existing?.status === "issued" || existing?.status === "redeemed") return { code: existing.code, type: existing.kind, label: existing.label, repeated: true };
+    if (existing) {
+      selected = { label: existing.label, discountType: (existing.discountType as "percentage" | "fixed_amount" | null) ?? undefined, discountValue: existing.value ?? 0 };
+      selectedType = selected.discountType ?? "percentage";
+      selectedValue = selected.discountValue ?? 0;
+      const staleBefore = new Date(Date.now() - 5 * 60_000);
+      const claimed = await prisma.formIncentiveGrant.updateMany({
+        where: { ...identity, OR: [{ status: "failed" }, { status: "pending" }, { status: "processing", updatedAt: { lt: staleBefore } }] },
+        data: { status: "processing", attemptCount: { increment: 1 }, lastError: null },
+      });
+      if (claimed.count !== 1) return { code: existing.code, type: existing.kind, label: existing.label, repeated: true };
+    } else {
+      try {
+        await prisma.formIncentiveGrant.create({ data: { ...identity, kind: selectedValue > 0 ? "discount" : "no_prize", discountType: selectedType, label: selected.label, value: selectedValue, status: "processing", attemptCount: 1 } });
+      } catch {
+        const winner = await prisma.formIncentiveGrant.findUnique({ where: { formId_customerId: identity } });
+        if (winner) return { code: winner.code, type: winner.kind, label: winner.label, repeated: true };
+        throw new Error("Could not reserve incentive grant");
+      }
     }
   }
 
@@ -89,7 +105,9 @@ export async function deliverIncentive(
   }
 
   const client = await shopify.getShopifyAdminClient(store.id);
-  const code = config.code ?? generateCode(config.mode === "spin" ? "SPIN" : "JOON");
+  // Even a merchant-provided base becomes a prefix: every customer receives a
+  // unique code, preserving Shopify once-per-customer semantics and our ledger.
+  const code = generateCode((config.code ?? (config.mode === "spin" ? "SPIN" : "JOON")).slice(0, 20));
 
   // Percentage or fixed discount
   try {
@@ -101,7 +119,7 @@ export async function deliverIncentive(
       oncePerCustomer: true,
     });
   } catch (error) {
-    if (identity) await prisma.formIncentiveGrant.deleteMany({ where: { ...identity, status: "pending" } });
+    if (identity) await prisma.formIncentiveGrant.updateMany({ where: identity, data: { status: "failed", lastError: error instanceof Error ? error.message.slice(0, 500) : "Discount provider failure" } });
     throw error;
   }
 

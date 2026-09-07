@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assignFormExperimentArm } from "./experiment-assignment";
-import { chooseWeightedOutcome } from "./incentive-logic";
+import { chooseWeightedOutcome, incentiveGrantIsClaimable } from "./incentive-logic";
+import { consentRequestEvidence } from "./consent-evidence";
 import { consentPreset } from "./consent-presets";
 import { shouldSuppressKnownCustomerIncentive } from "./acquisition-policy";
 
@@ -18,3 +19,5 @@ test("unknown market falls back conservatively",()=>assert.equal(consentPreset("
 test("known subscriber incentives are suppressed",()=>assert.equal(shouldSuppressKnownCustomerIncentive({isNewSubscriber:false,hasRecentOrder:false}).reason,"already_subscribed"));
 test("recent-buyer incentives are suppressed",()=>assert.equal(shouldSuppressKnownCustomerIncentive({isNewSubscriber:true,hasRecentOrder:true}).reason,"recent_customer"));
 test("explicit merchant override permits known buyers",()=>assert.equal(shouldSuppressKnownCustomerIncentive({isNewSubscriber:false,hasRecentOrder:true,allowKnownCustomers:true}).allowed,true));
+test("network consent evidence hashes IP rather than retaining it",()=>{const evidence=consentRequestEvidence({ip:"203.0.113.7",userAgent:"browser",secret:"test-secret"});assert.equal("ip" in evidence,false);assert.equal(evidence.ipHash?.length,64);assert.equal(evidence.userAgent,"browser")});
+test("failed and stale incentive grants are retryable",()=>{const now=new Date("2026-09-07T12:00:00Z");assert.equal(incentiveGrantIsClaimable("failed",now,now),true);assert.equal(incentiveGrantIsClaimable("processing",new Date(now.getTime()-301000),now),true);assert.equal(incentiveGrantIsClaimable("processing",now,now),false)});

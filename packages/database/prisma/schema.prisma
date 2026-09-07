@@ -1775,24 +1775,26 @@ model Popup {
 }
 
 model FormSubmission {
-  id                 String    @id @default(cuid())
-  formId             String
-  customerId         String?
-  popupId            String?
-  visitorId          String?
-  sessionId          String?
-  experimentId       String?
-  experimentVariant  String?
-  data               Json // submitted field values { email, phone, name, ... }
-  source             String    @default("popup") // popup, embed, hosted, api
-  consentGiven       Json? // { email?: bool, sms?: bool, whatsapp?: bool }
-  incentiveCode      String?
-  incentiveIssuedAt  DateTime?
-  attributedOrderId  String?   @unique
-  attributedRevenue  Decimal?  @db.Decimal(12, 2)
-  attributedDiscount Decimal?  @db.Decimal(12, 2)
-  convertedAt        DateTime?
-  capturedAt         DateTime  @default(now())
+  id                         String    @id @default(cuid())
+  formId                     String
+  customerId                 String?
+  popupId                    String?
+  visitorId                  String?
+  sessionId                  String?
+  experimentId               String?
+  experimentVariant          String?
+  data                       Json // submitted field values { email, phone, name, ... }
+  source                     String    @default("popup") // popup, embed, hosted, api
+  consentGiven               Json? // { email?: bool, sms?: bool, whatsapp?: bool }
+  incentiveCode              String?
+  incentiveIssuedAt          DateTime?
+  incentiveEligible          Boolean?
+  incentiveSuppressionReason String?
+  attributedOrderId          String?   @unique
+  attributedRevenue          Decimal?  @db.Decimal(12, 2)
+  attributedDiscount         Decimal?  @db.Decimal(12, 2)
+  convertedAt                DateTime?
+  capturedAt                 DateTime  @default(now())
 
   form     Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id])
@@ -1853,18 +1855,22 @@ model FormExperimentExposure {
 }
 
 model FormIncentiveGrant {
-  id         String    @id @default(cuid())
-  formId     String
-  customerId String
-  kind       String
-  label      String
-  code       String?   @unique
-  value      Float?
-  status     String    @default("pending")
-  issuedAt   DateTime?
-  redeemedAt DateTime?
-  orderId    String?
-  createdAt  DateTime  @default(now())
+  id           String    @id @default(cuid())
+  formId       String
+  customerId   String
+  kind         String
+  discountType String?
+  label        String
+  code         String?   @unique
+  value        Float?
+  status       String    @default("pending")
+  attemptCount Int       @default(0)
+  lastError    String?
+  issuedAt     DateTime?
+  redeemedAt   DateTime?
+  orderId      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   form     Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)

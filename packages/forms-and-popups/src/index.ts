@@ -29,8 +29,9 @@ export {
 } from "./popup-engine";
 
 // Incentive logic
-export { deliverIncentive, chooseWeightedOutcome } from "./incentive-logic";
-export { createConsentConfirmation, redeemConsentConfirmation } from "./confirmation";
+export { deliverIncentive, chooseWeightedOutcome, incentiveGrantIsClaimable } from "./incentive-logic";
+export { canSendConsentConfirmation, createConsentConfirmation, redeemConsentConfirmation } from "./confirmation";
+export { consentRequestEvidence } from "./consent-evidence";
 export { assignFormExperimentArm } from "./experiment-assignment";
 export type { FormExperimentArm } from "./experiment-assignment";
 export { CONSENT_PRESETS, consentPreset } from "./consent-presets";

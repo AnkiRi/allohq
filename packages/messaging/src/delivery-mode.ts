@@ -8,6 +8,8 @@ export interface DeliveryModeDecision {
   reason?: "delivery_disabled" | "recipient_not_allowlisted" | "global_kill_switch";
 }
 
+export type EmailDeliveryClass = "marketing" | "transactional";
+
 function normalizedRecipient(value: string): string {
   const trimmed = value.trim().toLowerCase();
   if (trimmed.includes("@")) return trimmed;
@@ -73,4 +75,37 @@ export function getDeliveryModeDecision(
     return { allowed: false, mode, reason: "recipient_not_allowlisted" };
   }
   return { allowed: true, mode };
+}
+
+/**
+ * Consent and account-lifecycle messages use a transactional lane: they do
+ * not inherit campaign allowlists, complaint pauses, or the marketing kill
+ * switch. A separate emergency switch remains available for provider or
+ * abuse incidents. Recipient-level hard-bounce suppression is enforced by
+ * the caller before this policy is evaluated.
+ */
+export function getEmailDeliveryDecision(
+  recipient: string,
+  deliveryClass: EmailDeliveryClass,
+  env: {
+    mode?: string;
+    allowlist?: string;
+    killSwitch?: string;
+    transactionalKillSwitch?: string;
+  } = {},
+): DeliveryModeDecision {
+  if (deliveryClass === "marketing") {
+    return getDeliveryModeDecision(recipient, "email", env);
+  }
+  const stopped =
+    env.transactionalKillSwitch ??
+    process.env["TRANSACTIONAL_EMAIL_KILL_SWITCH"];
+  if (stopped?.trim().toLowerCase() === "true") {
+    return {
+      allowed: false,
+      mode: getMessagingSendMode(env.mode),
+      reason: "global_kill_switch",
+    };
+  }
+  return { allowed: true, mode: getMessagingSendMode(env.mode) };
 }

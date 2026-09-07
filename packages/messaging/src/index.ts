@@ -63,7 +63,7 @@ export async function send(message: Message): Promise<SendResult> {
 
 // ── Re-export channel functions ────────────────────────────────────────────
 
-export { sendEmail } from "./channels/email";
+export { sendEmail, sendTransactionalEmail } from "./channels/email";
 export { sendSms } from "./channels/sms";
 export { sendWhatsApp } from "./channels/whatsapp";
 export { sendRcs } from "./channels/rcs";

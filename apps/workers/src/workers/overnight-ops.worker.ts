@@ -3,6 +3,7 @@ import { prisma } from "@allohq/database";
 import { logActivity } from "@allohq/agent-core";
 import { scanOpportunities } from "@allohq/campaign-engine";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { enqueueCampaignOpportunities } from "../utils/enqueue-opportunities";
 
 const journeyStepQueue = new Queue(QUEUE_NAMES.JOURNEY_STEP, { connection: redisConnection });
 const campaignFactoryQueue = new Queue(QUEUE_NAMES.CAMPAIGN_FACTORY, { connection: redisConnection });
@@ -358,7 +359,7 @@ async function processStore(storeId: string) {
     opportunities = opps.length;
 
     for (const opp of opps) {
-      await campaignFactoryQueue.add("generate-draft", { opportunity: opp });
+      await enqueueCampaignOpportunities(campaignFactoryQueue, [opp]);
 
       await logActivity({
         storeId,

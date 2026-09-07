@@ -3,6 +3,14 @@ import { prisma } from "@allohq/database";
 
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
 
+export async function canSendConsentConfirmation(customerId: string): Promise<boolean> {
+  const blocked = await prisma.contactSuppression.findFirst({
+    where: { customerId, channel: "email", reason: "hard_bounce" },
+    select: { id: true },
+  });
+  return !blocked;
+}
+
 export async function createConsentConfirmation(customerId: string, storeId: string, channel: "email" | "sms", submissionId?: string) {
   const token = randomBytes(32).toString("base64url");
   await prisma.$transaction([

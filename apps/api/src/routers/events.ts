@@ -1,54 +1,11 @@
 import { z } from "zod";
-import { router, publicProcedure, workspaceProcedure } from "../trpc";
+import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 
 /**
  * Events router — handles browse event tracking and activity queries.
  */
 export const eventsRouter = router({
-  /**
-   * Track a browse event.
-   * Public-ish: validates that the storeId exists.
-   */
-  trackBrowse: publicProcedure
-    .input(
-      z.object({
-        storeId: z.string(),
-        customerId: z.string().optional(),
-        sessionId: z.string(),
-        productId: z.string(),
-        pageUrl: z.string().optional(),
-        duration: z.number().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Validate store exists
-      const store = await ctx.prisma.store.findUnique({
-        where: { id: input.storeId },
-        select: { id: true, isActive: true },
-      });
-
-      if (!store || !store.isActive) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Store not found or inactive",
-        });
-      }
-
-      const event = await ctx.prisma.browseEvent.create({
-        data: {
-          storeId: input.storeId,
-          customerId: input.customerId,
-          sessionId: input.sessionId,
-          productId: input.productId,
-          pageUrl: input.pageUrl,
-          duration: input.duration,
-        },
-      });
-
-      return { id: event.id };
-    }),
-
   /**
    * Get recent browse activity for analytics.
    * Requires workspace authentication.

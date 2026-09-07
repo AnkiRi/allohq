@@ -2,6 +2,8 @@ import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { checkEventTriggers } from "../utils/event-triggers";
+import { redactAcquisitionEvidence } from "../acquisition-privacy";
+import { calculateNetOrderRevenue } from "../refund-revenue";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
@@ -285,6 +287,13 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             prisma.formExperimentExposure.updateMany({ where: { orderId: order.id }, data: { orderId: null, revenue: null, convertedAt: null } }),
             prisma.formIncentiveGrant.updateMany({ where: { orderId: order.id }, data: { orderId: null, redeemedAt: null, status: "issued" } }),
           ]);
+        } else if (order) {
+          const netRevenue = calculateNetOrderRevenue(payload, order.totalPrice);
+          await prisma.$transaction([
+            prisma.formSubmission.updateMany({ where: { attributedOrderId: order.id }, data: { attributedRevenue: netRevenue } }),
+            prisma.formExperimentExposure.updateMany({ where: { orderId: order.id }, data: { revenue: netRevenue } }),
+            prisma.experimentOrderOutcome.updateMany({ where: { orderId: order.id }, data: { revenue: netRevenue } }),
+          ]);
         }
         break;
       }
@@ -488,12 +497,7 @@ async function redactCustomer(
   if (!customer) return;
 
   await prisma.$transaction(async (tx) => {
-    const submissions = await tx.formSubmission.findMany({ where: { customerId: customer.id }, select: { id: true } });
-    await tx.formExperimentExposure.deleteMany({ where: { submissionId: { in: submissions.map((row) => row.id) } } });
-    await tx.formIncentiveGrant.deleteMany({ where: { customerId: customer.id } });
-    await tx.consentConfirmation.deleteMany({ where: { customerId: customer.id } });
-    await tx.customerTrait.deleteMany({ where: { customerId: customer.id } });
-    await tx.experimentOrderOutcome.deleteMany({ where: { customerId: customer.id } });
+    await redactAcquisitionEvidence(tx, customer.id);
     await tx.conversation.deleteMany({ where: { customerId: customer.id } });
     await tx.customerMemory.deleteMany({ where: { customerId: customer.id } });
     await tx.formSubmission.deleteMany({ where: { customerId: customer.id } });

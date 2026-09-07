@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { randomUUID } from "node:crypto";
 import type { Message, SendResult } from "../../types";
-import { getDeliveryModeDecision } from "../../delivery-mode";
+import { getEmailDeliveryDecision, type EmailDeliveryClass } from "../../delivery-mode";
 import { isTransientProviderError, withProviderRetry } from "../../provider-retry";
 import { htmlToPlainText } from "../../plain-text";
 
@@ -18,9 +18,9 @@ function getResendClient(): Resend {
   return resendClient;
 }
 
-export async function sendEmail(message: Message): Promise<SendResult> {
+async function deliverEmail(message: Message, deliveryClass: EmailDeliveryClass): Promise<SendResult> {
   const messageId = randomUUID();
-  const delivery = getDeliveryModeDecision(message.to, "email");
+  const delivery = getEmailDeliveryDecision(message.to, deliveryClass);
   if (!delivery.allowed) {
     return {
       messageId,
@@ -77,4 +77,17 @@ export async function sendEmail(message: Message): Promise<SendResult> {
       retryable: isTransientProviderError(err),
     };
   }
+}
+
+/** Marketing delivery obeys global mode, allowlist and campaign kill switches. */
+export function sendEmail(message: Message): Promise<SendResult> {
+  return deliverEmail(message, "marketing");
+}
+
+/**
+ * Transactional lifecycle delivery is independent from marketing campaign
+ * controls. Callers must first enforce address-level hard-bounce suppression.
+ */
+export function sendTransactionalEmail(message: Message): Promise<SendResult> {
+  return deliverEmail(message, "transactional");
 }
