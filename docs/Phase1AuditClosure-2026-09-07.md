@@ -38,9 +38,10 @@ it does not overwrite the founder-edited pre-acceptance summary.
    remains intact.
 9. **Privacy testing.** The former source-text assertion was replaced with a
    behavioral transaction-contract test that executes the redaction function
-   and verifies every linked deletion. A true Postgres integration execution
-   remains part of the isolated-database acceptance drill because production
-   data must never be used as a test fixture.
+   and verifies every linked deletion. A real Postgres integration suite now
+   creates linked evidence, executes the same redaction function, and verifies
+   the rows are gone. Run it with an isolated `TEST_DATABASE_URL`; production
+   data is explicitly not an acceptable fixture.
 10. **Opportunity deduplication.** Scanner, activation, and overnight producers
     now share one enqueue function. Its deterministic daily fingerprint uses
     store, opportunity type, deduplicated/sorted customers and products, and
@@ -71,6 +72,8 @@ Repository closure requires all of the following on the committed revision:
 - `pnpm -r lint` — zero errors (existing warnings are tracked separately).
 - `pnpm -r build` — all production builds succeed.
 - `pnpm --filter @allohq/database exec prisma validate --schema prisma/schema.prisma`.
+- `pnpm --filter @allohq/workers test:privacy:integration` with an isolated
+  `TEST_DATABASE_URL` during external acceptance.
 - `git diff --check`.
 
 External acceptance remains the place for real Postgres concurrency, Shopify
