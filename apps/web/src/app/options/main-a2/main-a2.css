@@ -181,10 +181,83 @@
   font-size: 13px;
   margin: 20px 0;
 }
+.a2-working-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 66px;
+  color: var(--muted);
+  font:
+    500 11px "JetBrains Mono",
+    monospace;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+.a2-working-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: a2-consider 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.a2-approval.is-resolved .a2-working-state {
+  position: absolute;
+  opacity: 0;
+  filter: blur(3px);
+  pointer-events: none;
+}
+.a2-decision-marks {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 5px;
+  margin: 4px 0 14px;
+}
+.a2-decision-marks i {
+  aspect-ratio: 1;
+  max-width: 12px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 1px solid transparent;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.a2-approval.is-resolved .a2-decision-marks i.is-control,
+.a2-approval.is-resolved .a2-decision-marks i.is-skip {
+  background: transparent;
+  transform: scale(0.86);
+  transition-delay: calc(var(--mark-index) * 120ms);
+}
+.a2-approval.is-resolved .a2-decision-marks i.is-control {
+  border-color: #90a39a;
+  border-style: dashed;
+}
+.a2-approval.is-resolved .a2-decision-marks i.is-skip {
+  border-color: #c9ab6f;
+}
 .a2-counts {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  transition:
+    opacity 260ms ease 90ms,
+    transform 360ms cubic-bezier(0.16, 1, 0.3, 1) 90ms;
+}
+.a2-approval.is-working .a2-counts,
+.a2-approval.is-working .a2-reason,
+.a2-approval.is-working .a2-actions,
+.a2-approval.is-working small {
+  opacity: 0;
+  transform: translateY(7px);
+}
+.a2-reason,
+.a2-actions,
+.a2-approval small {
+  transition:
+    opacity 260ms ease 160ms,
+    transform 360ms cubic-bezier(0.16, 1, 0.3, 1) 160ms;
 }
 .a2-counts div {
   background: #eef4f0;
@@ -278,6 +351,16 @@
   border-style: dashed;
   background: transparent;
   opacity: 0.65;
+}
+.a2-field.is-active i.is-restraint {
+  animation:
+    a2-drift 12s ease-in-out infinite alternate,
+    a2-restraint 7s ease-in-out infinite;
+}
+.a2-field.is-active i.is-restraint:nth-child(24) {
+  animation-delay:
+    -5s,
+    -3.5s;
 }
 .a2-hero__field {
   position: absolute;
@@ -421,6 +504,28 @@ blockquote {
   background: transparent;
   border: 1px solid #c9ab6f;
 }
+.a2-decision-people i.is-control,
+.a2-decision-people i.is-skip {
+  background: #85928c;
+  border-color: transparent;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.a2-decision-people.is-decided i.is-control,
+.a2-decision-people.is-decided i.is-skip {
+  background: transparent;
+  transform: scale(0.86);
+  transition-delay: calc(var(--mark-index) * 120ms);
+}
+.a2-decision-people.is-decided i.is-control {
+  border-color: #fff;
+  border-style: dashed;
+}
+.a2-decision-people.is-decided i.is-skip {
+  border-color: #c9ab6f;
+}
 .a2-breathe {
   height: 150px;
   position: relative;
@@ -529,9 +634,24 @@ blockquote {
   grid-template-columns: repeat(7, 1fr);
 }
 .a2-holdout__group.is-control i {
-  border: 1px dashed var(--green);
+  border: 1px solid transparent;
   border-radius: 50%;
+  background: var(--green);
+  transform: translateX(-52px) scale(0.72);
+  opacity: 0;
+}
+.a2-holdout.is-revealed .a2-holdout__group.is-control i {
+  border-color: var(--green);
+  border-style: dashed;
   background: transparent;
+  transform: translateX(0) scale(1);
+  opacity: 1;
+  transition:
+    transform 430ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+  transition-delay: calc(var(--mark-index) * 7ms);
 }
 .a2-holdout__group strong {
   font-size: 15px;
@@ -928,6 +1048,54 @@ blockquote {
   }
   .a2-field i {
     transform: none !important;
+  }
+  .a2-approval.is-working .a2-working-state {
+    display: none;
+  }
+  .a2-approval.is-working .a2-counts,
+  .a2-approval.is-working .a2-reason,
+  .a2-approval.is-working .a2-actions,
+  .a2-approval.is-working small {
+    opacity: 1;
+    transform: none;
+  }
+  .a2-holdout__group.is-control i {
+    opacity: 1;
+    transform: none;
+    background: transparent;
+    border-color: var(--green);
+    border-style: dashed;
+  }
+}
+@keyframes a2-consider {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.3;
+  }
+  45% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.7);
+    opacity: 0.3;
+  }
+}
+@keyframes a2-restraint {
+  0%,
+  72%,
+  100% {
+    background: var(--green);
+    border-style: solid;
+    opacity: 0.28;
+    transform: scale(1);
+  }
+  80%,
+  92% {
+    background: transparent;
+    border-style: dashed;
+    opacity: 0.75;
+    transform: scale(1.8);
   }
 }
 .a2-actions b,

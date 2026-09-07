@@ -23,7 +23,10 @@ export function AmbientField({ className = "" }: { className?: string }) {
       aria-hidden="true"
     >
       {Array.from({ length: 38 }, (_, index) => (
-        <i key={index} className={index % 11 === 0 ? "is-silent" : ""} />
+        <i
+          key={index}
+          className={`${index % 11 === 0 ? "is-silent" : ""} ${index === 7 || index === 23 ? "is-restraint" : ""}`}
+        />
       ))}
     </div>
   );

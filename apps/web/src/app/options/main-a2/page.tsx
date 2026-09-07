@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AmbientField } from "./AmbientField";
-import { ApprovalSurface, HoldoutMarks, Receipt } from "./Surfaces";
+import { ApprovalSurface, DecisionMarks, HoldoutMarks, Receipt } from "./Surfaces";
 import "./main-a2.css";
 
 export const metadata: Metadata = {
@@ -126,11 +126,7 @@ export default function MainA2Page() {
                 <p>
                   <b>Two are held back.</b> What they buy anyway becomes the baseline.
                 </p>
-                <div className="a2-people">
-                  {Array.from({ length: 20 }, (_, i) => (
-                    <i key={i} className={i > 15 ? (i > 17 ? "is-skip" : "is-control") : ""} />
-                  ))}
-                </div>
+                <DecisionMarks />
               </article>
             </div>
           </div>
