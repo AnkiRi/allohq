@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AmbientField } from "./AmbientField";
 import { ApprovalSurface, HoldoutMarks } from "./Surfaces";
 import { BlastComparison, JourneyScene, LedgerScene, ReceiptStream } from "./SpecificationScenes";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import "./main-a2.css";
 
 export const metadata: Metadata = {
@@ -12,10 +13,12 @@ export const metadata: Metadata = {
 };
 
 const signup = "/sign-up";
+const THEME_INIT = `(function(){try{var ok=function(v){return v==='drenched'||v==='light'||v==='dark'};var q=new URLSearchParams(location.search).get('pal');var s=localStorage.getItem('allo-theme');var p=ok(q)?q:ok(s)?s:'drenched';var el=(document.currentScript&&document.currentScript.parentElement)||document.querySelector('.main-a2');if(el)el.setAttribute('data-pal',p)}catch(e){}})();`;
 
 export default function MainA2Page() {
   return (
-    <div className="main-a2">
+    <div className="main-a2" data-pal="drenched" suppressHydrationWarning>
+      <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       <header className="a2-nav">
         <a href="#top" className="a2-logo">
           <i />
@@ -26,9 +29,12 @@ export default function MainA2Page() {
           <a href="#proof">how it proves it</a>
           <a href="#pricing">what it costs</a>
         </nav>
-        <Link href={signup} className="a2-button">
-          Start free
-        </Link>
+        <div className="a2-nav__actions">
+          <ThemeSwitcher />
+          <Link href={signup} className="a2-button">
+            Start free
+          </Link>
+        </div>
       </header>
 
       <main id="top">
