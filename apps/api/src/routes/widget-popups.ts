@@ -235,11 +235,27 @@ export async function handleWidgetPopups(
     return;
   }
 
+  // GET /widget/form?id=... — active inline/hosted form
+  if (url.pathname === "/widget/form" && req.method === "GET") {
+    const formId = url.searchParams.get("id");
+    const form = formId ? await prisma.form.findFirst({ where: { id: formId, storeId: store.id, status: "active" } }) : null;
+    if (!form) {
+      json(res, 404, { error: "Active signup form not found" });
+      return;
+    }
+    const styling = (form.styling as unknown as FormStyling) ?? {};
+    styling.privacyPolicyUrl ??= `https://${store.shopDomain}/policies/privacy-policy`;
+    const rendered = renderFormHtml((form.fields as unknown as FormField[]) ?? [], styling);
+    json(res, 200, { formId: form.id, formHtml: rendered.html, formCss: rendered.css });
+    return;
+  }
+
   // POST /widget/submit
   if (url.pathname === "/widget/submit" && req.method === "POST") {
     try {
       const body = await parseBody(req);
       const popupId = body["popupId"] as string;
+      const formId = body["formId"] as string;
       const data = body["data"] as Record<string, unknown>;
       const source = (body["source"] as string) ?? "popup";
 
@@ -256,13 +272,17 @@ export async function handleWidgetPopups(
             include: { form: true },
           })
         : null;
-      if (!popup) {
+      const standaloneForm = !popup && formId
+        ? await prisma.form.findFirst({ where: { id: formId, storeId: store.id, status: "active" } })
+        : null;
+      const resolvedForm = popup?.form ?? standaloneForm;
+      if (!resolvedForm) {
         json(res, 404, { error: "Active signup form not found" });
         return;
       }
 
-      const configuredFields = (popup.form.fields as unknown as FormField[]) ?? [];
-      const formStyling = (popup.form.styling as unknown as FormStyling) ?? {};
+      const configuredFields = (resolvedForm.fields as unknown as FormField[]) ?? [];
+      const formStyling = (resolvedForm.styling as unknown as FormStyling) ?? {};
       const sanitizedData: Record<string, unknown> = {};
       for (const field of configuredFields) {
         const value = data[field.name];
@@ -325,7 +345,7 @@ export async function handleWidgetPopups(
 
       // Capture submission
       const result = await captureSubmission({
-        formId: popup.formId,
+        formId: resolvedForm.id,
         storeId: store.id,
         data: sanitizedData,
         source,
@@ -336,13 +356,26 @@ export async function handleWidgetPopups(
           privacyPolicyUrl: formStyling.privacyPolicyUrl,
           locale: req.headers["accept-language"]?.split(",")[0]?.slice(0, 16) ?? "unknown",
           capturedAt: new Date().toISOString(),
-          popupId,
+          popupId: popupId || undefined,
         },
       });
 
+      if (result.customerId) {
+        for (const field of configuredFields) {
+          if (!field.traitKey || field.name.startsWith("consent_")) continue;
+          const value = sanitizedData[field.name];
+          if (value === undefined || value === "") continue;
+          await prisma.customerTrait.upsert({
+            where: { customerId_key: { customerId: result.customerId, key: field.traitKey } },
+            create: { storeId: store.id, customerId: result.customerId, key: field.traitKey, value: value as any, source: "form", formId: resolvedForm.id },
+            update: { value: value as any, source: "form", formId: resolvedForm.id, observedAt: new Date() },
+          });
+        }
+      }
+
       // Check for incentive
       let discountCode: string | null = null;
-      const incentiveConfig = popup.form.incentiveConfig as unknown as IncentiveConfig | null;
+      const incentiveConfig = resolvedForm.incentiveConfig as unknown as IncentiveConfig | null;
       if (incentiveConfig && isNewEmailSubscriber) {
         const incentiveResult = await deliverIncentive(store.id, incentiveConfig);
         discountCode = incentiveResult?.code ?? null;

@@ -21,6 +21,7 @@ interface FormField {
   placeholder?: string;
   options?: string[];
   step?: number;
+  traitKey?: string;
 }
 
 const fieldTypeLabels: Record<string, string> = {
@@ -245,6 +246,12 @@ export default function NewFormPage() {
                   />
                   Required
                 </label>
+                <label className="space-y-1 text-[10px] text-muted-foreground">Step
+                  <input type="number" min={1} max={5} value={field.step ?? 1} onChange={(e) => updateField(i, { step: Math.max(1, Math.min(5, Number(e.target.value))) })} className="block w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground" />
+                </label>
+                {!field.name.startsWith("consent_") && !["email", "phone"].includes(field.name) && <label className="space-y-1 text-[10px] text-muted-foreground">Customer trait
+                  <input value={field.traitKey ?? ""} onChange={(e) => updateField(i, { traitKey: e.target.value })} placeholder="preferences.skin_type" className="block w-full px-3 py-2 bg-background border border-border rounded-md text-[12px] text-foreground" />
+                </label>}
               </div>
               <button
                 onClick={() => removeField(i)}

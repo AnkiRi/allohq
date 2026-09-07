@@ -30,3 +30,14 @@ test("theme app embed and readiness observation are wired", () => {
   assert.match(route, /signup_embed_loaded/);
   assert.match(readiness, /signupEmbedEvents/);
 });
+
+test("inline and multi-step forms persist zero-party traits", () => {
+  const renderer = read("packages/forms-and-popups/src/form-builder.ts");
+  const inline = read("apps/widget/src/inline-form.ts");
+  const route = read("apps/api/src/routes/widget-popups.ts");
+  const block = read("extensions/joon-signup-forms/blocks/inline-form.liquid");
+  assert.match(renderer, /data-allo-step/);
+  assert.match(inline, /data-joon-inline-form/);
+  assert.match(route, /customerTrait\.upsert/);
+  assert.match(block, /joon-inline\.js/);
+});

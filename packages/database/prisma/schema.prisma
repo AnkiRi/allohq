@@ -514,6 +514,7 @@ model Customer {
   proactiveOutreachLogs          ProactiveOutreachLog[]
   contactConsents                ContactConsent[]
   contactSuppressions            ContactSuppression[]
+  traits                         CustomerTrait[]
 
   @@unique([storeId, externalId])
   @@index([email])
@@ -542,6 +543,25 @@ model ContactConsent {
   @@unique([customerId, channel])
   @@index([storeId, channel, status])
   @@map("contact_consents")
+}
+
+model CustomerTrait {
+  id         String   @id @default(cuid())
+  storeId    String
+  customerId String
+  key        String
+  value      Json
+  source     String
+  formId     String?
+  observedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, key])
+  @@index([storeId, key])
+  @@map("customer_traits")
 }
 
 /// Permanent or time-bounded delivery suppression. Provider complaints and hard

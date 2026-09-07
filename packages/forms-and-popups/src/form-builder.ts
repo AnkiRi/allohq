@@ -74,8 +74,7 @@ export function renderFormHtml(
     ...styling,
   };
 
-  const fieldHtml = fields
-    .map((field) => {
+  const renderField = (field: FormField) => {
       const requiredAttr = field.required ? "required" : "";
       const placeholderAttr = field.placeholder
         ? `placeholder="${escapeHtml(field.placeholder)}"`
@@ -107,8 +106,14 @@ export function renderFormHtml(
         <label>${escapeHtml(field.label)}</label>
         <input type="${inputType}" name="${escapeHtml(field.name)}" ${phoneAttrs} ${placeholderAttr} ${requiredAttr} />
       </div>`;
-    })
-    .join("\n");
+    };
+  const steps = [...new Set(fields.map((field) => field.step ?? 1))].sort((a, b) => a - b);
+  const fieldHtml = steps.map((step, index) => {
+    const controls = steps.length > 1
+      ? `<div class="allo-step-controls">${index ? '<button type="button" data-allo-back>Back</button>' : ""}${index < steps.length - 1 ? '<button type="button" data-allo-next>Continue</button>' : `<button type="submit" class="allo-submit">${escapeHtml(s.buttonText ?? "Subscribe")}</button>`}</div>`
+      : "";
+    return `<section data-allo-step="${step}" ${index ? "hidden" : ""}>${fields.filter((field) => (field.step ?? 1) === step).map(renderField).join("\n")}${controls}</section>`;
+  }).join("\n");
 
   const hasSms = fields.some((field) => field.name === "consent_sms");
   const defaultSmsDisclosure = "By opting into texts, you agree to receive recurring automated marketing messages. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to opt out.";
@@ -118,7 +123,7 @@ export function renderFormHtml(
 
   const html = `<form class="allo-form" data-allo-form>
   ${fieldHtml}
-  <button type="submit" class="allo-submit">${escapeHtml(s.buttonText ?? "Subscribe")}</button>
+  ${steps.length === 1 ? `<button type="submit" class="allo-submit">${escapeHtml(s.buttonText ?? "Subscribe")}</button>` : ""}
   ${privacy}
 </form>`;
 
@@ -179,6 +184,8 @@ export function renderFormHtml(
   cursor: pointer;
   transition: opacity 0.2s;
 }
+.allo-step-controls { display:flex; justify-content:space-between; gap:8px; margin:8px 0 16px; }
+.allo-step-controls button { padding:10px 14px; border:1px solid currentColor; border-radius:6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
 .allo-submit:hover {
   opacity: 0.9;
 }

@@ -132,6 +132,21 @@ export class PopupWidget {
     // Handle form submission
     const form = container.querySelector("form[data-allo-form]");
     if (form) {
+      const steps = Array.from(form.querySelectorAll<HTMLElement>("[data-allo-step]"));
+      const move = (current: HTMLElement, direction: number) => {
+        const index = steps.indexOf(current);
+        if (direction > 0) {
+          const inputs = Array.from(current.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input,select"));
+          if (!inputs.every((input) => input.reportValidity())) return;
+        }
+        const target = steps[index + direction];
+        if (!target) return;
+        current.hidden = true;
+        target.hidden = false;
+        target.querySelector<HTMLElement>("input,select")?.focus();
+      };
+      form.querySelectorAll<HTMLElement>("[data-allo-next]").forEach((button) => button.addEventListener("click", () => move(button.closest("[data-allo-step]") as HTMLElement, 1)));
+      form.querySelectorAll<HTMLElement>("[data-allo-back]").forEach((button) => button.addEventListener("click", () => move(button.closest("[data-allo-step]") as HTMLElement, -1)));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         this.handleSubmit(popup.popupId, form as HTMLFormElement, container);

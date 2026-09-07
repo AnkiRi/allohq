@@ -38,8 +38,8 @@ References:
 | Center modal | Ready | Best for a focused offer |
 | Bottom flyout | Ready | Less disruptive and useful during browsing |
 | Announcement bar | Ready | Compact capture surface at the top of the page |
-| Embedded section/footer form | Backend renderer exists; storefront app block pending | Must be placeable through the theme editor rather than pasted code |
-| Multi-step form | Pending | Useful for asking email first and optional zero-party preferences second |
+| Embedded section/footer form | Ready in code | Shopify app block renders any active form by ID; live theme acceptance remains |
+| Multi-step form | Ready in code | Up to five steps with per-step validation and keyboard focus progression |
 | Spin-to-win | Pending by design | Requires server-selected weighted prizes, odds disclosure, per-visitor eligibility, abuse protection and jurisdiction review. A decorative wheel with a predetermined result will not be shipped |
 | Dedicated signup landing page | Pending | Useful for social and paid acquisition; not required for first design partners |
 
@@ -51,8 +51,8 @@ The market selector supplies conservative disclosure presets and evidence labeli
 
 ## Next strength layer
 
-1. Add a theme-editor section block for inline/footer forms.
-2. Add multi-step forms and optional zero-party preference mapping into segment traits.
+1. Validate the theme-editor section block across representative Online Store 2.0 themes.
+2. Surface customer-trait keys in the segment builder as merchant-friendly preference conditions.
 3. Add impression, submit, incentive redemption and downstream purchase attribution dashboards.
 4. Experiment on form treatment versus no form, offer, delay and creative—not merely raw conversion.
 5. Use Joon's decision layer to suppress acquisition offers for known customers who would purchase without a discount.

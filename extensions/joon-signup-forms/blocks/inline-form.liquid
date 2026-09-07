@@ -1,0 +1,17 @@
+<div data-joon-inline-form="{{ block.settings.form_id | escape }}"></div>
+<script>
+  window.JoonSignupForms = { apiUrl: "https://api.joonhq.com", shop: {{ shop.permanent_domain | json }} };
+  (function boot(attempt) {
+    if (!window.JoonInline) { if (attempt < 100) window.setTimeout(function(){ boot(attempt + 1); }, 50); return; }
+    var config = window.JoonSignupForms;
+    fetch(config.apiUrl + "/widget/bootstrap?shop=" + encodeURIComponent(config.shop)).then(function(r){ return r.ok ? r.json() : Promise.reject(); }).then(function(s){ window.JoonInline.init({ apiKey:s.publishableKey, apiUrl:config.apiUrl }); }).catch(function(){});
+  })(0);
+</script>
+{% schema %}
+{
+  "name": "Joon inline form",
+  "target": "section",
+  "javascript": "joon-inline.js",
+  "settings": [{ "type": "text", "id": "form_id", "label": "Form ID" }]
+}
+{% endschema %}
