@@ -15,7 +15,7 @@ function isTheme(value: string | null): value is ThemeId {
   return value === "drenched" || value === "light" || value === "dark";
 }
 
-function resolveTheme(): ThemeId {
+function resolveTheme(defaultTheme: ThemeId): ThemeId {
   try {
     const queryTheme = new URLSearchParams(window.location.search).get("pal");
     if (isTheme(queryTheme)) return queryTheme;
@@ -24,18 +24,18 @@ function resolveTheme(): ThemeId {
   } catch {
     // Storage and query parsing are optional; Dawn remains the safe default.
   }
-  return "drenched";
+  return defaultTheme;
 }
 
-export function ThemeSwitcher() {
-  const [theme, setTheme] = useState<ThemeId>("drenched");
+export function ThemeSwitcher({ defaultTheme = "drenched" }: { defaultTheme?: ThemeId }) {
+  const [theme, setTheme] = useState<ThemeId>(defaultTheme);
 
   useEffect(() => {
-    const resolved = resolveTheme();
+    const resolved = resolveTheme(defaultTheme);
     setTheme(resolved);
     const root = document.querySelector<HTMLElement>(".main-a2");
     if (root) root.dataset.pal = resolved;
-  }, []);
+  }, [defaultTheme]);
 
   const choose = (next: ThemeId) => {
     setTheme(next);

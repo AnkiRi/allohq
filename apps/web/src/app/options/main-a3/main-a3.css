@@ -1,0 +1,393 @@
+.main-a3 {
+  --a3-rule: var(--line-2);
+}
+.main-a3 h1,
+.main-a3 h2,
+.main-a3 h3 {
+  text-wrap: balance;
+  letter-spacing: -0.04em;
+}
+.main-a3 p {
+  text-wrap: pretty;
+}
+.a3-overline {
+  color: var(--green);
+  font:
+    600 11px "JetBrains Mono",
+    monospace;
+}
+.a3-hero {
+  min-height: 820px;
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  align-items: center;
+  gap: clamp(40px, 6vw, 90px);
+  position: relative;
+}
+.a3-hero h1 {
+  max-width: 720px;
+  margin: 18px 0 28px;
+  font-size: clamp(58px, 7vw, 96px);
+  line-height: 0.93;
+}
+.a3-hero__copy > p {
+  max-width: 650px;
+  color: var(--muted);
+  font-size: 21px;
+  line-height: 1.5;
+}
+.a3-hero__surface {
+  position: relative;
+  z-index: 2;
+  transform: rotate(-1deg);
+}
+.a3-hero__field {
+  position: absolute;
+  right: -60px;
+  top: 100px;
+  opacity: 0.28;
+  transform: scale(2.6);
+}
+.a3-morning {
+  padding: clamp(90px, 11vw, 150px) 0;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  align-items: center;
+  gap: clamp(50px, 8vw, 110px);
+}
+.a3-morning__note {
+  background: var(--sheet);
+  padding: 34px;
+  box-shadow: var(--shadow);
+  transform: rotate(0.7deg);
+}
+.a3-morning__note header {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font:
+    500 10px "JetBrains Mono",
+    monospace;
+}
+.a3-morning__note h2 {
+  font-size: 32px;
+  margin: 30px 0 4px;
+}
+.a3-morning__note > p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+.a3-morning__copy h2,
+.a3-section-copy h2,
+.a3-close h2 {
+  font-size: clamp(42px, 5vw, 68px);
+  line-height: 1;
+  margin: 18px 0 22px;
+}
+.a3-morning__copy p,
+.a3-section-copy p,
+.a3-close p {
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.55;
+}
+.a3-morning__copy strong {
+  display: block;
+  margin-top: 28px;
+  max-width: 540px;
+  color: var(--green);
+}
+.a3-rohan {
+  padding: 130px 0;
+  background: var(--surface-2);
+}
+.a3-rohan__grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 100px;
+  align-items: center;
+}
+.a3-rohan h2 {
+  font-size: clamp(48px, 6vw, 80px);
+  line-height: 0.96;
+  margin: 20px 0 28px;
+}
+.a3-rohan__grid > div:first-child p {
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1.55;
+}
+.a3-rohan__receipts {
+  position: relative;
+}
+.a3-rohan__receipts .a2-receipt {
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  padding: 16px 18px;
+  margin: -1px 0 0;
+}
+.a3-rohan__receipts .a2-receipt.is-silent {
+  border-style: dashed;
+  margin: 10px 0;
+}
+.a3-rohan__receipts > p {
+  color: var(--muted);
+  font:
+    500 9px "JetBrains Mono",
+    monospace;
+}
+.a3-proof {
+  padding: 130px 0;
+}
+.a3-section-copy {
+  max-width: 760px;
+}
+.a3-proof > small {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  font:
+    500 10px "JetBrains Mono",
+    monospace;
+}
+.a3-email {
+  padding: 130px 0;
+  background: var(--surface-2);
+}
+.a3-email__grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: clamp(60px, 9vw, 130px);
+  align-items: center;
+}
+.a3-voice {
+  margin-top: 38px;
+  border-top: 1px solid var(--line);
+}
+.a3-voice div {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.a3-voice dt {
+  color: var(--muted);
+}
+.a3-voice dd {
+  font-weight: 600;
+}
+.a3-email-preview {
+  background: var(--sheet);
+  box-shadow: var(--shadow);
+}
+.a3-email-preview > header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  font:
+    600 12px "JetBrains Mono",
+    monospace;
+  letter-spacing: 0.12em;
+}
+.a3-email-preview > header i {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--green);
+  border-radius: 50%;
+}
+.a3-email-preview__hero {
+  padding: 70px clamp(30px, 6vw, 76px);
+  text-align: center;
+  background: var(--green2);
+}
+.a3-email-preview__hero small {
+  color: var(--green);
+  font:
+    500 10px "JetBrains Mono",
+    monospace;
+}
+.a3-email-preview__hero h3 {
+  font-size: clamp(38px, 4vw, 58px);
+  line-height: 1;
+  margin: 20px 0;
+}
+.a3-email-preview__hero p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.a3-email-preview__hero button {
+  border: 0;
+  border-radius: 999px;
+  padding: 13px 19px;
+  margin-top: 18px;
+  background: var(--green);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.a3-email-preview footer {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 10px;
+}
+.a3-journeys {
+  padding: 130px 0;
+}
+.a3-acquisition {
+  padding: 130px 0;
+}
+.a3-acquisition__row {
+  margin-top: 55px;
+  display: grid;
+  grid-template-columns: 1.15fr 0.75fr 1fr;
+  gap: 18px;
+}
+.a3-acquisition__row > * {
+  padding: 30px;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+}
+.a3-consent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.a3-consent span {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.a3-consent small {
+  color: var(--green);
+}
+.a3-close {
+  position: relative;
+  padding: 120px 0 0;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.a3-close > .a2-field {
+  position: absolute;
+  right: 8%;
+  top: 8%;
+  opacity: 0.3;
+  transform: scale(2);
+}
+.a3-close__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 100px;
+  position: relative;
+}
+.a3-founder {
+  padding-left: 40px;
+  border-left: 1px solid var(--a3-rule);
+}
+.a3-founder blockquote {
+  margin: 0 0 28px;
+  font-size: 28px;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+}
+.a3-founder span {
+  color: var(--muted);
+  font:
+    500 10px "JetBrains Mono",
+    monospace;
+}
+.a3-final {
+  position: relative;
+  max-width: 760px;
+  margin: 120px auto 0;
+  padding: 90px 24px;
+  text-align: center;
+}
+.a3-final h2 {
+  margin-top: 0;
+}
+.a3-final p {
+  max-width: 600px;
+  margin: 0 auto 26px;
+}
+@media (max-width: 900px) {
+  .a3-hero,
+  .a3-morning,
+  .a3-rohan__grid,
+  .a3-email__grid,
+  .a3-close__grid {
+    grid-template-columns: 1fr;
+  }
+  .a3-hero {
+    padding: 100px 0;
+  }
+  .a3-hero__surface {
+    max-width: 620px;
+    transform: none;
+  }
+  .a3-rohan__grid,
+  .a3-email__grid,
+  .a3-close__grid {
+    gap: 55px;
+  }
+  .a3-founder {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--a3-rule);
+    padding-top: 40px;
+  }
+  .a3-acquisition__row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .a3-consent {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 600px) {
+  .a3-hero h1 {
+    font-size: 52px;
+  }
+  .a3-hero__copy > p {
+    font-size: 18px;
+  }
+  .a3-hero__field {
+    display: none;
+  }
+  .a3-morning__note {
+    padding: 22px;
+    transform: none;
+  }
+  .a3-morning__note header {
+    gap: 15px;
+  }
+  .a3-acquisition__row {
+    grid-template-columns: 1fr;
+  }
+  .a3-consent {
+    grid-column: auto;
+  }
+  .a3-rohan,
+  .a3-proof,
+  .a3-email,
+  .a3-journeys,
+  .a3-acquisition {
+    padding-block: 90px;
+  }
+  .a3-close__grid {
+    gap: 45px;
+  }
+  .a3-final {
+    margin-top: 70px;
+    padding-block: 70px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-a3 * {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
