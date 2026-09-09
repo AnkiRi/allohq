@@ -56,7 +56,7 @@ The six highest-density representatives - `/dashboard`, `/campaigns/new`, `/form
 - Browser keyboard traversal reaches a visible 2px cobalt focus outline; theme controls are real pressed-state buttons.
 - Warm-paper muted ink is `rgb(88,82,75)` on `rgb(255,250,240)`, a 7.41:1 contrast ratio.
 - Breadcrumbs, sidebar navigation, keyboard hints, profile metadata, assistant prompts and route-specific empty-state guidance use fully opaque semantic ink. A composited browser sweep found the original 19 AA failures plus two route-specific strings; the shared-token and component fixes remove opacity from meaningful small text rather than compensating route by route.
-- Clerk authentication surfaces use an explicit warm-paper appearance with dark primary and secondary ink, so hosted sign-in content does not inherit a low-contrast light widget treatment on the Drenched shell.
+- Clerk authentication surfaces use an explicit warm-paper appearance with dark primary and secondary ink, including an explicit social-button label colour. The development-only badge also receives contrast-safe ink locally; it is absent when production Clerk keys are used.
 - Drenched paper surfaces use dark ink; browser-computed examples were `rgb(23,20,18)` on `rgb(255,250,240)`.
 - Warning and destructive states do not borrow the product accents.
 - `prefers-reduced-motion` rules remain in the landing, console and streamed-output implementations; content is not gated behind motion.

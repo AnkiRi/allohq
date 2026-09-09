@@ -48,6 +48,12 @@ export default function RootLayout({
           cardBox: {
             backgroundColor: "#fffaf0",
           },
+          socialButtonsBlockButton: {
+            color: "#171412",
+          },
+          developmentModeBadge: {
+            color: "#7a5008",
+          },
         },
         variables: {
           colorBackground: "#fffaf0",
