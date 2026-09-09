@@ -97,7 +97,7 @@ export function TopBar() {
         {/* Hamburger — visible on mobile only */}
         <button
           onClick={toggle}
-          className="p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-white/10 transition-colors md:hidden"
+          className="p-1.5 rounded-lg hover:bg-nav-hover transition-colors md:hidden"
         >
           <Menu className="w-5 h-5 text-foreground" />
         </button>
@@ -202,11 +202,11 @@ export function TopBar() {
         {/* Command Palette Trigger */}
         <button
           onClick={commandPalette.open}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/3 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-nav-hover transition-colors"
         >
           <Search className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-[11px] text-muted-foreground hidden sm:inline">Search...</span>
-          <kbd className="text-[10px] font-mono text-muted-foreground/60 bg-white/80 dark:bg-white/10 px-1.5 py-0.5 rounded border border-black/5 dark:border-white/10 hidden sm:inline">
+          <kbd className="text-[10px] font-mono text-muted-foreground bg-card px-1.5 py-0.5 rounded border border-border hidden sm:inline">
             ⌘K
           </kbd>
         </button>
@@ -214,9 +214,9 @@ export function TopBar() {
         {/* Theme moved to Settings → Appearance (not floating in the nav). */}
 
         {/* Bell */}
-        <button className="relative p-2 rounded-lg hover:bg-black/3 dark:hover:bg-white/5 transition-colors">
+        <button className="relative p-2 rounded-lg hover:bg-nav-hover transition-colors">
           <Bell className="w-4 h-4 text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#1F7A4F]" />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-outcome" />
         </button>
       </div>
     </header>

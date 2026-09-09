@@ -6,15 +6,14 @@ import { useTheme, THEMES, type Theme } from "@/components/theme/ThemeProvider";
 /**
  * Appearance — the app's theme/colour control. Lives in Settings (not floating
  * in the nav); the choice persists via the ThemeProvider's localStorage. The
- * three palettes are the canonical V2 themes shared with the landing.
+ * two palettes share the landing's approved semantic system.
  */
 
 // A small, palette-true swatch so the choice reads at a glance (independent of
 // the active theme, so all three previews look right whatever you're on).
 const SWATCH: Record<Theme, { bg: string; ink: string; accent: string }> = {
-  drenched: { bg: "#1f2d80", ink: "#eef1fb", accent: "#e3b24f" },
-  light: { bg: "#fafaf9", ink: "#16181c", accent: "#0e7c5a" },
-  dark: { bg: "#0b1210", ink: "#e8eee9", accent: "#25b583" },
+  light: { bg: "#fafaf9", ink: "#0e0e10", accent: "#c38a16" },
+  drenched: { bg: "#18256f", ink: "#fffaf0", accent: "#e3b24f" },
 };
 
 export function AppearanceSetting() {
@@ -26,7 +25,7 @@ export function AppearanceSetting() {
       <p className="text-[12px] text-muted-foreground mt-2 mb-4">
         Pick how joon looks. Your choice is saved to this browser.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {THEMES.map((t) => {
           const active = mounted && theme === t.id;
           const sw = SWATCH[t.id];

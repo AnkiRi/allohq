@@ -70,6 +70,18 @@ const config: Config = {
           DEFAULT: "#6B8F5E",
           light: "rgba(107, 143, 94, 0.08)",
         },
+        decision: {
+          DEFAULT: "var(--decision)",
+          soft: "var(--decision-soft)",
+        },
+        measure: {
+          DEFAULT: "var(--measure)",
+          soft: "var(--measure-soft)",
+        },
+        outcome: {
+          DEFAULT: "var(--outcome)",
+          soft: "var(--outcome-soft)",
+        },
         warning: {
           DEFAULT: "#C49A3C",
           light: "rgba(196, 154, 60, 0.08)",

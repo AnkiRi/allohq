@@ -27,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex-1 flex flex-col overflow-hidden">
             <TopBar />
             <div className="flex flex-1 overflow-hidden">
-              <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+              <main className="app-workspace flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
                 <div className="min-h-full flex flex-col">
                   <div className="flex-1">
                     <OnboardingGate>{children}</OnboardingGate>

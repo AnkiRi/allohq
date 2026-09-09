@@ -8,14 +8,11 @@ import {
   useCallback,
 } from "react";
 
-export type Theme = "drenched" | "light" | "dark";
+export type Theme = "light" | "drenched";
 
-/** The two dark palettes keep the `.dark` class so every `dark:` utility works. */
-const DARKISH: Theme[] = ["drenched", "dark"];
 export const THEMES: { id: Theme; label: string; hint: string }[] = [
-  { id: "drenched", label: "Drenched", hint: "Cobalt, joon's signature blue" },
-  { id: "light", label: "Light", hint: "Minimal, near-white" },
-  { id: "dark", label: "Dark", hint: "Near-black, emerald" },
+  { id: "light", label: "Light", hint: "Crisp paper, evidence-led colour" },
+  { id: "drenched", label: "Drenched", hint: "Cobalt shell, warm-paper workspace" },
 ];
 
 interface ThemeContextType {
@@ -45,23 +42,31 @@ const STORAGE_KEY = "allo-app-theme";
 const DEFAULT_THEME: Theme = "light";
 
 function isTheme(v: string | null): v is Theme {
-  return v === "drenched" || v === "light" || v === "dark";
+  return v === "drenched" || v === "light";
+}
+
+function migrateTheme(v: string | null): Theme {
+  if (v === "spectrum") return "light";
+  if (v === "drenched-paper" || v === "dark") return "drenched";
+  return isTheme(v) ? v : DEFAULT_THEME;
 }
 
 /**
  * Inline script to prevent flash of wrong theme. Sets data-theme (and the
- * `.dark` class for the two dark palettes) before paint. Default = drenched.
+ * active palette before paint. The app defaults to Light.
  */
 export function ThemeScript() {
   const script = `
 (function(){
   try {
     var stored = localStorage.getItem('${STORAGE_KEY}');
-    var t = (stored === 'drenched' || stored === 'light' || stored === 'dark') ? stored : '${DEFAULT_THEME}';
+    var t = stored === 'spectrum' ? 'light'
+      : (stored === 'drenched-paper' || stored === 'dark') ? 'drenched'
+      : (stored === 'drenched' || stored === 'light') ? stored
+      : '${DEFAULT_THEME}';
     var el = document.documentElement;
     el.setAttribute('data-theme', t);
-    if (t === 'drenched' || t === 'dark') { el.classList.add('dark'); }
-    else { el.classList.remove('dark'); }
+    el.classList.remove('dark');
   } catch(e){}
 })();
 `;
@@ -83,11 +88,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Initialize from localStorage, otherwise the drenched default.
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    setThemeState(isTheme(stored) ? stored : DEFAULT_THEME);
+    setThemeState(migrateTheme(stored));
     setMounted(true);
   }, []);
 
-  // Apply data-theme + `.dark` class whenever theme changes. Apply ONLY — do
+  // Apply data-theme whenever theme changes. Apply ONLY — do
   // NOT persist here. Persisting the default on mount would pollute the shared
   // 'allo-theme' key (e.g. the app's light default overwriting the landing's
   // drenched). The key holds ONLY an explicit user choice (written below).
@@ -95,11 +100,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!mounted) return;
     const root = document.documentElement;
     root.setAttribute("data-theme", theme);
-    if (DARKISH.includes(theme)) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    root.classList.remove("dark");
   }, [theme, mounted]);
 
   const persist = (t: Theme) => {
@@ -116,11 +117,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     persist(t);
   }, []);
 
-  // Cycle drenched → light → dark → drenched (used by any quick toggle).
+  // Quick toggle between the two supported application themes.
   const toggleTheme = useCallback(() => {
     setThemeState((prev) => {
-      const next =
-        prev === "drenched" ? "light" : prev === "light" ? "dark" : "drenched";
+      const next = prev === "light" ? "drenched" : "light";
       persist(next);
       return next;
     });

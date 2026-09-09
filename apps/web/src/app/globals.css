@@ -2,17 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =====================================================================
-   joon app theme = V2 (canonical). Three user-selectable palettes,
-   keyed on html[data-theme]:
-     drenched  (DEFAULT)  cobalt + warm gold        — the blue hero look
-     light                minimal near-white + emerald
-     dark                 near-black green + emerald
-   The ThemeProvider also adds the `.dark` class for drenched AND dark, so
-   every existing `dark:` Tailwind variant and `.dark .foo` effect keeps
-   working; the per-palette token values come from data-theme. One token
-   system, no stale theme paths.
-   ===================================================================== */
+/* Joon application themes. Light is the operational default; Drenched keeps
+   the cobalt environment while placing dense work on warm paper. */
 
 @layer base {
   /* ---- LIGHT (minimal near-white + emerald) — also the :root base ---- */
@@ -75,65 +66,7 @@
     --brand-warm: #B8860B;
   }
 
-  /* ---- DARK (near-black green + emerald) ---- */
-  html[data-theme="dark"] {
-    --background: 156 18% 6%;          /* #0B1210 */
-    --foreground: 140 14% 92%;         /* #E8EEE9 */
-    --card: 156 22% 8%;                /* #111A16 */
-    --card-foreground: 140 14% 92%;
-    --popover: 156 22% 8%;
-    --popover-foreground: 140 14% 92%;
-    --primary: 157 67% 42%;            /* #25B583 emerald */
-    --primary-foreground: 156 55% 6%;  /* #04140E */
-    --secondary: 152 24% 11%;          /* #16231D */
-    --secondary-foreground: 140 14% 92%;
-    --muted: 156 22% 8%;
-    --muted-foreground: 150 9% 62%;    /* #94A49B */
-    --accent: 157 67% 42%;
-    --accent-foreground: 156 55% 6%;
-    --destructive: 0 100% 71%;         /* #FF6B6B */
-    --destructive-foreground: 156 18% 6%;
-    --border: 156 12% 16%;
-    --input: 156 12% 16%;
-    --ring: 157 67% 42%;
-
-    --border-light: 152 24% 11%;
-    --sidebar: 156 18% 6%;
-    --sidebar-active: 157 67% 42%;
-    --sidebar-active-text: 156 55% 6%;
-    --accent-bg: 152 24% 11%;
-    --nav-hover: 156 22% 8%;
-    --progress: 157 67% 42%;
-    --success: 157 67% 50%;
-    --success-bg: 152 24% 11%;
-    --ai-panel-bg: 156 22% 8%;
-
-    --color-accent: #25B583;
-    --color-accent-hover: #3ECB98;
-    --color-info: #94A49B;
-    --color-success: #46B377;
-    --color-warning: #E3B24F;
-    --color-urgent: #FF6B6B;
-
-    --terminal-border: rgba(255, 255, 255, 0.08);
-
-    --glass-bg: rgba(17, 26, 22, 0.72);
-    --glass-bg-hover: rgba(22, 35, 29, 0.82);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-blur: 20px;
-    --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-    --glass-shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.55);
-
-    --terracotta: #FF6B6B;
-    --olive: #46B377;
-    --warm-gold: #E3B24F;
-    --canvas-bg: #0B1210;
-    --brand-emerald: #25B583;
-    --brand-sage: #3ECB98;
-    --brand-warm: #E3B24F;
-  }
-
-  /* ---- DRENCHED (cobalt + warm gold) — DEFAULT, the blue hero look ---- */
+  /* ---- DRENCHED — cobalt shell with warm-paper operational surfaces ---- */
   html[data-theme="drenched"] {
     --background: 231 49% 20%;         /* deep cobalt */
     --foreground: 222 30% 97%;         /* bone */
@@ -190,6 +123,91 @@
     --brand-sage: #EDC067;
     --brand-warm: #E3B24F;
   }
+
+  /* Semantic layer shared by both application themes. */
+  :root,
+  html[data-theme="light"] {
+    --primary: 41 80% 43%;
+    --primary-foreground: 240 7% 6%;
+    --accent: 41 80% 43%;
+    --accent-foreground: 240 7% 6%;
+    --ring: 221 71% 49%;
+    --sidebar-active: 41 80% 43%;
+    --sidebar-active-text: 240 7% 6%;
+    --progress: 221 71% 49%;
+    --success: 159 81% 25%;
+    --decision: #c38a16;
+    --decision-hover: #a9700c;
+    --decision-soft: rgba(195, 138, 22, .1);
+    --measure: #2457d6;
+    --measure-soft: rgba(36, 87, 214, .1);
+    --outcome: #0c7252;
+    --outcome-soft: rgba(12, 114, 82, .1);
+    --warning: #9a650b;
+    --warning-soft: rgba(154, 101, 11, .1);
+    --info: #2457d6;
+    --info-soft: rgba(36, 87, 214, .1);
+    --disabled: #71757c;
+    --focus: #2457d6;
+    --color-accent: var(--decision);
+    --color-accent-hover: var(--decision-hover);
+    --color-info: var(--measure);
+    --color-success: var(--outcome);
+    --color-warning: var(--warning);
+    --olive: var(--outcome);
+    --warm-gold: var(--decision);
+    --brand-emerald: var(--outcome);
+    --brand-sage: #138967;
+    --brand-warm: var(--decision);
+  }
+
+  html[data-theme="drenched"] {
+    --card: 40 100% 97%;
+    --card-foreground: 30 11% 8%;
+    --popover: 40 100% 97%;
+    --popover-foreground: 30 11% 8%;
+    --secondary: 39 43% 93%;
+    --secondary-foreground: 30 11% 8%;
+    --muted: 39 43% 93%;
+    --muted-foreground: 34 8% 32%;
+    --border: 36 16% 80%;
+    --input: 36 16% 80%;
+    --primary: 41 72% 60%;
+    --accent: 41 72% 60%;
+    --ring: 41 72% 60%;
+    --progress: 221 71% 49%;
+    --success: 159 81% 25%;
+    --ai-panel-bg: 40 100% 97%;
+    --decision: #e3b24f;
+    --decision-hover: #edc067;
+    --decision-soft: rgba(227, 178, 79, .16);
+    --measure: #2457d6;
+    --measure-soft: rgba(36, 87, 214, .12);
+    --outcome: #0c7252;
+    --outcome-soft: rgba(12, 114, 82, .12);
+    --warning: #9a650b;
+    --warning-soft: rgba(154, 101, 11, .12);
+    --info: #2457d6;
+    --info-soft: rgba(36, 87, 214, .12);
+    --disabled: #80786e;
+    --focus: #e3b24f;
+    --color-accent: var(--decision);
+    --color-accent-hover: var(--decision-hover);
+    --color-info: var(--measure);
+    --color-success: var(--outcome);
+    --color-warning: var(--warning);
+    --glass-bg: #fffaf0;
+    --glass-bg-hover: #fffdf8;
+    --glass-border: rgba(23, 21, 18, .14);
+    --glass-blur: 0px;
+    --glass-shadow: 0 1px 0 rgba(9, 19, 64, .18);
+    --glass-shadow-hover: 0 8px 24px -20px rgba(9, 19, 64, .55);
+    --olive: var(--outcome);
+    --warm-gold: var(--decision);
+    --brand-emerald: var(--outcome);
+    --brand-sage: #138967;
+    --brand-warm: var(--decision);
+  }
 }
 
 @layer base {
@@ -200,9 +218,41 @@
     @apply bg-background text-foreground font-sans;
     font-variant-numeric: tabular-nums;
   }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--measure);
+    color: #fff;
+  }
 }
 
 @layer utilities {
+  .app-workspace {
+    background: hsl(var(--background));
+  }
+
+  html[data-theme="drenched"] .app-workspace {
+    background: color-mix(in srgb, hsl(var(--background)) 92%, #0b133f);
+  }
+
+  .bg-card,
+  .bg-popover,
+  .glass-card,
+  .glass-card-static,
+  .aurora-card,
+  .ai-panel-bg {
+    color: hsl(var(--card-foreground));
+  }
+
+  .semantic-decision { color: var(--decision); }
+  .semantic-measure { color: var(--measure); }
+  .semantic-outcome { color: var(--outcome); }
+  .semantic-warning { color: var(--warning); }
+
   /* Terminal canvas — flat surface with a faint scanline grid, no aurora */
   .canvas-noise {
     background-color: hsl(var(--background));
@@ -222,8 +272,8 @@
 
   .glass-card {
     background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur)) saturate(120%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     border: 1px solid var(--glass-border);
     border-radius: 16px;
     box-shadow: var(--glass-shadow);
@@ -237,8 +287,8 @@
 
   .glass-card-static {
     background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur)) saturate(120%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     border: 1px solid var(--glass-border);
     border-radius: 16px;
     box-shadow: var(--glass-shadow);
@@ -314,9 +364,18 @@
 
   /* Sidebar glass — adopts the active palette's raised surface */
   .glass-sidebar {
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur)) saturate(120%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+    background: hsl(var(--sidebar));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  html[data-theme="drenched"] .glass-sidebar {
+    --foreground: 222 30% 97%;
+    --muted-foreground: 223 24% 83%;
+    --secondary: 231 45% 25%;
+    --secondary-foreground: 222 30% 97%;
+    --border: 228 30% 37%;
+    --nav-hover: 231 45% 25%;
   }
 
   /* ── Refined-aurora utilities (token-driven, theme-aware) ──────────── */

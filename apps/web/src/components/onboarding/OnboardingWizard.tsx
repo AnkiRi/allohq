@@ -334,7 +334,7 @@ export function OnboardingWizard({
   if (currentStep === null) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B8074]" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -409,14 +409,14 @@ function PhaseIndicator({ currentStep }: { currentStep: number }) {
         const isDone = phase.steps.every((s) => s < currentStep);
         return (
           <div key={i} className="flex items-center gap-2 shrink-0">
-            {i > 0 && <div className={`w-6 h-px ${isDone ? "bg-[#1F7A4F]" : "bg-[#EDE7DB]"}`} />}
+            {i > 0 && <div className={`w-6 h-px ${isDone ? "bg-decision" : "bg-[#EDE7DB]"}`} />}
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 isActive
-                  ? "bg-[#1F7A4F]/10 text-[#1F7A4F] border border-[#1F7A4F]/30"
+                  ? "bg-decision/10 text-decision border border-[#1F7A4F]/30"
                   : isDone
-                    ? "bg-[#1F7A4F]/5 text-[#1F7A4F]"
-                    : "text-[#8B8074]"
+                    ? "bg-decision/5 text-decision"
+                    : "text-muted-foreground"
               }`}
             >
               {isDone ? (
@@ -587,10 +587,10 @@ function BackgroundAnalysisStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">
+        <h2 className="text-xl font-semibold text-card-foreground mb-1">
           joon is getting to know your store
         </h2>
-        <p className="text-sm text-[#8B8074]">
+        <p className="text-sm text-muted-foreground">
           We&apos;re bringing in your data and learning the details. This usually takes a minute or
           two.
         </p>
@@ -601,7 +601,7 @@ function BackgroundAnalysisStep({
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#2C2C2C]">
+              <p className="text-sm font-medium text-card-foreground">
                 This is taking longer than expected.
               </p>
               <p className="text-xs text-[#8B7A55] mt-0.5">
@@ -612,11 +612,11 @@ function BackgroundAnalysisStep({
               <div className="mt-3 space-y-2">
                 {stuckSteps.map((s) => (
                   <div key={s.key} className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-[#5C5549] truncate">{s.label}</span>
+                    <span className="text-xs text-muted-foreground truncate">{s.label}</span>
                     <button
                       onClick={() => handleRetry(s.key)}
                       disabled={retry.isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#2C2C2C] text-white hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#2C2C2C] text-primary-foreground hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 shrink-0"
                     >
                       {retryingKey === s.key ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -637,27 +637,27 @@ function BackgroundAnalysisStep({
         {syncRows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
             {row.done ? (
-              <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
-                <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
+              <div className="w-6 h-6 rounded-full bg-decision/10 flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 text-decision" />
               </div>
             ) : syncStuck ? (
               <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
               </div>
             ) : (
-              <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             )}
-            <span className={`text-sm ${row.done ? "text-[#2C2C2C]" : "text-[#8B8074]"}`}>
+            <span className={`text-sm ${row.done ? "text-card-foreground" : "text-muted-foreground"}`}>
               {row.label}
               {row.count != null && row.count > 0 && (
-                <span className="ml-1 text-[#1F7A4F] font-medium">({row.count} found)</span>
+                <span className="ml-1 text-decision font-medium">({row.count} found)</span>
               )}
             </span>
           </div>
         ))}
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-3">
-        <p className="text-xs font-medium text-[#8B8074] uppercase tracking-wide mb-1">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
           What joon is learning {analysisDone ? "(done)" : "(in the background)"}
         </p>
         {analysisRows.map((row) => {
@@ -665,17 +665,17 @@ function BackgroundAnalysisStep({
           return (
             <div key={row.label} className="flex items-center gap-3">
               {row.done ? (
-                <div className="w-6 h-6 rounded-full bg-[#1F7A4F]/10 flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5 text-[#1F7A4F]" />
+                <div className="w-6 h-6 rounded-full bg-decision/10 flex items-center justify-center">
+                  <Check className="w-3.5 h-3.5 text-decision" />
                 </div>
               ) : rowStuck ? (
                 <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                 </div>
               ) : (
-                <Loader2 className="w-6 h-6 animate-spin text-[#8B8074]" />
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               )}
-              <span className={`text-sm flex-1 ${row.done ? "text-[#2C2C2C]" : "text-[#8B8074]"}`}>
+              <span className={`text-sm flex-1 ${row.done ? "text-card-foreground" : "text-muted-foreground"}`}>
                 {row.label}
               </span>
               {rowStuck && (
@@ -697,7 +697,7 @@ function BackgroundAnalysisStep({
         })}
       </div>
       {syncDone && !analysisDone && (
-        <p className="text-xs text-[#8B8074]">
+        <p className="text-xs text-muted-foreground">
           Your data&apos;s in. joon is still learning your brand and scoring customers in the
           background — you can continue; it&apos;ll be ready shortly (and you can re-run it anytime
           from Brand Voice).
@@ -707,7 +707,7 @@ function BackgroundAnalysisStep({
         <button
           onClick={onContinue}
           disabled={!canContinue || isAdvancing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-primary-foreground text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isAdvancing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -761,8 +761,8 @@ function ModelSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Choose the model joon runs on</h2>
-        <p className="text-sm text-[#8B8074]">
+        <h2 className="text-xl font-semibold text-card-foreground mb-1">Choose the model joon runs on</h2>
+        <p className="text-sm text-muted-foreground">
           This is the brain behind joon&apos;s emails, customer analysis, and the actions it takes
           for you.
         </p>
@@ -778,24 +778,24 @@ function ModelSelectionStep({
                 onClick={() => handleSelect(model.id)}
                 className={`relative rounded-xl p-4 text-left transition-all ${
                   isSelected
-                    ? "border-2 border-[#1F7A4F] bg-[#1F7A4F]/5 shadow-sm"
-                    : "border border-[#EDE7DB] bg-white/30 backdrop-blur-sm hover:bg-white/50"
+                    ? "border-2 border-[#1F7A4F] bg-decision/5 shadow-sm"
+                    : "border border-border bg-card/30 backdrop-blur-sm hover:bg-card/50"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-[#1F7A4F] flex items-center justify-center">
-                    <Check className="w-3.5 h-3.5 text-white" />
+                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-decision flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 text-primary-foreground" />
                   </div>
                 )}
                 <div className="flex items-center gap-2 mb-1 pr-8">
-                  <span className="text-sm font-medium text-[#2C2C2C]">{model.label}</span>
+                  <span className="text-sm font-medium text-card-foreground">{model.label}</span>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tierColors[model.tier] ?? ""}`}
                   >
                     {model.tier}
                   </span>
                 </div>
-                <p className="text-xs text-[#8B8074]">{model.description}</p>
+                <p className="text-xs text-muted-foreground">{model.description}</p>
                 <p className="text-[10px] text-[#A09888] mt-1">
                   ₹{model.inputCostPerMillion}/M input · ₹{model.outputCostPerMillion}/M output
                 </p>
@@ -807,7 +807,7 @@ function ModelSelectionStep({
         <button
           onClick={onContinue}
           disabled={!selected || isAdvancing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-primary-foreground text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isAdvancing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -991,8 +991,8 @@ function BrandReviewStep({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B8074]" />
-        <span className="ml-3 text-sm text-[#8B8074]">Loading what joon found...</span>
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <span className="ml-3 text-sm text-muted-foreground">Loading what joon found...</span>
       </div>
     );
   }
@@ -1022,17 +1022,17 @@ function BrandReviewStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Review your brand</h2>
-        <p className="text-sm text-[#8B8074]">
+        <h2 className="text-xl font-semibold text-card-foreground mb-1">Review your brand</h2>
+        <p className="text-sm text-muted-foreground">
           Here&apos;s the brand identity joon picked up from your store. Adjust anything that
           doesn&apos;t feel right.
         </p>
       </div>
 
       {/* Brand Document Upload */}
-      <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
+      <div className="mb-8 p-6 bg-secondary rounded-xl border border-border">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand guidelines</h3>
-        <p className="text-sm text-[#8B8074] mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           Already have brand guidelines? Paste them here and joon will follow them as the source of
           truth for your voice, ahead of anything it picked up on its own.
         </p>
@@ -1040,14 +1040,14 @@ function BrandReviewStep({
           value={brandDocument}
           onChange={(e) => setBrandDocument(e.target.value)}
           placeholder="Paste your tone of voice, personality, guidelines, or any brand document here..."
-          className="w-full h-40 p-4 border border-[#E8E4DE] rounded-lg text-sm bg-white resize-y focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+          className="w-full h-40 p-4 border border-border rounded-lg text-sm bg-card resize-y focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
         />
         {brandDocument.trim() && (
           <div className="flex items-center gap-3 mt-3">
             <button
               onClick={handleAnalyzeFromDocument}
               disabled={isAnalyzing}
-              className="px-4 py-2 bg-[#2D2A26] text-white rounded-lg text-sm font-medium hover:bg-[#3D3A36] disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 bg-[#2D2A26] text-primary-foreground rounded-lg text-sm font-medium hover:bg-[#3D3A36] disabled:opacity-50 flex items-center gap-2"
             >
               {isAnalyzing ? (
                 <>
@@ -1058,7 +1058,7 @@ function BrandReviewStep({
               )}
             </button>
             {analysisDone && (
-              <span className="flex items-center gap-1.5 text-sm text-[#1F7A4F] font-medium">
+              <span className="flex items-center gap-1.5 text-sm text-decision font-medium">
                 <Check className="w-4 h-4" /> Your brand voice is updated. Take a look below
               </span>
             )}
@@ -1067,19 +1067,19 @@ function BrandReviewStep({
       </div>
 
       {/* Sending & sender */}
-      <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
+      <div className="mb-8 p-6 bg-secondary rounded-xl border border-border">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Your business</h3>
-        <p className="text-sm text-[#8B8074] mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           This helps joon choose useful starter segments and understand whether you may want
           migration help later.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-[#8B8074] mb-1 block">Business category</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Business category</label>
             <select
               value={storeCategory}
               onChange={(e) => setStoreCategory(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card"
             >
               <option value="">Choose a category</option>
               {STORE_CATEGORIES.map(([value, label]) => (
@@ -1090,11 +1090,11 @@ function BrandReviewStep({
             </select>
           </div>
           <div>
-            <label className="text-xs text-[#8B8074] mb-1 block">Current email platform</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Current email platform</label>
             <select
               value={currentEmailPlatform}
               onChange={(e) => setCurrentEmailPlatform(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card"
             >
               <option value="">Choose a platform</option>
               {EMAIL_PLATFORMS.map(([value, label]) => (
@@ -1105,51 +1105,51 @@ function BrandReviewStep({
             </select>
           </div>
         </div>
-        <p className="text-xs text-[#8B8074] mt-3">
+        <p className="text-xs text-muted-foreground mt-3">
           Joon imports Shopify email consent automatically. Selecting another platform does not
           connect or copy data from it.
         </p>
       </div>
 
-      <div className="mb-8 p-6 bg-[#FAF9F7] rounded-xl border border-[#E8E4DE]">
+      <div className="mb-8 p-6 bg-secondary rounded-xl border border-border">
         <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Sending &amp; sender</h3>
-        <p className="text-sm text-[#8B8074] mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           Who do your emails come from? You can change this anytime.
         </p>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-[#8B8074] mb-1 block">From name</label>
+            <label className="text-xs text-muted-foreground mb-1 block">From name</label>
             <input
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
               placeholder="e.g. Vana Naturals"
-              className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
             />
           </div>
           <div>
-            <label className="text-xs text-[#8B8074] mb-1 block">From email</label>
+            <label className="text-xs text-muted-foreground mb-1 block">From email</label>
             <input
               type="email"
               value={fromEmail}
               onChange={(e) => setFromEmail(e.target.value)}
               placeholder="hello@yourbrand.com"
-              className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
             />
           </div>
           <div>
-            <label className="text-xs text-[#8B8074] mb-1 block">Reply-to email</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Reply-to email</label>
             <input
               type="email"
               value={replyTo}
               onChange={(e) => setReplyTo(e.target.value)}
               placeholder="care@yourbrand.com"
-              className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
             />
           </div>
         </div>
-        <div className="mt-5 pt-5 border-t border-[#E8E4DE]">
-          <label className="text-xs text-[#8B8074] mb-2 block">
+        <div className="mt-5 pt-5 border-t border-border">
+          <label className="text-xs text-muted-foreground mb-2 block">
             Business address shown in the email footer
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1168,11 +1168,11 @@ function BrandReviewStep({
                 value={businessAddress[key]}
                 onChange={(e) => setBusinessAddress((prev) => ({ ...prev, [key]: e.target.value }))}
                 placeholder={label}
-                className="w-full px-3 py-2 border border-[#E8E4DE] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
               />
             ))}
           </div>
-          <p className="text-xs text-[#8B8074] mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             We prefill this from your Shopify store. It is your business address, not a customer
             address.
           </p>
@@ -1183,26 +1183,26 @@ function BrandReviewStep({
       {bp && (
         <div className="glass-card-static rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-[#1F7A4F]" />
-            <span className="text-xs font-medium uppercase tracking-wide text-[#1F7A4F]">
+            <Sparkles className="w-4 h-4 text-decision" />
+            <span className="text-xs font-medium uppercase tracking-wide text-decision">
               What joon found
             </span>
           </div>
-          <p className="text-sm text-[#2C2C2C] font-medium mb-1">{bp.brandName || "Your Store"}</p>
+          <p className="text-sm text-card-foreground font-medium mb-1">{bp.brandName || "Your Store"}</p>
           {bp.brandDescription && (
-            <p className="text-xs text-[#5C5549] mb-3">{bp.brandDescription}</p>
+            <p className="text-xs text-muted-foreground mb-3">{bp.brandDescription}</p>
           )}
           {bp.sampleCopy && (bp.sampleCopy as string[]).length > 0 && (
             <div className="space-y-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-[#8B8074]">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Sample copy from your store
               </span>
               {(bp.sampleCopy as string[]).slice(0, 3).map((copy: string, i: number) => (
                 <div
                   key={i}
-                  className="flex gap-2 text-xs text-[#5C5549] bg-white/40 rounded-lg px-3 py-2"
+                  className="flex gap-2 text-xs text-muted-foreground bg-card/40 rounded-lg px-3 py-2"
                 >
-                  <Quote className="w-3 h-3 text-[#8B8074] shrink-0 mt-0.5" />
+                  <Quote className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
                   <span className="italic">
                     {copy.length > 120 ? copy.slice(0, 120) + "..." : copy}
                   </span>
@@ -1216,12 +1216,12 @@ function BrandReviewStep({
       {/* Brand Voice — Tone */}
       <div className="glass-card-static rounded-xl p-5">
         <div className="flex items-center gap-2 mb-2">
-          <MessageSquare className="w-4 h-4 text-[#8B8074]" />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+          <MessageSquare className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Brand Voice
           </span>
         </div>
-        <p className="text-sm text-[#5C5549] mb-4">{toneSummary}</p>
+        <p className="text-sm text-muted-foreground mb-4">{toneSummary}</p>
 
         <div className="space-y-4">
           {TONE_DIMENSIONS.map((dim) => {
@@ -1230,13 +1230,13 @@ function BrandReviewStep({
             return (
               <div key={dim.key}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-medium text-[#2C2C2C]">{dim.label}</span>
-                  <span className="text-[10px] text-[#1F7A4F] font-medium">
+                  <span className="text-xs font-medium text-card-foreground">{dim.label}</span>
+                  <span className="text-[10px] text-decision font-medium">
                     {dim.options[currentIdx >= 0 ? currentIdx : 1] ?? ""}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-[#8B8074] w-16 text-right shrink-0">
+                  <span className="text-[10px] text-muted-foreground w-16 text-right shrink-0">
                     {dim.left.label}
                   </span>
                   <input
@@ -1251,7 +1251,7 @@ function BrandReviewStep({
                     }}
                     className="flex-1 h-1.5 accent-[#1F7A4F] cursor-pointer"
                   />
-                  <span className="text-[10px] text-[#8B8074] w-16 shrink-0">
+                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">
                     {dim.right.label}
                   </span>
                 </div>
@@ -1269,13 +1269,13 @@ function BrandReviewStep({
         </div>
 
         {/* Live preview */}
-        <div className="mt-5 p-4 bg-white/60 rounded-lg border border-[#EDE7DB]">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-[#8B8074] block mb-2">
+        <div className="mt-5 p-4 bg-card/60 rounded-lg border border-border">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground block mb-2">
             Live Preview
           </span>
-          <p className="text-xs font-medium text-[#2C2C2C]">Subject: {sampleCopy.subject}</p>
-          <p className="text-xs text-[#5C5549] mt-1">{sampleCopy.body}</p>
-          <span className="inline-block mt-2 px-3 py-1 text-[10px] font-medium bg-[#1F7A4F] text-white rounded">
+          <p className="text-xs font-medium text-card-foreground">Subject: {sampleCopy.subject}</p>
+          <p className="text-xs text-muted-foreground mt-1">{sampleCopy.body}</p>
+          <span className="inline-block mt-2 px-3 py-1 text-[10px] font-medium bg-decision text-primary-foreground rounded">
             {sampleCopy.cta}
           </span>
         </div>
@@ -1284,14 +1284,14 @@ function BrandReviewStep({
       {/* Vocabulary */}
       <div className="glass-card-static rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
-          <Ban className="w-4 h-4 text-[#8B8074]" />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+          <Ban className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Vocabulary
           </span>
         </div>
         {bp?.vocabulary && (
           <div className="mb-3">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-[#8B8074] block mb-1">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground block mb-1">
               Detected brand terms
             </span>
             <div className="flex flex-wrap gap-1">
@@ -1303,7 +1303,7 @@ function BrandReviewStep({
                 .map((word: string, i: number) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 text-[10px] bg-[#1F7A4F]/10 text-[#1F7A4F] rounded-full"
+                    className="px-2 py-0.5 text-[10px] bg-decision/10 text-decision rounded-full"
                   >
                     {word}
                   </span>
@@ -1312,14 +1312,14 @@ function BrandReviewStep({
           </div>
         )}
         <div>
-          <label className="text-xs text-[#5C5549] block mb-1">
+          <label className="text-xs text-muted-foreground block mb-1">
             Words to avoid (comma-separated)
           </label>
           <input
             type="text"
             value={bannedWords}
             onChange={(e) => setBannedWords(e.target.value)}
-            className="w-full px-3 py-2 text-xs rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+            className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card/60 text-card-foreground"
             placeholder="cheap, discount, spam..."
           />
         </div>
@@ -1328,8 +1328,8 @@ function BrandReviewStep({
       {/* Aesthetic */}
       <div className="glass-card-static rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
-          <Palette className="w-4 h-4 text-[#8B8074]" />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+          <Palette className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Visual Aesthetic
           </span>
         </div>
@@ -1342,25 +1342,25 @@ function BrandReviewStep({
                 onClick={() => setAesthetic(opt.value)}
                 className={`relative text-left p-3 rounded-xl transition-all ${
                   isSelected
-                    ? "border-2 border-[#1F7A4F] bg-[#1F7A4F]/5"
-                    : "border border-[#EDE7DB] hover:bg-white/40"
+                    ? "border-2 border-[#1F7A4F] bg-decision/5"
+                    : "border border-border hover:bg-card/40"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#1F7A4F] flex items-center justify-center">
-                    <Check className="w-3 h-3 text-white" />
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-decision flex items-center justify-center">
+                    <Check className="w-3 h-3 text-primary-foreground" />
                   </div>
                 )}
-                <span className="text-xs font-medium text-[#2C2C2C] block pr-6">{opt.label}</span>
-                <span className="text-[10px] text-[#8B8074] block mt-0.5">{opt.desc}</span>
-                <span className="text-[10px] text-[#1F7A4F] block mt-1">
+                <span className="text-xs font-medium text-card-foreground block pr-6">{opt.label}</span>
+                <span className="text-[10px] text-muted-foreground block mt-0.5">{opt.desc}</span>
+                <span className="text-[10px] text-decision block mt-1">
                   Best for: {opt.bestFor}
                 </span>
-                <div className="mt-2 pt-2 border-t border-[#EDE7DB]/50 space-y-0.5">
-                  <p className="text-[10px] text-[#5C5549]">
+                <div className="mt-2 pt-2 border-t border-border/50 space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground">
                     <span className="font-medium">Subject:</span> {opt.exampleSubject}
                   </p>
-                  <p className="text-[10px] text-[#5C5549]">
+                  <p className="text-[10px] text-muted-foreground">
                     <span className="font-medium">CTA:</span> {opt.exampleCTA}
                   </p>
                 </div>
@@ -1373,27 +1373,27 @@ function BrandReviewStep({
       {/* Colors */}
       <div className="glass-card-static rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
-          <Palette className="w-4 h-4 text-[#8B8074]" />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+          <Palette className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Brand Colors
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {COLOR_TOKENS.map(({ key, label }) => (
             <div key={key}>
-              <label className="text-xs text-[#5C5549] mb-1 block">{label}</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={tokens[key] || "#000000"}
                   onChange={(e) => updateToken(key, e.target.value)}
-                  className="w-8 h-8 rounded border border-[#EDE7DB] cursor-pointer"
+                  className="w-8 h-8 rounded border border-border cursor-pointer"
                 />
                 <input
                   type="text"
                   value={tokens[key] || ""}
                   onChange={(e) => updateToken(key, e.target.value)}
-                  className="flex-1 px-2 py-1 text-xs font-mono rounded border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+                  className="flex-1 px-2 py-1 text-xs font-mono rounded border border-border bg-card/60 text-card-foreground"
                 />
               </div>
             </div>
@@ -1404,13 +1404,13 @@ function BrandReviewStep({
       {/* Logo asset */}
       <div className="glass-card-static rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
-          <ImageIcon className="w-4 h-4 text-[#8B8074]" />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+          <ImageIcon className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Logo asset
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-xl border border-[#EDE7DB] bg-white p-2 flex items-center justify-center shrink-0">
+          <div className="w-20 h-20 rounded-xl border border-border bg-card p-2 flex items-center justify-center shrink-0">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -1422,15 +1422,15 @@ function BrandReviewStep({
             )}
           </div>
           <div className="flex-1">
-            <label className="text-xs text-[#5C5549] block mb-1">Logo URL</label>
+            <label className="text-xs text-muted-foreground block mb-1">Logo URL</label>
             <input
               type="url"
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://cdn.shopify.com/..."
-              className="w-full px-3 py-2 text-xs rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+              className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card/60 text-card-foreground"
             />
-            <p className="text-[10px] text-[#8B8074] mt-1">
+            <p className="text-[10px] text-muted-foreground mt-1">
               Prefilled from your Shopify theme when available. Leave empty to use your brand name.
             </p>
           </div>
@@ -1440,8 +1440,8 @@ function BrandReviewStep({
       {/* Typography */}
       <div className="glass-card-static rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
-          <Type className="w-4 h-4 text-[#8B8074]" />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+          <Type className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Typography
           </span>
         </div>
@@ -1451,12 +1451,12 @@ function BrandReviewStep({
             { key: "bodyFont", label: "Body Font" },
           ].map(({ key, label }) => (
             <div key={key}>
-              <label className="text-xs text-[#5C5549] mb-1 block">{label}</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
               <input
                 type="text"
                 value={tokens[key] || ""}
                 onChange={(e) => updateToken(key, e.target.value)}
-                className="w-full px-3 py-1.5 text-xs rounded border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+                className="w-full px-3 py-1.5 text-xs rounded border border-border bg-card/60 text-card-foreground"
               />
             </div>
           ))}
@@ -1467,7 +1467,7 @@ function BrandReviewStep({
         {onBack ? (
           <button
             onClick={onBack}
-            className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors"
+            className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             ← Back
           </button>
@@ -1477,7 +1477,7 @@ function BrandReviewStep({
         <button
           onClick={handleSave}
           disabled={onSave.isPending}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:opacity-90 transition-colors disabled:opacity-40"
         >
           {onSave.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1507,10 +1507,10 @@ function AutonomyStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">
+        <h2 className="text-xl font-semibold text-card-foreground mb-1">
           You stay in control
         </h2>
-        <p className="text-sm text-[#8B8074]">
+        <p className="text-sm text-muted-foreground">
           In email v1, Joon prepares the work and you decide what is activated.
         </p>
       </div>
@@ -1518,13 +1518,13 @@ function AutonomyStep({
         {AUTONOMY_CATEGORIES.map(({ key, label, desc }) => (
           <div key={key} className="glass-card-static rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1F7A4F]/10">
-                <Check className="size-3.5 text-[#1F7A4F]" />
+              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-decision/10">
+                <Check className="size-3.5 text-decision" />
               </div>
               <div>
-              <span className="text-sm font-medium text-[#2C2C2C]">{label}</span>
-              <p className="text-xs text-[#8B8074]">{desc}</p>
-                <p className="mt-1 text-[11px] font-medium text-[#1F7A4F]">
+              <span className="text-sm font-medium text-card-foreground">{label}</span>
+              <p className="text-xs text-muted-foreground">{desc}</p>
+                <p className="mt-1 text-[11px] font-medium text-decision">
                   Co-pilot · Joon drafts, you review and activate
                 </p>
               </div>
@@ -1536,7 +1536,7 @@ function AutonomyStep({
         {onBack ? (
           <button
             onClick={onBack}
-            className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors"
+            className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             ← Back
           </button>
@@ -1551,7 +1551,7 @@ function AutonomyStep({
             })
           }
           disabled={onSave.isPending}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:opacity-90 transition-colors disabled:opacity-40"
         >
           {onSave.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1590,15 +1590,15 @@ function GuardrailsStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">Set joon&apos;s limits</h2>
-        <p className="text-sm text-[#8B8074]">
+        <h2 className="text-xl font-semibold text-card-foreground mb-1">Set joon&apos;s limits</h2>
+        <p className="text-sm text-muted-foreground">
           These are the boundaries joon always stays within. You can change them anytime.
         </p>
       </div>
       <div className="glass-card-static rounded-xl p-5 space-y-5">
         <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-[#2C2C2C] mb-2">
-            <Shield className="w-4 h-4 text-[#8B8074]" /> Max emails per customer per week
+          <label className="flex items-center gap-2 text-sm font-medium text-card-foreground mb-2">
+            <Shield className="w-4 h-4 text-muted-foreground" /> Max emails per customer per week
           </label>
           <input
             type="number"
@@ -1606,12 +1606,12 @@ function GuardrailsStep({
             onChange={(e) => setMaxEmails(Number(e.target.value))}
             min={1}
             max={10}
-            className="w-24 px-3 py-2 text-sm rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+            className="w-24 px-3 py-2 text-sm rounded-lg border border-border bg-card/60 text-card-foreground"
           />
         </div>
         <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-[#2C2C2C] mb-2">
-            <ShieldCheck className="w-4 h-4 text-[#8B8074]" /> Max discount percentage
+          <label className="flex items-center gap-2 text-sm font-medium text-card-foreground mb-2">
+            <ShieldCheck className="w-4 h-4 text-muted-foreground" /> Max discount percentage
           </label>
           <div className="flex items-center gap-2">
             <input
@@ -1620,14 +1620,14 @@ function GuardrailsStep({
               onChange={(e) => setMaxDiscount(Number(e.target.value))}
               min={5}
               max={50}
-              className="w-24 px-3 py-2 text-sm rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+              className="w-24 px-3 py-2 text-sm rounded-lg border border-border bg-card/60 text-card-foreground"
             />
-            <span className="text-sm text-[#8B8074]">%</span>
+            <span className="text-sm text-muted-foreground">%</span>
           </div>
         </div>
         <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-[#2C2C2C] mb-2">
-            <Sparkles className="w-4 h-4 text-[#8B8074]" /> Quiet hours (no messages)
+          <label className="flex items-center gap-2 text-sm font-medium text-card-foreground mb-2">
+            <Sparkles className="w-4 h-4 text-muted-foreground" /> Quiet hours (no messages)
           </label>
           <div className="flex items-center gap-2 text-sm">
             <input
@@ -1636,18 +1636,18 @@ function GuardrailsStep({
               onChange={(e) => setQuietStart(Number(e.target.value))}
               min={0}
               max={23}
-              className="w-20 px-3 py-2 rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+              className="w-20 px-3 py-2 rounded-lg border border-border bg-card/60 text-card-foreground"
             />
-            <span className="text-[#8B8074]">:00 to</span>
+            <span className="text-muted-foreground">:00 to</span>
             <input
               type="number"
               value={quietEnd}
               onChange={(e) => setQuietEnd(Number(e.target.value))}
               min={0}
               max={23}
-              className="w-20 px-3 py-2 rounded-lg border border-[#EDE7DB] bg-white/60 text-[#2C2C2C]"
+              className="w-20 px-3 py-2 rounded-lg border border-border bg-card/60 text-card-foreground"
             />
-            <span className="text-[#8B8074]">:00</span>
+            <span className="text-muted-foreground">:00</span>
           </div>
         </div>
       </div>
@@ -1656,7 +1656,7 @@ function GuardrailsStep({
           {onBack && (
             <button
               onClick={onBack}
-              className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors"
+              className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
             >
               ← Back
             </button>
@@ -1664,7 +1664,7 @@ function GuardrailsStep({
           <button
             onClick={() => onSave.mutate({ storeId, skip: true })}
             disabled={onSave.isPending}
-            className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors"
+            className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             Skip for now
           </button>
@@ -1680,7 +1680,7 @@ function GuardrailsStep({
             })
           }
           disabled={onSave.isPending}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:opacity-90 transition-colors disabled:opacity-40"
         >
           {onSave.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1717,7 +1717,7 @@ function StoreReportStep({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B8074]" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -1725,17 +1725,17 @@ function StoreReportStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-1">
+        <h2 className="text-xl font-semibold text-card-foreground mb-1">
           What joon learned about your store
         </h2>
-        <p className="text-sm text-[#8B8074]">Here&apos;s a first look at what joon found.</p>
+        <p className="text-sm text-muted-foreground">Here&apos;s a first look at what joon found.</p>
       </div>
       {report && (
         <div className="space-y-4">
           <div className="glass-card-static rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-[#8B8074]" />
-              <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Customer Insights
               </span>
             </div>
@@ -1748,8 +1748,8 @@ function StoreReportStep({
           </div>
           <div className="glass-card-static rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <BarChart3 className="w-4 h-4 text-[#8B8074]" />
-              <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+              <BarChart3 className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Revenue Insights
               </span>
             </div>
@@ -1771,15 +1771,15 @@ function StoreReportStep({
           {report.recommendations.length > 0 && (
             <div className="glass-card-static rounded-xl p-5">
               <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-[#8B8074]" />
-                <span className="text-xs font-medium uppercase tracking-wide text-[#8B8074]">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Recommendations
                 </span>
               </div>
               <ul className="space-y-2">
                 {report.recommendations.map((rec: string, i: number) => (
-                  <li key={i} className="flex gap-2 text-sm text-[#5C5549]">
-                    <Sparkles className="w-4 h-4 text-[#1F7A4F] shrink-0 mt-0.5" />
+                  <li key={i} className="flex gap-2 text-sm text-muted-foreground">
+                    <Sparkles className="w-4 h-4 text-decision shrink-0 mt-0.5" />
                     {rec}
                   </li>
                 ))}
@@ -1792,7 +1792,7 @@ function StoreReportStep({
         {onBack ? (
           <button
             onClick={onBack}
-            className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors"
+            className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             ← Back
           </button>
@@ -1802,7 +1802,7 @@ function StoreReportStep({
         <button
           onClick={onAcknowledge}
           disabled={isAdvancing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-white text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-primary-foreground text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40"
         >
           {isAdvancing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1819,8 +1819,8 @@ function StoreReportStep({
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <div className="text-xs text-[#8B8074]">{label}</div>
-      <div className="text-lg font-semibold text-[#2C2C2C]">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-semibold text-card-foreground">{value}</div>
     </div>
   );
 }
@@ -1901,44 +1901,44 @@ export function LaunchReadinessPanel({
   return (
     <div className="space-y-6">
       <div className="py-2">
-        <h2 className="text-xl font-semibold text-[#2C2C2C] mb-2">Your launch readiness</h2>
-        <p className="text-sm text-[#70685d] max-w-2xl leading-relaxed">
+        <h2 className="text-xl font-semibold text-card-foreground mb-2">Your launch readiness</h2>
+        <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
           One place to see what Joon knows, what is protected, and what still needs an external
           confirmation. Pending DNS or a first storefront visit will not erase the work you have
           completed.
         </p>
       </div>
 
-      <div className="divide-y divide-[#E8E4DE] border-y border-[#E8E4DE]">
+      <div className="divide-y divide-[#E8E4DE] border-y border-border">
         {readiness.isLoading ? (
-          <div className="py-6 flex items-center gap-2 text-sm text-[#70685d]">
+          <div className="py-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Checking your setup…
           </div>
         ) : (
           rows.map(([label, check]) => (
             <div key={label} className="flex items-start gap-3 py-3">
               {check.ready ? (
-                <Check className="mt-0.5 size-4 text-[#1F7A4F]" />
+                <Check className="mt-0.5 size-4 text-decision" />
               ) : (
                 <Circle className="mt-0.5 size-4 text-[#9B7B31]" />
               )}
               <div className="min-w-0">
-                <p className="text-sm font-medium text-[#2C2C2C]">{label}</p>
-                <p className="mt-0.5 text-xs text-[#70685d]">{check.detail}</p>
+                <p className="text-sm font-medium text-card-foreground">{label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{check.detail}</p>
               </div>
             </div>
           ))
         )}
       </div>
 
-      <section className="rounded-xl bg-[#FAF9F7] p-5">
+      <section className="rounded-xl bg-secondary p-5">
         <div className="flex items-start gap-3">
-          <Globe2 className="mt-0.5 size-5 text-[#1F7A4F]" />
+          <Globe2 className="mt-0.5 size-5 text-decision" />
           <div>
-            <h3 className="text-sm font-semibold text-[#2C2C2C]">
+            <h3 className="text-sm font-semibold text-card-foreground">
               Authenticate your sending domain
             </h3>
-            <p className="mt-1 text-xs leading-5 text-[#70685d]">
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Joon creates the provider records; you add the displayed DNS values at your domain
               host. Live email stays blocked until verification succeeds.
             </p>
@@ -1951,12 +1951,12 @@ export function LaunchReadinessPanel({
                 value={domain}
                 onChange={(event) => setDomain(event.target.value)}
                 placeholder="email.yourbrand.com"
-                className="min-w-0 flex-1 rounded-lg border border-[#D7D1C7] bg-white px-3 py-2 text-sm text-[#2C2C2C] placeholder:text-[#70685d]"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground placeholder:text-muted-foreground"
               />
               <button
                 disabled={!domain || configureDomain.isPending}
                 onClick={() => configureDomain.mutate({ storeId, domain })}
-                className="rounded-lg bg-[#2C2C2C] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                className="rounded-lg bg-[#2C2C2C] px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
               >
                 Create DNS records
               </button>
@@ -1969,17 +1969,17 @@ export function LaunchReadinessPanel({
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            <p className="font-mono text-xs text-[#2C2C2C]">
+            <p className="font-mono text-xs text-card-foreground">
               {sender.data.domain} · {sender.data.status}
             </p>
             {records.map((record, index) => (
               <div
                 key={index}
-                className="grid gap-1 border-t border-[#E8E4DE] pt-2 text-xs sm:grid-cols-[70px_1fr_2fr]"
+                className="grid gap-1 border-t border-border pt-2 text-xs sm:grid-cols-[70px_1fr_2fr]"
               >
                 <span className="font-medium">{String(record.type ?? "DNS")}</span>
                 <span className="break-all font-mono">{String(record.name ?? "")}</span>
-                <span className="break-all font-mono text-[#70685d]">
+                <span className="break-all font-mono text-muted-foreground">
                   {String(record.value ?? "")}
                 </span>
               </div>
@@ -1988,14 +1988,14 @@ export function LaunchReadinessPanel({
               <button
                 disabled={verifyDomain.isPending || sender.data.status === "verified"}
                 onClick={() => verifyDomain.mutate({ storeId })}
-                className="rounded-lg bg-[#2C2C2C] px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
+                className="rounded-lg bg-[#2C2C2C] px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-40"
               >
                 I added these records
               </button>
               <button
                 disabled={refreshDomain.isPending}
                 onClick={() => refreshDomain.mutate({ storeId })}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#D7D1C7] px-3 py-2 text-xs font-medium text-[#2C2C2C]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-card-foreground"
               >
                 <RefreshCw className="size-3" /> Refresh status
               </button>
@@ -2009,28 +2009,28 @@ export function LaunchReadinessPanel({
         )}
       </section>
 
-      <section className="rounded-xl bg-[#FAF9F7] p-5">
+      <section className="rounded-xl bg-secondary p-5">
         <div className="flex items-start gap-3">
-          <MousePointerClick className="mt-0.5 size-5 text-[#1F7A4F]" />
+          <MousePointerClick className="mt-0.5 size-5 text-decision" />
           <div>
-            <h3 className="text-sm font-semibold text-[#2C2C2C]">Grow a consented email audience</h3>
-            <p className="mt-1 text-xs leading-5 text-[#70685d]">
+            <h3 className="text-sm font-semibold text-card-foreground">Grow a consented email audience</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Create a branded signup form, activate its popup, then enable Joon&apos;s Shopify theme
               app embed. New subscribers enter the welcome journey only with explicit consent.
             </p>
           </div>
         </div>
-        <Link href="/forms" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#1F7A4F]">
+        <Link href="/forms" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-decision">
           Set up signup forms <ArrowUpRight className="size-3" />
         </Link>
       </section>
 
-      <section className="rounded-xl bg-[#FAF9F7] p-5">
+      <section className="rounded-xl bg-secondary p-5">
         <div className="flex items-start gap-3">
-          <Radio className="mt-0.5 size-5 text-[#1F7A4F]" />
+          <Radio className="mt-0.5 size-5 text-decision" />
           <div>
-            <h3 className="text-sm font-semibold text-[#2C2C2C]">Storefront tracking</h3>
-            <p className="mt-1 text-xs leading-5 text-[#70685d]">
+            <h3 className="text-sm font-semibold text-card-foreground">Storefront tracking</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Joon uses Shopify&apos;s consent-aware Web Pixel. It is registered through the app and
               does not require a theme app embed. Visit a storefront product or collection page
               after installation; the status above changes once the first event arrives.
@@ -2041,23 +2041,23 @@ export function LaunchReadinessPanel({
           href="https://admin.shopify.com"
           target="_blank"
           rel="noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#1F7A4F]"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-decision"
         >
           Open Shopify <ArrowUpRight className="size-3" />
         </a>
       </section>
 
       {data?.currentEmailPlatform && data.currentEmailPlatform !== "none" && (
-        <section className="rounded-xl bg-[#FAF9F7] p-5">
-          <h3 className="text-sm font-semibold text-[#2C2C2C]">
+        <section className="rounded-xl bg-secondary p-5">
+          <h3 className="text-sm font-semibold text-card-foreground">
             Move from {data.currentEmailPlatform}
           </h3>
-          <p className="mt-1 text-xs leading-5 text-[#70685d]">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Request a guided migration. Joon will preserve suppression and consent boundaries and
             will never treat an imported profile as permission to send.
           </p>
           {data.migrationRequest ? (
-            <p className="mt-3 text-xs font-medium text-[#1F7A4F]">
+            <p className="mt-3 text-xs font-medium text-decision">
               Migration request received · {data.migrationRequest.status.replaceAll("_", " ")}
             </p>
           ) : (
@@ -2066,7 +2066,7 @@ export function LaunchReadinessPanel({
                 {migrationChoices.map(([value, label]) => (
                   <label
                     key={value}
-                    className="flex items-center gap-2 rounded-lg border border-[#D7D1C7] px-3 py-2 text-xs"
+                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs"
                   >
                     <input
                       type="checkbox"
@@ -2086,7 +2086,7 @@ export function LaunchReadinessPanel({
                     requestedItems: migrationItems,
                   })
                 }
-                className="mt-3 rounded-lg border border-[#2C2C2C] px-3 py-2 text-xs font-medium text-[#2C2C2C] disabled:opacity-40"
+                className="mt-3 rounded-lg border border-[#2C2C2C] px-3 py-2 text-xs font-medium text-card-foreground disabled:opacity-40"
               >
                 Request migration help
               </button>
@@ -2095,7 +2095,7 @@ export function LaunchReadinessPanel({
         </section>
       )}
 
-      <div className="rounded-xl bg-[#1F7A4F]/7 p-5">
+      <div className="rounded-xl bg-[var(--decision-soft)] p-5">
         <div className="space-y-3">
           {[
             { icon: Zap, text: "Approved email journeys remain under your control" },
@@ -2103,8 +2103,8 @@ export function LaunchReadinessPanel({
             { icon: Boxes, text: "Eligible campaign cohorts use a frozen control holdout; small cohorts are clearly marked unmeasured" },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-3">
-              <Icon className="size-4 shrink-0 text-[#1F7A4F]" />
-              <span className="text-sm text-[#4F493F]">{text}</span>
+              <Icon className="size-4 shrink-0 text-decision" />
+              <span className="text-sm text-card-foreground">{text}</span>
             </div>
           ))}
         </div>
@@ -2114,7 +2114,7 @@ export function LaunchReadinessPanel({
         {onBack ? (
           <button
             onClick={onBack}
-            className="text-sm text-[#8B8074] hover:text-[#5C5549] transition-colors"
+            className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             ← Back
           </button>
@@ -2125,7 +2125,7 @@ export function LaunchReadinessPanel({
           <button
             onClick={onComplete}
             disabled={isCompleting}
-            className="flex items-center gap-2 px-6 py-2.5 bg-[#1F7A4F] text-white text-sm rounded-lg hover:bg-[#175E3D] transition-colors disabled:opacity-40"
+            className="flex items-center gap-2 px-6 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:opacity-90 transition-colors disabled:opacity-40"
           >
             {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             {remainingLaunchChecks > 0 ? "Continue to dashboard" : "Finish setup"}
@@ -2133,9 +2133,9 @@ export function LaunchReadinessPanel({
         ) : <div />}
       </div>
       {remainingLaunchChecks > 0 && (
-        <p className="text-right text-xs leading-5 text-[#70685d]">
+        <p className="text-right text-xs leading-5 text-muted-foreground">
           {remainingLaunchChecks} launch {remainingLaunchChecks === 1 ? "check remains" : "checks remain"}.
-          You can return here from <span className="font-medium text-[#2C2C2C]">Setup readiness</span>;
+          You can return here from <span className="font-medium text-card-foreground">Setup readiness</span>;
           live sending stays blocked until the required checks pass.
         </p>
       )}

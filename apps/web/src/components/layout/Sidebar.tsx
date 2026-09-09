@@ -115,14 +115,14 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "glass-sidebar border-r border-white/20 dark:border-white/10 flex flex-col transition-all duration-300",
+          "glass-sidebar border-r border-border flex flex-col transition-all duration-300",
           collapsed ? "w-[60px] overflow-visible" : "w-60",
           "hidden md:flex",
           isOpen && "fixed inset-y-0 left-0 z-50 flex !w-60"
         )}
       >
         {/* Logo */}
-        <div className={cn("border-b border-white/15 dark:border-white/10", collapsed ? "px-3 py-5" : "px-6 py-5")}>
+        <div className={cn("border-b border-border", collapsed ? "px-3 py-5" : "px-6 py-5")}>
           {collapsed ? (
             <div className="flex justify-center">
               <span
@@ -160,8 +160,8 @@ export function Sidebar() {
                   "group/tooltip flex items-center rounded-xl transition-all text-[13px] font-sans py-2.5 relative",
                   collapsed ? "justify-center px-2" : "gap-3 px-3",
                   active
-                    ? "bg-white/40 dark:bg-white/10 text-foreground font-semibold border-l-[3px] border-l-[var(--color-accent)]"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10"
+                    ? "bg-[var(--decision-soft)] text-foreground font-semibold border-l border-l-[var(--decision)]"
+                    : "text-muted-foreground hover:text-foreground hover:bg-nav-hover"
                 )}
               >
                 <item.icon className="w-4 h-4 flex-shrink-0" />
@@ -188,14 +188,14 @@ export function Sidebar() {
         </nav>
 
         {/* Divider */}
-        <div className={cn("border-t border-white/15 dark:border-white/10", collapsed ? "mx-2" : "mx-5")} />
+        <div className={cn("border-t border-border", collapsed ? "mx-2" : "mx-5")} />
 
         {/* More section */}
         <div className={cn("py-2", collapsed ? "px-1.5" : "px-3")}>
           {!collapsed && (
             <button
               onClick={() => setMoreOpen(!moreOpen)}
-              className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-[12px] font-sans text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 transition-all"
+              className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-[12px] font-sans text-muted-foreground hover:text-foreground hover:bg-nav-hover transition-all"
             >
               <ChevronDown
                 className={cn(
@@ -228,8 +228,8 @@ export function Sidebar() {
                           "group/tooltip flex items-center rounded-xl transition-all text-[12px] font-sans relative",
                           collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
                           active
-                            ? "bg-white/30 dark:bg-white/10 text-foreground font-semibold border-l-[3px] border-l-[var(--color-accent)]"
-                            : "text-muted-foreground/80 hover:text-foreground hover:bg-white/15 dark:hover:bg-white/8"
+                            ? "bg-[var(--decision-soft)] text-foreground font-semibold border-l border-l-[var(--decision)]"
+                            : "text-muted-foreground/80 hover:text-foreground hover:bg-nav-hover"
                         )}
                       >
                         <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -252,7 +252,7 @@ export function Sidebar() {
         <div className="flex-1" />
 
         {/* User section */}
-        <div className={cn("py-3 border-t border-white/15 dark:border-[rgba(200,180,150,0.08)]", collapsed ? "px-1.5" : "px-3")}>
+        <div className={cn("py-3 border-t border-border", collapsed ? "px-1.5" : "px-3")}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               {user?.imageUrl ? (
@@ -264,14 +264,14 @@ export function Sidebar() {
               )}
               <button
                 onClick={toggleCollapsed}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors hidden md:block"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-nav-hover transition-colors hidden md:block"
                 title="Expand sidebar"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => signOut({ redirectUrl: signOutRedirect })}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-nav-hover transition-colors"
                 title="Sign out"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -296,14 +296,14 @@ export function Sidebar() {
               </div>
               <button
                 onClick={toggleCollapsed}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors hidden md:flex"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-nav-hover transition-colors hidden md:flex"
                 title="Collapse sidebar"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => signOut({ redirectUrl: signOutRedirect })}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/15 dark:hover:bg-[rgba(200,180,150,0.08)] transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-nav-hover transition-colors"
                 title="Sign out"
               >
                 <LogOut className="w-3.5 h-3.5" />
