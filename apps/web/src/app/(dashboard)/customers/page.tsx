@@ -219,7 +219,7 @@ function CustomersConsole() {
             line so it never collides with or gets clipped by the filter state. */}
         {lastCommand && (
           <div className="font-mono text-[11.5px] text-muted-foreground mb-2 truncate">
-            <span className="text-[hsl(var(--accent))]">joon ›</span>{" "}
+            <span className="text-decision-ink">joon ›</span>{" "}
             {lastCommand}
           </div>
         )}
@@ -255,7 +255,7 @@ function CustomersConsole() {
               }}
               className={`flex-shrink-0 px-3 py-1.5 rounded-md font-mono text-[11px] lowercase transition-colors ${
                 segment === s
-                  ? "border border-[hsl(var(--accent))]/40 bg-[hsl(var(--accent))]/[0.06] text-[hsl(var(--accent))]"
+                  ? "border border-decision/40 bg-decision-soft text-decision-ink"
                   : "border border-border bg-background/40 text-muted-foreground hover:border-muted-foreground/40"
               }`}
             >

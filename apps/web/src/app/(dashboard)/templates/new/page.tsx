@@ -504,7 +504,7 @@ export default function NewTemplatePage() {
                   className={cn(
                     "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono font-bold transition-all",
                     isActive
-                      ? "bg-decision text-white"
+                      ? "bg-decision text-decision-foreground"
                       : isCompleted
                         ? "bg-decision/20 text-decision"
                         : "bg-muted text-muted-foreground"
@@ -623,7 +623,7 @@ export default function NewTemplatePage() {
                 className={cn(
                   "flex items-center gap-2 px-6 py-2.5 rounded-lg text-[13px] font-sans font-bold transition-all",
                   goal
-                    ? "bg-decision text-white hover:bg-[var(--color-accent-hover)]"
+                    ? "bg-decision text-decision-foreground hover:bg-[var(--color-accent-hover)]"
                     : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >
@@ -720,7 +720,7 @@ export default function NewTemplatePage() {
               <div className="flex-1" />
               <button
                 onClick={() => setStep(4)}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-sans font-bold bg-decision text-white hover:bg-[var(--color-accent-hover)] transition-all"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-sans font-bold bg-decision text-decision-foreground hover:bg-[var(--color-accent-hover)] transition-all"
               >
                 Continue
                 <ChevronRight className="w-4 h-4" />
@@ -893,7 +893,7 @@ export default function NewTemplatePage() {
                       <button
                         onClick={handleRegenerate}
                         disabled={regenerateMut?.isPending}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-decision text-white rounded-lg text-[10px] font-sans font-bold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-decision text-decision-foreground rounded-lg text-[10px] font-sans font-bold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all"
                       >
                         <Wand2 className={cn("w-3 h-3", regenerateMut?.isPending && "animate-spin")} />
                         Regen
@@ -995,7 +995,7 @@ export default function NewTemplatePage() {
               <button
                 onClick={handleSaveTemplate}
                 disabled={createMut.isPending}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all bg-decision text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all bg-decision text-decision-foreground hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
               >
                 {createMut.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

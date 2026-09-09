@@ -27,7 +27,7 @@
 
 ## Route-by-route browser audit
 
-Every route below was loaded locally in both Light and Drenched at 1440px. No route produced page-level horizontal overflow. Dynamic routes used a deliberately missing id to inspect their loading/error boundary; populated-record acceptance remains a real-data test.
+Every route below was requested locally in both Light and Drenched at 1440px. No route produced page-level horizontal overflow. Dynamic routes used a deliberately missing id to inspect their loading/error boundary; populated-record acceptance remains a real-data test. `/admin/llm` and `/demo/welcome` returned route shells but no inspectable content without their required authorization or data, so 41 of 43 routes had rendered content in both themes.
 
 | Routes | Light | Drenched | State observed |
 | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ Every route below was loaded locally in both Light and Drenched at 1440px. No ro
 | `/settings`, `/settings/autonomy`, `/settings/guardrails`, `/settings/readiness` | Pass | Pass | appearance, model, guardrail and readiness states |
 | `/templates`, `/templates/new`, `/templates/[id]/edit`, `/templates/channel` | Pass | Pass | library, full editor, missing-record boundary and channel redirect |
 | `/creative-studio`, `/emails`, `/conversations` | Pass | Pass | editors, email workspace and conversation states |
-| `/admin/llm`, `/demo/welcome` | Pass | Pass | intentionally blank/redirecting route boundary |
+| `/admin/llm`, `/demo/welcome` | Not inspectable | Not inspectable | route shell only without required authorization/data |
 
 ## Responsive verification
 
@@ -55,7 +55,7 @@ The six highest-density representatives - `/dashboard`, `/campaigns/new`, `/form
 
 - Browser keyboard traversal reaches a visible 2px cobalt focus outline; theme controls are real pressed-state buttons.
 - Warm-paper muted ink is `rgb(88,82,75)` on `rgb(255,250,240)`, a 7.41:1 contrast ratio.
-- Drenched shell breadcrumbs were raised from 50% to 75% muted opacity so 11px navigation context remains legible.
+- Breadcrumbs, sidebar navigation, keyboard hints, profile metadata and assistant prompts use fully opaque semantic ink. A composited browser sweep had found 19 AA failures in these shared elements; the shared-token and component fixes remove opacity from meaningful small text rather than compensating route by route.
 - Drenched paper surfaces use dark ink; browser-computed examples were `rgb(23,20,18)` on `rgb(255,250,240)`.
 - Warning and destructive states do not borrow the product accents.
 - `prefers-reduced-motion` rules remain in the landing, console and streamed-output implementations; content is not gated behind motion.
@@ -90,6 +90,14 @@ Dashboard warnings, errors, decisions, controls, estimates and outcomes now use 
 - A clean-tab Drenched -> Light -> Drenched switch produced no console or hydration error.
 - `/options/v2` and `/` still expose Dawn, Day and Night and remain isolated from the v3 names.
 
+The legacy all-cobalt Drenched rules remain intentionally as the shared base used by `/` and `/options/v2`. The v3 warm-paper treatment is scoped with `.v3-landing[data-pal="drenched"]` selectors. Removing the shared base literally would have changed the live landing, so this is a deliberate isolation safeguard rather than unfinished palette cleanup.
+
+## Reproducible verification counts
+
+- `pnpm test` is authoritative: its runner reports 52 selected test-file paths and 152 passing tests. Independent filesystem counts may differ when they use different globs; the runner's own discovery output is the reproducible baseline.
+- `pnpm -r typecheck` evaluates the monorepo scope, while 18 workspaces currently define and execute a `typecheck` script. The reliable result is zero TypeScript errors across those 18 scripts, not “30 typecheck workspaces.”
+- The production web build completed successfully. Build progress reported 56 generated pages; that number is not presented as the count of audited application routes. The route audit is derived separately from the 43 dashboard `page.tsx` files listed above.
+
 ## Honest remaining acceptance boundary
 
-Repository and local-browser work is complete. Populated dynamic records, production API failures, real long merchant data, Shopify handoff first paint and real-account persistence require the production acceptance pass; they are not reproducible truthfully from the empty local store state.
+Repository implementation is complete after the documented shared-chrome AA corrections. Local browser coverage is complete for the 41 routes with inspectable empty, loading or error content. Populated dynamic records, the two authorization/data-dependent blank routes, production API failures, real long merchant data, Shopify handoff first paint and real-account persistence require the production acceptance pass; they are not reproducible truthfully from the empty local store state and mismatched local Clerk credentials.

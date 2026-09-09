@@ -137,6 +137,8 @@
     --progress: 221 71% 49%;
     --success: 159 81% 25%;
     --decision: #c38a16;
+    --decision-foreground: #0e0e10;
+    --decision-ink: #7a5008;
     --decision-hover: #a9700c;
     --decision-soft: rgba(195, 138, 22, .1);
     --measure: #2457d6;
@@ -173,6 +175,8 @@
     --success: 159 81% 25%;
     --ai-panel-bg: 40 100% 97%;
     --decision: #e3b24f;
+    --decision-foreground: #171512;
+    --decision-ink: #f1cc78;
     --decision-hover: #edc067;
     --decision-soft: rgba(227, 178, 79, .16);
     --measure: #2457d6;
@@ -266,6 +270,9 @@
     --border: 36 16% 80%;
     --input: 36 16% 80%;
     --accent-foreground: 30 11% 8%;
+    --decision-ink: #7a5008;
+    --destructive: 4 64% 48%;
+    --destructive-foreground: 0 0% 100%;
   }
 
   .semantic-decision { color: var(--decision); }

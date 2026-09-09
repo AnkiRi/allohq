@@ -107,7 +107,7 @@ export function TopBar() {
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard"
-              className="text-muted-foreground/75 hover:text-muted-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
             </Link>
@@ -120,20 +120,14 @@ export function TopBar() {
             <div className="flex items-center gap-1">
               <Link
                 href="/dashboard"
-                className="text-muted-foreground/75 hover:text-muted-foreground transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
               </Link>
               {breadcrumb.map((label, i) => (
                 <span key={i} className="flex items-center gap-1">
                   {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
-                  <span
-                    className={`text-[11px] font-sans tracking-[0.5px] uppercase ${
-                      i === breadcrumb.length - 1
-                        ? "text-muted-foreground"
-                        : "text-muted-foreground/75"
-                    }`}
-                  >
+                  <span className="text-[11px] font-sans tracking-[0.5px] uppercase text-muted-foreground">
                     {label}
                   </span>
                 </span>

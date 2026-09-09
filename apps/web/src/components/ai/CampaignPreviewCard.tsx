@@ -138,7 +138,7 @@ export function CampaignPreviewCard({
                 disabled={approving}
                 className={cn(
                   "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                  "bg-decision text-white text-[11px] font-sans font-medium",
+                  "bg-decision text-decision-foreground text-[11px] font-sans font-medium",
                   "hover:opacity-90 transition-opacity",
                   approving && "opacity-60 cursor-not-allowed",
                 )}
@@ -160,7 +160,7 @@ export function CampaignPreviewCard({
               onClick={() => setConfirming(true)}
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-decision text-white text-[11px] font-sans font-medium",
+                "bg-decision text-decision-foreground text-[11px] font-sans font-medium",
                 "hover:opacity-90 transition-opacity",
               )}
             >

@@ -132,7 +132,7 @@ export default function AutomationsPage() {
               onClick={() => storeId && generateAllMut.mutate({ storeId, model: selectedModel })}
               disabled={generateAllMut.isPending || !hasBrandProfile}
               title={!hasBrandProfile ? "Run brand analysis first" : ""}
-              className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-decision text-decision-foreground rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
             >
               {generateAllMut.isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

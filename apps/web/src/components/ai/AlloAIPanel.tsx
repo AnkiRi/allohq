@@ -2122,7 +2122,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             {/* Disabled command line during activation */}
             <div className="px-5 py-4 border-t border-border">
               <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 opacity-60">
-                <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
+                <span className="font-mono text-sm font-semibold text-foreground select-none shrink-0">
                   joon ›
                 </span>
                 <input
@@ -2234,7 +2234,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 )}
                 onClick={() => inputRef.current?.focus()}
               >
-                <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none shrink-0">
+                <span className="font-mono text-sm font-semibold text-foreground select-none shrink-0">
                   joon ›
                 </span>
                 <input
@@ -2279,10 +2279,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           className="group fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent))]/30 bg-card px-3.5 py-2.5 shadow-lg hover:border-[hsl(var(--accent))] transition-colors z-[60]"
           title="Summon joon (⌘J)"
         >
-          <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
+          <span className="font-mono text-sm font-semibold text-foreground select-none">
             joon ›
           </span>
-          <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground/70 border border-border rounded px-1.5 py-0.5 select-none">
+          <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 select-none">
             ⌘J
           </kbd>
         </button>

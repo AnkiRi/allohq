@@ -730,7 +730,7 @@ export default function SettingsPage() {
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {user?.emailAddresses[0]?.emailAddress || ""}
             </p>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "·"}
             </p>
           </div>
@@ -854,7 +854,7 @@ export default function SettingsPage() {
       <NotificationPreferencesSection />
 
       {/* Billing — Coming Soon */}
-      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6 opacity-80">
+      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-4">
           <CreditCard className="w-4 h-4 text-muted-foreground" />
           <h2 className="section-header accent-bar-left text-[13px]">Billing</h2>
@@ -863,7 +863,7 @@ export default function SettingsPage() {
           <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
             Subscriptions and payment methods are on the way in our next update.
           </p>
-          <p className="text-[11px] mt-3" style={{ color: "var(--terracotta)" }}>
+          <p className="text-[11px] text-muted-foreground mt-3">
             We&apos;ll let you know the moment it&apos;s ready
           </p>
         </div>

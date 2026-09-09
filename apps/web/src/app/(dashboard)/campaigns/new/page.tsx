@@ -143,7 +143,7 @@ export default function NewCampaignPage() {
           </div>
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans hover:opacity-90 transition-all whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 bg-decision text-decision-foreground rounded-lg text-xs font-sans hover:opacity-90 transition-all whitespace-nowrap"
           >
             <Palette className="w-3.5 h-3.5" />
             Set up brand

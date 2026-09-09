@@ -251,7 +251,7 @@ export function EmailStudio({
           onClick={() => setMobileTab("edit")}
           className={cn(
             "py-1.5 rounded-md text-[12px] font-sans font-medium transition-colors",
-            mobileTab === "edit" ? "bg-decision text-white" : "text-muted-foreground hover:text-foreground",
+            mobileTab === "edit" ? "bg-decision text-decision-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
           Edit
@@ -261,7 +261,7 @@ export function EmailStudio({
           onClick={() => setMobileTab("preview")}
           className={cn(
             "py-1.5 rounded-md text-[12px] font-sans font-medium transition-colors",
-            mobileTab === "preview" ? "bg-decision text-white" : "text-muted-foreground hover:text-foreground",
+            mobileTab === "preview" ? "bg-decision text-decision-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
           Preview

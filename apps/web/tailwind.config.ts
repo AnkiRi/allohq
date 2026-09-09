@@ -73,6 +73,8 @@ const config: Config = {
         decision: {
           DEFAULT: "var(--decision)",
           soft: "var(--decision-soft)",
+          foreground: "var(--decision-foreground)",
+          ink: "var(--decision-ink)",
         },
         measure: {
           DEFAULT: "var(--measure)",

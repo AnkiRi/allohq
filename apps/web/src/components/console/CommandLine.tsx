@@ -63,7 +63,7 @@ export function CommandLine({
       )}
       onClick={() => inputRef.current?.focus()}
     >
-      <span className="font-mono text-sm font-semibold text-[hsl(var(--accent))] select-none">
+      <span className="font-mono text-sm font-semibold text-foreground select-none">
         joon ›
       </span>
       <div className="relative flex-1 min-w-0">
@@ -99,7 +99,7 @@ export function CommandLine({
           </span>
         )}
       </div>
-      <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground/70 border border-border rounded px-1.5 py-0.5 select-none">
+      <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 select-none">
         ↵
       </kbd>
 

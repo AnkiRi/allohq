@@ -1102,7 +1102,7 @@ export default function BrandProfilePage() {
         <motion.div variants={itemVariants} className="text-center py-20 glass-card-static">
           <Palette className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
           <p className="text-[13px] text-muted-foreground">No brand profile yet.</p>
-          <p className="text-[11px] text-muted-foreground/50 font-sans mt-1">
+          <p className="text-[11px] text-muted-foreground font-sans mt-1">
             joon builds this on its own after your Shopify sync. Or hit &quot;Re-analyze&quot; above to start now.
           </p>
         </motion.div>

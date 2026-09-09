@@ -173,11 +173,11 @@ export function Sidebar() {
                 )}
                 {"showBadge" in item && item.showBadge && pendingCount > 0 && (
                   collapsed ? (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-decision text-white text-[9px] font-bold px-0.5">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-decision text-decision-foreground text-[9px] font-bold px-0.5">
                       {pendingCount}
                     </span>
                   ) : (
-                    <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-decision text-white text-[10px] font-bold px-1">
+                    <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-decision text-decision-foreground text-[10px] font-bold px-1">
                       {pendingCount}
                     </span>
                   )
@@ -229,7 +229,7 @@ export function Sidebar() {
                           collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
                           active
                             ? "bg-[var(--decision-soft)] text-foreground font-semibold border-l border-l-[var(--decision)]"
-                            : "text-muted-foreground/80 hover:text-foreground hover:bg-nav-hover"
+                            : "text-muted-foreground hover:text-foreground hover:bg-nav-hover"
                         )}
                       >
                         <item.icon className="w-3.5 h-3.5 flex-shrink-0" />

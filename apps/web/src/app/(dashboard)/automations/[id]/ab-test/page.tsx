@@ -430,7 +430,7 @@ export default function ABTestPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-decision text-decision-foreground rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           New Test
@@ -695,7 +695,7 @@ export default function ABTestPage() {
               <button
                 onClick={handleCreate}
                 disabled={createMut.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-decision text-decision-foreground rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
               >
                 {createMut.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1096,7 +1096,7 @@ export default function ABTestPage() {
           </p>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-decision text-decision-foreground rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
             New Test

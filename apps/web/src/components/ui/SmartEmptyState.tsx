@@ -47,7 +47,7 @@ export function SmartEmptyState({
                 href={action.href}
                 className={
                   action.primary
-                    ? "px-5 py-2.5 rounded-xl bg-decision text-white text-[13px] font-sans font-medium hover:opacity-90 transition-opacity"
+                    ? "px-5 py-2.5 rounded-xl bg-decision text-decision-foreground text-[13px] font-sans font-medium hover:opacity-90 transition-opacity"
                     : "px-5 py-2.5 rounded-xl border border-border text-[13px] font-sans text-foreground hover:bg-muted transition-colors"
                 }
               >
@@ -59,7 +59,7 @@ export function SmartEmptyState({
                 onClick={action.onClick}
                 className={
                   action.primary
-                    ? "px-5 py-2.5 rounded-xl bg-decision text-white text-[13px] font-sans font-medium hover:opacity-90 transition-opacity"
+                    ? "px-5 py-2.5 rounded-xl bg-decision text-decision-foreground text-[13px] font-sans font-medium hover:opacity-90 transition-opacity"
                     : "px-5 py-2.5 rounded-xl border border-border text-[13px] font-sans text-foreground hover:bg-muted transition-colors"
                 }
               >
