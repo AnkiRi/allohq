@@ -220,7 +220,7 @@ export default function GuardrailsPage() {
                   title={rule.isActive ? "Disable" : "Enable"}
                 >
                   {rule.isActive ? (
-                    <ToggleRight className="w-5 h-5 text-green-600" />
+                    <ToggleRight className="w-5 h-5 text-outcome" />
                   ) : (
                     <ToggleLeft className="w-5 h-5 text-muted-foreground" />
                   )}
@@ -228,7 +228,7 @@ export default function GuardrailsPage() {
                 <button
                   onClick={() => deleteMut.mutate({ id: rule.id })}
                   disabled={deleteMut.isPending}
-                  className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
                   title="Delete"
                 >
                   <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />

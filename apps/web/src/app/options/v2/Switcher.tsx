@@ -5,9 +5,8 @@ import { Sunrise, Sun, Moon, Palette } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* V3 has two public worlds: paper-on-cobalt Drenched and crisp Light. */
-/* Persists to localStorage('allo-theme'), the SAME key the app's      */
-/* ThemeProvider reads, and mirrors data-theme + .dark on <html>, so  */
-/* the choice carries landing <-> app live. SSR default is drenched.   */
+/* Persists to the landing-only localStorage('allo-theme') key.        */
+/* Authenticated app preferences use 'allo-app-theme' independently.  */
 /* A no-FOUC inline script in page.tsx sets it before paint.           */
 /* ------------------------------------------------------------------ */
 
@@ -25,7 +24,7 @@ type V3PalId = (typeof V3_PALS)[number]["id"];
 type V2PalId = (typeof V2_PALS)[number]["id"];
 type PalId = V3PalId | V2PalId;
 
-// Shared with the app's ThemeProvider so the theme choice carries across.
+// Landing-only preference. The authenticated app intentionally uses another key.
 const STORE_KEY = "allo-theme";
 
 function isAllowedPal(v: string | null, enhanced: boolean): v is PalId {
@@ -74,11 +73,6 @@ export function PaletteSwitcher({ enhanced = false }: { enhanced?: boolean }) {
     setPal(id);
     const root = document.querySelector<HTMLElement>(".opt-v2");
     if (root) root.dataset.pal = id;
-    // Mirror the app's source of truth so the choice carries into the app
-    // (and survives a client-side navigation), matching ThemeProvider.
-    const html = document.documentElement;
-    html.setAttribute("data-theme", id);
-    html.classList.toggle("dark", id === "drenched" || id === "dark");
     try {
       localStorage.setItem(STORE_KEY, id);
     } catch {

@@ -60,11 +60,11 @@ function actionLabel(type: string) {
 function statusIcon(status: string) {
   switch (status) {
     case "completed":
-      return <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />;
+      return <CheckCircle className="w-3.5 h-3.5 text-outcome" />;
     case "failed":
       return <XCircle className="w-3.5 h-3.5 text-destructive" />;
     case "running":
-      return <Clock className="w-3.5 h-3.5 text-amber-500 animate-spin" />;
+      return <Clock className="w-3.5 h-3.5 text-warning animate-spin" />;
     default:
       return <Clock className="w-3.5 h-3.5 text-muted-foreground" />;
   }
@@ -75,9 +75,9 @@ function severityColor(severity: string) {
     case "critical":
       return "border-destructive/30 bg-destructive/5";
     case "warning":
-      return "border-amber-500/30 bg-amber-500/5";
+      return "border-warning/30 bg-warning/5";
     default:
-      return "border-blue-500/30 bg-blue-500/5";
+      return "border-measure/30 bg-measure/5";
   }
 }
 
@@ -116,7 +116,7 @@ export function AgentCanvas() {
         <Zap className="w-4 h-4 text-[hsl(var(--accent))]" />
         <span className="font-semibold text-sm">Agent Canvas</span>
         {unacknowledgedCount > 0 && (
-          <span className="ml-auto px-2 py-0.5 rounded-full bg-red-500/10 text-destructive text-[10px] font-sans font-bold">
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-sans font-bold">
             {unacknowledgedCount} new
           </span>
         )}
@@ -172,7 +172,7 @@ export function AgentCanvas() {
                   <AlertTriangle
                     className={cn(
                       "w-4 h-4 mt-0.5 flex-shrink-0",
-                      obs.severity === "critical" ? "text-destructive" : "text-amber-500"
+                      obs.severity === "critical" ? "text-destructive" : "text-warning"
                     )}
                   />
                   <div className="flex-1 min-w-0">

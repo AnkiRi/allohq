@@ -2,7 +2,7 @@
 
 export function Sparkline({
   data,
-  color = "#1F7A4F",
+  color = "var(--measure)",
   width = 60,
   height = 20,
 }: {

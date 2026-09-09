@@ -367,7 +367,7 @@ export function EmailStudio({
               </button>
             </div>
             {promptError ? (
-              <p className="mt-2 text-[12px] font-sans text-amber-600 dark:text-amber-400">
+              <p className="mt-2 text-[12px] font-sans text-warning">
                 {promptError}
               </p>
             ) : null}

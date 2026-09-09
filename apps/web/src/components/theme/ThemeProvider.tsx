@@ -45,7 +45,7 @@ function isTheme(v: string | null): v is Theme {
   return v === "drenched" || v === "light";
 }
 
-function migrateTheme(v: string | null): Theme {
+export function normalizeAppTheme(v: string | null): Theme {
   if (v === "spectrum") return "light";
   if (v === "drenched-paper" || v === "dark") return "drenched";
   return isTheme(v) ? v : DEFAULT_THEME;
@@ -88,7 +88,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Initialize from localStorage, otherwise the Light default.
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    setThemeState(migrateTheme(stored));
+    setThemeState(normalizeAppTheme(stored));
     setMounted(true);
   }, []);
 

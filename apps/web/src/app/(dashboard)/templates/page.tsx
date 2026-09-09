@@ -35,7 +35,7 @@ function getCategoryBadgeStyle(category: string): string {
     case "automation":
       return "bg-warm-gold/10 text-warm-gold border border-warm-gold/20";
     case "ai_generated":
-      return "bg-purple-100 text-purple-700 border border-purple-200";
+      return "bg-measure/10 text-measure border border-measure/20";
     default:
       return "bg-muted text-muted-foreground border border-border";
   }
@@ -201,7 +201,7 @@ export default function TemplatesPage() {
                 {!confirmRemoveAll ? (
                   <button
                     onClick={() => setConfirmRemoveAll(true)}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-red-50 transition-colors text-destructive"
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-destructive/10 transition-colors text-destructive"
                   >
                     Remove All Templates ({templates?.length || 0})
                   </button>
@@ -210,7 +210,7 @@ export default function TemplatesPage() {
                     onClick={() => {
                       deleteByCategoryMut.mutate({});
                     }}
-                    className="w-full text-left px-3 py-2 text-xs bg-red-50 text-red-700 font-medium"
+                    className="w-full text-left px-3 py-2 text-xs bg-destructive/10 text-destructive font-medium"
                   >
                     <AlertTriangle className="w-3 h-3 inline mr-1" />
                     Yes, delete all {templates?.length || 0}. This can't be undone
@@ -306,7 +306,7 @@ export default function TemplatesPage() {
               <button
                 onClick={() => bulkDeleteMut.mutate({ ids: Array.from(selectedIds) })}
                 disabled={bulkDeleteMut.isPending}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-destructive hover:bg-red-50 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-destructive/25 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
               >
                 <Trash2 className="w-3 h-3" />
                 Delete Selected ({selectedIds.size})
@@ -393,7 +393,7 @@ export default function TemplatesPage() {
                         {/* Badges */}
                         <div className="flex items-center gap-2 flex-wrap">
                           {template.category === "ai_generated" && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-sans bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-sans bg-measure/10 text-measure border border-measure/20 rounded-md">
                               <Sparkles className="w-2.5 h-2.5" />
                               AI
                             </span>
@@ -402,7 +402,7 @@ export default function TemplatesPage() {
                             {formatCategoryLabel(template.category)}
                           </span>
                           {isDuplicate && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-sans bg-amber-100 text-amber-700 border border-amber-200 rounded-md">
+                            <span className="px-1.5 py-0.5 text-[10px] font-sans bg-warning/10 text-warning border border-warning/20 rounded-md">
                               Duplicate
                             </span>
                           )}

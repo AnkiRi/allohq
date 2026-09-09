@@ -33,9 +33,9 @@ export const metadata: Metadata = {
 /**
  * No-FOUC palette resolver. Runs synchronously before the page paints and sets
  * data-pal on the .opt-v2 root. Resolution order: ?pal= URL query → stored
- * localStorage('allo-theme') → SSR default (drenched). The key is shared with
- * the app's ThemeProvider, so a palette picked on the landing carries into the
- * app (and back). So a palette can be linked / screenshotted directly, a
+ * localStorage('allo-theme') → SSR default (drenched). This landing-only key is
+ * deliberately separate from the authenticated app preference. A palette can
+ * therefore be linked / screenshotted directly, a
  * returning visitor never flashes the default, and the choice survives a reload.
  */
 const PAL_INIT = `

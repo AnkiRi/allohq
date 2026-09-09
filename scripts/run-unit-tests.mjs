@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const roots = [
   "apps/api/src",
+  "apps/web/src",
   "apps/workers/src",
   "packages",
   "scripts",

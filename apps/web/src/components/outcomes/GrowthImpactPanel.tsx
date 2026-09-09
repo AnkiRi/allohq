@@ -70,7 +70,7 @@ function DecisionBadge({ decision }: { decision: Campaign["decision"] }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-[11px] text-amber-500 whitespace-nowrap">
+    <span className="inline-flex items-center gap-1 font-mono text-[11px] text-warning whitespace-nowrap">
       <span aria-hidden>·</span> learning
     </span>
   );

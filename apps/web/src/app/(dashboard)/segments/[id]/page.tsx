@@ -126,7 +126,7 @@ export default function SegmentDetailPage() {
                 if (window.confirm(`Delete "${seg.name}"? This can't be undone.`)) deleteMut.mutate({ id });
               }}
               disabled={deleteMut.isPending}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:border-red-500/50 hover:text-destructive disabled:opacity-50 transition-colors"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:border-destructive/50 hover:text-destructive disabled:opacity-50 transition-colors"
               title="Delete segment"
             >
               {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}

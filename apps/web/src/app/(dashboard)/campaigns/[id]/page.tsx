@@ -258,8 +258,8 @@ export default function CampaignDetailPage() {
                 ))}
               </div>
               {dryRun.measurement.warning && (
-                <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                <div className="mb-5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-warning">
                     {dryRun.measurement.tier === "unmeasured" ? "Unmeasured small cohort" : "Directional measurement"}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">{dryRun.measurement.warning}</p>
@@ -285,8 +285,8 @@ export default function CampaignDetailPage() {
               </div>
               <p className="mt-2 text-[10px] text-muted-foreground">The eligible customer set and complete treatment/control assignment freeze when you approve. Consent, suppression, pauses and delivery limits are checked again immediately before every email.</p>
               {dryRun.marginRisk.discountPercent > 0 && dryRun.marginRisk.recentBuyers > 0 && (
-                <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Margin worth reviewing</div>
+                <div className="mt-4 rounded-xl border border-warning/30 bg-warning/5 p-4">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-warning">Margin worth reviewing</div>
                   <p className="mt-1 text-[13px] font-medium">
                     {dryRun.marginRisk.recentBuyers} currently eligible {dryRun.marginRisk.recentBuyers === 1 ? "customer has" : "customers have"} already purchased in the last 7 days.
                   </p>

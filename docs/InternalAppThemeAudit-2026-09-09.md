@@ -1,87 +1,95 @@
 # Internal application theme audit - 9 September 2026
 
-## Derived scope
+## Scope derived from the repository
 
-- 43 authenticated route pages under `apps/web/src/app/(dashboard)/**/page.tsx`.
-- 54 shared component files under `apps/web/src/components/`.
-- Merchant output excluded by design: `packages/emails`, branded-email rendering, the storefront widget, hosted customer forms, confirmation pages and email preview documents.
+- 43 route pages under `apps/web/src/app/(dashboard)/**/page.tsx`.
+- 51 shared `.tsx` and `.css` component files under `apps/web/src/components`.
+- Merchant output is deliberately excluded: `packages/emails`, branded-email rendering, the storefront widget, hosted customer forms and email preview documents. Their colours belong to each merchant, not to the Joon dashboard.
+- `/options/v3-landing` has its own two-palette contract. `/` and `/options/v2` retain the legacy three-palette implementation until the new landing is approved.
 
-## Starting state
+## Starting risks
 
-- Three application themes existed: Light, Drenched and a generic near-black Dark theme.
-- Light used emerald as a generic action colour, so decisions and verified outcomes were visually conflated.
-- Drenched rendered working cards on cobalt, reducing table and editor readability.
-- 126 hardcoded colour matches and 22 `dark:` utility matches bypassed the theme contract in the audited application surface.
-- Onboarding and the activity panel carried a separate cream/green styling vocabulary.
-- Theme persistence already used a key separate from the public landing, which is the correct boundary.
-- Focus, selection, control, evidence and outcome roles were not expressed as durable semantic tokens.
+- Light used emerald as a generic action colour, conflating an action with a verified outcome.
+- Drenched rendered dense work directly on cobalt and inherited dark ink inconsistently.
+- Route-local colour utilities and legacy `dark:` overrides bypassed the theme contract.
+- Generic green represented primary actions, success, revenue and status at the same time.
+- A generic near-black Dark theme added a third state matrix without adding product meaning.
 
-## Accessibility and state risks found
+## Implemented contract
 
-- Muted text and legacy dark overrides could produce low contrast when a light working surface appeared inside Drenched.
-- Generic green represented primary actions, success, revenue and status simultaneously.
-- Several states relied on colour alone even when their text labels were otherwise adequate.
-- Hardcoded white panels inherited surrounding foreground colours inconsistently.
-- The third Dark theme increased the state matrix while adding no product-specific visual meaning.
+- **Light** is the SSR-safe default: warm off-white application ground, white paper, near-black ink, gold decisions, cobalt evidence and emerald verified outcomes.
+- **Drenched** is optional: a cobalt application environment with warm-paper operational surfaces. It is not a generic dark mode.
+- Stale preferences migrate deterministically: `spectrum -> light`, `drenched-paper -> drenched`, `dark -> drenched`, and `mono` or unknown values to Light.
+- The landing preference and authenticated-app preference use separate storage keys.
+- Semantic tokens cover background, paper, subtle/elevated surfaces, ink levels, borders, focus, decision, measurement, outcome, warning, destructive, informational, disabled and chart states.
+- Warm-paper components rebind foreground, muted, border, input and secondary tokens locally, while the surrounding Drenched shell keeps light ink.
+- All interactive state still has text, shape or icon cues; colour is not the only signal.
 
-## Consolidation direction
+## Route-by-route browser audit
 
-1. Light is the SSR-safe default: warm off-white ground, paper surfaces and semantic gold/cobalt/emerald.
-2. Drenched is the optional dark environment: cobalt shell with warm-paper operational surfaces.
-3. Gold means decision or approval; cobalt means measurement, restraint or evidence; emerald means a verified outcome.
-4. Warning and destructive colours remain independent of the three product accents.
-5. Shared tokens and primitives replace route-specific palette overrides.
-6. Existing preferences migrate as follows: `spectrum -> light`, `drenched-paper -> drenched`, `dark -> drenched`, invalid/mono -> light.
+Every route below was loaded locally in both Light and Drenched at 1440px. No route produced page-level horizontal overflow. Dynamic routes used a deliberately missing id to inspect their loading/error boundary; populated-record acceptance remains a real-data test.
 
-## Route inventory
+| Routes | Light | Drenched | State observed |
+| --- | --- | --- | --- |
+| `/dashboard`, `/activity`, `/actions`, `/agent` | Pass | Pass | shell, empty/connection states |
+| `/analytics`, `/outcomes` | Pass | Pass | reporting and underpowered/empty states |
+| `/campaigns`, `/campaigns/new`, `/campaigns/[id]` | Pass | Pass | list, creation, missing-record boundary |
+| `/automations`, `/automations/[id]`, `/automations/[id]/edit`, `/automations/[id]/ab-test` | Pass | Pass | list plus missing-record/loading boundaries |
+| `/forms`, `/forms/new`, `/forms/[id]` | Pass | Pass | list, full form builder, missing-record boundary |
+| `/customers`, `/customers/[id]` | Pass | Pass | list/empty and missing-record boundary |
+| `/segments`, `/segments/new`, `/segments/[id]` | Pass | Pass | list, rule builder, missing-record boundary |
+| `/products`, `/orders` | Pass | Pass | commerce tables and connection/empty states |
+| `/intelligence`, `/intelligence/brand`, `/intelligence/cohorts` | Pass | Pass | evidence, brand controls and cohorts |
+| `/onboarding`, `/onboarding/brand-review` | Pass | Pass | guided flow and connection boundary |
+| `/integrations`, `/integrations/shopify` | Pass | Pass | provider cards and Shopify detail |
+| `/settings`, `/settings/autonomy`, `/settings/guardrails`, `/settings/readiness` | Pass | Pass | appearance, model, guardrail and readiness states |
+| `/templates`, `/templates/new`, `/templates/[id]/edit`, `/templates/channel` | Pass | Pass | library, full editor, missing-record boundary and channel redirect |
+| `/creative-studio`, `/emails`, `/conversations` | Pass | Pass | editors, email workspace and conversation states |
+| `/admin/llm`, `/demo/welcome` | Pass | Pass | intentionally blank/redirecting route boundary |
 
-| Surface group | Routes | Primary states audited |
-| --- | ---: | --- |
-| Shell and home | 5 | navigation, command search, dashboard, activity, actions |
-| Campaigns and outcomes | 7 | list, draft, approval, treatment/control, reporting |
-| Automations and journeys | 5 | list, detail, editor, experiment, inactive state |
-| Forms and acquisition | 3 | list, creation, analytics, disabled and empty states |
-| Customers, segments and commerce | 9 | tables, detail, filters, products and orders |
-| Intelligence and brand | 4 | evidence, cohorts, brand controls and model labels |
-| Integrations and readiness | 6 | Shopify state, DNS/readiness, guardrails and settings |
-| Templates and creative tools | 4 | library, editor, previews and channel boundary |
+## Responsive verification
 
-## Shared primitives to consolidate
+The six highest-density representatives - `/dashboard`, `/campaigns/new`, `/forms/new`, `/creative-studio`, `/templates/new` and `/settings` - were measured at 1440, 1024, 768 and 390px. All 24 combinations kept `scrollWidth === clientWidth`. The 390px form builder was also visually inspected after its connection state resolved; fields stack without clipping and the mobile shell replaces the desktop sidebar.
 
-- Theme provider and pre-paint resolver.
-- Application shell, workspace, sidebar and top bar.
-- Card/paper, popover, input and table surfaces.
-- Decision, measurement, outcome, warning and destructive tokens.
-- Buttons, badges, progress, focus, selection and disabled states.
-- Loading, error, empty, toast, dialog and command-palette surfaces.
+## Accessibility verification
 
-## Verification contract
+- Browser keyboard traversal reaches a visible 2px cobalt focus outline; theme controls are real pressed-state buttons.
+- Warm-paper muted ink is `rgb(88,82,75)` on `rgb(255,250,240)`, a 7.41:1 contrast ratio.
+- Drenched shell breadcrumbs were raised from 50% to 75% muted opacity so 11px navigation context remains legible.
+- Drenched paper surfaces use dark ink; browser-computed examples were `rgb(23,20,18)` on `rgb(255,250,240)`.
+- Warning and destructive states do not borrow the product accents.
+- `prefers-reduced-motion` rules remain in the landing, console and streamed-output implementations; content is not gated behind motion.
+- Disabled states retain labels and reduced opacity rather than disappearing.
 
-- Light and Drenched at 1440, 1024, 768 and 390 widths.
-- Signed-out shell plus reachable empty, loading, populated, disabled and error examples.
-- WCAG AA for body copy, controls and small mono labels.
-- Keyboard focus and non-colour state labels.
-- No theme leakage into merchant emails, brand rendering or storefront widgets.
+## Hardcoded-colour classification after migration
 
-## Implementation result
+The remaining literal colours are intentional output boundaries rather than dashboard-theme leaks:
 
-- The authenticated application now exposes exactly two themes: Light and Drenched.
-- Light is the pre-paint and React default; Drenched is an explicit preference.
-- Stale application preferences migrate deterministically without sharing the landing-page storage key.
-- The shell, navigation, onboarding, campaigns, journeys, forms, commerce, intelligence, integrations, settings, templates and assistant surfaces consume the shared paper and semantic state tokens.
-- Campaign treatment and approvals use decision gold; holdouts and evidence use measurement cobalt; completed and verified results use outcome emerald.
-- Legacy `.dark` activation is removed from the authenticated theme provider, preventing old dark utilities from recolouring warm-paper work surfaces.
-- Merchant-rendered email HTML, widget output, hosted customer forms and merchant brand colours were not changed.
+- `AppearanceSetting`: tiny palette preview swatches.
+- `ColorField`, onboarding and brand settings: merchant-controlled brand colour values.
+- Forms and template editors: initial merchant-facing form/email colours.
+- `EmailPreviewFrame` and Creative Studio dark-mode literals: the merchant email/device preview canvas, not application chrome.
+- Settings `#96BF48`: Shopify's provider mark.
 
-## Route-group verification matrix
+Dashboard warnings, errors, decisions, controls, estimates and outcomes now use semantic tokens. `packages/emails`, widget code and brand-kit rendering were not touched.
 
-| Surface group | Light | Drenched | Narrow layout | Empty/loading/error semantics |
-| --- | --- | --- | --- | --- |
-| Shell, navigation and dashboard | Paper-led | Cobalt shell + paper work area | Verified | Verified |
-| Campaigns, approvals and outcomes | Verified | Verified | Verified | Verified |
-| Journeys, nodes and experiments | Verified | Verified | Verified | Verified |
-| Forms and acquisition analytics | Verified | Verified | Verified | Verified |
-| Customers, segments, products and orders | Verified | Verified | Verified | Verified |
-| Intelligence, cohorts and brand settings | Verified | Verified | Verified | Verified |
-| Integrations, readiness and guardrails | Verified | Verified | Verified | Verified |
-| Templates, editors and creative tools | Verified | Verified | Verified | Verified |
+## Shared primitives consolidated
+
+- `ThemeProvider` and the pre-paint resolver normalize and persist application themes without activating the legacy `.dark` class.
+- Application shell, sidebar, top bar, cards, popovers, inputs, tables and assistant panels share semantic surfaces.
+- Buttons, badges, progress, focus, selection, loading, empty, warning and destructive states use the same roles.
+- Campaign treatment/approval is decision gold; holdout/evidence is measurement cobalt; completed and verified revenue/lift is outcome emerald.
+
+## Landing isolation verification
+
+- `/options/v3-landing` defaults to Drenched and exposes exactly Drenched and Light.
+- `?pal=light` resolves to Light; `?pal=drenched` resolves to Drenched.
+- `drenched-paper`, `spectrum`, `mono`, `dark` and unknown query values fall back to Drenched without an error.
+- All required Drenched data surfaces resolve to warm paper: morning brief, receipt marquee, journey nodes, holdout/readout, customer ledger, sharper-decision cards and pricing bill.
+- The HELD OUT area remains a deliberate cobalt inset with off-white text.
+- A clean-tab Drenched -> Light -> Drenched switch produced no console or hydration error.
+- `/options/v2` and `/` still expose Dawn, Day and Night and remain isolated from the v3 names.
+
+## Honest remaining acceptance boundary
+
+Repository and local-browser work is complete. Populated dynamic records, production API failures, real long merchant data, Shopify handoff first paint and real-account persistence require the production acceptance pass; they are not reproducible truthfully from the empty local store state.

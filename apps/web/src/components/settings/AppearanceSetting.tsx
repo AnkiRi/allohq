@@ -10,7 +10,7 @@ import { useTheme, THEMES, type Theme } from "@/components/theme/ThemeProvider";
  */
 
 // A small, palette-true swatch so the choice reads at a glance (independent of
-// the active theme, so all three previews look right whatever you're on).
+// the active theme, so both previews look right whatever you're on).
 const SWATCH: Record<Theme, { bg: string; ink: string; accent: string }> = {
   light: { bg: "#fafaf9", ink: "#0e0e10", accent: "#c38a16" },
   drenched: { bg: "#18256f", ink: "#fffaf0", accent: "#e3b24f" },

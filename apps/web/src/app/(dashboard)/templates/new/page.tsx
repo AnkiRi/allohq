@@ -240,8 +240,8 @@ function scoreSubjectLocally(subject: string): { score: number; label: string; c
 
   let label: string;
   let color: string;
-  if (score >= 75) { label = "Great"; color = "text-green-600 dark:text-green-400"; }
-  else if (score >= 50) { label = "Good"; color = "text-amber-600 dark:text-amber-400"; }
+  if (score >= 75) { label = "Great"; color = "text-outcome"; }
+  else if (score >= 50) { label = "Good"; color = "text-warning"; }
   else { label = "Needs Work"; color = "text-destructive text-destructive"; }
 
   return { score, label, color };
@@ -559,8 +559,8 @@ export default function NewTemplatePage() {
                     onClick={() => setGoal(g.id)}
                     className={cn(
                       "text-left p-5 rounded-xl transition-all",
-                      "bg-card dark:bg-[rgba(40,36,30,0.7)]",
-                      "border border-border dark:border-[rgba(200,180,150,0.12)]",
+                      "bg-card",
+                      "border border-border",
                       "hover:shadow-md hover:-translate-y-0.5",
                       isSelected && "ring-2 ring-decision"
                     )}
@@ -608,7 +608,7 @@ export default function NewTemplatePage() {
                       onChange={(e) => setCustomPrompt(e.target.value)}
                       rows={3}
                       placeholder="E.g., 'A holiday sale email with a festive theme, featuring our top 6 products with a 20% off coupon code...'"
-                      className="w-full px-4 py-3 bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-decision resize-none"
+                      className="w-full px-4 py-3 bg-card border border-border rounded-xl text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-decision resize-none"
                     />
                   </div>
                 </motion.div>
@@ -789,7 +789,7 @@ export default function NewTemplatePage() {
               {/* Right: Refinement Panel (40%) */}
               <div className="flex-[2] flex flex-col gap-5 overflow-y-auto">
                 {/* Template name */}
-                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                <div className="bg-card border border-border rounded-xl p-4 space-y-3">
                   <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     TEMPLATE NAME
                   </label>
@@ -802,7 +802,7 @@ export default function NewTemplatePage() {
                 </div>
 
                 {/* Subject Line */}
-                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                <div className="bg-card border border-border rounded-xl p-4 space-y-3">
                   <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     SUBJECT LINE
                   </label>
@@ -856,7 +856,7 @@ export default function NewTemplatePage() {
                 </div>
 
                 {/* Quick Adjustments */}
-                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                <div className="bg-card border border-border rounded-xl p-4 space-y-3">
                   <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     QUICK ADJUSTMENTS
                   </label>
@@ -903,7 +903,7 @@ export default function NewTemplatePage() {
                 </div>
 
                 {/* Blocks */}
-                <div className="bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-4 space-y-3">
+                <div className="bg-card border border-border rounded-xl p-4 space-y-3">
                   <label className="text-[10px] uppercase tracking-[1px] font-sans text-muted-foreground font-bold">
                     BLOCKS ({blocks.length})
                   </label>
@@ -970,7 +970,7 @@ export default function NewTemplatePage() {
             </div>
 
             {/* Summary card */}
-            <div className="max-w-lg mx-auto bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-5 space-y-3">
+            <div className="max-w-lg mx-auto bg-card border border-border rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-decision/15 flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-decision" />

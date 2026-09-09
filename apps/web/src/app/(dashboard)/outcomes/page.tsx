@@ -394,11 +394,11 @@ export default function OutcomesPage() {
                     {moneyExact(model.liftCiLow)} … {moneyExact(model.liftCiHigh)}
                   </span>{" "}
                   {model.underpowered ? (
-                    <span className="text-amber-500">· underpowered — gathering data</span>
+                    <span className="text-warning">· underpowered — gathering data</span>
                   ) : model.significant ? (
                     <span className="text-[hsl(var(--accent))]">· statistically significant</span>
                   ) : (
-                    <span className="text-amber-500">· not yet significant</span>
+                    <span className="text-warning">· not yet significant</span>
                   )}
                 </span>
               </div>

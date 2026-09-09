@@ -166,12 +166,6 @@
     --card-foreground: 30 11% 8%;
     --popover: 40 100% 97%;
     --popover-foreground: 30 11% 8%;
-    --secondary: 39 43% 93%;
-    --secondary-foreground: 30 11% 8%;
-    --muted: 39 43% 93%;
-    --muted-foreground: 34 8% 32%;
-    --border: 36 16% 80%;
-    --input: 36 16% 80%;
     --primary: 41 72% 60%;
     --accent: 41 72% 60%;
     --ring: 41 72% 60%;
@@ -246,6 +240,32 @@
   .aurora-card,
   .ai-panel-bg {
     color: hsl(var(--card-foreground));
+  }
+
+  /* Paper is a reading context in Drenched, not merely a light background.
+     Rebind explicit Tailwind text utilities inside it so dense tables, forms,
+     popovers and editors keep dark ink instead of inheriting cobalt-shell ink. */
+  html[data-theme="drenched"] :is(
+    .bg-card,
+    .bg-popover,
+    .glass-card,
+    .glass-card-static,
+    .aurora-card,
+    .ai-panel-bg
+  ) {
+    --foreground: 30 11% 8%;
+    --background: 40 100% 97%;
+    --card: 40 100% 97%;
+    --card-foreground: 30 11% 8%;
+    --popover: 40 100% 97%;
+    --popover-foreground: 30 11% 8%;
+    --secondary: 39 43% 93%;
+    --secondary-foreground: 30 11% 8%;
+    --muted: 39 43% 93%;
+    --muted-foreground: 34 8% 32%;
+    --border: 36 16% 80%;
+    --input: 36 16% 80%;
+    --accent-foreground: 30 11% 8%;
   }
 
   .semantic-decision { color: var(--decision); }

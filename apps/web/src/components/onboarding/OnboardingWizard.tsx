@@ -597,9 +597,9 @@ function BackgroundAnalysisStep({
       </div>
 
       {stuckSteps.length > 0 && (
-        <div className="sticky top-2 z-20 rounded-xl border border-amber-300/70 bg-amber-50/95 backdrop-blur-sm p-4 shadow-sm">
+        <div className="sticky top-2 z-20 rounded-xl border border-warning/30 bg-card p-4 shadow-sm">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-card-foreground">
                 This is taking longer than expected.
@@ -641,8 +641,8 @@ function BackgroundAnalysisStep({
                 <Check className="w-3.5 h-3.5 text-decision" />
               </div>
             ) : syncStuck ? (
-              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              <div className="w-6 h-6 rounded-full bg-warning/10 flex items-center justify-center">
+                <AlertTriangle className="w-3.5 h-3.5 text-warning" />
               </div>
             ) : (
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -669,8 +669,8 @@ function BackgroundAnalysisStep({
                   <Check className="w-3.5 h-3.5 text-decision" />
                 </div>
               ) : rowStuck ? (
-                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <div className="w-6 h-6 rounded-full bg-warning/10 flex items-center justify-center">
+                  <AlertTriangle className="w-3.5 h-3.5 text-warning" />
                 </div>
               ) : (
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -682,7 +682,7 @@ function BackgroundAnalysisStep({
                 <button
                   onClick={() => handleRetry(row.key)}
                   disabled={retry.isPending}
-                  className="flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 transition-colors disabled:opacity-40 shrink-0"
+                  className="flex items-center gap-1 text-xs font-medium text-warning hover:opacity-80 transition-opacity disabled:opacity-40 shrink-0"
                 >
                   {retryingKey === row.key ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -753,9 +753,9 @@ function ModelSelectionStep({
   };
 
   const tierColors: Record<string, string> = {
-    premium: "bg-amber-100 text-amber-800",
-    standard: "bg-blue-100 text-blue-800",
-    economy: "bg-green-100 text-green-800",
+    premium: "bg-decision/10 text-decision",
+    standard: "bg-measure/10 text-measure",
+    economy: "bg-muted text-muted-foreground",
   };
 
   return (
@@ -1047,7 +1047,7 @@ function BrandReviewStep({
             <button
               onClick={handleAnalyzeFromDocument}
               disabled={isAnalyzing}
-              className="px-4 py-2 bg-[#2D2A26] text-primary-foreground rounded-lg text-sm font-medium hover:bg-decision/90 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 bg-decision text-primary-foreground rounded-lg text-sm font-medium hover:bg-decision/90 disabled:opacity-50 flex items-center gap-2"
             >
               {isAnalyzing ? (
                 <>
@@ -1962,7 +1962,7 @@ export function LaunchReadinessPanel({
               </button>
             </div>
             {configureDomain.error && (
-              <p role="alert" className="mt-2 text-xs text-red-700">
+              <p role="alert" className="mt-2 text-xs text-destructive">
                 {configureDomain.error.message}
               </p>
             )}
@@ -2001,7 +2001,7 @@ export function LaunchReadinessPanel({
               </button>
             </div>
             {(verifyDomain.error || refreshDomain.error) && (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-xs text-destructive">
                 {verifyDomain.error?.message ?? refreshDomain.error?.message}
               </p>
             )}

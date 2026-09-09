@@ -429,33 +429,33 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
   cart_recovery: {
     icon: ShoppingCart,
     label: "Abandoned carts",
-    accentColor: "text-amber-500",
-    accentBg: "bg-amber-500/10",
-    accentBorder: "border-amber-500/20",
+    accentColor: "text-decision",
+    accentBg: "bg-decision/10",
+    accentBorder: "border-decision/20",
     description: (count) => `${count} cart${count !== 1 ? "s" : ""} left behind. I've drafted recovery emails, ready when you are.`,
   },
   price_drop_alert: {
     icon: TrendingDown,
     label: "Price drops",
-    accentColor: "text-blue-500",
-    accentBg: "bg-blue-500/10",
-    accentBorder: "border-blue-500/20",
+    accentColor: "text-measure",
+    accentBg: "bg-measure/10",
+    accentBorder: "border-measure/20",
     description: (count) => `${count} product${count !== 1 ? "s" : ""} dropped in price. Let's tell the customers who were watching.`,
   },
   restock_alert: {
     icon: Package,
     label: "Back in stock",
-    accentColor: "text-emerald-500",
-    accentBg: "bg-emerald-500/10",
-    accentBorder: "border-emerald-500/20",
+    accentColor: "text-outcome",
+    accentBg: "bg-outcome/10",
+    accentBorder: "border-outcome/20",
     description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock. Let's let waiting customers know.`,
   },
   repurchase_reminder: {
     icon: RefreshCw,
     label: "Time to reorder",
-    accentColor: "text-purple-500",
-    accentBg: "bg-purple-500/10",
-    accentBorder: "border-purple-500/20",
+    accentColor: "text-muted-foreground",
+    accentBg: "bg-muted",
+    accentBorder: "border-border",
     description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a refill, a gentle nudge could bring them back.`,
   },
 };
@@ -585,7 +585,7 @@ function RecoveryOpportunityCards({
                           "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-sans font-medium transition-all",
                           approvingType === type
                             ? "bg-muted text-muted-foreground"
-                            : cn("text-white", type === "cart_recovery" ? "bg-amber-500 hover:bg-amber-600" : type === "price_drop_alert" ? "bg-blue-500 hover:bg-blue-600" : type === "restock_alert" ? "bg-emerald-500 hover:bg-emerald-600" : "bg-purple-500 hover:bg-purple-600"),
+                            : "bg-decision text-primary-foreground hover:bg-decision/90",
                         )}
                       >
                         {approvingType === type ? (

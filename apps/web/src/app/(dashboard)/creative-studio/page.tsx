@@ -181,7 +181,7 @@ function scoreSubjectLine(subject: string): { total: number; breakdown: SubjectS
 // ---------------------------------------------------------------------------
 
 function ScoreGauge({ score }: { score: number }) {
-  const color = score >= 80 ? "#6B7A2F" : score >= 60 ? "#B8963E" : score >= 40 ? "#c4704a" : "#dc2626";
+  const color = score >= 80 ? "var(--outcome)" : score >= 60 ? "var(--warning)" : "hsl(var(--destructive))";
   const label = score >= 80 ? "Excellent" : score >= 60 ? "Good" : score >= 40 ? "Fair" : "Needs Work";
   return (
     <div className="flex items-center gap-4">
@@ -226,7 +226,7 @@ function BreakdownBar({ label, score, maxScore, detail, icon: Icon }: {
   icon: React.ElementType;
 }) {
   const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  const color = pct >= 80 ? "#6B7A2F" : pct >= 60 ? "#B8963E" : "#c4704a";
+  const color = pct >= 80 ? "var(--outcome)" : pct >= 60 ? "var(--warning)" : "hsl(var(--destructive))";
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
@@ -284,8 +284,7 @@ function TabButton({ active, onClick, icon: Icon, label }: {
 function StudioCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-2xl border border-border dark:border-[rgba(200,180,150,0.12)] p-6 bg-card dark:bg-[rgba(40,36,30,0.7)] ${className}`}
-      style={{ backdropFilter: "blur(20px)" }}
+      className={`rounded-2xl border border-border p-6 bg-card ${className}`}
     >
       {children}
     </div>
@@ -303,8 +302,8 @@ function SectionHeader({ icon: Icon, title, subtitle }: {
 }) {
   return (
     <div className="flex items-center gap-3 mb-5">
-      <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(184,150,62,0.1)" }}>
-        <Icon className="w-4 h-4" style={{ color: "#B8963E" }} />
+      <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-decision/10">
+        <Icon className="w-4 h-4 text-decision" />
       </div>
       <div>
         <h2
@@ -429,7 +428,7 @@ function SubjectLineScorer() {
               />
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] text-muted-foreground font-mono">{subject.length} characters</span>
-                <span className={`text-[10px] font-sans ${subject.length > 60 ? "text-amber-600" : "text-muted-foreground"}`}>
+                <span className={`text-[10px] font-sans ${subject.length > 60 ? "text-warning" : "text-muted-foreground"}`}>
                   {subject.length > 60 ? "May be truncated on mobile" : "Ideal: 30-60 characters"}
                 </span>
               </div>
@@ -444,7 +443,7 @@ function SubjectLineScorer() {
                 <div className="space-y-1.5">
                   {result.suggestions.map((sug, i) => (
                     <div key={i} className="flex items-start gap-2 text-[12px] text-foreground/80">
-                      <ArrowRight className="w-3 h-3 text-[#B8963E] mt-0.5 flex-shrink-0" />
+                      <ArrowRight className="w-3 h-3 text-decision mt-0.5 flex-shrink-0" />
                       <span>{sug}</span>
                     </div>
                   ))}
@@ -485,7 +484,7 @@ function SubjectLineScorer() {
                   >
                     <span
                       className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md ${
-                        altScore >= 70 ? "bg-[#6B7A2F]/10 text-[#6B7A2F]" : altScore >= 50 ? "bg-[#B8963E]/10 text-[#B8963E]" : "bg-[#c4704a]/10 text-[#c4704a]"
+                        altScore >= 70 ? "bg-outcome/10 text-outcome" : altScore >= 50 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"
                       }`}
                     >
                       {altScore}
@@ -496,7 +495,7 @@ function SubjectLineScorer() {
                       className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
                       title="Copy"
                     >
-                      {copiedIdx === i ? <Check className="w-3.5 h-3.5 text-[#6B7A2F]" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedIdx === i ? <Check className="w-3.5 h-3.5 text-outcome" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                     <button
                       onClick={() => setSubject(alt)}
@@ -830,7 +829,7 @@ function CopyAssistant() {
                     onClick={() => copyText(inputText, "original")}
                     className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {copiedField === "original" ? <Check className="w-3 h-3 text-[#6B7A2F]" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === "original" ? <Check className="w-3 h-3 text-outcome" /> : <Copy className="w-3 h-3" />}
                   </button>
                 )}
                 <span className="text-[10px] text-muted-foreground font-mono">
@@ -859,7 +858,7 @@ function CopyAssistant() {
                     onClick={() => copyText(improvedText, "improved")}
                     className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {copiedField === "improved" ? <Check className="w-3 h-3 text-[#6B7A2F]" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === "improved" ? <Check className="w-3 h-3 text-outcome" /> : <Copy className="w-3 h-3" />}
                   </button>
                 )}
                 {improvedText && (
@@ -872,7 +871,7 @@ function CopyAssistant() {
             <div
               className={`w-full px-4 py-3 border rounded-xl text-[13px] leading-relaxed font-sans min-h-[200px] ${
                 improvedText
-                  ? "bg-[#6B7A2F]/5 border-[#6B7A2F]/20 text-foreground"
+                  ? "bg-outcome/5 border-outcome/20 text-foreground"
                   : "bg-muted border-border text-muted-foreground/50"
               }`}
             >
@@ -1075,7 +1074,7 @@ function BrandVoiceCheck() {
             <div className="space-y-3">
               {analysis.feedback.map((item, i) => {
                 const Icon = item.status === "pass" ? CheckCircle : item.status === "warning" ? AlertTriangle : XCircle;
-                const color = item.status === "pass" ? "#6B7A2F" : item.status === "warning" ? "#B8963E" : "#c4704a";
+                const color = item.status === "pass" ? "var(--outcome)" : item.status === "warning" ? "var(--warning)" : "hsl(var(--destructive))";
                 return (
                   <div key={i} className="flex items-start gap-3">
                     <div

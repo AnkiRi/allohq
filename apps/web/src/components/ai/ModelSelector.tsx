@@ -20,9 +20,9 @@ const MODEL_LABELS: Record<AIModelId, { label: string; short: string; provider: 
 };
 
 const TIER_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  premium: { bg: "bg-purple-50", text: "text-purple-600", label: "Premium" },
-  standard: { bg: "bg-blue-50", text: "text-blue-600", label: "Standard" },
-  economy: { bg: "bg-green-50", text: "text-green-600", label: "Economy" },
+  premium: { bg: "bg-decision/10", text: "text-decision", label: "Premium" },
+  standard: { bg: "bg-measure/10", text: "text-measure", label: "Standard" },
+  economy: { bg: "bg-muted", text: "text-muted-foreground", label: "Economy" },
 };
 
 export function ModelSelector({ value, onChange, compact }: ModelSelectorProps) {

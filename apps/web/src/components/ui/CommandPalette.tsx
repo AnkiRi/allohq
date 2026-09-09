@@ -218,13 +218,13 @@ export function CommandPalette() {
         >
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 bg-foreground/35 backdrop-blur-sm"
             onClick={close}
           />
 
           {/* Modal */}
           <motion.div
-            className="relative w-[560px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border border-white/20 dark:border-white/10 overflow-hidden backdrop-blur-xl"
+            className="relative w-[560px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-xl border border-border overflow-hidden bg-popover"
             style={{
               background: "hsl(var(--card) / 0.95)",
             }}
@@ -264,7 +264,7 @@ export function CommandPalette() {
                       onMouseEnter={() => setSelectedIndex(currentFlatIndex)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
                         isSelected
-                          ? "bg-decision/8 dark:bg-decision/15"
+                          ? "bg-decision/10"
                           : "hover:bg-muted/50"
                       }`}
                     >
