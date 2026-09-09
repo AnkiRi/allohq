@@ -232,7 +232,7 @@ export function V2Landing({
           <section className="v2-section" id="brief">
             <div className="v2-wrap v2-half v2-half--art-left">
               <Rise className="v2-half__art">
-                <MorningBrief controlCount={enhanced ? 28 : 22} />
+                <MorningBrief controlCount={28} />
               </Rise>
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">the morning brief</p>
@@ -306,7 +306,7 @@ export function V2Landing({
             <div className="v2-wrap v2-half v2-half--art-left v2-half--wide-art">
               <Rise className="v2-half__art">
                 <div className="v2-proof-card">
-                  <HoldoutField controlCount={enhanced ? 28 : 22} />
+                  <HoldoutField controlCount={28} />
                 </div>
               </Rise>
               <Rise className="v2-half__copy">
