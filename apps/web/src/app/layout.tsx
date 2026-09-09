@@ -51,9 +51,6 @@ export default function RootLayout({
           socialButtonsBlockButton: {
             color: "#171412",
           },
-          developmentModeBadge: {
-            color: "#7a5008",
-          },
         },
         variables: {
           colorBackground: "#fffaf0",

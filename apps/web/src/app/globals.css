@@ -208,6 +208,13 @@
   }
 }
 
+/* Clerk does not expose an appearance key for its development-instance badge
+   in the installed version. Target its stable footer semantics, never its
+   generated cl-internal class. This badge is absent with production keys. */
+.cl-footer p[data-variant="body"][data-color="inherit"] {
+  color: #7a5008;
+}
+
 @layer base {
   * {
     @apply border-border;
