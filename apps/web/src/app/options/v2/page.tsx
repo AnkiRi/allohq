@@ -485,11 +485,11 @@ export function V2Landing({
                           <p className="v2-event__detail">
                             187 lapsed buyers included in an email campaign,
                             with{" "}
-                            <span className="v2-noticed">{enhanced ? 28 : 22} held back</span> as a
+                            <span className="v2-noticed">28 held back</span> as a
                             control, so the lift is proven, not claimed.
                           </p>
                           <p className="v2-event__meta v2-event__meta--control mono">
-                            held back {enhanced ? 28 : 22} as control · lift measured
+                            held back 28 as control · lift measured
                           </p>
                         </div>
                       </div>
@@ -601,7 +601,7 @@ export function V2Landing({
                   <span className="v2-step__k mono">$ joon learn</span>
                   <h3 className="v2-step__h">It holds out a control first.</h3>
                   <p className="v2-step__p">
-                    From the 187, joon holds back <strong>{enhanced ? 28 : 22}</strong>, matched on
+                    From the 187, joon holds back <strong>28</strong>, matched on
                     past spend, and leaves them untouched. Everything next is
                     measured against them, proven, not assumed.
                   </p>
@@ -612,7 +612,7 @@ export function V2Landing({
                   <p className="v2-step__p">
                     joon drafts <strong>3</strong> win-back variants in your
                     voice, explains the evidence before you approve, and keeps
-                    <strong> {enhanced ? 28 : 22}</strong> customers silent as a control.
+                    <strong> 28</strong> customers silent as a control.
                   </p>
                 </Rise>
               </ol>
@@ -635,7 +635,7 @@ export function V2Landing({
                       </span>
                       <span className="v2-consequence__v">₹1.2L recovered</span>
                       <span className="v2-consequence__d">
-                        lift vs the {enhanced ? 28 : 22} held-back buyers
+                        lift vs the 28 held-back buyers
                       </span>
                     </div>
                     <div className="v2-consequence__cell">

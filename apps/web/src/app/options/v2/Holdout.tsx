@@ -8,7 +8,7 @@ import { motion, useInView, useReducedMotion, animate } from "framer-motion";
 /* frontend-holdout/HoldoutField.tsx and re-themed via v2 tokens.      */
 /*                                                                     */
 /* 187 lapsed buyers render as a field of individual unit marks. On    */
-/* reveal, 22 of them are deliberately pulled out of the crowd into a  */
+/* reveal, 28 of them are deliberately pulled out of the crowd into a  */
 /* sealed enclosure and LEFT UNTOUCHED (control). The rest are worked  */
 /* (treatment) and WARM UP. The lift is the measured gap between them. */
 /*                                                                     */
@@ -78,7 +78,7 @@ function CountUp({
   );
 }
 
-export function HoldoutField({ controlCount = 22 }: { controlCount?: number }) {
+export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
   const reduced = useReducedMotion() ?? false;
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: false, margin: "-25% 0px" });
@@ -109,7 +109,7 @@ export function HoldoutField({ controlCount = 22 }: { controlCount?: number }) {
         </span>
       </div>
 
-      {/* THE FIELD, 187 unit marks, 22 held out of the crowd. */}
+      {/* THE FIELD, 187 unit marks, 28 held out of the crowd. */}
       <div className="v2-hf__panels">
         <div className="v2-hf__worked" aria-hidden="true">
           <span className="v2-hf__panel-tag mono">Worked</span>
@@ -159,7 +159,7 @@ export function HoldoutField({ controlCount = 22 }: { controlCount?: number }) {
           </div>
         </div>
 
-        {/* the sealed enclosure: the held-out 22, deliberately untouched */}
+        {/* the sealed enclosure: the held-out 28, deliberately untouched */}
         <motion.div
           className="v2-hf__sealed"
           aria-hidden="true"

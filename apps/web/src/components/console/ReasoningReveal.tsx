@@ -21,7 +21,7 @@ import "./ReasoningReveal.css";
 export interface ReasoningLine {
   /** Plain text (no HTML). Mono console line. */
   text: string;
-  /** The deliberate beat — e.g. "held back 22 as control" / "left alone". */
+  /** The deliberate beat — e.g. "held back 28 as control" / "left alone". */
   beat?: boolean;
   /** Render as a "→ ready …" closing line instead of a "✓" line. */
   arrow?: boolean;
@@ -159,7 +159,7 @@ export const ATTENTION_STORIES: ReasoningStory[] = [
     lines: [
       { text: "scanned 4,820 customers" },
       { text: "matched 187 lapsed · last spring's buyers" },
-      { text: "held back 22 as control", beat: true },
+      { text: "held back 28 as control", beat: true },
       { text: "drafted 3 win-back variants" },
       { text: "ready · expected recovery ₹1.2L", arrow: true },
     ],

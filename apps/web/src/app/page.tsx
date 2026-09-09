@@ -1,7 +1,14 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { V2Landing } from "./options/v2/page";
+import type { Metadata } from "next";
+import { V3Landing } from "./options/v3-landing/Landing";
+
+export const metadata: Metadata = {
+  title: "joon · the email tool that gets paid to send less",
+  description:
+    "Joon helps Shopify brands send fewer, better emails, with merchant approval and a measurable control.",
+};
 
 type HomePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -36,7 +43,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     }
   }
 
-  // Production landing = the locked V2 design (default palette: drenched).
-  // No prototype banner; the visitor-facing palette switcher still renders.
-  return <V2Landing showBanner={false} />;
+  // Public landing uses the approved v3 composition without its prototype
+  // banner. The legacy landing remains available at /options/v2.
+  return <V3Landing searchParams={searchParams} showBanner={false} />;
 }

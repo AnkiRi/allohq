@@ -44,7 +44,7 @@ function BriefLine({
   );
 }
 
-export function MorningBrief({ controlCount = 22 }: { controlCount?: number }) {
+export function MorningBrief({ controlCount = 28 }: { controlCount?: number }) {
   return (
     <article className="v2-mb" aria-label="Your morning brief from joon">
       <div className="v2-mb__head">
