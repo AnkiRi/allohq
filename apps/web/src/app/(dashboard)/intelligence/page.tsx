@@ -342,7 +342,7 @@ export default function IntelligencePage() {
           <div className="p-16 text-center">
             <Brain className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
             <p className="text-[13px] text-muted-foreground">No segments yet.</p>
-            <p className="text-[11px] text-muted-foreground/50 mt-1">
+            <p className="text-[11px] text-muted-foreground mt-1">
               Run an analysis and joon will group your customers for you.
             </p>
           </div>

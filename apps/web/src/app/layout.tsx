@@ -42,7 +42,26 @@ export default function RootLayout({
   const apiOrigin = process.env.NEXT_PUBLIC_API_URL;
 
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        elements: {
+          cardBox: {
+            backgroundColor: "#fffaf0",
+          },
+        },
+        variables: {
+          colorBackground: "#fffaf0",
+          colorText: "#171412",
+          colorTextSecondary: "#58524b",
+          colorPrimary: "#9a660e",
+          colorTextOnPrimaryBackground: "#0e0e10",
+          colorInputBackground: "#fffaf0",
+          colorInputText: "#171412",
+          colorNeutral: "#58524b",
+          colorDanger: "#c8362c",
+        },
+      }}
+    >
       <html
         lang="en"
         suppressHydrationWarning

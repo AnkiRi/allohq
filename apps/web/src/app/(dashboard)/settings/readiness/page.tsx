@@ -18,7 +18,7 @@ export default function SetupReadinessPage() {
       <div className="mx-auto max-w-2xl py-12">
         <h1 className="text-2xl font-semibold">Connect a store first</h1>
         <p className="mt-2 text-sm text-muted-foreground">Setup readiness becomes available after Shopify is connected.</p>
-        <Link href="/dashboard" className="mt-5 inline-flex text-sm font-medium text-decision">Return to home</Link>
+        <Link href="/dashboard" className="mt-5 inline-flex text-sm font-medium text-decision-ink">Return to home</Link>
       </div>
     );
   }
@@ -26,7 +26,7 @@ export default function SetupReadinessPage() {
   return (
     <div className="mx-auto w-full max-w-3xl py-4 sm:py-8">
       <LaunchReadinessPanel storeId={storeId} />
-      <div className="mt-6"><Link href="/dashboard" className="text-sm font-medium text-decision">← Return to dashboard</Link></div>
+      <div className="mt-6"><Link href="/dashboard" className="text-sm font-medium text-decision-ink">← Return to dashboard</Link></div>
     </div>
   );
 }
