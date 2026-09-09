@@ -253,21 +253,9 @@
   .semantic-outcome { color: var(--outcome); }
   .semantic-warning { color: var(--warning); }
 
-  /* Terminal canvas — flat surface with a faint scanline grid, no aurora */
+  /* Quiet application canvas. Product structure, not decoration, carries depth. */
   .canvas-noise {
     background-color: hsl(var(--background));
-    background-image:
-      linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 0, 0, 0.015) 1px, transparent 1px);
-    background-size: 32px 32px, 32px 32px;
-  }
-
-  .dark .canvas-noise {
-    background-color: hsl(var(--background));
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 32px 32px, 32px 32px;
   }
 
   .glass-card {
@@ -390,20 +378,6 @@
     isolation: isolate;
     box-shadow: var(--glass-shadow);
   }
-  .aurora-card::before {
-    content: "";
-    position: absolute; inset: 0; z-index: 0; pointer-events: none;
-    background:
-      linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 0, 0, 0.015) 1px, transparent 1px);
-    background-size: 28px 28px, 28px 28px;
-  }
-  .dark .aurora-card::before {
-    background:
-      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 28px 28px, 28px 28px;
-  }
   .aurora-card > * { position: relative; z-index: 1; }
 
   /* Dark hero strip — adopts the active palette (cobalt/dark), accent glow */
@@ -417,51 +391,17 @@
   .aurora-hero-dark::before {
     content: "";
     position: absolute; inset: 0; z-index: 0; pointer-events: none;
-    background:
-      radial-gradient(ellipse 110% 90% at 95% -10%, hsl(var(--accent) / 0.10) 0%, transparent 55%),
-      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-    background-size: auto, 30px 30px, 30px 30px;
+    background: radial-gradient(ellipse 110% 90% at 95% -10%, hsl(var(--accent) / 0.10) 0%, transparent 55%);
   }
   .aurora-hero-dark > * { position: relative; z-index: 1; }
 
-  /* Onboarding full background — canvas with faint grid (no aurora) */
+  /* Quiet onboarding canvas; working surfaces carry the hierarchy. */
   .aurora-canvas-light {
     position: relative;
     background: hsl(var(--background));
     isolation: isolate;
   }
-  .aurora-canvas-light::before {
-    content: "";
-    position: absolute; inset: 0; z-index: 0; pointer-events: none;
-    background:
-      linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 0, 0, 0.015) 1px, transparent 1px);
-    background-size: 32px 32px, 32px 32px;
-  }
-  .dark .aurora-canvas-light::before {
-    background:
-      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 32px 32px, 32px 32px;
-  }
   .aurora-canvas-light > * { position: relative; z-index: 1; }
-
-  /* Dark mode glass row hover */
-  .dark .glass-row-hover:hover {
-    background: rgba(255, 255, 255, 0.04);
-  }
-
-  /* Dark mode glass skeleton */
-  .dark .glass-skeleton {
-    background: linear-gradient(90deg, hsl(var(--card)) 25%, hsl(var(--secondary)) 50%, hsl(var(--card)) 75%);
-    background-size: 200% 100%;
-  }
-
-  /* Dark mode AI panel */
-  .dark .ai-panel-bg {
-    background: linear-gradient(180deg, hsl(var(--ai-panel-bg)) 0%, hsl(var(--background)) 100%);
-  }
 }
 
 @keyframes glass-shimmer {

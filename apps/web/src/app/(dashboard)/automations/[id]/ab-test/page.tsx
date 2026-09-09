@@ -805,7 +805,7 @@ export default function ABTestPage() {
               return (
                 <div
                   key={test.id}
-                  className="border border-border rounded-xl bg-card p-5 border-l-4 border-l-[var(--color-accent)]"
+                  className="border border-border rounded-xl bg-card p-5"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -950,7 +950,7 @@ export default function ABTestPage() {
               return (
                 <div
                   key={test.id}
-                  className="border border-border rounded-xl bg-card p-5 border-l-4 border-l-[hsl(var(--success))]"
+                  className="border border-border rounded-xl bg-card p-5"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>

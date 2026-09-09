@@ -411,7 +411,7 @@ export default function CohortAnalysisPage() {
       {cohorts && cohorts.length > 0 && bestCohort && (
         <motion.div
           variants={itemVariants}
-          className="glass-card-static p-6 border-l-4 border-l-measure"
+          className="glass-card-static p-6"
         >
           <div className="flex gap-4">
             <Sparkles className="w-5 h-5 text-decision shrink-0 mt-0.5" />

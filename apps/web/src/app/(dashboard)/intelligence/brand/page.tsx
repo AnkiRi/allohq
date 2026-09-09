@@ -414,7 +414,7 @@ export default function BrandProfilePage() {
 
       {/* Analyzing banner */}
       {analyzing && (
-        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[var(--color-accent)] flex items-center gap-3 px-4 py-3">
+        <motion.div variants={itemVariants} className="glass-card-static flex items-center gap-3 px-4 py-3">
           <RefreshCw className="w-4 h-4 text-decision animate-spin flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground">Reading your brand...</p>
@@ -427,7 +427,7 @@ export default function BrandProfilePage() {
 
       {/* Error banner */}
       {error && !analyzing && (
-        <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[var(--color-urgent)] flex items-center gap-3 px-4 py-3">
+        <motion.div variants={itemVariants} className="glass-card-static flex items-center gap-3 px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-[var(--color-urgent)] flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground">That didn&apos;t go through</p>
@@ -759,7 +759,7 @@ export default function BrandProfilePage() {
               </div>
               <div className="space-y-3">
                 {sampleCopy.map((copy, i) => (
-                  <div key={i} className="p-3 bg-muted rounded-lg border-l-2 border-l-[var(--color-accent)]">
+                  <div key={i} className="p-3 bg-muted rounded-lg">
                     <p className="text-[11px] text-foreground leading-relaxed">{copy}</p>
                   </div>
                 ))}

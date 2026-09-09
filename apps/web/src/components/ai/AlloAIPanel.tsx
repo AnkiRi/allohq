@@ -746,7 +746,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
         <Sparkles className="w-3 h-3 text-decision" />
       </div>
-      <div className="flex-1 min-w-0 border-l-2 border-decision/20 pl-3 rounded-xl rounded-bl-sm">
+      <div className="flex-1 min-w-0 pl-3 rounded-xl rounded-bl-sm">
         {/* Tool calls indicator */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">

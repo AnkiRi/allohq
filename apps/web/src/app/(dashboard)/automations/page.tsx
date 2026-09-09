@@ -32,11 +32,11 @@ function getCardClasses(status: string): string {
     case "recommended":
       return "glass-card-static rounded-xl border-dashed border-border p-6 hover:border-border transition-all";
     case "generating":
-      return "glass-card-static rounded-xl border-l-4 border-l-[var(--color-warning)] animate-pulse p-6 transition-all";
+      return "glass-card-static rounded-xl animate-pulse p-6 transition-all";
     case "ready":
-      return "glass-card rounded-xl border-l-4 border-l-[var(--color-warning)] p-6 hover:shadow-lg transition-all";
+      return "glass-card rounded-xl p-6 hover:shadow-lg transition-all";
     case "active":
-      return "glass-card rounded-xl border-l-4 border-l-[var(--color-success)] p-6 hover:shadow-lg transition-all";
+      return "glass-card rounded-xl p-6 hover:shadow-lg transition-all";
     case "paused":
       return "glass-card-static rounded-xl opacity-60 p-6 hover:opacity-80 transition-all";
     default:
@@ -150,7 +150,7 @@ export default function AutomationsPage() {
       {storeId && !hasBrandProfile && (
         <motion.div
           variants={itemVariants}
-          className="glass-card-static border-l-4 border-l-terracotta flex items-center gap-3 px-4 py-3"
+          className="glass-card-static flex items-center gap-3 px-4 py-3"
         >
           <Palette className="w-4 h-4 text-terracotta flex-shrink-0" />
           <div className="flex-1">
@@ -173,7 +173,7 @@ export default function AutomationsPage() {
       {isGenerating && (
         <motion.div
           variants={itemVariants}
-          className="glass-card-static border-l-4 border-l-warm-gold flex items-center gap-3 px-4 py-3"
+          className="glass-card-static flex items-center gap-3 px-4 py-3"
         >
           <Loader2 className="w-4 h-4 text-warm-gold animate-spin flex-shrink-0" />
           <div>

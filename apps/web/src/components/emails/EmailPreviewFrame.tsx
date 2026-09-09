@@ -86,7 +86,6 @@ export function EmailPreviewFrame({
             borderRadius: 8,
             background: theme === "dark" ? "#14150F" : "#F7F4EC",
             boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
-            transition: "width 240ms cubic-bezier(0.23,1,0.32,1)",
           }}
         />
       </div>
