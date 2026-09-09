@@ -333,7 +333,7 @@ export default function CampaignDetailPage() {
         </div>
         <div className="flex justify-center bg-muted/50 p-6">
           {(campaign.template?.html || renderMut.data?.html) ? (
-            <div className="border border-border rounded-lg overflow-hidden bg-white shadow-sm" style={{ width: 620 }}>
+            <div className="border border-border rounded-lg overflow-hidden bg-card shadow-sm" style={{ width: 620 }}>
               <iframe
                 srcDoc={campaign.template?.html ?? renderMut.data?.html}
                 className={`w-full transition-all duration-300 ${previewExpanded ? "h-[1200px]" : "h-[700px]"}`}

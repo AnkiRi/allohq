@@ -23,7 +23,7 @@ const STATUS_BADGES: Record<string, { className: string; label: string }> = {
   generating: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Generating..." },
   draft: { className: "bg-muted text-muted-foreground border border-border", label: "Draft" },
   ready: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Ready" },
-  active: { className: "bg-[var(--color-success)] text-white", label: "Active" },
+  active: { className: "bg-outcome text-white", label: "Active" },
   paused: { className: "bg-muted text-muted-foreground border border-border", label: "Paused" },
 };
 
@@ -132,7 +132,7 @@ export default function AutomationsPage() {
               onClick={() => storeId && generateAllMut.mutate({ storeId, model: selectedModel })}
               disabled={generateAllMut.isPending || !hasBrandProfile}
               title={!hasBrandProfile ? "Run brand analysis first" : ""}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
             >
               {generateAllMut.isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -233,7 +233,7 @@ export default function AutomationsPage() {
                     <Link
                       href={`/automations/${automation.id}/ab-test`}
                       title="A/B Tests"
-                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border text-muted-foreground hover:text-foreground hover:border-[var(--color-accent)]/50 transition-colors text-[10px] font-sans font-bold"
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border text-muted-foreground hover:text-foreground hover:border-decision/50 transition-colors text-[10px] font-sans font-bold"
                     >
                       <FlaskConical className="w-3 h-3" />
                       A/B

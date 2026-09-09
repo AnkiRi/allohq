@@ -11,7 +11,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: 
   draft: { icon: Clock, color: "text-muted-foreground", label: "Draft" },
   scheduled: { icon: Clock, color: "text-[var(--color-warning)]", label: "Scheduled" },
   sending: { icon: Send, color: "text-[var(--color-warning)]", label: "Sending" },
-  sent: { icon: Check, color: "text-[var(--color-success)]", label: "Sent" },
+  sent: { icon: Check, color: "text-outcome", label: "Sent" },
   cancelled: { icon: XCircle, color: "text-[var(--color-urgent)]", label: "Cancelled" },
 };
 

@@ -42,8 +42,8 @@ export function CampaignPreviewCard({
       {/* Header */}
       <div className="px-4 py-3 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2 mb-1">
-          <Mail className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-          <span className="font-sans text-[10px] uppercase tracking-wider text-[var(--color-accent)]">
+          <Mail className="w-3.5 h-3.5 text-decision" />
+          <span className="font-sans text-[10px] uppercase tracking-wider text-decision">
             Here&apos;s your campaign
           </span>
         </div>
@@ -64,7 +64,7 @@ export function CampaignPreviewCard({
 
       {/* Email preview iframe */}
       <div className="flex justify-center bg-muted/20 p-4">
-        <div className="rounded-lg border border-border overflow-hidden bg-white shadow-sm">
+        <div className="rounded-lg border border-border overflow-hidden bg-card shadow-sm">
           <iframe
             srcDoc={previewHtml}
             title="Email preview"
@@ -112,7 +112,7 @@ export function CampaignPreviewCard({
             <div
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-[var(--color-success)] text-white text-[11px] font-sans font-medium",
+                "bg-outcome text-white text-[11px] font-sans font-medium",
               )}
             >
               <CheckCircle2 className="w-3 h-3" />
@@ -138,7 +138,7 @@ export function CampaignPreviewCard({
                 disabled={approving}
                 className={cn(
                   "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                  "bg-[var(--color-accent)] text-white text-[11px] font-sans font-medium",
+                  "bg-decision text-white text-[11px] font-sans font-medium",
                   "hover:opacity-90 transition-opacity",
                   approving && "opacity-60 cursor-not-allowed",
                 )}
@@ -160,7 +160,7 @@ export function CampaignPreviewCard({
               onClick={() => setConfirming(true)}
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-[var(--color-accent)] text-white text-[11px] font-sans font-medium",
+                "bg-decision text-white text-[11px] font-sans font-medium",
                 "hover:opacity-90 transition-opacity",
               )}
             >

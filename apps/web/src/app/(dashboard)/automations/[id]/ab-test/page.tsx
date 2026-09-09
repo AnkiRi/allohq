@@ -430,7 +430,7 @@ export default function ABTestPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           New Test
@@ -492,7 +492,7 @@ export default function ABTestPage() {
             {currentSuggestions.length > 0 && (
               <div>
                 <label className="text-[10px] font-sans text-muted-foreground uppercase font-bold tracking-[1px] flex items-center gap-1.5 mb-2">
-                  <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
+                  <Sparkles className="w-3 h-3 text-decision" />
                   joon's suggestions
                 </label>
                 <div className="space-y-2">
@@ -503,13 +503,13 @@ export default function ABTestPage() {
                       onClick={() => applySuggestion(idx)}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                         selectedSuggestionIdx === idx
-                          ? "border-[var(--color-accent)] bg-[var(--color-accent)]/5 ring-1 ring-[var(--color-accent)]/30"
+                          ? "border-decision bg-decision/5 ring-1 ring-[var(--color-accent)]/30"
                           : "border-border bg-muted/30 hover:border-muted-foreground/30 hover:bg-muted/50"
                       }`}
                     >
                       <p className="text-[11px] font-bold text-foreground mb-1">{s.label}</p>
                       <div className="flex items-center gap-3 text-[10px] font-sans text-muted-foreground">
-                        <span className="px-1.5 py-0.5 bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/25 rounded text-[var(--color-accent)] truncate max-w-[45%]">
+                        <span className="px-1.5 py-0.5 bg-decision/10 border border-decision/25 rounded text-decision truncate max-w-[45%]">
                           A: {s.a}
                         </span>
                         <span className="text-muted-foreground/40">vs</span>
@@ -663,7 +663,7 @@ export default function ABTestPage() {
                   className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"
                 />
                 <div className="flex items-center gap-2 text-[11px] font-mono text-foreground min-w-[120px]">
-                  <span className="px-2 py-0.5 bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/25 rounded text-[var(--color-accent)]">
+                  <span className="px-2 py-0.5 bg-decision/10 border border-decision/25 rounded text-decision">
                     A: {Math.round(splitRatio * 100)}%
                   </span>
                   <span className="px-2 py-0.5 bg-muted border border-border rounded text-foreground">
@@ -695,7 +695,7 @@ export default function ABTestPage() {
               <button
                 onClick={handleCreate}
                 disabled={createMut.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
               >
                 {createMut.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -769,7 +769,7 @@ export default function ABTestPage() {
                   <button
                     onClick={() => handleStartTest(test.id)}
                     disabled={updateMut.isPending}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-outcome text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
                   >
                     <Play className="w-3 h-3" />
                     Start Test
@@ -815,7 +815,7 @@ export default function ABTestPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/25">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-sans bg-decision/10 text-decision border border-decision/25">
                         running
                       </span>
                       {test.confidence != null && (
@@ -838,7 +838,7 @@ export default function ABTestPage() {
                     </div>
                     <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
+                        className="h-full bg-decision rounded-full transition-all duration-500"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
@@ -1026,7 +1026,7 @@ export default function ABTestPage() {
                       <button
                         onClick={() => handleApplyWinner(test)}
                         disabled={applyWinnerMut.isPending}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-success)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
+                        className="flex items-center gap-1.5 px-4 py-2 bg-outcome text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
                       >
                         <CheckCircle className="w-3 h-3" />
                         Apply Winner
@@ -1096,7 +1096,7 @@ export default function ABTestPage() {
           </p>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans font-bold hover:opacity-90 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
             New Test

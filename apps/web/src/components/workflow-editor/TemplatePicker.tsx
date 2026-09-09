@@ -29,10 +29,10 @@ interface TemplatePickerProps {
 // ---------------------------------------------------------------------------
 
 const CHANNEL_META: Record<TemplateChannel, { label: string; icon: typeof Mail; color: string; emptyText: string }> = {
-  email: { label: "Email Templates", icon: Mail, color: "text-blue-600", emptyText: "No email templates found" },
-  sms: { label: "SMS Templates", icon: MessageSquare, color: "text-purple-600", emptyText: "No SMS templates found" },
-  whatsapp: { label: "WhatsApp Templates", icon: Phone, color: "text-green-600", emptyText: "No WhatsApp templates found" },
-  rcs: { label: "RCS Templates", icon: Radio, color: "text-orange-600", emptyText: "No RCS templates found" },
+  email: { label: "Email Templates", icon: Mail, color: "text-decision", emptyText: "No email templates found" },
+  sms: { label: "SMS Templates", icon: MessageSquare, color: "text-muted-foreground", emptyText: "No SMS templates found" },
+  whatsapp: { label: "WhatsApp Templates", icon: Phone, color: "text-muted-foreground", emptyText: "No WhatsApp templates found" },
+  rcs: { label: "RCS Templates", icon: Radio, color: "text-muted-foreground", emptyText: "No RCS templates found" },
 };
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
           {displayName}
         </span>
         {currentTemplateId && (
-          <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
+          <Check className="w-3 h-3 text-outcome flex-shrink-0" />
         )}
       </button>
 
@@ -143,7 +143,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
                         setSearch("");
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors ${
-                        isSelected ? "bg-blue-50" : ""
+                        isSelected ? "bg-[var(--decision-soft)]" : ""
                       }`}
                     >
                       <Icon className={`w-3.5 h-3.5 ${isSelected ? meta.color : "text-muted-foreground/50"} flex-shrink-0`} />
@@ -155,7 +155,7 @@ export function TemplatePicker({ channel, currentTemplateId, currentTemplateName
                           <p className="text-[10px] font-sans text-muted-foreground truncate">{t.subject}</p>
                         )}
                       </div>
-                      {isSelected && <Check className="w-3 h-3 text-blue-600 flex-shrink-0" />}
+                      {isSelected && <Check className="w-3 h-3 text-decision flex-shrink-0" />}
                     </button>
                   );
                 })

@@ -447,7 +447,7 @@ export default function AutomationDetailPage() {
           {/* Journey stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
             {[
-              { label: "Active", value: journeyStats.active, color: "text-[var(--color-accent)]" },
+              { label: "Active", value: journeyStats.active, color: "text-decision" },
               { label: "Completed", value: journeyStats.completed, color: "text-[hsl(var(--success))]" },
               { label: "Left alone", value: journeyStats.suppressed, color: "text-[var(--color-warning)]" },
               { label: "Paused", value: journeyStats.paused, color: "text-muted-foreground" },
@@ -512,7 +512,7 @@ export default function AutomationDetailPage() {
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-sans ${
-                      journey.status === "active" ? "bg-[var(--color-accent)]/10 text-[var(--color-accent)]" :
+                      journey.status === "active" ? "bg-decision/10 text-decision" :
                       journey.status === "completed" ? "bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]" :
                       journey.status === "suppressed" ? "bg-[var(--color-warning)]/10 text-[var(--color-warning)]" :
                       "bg-muted text-muted-foreground"
@@ -552,7 +552,7 @@ export default function AutomationDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-sans ${
-                        test.status === "running" ? "bg-[var(--color-accent)]/10 text-[var(--color-accent)]" :
+                        test.status === "running" ? "bg-decision/10 text-decision" :
                         test.status === "concluded" ? "bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]" :
                         "bg-muted text-muted-foreground"
                       }`}>

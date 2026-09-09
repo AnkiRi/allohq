@@ -134,7 +134,7 @@ export default function NewCampaignPage() {
       {/* Brand analysis gate */}
       {storeId && !hasBrandProfile && (
         <div className="flex items-center gap-3 px-4 py-3 bg-card border-l-4 border-l-[var(--color-accent)] border border-border rounded-xl">
-          <Palette className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
+          <Palette className="w-4 h-4 text-decision flex-shrink-0" />
           <div className="flex-1">
             <p className="text-[13px] font-bold text-foreground">Let's set up your brand voice first</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -143,7 +143,7 @@ export default function NewCampaignPage() {
           </div>
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-xs font-sans hover:opacity-90 transition-all whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 bg-decision text-white rounded-lg text-xs font-sans hover:opacity-90 transition-all whitespace-nowrap"
           >
             <Palette className="w-3.5 h-3.5" />
             Set up brand

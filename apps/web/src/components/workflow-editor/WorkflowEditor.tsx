@@ -286,13 +286,13 @@ function getNodeIcon(type: WorkflowNode["type"]) {
 
 function getNodeColor(type: WorkflowNode["type"]) {
   switch (type) {
-    case "send_email": return "bg-blue-50 border-blue-200 text-blue-700";
-    case "send_sms": return "bg-purple-50 border-purple-200 text-purple-700";
-    case "send_whatsapp": return "bg-green-50 border-green-200 text-green-700";
-    case "send_rcs": return "bg-orange-50 border-orange-200 text-orange-700";
-    case "wait": return "bg-amber-50 border-amber-200 text-amber-700";
-    case "condition": return "bg-emerald-50 border-emerald-200 text-emerald-700";
-    case "webhook": return "bg-orange-50 border-orange-200 text-orange-700";
+    case "send_email": return "bg-[var(--decision-soft)] border-decision text-decision";
+    case "send_sms":
+    case "send_whatsapp":
+    case "send_rcs": return "bg-muted border-border text-muted-foreground";
+    case "wait": return "bg-muted border-border text-muted-foreground";
+    case "condition": return "bg-[var(--measure-soft)] border-measure text-measure";
+    case "webhook": return "bg-[var(--measure-soft)] border-measure text-measure";
   }
 }
 
@@ -487,7 +487,7 @@ export function WorkflowEditor({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteNode(node.id); }}
-                        className="p-1 rounded-lg text-current opacity-40 hover:opacity-100 hover:bg-black/5 transition-all"
+                        className="p-1 rounded-lg text-current opacity-40 hover:opacity-100 hover:bg-muted transition-all"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -551,7 +551,7 @@ export function WorkflowEditor({
             className={cn(
               "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-sans transition-all",
               saveStatus === "success"
-                ? "bg-green-600 text-white"
+                ? "bg-outcome text-white"
                 : "bg-secondary text-secondary-foreground hover:bg-secondary/90 disabled:opacity-70"
             )}
           >

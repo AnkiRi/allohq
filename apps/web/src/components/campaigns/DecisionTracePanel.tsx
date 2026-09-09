@@ -88,7 +88,7 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
               </p>
               <span
                 className={`inline-block mt-1.5 text-[11px] font-mono ${
-                  s.significant ? "text-[hsl(var(--accent))]" : "text-amber-500"
+                  s.significant ? "text-outcome" : "text-warning"
                 }`}
               >
                 {s.underpowered
