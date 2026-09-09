@@ -16,7 +16,7 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 const inputCls =
-  "w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] transition";
+  "w-full px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-decision transition";
 
 function TextInput({
   value,
@@ -127,7 +127,7 @@ function Checkbox({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="w-4 h-4 rounded border-border accent-[var(--color-accent)]"
+        className="w-4 h-4 rounded border-border accent-decision"
       />
       <span className="text-[13px] font-sans text-foreground">{label}</span>
     </label>
@@ -251,7 +251,7 @@ function IconRowEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
             <button
               type="button"
               onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-              className="text-[11px] font-mono text-muted-foreground hover:text-red-500"
+              className="text-[11px] font-mono text-muted-foreground hover:text-destructive"
             >
               remove item
             </button>
@@ -261,7 +261,7 @@ function IconRowEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
       <button
         type="button"
         onClick={() => setItems([...items, { icon: "🌿", label: "New", description: "" }])}
-        className="text-[12px] font-mono text-[var(--color-accent)] hover:underline"
+        className="text-[12px] font-mono text-decision hover:underline"
       >
         + add item
       </button>
@@ -313,7 +313,7 @@ export function BlockEditor({
   return (
     <div className="flex flex-col">
       <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-[10px] font-mono uppercase tracking-[0.16em] text-[var(--color-accent)]">
+        <h3 className="text-[10px] font-mono uppercase tracking-[0.16em] text-decision">
           {block.type} · {block.id}
         </h3>
       </div>

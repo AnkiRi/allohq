@@ -528,7 +528,7 @@ function NotificationPreferencesSection() {
               <p className="text-[10px] text-muted-foreground">{ch.desc}</p>
             </div>
             <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ch.key] ? "bg-[var(--olive)]" : "bg-muted"}`}>
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ch.key] ? "translate-x-4" : "translate-x-0.5"}`} />
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-card shadow transition-transform ${p[ch.key] ? "translate-x-4" : "translate-x-0.5"}`} />
             </div>
           </button>
         ))}
@@ -549,7 +549,7 @@ function NotificationPreferencesSection() {
               <p className="text-[10px] text-muted-foreground">{ev.desc}</p>
             </div>
             <div className={`w-9 h-5 rounded-full transition-colors relative ${p[ev.key] ? "bg-[var(--olive)]" : "bg-muted"}`}>
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${p[ev.key] ? "translate-x-4" : "translate-x-0.5"}`} />
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-card shadow transition-transform ${p[ev.key] ? "translate-x-4" : "translate-x-0.5"}`} />
             </div>
           </button>
         ))}
@@ -612,7 +612,7 @@ function SuppressionStatsSection() {
     <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Activity className="w-4 h-4 text-[var(--color-success)]" />
+          <Activity className="w-4 h-4 text-outcome" />
           <h2 className="section-header accent-bar-left text-[13px]">Message protection</h2>
         </div>
         <div className="flex gap-1">
@@ -631,8 +631,8 @@ function SuppressionStatsSection() {
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="rounded-lg bg-[var(--color-success)]/8 border border-[var(--color-success)]/15 p-3 text-center">
-          <div className="text-[22px] font-bold font-mono text-[var(--color-success)]">{suppressed}</div>
+        <div className="rounded-lg bg-outcome/8 border border-outcome/15 p-3 text-center">
+          <div className="text-[22px] font-bold font-mono text-outcome">{suppressed}</div>
           <div className="text-[10px] font-sans text-muted-foreground mt-0.5">Messages held back</div>
         </div>
         <div className="rounded-lg bg-muted/50 border border-border p-3 text-center">
@@ -646,7 +646,7 @@ function SuppressionStatsSection() {
       </div>
 
       {suppressed > 0 && (
-        <p className="text-[11px] text-[var(--color-success)] mb-3">
+        <p className="text-[11px] text-outcome mb-3">
           joon held back {suppressed} messages that would have worn out your customers
         </p>
       )}

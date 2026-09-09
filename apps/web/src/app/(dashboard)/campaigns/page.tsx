@@ -9,8 +9,8 @@ import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
 
 const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: string }> = {
   draft: { icon: Clock, color: "text-muted-foreground", label: "Draft" },
-  scheduled: { icon: Clock, color: "text-[var(--color-warning)]", label: "Scheduled" },
-  sending: { icon: Send, color: "text-[var(--color-warning)]", label: "Sending" },
+  scheduled: { icon: Clock, color: "text-warning", label: "Scheduled" },
+  sending: { icon: Send, color: "text-warning", label: "Sending" },
   sent: { icon: Check, color: "text-outcome", label: "Sent" },
   cancelled: { icon: XCircle, color: "text-[var(--color-urgent)]", label: "Cancelled" },
 };

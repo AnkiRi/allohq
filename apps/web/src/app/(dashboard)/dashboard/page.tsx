@@ -733,13 +733,13 @@ export default function DashboardPage() {
       {!demo && launchReadiness && !launchReadiness.readyForAllowlistTest && (
         <Link
           href="/settings/readiness"
-          className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-sm transition-colors hover:bg-amber-50"
+          className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-warning/25 bg-warning/10 px-4 py-3 text-sm transition-colors hover:bg-warning/10"
         >
           <span>
-            <span className="font-medium text-amber-950">Complete launch setup</span>
-            <span className="ml-2 text-amber-800">Sending remains protected while required checks are pending.</span>
+            <span className="font-medium text-warning">Complete launch setup</span>
+            <span className="ml-2 text-warning">Sending remains protected while required checks are pending.</span>
           </span>
-          <span className="shrink-0 font-medium text-amber-950">Review setup →</span>
+          <span className="shrink-0 font-medium text-warning">Review setup →</span>
         </Link>
       )}
       {/* The ask: heading + command line read as one prompt unit */}
@@ -843,7 +843,7 @@ export default function DashboardPage() {
         <div className="mt-4 pt-3 border-t border-border flex justify-end">
           <Link
             href="/activity"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-sans font-medium text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-sans font-medium text-foreground hover:border-decision hover:text-decision transition-colors"
           >
             View full activity →
           </Link>

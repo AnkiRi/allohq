@@ -101,7 +101,7 @@ function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>
             <button
               type="button"
               onClick={() => onChange({ ...config, subject: templateSubject })}
-              className="text-[10px] font-sans text-[var(--color-accent)] hover:underline"
+              className="text-[10px] font-sans text-decision hover:underline"
             >
               Use the email&apos;s subject
             </button>
@@ -115,7 +115,7 @@ function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>
               })
             }
             disabled={suggestMut.isPending}
-            className="inline-flex items-center gap-1 text-[10px] font-sans text-[var(--color-accent)] hover:underline disabled:opacity-50"
+            className="inline-flex items-center gap-1 text-[10px] font-sans text-decision hover:underline disabled:opacity-50"
           >
             {suggestMut.isPending ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -143,7 +143,7 @@ function SendEmailConfig({ config, onChange }: { config: Record<string, unknown>
                 onChange({ ...config, subject: v });
                 setVariants([]);
               }}
-              className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors max-w-full truncate"
+              className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-decision hover:text-decision transition-colors max-w-full truncate"
             >
               {v}
             </button>

@@ -51,7 +51,7 @@ export default function SegmentDetailPage() {
     return (
       <div className="max-w-md mx-auto py-32 text-center">
         <p className="text-[15px] font-serif font-semibold text-foreground mb-1">Segment not found</p>
-        <Link href="/segments" className="text-[13px] text-[var(--color-accent)] hover:underline inline-flex items-center gap-1.5">
+        <Link href="/segments" className="text-[13px] text-decision hover:underline inline-flex items-center gap-1.5">
           <ArrowLeft className="w-3.5 h-3.5" /> Back to segments
         </Link>
       </div>
@@ -87,14 +87,14 @@ export default function SegmentDetailPage() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[20px] font-serif font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[20px] font-serif font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
               />
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 placeholder="What this segment represents…"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-decision"
               />
             </div>
           ) : (
@@ -110,12 +110,12 @@ export default function SegmentDetailPage() {
         </div>
         <div className="shrink-0 flex items-center gap-2">
           {editing ? (
-            <button onClick={save} disabled={updateMut.isPending} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity">
+            <button onClick={save} disabled={updateMut.isPending} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-decision hover:opacity-90 disabled:opacity-50 transition-opacity">
               {updateMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Save
             </button>
           ) : (
-            <button onClick={startEdit} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-[12px] font-sans text-foreground hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors">
+            <button onClick={startEdit} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-[12px] font-sans text-foreground hover:border-decision hover:text-decision transition-colors">
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>
           )}
@@ -126,7 +126,7 @@ export default function SegmentDetailPage() {
                 if (window.confirm(`Delete "${seg.name}"? This can't be undone.`)) deleteMut.mutate({ id });
               }}
               disabled={deleteMut.isPending}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:border-red-500/50 hover:text-red-500 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:border-red-500/50 hover:text-destructive disabled:opacity-50 transition-colors"
               title="Delete segment"
             >
               {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -135,7 +135,7 @@ export default function SegmentDetailPage() {
         </div>
       </header>
       {deleteError ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-[12.5px] text-red-600 dark:text-red-400 font-sans">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12.5px] text-destructive text-destructive font-sans">
           {deleteError}
         </div>
       ) : null}

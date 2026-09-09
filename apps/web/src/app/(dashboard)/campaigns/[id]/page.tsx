@@ -109,7 +109,7 @@ export default function CampaignDetailPage() {
             </span>
           )}
           {campaign.status === "sending" && (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/25 rounded-lg text-xs font-sans font-bold">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning)]/10 text-warning border border-[var(--color-warning)]/25 rounded-lg text-xs font-sans font-bold">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               Sending…
             </span>

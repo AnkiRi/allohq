@@ -231,7 +231,7 @@ export default function GuardrailsPage() {
                   className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
                   title="Delete"
                 >
-                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                 </button>
               </div>
             </div>

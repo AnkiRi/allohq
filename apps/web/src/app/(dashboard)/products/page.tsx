@@ -129,9 +129,9 @@ export default function ProductsPage() {
                     <span
                       className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-sans ${
                         product.status === "active"
-                          ? "bg-[hsl(var(--success))/0.12] text-[var(--color-success)]"
+                          ? "bg-[hsl(var(--success))/0.12] text-outcome"
                           : product.status === "draft"
-                            ? "bg-[var(--color-warning)]/12 text-[var(--color-warning)]"
+                            ? "bg-[var(--color-warning)]/12 text-warning"
                             : "bg-muted text-muted-foreground"
                       }`}
                     >

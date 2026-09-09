@@ -145,7 +145,7 @@ export function DecisionDetail({
                   title="Message preview"
                   sandbox=""
                   srcDoc={data.bodyHtml}
-                  className="w-full h-[360px] bg-white mt-3"
+                  className="w-full h-[360px] bg-card mt-3"
                 />
               ) : data.bodyText ? (
                 <div className="px-4 py-3 font-sans text-[13.5px] leading-relaxed text-foreground whitespace-pre-line">

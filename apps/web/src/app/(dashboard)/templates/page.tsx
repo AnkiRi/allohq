@@ -188,7 +188,7 @@ export default function TemplatesPage() {
               <ChevronDown className="w-3 h-3" />
             </button>
             {showRemoveMenu && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-border rounded-lg shadow-lg z-10 py-1">
+              <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-10 py-1">
                 <button
                   onClick={() => {
                     deleteByCategoryMut.mutate({ category: "ai_generated" });
@@ -201,7 +201,7 @@ export default function TemplatesPage() {
                 {!confirmRemoveAll ? (
                   <button
                     onClick={() => setConfirmRemoveAll(true)}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-red-50 transition-colors text-red-600"
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-red-50 transition-colors text-destructive"
                   >
                     Remove All Templates ({templates?.length || 0})
                   </button>
@@ -306,7 +306,7 @@ export default function TemplatesPage() {
               <button
                 onClick={() => bulkDeleteMut.mutate({ ids: Array.from(selectedIds) })}
                 disabled={bulkDeleteMut.isPending}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-destructive hover:bg-red-50 transition-colors disabled:opacity-50"
               >
                 <Trash2 className="w-3 h-3" />
                 Delete Selected ({selectedIds.size})
@@ -365,7 +365,7 @@ export default function TemplatesPage() {
                       {/* Selection checkbox */}
                       <button
                         onClick={() => toggleSelect(template.id)}
-                        className="absolute top-3 left-3 z-10 w-5 h-5 rounded flex items-center justify-center bg-card border border-border hover:bg-white transition-colors"
+                        className="absolute top-3 left-3 z-10 w-5 h-5 rounded flex items-center justify-center bg-card border border-border hover:bg-card transition-colors"
                       >
                         {isSelected ? (
                           <CheckSquare className="w-4 h-4 text-foreground" />
@@ -437,7 +437,7 @@ export default function TemplatesPage() {
                             <button
                               onClick={() => deleteMut.mutate({ id: template.id })}
                               disabled={deleteMut.isPending}
-                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-red-600 disabled:opacity-50 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive disabled:opacity-50 transition-colors"
                             >
                               {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                             </button>

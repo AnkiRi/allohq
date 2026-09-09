@@ -463,7 +463,7 @@ export default function ABTestPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Welcome email subject test"
-                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision"
               />
             </div>
 
@@ -480,7 +480,7 @@ export default function ABTestPage() {
                   setVariantBValue("");
                   setSelectedSuggestionIdx(null);
                 }}
-                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
               >
                 {VARIABLE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -503,7 +503,7 @@ export default function ABTestPage() {
                       onClick={() => applySuggestion(idx)}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                         selectedSuggestionIdx === idx
-                          ? "border-decision bg-decision/5 ring-1 ring-[var(--color-accent)]/30"
+                          ? "border-decision bg-decision/5 ring-1 ring-decision/30"
                           : "border-border bg-muted/30 hover:border-muted-foreground/30 hover:bg-muted/50"
                       }`}
                     >
@@ -539,7 +539,7 @@ export default function ABTestPage() {
                     value={variantAValue}
                     onChange={(e) => setVariantAValue(e.target.value)}
                     placeholder="Enter subject line A"
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision"
                   />
                 )}
                 {variable === "send_time" && (
@@ -547,7 +547,7 @@ export default function ABTestPage() {
                     type="time"
                     value={variantAValue}
                     onChange={(e) => setVariantAValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
                   />
                 )}
                 {variable === "discount_level" && (
@@ -559,7 +559,7 @@ export default function ABTestPage() {
                       placeholder="10"
                       min={0}
                       max={100}
-                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision"
                     />
                     <span className="text-[13px] font-sans text-muted-foreground">%</span>
                   </div>
@@ -568,7 +568,7 @@ export default function ABTestPage() {
                   <select
                     value={variantAValue}
                     onChange={(e) => setVariantAValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
                   >
                     <option value="">Select channel</option>
                     {CHANNEL_OPTIONS.map((ch) => (
@@ -582,7 +582,7 @@ export default function ABTestPage() {
                     onChange={(e) => setVariantAValue(e.target.value)}
                     placeholder="Enter content for variant A"
                     rows={4}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision resize-none"
                   />
                 )}
               </div>
@@ -598,7 +598,7 @@ export default function ABTestPage() {
                     value={variantBValue}
                     onChange={(e) => setVariantBValue(e.target.value)}
                     placeholder="Enter subject line B"
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision"
                   />
                 )}
                 {variable === "send_time" && (
@@ -606,7 +606,7 @@ export default function ABTestPage() {
                     type="time"
                     value={variantBValue}
                     onChange={(e) => setVariantBValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
                   />
                 )}
                 {variable === "discount_level" && (
@@ -618,7 +618,7 @@ export default function ABTestPage() {
                       placeholder="20"
                       min={0}
                       max={100}
-                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                      className="flex-1 px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision"
                     />
                     <span className="text-[13px] font-sans text-muted-foreground">%</span>
                   </div>
@@ -627,7 +627,7 @@ export default function ABTestPage() {
                   <select
                     value={variantBValue}
                     onChange={(e) => setVariantBValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
                   >
                     <option value="">Select channel</option>
                     {CHANNEL_OPTIONS.map((ch) => (
@@ -641,7 +641,7 @@ export default function ABTestPage() {
                     onChange={(e) => setVariantBValue(e.target.value)}
                     placeholder="Enter content for variant B"
                     rows={4}
-                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
+                    className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision resize-none"
                   />
                 )}
               </div>
@@ -660,7 +660,7 @@ export default function ABTestPage() {
                   step={5}
                   value={splitRatio * 100}
                   onChange={(e) => setSplitRatio(Number(e.target.value) / 100)}
-                  className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"
+                  className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-decision"
                 />
                 <div className="flex items-center gap-2 text-[11px] font-mono text-foreground min-w-[120px]">
                   <span className="px-2 py-0.5 bg-decision/10 border border-decision/25 rounded text-decision">
@@ -683,7 +683,7 @@ export default function ABTestPage() {
                 value={minSampleSize}
                 onChange={(e) => setMinSampleSize(Math.max(50, Number(e.target.value) || 50))}
                 min={50}
-                className="w-48 px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-48 px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
                 How many sends to gather before we call a winner (at least 50).

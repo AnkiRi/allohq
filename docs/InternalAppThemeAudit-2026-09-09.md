@@ -62,3 +62,26 @@
 - WCAG AA for body copy, controls and small mono labels.
 - Keyboard focus and non-colour state labels.
 - No theme leakage into merchant emails, brand rendering or storefront widgets.
+
+## Implementation result
+
+- The authenticated application now exposes exactly two themes: Light and Drenched.
+- Light is the pre-paint and React default; Drenched is an explicit preference.
+- Stale application preferences migrate deterministically without sharing the landing-page storage key.
+- The shell, navigation, onboarding, campaigns, journeys, forms, commerce, intelligence, integrations, settings, templates and assistant surfaces consume the shared paper and semantic state tokens.
+- Campaign treatment and approvals use decision gold; holdouts and evidence use measurement cobalt; completed and verified results use outcome emerald.
+- Legacy `.dark` activation is removed from the authenticated theme provider, preventing old dark utilities from recolouring warm-paper work surfaces.
+- Merchant-rendered email HTML, widget output, hosted customer forms and merchant brand colours were not changed.
+
+## Route-group verification matrix
+
+| Surface group | Light | Drenched | Narrow layout | Empty/loading/error semantics |
+| --- | --- | --- | --- | --- |
+| Shell, navigation and dashboard | Paper-led | Cobalt shell + paper work area | Verified | Verified |
+| Campaigns, approvals and outcomes | Verified | Verified | Verified | Verified |
+| Journeys, nodes and experiments | Verified | Verified | Verified | Verified |
+| Forms and acquisition analytics | Verified | Verified | Verified | Verified |
+| Customers, segments, products and orders | Verified | Verified | Verified | Verified |
+| Intelligence, cohorts and brand settings | Verified | Verified | Verified | Verified |
+| Integrations, readiness and guardrails | Verified | Verified | Verified | Verified |
+| Templates, editors and creative tools | Verified | Verified | Verified | Verified |

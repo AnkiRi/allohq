@@ -370,17 +370,17 @@ function InsightCardView({ card }: { card: InsightCard }) {
     accent: {
       bg: "bg-[hsl(var(--accent-bg))]",
       border: "border-border",
-      text: "text-[var(--color-accent)]",
+      text: "text-decision",
     },
     success: {
       bg: "bg-[hsl(var(--success-bg))]",
       border: "border-[hsl(var(--success)/0.2)]",
-      text: "text-[var(--color-success)]",
+      text: "text-outcome",
     },
     warning: {
       bg: "bg-[hsl(var(--accent-bg))]",
       border: "border-border",
-      text: "text-[var(--color-warning)]",
+      text: "text-warning",
     },
   };
   const colors = colorMap[card.variant];
@@ -744,18 +744,18 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
   return (
     <div className="flex gap-2.5">
       <div className="w-6 h-6 rounded-lg bg-[hsl(var(--accent-bg))] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
+        <Sparkles className="w-3 h-3 text-decision" />
       </div>
-      <div className="flex-1 min-w-0 border-l-2 border-[var(--color-accent)]/20 pl-3 rounded-xl rounded-bl-sm">
+      <div className="flex-1 min-w-0 border-l-2 border-decision/20 pl-3 rounded-xl rounded-bl-sm">
         {/* Tool calls indicator */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {message.toolCalls.map((tool, i) => (
               <span
                 key={`${tool}-${i}`}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[10px] font-mono text-[var(--color-success)]"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-outcome/10 border border-outcome/20 text-[10px] font-mono text-outcome"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-outcome" />
                 {tool.replace(/_/g, " ")}
               </span>
             ))}
@@ -772,7 +772,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
                 <div className="font-sans text-[10px] uppercase tracking-wider text-muted-foreground">
                   {h.label}
                 </div>
-                <div className="font-mono text-[15px] font-bold text-[var(--color-accent)] mt-0.5">
+                <div className="font-mono text-[15px] font-bold text-decision mt-0.5">
                   {h.value}
                 </div>
               </div>
@@ -834,7 +834,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
               code: ({ children, className }) => {
                 const isInline = !className;
                 return isInline ? (
-                  <code className="px-1.5 py-0.5 rounded-md bg-muted text-[12px] font-mono text-[var(--color-accent)]">
+                  <code className="px-1.5 py-0.5 rounded-md bg-muted text-[12px] font-mono text-decision">
                     {children}
                   </code>
                 ) : (
@@ -844,7 +844,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
                 );
               },
               blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-[var(--color-accent)] pl-3 my-2 text-muted-foreground italic">
+                <blockquote className="border-l-2 border-decision pl-3 my-2 text-muted-foreground italic">
                   {children}
                 </blockquote>
               ),
@@ -872,7 +872,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
               <button
                 key={link.href}
                 onClick={() => onNavigate?.(link.href)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-decision font-sans text-[11px] hover:border-decision/50 transition-colors"
               >
                 {link.label}
                 <ArrowRight className="w-3 h-3" />
@@ -1013,8 +1013,8 @@ function CompletionSummary({
     <div className="flex-1 overflow-y-auto p-5 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-[var(--color-success)]/10 flex items-center justify-center">
-          <PartyPopper className="w-4 h-4 text-[var(--color-success)]" />
+        <div className="w-8 h-8 rounded-xl bg-outcome/10 flex items-center justify-center">
+          <PartyPopper className="w-4 h-4 text-outcome" />
         </div>
         <div>
           <div className="text-[14px] font-serif font-semibold text-foreground">
@@ -1029,13 +1029,13 @@ function CompletionSummary({
       {/* Active automations */}
       {activeItems.length > 0 && (
         <div>
-          <div className="text-[10px] font-sans uppercase tracking-wider text-[var(--color-success)] mb-2">
+          <div className="text-[10px] font-sans uppercase tracking-wider text-outcome mb-2">
             Live now
           </div>
           <div className="space-y-1.5">
             {activeItems.map((item) => (
               <div key={item.id} className="flex items-center gap-2 py-1">
-                <Check className="w-3.5 h-3.5 text-[var(--color-success)] flex-shrink-0" />
+                <Check className="w-3.5 h-3.5 text-outcome flex-shrink-0" />
                 <span className="text-[12px] font-sans text-foreground">
                   {item.name.replace(" Automation", "")}
                 </span>
@@ -1048,7 +1048,7 @@ function CompletionSummary({
       {/* Review items */}
       {reviewItems.length > 0 && (
         <div>
-          <div className="text-[10px] font-sans uppercase tracking-wider text-[var(--color-accent)] mb-2">
+          <div className="text-[10px] font-sans uppercase tracking-wider text-decision mb-2">
             Waiting for your okay
           </div>
           <div className="space-y-2">
@@ -1060,7 +1060,7 @@ function CompletionSummary({
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => onAction(`Approve the ${item.name.replace(" Automation", "")} automation`)}
-                    className="px-2.5 py-1 rounded-lg bg-[var(--color-success)] text-white text-[10px] font-sans font-medium hover:opacity-90 transition-opacity"
+                    className="px-2.5 py-1 rounded-lg bg-outcome text-white text-[10px] font-sans font-medium hover:opacity-90 transition-opacity"
                   >
                     Approve
                   </button>
@@ -1093,14 +1093,14 @@ function CompletionSummary({
           {reviewItems.length > 0 && (
             <button
               onClick={() => onAction("Approve all pending automations")}
-              className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
+              className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-decision font-sans text-[11px] hover:border-decision/50 transition-all"
             >
               Approve everything
             </button>
           )}
           <button
             onClick={() => onAction("What should I focus on today?")}
-            className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 transition-all"
+            className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-decision font-sans text-[11px] hover:border-decision/50 transition-all"
           >
             What should I focus on?
           </button>
@@ -1907,7 +1907,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 isProcessing ? "bg-[var(--color-warning)] animate-pulse" :
                 isActivationInProgress ? "bg-[var(--color-warning)] animate-pulse" :
                 agentStatus?.isWorking ? "bg-[var(--color-warning)] animate-pulse" :
-                storeId ? "bg-[var(--color-success)]" : "bg-muted-foreground",
+                storeId ? "bg-outcome" : "bg-muted-foreground",
               )}
             />
             {editingHeaderTitle && currentChatId ? (
@@ -2190,7 +2190,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       <button
                         key={text}
                         onClick={() => sendMessage(text)}
-                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all text-left"
+                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-decision font-sans text-[11px] hover:border-decision/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all text-left"
                       >
                         {text}
                       </button>
@@ -2210,7 +2210,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       <button
                         key={pill.label}
                         onClick={() => handlePillClick(pill)}
-                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-[var(--color-accent)] font-sans text-[11px] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all"
+                        className="px-3 py-1.5 rounded-full bg-[hsl(var(--accent-bg))] border border-border text-decision font-sans text-[11px] hover:border-decision/50 hover:shadow-[0_0_8px_rgba(196,112,77,0.15)] transition-all"
                       >
                         {pill.label}
                       </button>

@@ -52,7 +52,7 @@ export default function EditTemplatePage() {
         </p>
         <Link
           href="/templates"
-          className="inline-flex items-center gap-1.5 text-[13px] font-sans text-[var(--color-accent)] hover:underline"
+          className="inline-flex items-center gap-1.5 text-[13px] font-sans text-decision hover:underline"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to the library
         </Link>

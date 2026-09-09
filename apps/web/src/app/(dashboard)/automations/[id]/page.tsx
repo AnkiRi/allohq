@@ -448,8 +448,8 @@ export default function AutomationDetailPage() {
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
             {[
               { label: "Active", value: journeyStats.active, color: "text-decision" },
-              { label: "Completed", value: journeyStats.completed, color: "text-[hsl(var(--success))]" },
-              { label: "Left alone", value: journeyStats.suppressed, color: "text-[var(--color-warning)]" },
+              { label: "Completed", value: journeyStats.completed, color: "text-outcome" },
+              { label: "Left alone", value: journeyStats.suppressed, color: "text-warning" },
               { label: "Paused", value: journeyStats.paused, color: "text-muted-foreground" },
               { label: "Avg Steps", value: journeyStats.avgStepsCompleted, color: "text-foreground" },
             ].map((stat) => (
@@ -480,7 +480,7 @@ export default function AutomationDetailPage() {
               <div className="text-[10px] font-sans text-muted-foreground uppercase mb-2">Left alone, and why</div>
               <div className="flex gap-2">
                 {Object.entries(journeyStats.suppressReasons).map(([reason, count]) => (
-                  <span key={reason} className="px-2 py-1 bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/25 rounded text-[11px] font-mono text-[var(--color-warning)]">
+                  <span key={reason} className="px-2 py-1 bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/25 rounded text-[11px] font-mono text-warning">
                     {reason}: {count}
                   </span>
                 ))}
@@ -513,8 +513,8 @@ export default function AutomationDetailPage() {
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-sans ${
                       journey.status === "active" ? "bg-decision/10 text-decision" :
-                      journey.status === "completed" ? "bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]" :
-                      journey.status === "suppressed" ? "bg-[var(--color-warning)]/10 text-[var(--color-warning)]" :
+                      journey.status === "completed" ? "bg-outcome/10 text-outcome" :
+                      journey.status === "suppressed" ? "bg-[var(--color-warning)]/10 text-warning" :
                       "bg-muted text-muted-foreground"
                     }`}>
                       {journey.status === "suppressed" ? "left alone" : journey.status}
@@ -553,13 +553,13 @@ export default function AutomationDetailPage() {
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-sans ${
                         test.status === "running" ? "bg-decision/10 text-decision" :
-                        test.status === "concluded" ? "bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]" :
+                        test.status === "concluded" ? "bg-outcome/10 text-outcome" :
                         "bg-muted text-muted-foreground"
                       }`}>
                         {test.status}
                       </span>
                       {test.winner && (
-                        <span className="px-2 py-0.5 bg-[hsl(var(--success)/0.16)] text-[hsl(var(--success))] rounded text-[10px] font-sans font-bold">
+                        <span className="px-2 py-0.5 bg-[hsl(var(--success)/0.16)] text-outcome rounded text-[10px] font-sans font-bold">
                           Winner: {test.winner.toUpperCase()}
                         </span>
                       )}
@@ -587,7 +587,7 @@ export default function AutomationDetailPage() {
                               <span>Converted: {r.converted}</span>
                             </div>
                             {r.revenue > 0 && (
-                              <div className="text-[11px] font-mono text-[hsl(var(--success))] mt-1">
+                              <div className="text-[11px] font-mono text-outcome mt-1">
                                 Revenue: ₹{r.revenue.toFixed(2)}
                               </div>
                             )}

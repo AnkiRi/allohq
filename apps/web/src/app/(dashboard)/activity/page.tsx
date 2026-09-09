@@ -99,7 +99,7 @@ function ActivityEntry({ row }: { row: ActivityRow }) {
               <span className="text-[10px] font-sans text-muted-foreground/70">· {tierNote}</span>
             )}
             {typeof row.revenue === "number" && row.revenue > 0 && (
-              <span className="text-[11px] font-mono text-[var(--color-success)]">
+              <span className="text-[11px] font-mono text-outcome">
                 {formatINR(row.revenue)}
               </span>
             )}

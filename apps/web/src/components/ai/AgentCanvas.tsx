@@ -62,7 +62,7 @@ function statusIcon(status: string) {
     case "completed":
       return <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />;
     case "failed":
-      return <XCircle className="w-3.5 h-3.5 text-red-500" />;
+      return <XCircle className="w-3.5 h-3.5 text-destructive" />;
     case "running":
       return <Clock className="w-3.5 h-3.5 text-amber-500 animate-spin" />;
     default:
@@ -73,7 +73,7 @@ function statusIcon(status: string) {
 function severityColor(severity: string) {
   switch (severity) {
     case "critical":
-      return "border-red-500/30 bg-red-500/5";
+      return "border-destructive/30 bg-destructive/5";
     case "warning":
       return "border-amber-500/30 bg-amber-500/5";
     default:
@@ -116,7 +116,7 @@ export function AgentCanvas() {
         <Zap className="w-4 h-4 text-[hsl(var(--accent))]" />
         <span className="font-semibold text-sm">Agent Canvas</span>
         {unacknowledgedCount > 0 && (
-          <span className="ml-auto px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 text-[10px] font-sans font-bold">
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-red-500/10 text-destructive text-[10px] font-sans font-bold">
             {unacknowledgedCount} new
           </span>
         )}
@@ -172,7 +172,7 @@ export function AgentCanvas() {
                   <AlertTriangle
                     className={cn(
                       "w-4 h-4 mt-0.5 flex-shrink-0",
-                      obs.severity === "critical" ? "text-red-500" : "text-amber-500"
+                      obs.severity === "critical" ? "text-destructive" : "text-amber-500"
                     )}
                   />
                   <div className="flex-1 min-w-0">

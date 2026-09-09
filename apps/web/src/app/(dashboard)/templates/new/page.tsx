@@ -206,7 +206,7 @@ const SPAM_WORDS = new Set([
 
 function scoreSubjectLocally(subject: string): { score: number; label: string; color: string } {
   const trimmed = subject.trim();
-  if (!trimmed) return { score: 0, label: "Empty", color: "text-red-500" };
+  if (!trimmed) return { score: 0, label: "Empty", color: "text-destructive" };
 
   const lower = trimmed.toLowerCase();
   const words = lower.split(/\s+/);
@@ -242,7 +242,7 @@ function scoreSubjectLocally(subject: string): { score: number; label: string; c
   let color: string;
   if (score >= 75) { label = "Great"; color = "text-green-600 dark:text-green-400"; }
   else if (score >= 50) { label = "Good"; color = "text-amber-600 dark:text-amber-400"; }
-  else { label = "Needs Work"; color = "text-red-500 dark:text-red-400"; }
+  else { label = "Needs Work"; color = "text-destructive text-destructive"; }
 
   return { score, label, color };
 }
@@ -504,9 +504,9 @@ export default function NewTemplatePage() {
                   className={cn(
                     "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono font-bold transition-all",
                     isActive
-                      ? "bg-[var(--color-accent)] text-white"
+                      ? "bg-decision text-white"
                       : isCompleted
-                        ? "bg-[var(--color-accent)]/20 text-[var(--color-accent)]"
+                        ? "bg-decision/20 text-decision"
                         : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -562,7 +562,7 @@ export default function NewTemplatePage() {
                       "bg-card dark:bg-[rgba(40,36,30,0.7)]",
                       "border border-border dark:border-[rgba(200,180,150,0.12)]",
                       "hover:shadow-md hover:-translate-y-0.5",
-                      isSelected && "ring-2 ring-[var(--color-accent)]"
+                      isSelected && "ring-2 ring-decision"
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -570,7 +570,7 @@ export default function NewTemplatePage() {
                         className={cn(
                           "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
                           isSelected
-                            ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                            ? "bg-decision/15 text-decision"
                             : "bg-muted text-muted-foreground"
                         )}
                       >
@@ -608,7 +608,7 @@ export default function NewTemplatePage() {
                       onChange={(e) => setCustomPrompt(e.target.value)}
                       rows={3}
                       placeholder="E.g., 'A holiday sale email with a festive theme, featuring our top 6 products with a 20% off coupon code...'"
-                      className="w-full px-4 py-3 bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] resize-none"
+                      className="w-full px-4 py-3 bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl text-[13px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-decision resize-none"
                     />
                   </div>
                 </motion.div>
@@ -623,7 +623,7 @@ export default function NewTemplatePage() {
                 className={cn(
                   "flex items-center gap-2 px-6 py-2.5 rounded-lg text-[13px] font-sans font-bold transition-all",
                   goal
-                    ? "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
+                    ? "bg-decision text-white hover:bg-[var(--color-accent-hover)]"
                     : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >
@@ -658,7 +658,7 @@ export default function NewTemplatePage() {
                     setGenError(false);
                     setRetryNonce((n) => n + 1);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 transition-opacity"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-decision hover:opacity-90 transition-opacity"
                 >
                   Retry
                 </button>
@@ -670,7 +670,7 @@ export default function NewTemplatePage() {
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-success)] opacity-20 animate-ping" />
                   <div className="absolute inset-2 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-success)] opacity-30 animate-pulse" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className="w-10 h-10 text-[var(--color-accent)]" />
+                    <Sparkles className="w-10 h-10 text-decision" />
                   </div>
                 </div>
 
@@ -720,7 +720,7 @@ export default function NewTemplatePage() {
               <div className="flex-1" />
               <button
                 onClick={() => setStep(4)}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-sans font-bold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-all"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-sans font-bold bg-decision text-white hover:bg-[var(--color-accent-hover)] transition-all"
               >
                 Continue
                 <ChevronRight className="w-4 h-4" />
@@ -775,7 +775,7 @@ export default function NewTemplatePage() {
                     key={previewHtml ? "loaded" : "empty"}
                     srcDoc={previewHtml || "<html><body></body></html>"}
                     title="Email Preview"
-                    className="bg-white border border-border rounded-lg shadow-sm transition-all"
+                    className="bg-card border border-border rounded-lg shadow-sm transition-all"
                     style={{
                       width: previewMode === "desktop" ? 600 : 375,
                       minHeight: 500,
@@ -796,7 +796,7 @@ export default function NewTemplatePage() {
                   <input
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
-                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
                     placeholder="Template name..."
                   />
                 </div>
@@ -809,7 +809,7 @@ export default function NewTemplatePage() {
                   <input
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision"
                     placeholder="Email subject..."
                   />
                   {/* Score badge */}
@@ -825,7 +825,7 @@ export default function NewTemplatePage() {
                   {/* Suggest alternatives */}
                   <button
                     onClick={() => setShowAlternatives(!showAlternatives)}
-                    className="text-[11px] font-sans text-[var(--color-accent)] hover:underline"
+                    className="text-[11px] font-sans text-decision hover:underline"
                   >
                     {showAlternatives ? "Hide alternatives" : "Suggest alternatives"}
                   </button>
@@ -888,12 +888,12 @@ export default function NewTemplatePage() {
                         onChange={(e) => setAiInstruction(e.target.value)}
                         placeholder="Tell joon what to change…"
                         onKeyDown={(e) => e.key === "Enter" && handleRegenerate()}
-                        className="flex-1 px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        className="flex-1 px-2.5 py-1.5 bg-muted border border-border rounded-lg text-[11px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-decision"
                       />
                       <button
                         onClick={handleRegenerate}
                         disabled={regenerateMut?.isPending}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-[10px] font-sans font-bold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-decision text-white rounded-lg text-[10px] font-sans font-bold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all"
                       >
                         <Wand2 className={cn("w-3 h-3", regenerateMut?.isPending && "animate-spin")} />
                         Regen
@@ -922,7 +922,7 @@ export default function NewTemplatePage() {
                         </span>
                         <button
                           onClick={() => handleDeleteBlock(block.id)}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-red-500 transition-all"
+                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -972,8 +972,8 @@ export default function NewTemplatePage() {
             {/* Summary card */}
             <div className="max-w-lg mx-auto bg-card dark:bg-[rgba(40,36,30,0.7)] border border-border dark:border-[rgba(200,180,150,0.12)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)]/15 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-[var(--color-accent)]" />
+                <div className="w-10 h-10 rounded-lg bg-decision/15 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-decision" />
                 </div>
                 <div>
                   <p className="text-[13px] font-bold text-foreground">{templateName}</p>
@@ -995,7 +995,7 @@ export default function NewTemplatePage() {
               <button
                 onClick={handleSaveTemplate}
                 disabled={createMut.isPending}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all bg-decision text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
               >
                 {createMut.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1009,7 +1009,7 @@ export default function NewTemplatePage() {
               <button
                 onClick={handleLaunchCampaign}
                 disabled={createMut.isPending}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all border-2 border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-[13px] font-sans font-bold transition-all border-2 border-decision text-decision hover:bg-decision/10 disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
                 Launch as Campaign

@@ -10,9 +10,9 @@ import {
 import { trpc } from "@/lib/trpc";
 
 const STATUS_COLORS: Record<string, string> = {
-  paid: "bg-[hsl(var(--success))/0.12] text-[var(--color-success)]",
+  paid: "bg-[hsl(var(--success))/0.12] text-outcome",
   fulfilled: "bg-[hsl(var(--accent))/0.12] text-[hsl(var(--accent))]",
-  pending: "bg-[var(--color-warning)]/12 text-[var(--color-warning)]",
+  pending: "bg-[var(--color-warning)]/12 text-warning",
   cancelled: "bg-destructive/12 text-destructive",
 };
 

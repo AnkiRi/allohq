@@ -119,7 +119,7 @@ function timeAgo(dateStr: string) {
 function channelIcon(channel: string) {
   switch (channel) {
     case "whatsapp":
-      return <Phone className="w-3.5 h-3.5 text-[var(--color-success)]" />;
+      return <Phone className="w-3.5 h-3.5 text-outcome" />;
     case "sms":
       return <MessageSquare className="w-3.5 h-3.5 text-[hsl(var(--accent))]" />;
     case "email":
@@ -144,7 +144,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 
 const VIP_COLORS: Record<string, string> = {
   platinum: "bg-[hsl(var(--accent))/0.1] text-[hsl(var(--accent))]",
-  gold: "bg-[var(--color-warning)]/10 text-[var(--color-warning)]",
+  gold: "bg-[var(--color-warning)]/10 text-warning",
   silver: "bg-muted text-muted-foreground",
 };
 
@@ -219,7 +219,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
             </div>
             <div className="flex justify-between text-[11px]">
               <span className="text-muted-foreground font-sans">Churn Risk</span>
-              <span className={cn("font-mono font-bold", ctx.state.churnRisk > 0.5 ? "text-destructive" : ctx.state.churnRisk > 0.3 ? "text-[var(--color-warning)]" : "text-[var(--color-success)]")}>
+              <span className={cn("font-mono font-bold", ctx.state.churnRisk > 0.5 ? "text-destructive" : ctx.state.churnRisk > 0.3 ? "text-warning" : "text-outcome")}>
                 {(ctx.state.churnRisk * 100).toFixed(0)}%
               </span>
             </div>
@@ -229,7 +229,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
             </div>
             <div className="flex justify-between text-[11px]">
               <span className="text-muted-foreground font-sans">Support</span>
-              <span className={cn("font-sans", ctx.state.supportState !== "clear" && "text-[var(--color-warning)]")}>
+              <span className={cn("font-sans", ctx.state.supportState !== "clear" && "text-warning")}>
                 {ctx.state.supportState}
               </span>
             </div>
@@ -283,7 +283,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "px-1 py-0.5 rounded text-[9px] font-sans",
-                    order.status === "paid" ? "bg-[hsl(var(--success))/0.1] text-[var(--color-success)]" :
+                    order.status === "paid" ? "bg-[hsl(var(--success))/0.1] text-outcome" :
                     order.status === "fulfilled" ? "bg-[hsl(var(--accent))/0.1] text-[hsl(var(--accent))]" :
                     "bg-foreground/5 text-muted-foreground"
                   )}>
@@ -301,8 +301,8 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
       {ctx.aiBrief && (
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-[var(--color-warning)]" />
-            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-[var(--color-warning)]">
+            <Sparkles className="w-4 h-4 text-warning" />
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-warning">
               joon&apos;s read
             </span>
           </div>
@@ -413,7 +413,7 @@ export function ConversationManager() {
                 <button
                   onClick={() => resolveMut.mutate({ conversationId: selectedId })}
                   disabled={resolveMut.isPending}
-                  className="text-[10px] font-sans px-2 py-1 rounded bg-[hsl(var(--success))/0.12] text-[var(--color-success)] hover:bg-[hsl(var(--success))/0.2] flex items-center gap-1"
+                  className="text-[10px] font-sans px-2 py-1 rounded bg-[hsl(var(--success))/0.12] text-outcome hover:bg-[hsl(var(--success))/0.2] flex items-center gap-1"
                 >
                   <CheckCircle className="w-3 h-3" /> Resolve
                 </button>
@@ -582,7 +582,7 @@ export function ConversationManager() {
               </div>
             )}
             {conv.status === "escalated" && conv.aiBrief && (
-              <div className="mt-1 pl-5 text-[10px] font-sans text-[var(--color-warning)] truncate flex items-center gap-1">
+              <div className="mt-1 pl-5 text-[10px] font-sans text-warning truncate flex items-center gap-1">
                 <Sparkles className="w-3 h-3 flex-shrink-0" />
                 {conv.aiBrief.slice(0, 80)}...
               </div>
@@ -594,7 +594,7 @@ export function ConversationManager() {
                   conv.status === "escalated"
                     ? "bg-destructive/10 text-destructive"
                     : conv.status === "active"
-                    ? "bg-[hsl(var(--success))/0.1] text-[var(--color-success)]"
+                    ? "bg-[hsl(var(--success))/0.1] text-outcome"
                     : conv.status === "resolved"
                     ? "bg-[hsl(var(--accent))/0.1] text-[hsl(var(--accent))]"
                     : "bg-foreground/5 text-muted-foreground"
@@ -606,7 +606,7 @@ export function ConversationManager() {
                 <span className={cn(
                   "text-[10px] font-sans px-1.5 py-0.5 rounded",
                   conv.sentiment === "negative" ? "bg-destructive/10 text-destructive" :
-                  conv.sentiment === "positive" ? "bg-[hsl(var(--success))/0.1] text-[var(--color-success)]" :
+                  conv.sentiment === "positive" ? "bg-[hsl(var(--success))/0.1] text-outcome" :
                   "bg-foreground/5 text-muted-foreground"
                 )}>
                   {conv.sentiment}

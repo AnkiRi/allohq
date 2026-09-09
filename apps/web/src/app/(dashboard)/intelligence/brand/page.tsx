@@ -415,7 +415,7 @@ export default function BrandProfilePage() {
       {/* Analyzing banner */}
       {analyzing && (
         <motion.div variants={itemVariants} className="glass-card-static border-l-4 border-l-[var(--color-accent)] flex items-center gap-3 px-4 py-3">
-          <RefreshCw className="w-4 h-4 text-[var(--color-accent)] animate-spin flex-shrink-0" />
+          <RefreshCw className="w-4 h-4 text-decision animate-spin flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground">Reading your brand...</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -473,13 +473,13 @@ export default function BrandProfilePage() {
               onChange={(e) => setGuidelinesEdit(e.target.value)}
               rows={5}
               placeholder="Paste your brand guidelines, do's and don'ts, positioning notes…"
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-decision"
             />
             <div className="flex justify-end mt-3">
               <button
                 onClick={handleSaveVoice}
                 disabled={updateVoiceMut.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-decision hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 <Save className="w-3.5 h-3.5" />
                 {updateVoiceMut.isPending ? "Saving…" : "Save guidelines"}
@@ -500,22 +500,22 @@ export default function BrandProfilePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">FROM NAME</label>
-                <input type="text" value={fromNameEdit} onChange={(e) => setFromNameEdit(e.target.value)} placeholder="e.g. Vana Naturals" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+                <input type="text" value={fromNameEdit} onChange={(e) => setFromNameEdit(e.target.value)} placeholder="e.g. Vana Naturals" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision" />
               </div>
               <div>
                 <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">FROM EMAIL</label>
-                <input type="email" value={fromEmailEdit} onChange={(e) => setFromEmailEdit(e.target.value)} placeholder="hello@yourbrand.com" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+                <input type="email" value={fromEmailEdit} onChange={(e) => setFromEmailEdit(e.target.value)} placeholder="hello@yourbrand.com" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision" />
               </div>
               <div>
                 <label className="text-[11px] text-muted-foreground font-sans block mb-1.5">REPLY-TO EMAIL</label>
-                <input type="email" value={replyToEdit} onChange={(e) => setReplyToEdit(e.target.value)} placeholder="care@yourbrand.com" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+                <input type="email" value={replyToEdit} onChange={(e) => setReplyToEdit(e.target.value)} placeholder="care@yourbrand.com" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-decision" />
               </div>
             </div>
             <div className="flex justify-end mt-4">
               <button
                 onClick={handleSaveVoice}
                 disabled={updateVoiceMut.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-sans font-medium text-white bg-decision hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 <Save className="w-3.5 h-3.5" />
                 {updateVoiceMut.isPending ? "Saving…" : "Save settings"}
@@ -593,7 +593,7 @@ export default function BrandProfilePage() {
                       <div key={dim.key}>
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[11px] font-bold text-foreground font-sans">{dim.label}</span>
-                          <span className="text-[10px] text-[var(--color-accent)] font-sans font-medium">
+                          <span className="text-[10px] text-decision font-sans font-medium">
                             {dim.options[currentIdx >= 0 ? currentIdx : 1]}
                           </span>
                         </div>
@@ -608,7 +608,7 @@ export default function BrandProfilePage() {
                               const val = dim.options[Number(e.target.value)];
                               if (val != null) setToneEdits((prev) => ({ ...prev, [dim.key]: val }));
                             }}
-                            className="flex-1 h-1.5 accent-[var(--color-accent)] cursor-pointer"
+                            className="flex-1 h-1.5 accent-decision cursor-pointer"
                           />
                           <span className="text-[9px] text-muted-foreground font-sans w-16 shrink-0">{dim.right.label}</span>
                         </div>
@@ -696,7 +696,7 @@ export default function BrandProfilePage() {
                     disabled={updateIntensityMut.isPending}
                     className={`text-left p-4 border rounded-xl transition-all ${
                       currentIntensity === opt.value
-                        ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-muted"
+                        ? "border-decision shadow-[0_0_0_1px_var(--color-accent)] bg-muted"
                         : "border-border bg-muted hover:border-border"
                     }`}
                   >
@@ -841,7 +841,7 @@ export default function BrandProfilePage() {
                         onClick={() => setAestheticEdit(opt.value)}
                         className={`text-left px-3 py-2 border rounded-lg transition-all ${
                           aestheticEdit === opt.value
-                            ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-muted"
+                            ? "border-decision shadow-[0_0_0_1px_var(--color-accent)] bg-muted"
                             : "border-border bg-muted hover:border-border"
                         }`}
                       >
@@ -923,7 +923,7 @@ export default function BrandProfilePage() {
                     className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-[12px] font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-secondary"
                   />
                   {logoUrl && (
-                    <div className="w-16 h-16 border border-border rounded-lg overflow-hidden bg-white flex-shrink-0">
+                    <div className="w-16 h-16 border border-border rounded-lg overflow-hidden bg-card flex-shrink-0">
                       <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     </div>
                   )}
@@ -938,7 +938,7 @@ export default function BrandProfilePage() {
                       onClick={() => setLogoPosition(pos)}
                       className={`px-4 py-2 border rounded-lg text-[11px] font-sans transition-all ${
                         logoPosition === pos
-                          ? "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] bg-muted font-bold"
+                          ? "border-decision shadow-[0_0_0_1px_var(--color-accent)] bg-muted font-bold"
                           : "border-border bg-muted hover:border-border"
                       }`}
                     >
@@ -983,7 +983,7 @@ export default function BrandProfilePage() {
                       showAddress ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
                     }`}
                   >
-                    <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
+                    <div className="w-4 h-4 bg-card rounded-full shadow-sm mx-0.5" />
                   </button>
                   <span className="text-[11px] font-sans text-foreground">Show store address</span>
                 </label>
@@ -994,7 +994,7 @@ export default function BrandProfilePage() {
                       showSocialLinks ? "bg-secondary justify-end" : "bg-muted border border-border justify-start"
                     }`}
                   >
-                    <div className="w-4 h-4 bg-white rounded-full shadow-sm mx-0.5" />
+                    <div className="w-4 h-4 bg-card rounded-full shadow-sm mx-0.5" />
                   </button>
                   <span className="text-[11px] font-sans text-foreground">Show social links</span>
                 </label>

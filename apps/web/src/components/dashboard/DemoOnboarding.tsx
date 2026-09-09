@@ -108,7 +108,7 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
               <span
                 className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-mono shrink-0 ${
                   past
-                    ? "bg-[var(--color-success)] text-white"
+                    ? "bg-outcome text-white"
                     : active
                       ? "bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]"
                       : "bg-muted text-muted-foreground"
@@ -156,7 +156,7 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
               <li key={step.key} className="flex items-center gap-3 text-[13px]">
                 <span className="w-4 h-4 shrink-0 flex items-center justify-center">
                   {step.status === "done" ? (
-                    <Check className="w-4 h-4 text-[var(--color-success)]" />
+                    <Check className="w-4 h-4 text-outcome" />
                   ) : step.status === "generating" ? (
                     <Loader2 className="w-3.5 h-3.5 text-[hsl(var(--accent))] animate-spin" />
                   ) : (
@@ -196,7 +196,7 @@ export function DemoOnboarding({ onDone }: { onDone: () => void }) {
               <li key={s} className="flex items-center gap-3 text-[13px]">
                 <span className="w-4 h-4 shrink-0 flex items-center justify-center">
                   {i < setupDone ? (
-                    <Check className="w-4 h-4 text-[var(--color-success)]" />
+                    <Check className="w-4 h-4 text-outcome" />
                   ) : (
                     <Loader2 className="w-3.5 h-3.5 text-[hsl(var(--accent))] animate-spin" />
                   )}

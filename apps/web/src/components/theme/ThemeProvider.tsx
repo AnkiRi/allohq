@@ -52,8 +52,8 @@ function migrateTheme(v: string | null): Theme {
 }
 
 /**
- * Inline script to prevent flash of wrong theme. Sets data-theme (and the
- * active palette before paint. The app defaults to Light.
+ * Inline script to prevent a flash of the wrong theme. It sets the active
+ * data-theme before paint. The app defaults to Light.
  */
 export function ThemeScript() {
   const script = `
@@ -85,7 +85,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage, otherwise the drenched default.
+  // Initialize from localStorage, otherwise the Light default.
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     setThemeState(migrateTheme(stored));

@@ -500,7 +500,7 @@ function SubjectLineScorer() {
                     </button>
                     <button
                       onClick={() => setSubject(alt)}
-                      className="opacity-0 group-hover:opacity-100 text-[10px] font-sans text-[var(--color-accent)] hover:opacity-80 transition-all"
+                      className="opacity-0 group-hover:opacity-100 text-[10px] font-sans text-decision hover:opacity-80 transition-all"
                     >
                       Use
                     </button>
@@ -584,7 +584,7 @@ function EmailPreviewGenerator() {
               <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
             </button>
             {dropdownOpen && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto py-1">
+              <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto py-1">
                 {isLoading ? (
                   <div className="px-4 py-3 text-[12px] text-muted-foreground">Loading templates...</div>
                 ) : templates && templates.length > 0 ? (
@@ -648,7 +648,7 @@ function EmailPreviewGenerator() {
           <motion.div
             layout
             className={`border rounded-2xl overflow-hidden transition-all duration-300 ${
-              darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-border"
+              darkMode ? "bg-gray-900 border-gray-700" : "bg-card border-border"
             }`}
             style={{
               width: viewMode === "desktop" ? "100%" : "375px",

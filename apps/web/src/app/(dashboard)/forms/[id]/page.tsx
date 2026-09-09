@@ -107,7 +107,7 @@ export default function FormDetailPage() {
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-bold uppercase ${
                 form.status === "active"
-                  ? "bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]"
+                  ? "bg-[hsl(var(--success))/0.12] text-outcome border border-[hsl(var(--success))/0.25]"
                   : "bg-muted text-muted-foreground border border-border"
               }`}
             >
@@ -194,7 +194,7 @@ export default function FormDetailPage() {
                   <span
                     className={`px-2 py-0.5 rounded-full text-[9px] font-sans font-bold uppercase ${
                       popup.status === "active"
-                        ? "bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]"
+                        ? "bg-[hsl(var(--success))/0.12] text-outcome border border-[hsl(var(--success))/0.25]"
                         : "bg-muted text-muted-foreground border border-border"
                     }`}
                   >
@@ -335,7 +335,7 @@ export default function FormDetailPage() {
                                 val ? (
                                   <span
                                     key={ch}
-                                    className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]"
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[hsl(var(--success))/0.12] text-outcome border border-[hsl(var(--success))/0.25]"
                                   >
                                     {ch}
                                   </span>

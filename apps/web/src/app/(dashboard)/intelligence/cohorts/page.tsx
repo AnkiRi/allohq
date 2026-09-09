@@ -46,7 +46,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
             height={140}
             rx={6}
             fill="hsl(var(--accent) / 0.15)"
-            stroke="var(--color-accent)"
+            stroke="var(--measure)"
             strokeWidth={2}
           />
           <text
@@ -111,7 +111,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
         <polyline
           points={linePoints}
           fill="none"
-          stroke="var(--color-accent)"
+          stroke="var(--measure)"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -119,7 +119,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
 
         {/* Data dots */}
         {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--color-accent)" />
+          <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--measure)" />
         ))}
 
         {/* X-axis labels */}
@@ -148,9 +148,9 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
 // Segment swatches resolve per palette via V2 tokens (success / warning /
 // urgent / accent), so the legend wears the active theme rather than fixed hex.
 const SEGMENT_COLORS: Record<string, string> = {
-  Champions: "var(--color-success)",
+  Champions: "var(--outcome)",
   "Loyal Customers": "var(--color-warning)",
-  "Potential Loyalists": "var(--color-accent)",
+  "Potential Loyalists": "var(--measure)",
   "New Customers": "hsl(var(--muted-foreground))",
   "At Risk": "var(--color-urgent)",
   Hibernating: "hsl(var(--muted-foreground) / 0.6)",
@@ -411,10 +411,10 @@ export default function CohortAnalysisPage() {
       {cohorts && cohorts.length > 0 && bestCohort && (
         <motion.div
           variants={itemVariants}
-          className="glass-card-static p-6 border-l-4 border-l-[var(--color-accent)]"
+          className="glass-card-static p-6 border-l-4 border-l-measure"
         >
           <div className="flex gap-4">
-            <Sparkles className="w-5 h-5 text-[var(--color-accent)] shrink-0 mt-0.5" />
+            <Sparkles className="w-5 h-5 text-decision shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-[13px] text-foreground/90 font-sans leading-relaxed">
                 Your <span className="font-bold">{bestCohort.month}</span> cohort is your strongest,
@@ -426,13 +426,13 @@ export default function CohortAnalysisPage() {
               <div className="flex items-center gap-4 mt-3">
                 <Link
                   href="/segments"
-                  className="text-[11px] font-sans text-[var(--color-accent)] hover:underline"
+                  className="text-[11px] font-sans text-decision hover:underline"
                 >
                   View Segments &rarr;
                 </Link>
                 <Link
                   href="/campaigns"
-                  className="text-[11px] font-sans text-[var(--color-accent)] hover:underline"
+                  className="text-[11px] font-sans text-decision hover:underline"
                 >
                   Create Campaign &rarr;
                 </Link>
@@ -551,7 +551,7 @@ export default function CohortAnalysisPage() {
                           const alpha = 0.15 + intensity * 0.6;
                           let bgColor: string;
                           if (pct > 100) {
-                            bgColor = `color-mix(in srgb, var(--color-success) ${alpha * 100}%, transparent)`;
+                            bgColor = `color-mix(in srgb, var(--outcome) ${alpha * 100}%, transparent)`;
                           } else if (pct >= 50) {
                             bgColor = `color-mix(in srgb, var(--color-warning) ${alpha * 100}%, transparent)`;
                           } else {

@@ -31,7 +31,7 @@ export function ColorField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="#000000"
-        className="flex-1 min-w-0 px-2.5 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono uppercase text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] transition-shadow"
+        className="flex-1 min-w-0 px-2.5 py-1.5 bg-background border border-border rounded-md text-[12px] font-mono uppercase text-foreground focus:outline-none focus:ring-1 focus:ring-decision transition-shadow"
       />
     </div>
   );

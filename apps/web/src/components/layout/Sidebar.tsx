@@ -173,11 +173,11 @@ export function Sidebar() {
                 )}
                 {"showBadge" in item && item.showBadge && pendingCount > 0 && (
                   collapsed ? (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-[var(--color-accent)] text-white text-[9px] font-bold px-0.5">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-decision text-white text-[9px] font-bold px-0.5">
                       {pendingCount}
                     </span>
                   ) : (
-                    <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-[var(--color-accent)] text-white text-[10px] font-bold px-1">
+                    <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-decision text-white text-[10px] font-bold px-1">
                       {pendingCount}
                     </span>
                   )

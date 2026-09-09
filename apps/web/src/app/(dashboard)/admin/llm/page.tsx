@@ -36,7 +36,7 @@ export default function LlmSpendPage() {
       </div>
 
       {data.threshold?.exceeded ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-[12.5px] text-red-600 dark:text-red-400 font-sans">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12.5px] text-destructive text-destructive font-sans">
           ⚠ Today's spend (${data.todayUsd.toFixed(2)}) exceeds the ${data.threshold.dailyUsd} daily threshold.
         </div>
       ) : null}
@@ -93,7 +93,7 @@ export default function LlmSpendPage() {
             {data.recentErrors.map((e: any, i: number) => (
               <div key={i} className="px-4 py-2.5 text-[12.5px] flex items-center gap-2">
                 <span className="font-mono text-foreground">{e.actionType}</span>
-                <span className="text-red-600 dark:text-red-400 font-sans truncate flex-1">{e.error}</span>
+                <span className="text-destructive text-destructive font-sans truncate flex-1">{e.error}</span>
               </div>
             ))}
           </div>
@@ -105,7 +105,7 @@ export default function LlmSpendPage() {
 
 function Stat({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
-    <div className={`rounded-xl border ${alert ? "border-red-500/40" : "border-border"} bg-card p-4`}>
+    <div className={`rounded-xl border ${alert ? "border-destructive/40" : "border-border"} bg-card p-4`}>
       <div className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="text-[24px] font-serif font-semibold text-foreground mt-1 tabular-nums">{value}</div>
     </div>

@@ -409,11 +409,11 @@ function PhaseIndicator({ currentStep }: { currentStep: number }) {
         const isDone = phase.steps.every((s) => s < currentStep);
         return (
           <div key={i} className="flex items-center gap-2 shrink-0">
-            {i > 0 && <div className={`w-6 h-px ${isDone ? "bg-decision" : "bg-[#EDE7DB]"}`} />}
+            {i > 0 && <div className={`w-6 h-px ${isDone ? "bg-decision" : "bg-border"}`} />}
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 isActive
-                  ? "bg-decision/10 text-decision border border-[#1F7A4F]/30"
+                  ? "bg-decision/10 text-decision border border-decision/30"
                   : isDone
                     ? "bg-decision/5 text-decision"
                     : "text-muted-foreground"
@@ -604,7 +604,7 @@ function BackgroundAnalysisStep({
               <p className="text-sm font-medium text-card-foreground">
                 This is taking longer than expected.
               </p>
-              <p className="text-xs text-[#8B7A55] mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {hasBlocking
                   ? "Your store data hasn't finished importing yet. You can keep waiting, or retry just this step — no need to start over."
                   : "A background step is running slow. You can continue and it'll keep trying, or retry it now."}
@@ -616,7 +616,7 @@ function BackgroundAnalysisStep({
                     <button
                       onClick={() => handleRetry(s.key)}
                       disabled={retry.isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#2C2C2C] text-primary-foreground hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-decision text-primary-foreground hover:bg-decision/90 transition-colors disabled:opacity-40 shrink-0"
                     >
                       {retryingKey === s.key ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -707,7 +707,7 @@ function BackgroundAnalysisStep({
         <button
           onClick={onContinue}
           disabled={!canContinue || isAdvancing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-primary-foreground text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-5 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:bg-decision/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isAdvancing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -778,7 +778,7 @@ function ModelSelectionStep({
                 onClick={() => handleSelect(model.id)}
                 className={`relative rounded-xl p-4 text-left transition-all ${
                   isSelected
-                    ? "border-2 border-[#1F7A4F] bg-decision/5 shadow-sm"
+                    ? "border-2 border-decision bg-decision/5 shadow-sm"
                     : "border border-border bg-card/30 backdrop-blur-sm hover:bg-card/50"
                 }`}
               >
@@ -796,7 +796,7 @@ function ModelSelectionStep({
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">{model.description}</p>
-                <p className="text-[10px] text-[#A09888] mt-1">
+                <p className="text-[10px] text-muted-foreground mt-1">
                   ₹{model.inputCostPerMillion}/M input · ₹{model.outputCostPerMillion}/M output
                 </p>
               </button>
@@ -807,7 +807,7 @@ function ModelSelectionStep({
         <button
           onClick={onContinue}
           disabled={!selected || isAdvancing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-primary-foreground text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-5 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:bg-decision/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isAdvancing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1031,7 +1031,7 @@ function BrandReviewStep({
 
       {/* Brand Document Upload */}
       <div className="mb-8 p-6 bg-secondary rounded-xl border border-border">
-        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Brand guidelines</h3>
+        <h3 className="text-lg font-semibold text-card-foreground mb-2">Brand guidelines</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Already have brand guidelines? Paste them here and joon will follow them as the source of
           truth for your voice, ahead of anything it picked up on its own.
@@ -1040,14 +1040,14 @@ function BrandReviewStep({
           value={brandDocument}
           onChange={(e) => setBrandDocument(e.target.value)}
           placeholder="Paste your tone of voice, personality, guidelines, or any brand document here..."
-          className="w-full h-40 p-4 border border-border rounded-lg text-sm bg-card resize-y focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+          className="w-full h-40 p-4 border border-border rounded-lg text-sm bg-card resize-y focus:outline-none focus:ring-2 focus:ring-focus/30"
         />
         {brandDocument.trim() && (
           <div className="flex items-center gap-3 mt-3">
             <button
               onClick={handleAnalyzeFromDocument}
               disabled={isAnalyzing}
-              className="px-4 py-2 bg-[#2D2A26] text-primary-foreground rounded-lg text-sm font-medium hover:bg-[#3D3A36] disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 bg-[#2D2A26] text-primary-foreground rounded-lg text-sm font-medium hover:bg-decision/90 disabled:opacity-50 flex items-center gap-2"
             >
               {isAnalyzing ? (
                 <>
@@ -1068,7 +1068,7 @@ function BrandReviewStep({
 
       {/* Sending & sender */}
       <div className="mb-8 p-6 bg-secondary rounded-xl border border-border">
-        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Your business</h3>
+        <h3 className="text-lg font-semibold text-card-foreground mb-2">Your business</h3>
         <p className="text-sm text-muted-foreground mb-4">
           This helps joon choose useful starter segments and understand whether you may want
           migration help later.
@@ -1112,7 +1112,7 @@ function BrandReviewStep({
       </div>
 
       <div className="mb-8 p-6 bg-secondary rounded-xl border border-border">
-        <h3 className="text-lg font-semibold text-[#2D2A26] mb-2">Sending &amp; sender</h3>
+        <h3 className="text-lg font-semibold text-card-foreground mb-2">Sending &amp; sender</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Who do your emails come from? You can change this anytime.
         </p>
@@ -1124,7 +1124,7 @@ function BrandReviewStep({
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
               placeholder="e.g. Vana Naturals"
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-focus/30"
             />
           </div>
           <div>
@@ -1134,7 +1134,7 @@ function BrandReviewStep({
               value={fromEmail}
               onChange={(e) => setFromEmail(e.target.value)}
               placeholder="hello@yourbrand.com"
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-focus/30"
             />
           </div>
           <div>
@@ -1144,7 +1144,7 @@ function BrandReviewStep({
               value={replyTo}
               onChange={(e) => setReplyTo(e.target.value)}
               placeholder="care@yourbrand.com"
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-focus/30"
             />
           </div>
         </div>
@@ -1168,7 +1168,7 @@ function BrandReviewStep({
                 value={businessAddress[key]}
                 onChange={(e) => setBusinessAddress((prev) => ({ ...prev, [key]: e.target.value }))}
                 placeholder={label}
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-[#8B8074]/30"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-focus/30"
               />
             ))}
           </div>
@@ -1249,17 +1249,17 @@ function BrandReviewStep({
                       const val = dim.options[idx];
                       if (val != null) setTone((prev) => ({ ...prev, [dim.key]: val }));
                     }}
-                    className="flex-1 h-1.5 accent-[#1F7A4F] cursor-pointer"
+                    className="flex-1 h-1.5 accent-decision cursor-pointer"
                   />
                   <span className="text-[10px] text-muted-foreground w-16 shrink-0">
                     {dim.right.label}
                   </span>
                 </div>
                 <div className="flex justify-between mt-1">
-                  <span className="text-[10px] text-[#A09888] italic max-w-[45%]">
+                  <span className="text-[10px] text-muted-foreground italic max-w-[45%]">
                     &ldquo;{dim.left.example}&rdquo;
                   </span>
-                  <span className="text-[10px] text-[#A09888] italic max-w-[45%] text-right">
+                  <span className="text-[10px] text-muted-foreground italic max-w-[45%] text-right">
                     &ldquo;{dim.right.example}&rdquo;
                   </span>
                 </div>
@@ -1342,7 +1342,7 @@ function BrandReviewStep({
                 onClick={() => setAesthetic(opt.value)}
                 className={`relative text-left p-3 rounded-xl transition-all ${
                   isSelected
-                    ? "border-2 border-[#1F7A4F] bg-decision/5"
+                    ? "border-2 border-decision bg-decision/5"
                     : "border border-border hover:bg-card/40"
                 }`}
               >
@@ -1418,7 +1418,7 @@ function BrandReviewStep({
                 className="max-w-full max-h-full object-contain"
               />
             ) : (
-              <span className="text-[10px] text-[#A09888] text-center">Text logo fallback</span>
+              <span className="text-[10px] text-muted-foreground text-center">Text logo fallback</span>
             )}
           </div>
           <div className="flex-1">
@@ -1802,7 +1802,7 @@ function StoreReportStep({
         <button
           onClick={onAcknowledge}
           disabled={isAdvancing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#2C2C2C] text-primary-foreground text-sm rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 bg-decision text-primary-foreground text-sm rounded-lg hover:bg-decision/90 transition-colors disabled:opacity-40"
         >
           {isAdvancing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1909,7 +1909,7 @@ export function LaunchReadinessPanel({
         </p>
       </div>
 
-      <div className="divide-y divide-[#E8E4DE] border-y border-border">
+      <div className="divide-y divide-border border-y border-border">
         {readiness.isLoading ? (
           <div className="py-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Checking your setup…
@@ -1920,7 +1920,7 @@ export function LaunchReadinessPanel({
               {check.ready ? (
                 <Check className="mt-0.5 size-4 text-decision" />
               ) : (
-                <Circle className="mt-0.5 size-4 text-[#9B7B31]" />
+                <Circle className="mt-0.5 size-4 text-warning" />
               )}
               <div className="min-w-0">
                 <p className="text-sm font-medium text-card-foreground">{label}</p>
@@ -1956,7 +1956,7 @@ export function LaunchReadinessPanel({
               <button
                 disabled={!domain || configureDomain.isPending}
                 onClick={() => configureDomain.mutate({ storeId, domain })}
-                className="rounded-lg bg-[#2C2C2C] px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                className="rounded-lg bg-decision px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
               >
                 Create DNS records
               </button>
@@ -1988,7 +1988,7 @@ export function LaunchReadinessPanel({
               <button
                 disabled={verifyDomain.isPending || sender.data.status === "verified"}
                 onClick={() => verifyDomain.mutate({ storeId })}
-                className="rounded-lg bg-[#2C2C2C] px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-40"
+                className="rounded-lg bg-decision px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-40"
               >
                 I added these records
               </button>
@@ -2086,7 +2086,7 @@ export function LaunchReadinessPanel({
                     requestedItems: migrationItems,
                   })
                 }
-                className="mt-3 rounded-lg border border-[#2C2C2C] px-3 py-2 text-xs font-medium text-card-foreground disabled:opacity-40"
+                className="mt-3 rounded-lg border border-foreground px-3 py-2 text-xs font-medium text-card-foreground disabled:opacity-40"
               >
                 Request migration help
               </button>

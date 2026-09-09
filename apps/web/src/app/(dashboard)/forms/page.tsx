@@ -27,7 +27,7 @@ const itemVariants = {
 function statusBadge(status: string) {
   switch (status) {
     case "active":
-      return "bg-[hsl(var(--success))/0.12] text-[var(--color-success)] border border-[hsl(var(--success))/0.25]";
+      return "bg-[hsl(var(--success))/0.12] text-outcome border border-[hsl(var(--success))/0.25]";
     case "draft":
       return "bg-muted text-muted-foreground border border-border";
     case "archived":
@@ -179,7 +179,7 @@ export default function FormsPage() {
                     title={form.status === "active" ? "Deactivate" : "Activate"}
                   >
                     {form.status === "active" ? (
-                      <ToggleRight className="w-4 h-4 text-[var(--color-success)]" />
+                      <ToggleRight className="w-4 h-4 text-outcome" />
                     ) : (
                       <ToggleLeft className="w-4 h-4" />
                     )}

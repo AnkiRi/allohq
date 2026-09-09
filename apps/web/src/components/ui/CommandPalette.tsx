@@ -264,14 +264,14 @@ export function CommandPalette() {
                       onMouseEnter={() => setSelectedIndex(currentFlatIndex)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
                         isSelected
-                          ? "bg-[var(--color-accent)]/8 dark:bg-[var(--color-accent)]/15"
+                          ? "bg-decision/8 dark:bg-decision/15"
                           : "hover:bg-muted/50"
                       }`}
                     >
                       <div
                         className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
                           isSelected
-                            ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                            ? "bg-decision/15 text-decision"
                             : "bg-muted/60 text-muted-foreground"
                         }`}
                       >

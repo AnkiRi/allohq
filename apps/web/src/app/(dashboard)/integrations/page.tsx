@@ -207,7 +207,7 @@ export default function IntegrationsPage() {
               variants={itemVariants}
             >
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-decision flex items-center justify-center">
                   <ShoppingBag className="w-5 h-5 text-[hsl(var(--accent-foreground))]" />
                 </div>
                 <div>
@@ -221,7 +221,7 @@ export default function IntegrationsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-[11px] font-sans text-[var(--color-success)]">
+                <span className="flex items-center gap-1.5 text-[11px] font-sans text-outcome">
                   <Check className="w-3.5 h-3.5" />
                   Connected
                 </span>
@@ -261,7 +261,7 @@ export default function IntegrationsPage() {
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     platform.id === "shopify"
-                      ? "bg-[var(--color-accent)]"
+                      ? "bg-decision"
                       : "bg-muted"
                   }`}
                 >

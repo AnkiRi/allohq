@@ -24,7 +24,7 @@ function getSegmentBadgeColor(segment: string): string {
   if (s.includes("champion"))
     return "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))] border-[hsl(var(--success)/0.25)]";
   if (s.includes("loyal") || s.includes("potential"))
-    return "bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] text-[var(--color-warning)] border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]";
+    return "bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] text-warning border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]";
   if (s.includes("hibernat") || s.includes("lost"))
     return "bg-muted text-muted-foreground border-border";
   if (s.includes("risk"))
@@ -443,7 +443,7 @@ export default function CustomerDetailPage() {
           {/* Order entries */}
           {customer.orders.map((order) => (
             <div key={order.id} className="relative pb-5">
-              <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-[var(--color-accent)] border-2 border-background" />
+              <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-decision border-2 border-background" />
               <div className="text-[12px] font-mono text-foreground">
                 Order #{order.orderNumber} &middot; {formatINR(order.totalPrice)}
               </div>

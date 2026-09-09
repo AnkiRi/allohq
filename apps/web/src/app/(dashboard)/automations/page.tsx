@@ -20,9 +20,9 @@ const itemVariants = {
 
 const STATUS_BADGES: Record<string, { className: string; label: string }> = {
   recommended: { className: "bg-muted text-muted-foreground border border-border", label: "Recommended" },
-  generating: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Generating..." },
+  generating: { className: "bg-[var(--color-warning)]/10 text-warning border border-[var(--color-warning)]/20", label: "Generating..." },
   draft: { className: "bg-muted text-muted-foreground border border-border", label: "Draft" },
-  ready: { className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20", label: "Ready" },
+  ready: { className: "bg-[var(--color-warning)]/10 text-warning border border-[var(--color-warning)]/20", label: "Ready" },
   active: { className: "bg-outcome text-white", label: "Active" },
   paused: { className: "bg-muted text-muted-foreground border border-border", label: "Paused" },
 };

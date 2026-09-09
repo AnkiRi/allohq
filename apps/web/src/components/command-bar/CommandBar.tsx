@@ -188,19 +188,19 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
         <div
           className={`mt-3 px-4 py-4 rounded-xl border ${
             result.success
-              ? "bg-green-50 border-green-200"
-              : "bg-red-50 border-red-200"
+              ? "bg-outcome/10 border-outcome/25"
+              : "bg-destructive/10 border-destructive/25"
           }`}
         >
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
               {result.success ? (
-                <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-outcome mt-0.5 flex-shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
               )}
               <div>
-                <p className={`text-[13px] font-bold font-sans ${result.success ? "text-green-900" : "text-red-900"}`}>
+                <p className={`text-[13px] font-bold font-sans ${result.success ? "text-outcome" : "text-destructive"}`}>
                   {result.summary}
                 </p>
                 {result.success && (
@@ -208,7 +208,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.automationId && (
                       <button
                         onClick={() => handleNavigate(`/automations/${result.created.automationId}`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
                       >
                         View & Edit
                       </button>
@@ -216,7 +216,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.campaignId && (
                       <button
                         onClick={() => handleNavigate(`/campaigns`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
                       >
                         View Campaign
                       </button>
@@ -224,7 +224,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.templateIds && result.created.templateIds.length > 0 && !result.created.automationId && !result.created.campaignId && (
                       <button
                         onClick={() => handleNavigate(`/templates/${result.created.templateIds![0]}/edit`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
                       >
                         View Template
                       </button>
@@ -232,7 +232,7 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
                     {result.created.segmentId && (
                       <button
                         onClick={() => handleNavigate(`/segments`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-green-300 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
                       >
                         View Segment
                       </button>

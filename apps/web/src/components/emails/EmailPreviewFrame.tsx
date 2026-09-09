@@ -38,7 +38,7 @@ export function EmailPreviewFrame({
     <section className="flex flex-col h-full rounded-xl border border-border overflow-hidden bg-[#0c0f0c] dark:bg-[#0c0f0c]">
       <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-card/60 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--color-accent)]">
+          <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-decision">
             Live preview
           </span>
           {isLoading ? (
@@ -104,7 +104,7 @@ function Toggle({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg overflow-hidden border border-[var(--color-accent)]/40">
+    <div className="inline-flex rounded-lg overflow-hidden border border-decision/40">
       {options.map((o) => {
         const active = o.v === value;
         return (

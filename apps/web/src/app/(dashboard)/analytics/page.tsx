@@ -362,7 +362,7 @@ export default function AnalyticsPage() {
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {([
-                  { data: aiData.ai, label: "Written by joon", color: "text-[var(--color-accent)]", bg: "bg-[hsl(var(--accent))]/[0.06]", border: "border-[hsl(var(--accent))]/40" },
+                  { data: aiData.ai, label: "Written by joon", color: "text-decision", bg: "bg-[hsl(var(--accent))]/[0.06]", border: "border-[hsl(var(--accent))]/40" },
                   { data: aiData.manual, label: "Written by hand", color: "text-foreground", bg: "bg-muted", border: "border-border" },
                 ] as const).map((group) => (
                   <motion.div key={group.label} variants={itemVariants} className={`p-5 ${group.bg} border ${group.border} rounded-xl`}>
@@ -495,7 +495,7 @@ export default function AnalyticsPage() {
                         ₹{(fc.value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </div>
                       {fc.trend != null && (
-                        <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-[var(--color-success)]" : "text-destructive"}`}>
+                        <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-outcome" : "text-destructive"}`}>
                           {fc.trend >= 0 ? "+" : ""}{fc.trend}% vs prior period
                         </div>
                       )}

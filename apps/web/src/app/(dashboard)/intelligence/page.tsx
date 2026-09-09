@@ -16,7 +16,7 @@ const itemVariants = {
 };
 
 function rfmBarColor(value: number): string {
-  if (value >= 3.5) return "var(--color-success)";
+  if (value >= 3.5) return "var(--outcome)";
   if (value >= 2.5) return "var(--color-warning)";
   return "var(--color-urgent)";
 }
@@ -169,7 +169,7 @@ export default function IntelligencePage() {
           <ul className="space-y-2 mb-5">
             {championsSegment && championsRevenuePct && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
-                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-success)] shrink-0" />
+                <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-outcome shrink-0" />
                 Your {championsSegment.count} Champions bring in {championsRevenuePct}% of your revenue (₹
                 {(championsSegment.revenue / 1000).toFixed(0)}K)
               </li>
@@ -370,11 +370,11 @@ export default function IntelligencePage() {
               {rfmData.topCustomers.map((tc, i) => {
                 const rankColor =
                   i === 0
-                    ? "text-[var(--color-warning)]"
+                    ? "text-warning"
                     : i === 1
                     ? "text-foreground/70"
                     : i === 2
-                    ? "text-[var(--color-warning)]/60"
+                    ? "text-warning/60"
                     : "text-muted-foreground";
                 const rankPrefix = i === 0 ? "\u2605 " : i === 1 ? "\u2605 " : i === 2 ? "\u2605 " : "";
                 return (
