@@ -38,12 +38,9 @@
   --surface-2: #f2f2f0;
   --ink: #16181c;
   --dim: #565a61;
-  /* spec faint #888C93 fails AA on surface-2; nudged to clear ≥3:1 everywhere */
   --faint: #71757c;
   --line: rgba(0, 0, 0, 0.09);
   --line-2: rgba(0, 0, 0, 0.15);
-  /* spec accent #0E7C5A is AA-large only; deepened a hair to #0C7252 so accent
-     TEXT clears AA-body (≥4.5) on white and on surface-2 */
   --accent: #0c7252;
   --accent-soft: rgba(12, 114, 82, 0.1);
   --accent-ink: #ffffff;
@@ -57,7 +54,6 @@
   --surface-2: #16231d;
   --ink: #e8eee9;
   --dim: #94a49b;
-  /* spec faint #66766D fails AA on surface/surface-2; nudged to clear ≥3:1 */
   --faint: #76867d;
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.15);
@@ -67,6 +63,27 @@
   --shadow: 0 24px 60px -38px rgba(0, 0, 0, 0.82);
   color-scheme: dark;
 }
+/* V3 Light uses a crisp paper ground and assigns each accent one job. */
+.opt-v2.v3-landing[data-pal="light"] {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --ink: #0e0e10;
+  --dim: #444448;
+  --faint: #65656b;
+  --line: rgba(14, 14, 16, 0.1);
+  --line-2: rgba(14, 14, 16, 0.22);
+  --accent: #c38a16;
+  --accent-soft: rgba(195, 138, 22, 0.1);
+  --accent-ink: #0e0e10;
+  --measure: #2457d6;
+  --measure-soft: rgba(36, 87, 214, 0.1);
+  --outcome: #0c7252;
+  --outcome-soft: rgba(12, 114, 82, 0.1);
+  --shadow: 0 28px 65px -45px rgba(14, 14, 16, 0.38);
+  color-scheme: light;
+}
+
 
 /* ── root ────────────────────────────────────────────────────────────────── */
 .opt-v2 {
@@ -104,6 +121,15 @@
   text-rendering: optimizeLegibility;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+.opt-v2 .v2-hero__headline {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(54px, 7vw, 96px);
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 .opt-v2 *,
 .opt-v2 *::before,
@@ -320,10 +346,8 @@
   gap: 14px;
 }
 
-/* ── "joon keeps your hours", the light-of-day control ─────────────────── */
-/* Not a palette picker: a sun-cycle (dawn / day / night) that sets the light
-   joon is working in. Quiet by default, set off from the nav links by a faint
-   rule; the active hour glows in the accent. */
+/* ── two-world palette control ──────────────────────────────────────────── */
+/* Quiet by default, set off from the nav links by a faint rule. */
 .opt-v2 .v2-pal {
   display: inline-flex;
   align-items: center;
@@ -832,28 +856,6 @@
 .opt-v2 .v2-mb__body {
   padding: 22px 22px 4px;
 }
-.opt-v2 .v2-mb__salute {
-  font-weight: 600;
-  font-size: clamp(20px, 2.6vw, 24px);
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  margin: 0 0 4px;
-  min-height: 1.3em;
-}
-.opt-v2 .v2-mb__caret {
-  display: inline-block;
-  width: 2px;
-  height: 1.05em;
-  margin-left: 2px;
-  vertical-align: -0.16em;
-  background: var(--accent);
-  animation: v2-mb-blink 0.9s steps(1) infinite;
-}
-@keyframes v2-mb-blink {
-  50% {
-    opacity: 0;
-  }
-}
 .opt-v2 .v2-mb__opening {
   font-size: 14.5px;
   line-height: 1.55;
@@ -1174,8 +1176,16 @@
   background: var(--ink);
 }
 .opt-v2 .v2-hf__mark--held {
+  background: var(--faint);
+  border: 1px dashed transparent;
+  border-radius: 2px;
+  transition: background 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.opt-v2 .v2-hf__mark--held.is-separated {
   background: transparent;
-  border: 1px dashed var(--faint);
+  border-color: var(--faint);
   border-radius: 50%;
 }
 .opt-v2 .v2-hf__mark--sealed {
@@ -1317,6 +1327,13 @@
   text-transform: uppercase;
   color: var(--faint);
 }
+.opt-v2 .v2-bill__principle {
+  margin: 0;
+  color: var(--dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 .opt-v2 .v2-bill__meta {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1396,6 +1413,7 @@
 }
 /* the proven lift, the single bold beat; the only place accent runs large */
 .opt-v2 .v2-bill__row--lift {
+  grid-template-columns: 22px minmax(0, 1fr);
   margin-inline: -24px;
   padding: 20px 24px 18px;
   background: var(--accent-soft);
@@ -1410,10 +1428,26 @@
 .opt-v2 .v2-bill__row--lift .v2-bill__note {
   color: var(--dim);
 }
-.opt-v2 .v2-bill__amt--lift {
-  font-size: 25px;
-  font-weight: 700;
+.opt-v2 .v2-bill__lift-copy {
+  display: block;
+  min-width: 0;
+}
+.opt-v2 .v2-bill__lift-copy > strong {
+  display: block;
+  font-size: clamp(17px, 1.7vw, 22px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.opt-v2 .v2-bill__lift-line {
+  display: block;
+  width: fit-content;
+  margin-top: 18px;
+  padding-top: 11px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent);
+  font-size: clamp(12px, 1.2vw, 15px);
+  font-weight: 700;
+  line-height: 1.35;
 }
 .opt-v2 .v2-bill__row--fee .v2-bill__sign,
 .opt-v2 .v2-bill__amt--fee {
@@ -2146,9 +2180,6 @@
     transition-duration: 0.001ms !important;
   }
   .opt-v2 .v2-blip {
-    animation: none !important;
-  }
-  .opt-v2 .v2-mb__caret {
     animation: none !important;
   }
   /* holdout: worked marks resolve warm (ink), held marks read as the cold gap;

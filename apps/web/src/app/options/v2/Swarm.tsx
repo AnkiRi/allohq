@@ -15,7 +15,7 @@ import { useReducedMotion } from "framer-motion";
 /*                                                                     */
 /* RE-THEMED for v2: colours are read from the live .opt-v2 palette    */
 /* tokens (--ink / --accent / --faint), so the field re-themes across  */
-/* drenched / light / dark, ink/accent marks on white in LIGHT,       */
+/* drenched and light, with all marks driven by palette tokens,       */
 /* never neon-on-black baked in.                                       */
 /*                                                                     */
 /* Continuous pointer + animation values live in refs + one rAF loop,  */
@@ -317,8 +317,8 @@ export function SwarmField() {
     let raf = 0;
     let last = performance.now();
     let cycleT = 0;
-    const HOLD = 3.4;
-    const MORPH = 1.5;
+    const HOLD = 2.2;
+    const MORPH = 1.1;
     let morphing = false;
     let lastLabelIdx = -1;
 

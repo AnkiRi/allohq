@@ -10,6 +10,7 @@ import { KineticHeadline } from "./Kinetic";
 import { HoldoutField } from "./Holdout";
 import { SwarmField } from "./Swarm";
 import { MorningBrief } from "./Brief";
+import { BillStatement } from "./Bill";
 import {
   DayRail,
   SkyWash,
@@ -19,6 +20,9 @@ import {
   Rise,
   ConsoleClock,
 } from "./Clock";
+import { DecisionMarquee, CustomerStories } from "../v3-landing/V3Sections";
+import { ChannelsStrip, FormsSection, JourneySection, SharperDecisions } from "../v3-landing/StaticSections";
+import { CrmCapture } from "../v3-landing/CrmCapture";
 
 export const metadata: Metadata = {
   title: "joon · one marketer for every customer",
@@ -37,17 +41,20 @@ export const metadata: Metadata = {
 const PAL_INIT = `
 (function(){
   try {
-    var ok = function(p){ return p==="drenched"||p==="light"||p==="dark"; };
+    var sc = document.currentScript;
+    var el = (sc && sc.parentElement) || document.querySelector(".opt-v2");
+    var allowPaper = !!(el && el.classList.contains("v3-landing"));
+    var ok = function(p){ return allowPaper
+      ? p==="drenched"||p==="light"
+      : p==="drenched"||p==="light"||p==="dark"; };
     var pal = null;
     var q = new URLSearchParams(location.search).get("pal");
-    if (ok(q)) { pal = q; }
+    if (q !== null) { pal = ok(q) ? q : "drenched"; }
     else {
       var s = localStorage.getItem("allo-theme");
       if (ok(s)) pal = s;
     }
     if (!pal) return;
-    var sc = document.currentScript;
-    var el = (sc && sc.parentElement) || document.querySelector(".opt-v2");
     if (el) el.setAttribute("data-pal", pal);
   } catch (e) {}
 })();
@@ -59,7 +66,7 @@ const signUp = "/sign-up";
 const signIn = "/sign-in";
 
 type PalId = "drenched" | "light" | "dark";
-function isPal(v: unknown): v is PalId {
+function isLegacyPal(v: unknown): v is "drenched" | "light" | "dark" {
   return v === "drenched" || v === "light" || v === "dark";
 }
 
@@ -79,12 +86,18 @@ function isPal(v: unknown): v is PalId {
 export function V2Landing({
   showBanner = true,
   initialPal = "drenched",
+  enhanced = false,
+  crmFormId = null,
+  crmConfigured = false,
 }: {
   showBanner?: boolean;
   initialPal?: PalId;
+  enhanced?: boolean;
+  crmFormId?: string | null;
+  crmConfigured?: boolean;
 }) {
   return (
-    <div className="opt-v2" data-pal={initialPal} suppressHydrationWarning>
+    <div className={`opt-v2${enhanced ? " v3-landing" : ""}`} data-pal={initialPal} suppressHydrationWarning>
       {/* No-FOUC: resolve ?pal= / stored palette synchronously, before paint.
           The script mutates data-pal before hydration, so this element's
           attributes legitimately differ server vs client, suppress the warning
@@ -107,7 +120,7 @@ export function V2Landing({
       {showBanner && (
         <div className="v2-banner" role="note">
           <span className="v2-banner__label mono">
-            DESIGN OPTION · synthesis, best elements, three palettes
+            DESIGN OPTION · synthesis, two palettes
           </span>
           <Link className="v2-banner__back mono" href="/options">
             ← all options
@@ -130,7 +143,7 @@ export function V2Landing({
               <a href="#how">how it works</a>
             </nav>
             <div className="v2-nav__right">
-              <PaletteSwitcher />
+              <PaletteSwitcher enhanced={enhanced} />
               <a className="v2-btn v2-btn--primary" href={signUp}>
                 Start free
               </a>
@@ -146,13 +159,13 @@ export function V2Landing({
               <div className="v2-hero__lead">
                 <p className="v2-hero__stance mono">
                   <span className="v2-hero__stance-dot" aria-hidden="true" />
-                  grow by sending less · built for commerce, from india
+                  {enhanced ? "Shopify email · approval first" : "grow by sending less · built for commerce, from india"}
                 </p>
-                <KineticHeadline />
+                {enhanced ? <h1 className="v2-hero__headline">The email tool that gets paid to send less.</h1> : <KineticHeadline />}
                 <p className="v2-hero__sub">
-                  joon connects to Shopify, learns your brand, and helps you send
-                  fewer, better emails—with an explicit approval before anything
-                  leaves and a held-out control to measure what followed.
+                  {enhanced
+                    ? "Joon connects to Shopify, learns your brand and sends fewer, better emails. You approve every send, and a held-out control measures what changed."
+                    : "joon connects to Shopify, learns your brand, and helps you send fewer, better emails—with an explicit approval before anything leaves and a held-out control to measure what followed."}
                 </p>
                 <div className="v2-hero__cta">
                   <a className="v2-btn v2-btn--primary v2-btn--lg" href={signUp}>
@@ -212,11 +225,14 @@ export function V2Landing({
             </div>
           </section>
 
+          {enhanced && <DecisionMarquee />}
+          {enhanced && <JourneySection />}
+
           {/* ── 3 · MORNING BRIEF, HALF page, visual-LEFT ─────────── */}
           <section className="v2-section" id="brief">
             <div className="v2-wrap v2-half v2-half--art-left">
               <Rise className="v2-half__art">
-                <MorningBrief />
+                <MorningBrief controlCount={enhanced ? 28 : 22} />
               </Rise>
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">the morning brief</p>
@@ -239,15 +255,14 @@ export function V2Landing({
           <section className="v2-section v2-section--alt">
             <div className="v2-wrap v2-half v2-half--art-right">
               <Rise className="v2-half__copy">
-                <p className="v2-eyebrow mono">one marketer for every customer</p>
+                <p className="v2-eyebrow mono">{enhanced ? "every customer, a different email decision" : "one marketer for every customer"}</p>
                 <h2 className="v2-section__h">
                   4,820 customers. <em>Not one undifferentiated blast.</em>
                 </h2>
                 <div className="v2-attend__beat">
                   <p className="v2-section__lede">
                     A human marketer can only truly know a handful of customers, so
-                    everyone else gets the same blast. joon knows each one, and reaches
-                    each person from the evidence the store already has:
+                    everyone else gets the same blast. joon knows each one, and {enhanced ? "decides whether an email is useful from" : "reaches each person from"} the evidence the store already has:
                   </p>
                   <ul className="v2-attend__learns">
                     <li>who they are</li>
@@ -276,7 +291,7 @@ export function V2Landing({
                 <p className="v2-section__lede">
                   Blast your whole list and your best customers learn to mute, archive and
                   unsubscribe, until the audience you paid to build quietly stops opening.
-                  joon reaches each customer when it matters to them, and holds back when it
+                  joon {enhanced ? "sends email when it can help" : "reaches each customer when it matters to them"}, and holds back when it
                   doesn&rsquo;t, so everyone feels looked after and no one feels spammed.
                 </p>
               </div>
@@ -291,7 +306,7 @@ export function V2Landing({
             <div className="v2-wrap v2-half v2-half--art-left v2-half--wide-art">
               <Rise className="v2-half__art">
                 <div className="v2-proof-card">
-                  <HoldoutField />
+                  <HoldoutField controlCount={enhanced ? 28 : 22} />
                 </div>
               </Rise>
               <Rise className="v2-half__copy">
@@ -301,11 +316,12 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   Reaching the right customer at the right moment grows revenue without
-                  adding sends. And it isn&rsquo;t a guess: on every campaign joon holds
+                  adding sends. And it isn&rsquo;t a guess: {enhanced ? "on every campaign big enough to measure" : "on every campaign"} joon holds
                   a few back, matched on past spend and left untouched, so the lift is
                   measured against that control, never claimed.
                 </p>
                 <p className="v2-half__aside">
+                  {enhanced && <><strong>Holdouts are not a setting.</strong>{" "}</>}
                   Holdouts are one-way: you can&rsquo;t run a control on history.
                   Every campaign that runs without one loses that proof forever.
                 </p>
@@ -313,13 +329,35 @@ export function V2Landing({
             </div>
           </section>
 
+          {enhanced && <CustomerStories />}
+
+          {enhanced && <section className="v2-section v2-founder v3-founder-note" aria-label="Founder">
+            <div className="v2-wrap">
+              <Rise className="v2-founder__pane">
+                <div className="v2-founder__head mono">
+                  // founder · field note
+                </div>
+                <blockquote className="v2-founder__quote">
+                  At Zymrat, the moment I stopped writing every email myself was
+                  the moment retention died.{" "}
+                  <span className="v2-accent">
+                    joon would have given me back my Sundays.
+                  </span>
+                </blockquote>
+                <figcaption className="v2-founder__by mono">
+                  <b>Ujjawal Asthana</b> · ex-founder, Zymrat
+                </figcaption>
+              </Rise>
+            </div>
+          </section>}
+
           {/* ── 6 · ON THE CLOCK, full, scroll-scrub day rail ─────── */}
           <section className="v2-section v2-section--alt v2-day" id="day">
             <div className="v2-wrap">
               <Rise className="v2-section__head v2-section__head--center">
                 <p className="v2-eyebrow mono">a day, on the clock</p>
                 <h2 className="v2-section__h">
-                  One operator, attending all day. <em>Each move at its hour.</em>
+                  {enhanced ? <>A day of decisions. <em>Each one at its hour.</em></> : <>One operator, attending all day. <em>Each move at its hour.</em></>}
                 </h2>
                 <p className="v2-section__lede">
                   One customer at a time, each decision posting at the
@@ -447,11 +485,11 @@ export function V2Landing({
                           <p className="v2-event__detail">
                             187 lapsed buyers included in an email campaign,
                             with{" "}
-                            <span className="v2-noticed">22 held back</span> as a
+                            <span className="v2-noticed">{enhanced ? 28 : 22} held back</span> as a
                             control, so the lift is proven, not claimed.
                           </p>
                           <p className="v2-event__meta v2-event__meta--control mono">
-                            held back 22 as control · lift measured
+                            held back {enhanced ? 28 : 22} as control · lift measured
                           </p>
                         </div>
                       </div>
@@ -471,7 +509,7 @@ export function V2Landing({
                             midnight.
                           </h3>
                           <p className="v2-event__detail">
-                            Not at 9am. joon left the blast alone and writes him
+                            Not at 9am. joon left the blast alone and {enhanced ? "sends the email" : "writes him"}
                             when he&rsquo;s actually reading.
                           </p>
                           <p className="v2-event__meta mono">
@@ -486,25 +524,28 @@ export function V2Landing({
             </DayRail>
           </section>
 
+          {enhanced && <SharperDecisions />}
+          {enhanced && <FormsSection />}
+
           {/* ── 7 · FREE V1 ───────────────────────────────────────── */}
           <section className="v2-section" id="bill">
             <div className="v2-wrap v2-half v2-half--art-right v2-half--wide-art">
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">free public v1</p>
                 <h2 className="v2-section__h">
-                  Start with the ledger. <em>Pay nothing.</em>
+                  {enhanced ? <>Free in v1. <em>Never per message.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
                 </h2>
                 <p className="v2-section__lede">
-                  Joon is free at launch. There is no per-email charge and no
-                  performance fee in v1. We are earning the right to price the
-                  decision layer only after real holdout evidence exists.
+                  {enhanced
+                    ? "No subscription and no per-email charge. When we do charge, it will be a share of the lift the held-out group proves, and nothing else. Not your revenue. Not your list size. Not your volume."
+                    : "Joon is free at launch. There is no per-email charge and no performance fee in v1. We are earning the right to price the decision layer only after real holdout evidence exists."}
                 </p>
                 <p className="v2-half__aside mono">
                   free plan · email only · merchant approval required
                 </p>
               </Rise>
               <Rise className="v2-half__art">
-                <div className="v2-bill" aria-label="Joon public v1 pricing">
+                {enhanced ? <BillStatement /> : <div className="v2-bill" aria-label="Joon public v1 pricing">
                   <div className="v2-bill__head">
                     <div className="v2-bill__masthead">
                       <span className="v2-bill__mark">joon</span>
@@ -525,10 +566,12 @@ export function V2Landing({
                     Delivery-provider costs, if any, remain between the merchant
                     and their selected provider.
                   </p>
-                </div>
+                </div>}
               </Rise>
             </div>
           </section>
+
+          {enhanced && <ChannelsStrip />}
 
           {/* ── 8 · HOW IT WORKS, connect / learn / attend cards ──── */}
           <section className="v2-section v2-section--alt" id="how">
@@ -558,7 +601,7 @@ export function V2Landing({
                   <span className="v2-step__k mono">$ joon learn</span>
                   <h3 className="v2-step__h">It holds out a control first.</h3>
                   <p className="v2-step__p">
-                    From the 187, joon holds back <strong>22</strong>, matched on
+                    From the 187, joon holds back <strong>{enhanced ? 28 : 22}</strong>, matched on
                     past spend, and leaves them untouched. Everything next is
                     measured against them, proven, not assumed.
                   </p>
@@ -569,7 +612,7 @@ export function V2Landing({
                   <p className="v2-step__p">
                     joon drafts <strong>3</strong> win-back variants in your
                     voice, explains the evidence before you approve, and keeps
-                    <strong> 22</strong> customers silent as a control.
+                    <strong> {enhanced ? 28 : 22}</strong> customers silent as a control.
                   </p>
                 </Rise>
               </ol>
@@ -592,7 +635,7 @@ export function V2Landing({
                       </span>
                       <span className="v2-consequence__v">₹1.2L recovered</span>
                       <span className="v2-consequence__d">
-                        lift vs the 22 held-back buyers
+                        lift vs the {enhanced ? 28 : 22} held-back buyers
                       </span>
                     </div>
                     <div className="v2-consequence__cell">
@@ -618,7 +661,7 @@ export function V2Landing({
           </section>
 
           {/* ── 9 · POSITIONING band, centered ────────────────────── */}
-          <section className="v2-position" aria-label="Positioning">
+          {!enhanced && <section className="v2-position" aria-label="Positioning">
             <div className="v2-wrap v2-position__inner">
               <Rise>
                 <p className="v2-position__eyebrow mono">what joon is</p>
@@ -631,10 +674,10 @@ export function V2Landing({
                 </p>
               </Rise>
             </div>
-          </section>
+          </section>}
 
           {/* ── 10 · FOUNDER quote ─────────────────────────────────── */}
-          <section className="v2-section v2-founder" aria-label="Founder">
+          {!enhanced && <section className="v2-section v2-founder" aria-label="Founder">
             <div className="v2-wrap">
               <Rise className="v2-founder__pane">
                 <div className="v2-founder__head mono">
@@ -652,10 +695,10 @@ export function V2Landing({
                 </figcaption>
               </Rise>
             </div>
-          </section>
+          </section>}
 
           {/* ── 11 · FOUNDING cohort ───────────────────────────────── */}
-          <section className="v2-section v2-section--alt" aria-labelledby="cohort-h">
+          {!enhanced && <section className="v2-section v2-section--alt" aria-labelledby="cohort-h">
             <div className="v2-wrap">
               <Rise className="v2-cohort">
                 <div className="v2-cohort__copy">
@@ -689,31 +732,36 @@ export function V2Landing({
                 </div>
               </Rise>
             </div>
-          </section>
+          </section>}
 
           {/* ── 12 · FINAL CTA, command prompt redux ──────────────── */}
-          <section className="v2-final" aria-label="Get started">
+          <section className="v2-final" id="get-started" aria-label="Get started">
             <div className="v2-wrap">
               <Rise>
                 <p className="v2-final__prompt mono">
                   <span className="v2-accent">joon ❯</span> deploy on my store
                 </p>
                 <h2 className="v2-final__h">
-                  Try joon with your store.{" "}
-                  <em>Free in public v1.</em>
+                  Try joon with your store.
                 </h2>
                 <p className="v2-final__p">
-                  Connect Shopify in one click. joon holds out its first control
+                  Connect Shopify in one click. joon{" "}
+                  {enhanced
+                    ? "holds out a control when the campaign is big enough to measure"
+                    : "holds out its first control"}{" "}
                   and writes your first campaign before you finish your coffee.
                 </p>
                 <div className="v2-final__cta">
                   <a className="v2-btn v2-btn--primary v2-btn--lg" href={signUp}>
                     Start free <span aria-hidden="true">→</span>
                   </a>
-                  <a className="v2-final__signin mono" href={signIn}>
-                    or sign in
-                  </a>
+                  {!enhanced && <a className="v2-final__signin mono" href={signIn}>or sign in</a>}
                 </div>
+                {enhanced && crmFormId && <div className="v3-final__secondary">
+                  <p className="v3-final__secondary-label mono">Not ready to install?</p>
+                  <h3>Tell us your store and we will show you what Joon would do with it.</h3>
+                  <CrmCapture formId={crmFormId} configured={crmConfigured} />
+                </div>}
               </Rise>
             </div>
           </section>
@@ -722,7 +770,7 @@ export function V2Landing({
         {/* ── 13 · FOOTER ────────────────────────────────────────── */}
         <footer className="v2-footer">
           <div className="v2-wrap v2-footer__inner mono">
-            <span className="v2-footer__brand">hand-built in bangalore</span>
+            <span className="v2-footer__brand">{enhanced ? "Built for commerce, from India" : "hand-built in bangalore"}</span>
             <span className="v2-footer__links">
               <Link href="/privacy">privacy</Link>
               <Link href="/terms">terms</Link>
@@ -748,7 +796,7 @@ export default async function V2Page({
   // still handled by the no-FOUC script + the Switcher's mount effect.
   const sp = await searchParams;
   const raw = Array.isArray(sp?.pal) ? sp.pal[0] : sp?.pal;
-  const initialPal: PalId = isPal(raw) ? raw : "drenched";
+  const initialPal: PalId = isLegacyPal(raw) ? raw : "drenched";
 
   return <V2Landing showBanner initialPal={initialPal} />;
 }

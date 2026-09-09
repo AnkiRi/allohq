@@ -1,71 +1,76 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sunrise, Sun, Moon } from "lucide-react";
+import { Sunrise, Sun, Moon, Palette } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* "joon keeps your hours", not a palette picker, a sun-cycle that    */
-/* sets the LIGHT joon is working in: Dawn (the blue hour, drafts      */
-/* before sunrise), Day (approvals over coffee), Night (the late       */
-/* shift). It reads as comfort/context, not a design choice.           */
-/* Persists to localStorage('allo-theme'), the SAME key the app's     */
+/* V3 has two public worlds: paper-on-cobalt Drenched and crisp Light. */
+/* Persists to localStorage('allo-theme'), the SAME key the app's      */
 /* ThemeProvider reads, and mirrors data-theme + .dark on <html>, so  */
-/* the choice carries landing <-> app live. SSR default is Dawn        */
-/* (drenched); a no-FOUC inline script in page.tsx sets it pre-paint.  */
+/* the choice carries landing <-> app live. SSR default is drenched.   */
+/* A no-FOUC inline script in page.tsx sets it before paint.           */
 /* ------------------------------------------------------------------ */
 
-const PALS = [
+const V3_PALS = [
+  { id: "drenched", label: "Drenched", Icon: Sunrise },
+  { id: "light", label: "Light", Icon: Palette },
+] as const;
+const V2_PALS = [
   { id: "drenched", label: "Dawn", Icon: Sunrise },
   { id: "light", label: "Day", Icon: Sun },
   { id: "dark", label: "Night", Icon: Moon },
 ] as const;
 
-type PalId = (typeof PALS)[number]["id"];
+type V3PalId = (typeof V3_PALS)[number]["id"];
+type V2PalId = (typeof V2_PALS)[number]["id"];
+type PalId = V3PalId | V2PalId;
 
 // Shared with the app's ThemeProvider so the theme choice carries across.
 const STORE_KEY = "allo-theme";
 
-function isPal(v: string | null): v is PalId {
-  return v === "drenched" || v === "light" || v === "dark";
+function isAllowedPal(v: string | null, enhanced: boolean): v is PalId {
+  return enhanced
+    ? v === "drenched" || v === "light"
+    : v === "drenched" || v === "light" || v === "dark";
 }
 
 // Resolve the active palette the same way the no-FOUC script does:
 // ?pal= query → stored localStorage → the attribute already on the root →
 // default. React hydration can reset the SSR data-pal back to "drenched", so
 // the client must re-resolve here and re-apply, or a linked ?pal= would be lost.
-function resolvePal(): PalId {
+function resolvePal(enhanced: boolean): PalId {
   if (typeof window === "undefined") return "drenched";
   try {
     const q = new URLSearchParams(window.location.search).get("pal");
-    if (isPal(q)) return q;
+    if (q !== null) return isAllowedPal(q, enhanced) ? q : "drenched";
   } catch {
     /* ignore */
   }
   try {
     const v = localStorage.getItem(STORE_KEY);
-    if (isPal(v)) return v;
+    if (isAllowedPal(v, enhanced)) return v;
   } catch {
     /* ignore */
   }
   const attr = document.querySelector<HTMLElement>(".opt-v2")?.dataset.pal;
-  if (isPal(attr ?? null)) return attr as PalId;
+  if (isAllowedPal(attr ?? null, enhanced)) return attr as PalId;
   return "drenched";
 }
 
-export function PaletteSwitcher() {
+export function PaletteSwitcher({ enhanced = false }: { enhanced?: boolean }) {
   // Mirror whatever the no-FOUC script already put on the root so the active
   // chip matches the rendered palette on first paint.
   const [pal, setPal] = useState<PalId>("drenched");
 
   useEffect(() => {
-    const resolved = resolvePal();
+    const resolved = resolvePal(enhanced);
     setPal(resolved);
     const root = document.querySelector<HTMLElement>(".opt-v2");
     // hydration may have reset the attribute to the SSR default, re-apply.
     if (root && root.dataset.pal !== resolved) root.dataset.pal = resolved;
-  }, []);
+  }, [enhanced]);
 
-  const choose = (id: PalId) => {
+  const choose = (id: V3PalId | V2PalId) => {
     setPal(id);
     const root = document.querySelector<HTMLElement>(".opt-v2");
     if (root) root.dataset.pal = id;
@@ -81,11 +86,11 @@ export function PaletteSwitcher() {
     }
   };
 
-  // A discreet sun-cycle, match joon to the light you're working in. Reads as
-  // comfort/context (dawn/day/night), not a "pick your design" widget.
+  // A discreet two-world switch: the immersive cobalt default and the crisp
+  // evidence-led alternative.
   return (
     <div className="v2-pal" role="group" aria-label="Set joon to your hours">
-      {PALS.map((p) => (
+      {(enhanced ? V3_PALS : V2_PALS).map((p) => (
         <button
           key={p.id}
           type="button"

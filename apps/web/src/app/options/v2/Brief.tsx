@@ -5,51 +5,21 @@ import {
   useReducedMotion,
   useInView,
 } from "framer-motion";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 /* ------------------------------------------------------------------ */
-/* THE MORNING BRIEF, reused from frontend-brief/ (Salutation +       */
-/* BriefLine + the approvable .mb-item structure), adapted into v2 and */
+/* THE MORNING BRIEF, reused from frontend-brief/ (BriefLine + the     */
+/* approvable .mb-item structure), adapted into v2 and                 */
 /* re-themed via the v2 colour tokens (its own .v2-mb__* classes).     */
 /*                                                                     */
-/* "Good morning, Ujjawal, " types itself once, then each approvable   */
-/* line settles in sequence, as if joon is composing the note while    */
-/* you watch. CONTENT is always rendered; motion only enhances an      */
-/* already-readable default, JS-off / reduced-motion ships the whole  */
+/* Each approvable line settles in sequence, as if joon is composing   */
+/* the note while you watch. CONTENT is always rendered; motion only  */
+/* enhances an already-readable default; JS-off / reduced-motion      */
+/* ships the whole                                                    */
 /* brief readable and every Approve / Hold control usable.             */
 /* ------------------------------------------------------------------ */
 
 const SETTLE: [number, number, number, number] = [0.16, 1, 0.3, 1];
-
-function Salutation({ text }: { text: string }) {
-  const reduce = useReducedMotion();
-  const ref = useRef<HTMLHeadingElement>(null);
-  const inView = useInView(ref, { once: true, margin: "0px" });
-  const [shown, setShown] = useState(reduce ? text.length : 0);
-
-  useEffect(() => {
-    if (reduce) {
-      setShown(text.length);
-      return;
-    }
-    if (!inView) return;
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setShown(i);
-      if (i >= text.length) window.clearInterval(id);
-    }, 40);
-    return () => window.clearInterval(id);
-  }, [inView, reduce, text]);
-
-  const done = shown >= text.length;
-  return (
-    <h3 ref={ref} className="v2-mb__salute" aria-label={text}>
-      <span aria-hidden="true">{text.slice(0, shown)}</span>
-      {!done && !reduce && <span className="v2-mb__caret" aria-hidden="true" />}
-    </h3>
-  );
-}
 
 function BriefLine({
   index = 0,
@@ -60,13 +30,13 @@ function BriefLine({
 }) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLLIElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-8% 0px" });
+  const inView = useInView(ref, { once: false, margin: "-25% 0px" });
   return (
     <motion.li
       ref={ref}
       className="v2-mb__item"
       initial={reduce ? false : { opacity: 0, y: 10 }}
-      animate={reduce ? undefined : inView ? { opacity: 1, y: 0 } : undefined}
+      animate={reduce ? undefined : inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
       transition={{ duration: 0.55, ease: SETTLE, delay: 0.16 * index }}
     >
       {children}
@@ -74,7 +44,7 @@ function BriefLine({
   );
 }
 
-export function MorningBrief() {
+export function MorningBrief({ controlCount = 22 }: { controlCount?: number }) {
   return (
     <article className="v2-mb" aria-label="Your morning brief from joon">
       <div className="v2-mb__head">
@@ -83,7 +53,6 @@ export function MorningBrief() {
       </div>
 
       <div className="v2-mb__body">
-        <Salutation text="Good morning, Ujjawal." />
         <p className="v2-mb__opening">
           Quiet night. I scanned all <span className="v2-mb__fig">4,820</span> of
           your customers. Here&rsquo;s what I lined up. Nothing&rsquo;s
@@ -133,7 +102,7 @@ export function MorningBrief() {
             <span className="v2-mb__item-inner is-control">
               <p className="v2-mb__text">
                 The 9am blast, left alone. I held back{" "}
-                <span className="v2-mb__fig">22</span> as a control, so the lift
+                <span className="v2-mb__fig">{controlCount}</span> as a control, so the lift
                 is proven, not claimed.
                 <span className="v2-mb__sub">
                   Holdouts are one-way. You can&rsquo;t measure this after the

@@ -201,7 +201,7 @@ export function Rise({
       className={className}
       initial={reduce ? false : { opacity: 0, y: 18 }}
       whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-8% 0px -6% 0px" }}
+      viewport={{ once: false, margin: "-25% 0px" }}
       transition={{ duration: 0.7, ease: SETTLE, delay }}
     >
       {children}

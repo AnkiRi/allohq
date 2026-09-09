@@ -21,22 +21,19 @@ import { motion, useInView, useReducedMotion, animate } from "framer-motion";
 /* ------------------------------------------------------------------ */
 
 const TOTAL = 187;
-const CONTROL_N = 22;
-const TREATMENT_N = TOTAL - CONTROL_N; // 165
 
 // Resolved, consistent demo figures (per the shared content kit).
 const CONTROL_PER = 138; // ₹ recovered per held-back customer (would-have-anyway)
 const TREATMENT_PER = 865; // ₹ recovered per worked customer
-const LIFT_TOTAL = 119_955; // (865 − 138) × 165 ≈ the ₹1.2L recovery story
 
 function inr(n: number) {
   return n.toLocaleString("en-IN");
 }
 
-function pickControlIndices(): Set<number> {
+function pickControlIndices(controlCount: number): Set<number> {
   const picks = new Set<number>();
   let seed = 187 * 991;
-  while (picks.size < CONTROL_N) {
+  while (picks.size < controlCount) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
     picks.add(seed % TOTAL);
   }
@@ -62,7 +59,10 @@ function CountUp({
       setVal(to);
       return;
     }
-    if (!start) return;
+    if (!start) {
+      setVal(0);
+      return;
+    }
     const controls = animate(0, to, {
       duration,
       ease: [0.16, 1, 0.3, 1],
@@ -78,21 +78,15 @@ function CountUp({
   );
 }
 
-export function HoldoutField() {
+export function HoldoutField({ controlCount = 22 }: { controlCount?: number }) {
   const reduced = useReducedMotion() ?? false;
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-10% 0px -10% 0px" });
+  const inView = useInView(ref, { once: false, margin: "-25% 0px" });
+  const start = reduced ? true : inView;
 
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    if (reduced) return;
-    const t = setTimeout(() => setSettled(true), 2600);
-    return () => clearTimeout(t);
-  }, [reduced]);
-
-  const start = reduced ? true : inView || settled;
-
-  const controlSet = useMemo(() => pickControlIndices(), []);
+  const treatmentCount = TOTAL - controlCount;
+  const liftTotal = (TREATMENT_PER - CONTROL_PER) * treatmentCount;
+  const controlSet = useMemo(() => pickControlIndices(controlCount), [controlCount]);
   const marks = useMemo(
     () =>
       Array.from({ length: TOTAL }, (_, i) => ({
@@ -125,12 +119,12 @@ export function HoldoutField() {
                 return (
                   <motion.span
                     key={m.i}
-                    className="v2-hf__mark v2-hf__mark--held"
-                    initial={reduced ? false : { opacity: 1, scale: 1 }}
-                    animate={start ? { opacity: 0, scale: 0.4 } : undefined}
+                    className={`v2-hf__mark v2-hf__mark--held${start ? " is-separated" : ""}`}
+                    initial={false}
+                    animate={start ? { opacity: 0, x: 42, scale: 0.7 } : { opacity: 1, x: 0, scale: 1 }}
                     transition={{
-                      duration: reduced ? 0 : 0.5,
-                      ease: "easeInOut",
+                      duration: reduced ? 0 : 0.7,
+                      ease: [0.16, 1, 0.3, 1],
                       delay: reduced ? 0 : 0.15 + (m.i % 11) * 0.012,
                     }}
                   />
@@ -147,8 +141,8 @@ export function HoldoutField() {
                   className={`v2-hf__mark v2-hf__mark--worked${
                     start ? " is-warm" : ""
                   }`}
-                  initial={reduced ? false : { opacity: 0.5 }}
-                  animate={start ? { opacity: 1 } : undefined}
+                  initial={false}
+                  animate={start ? { opacity: 1 } : { opacity: 0.5 }}
                   transition={{
                     duration: reduced ? 0 : 0.55,
                     ease: "easeOut",
@@ -169,20 +163,20 @@ export function HoldoutField() {
         <motion.div
           className="v2-hf__sealed"
           aria-hidden="true"
-          initial={reduced ? false : { opacity: 0.25 }}
-          animate={start ? { opacity: 1 } : undefined}
+          initial={false}
+          animate={start ? { opacity: 1 } : { opacity: 0.25 }}
           transition={{ duration: reduced ? 0 : 0.6, delay: reduced ? 0 : 0.55 }}
         >
           <span className="v2-hf__panel-tag v2-hf__panel-tag--sealed mono">
             Held out
           </span>
           <div className="v2-hf__grid v2-hf__grid--sealed">
-            {Array.from({ length: CONTROL_N }, (_, k) => (
+            {Array.from({ length: controlCount }, (_, k) => (
               <motion.span
                 key={k}
                 className="v2-hf__mark v2-hf__mark--sealed"
-                initial={reduced ? false : { opacity: 0, y: 6 }}
-                animate={start ? { opacity: 1, y: 0 } : undefined}
+                initial={false}
+                animate={start ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: -32, scale: 0.72 }}
                 transition={{
                   duration: reduced ? 0 : 0.4,
                   delay: reduced ? 0 : 0.6 + k * 0.02,
@@ -199,13 +193,13 @@ export function HoldoutField() {
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
             <span className="v2-hf__swatch v2-hf__swatch--worked" aria-hidden="true" />
-            Worked · {TREATMENT_N} buyers
+            Worked · {treatmentCount} buyers
           </div>
           <div className="v2-hf__track" role="presentation">
             <motion.span
               className="v2-hf__fill v2-hf__fill--worked"
-              initial={reduced ? false : { scaleX: 0 }}
-              animate={start ? { scaleX: 1 } : undefined}
+              initial={false}
+              animate={{ scaleX: start ? 1 : 0 }}
               transition={{
                 duration: reduced ? 0 : 1.1,
                 ease: [0.16, 1, 0.3, 1],
@@ -222,13 +216,13 @@ export function HoldoutField() {
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
             <span className="v2-hf__swatch v2-hf__swatch--held" aria-hidden="true" />
-            Held out · {CONTROL_N} buyers
+            Held out · {controlCount} buyers
           </div>
           <div className="v2-hf__track" role="presentation">
             <motion.span
               className="v2-hf__fill v2-hf__fill--held"
-              initial={reduced ? false : { scaleX: 0 }}
-              animate={start ? { scaleX: controlPct / 100 } : undefined}
+              initial={false}
+              animate={{ scaleX: start ? controlPct / 100 : 0 }}
               transition={{
                 duration: reduced ? 0 : 1.0,
                 ease: [0.16, 1, 0.3, 1],
@@ -244,15 +238,7 @@ export function HoldoutField() {
 
         <div className="v2-hf__gap">
           <div className="v2-hf__gap-k mono">Measured lift · the gap</div>
-          <div className="v2-hf__gap-v mono">
-            <CountUp
-              to={LIFT_TOTAL}
-              reduced={reduced}
-              start={start}
-              prefix="₹"
-              duration={1.5}
-            />
-          </div>
+          <div className="v2-hf__gap-v mono">₹{inr(liftTotal)}</div>
           <p className="v2-hf__gap-sub">
             Recovered above the held-back baseline. The gap is the only thing joon
             bills a performance fee on, never the gross.
