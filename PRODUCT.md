@@ -44,7 +44,7 @@ This differs from blast-oriented lifecycle tools that optimize gross attributed 
 - RFM, category affinity, churn risk estimates, LTV estimates and historical send-time signals are deterministic or heuristic analytics today. They must not be marketed as calibrated probability, trained uplift or cross-brand learning.
 - Personal incremental-lift prediction and cross-brand learning are not live in v1. Their future activation requires the documented training schema, evidence thresholds, privacy boundary and merchant-safe evaluation.
 - Delivery fails closed unless an explicit mode is configured. Sender-domain verification, consent, suppression, complaints, store pause, approval checksum and idempotency are enforced before live delivery.
-- The public v1 plan is free. Billing code is intentionally deferred; future performance pricing is a product decision, not a current operational claim.
+- Early access is free and any invoice is a shadow preview only; Joon makes no billing API calls. The approved future model uses a capped share of non-overlapping, measurement-ready caused revenue, while merchant-requested blasts carry provider postage at cost and Joon absorbs its own sends.
 - Protected customer data is minimized to the approved use case. Email and SMS consent remain separate, double opt-in is market-aware and transactional confirmation is independent of marketing delivery controls.
 
 ## Brand Commitments
