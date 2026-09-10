@@ -688,6 +688,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@allohq/pricing':
+        specifier: workspace:*
+        version: link:../pricing
       '@prisma/client':
         specifier: ^6.3.0
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
@@ -878,6 +881,18 @@ importers:
         version: 22.19.11
       typescript:
         specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/pricing:
+    devDependencies:
+      '@allohq/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7.3
         version: 5.9.3
 
   packages/proactive-outreach:

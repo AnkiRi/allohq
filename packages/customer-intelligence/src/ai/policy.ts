@@ -42,15 +42,15 @@ export interface AIModel {
 // 30k-TPM tier caused a prod 429 storm when it became the fallback. Sonnet 4.6 is
 // the guaranteed-working backstop (your key has it) that every chain degrades to,
 // so a missing Sonnet-5/Haiku-4.5 access can't fall through to a rate-limited model.
-// New Claude prices are best-estimate — verify vs Anthropic pricing (display only).
+// Prices are USD per million tokens and are mirrored in costs.ts for persisted usage rows.
 export const AI_MODELS: AIModel[] = [
   {
     id: "claude-sonnet-5",
     provider: "anthropic",
     label: "Claude Sonnet 5",
     description: "Best quality — Anthropic's most capable model for customer-facing copy",
-    inputCostPerMillion: 3,
-    outputCostPerMillion: 15,
+    inputCostPerMillion: 2,
+    outputCostPerMillion: 10,
     tier: "premium",
   },
   {

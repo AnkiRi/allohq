@@ -20,8 +20,8 @@ export interface ModelCost {
  * still resolve a price.
  */
 export const MODEL_COSTS: Record<string, ModelCost> = {
-  // Current roster (best-estimate Claude pricing — verify vs Anthropic pricing).
-  "claude-sonnet-5": { input: 3, output: 15 },
+  // Current roster (USD per million tokens).
+  "claude-sonnet-5": { input: 2, output: 10 },
   "claude-haiku-4-5-20251001": { input: 1, output: 5 },
   "claude-sonnet-4-6": { input: 3, output: 15 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
