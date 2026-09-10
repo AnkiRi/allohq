@@ -10,7 +10,7 @@ export type AudienceExclusionReason = typeof AUDIENCE_EXCLUSION_REASONS[number];
 
 export interface AudienceResolution {
   requested: number;
-  eligible: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  eligible: Array<{ id: string; email: string; firstName: string | null; lastName: string | null; rfmStratum: string | null }>;
   exclusions: Record<AudienceExclusionReason, number>;
   samples: Partial<Record<AudienceExclusionReason, Array<{ id: string; email: string }>>>;
 }
@@ -86,6 +86,7 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
       where,
       select: {
         id: true, email: true, firstName: true, lastName: true, acceptsMarketing: true,
+        rfmScore: { select: { segment: true } },
         contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
         orders: {
           where: { status: { not: "cancelled" } }, orderBy: { createdAt: "desc" }, take: 1,
@@ -140,7 +141,7 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
     // Quiet hours defer treatment delivery; they do not change eligibility or
     // the frozen randomized arm map.
     if (shouldExcludeGovernorDecision(decision)) { exclude(governorReason(decision.rule), customer); continue; }
-    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName });
+    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName, rfmStratum: customer.rfmScore?.segment ?? null });
   }
   return { requested: customers.length, eligible, exclusions, samples };
 }
@@ -161,6 +162,7 @@ export async function resolveAutomationAudience(automationId: string, now = new 
       where: { storeId: automation.storeId },
       select: {
         id: true, email: true, firstName: true, lastName: true, acceptsMarketing: true,
+        rfmScore: { select: { segment: true } },
         contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
         contactSuppressions: {
           where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
@@ -197,7 +199,7 @@ export async function resolveAutomationAudience(automationId: string, now = new 
       now,
     });
     if (shouldExcludeGovernorDecision(decision)) { exclude(governorReason(decision.rule), customer); continue; }
-    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName });
+    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName, rfmStratum: customer.rfmScore?.segment ?? null });
   }
   return { requested: customers.length, eligible, exclusions, samples };
 }

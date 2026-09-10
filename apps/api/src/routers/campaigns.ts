@@ -5,7 +5,12 @@ import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
 import { DEMO_STORE_DOMAIN, messagingCostFor } from "@allohq/database";
 import { campaignApprovalChecksum, findBannedTerms, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
-import { assignCohortArms, campaignMeasurementPolicy, getOrCreateExperiment } from "@allohq/customer-state";
+import {
+  assignStratifiedCohortArms,
+  campaignMeasurementPolicy,
+  getOrCreateExperiment,
+  holdoutRateFor,
+} from "@allohq/customer-state";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -14,6 +19,32 @@ const redisConnection = {
 };
 
 const emailSendQueue = new Queue("email-send", { connection: redisConnection });
+
+function campaignFamily(proposal: unknown): string {
+  const value = (proposal ?? {}) as { intent?: unknown; discountPercent?: unknown; discountCode?: unknown };
+  const intent = typeof value.intent === "string" && value.intent.trim() ? value.intent.trim() : "broadcast";
+  const discounted = (typeof value.discountPercent === "number" && value.discountPercent > 0)
+    || (typeof value.discountCode === "string" && value.discountCode.trim().length > 0);
+  return `${intent}:${discounted ? "discount" : "full_price"}`;
+}
+
+function planCampaignHoldout(
+  storeId: string,
+  assignmentSeed: string,
+  proposal: unknown,
+  eligible: Array<{ id: string; rfmStratum: string | null }>,
+) {
+  const family = campaignFamily(proposal);
+  // Until the immutable caused-revenue ledger lands, there is deliberately no
+  // evidence adapter here. Missing evidence means the conservative 30% policy.
+  const decision = holdoutRateFor(storeId, family, "all", null);
+  const assignment = assignStratifiedCohortArms({
+    assignmentSeed,
+    customers: eligible.map((customer) => ({ customerId: customer.id, stratum: customer.rfmStratum })),
+    rateForStratum: (stratum) => holdoutRateFor(storeId, family, stratum, null).rate,
+  });
+  return { family, decision, assignment };
+}
 
 export const campaignsRouter = router({
   dryRun: workspaceProcedure
@@ -46,9 +77,20 @@ export const campaignsRouter = router({
         : [];
       const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
       const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
-      const holdoutRate = 0.15;
-      const measurement = campaignMeasurementPolicy(audience.eligible.length, holdoutRate);
-      const control = measurement.control;
+      const previewSeed = `campaign-preview:${campaign.id}`;
+      const holdout = planCampaignHoldout(campaign.storeId, previewSeed, campaign.agentProposal, audience.eligible);
+      const control = Object.values(holdout.assignment.strata).reduce((sum, stratum) => sum + stratum.controlCount, 0);
+      const effectiveRate = audience.eligible.length > 0 ? control / audience.eligible.length : holdout.decision.rate;
+      const measurement = {
+        ...campaignMeasurementPolicy(audience.eligible.length, effectiveRate),
+        control,
+        treatment: audience.eligible.length - control,
+        holdoutRate: effectiveRate,
+        policyRate: holdout.decision.rate,
+        policyReason: holdout.decision.reason,
+        family: holdout.family,
+        strata: holdout.assignment.strata,
+      };
       return {
         providerCalled: false,
         requested: audience.requested,
@@ -345,18 +387,24 @@ export const campaignsRouter = router({
       }
 
       const audience = await resolveCampaignAudience(campaign.id);
+      const family = campaignFamily(campaign.agentProposal);
+      const policy = holdoutRateFor(campaign.storeId, family, "all", null);
       const experiment = await getOrCreateExperiment(campaign.storeId, {
-        label: `campaign:${campaign.id}`,
+        label: `campaign:${campaign.id}:stratified:v1`,
         source: "campaign",
+        family,
         campaignId: campaign.id,
         segmentId: campaign.segmentId ?? null,
         segmentName: campaign.segment?.name ?? null,
-      });
-      const arms = assignCohortArms(experiment, audience.eligible.map((customer) => customer.id));
+      }, policy.rate);
+      const holdout = planCampaignHoldout(campaign.storeId, experiment.assignmentSeed, campaign.agentProposal, audience.eligible);
       const approvedProposal = withCampaignAudienceSnapshot(campaign.agentProposal, audience, new Date(), {
         experimentId: experiment.id,
-        splitRatio: experiment.splitRatio,
-        assignments: Object.fromEntries(arms),
+        splitRatio: policy.rate,
+        assignments: Object.fromEntries(holdout.assignment.arms),
+        policyReason: policy.reason,
+        strata: holdout.assignment.strata,
+        assignmentDetails: holdout.assignment.assignments,
       });
       const approvalChecksum = campaignApprovalChecksum({
         campaignId: campaign.id,

@@ -10,6 +10,14 @@ export interface CampaignAudienceSnapshot {
     experimentId: string;
     splitRatio: number;
     assignments: Record<string, "CONTROL" | "TREATMENT">;
+    policyReason?: string;
+    strata?: Record<string, { customerCount: number; controlCount: number; holdoutRate: number }>;
+    assignmentDetails?: Record<string, {
+      arm: "CONTROL" | "TREATMENT";
+      stratum: string;
+      assignmentStratum: string;
+      holdoutRate: number;
+    }>;
   };
 }
 
@@ -46,6 +54,18 @@ export function campaignAudienceSnapshot(proposal: unknown): CampaignAudienceSna
     const h = snapshot.holdout;
     if (typeof h.experimentId !== "string" || typeof h.splitRatio !== "number" || !h.assignments || typeof h.assignments !== "object") return null;
     if (Object.keys(h.assignments).some((id) => !snapshot.customerIds!.includes(id)) || Object.values(h.assignments).some((arm) => arm !== "CONTROL" && arm !== "TREATMENT")) return null;
+    if (h.assignmentDetails) {
+      if (Object.keys(h.assignmentDetails).some((id) => !snapshot.customerIds!.includes(id))) return null;
+      for (const [id, detail] of Object.entries(h.assignmentDetails)) {
+        if (!detail || typeof detail !== "object") return null;
+        if (detail.arm !== h.assignments[id]
+          || typeof detail.stratum !== "string"
+          || typeof detail.assignmentStratum !== "string"
+          || typeof detail.holdoutRate !== "number"
+          || detail.holdoutRate < 0.10
+          || detail.holdoutRate > 0.30) return null;
+      }
+    }
   }
   return snapshot as CampaignAudienceSnapshot;
 }

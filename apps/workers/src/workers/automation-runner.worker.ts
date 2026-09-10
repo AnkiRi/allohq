@@ -135,7 +135,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             lastOrderAt: customer.rfmScore?.lastOrderAt?.toISOString() ?? null,
             historicalLtv: customer.lifetimeValue?.historicalLtv ?? null,
           },
-          metadata: { withheld: true, reason: "control_group", triggeredBy, executionId },
+          metadata: { withheld: true, reason: "control_group", triggeredBy, executionId, holdoutRate: experiment.splitRatio },
         },
         update: {},
       });
@@ -247,7 +247,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
                 treatmentArm: "TREATMENT",
                 experimentId: experiment.id,
                 error: emailGovCheck.reason,
-                metadata: { rule: emailGovCheck.rule, triggeredBy, executionId, nodeId: node.id } as any,
+                metadata: { rule: emailGovCheck.rule, triggeredBy, executionId, nodeId: node.id, holdoutRate: experiment.splitRatio } as any,
               },
               update: { status: "suppressed", error: emailGovCheck.reason },
             });
@@ -360,7 +360,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
                 nodeIndex: i,
               },
               messageVariantId: (node.config.variantId as string | undefined) ?? templateId,
-              metadata: { triggeredBy, executionId, nodeId: node.id },
+              metadata: { triggeredBy, executionId, nodeId: node.id, holdoutRate: experiment.splitRatio },
             } });
 
           // Render email HTML — brand-styled via the store's BrandKit

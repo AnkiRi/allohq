@@ -35,7 +35,14 @@ export {
   assignCohortArms,
   assignmentValue,
   campaignMeasurementPolicy,
+  holdoutRateFor,
+  assignStratifiedCohortArms,
+  estimateStratifiedCausedRevenue,
 } from "./experiments";
-export type { Arm, CohortDefinition, MeasurementTier, CampaignMeasurementPolicy } from "./experiments";
+export type {
+  Arm, CohortDefinition, MeasurementTier, CampaignMeasurementPolicy,
+  CampaignEvidenceSummary, HoldoutRateDecision, StratifiedCustomer,
+  FrozenStratifiedAssignment, StratifiedAssignmentResult, StratifiedOutcome,
+} from "./experiments";
 export { upliftReadiness } from "./uplift-readiness";
 export type { UpliftTrainingExample, UpliftReadinessTier } from "./uplift-readiness";

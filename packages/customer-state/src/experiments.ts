@@ -17,6 +17,50 @@ import type { Experiment } from "@allohq/database";
 
 export type Arm = "CONTROL" | "TREATMENT";
 
+export const NEW_FAMILY_HOLDOUT_RATE = 0.30;
+export const PROVEN_FAMILY_HOLDOUT_RATE = 0.15;
+export const MIN_HOLDOUT_RATE = 0.10;
+export const MAX_HOLDOUT_RATE = 0.30;
+export const MIN_STRATUM_SIZE = 10;
+export const POOLED_SMALL_STRATUM = "pooled_small";
+
+export interface CampaignEvidenceSummary {
+  /** Evidence must already be filtered to this exact campaign family. */
+  measurementReadyNonOverlappingUnits: number;
+  /** 95% interval for the family's pooled caused revenue. */
+  pooledCiLow: number | null;
+  pooledCiHigh: number | null;
+}
+
+export interface HoldoutRateDecision {
+  rate: number;
+  reason: string;
+  evidenceReady: boolean;
+}
+
+/**
+ * Adaptive campaign policy. This is deliberately pure: the future ledger owns
+ * evidence selection, while missing or incomplete evidence fails safely to the
+ * larger learning holdout.
+ */
+export function holdoutRateFor(
+  _storeId: string,
+  _family: string,
+  _stratum: string,
+  evidence?: CampaignEvidenceSummary | null,
+): HoldoutRateDecision {
+  const evidenceReady = Boolean(
+    evidence
+    && evidence.measurementReadyNonOverlappingUnits >= 3
+    && evidence.pooledCiLow !== null
+    && evidence.pooledCiHigh !== null
+    && (evidence.pooledCiLow > 0 || evidence.pooledCiHigh < 0),
+  );
+  return evidenceReady
+    ? { rate: PROVEN_FAMILY_HOLDOUT_RATE, evidenceReady: true, reason: "proven campaign type - holding back 15% to keep measuring" }
+    : { rate: NEW_FAMILY_HOLDOUT_RATE, evidenceReady: false, reason: "new campaign type - holding back 30% until proven" };
+}
+
 export type MeasurementTier = "empty" | "unmeasured" | "directional" | "measurement_ready";
 export interface CampaignMeasurementPolicy {
   tier: MeasurementTier;
@@ -141,4 +185,112 @@ export function assignCohortArms(
     .sort((a, b) => a.value - b.value || a.customerId.localeCompare(b.customerId));
   const controls = new Set(ranked.slice(0, controlCount).map((entry) => entry.customerId));
   return new Map(uniqueIds.map((customerId) => [customerId, controls.has(customerId) ? "CONTROL" : "TREATMENT"]));
+}
+
+export interface StratifiedCustomer {
+  customerId: string;
+  /** RFM segment frozen at approval. Unscored customers form a real stratum. */
+  stratum: string | null;
+}
+
+export interface FrozenStratifiedAssignment {
+  arm: Arm;
+  stratum: string;
+  assignmentStratum: string;
+  holdoutRate: number;
+}
+
+export interface StratifiedAssignmentResult {
+  arms: Map<string, Arm>;
+  assignments: Record<string, FrozenStratifiedAssignment>;
+  strata: Record<string, { customerCount: number; controlCount: number; holdoutRate: number }>;
+}
+
+function normalizedRate(value: number): number {
+  if (!Number.isFinite(value)) return NEW_FAMILY_HOLDOUT_RATE;
+  return Math.max(MIN_HOLDOUT_RATE, Math.min(MAX_HOLDOUT_RATE, value));
+}
+
+/**
+ * Exact, deterministic quotas within frozen RFM strata. Strata smaller than ten
+ * are pooled before assignment so a tiny named segment is never singled out as
+ * the control. Duplicate customer ids are ignored on retry.
+ */
+export function assignStratifiedCohortArms(input: {
+  assignmentSeed: string;
+  customers: StratifiedCustomer[];
+  rateForStratum: (stratum: string) => number;
+}): StratifiedAssignmentResult {
+  const unique = new Map<string, { customerId: string; stratum: string }>();
+  for (const customer of input.customers) {
+    if (!unique.has(customer.customerId)) {
+      unique.set(customer.customerId, {
+        customerId: customer.customerId,
+        stratum: customer.stratum?.trim() || "Unscored",
+      });
+    }
+  }
+  const originalGroups = new Map<string, Array<{ customerId: string; stratum: string }>>();
+  for (const customer of unique.values()) {
+    const group = originalGroups.get(customer.stratum) ?? [];
+    group.push(customer);
+    originalGroups.set(customer.stratum, group);
+  }
+  const assignmentGroups = new Map<string, Array<{ customerId: string; stratum: string }>>();
+  for (const [stratum, customers] of originalGroups) {
+    const key = customers.length < MIN_STRATUM_SIZE ? POOLED_SMALL_STRATUM : stratum;
+    const group = assignmentGroups.get(key) ?? [];
+    group.push(...customers);
+    assignmentGroups.set(key, group);
+  }
+
+  const arms = new Map<string, Arm>();
+  const assignments: Record<string, FrozenStratifiedAssignment> = {};
+  const strata: StratifiedAssignmentResult["strata"] = {};
+  for (const [assignmentStratum, customers] of assignmentGroups) {
+    const rate = normalizedRate(input.rateForStratum(assignmentStratum));
+    const controlCount = Math.min(Math.floor(customers.length * rate), Math.max(0, customers.length - 1));
+    const ranked = customers
+      .map((customer) => ({ ...customer, value: assignmentValue(`${input.assignmentSeed}:${assignmentStratum}`, customer.customerId) }))
+      .sort((a, b) => a.value - b.value || a.customerId.localeCompare(b.customerId));
+    const controls = new Set(ranked.slice(0, controlCount).map((customer) => customer.customerId));
+    strata[assignmentStratum] = { customerCount: customers.length, controlCount, holdoutRate: rate };
+    for (const customer of customers) {
+      const arm = controls.has(customer.customerId) ? "CONTROL" : "TREATMENT";
+      arms.set(customer.customerId, arm);
+      assignments[customer.customerId] = { arm, stratum: customer.stratum, assignmentStratum, holdoutRate: rate };
+    }
+  }
+  return { arms, assignments, strata };
+}
+
+export interface StratifiedOutcome {
+  stratum: string;
+  treatedCount: number;
+  treatedMean: number;
+  treatedVariance: number;
+  controlCount: number;
+  controlMean: number;
+  controlVariance: number;
+}
+
+/** Stratified difference in means, weighted by assigned treated customers. */
+export function estimateStratifiedCausedRevenue(strata: StratifiedOutcome[]): {
+  causedRevenue: number;
+  stdErr: number;
+  ciLow: number;
+  ciHigh: number;
+} {
+  let causedRevenue = 0;
+  let variance = 0;
+  for (const stratum of strata) {
+    if (stratum.treatedCount <= 0 || stratum.controlCount <= 0) continue;
+    causedRevenue += (stratum.treatedMean - stratum.controlMean) * stratum.treatedCount;
+    variance += stratum.treatedCount ** 2 * (
+      stratum.treatedVariance / stratum.treatedCount
+      + stratum.controlVariance / stratum.controlCount
+    );
+  }
+  const stdErr = Math.sqrt(Math.max(0, variance));
+  return { causedRevenue, stdErr, ciLow: causedRevenue - 1.96 * stdErr, ciHigh: causedRevenue + 1.96 * stdErr };
 }
