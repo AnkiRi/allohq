@@ -4,11 +4,11 @@ import {
   getMarketingDeliveryPermission,
   requireVerifiedSenderDomain,
 } from "@allohq/database";
-import { renderBrandedEmail } from "@allohq/customer-intelligence";
+import { getOptimalSendTime, renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
 import type { StoreMessagingConfig } from "@allohq/messaging";
-import { checkAllRules } from "@allohq/communication-governor";
+import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-governor";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { assertV1EmailAutomation } from "@allohq/release-gate";
@@ -20,6 +20,7 @@ import { assignArm, getOrCreateExperiment } from "@allohq/customer-state";
 import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
 import { automationContinuationJobId } from "../utils/automation-continuation";
+import { quietHoursDeferralMs } from "../utils/automation-quiet-hours";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -196,13 +197,40 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             break;
           }
           if (await logPermissionSuppression("email", customer.email, deliveryKey)) break;
-          // Governor check before sending
+          // Governor check before sending. Customer-local quiet hours defer this
+          // exact node; they do not create a terminal suppression or advance it.
+          const governorConfig = await loadStoreGovernorConfig(automation.storeId);
+          let deliveryTimezone = governorConfig.timezone ?? "UTC";
+          try {
+            deliveryTimezone = (await getOptimalSendTime(customer.id, automation.storeId)).timezone;
+          } catch {
+            // The explicit priority still fails closed: customer state when it
+            // can be read, then the store timezone loaded above, then UTC.
+          }
+          const governorNow = new Date();
           const emailGovCheck = await checkAllRules({
             customerId: customer.id,
             storeId: automation.storeId,
             channel: "email",
             messageType: "automation",
+            ...governorConfig,
+            timezone: deliveryTimezone,
+            now: governorNow,
           });
+          const quietDelay = quietHoursDeferralMs(emailGovCheck, governorNow);
+          if (quietDelay != null) {
+            const resumeAt = emailGovCheck.delayUntil!;
+            await automationTriggerQueue.add(
+              "automation-trigger",
+              { ...job.data, currentNodeIndex: i, executionId },
+              {
+                delay: quietDelay,
+                jobId: `automation-${automationId}-${executionId}-node-${i}-quiet-${resumeAt.getTime()}`,
+              },
+            );
+            console.log(`[automation-runner] Deferred email node ${node.id} until ${resumeAt.toISOString()} in ${deliveryTimezone}`);
+            return { status: "deferred_quiet_hours", nodeIndex: i, until: resumeAt };
+          }
           if (!emailGovCheck.allowed) {
             console.log(`[automation-runner] Suppressed email for customer ${customer.id}: ${emailGovCheck.reason}`);
             await prisma.messageLog.upsert({

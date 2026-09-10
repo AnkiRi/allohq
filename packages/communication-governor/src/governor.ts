@@ -40,7 +40,7 @@ export async function checkAllRules(
 
   // Transactional messages only check quiet hours
   if (messageType === "transactional") {
-    return checkQuietHours(params.timezone, quietCfg);
+    return checkQuietHours(params.timezone, quietCfg, params.now);
   }
 
   // 1. Support suppression
@@ -66,7 +66,7 @@ export async function checkAllRules(
   if (!cooldownCheck.allowed) return cooldownCheck;
 
   // 6. Quiet hours
-  const quietCheck = checkQuietHours(params.timezone, quietCfg);
+  const quietCheck = checkQuietHours(params.timezone, quietCfg, params.now);
   if (!quietCheck.allowed) return quietCheck;
 
   return { allowed: true };

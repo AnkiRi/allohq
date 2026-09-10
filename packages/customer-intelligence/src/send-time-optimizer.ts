@@ -41,6 +41,13 @@ interface TimestampRow {
   clickedAt: Date | null;
 }
 
+export function resolveDeliveryTimezone(optimalSendWindow: unknown, storeTimezone?: string | null): string {
+  const window = optimalSendWindow as { timezone?: unknown } | null;
+  return typeof window?.timezone === "string" && window.timezone.trim()
+    ? window.timezone
+    : storeTimezone || "UTC";
+}
+
 /**
  * Extract engagement timestamps from MessageLog rows.
  * Prefers clickedAt, falls back to openedAt.
@@ -106,8 +113,11 @@ export async function getOptimalSendTime(
   customerId: string,
   storeId: string,
 ): Promise<SendTimeResult> {
-  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { timezone: true } });
-  const timezone = store?.timezone ?? "UTC";
+  const [store, state] = await Promise.all([
+    prisma.store.findUnique({ where: { id: storeId }, select: { timezone: true } }),
+    prisma.customerState.findUnique({ where: { customerId }, select: { optimalSendWindow: true } }),
+  ]);
+  const timezone = resolveDeliveryTimezone(state?.optimalSendWindow, store?.timezone);
   // 1. Try customer-level engagement events (opens + clicks from MessageLog)
   const customerLogs = await prisma.messageLog.findMany({
     where: {

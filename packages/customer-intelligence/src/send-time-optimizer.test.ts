@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { localHour } from "./send-time-optimizer";
+import { localHour, resolveDeliveryTimezone } from "./send-time-optimizer";
 
 test("engagement hours are interpreted in the merchant timezone", () => {
   const instant = new Date("2026-09-03T04:30:00.000Z");
@@ -11,4 +11,10 @@ test("engagement hours are interpreted in the merchant timezone", () => {
 
 test("invalid timezones fail closed to UTC", () => {
   assert.equal(localHour(new Date("2026-09-03T04:30:00.000Z"), "not/a-zone"), 4);
+});
+
+test("delivery timezone prioritizes customer state, then store, then UTC", () => {
+  assert.equal(resolveDeliveryTimezone({ timezone: "America/New_York" }, "Asia/Kolkata"), "America/New_York");
+  assert.equal(resolveDeliveryTimezone({}, "Asia/Kolkata"), "Asia/Kolkata");
+  assert.equal(resolveDeliveryTimezone({}, null), "UTC");
 });

@@ -4,7 +4,7 @@ import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-go
 export const AUDIENCE_EXCLUSION_REASONS = [
   "invalid_email", "no_consent", "unsubscribed", "complaint", "hard_bounce",
   "manual_suppression", "already_processed", "fatigue", "quiet_hours",
-  "collision", "cooldown", "support_state", "store_paused", "global_paused",
+  "collision", "cooldown", "support_state", "recent_purchase", "store_paused", "global_paused",
 ] as const;
 export type AudienceExclusionReason = typeof AUDIENCE_EXCLUSION_REASONS[number];
 
@@ -43,12 +43,30 @@ export function staticAudienceExclusion(input: {
   return null;
 }
 
+export function isRecentPurchase(input: {
+  lastOrderAt?: Date | null;
+  hasDiscount: boolean;
+  now: Date;
+  standardHours?: number;
+  discountHours?: number;
+}): boolean {
+  if (!input.lastOrderAt) return false;
+  // Safety is on by default even when a store has no recent_purchase guardrail
+  // row. A row customizes the windows; deleting it restores 72h / 7d defaults.
+  const hours = input.hasDiscount ? input.discountHours ?? 168 : input.standardHours ?? 72;
+  return input.lastOrderAt.getTime() >= input.now.getTime() - Math.max(0, hours) * 60 * 60 * 1000;
+}
+
 function governorReason(rule?: string): AudienceExclusionReason {
   if (rule?.includes("quiet")) return "quiet_hours";
   if (rule?.includes("fatigue")) return "fatigue";
   if (rule?.includes("collision")) return "collision";
   if (rule?.includes("cooldown")) return "cooldown";
   return "support_state";
+}
+
+export function shouldExcludeGovernorDecision(decision: { allowed: boolean; rule?: string }): boolean {
+  return !decision.allowed && decision.rule !== "quiet_hours";
 }
 
 export async function resolveCampaignAudience(campaignId: string, now = new Date()): Promise<AudienceResolution> {
@@ -61,12 +79,18 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
   const where = campaign.segment
     ? resolveSegmentWhere(campaign.segment, [campaign.storeId])
     : { storeId: campaign.storeId };
+  const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+  const hasDiscount = typeof proposal["discountPercent"] === "number" || typeof proposal["discountCode"] === "string";
   const [customers, processed, governorConfig] = await Promise.all([
     prisma.customer.findMany({
       where,
       select: {
         id: true, email: true, firstName: true, lastName: true, acceptsMarketing: true,
         contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
+        orders: {
+          where: { status: { not: "cancelled" } }, orderBy: { createdAt: "desc" }, take: 1,
+          select: { createdAt: true },
+        },
         contactSuppressions: {
           where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
           take: 1, select: { reason: true },
@@ -98,14 +122,24 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
       globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
     });
     if (staticReason) { exclude(staticReason, customer); continue; }
+    if (isRecentPurchase({
+      lastOrderAt: customer.orders[0]?.createdAt,
+      hasDiscount,
+      now,
+      standardHours: governorConfig.recentPurchase?.standardHours,
+      discountHours: governorConfig.recentPurchase?.discountHours,
+    })) { exclude("recent_purchase", customer); continue; }
     const decision = await checkAllRules({
       customerId: customer.id, storeId: campaign.storeId, channel: "email",
       messageType: "marketing", campaignId,
       timezone: governorConfig.timezone ?? campaign.store.timezone ?? "UTC",
       quietHours: governorConfig.quietHours,
       maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
+      now,
     });
-    if (!decision.allowed) { exclude(governorReason(decision.rule), customer); continue; }
+    // Quiet hours defer treatment delivery; they do not change eligibility or
+    // the frozen randomized arm map.
+    if (shouldExcludeGovernorDecision(decision)) { exclude(governorReason(decision.rule), customer); continue; }
     eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName });
   }
   return { requested: customers.length, eligible, exclusions, samples };
@@ -160,8 +194,9 @@ export async function resolveAutomationAudience(automationId: string, now = new 
       timezone: governorConfig.timezone ?? automation.store.timezone ?? "UTC",
       quietHours: governorConfig.quietHours,
       maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
+      now,
     });
-    if (!decision.allowed) { exclude(governorReason(decision.rule), customer); continue; }
+    if (shouldExcludeGovernorDecision(decision)) { exclude(governorReason(decision.rule), customer); continue; }
     eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName });
   }
   return { requested: customers.length, eligible, exclusions, samples };

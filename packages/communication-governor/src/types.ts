@@ -30,6 +30,7 @@ export interface GovernorCheckParams {
   maxEmailsPerWeek?: number;
   quietHours?: { startHour: number; endHour: number };
   timezone?: string;
+  now?: Date;
 }
 
 export const DEFAULT_FATIGUE_CONFIG: FatigueConfig = {

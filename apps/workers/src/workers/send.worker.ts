@@ -11,7 +11,7 @@ import { sendEmail } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
-import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-governor";
+import { checkAllRules, checkQuietHours, loadStoreGovernorConfig, nextLocalHour } from "@allohq/communication-governor";
 import {
   learnFromResults,
   assignVariant as abAssignVariant,
@@ -46,6 +46,7 @@ interface DeliveryPlan {
   reasoning: string;
   timingSource: "customer" | "store" | "default";
   timingConfidence: number;
+  timezone: string;
 }
 interface SendJobData {
   campaignId: string;
@@ -69,13 +70,13 @@ interface FinalizeData {
   campaignId: string;
 }
 
-/** ms until the next occurrence of `bestHour` (UTC), capped (demo = seconds). */
-function computeDelayMs(bestHour: number, isDemo: boolean, timezone = "UTC"): number {
-  let nowH = new Date().getUTCHours();
-  try { nowH = Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hour12: false }).format(new Date())) % 24; } catch { /* UTC fallback */ }
-  let h = bestHour - nowH;
-  if (h < 0) h += 24; // h === 0 → already in the optimal hour → send ~now
-  const real = h * 60 * 60 * 1000;
+/** Milliseconds to a zoned wall-clock hour, safe across UTC-offset changes. */
+function computeDelayMs(bestHour: number, isDemo: boolean, timezone = "UTC", now = new Date()): number {
+  try {
+    const currentHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hour12: false }).format(now)) % 24;
+    if (currentHour === bestHour) return 0;
+  } catch { /* nextLocalHour falls back safely to UTC */ }
+  const real = Math.max(0, nextLocalHour(now, bestHour, timezone).getTime() - now.getTime());
   return Math.min(real, isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS);
 }
 
@@ -245,6 +246,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   let controlCount = 0;
   let skippedCount = 0;
   const campaignArms = new Map(Object.entries(frozenHoldout.assignments));
+  const planningGovernorConfig = await loadStoreGovernorConfig(campaign.storeId);
 
   for (const customer of customers) {
     if (processedCustomerIds.has(customer.id)) continue;
@@ -285,11 +287,13 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     let bestHour = 10;
     let timingSource: DeliveryPlan["timingSource"] = "default";
     let timingConfidence = 0;
+    let deliveryTimezone = campaign.store.timezone ?? "UTC";
     try {
       const timing = await getOptimalSendTime(customer.id, campaign.storeId);
       bestHour = timing.bestHour;
       timingSource = timing.source;
       timingConfidence = timing.confidence;
+      deliveryTimezone = timing.timezone;
     } catch { /* fall back to 10:00 */ }
 
     // SKIP (send-less): record the decision as a "skipped" row with treatmentArm
@@ -357,6 +361,14 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     }
 
     // Fan out a delayed delivery job at THIS customer's optimal time.
+    const planningNow = new Date();
+    const quietDecision = checkQuietHours(deliveryTimezone, planningGovernorConfig.quietHours, planningNow);
+    const deliveryDelay = quietDecision.allowed
+      ? computeDelayMs(bestHour, isDemo, deliveryTimezone, planningNow)
+      : Math.min(
+          Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime()),
+          isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS,
+        );
     await emailSendQueue.add(
       "deliver-one",
       {
@@ -381,10 +393,11 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           reasoning: decision.reasoning,
           timingSource,
           timingConfidence,
+          timezone: deliveryTimezone,
         },
       } as DeliverOneData,
       {
-        delay: computeDelayMs(bestHour, isDemo, campaign.store.timezone ?? "UTC"),
+        delay: deliveryDelay,
         jobId: `deliver-${campaignId}-${customer.id}`,
         attempts: 5,
         backoff: { type: "exponential", delay: 2_000 },
@@ -546,8 +559,20 @@ export async function deliverOne(data: DeliverOneData) {
   // Governor check AT SEND TIME — now honoring the merchant's OWN limits (weekly
   // cap / quiet hours / timezone) from onboarding, not store-agnostic defaults.
   const govConfig = await loadStoreGovernorConfig(campaign.storeId);
-  const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId, ...govConfig });
+  const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId, ...govConfig, timezone: plan.timezone ?? govConfig.timezone });
   if (!governorCheck.allowed) {
+    if (governorCheck.rule === "quiet_hours" && governorCheck.delayUntil) {
+      const now = new Date();
+      await emailSendQueue.add("deliver-one", data, {
+        delay: Math.max(0, governorCheck.delayUntil.getTime() - now.getTime()),
+        jobId: `deliver-${campaignId}-${customerId}-quiet-${governorCheck.delayUntil.getTime()}`,
+        attempts: 5,
+        backoff: { type: "exponential", delay: 2_000 },
+        removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+        removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+      });
+      return { deferred: true, until: governorCheck.delayUntil };
+    }
     const suppressionData = {
       status: "suppressed",
       error: `Suppressed: ${governorCheck.reason}`,

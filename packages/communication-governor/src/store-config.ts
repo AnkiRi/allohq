@@ -4,6 +4,7 @@ export interface StoreGovernorConfig {
   maxEmailsPerWeek?: number;
   quietHours?: { startHour: number; endHour: number };
   timezone?: string;
+  recentPurchase?: { standardHours: number; discountHours: number };
 }
 
 /**
@@ -27,6 +28,11 @@ export async function loadStoreGovernorConfig(storeId: string): Promise<StoreGov
     }
     if (r.ruleType === "quiet_hours" && typeof v?.["startHour"] === "number" && typeof v?.["endHour"] === "number") {
       out.quietHours = { startHour: v["startHour"] as number, endHour: v["endHour"] as number };
+    }
+    if (r.ruleType === "recent_purchase") {
+      const standardHours = typeof v?.["standardHours"] === "number" ? v["standardHours"] as number : 72;
+      const discountHours = typeof v?.["discountHours"] === "number" ? v["discountHours"] as number : 168;
+      out.recentPurchase = { standardHours, discountHours };
     }
   }
   return out;
