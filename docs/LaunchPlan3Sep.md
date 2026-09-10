@@ -717,6 +717,12 @@ and require merchant confirmation before sharing.
 
 The implementation tracks above are complete in the repository. Do not begin
 merchant end-to-end acceptance by treating missing product work as a test task.
+The repository baseline was reverified on 10 September 2026 at `5e9c10c`:
+52 canonical test files / 152 tests passed, all 18 typechecked workspaces passed,
+all production builds passed, and the Prisma schema validated. The executable
+acceptance order, evidence requirements, stop conditions, and interruption log
+are maintained in
+[`ExternalAcceptancePlan-2026-09-10.md`](./ExternalAcceptancePlan-2026-09-10.md).
 The remaining order is entirely environment and operator validation:
 
 1. Deploy `send-path` and apply its database migrations.
