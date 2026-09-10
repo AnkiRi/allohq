@@ -56,16 +56,16 @@ On stop: disable delivery, pause the affected store, retain identifiers and sani
 
 Goal: prove the deployed system is known, recoverable and unable to send broadly.
 
-- [ ] Record `main` commit plus web, API and worker deployment IDs.
-- [ ] Confirm web, API and workers are all running the intended commit.
-- [ ] Confirm `https://joonhq.com`, `https://agent.joonhq.com/sign-in` and API `/healthz` return 200.
-- [ ] Confirm all production Prisma migrations completed, with no failed or rolled-back row.
-- [ ] Confirm both API and worker startup paths run `prisma migrate deploy` safely.
-- [ ] Confirm worker schedules and queues boot without recurring errors.
-- [ ] Confirm production `MESSAGING_SEND_MODE=disabled` before testing begins.
+- [x] Record `main` commit plus web, API and worker deployment IDs.
+- [x] Confirm web, API and workers are all running the intended commit.
+- [x] Confirm `https://joonhq.com`, `https://agent.joonhq.com/sign-in` and API `/healthz` return 200.
+- [x] Confirm all production Prisma migrations completed, with no failed or rolled-back row.
+- [x] Confirm both API and worker startup paths run `prisma migrate deploy` safely.
+- [x] Confirm worker schedules and queues boot without recurring errors.
+- [x] Confirm production `MESSAGING_SEND_MODE=disabled` before testing begins.
 - [ ] Exercise the global email kill switch and per-store pause without contacting a real recipient.
-- [ ] Confirm SMS, WhatsApp and RCS remain blocked by the v1 release gate.
-- [ ] Confirm production uses the intended Clerk production instance and the development badge is absent.
+- [x] Confirm SMS, WhatsApp and RCS remain blocked by the v1 release gate.
+- [x] Confirm production uses the intended Clerk production instance and the development badge is absent.
 - [ ] Confirm Shopify, Clerk, messaging-provider and infrastructure credentials are current; rotate any credential known to have been exposed.
 - [ ] Confirm logs, traces and error reporting redact tokens, email bodies and unnecessary personal data.
 - [ ] Confirm alert ownership for API errors, worker failures, queue depth, provider failures and complaint pause.
@@ -328,4 +328,4 @@ Add links to sanitized evidence as it is produced. Do not commit secrets, raw ac
 | Stage | Evidence location | Environment / store | Commit / deployment | Result | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Preflight | This document, repository command output from 2026-09-10 | Local repository | `5e9c10c` | PASS | 152/152 tests; typecheck, all builds and Prisma validation passed |
-| 0 | — | Production | — | NOT RUN | Current restart point |
+| 0 | GitHub status, direct HTTP checks, Railway deploy/log/variable views and public Clerk-prefix check, 2026-09-10 | Production | `259938e`; Vercel `4ruZVfwMNAmLYkznxHxfr9DPNVXh`; Railway API `2bf8fb93-8003-4be1-895b-f822177e77ff`; workers `243c262c-5dcf-41e6-a1ae-0309f7e62079` | IN PROGRESS | Deployments succeeded and endpoints returned 200. API found 73 migrations with none pending; both deployed start commands run migrate-deploy. Workers booted and scheduled checks completed. API/workers: send mode disabled and v1 mode true; worker global kill switch true. Public sign-in emits a `pk_live_` Clerk key, so the development badge is absent. PITR/WAL archiving is healthy. Kill-switch drill, store pause, credential review, log-redaction review, alert delivery, restore owner and restore drill remain open. |
