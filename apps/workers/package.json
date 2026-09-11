@@ -33,6 +33,7 @@
     "@allohq/product-recommendations": "workspace:*",
     "@allohq/release-gate": "workspace:*",
     "@prisma/client": "^6.3.0",
+    "@sentry/node": "^10.74.0",
     "bullmq": "^5.0.0",
     "dotenv": "^16.4.7",
     "ioredis": "^5.4.0",
