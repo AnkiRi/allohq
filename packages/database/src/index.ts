@@ -13,6 +13,8 @@ export const prisma =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export * from "@prisma/client";
+export { computeMonthlyInvoice, MissingComparisonCapEvidenceError } from "@allohq/pricing";
+export type { Currency as PricingCurrency } from "@allohq/pricing";
 
 // Causal-data moat: DecisionRecord substrate (backed by the decision_records view)
 export { getDecisionRecords } from "./decision-records";
@@ -29,6 +31,25 @@ export { normalizeEmail, normalizePhone } from "./identity";
 export { buildWhereFromConditions, resolveSegmentWhere } from "./segments";
 export type { SegmentCondition, SegmentConditions } from "./segments";
 export { MESSAGING_RATES_INR, messagingCostFor } from "./messaging-rates";
+export { CAMPAIGN_ORIGINS, parseCampaignOrigin } from "./campaign-origin";
+export type { CampaignOriginValue } from "./campaign-origin";
+export {
+  ATTRIBUTION_WINDOW_DAYS,
+  CAUSAL_LEDGER_COMPUTATION_VERSION,
+  REFUND_REVISION_DAYS,
+  billingPeriodsToRecompute,
+  ledgerWinnerMatches,
+  providerAcceptanceCountsForPostage,
+  computeLedgerSnapshot,
+  measurementRecoveryStart,
+  shouldCreateLedgerVersion,
+} from "./causal-ledger";
+export type {
+  FrozenAssignmentInput,
+  LedgerSnapshot,
+  LedgerSnapshotInput,
+  NetOrderInput,
+} from "./causal-ledger";
 export {
   encryptSecret,
   decryptSecret,
@@ -42,7 +63,6 @@ export type {
   DeliveryPermission,
   MarketingChannel,
 } from "./contact-policy";
-
 // Demo / sandbox mode (logged-out visitor → seeded Vana, read-mostly). Resolved
 // by STABLE slug/domain (portable across dev/prod), not hardcoded cuids.
 export {

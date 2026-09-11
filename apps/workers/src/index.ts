@@ -364,6 +364,15 @@ gatedSchedule(outcomeAttributionQueue,
   console.error("Failed to set up daily revenue summary schedule:", err.message);
 });
 
+// Early-access shadow invoices only: no Shopify Billing API calls are made.
+gatedSchedule(outcomeAttributionQueue,
+  "monthly-shadow-invoice-schedule",
+  { pattern: "15 2 1 * *", tz: BRIEFING_TZ },
+  { name: "monthly-shadow-invoice", data: { type: "monthly-shadow-invoice" } }
+).catch((err) => {
+  console.error("Failed to set up monthly shadow invoice schedule:", err.message);
+});
+
 // Schedule churn intervention scan (every 6 hours — increased from daily for faster detection)
 const churnInterventionQueue = new Queue(QUEUE_NAMES.CHURN_INTERVENTION, { connection: redisConnection });
 gatedSchedule(churnInterventionQueue,

@@ -1,13 +1,14 @@
 import { Worker } from "bullmq";
-import { prisma } from "@allohq/database";
+import { measurementRecoveryStart, prisma, REFUND_REVISION_DAYS } from "@allohq/database";
 import { computeLiftStats, varianceFromAggregates } from "@allohq/customer-state";
 
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { buildMonthlyShadowInvoices, persistClosedCampaignLedgers } from "./causal-ledger";
 
 const ATTRIBUTION_WINDOW_DAYS = 7;
 
 interface OutcomeAttributionJobData {
-  type?: "hourly" | "daily-summary";
+  type?: "hourly" | "daily-summary" | "monthly-shadow-invoice";
 }
 
 /**
@@ -27,6 +28,12 @@ export const outcomeAttributionWorker = new Worker<OutcomeAttributionJobData>(
 
     if (jobType === "daily-summary") {
       return runDailyRevenueSummary();
+    }
+
+    if (jobType === "monthly-shadow-invoice") {
+      const ledgerVersionsCreated = await persistClosedCampaignLedgers();
+      const shadowInvoicesCreated = await buildMonthlyShadowInvoices();
+      return { ledgerVersionsCreated, shadowInvoicesCreated };
     }
 
     return runHourlyAttribution();
@@ -66,11 +73,14 @@ async function runHourlyAttribution() {
     }
   }
 
+  const ledgerVersionsCreated = await persistClosedCampaignLedgers();
+  if (ledgerVersionsCreated > 0) await buildMonthlyShadowInvoices();
+
   console.log(
     `[outcome-attribution] Hourly run complete: ${totalOrdersAttributed} orders, $${totalRevenueAttributed.toFixed(2)} revenue across ${stores.length} stores`,
   );
 
-  return { totalOrdersAttributed, totalRevenueAttributed };
+  return { totalOrdersAttributed, totalRevenueAttributed, ledgerVersionsCreated };
 }
 
 export async function attributeOrdersForStore(storeId: string) {
@@ -82,9 +92,16 @@ export async function attributeOrdersForStore(storeId: string) {
   });
   const marginRate = storeRow?.defaultContributionMargin ?? 0.6;
 
-  // Re-scan a full day so a deploy/provider interruption cannot create a silent
-  // measurement hole. Both causal and marketing ledgers are database-idempotent.
-  const lookbackStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Re-scan every still-recoverable immutable assignment window. This survives
+  // outages longer than 24 hours and also picks up refund/cancellation revisions
+  // during the 30-day ledger revision period. All writes below are idempotent.
+  const now = new Date();
+  const recoverableAssignments = await prisma.measurementAssignment.findMany({
+    where: { storeId, windowEndsAt: { gte: new Date(now.getTime() - REFUND_REVISION_DAYS * 86_400_000) } },
+    select: { windowStartsAt: true, windowEndsAt: true },
+  });
+  const lookbackStart = measurementRecoveryStart(recoverableAssignments, now)
+    ?? new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   // Causal outcomes and marketing attribution are deliberately different:
   // control purchases belong in the experiment ledger, but never get credited
@@ -114,6 +131,29 @@ export async function attributeOrdersForStore(storeId: string) {
     const assignmentWindowStart = new Date(
       order.createdAt.getTime() - ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     );
+    // Immutable intent-to-treat outcomes use the common approval/schedule
+    // window frozen on MeasurementAssignment, independent of whether a treated
+    // delivery was later deferred by quiet hours or suppressed at send time.
+    const frozenAssignments = await prisma.measurementAssignment.findMany({
+      where: {
+        storeId,
+        customerId: order.customerId,
+        windowStartsAt: { lte: order.createdAt },
+        windowEndsAt: { gte: order.createdAt },
+      },
+      select: { id: true },
+    });
+    if (frozenAssignments.length > 0) {
+      await prisma.measurementOrderOutcome.createMany({
+        data: frozenAssignments.map((assignment) => ({
+          assignmentId: assignment.id,
+          orderId: order.id,
+          netRevenue: order.totalPrice,
+          occurredAt: order.createdAt,
+        })),
+        skipDuplicates: true,
+      });
+    }
     const assignments = await prisma.messageLog.findMany({
       where: {
         storeId,

@@ -302,6 +302,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           templateId: template.id,
           segmentId: segment?.id,
           status: "draft",
+          origin: "merchant",
           recipientCount,
           // Freeze what joon PROPOSED (the action bundle) so a later human edit can be
           // diffed against it at approval. Can't-backfill: once the draft is edited in

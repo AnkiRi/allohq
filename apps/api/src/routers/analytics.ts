@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, storeProcedure } from "../trpc";
+import { ownerProcedure, router, storeProcedure } from "../trpc";
 import { computeLiftStats, varianceFromAggregates } from "@allohq/customer-state";
 import {
   computeAttribution,
@@ -13,6 +13,93 @@ import {
 import type { AttributionModel } from "@allohq/analytics";
 
 export const analyticsRouter = router({
+  /** Versioned causal results. Latest snapshot per unit; never recomputed in the API. */
+  causedRevenueLedger: storeProcedure
+    .input(z.object({ storeId: z.string(), limit: z.number().int().min(1).max(200).default(50) }))
+    .query(async ({ ctx, input }) => {
+      const [versions, store] = await Promise.all([ctx.prisma.causedRevenueLedger.findMany({
+        where: { storeId: input.storeId },
+        include: { campaign: { select: { name: true } } },
+        orderBy: [{ computedAt: "desc" }, { version: "desc" }],
+        take: input.limit * 4,
+      }), ctx.prisma.store.findUnique({ where: { id: input.storeId }, select: { currency: true } })]);
+      const latest = [...versions.reduce((map, row) => {
+        const key = `${row.unitType}:${row.unitId}`;
+        if (!map.has(key)) map.set(key, row);
+        return map;
+      }, new Map<string, (typeof versions)[number]>()).values()].slice(0, input.limit);
+      return latest.map((row) => ({
+        ...row,
+        currency: store?.currency?.toUpperCase() === "INR" ? "INR" : "USD",
+        treatedNetRevenue: Number(row.treatedNetRevenue),
+        controlNetRevenue: Number(row.controlNetRevenue),
+        attributedRevenue: Number(row.attributedRevenue),
+        causedRevenue: Number(row.causedRevenue),
+        intervalLow: row.intervalLow === null ? null : Number(row.intervalLow),
+        intervalHigh: row.intervalHigh === null ? null : Number(row.intervalHigh),
+      }));
+    }),
+
+  /** Latest early-access preview. This endpoint cannot create a charge. */
+  billingPreview: storeProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const invoice = await ctx.prisma.shadowInvoice.findFirst({
+        where: { storeId: input.storeId },
+        orderBy: [{ periodEnd: "desc" }, { version: "desc" }],
+      });
+      if (!invoice) return null;
+      return {
+        id: invoice.id,
+        storeId: invoice.storeId,
+        periodStart: invoice.periodStart,
+        periodEnd: invoice.periodEnd,
+        currency: invoice.currency,
+        activeSubscribers: invoice.activeSubscribers,
+        subscriberSnapshotAt: invoice.subscriberSnapshotAt,
+        postageEmails: invoice.postageEmails,
+        lines: invoice.lines,
+        pricingVersion: invoice.pricingVersion,
+        computedAt: invoice.computedAt,
+        status: invoice.status,
+        pendingReason: invoice.pendingReason,
+        earlyAccess: true,
+        billableNow: false,
+        billableCausedRevenue: Number(invoice.billableCausedRevenue),
+        carryIn: Number(invoice.carryIn),
+        carryOut: Number(invoice.carryOut),
+        liftFee: Number(invoice.liftFee),
+        postage: Number(invoice.postage),
+        performanceFeeCap: invoice.performanceFeeCap === null ? null : Number(invoice.performanceFeeCap),
+        total: Number(invoice.total),
+      };
+    }),
+
+  /** Founder/admin comparison variants for pricing conversations. */
+  billingPreviewAdmin: ownerProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId }, select: { id: true },
+      });
+      if (!store) return null;
+      const invoice = await ctx.prisma.shadowInvoice.findFirst({
+        where: { storeId: input.storeId }, orderBy: [{ periodEnd: "desc" }, { version: "desc" }],
+      });
+      if (!invoice) return null;
+      return {
+        invoiceId: invoice.id,
+        storeId: invoice.storeId,
+        periodStart: invoice.periodStart,
+        periodEnd: invoice.periodEnd,
+        currency: invoice.currency,
+        variants: invoice.variants,
+        pricingVersion: invoice.pricingVersion,
+        earlyAccess: true,
+        billableNow: false,
+      };
+    }),
+
   /** Revenue attribution by source (campaign/automation) */
   attribution: storeProcedure
     .input(
@@ -362,10 +449,6 @@ export const analyticsRouter = router({
   controlLift: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(90) }))
     .query(async ({ ctx, input }) => {
-      // Fee model — must match the representative figures on the web screen so
-      // the page reads as one honest model whichever state it's in.
-      const BASE_MONTHLY_FEE = 24_000; // ₹ / mo — running retention, the floor
-      const PERFORMANCE_RATE = 0.15; // 15% of proven incremental margin vs control
       const MIN_CONTROL_WITH_OUTCOME = 30; // threshold for "meaningful"
 
       const since = new Date(Date.now() - input.days * 86_400_000);
@@ -443,9 +526,6 @@ export const analyticsRouter = router({
       const incrementalMargin =
         basis === "margin" ? incrementalTotal : incrementalTotal * contributionMargin;
 
-      const performanceFee = Math.max(0, incrementalMargin) * PERFORMANCE_RATE;
-      const totalFee = BASE_MONTHLY_FEE + performanceFee;
-
       const hasRealData = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
 
       return {
@@ -473,11 +553,6 @@ export const analyticsRouter = router({
         confidence: stats.confidence,
         incrementalTotal: Math.round(incrementalTotal),
         incrementalMargin: Math.round(incrementalMargin),
-        // Fee math
-        baseMonthly: BASE_MONTHLY_FEE,
-        performanceRate: PERFORMANCE_RATE,
-        performanceFee: Math.round(performanceFee),
-        totalFee: Math.round(totalFee),
         contributionMargin,
       };
     }),
@@ -485,8 +560,9 @@ export const analyticsRouter = router({
   /**
    * CAM-impact — growth intelligence made visible. Per campaign, the holdout tells
    * joon where sending PROVABLY drove incremental revenue and where it didn't (the
-   * loyalists who'd have bought anyway). The story: do MORE by sending LESS — send
-   * where lift is proven, hold back where it isn't (protect the channel).
+   * aggregate counterfactual; it cannot identify which individuals would have
+   * bought anyway. Send where aggregate lift is supported and keep learning
+   * where it is not.
    *
    * All figures derive from the SAME real machinery as controlLift (per-customer
    * mean by arm + Welch significance) — just grouped per campaign, then rolled up.
@@ -496,8 +572,6 @@ export const analyticsRouter = router({
   camImpact: storeProcedure
     .input(z.object({ storeId: z.string(), days: z.number().default(90) }))
     .query(async ({ ctx, input }) => {
-      const BASE_MONTHLY_FEE = 24_000; // ₹ / mo — must match controlLift
-      const PERFORMANCE_RATE = 0.15; // 15% of PROVEN incremental margin vs control
       const MIN_OBSERVED = 30; // per-arm floor for a trustworthy significance test
 
       const since = new Date(Date.now() - input.days * 86_400_000);
@@ -619,9 +693,6 @@ export const analyticsRouter = router({
       const sendsAvoidable = campaigns.filter((c) => c.decision === "hold").reduce((s, c) => s + c.messaged, 0);
       const sendsAvoidablePct = totalMessaged > 0 ? Math.round((sendsAvoidable / totalMessaged) * 100) : 0;
 
-      const performanceFee = Math.round(Math.max(0, provenIncrementalMargin) * PERFORMANCE_RATE);
-      const baseMonthly = BASE_MONTHLY_FEE;
-
       return {
         windowDays: input.days,
         basis,
@@ -637,10 +708,6 @@ export const analyticsRouter = router({
           provenIncrementalMargin: Math.round(provenIncrementalMargin),
           sendsAvoidable,
           sendsAvoidablePct,
-          baseMonthly,
-          performanceRate: PERFORMANCE_RATE,
-          performanceFee,
-          totalFee: baseMonthly + performanceFee,
           contributionMargin,
         },
       };

@@ -20,15 +20,14 @@ import { GrowthImpactPanel } from "@/components/outcomes/GrowthImpactPanel";
 //
 // The single most important pixel is the HELD-OUT CONTROL column: we prove the
 // lift is incremental by holding a cohort back and measuring what they did with
-// no message at all. Fee = base (running retention) + performance (a cut of the
-// proven lift vs control). Tiny real AI cost is set against the lift to show the
-// unit economics.
+// no message at all. Billing previews use immutable ledger rows and the shared
+// pricing module; early access never creates a charge.
 //
 // DATA HONESTY: AI cost / AI revenue / ROI are REAL (analytics.roi). The
 // treatment-vs-control comparison is REAL the moment there's a closed control
 // experiment with enough measured outcomes (analytics.controlLift.hasRealData):
 // then we show the real lift, real incremental revenue/margin and the real
-// base+performance fee, and DROP the "representative" disclaimer. Until then we
+// measured caused revenue, and DROP the "representative" disclaimer. Until then we
 // fall back to clearly-labelled representative figures so the screen still reads
 // as one honest model. The lift, fee math and total always derive consistently
 // from whichever set is live.
@@ -44,17 +43,10 @@ const COHORT = {
   windowDays: 90,
 };
 
-// --- Fee model --------------------------------------------------------------
-const FEE = {
-  baseMonthly: 24_000, // ₹ / mo — running retention, the floor
-  performanceRate: 0.15, // 15% of proven incremental revenue vs control
-};
-
-function moneyExact(n: number): string {
-  // Exact ₹ (no abbreviation) — used in the fee math so the arithmetic is legible.
-  return new Intl.NumberFormat("en-IN", {
+function moneyExact(n: number, currency: "INR" | "USD" = "INR"): string {
+  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
-    currency: "INR",
+    currency,
     maximumFractionDigits: 0,
   }).format(Math.round(n));
 }
@@ -137,16 +129,32 @@ export default function OutcomesPage() {
           confidence: number;
           incrementalTotal: number;
           incrementalMargin: number;
-          baseMonthly: number;
-          performanceRate: number;
-          performanceFee: number;
-          totalFee: number;
           contributionMargin: number;
         }
       | undefined;
   };
 
-  const isReal = !!liftData?.hasRealData;
+  const { data: ledgerData } = (trpc.analytics.causedRevenueLedger as any).useQuery(
+    { storeId: storeId ?? "", limit: 50 },
+    { enabled: !!storeId && onboardingDone },
+  ) as { data: Array<{
+    id: string; unitId: string; currency: "INR" | "USD"; campaign: { name: string } | null; assignedTreated: number; assignedControl: number;
+    treatedNetRevenue: number; controlNetRevenue: number; attributedRevenue: number; causedRevenue: number;
+    intervalLow: number | null; intervalHigh: number | null; tier: string; billable: boolean;
+    nonBillableReason: string | null; strata: unknown; computedAt: string;
+  }> | undefined };
+  const { data: billingData } = (trpc.analytics.billingPreview as any).useQuery(
+    { storeId: storeId ?? "" },
+    { enabled: !!storeId && onboardingDone },
+  ) as { data: null | {
+    currency: "INR" | "USD"; liftFee: number; postage: number; total: number; billableCausedRevenue: number;
+    performanceFeeCap: number | null; status: string; pendingReason: string | null;
+  } | undefined };
+
+  // Only an immutable closed ledger row graduates the page from
+  // representative to measured. The legacy aggregate is diagnostic support,
+  // never the authority for that claim.
+  const isReal = !!ledgerData?.length && !!liftData?.hasRealData;
 
   // --- Unified model: real when measured, else representative -------------
   // Every figure on the screen reads from this one object so the page stays one
@@ -165,16 +173,11 @@ export default function OutcomesPage() {
         significant: liftData!.significant,
         underpowered: liftData!.underpowered,
         incrementalRevenue: liftData!.incrementalTotal,
-        baseMonthly: liftData!.baseMonthly,
-        performanceRate: liftData!.performanceRate,
-        performanceFee: liftData!.performanceFee,
-        totalFee: liftData!.totalFee,
       }
     : (() => {
         const liftPerCustomer =
           COHORT.treatmentRevPerCustomer - COHORT.controlRevPerCustomer;
         const incrementalRevenue = liftPerCustomer * COHORT.treatmentCustomers;
-        const performanceFee = incrementalRevenue * FEE.performanceRate;
         return {
           treatmentCustomers: COHORT.treatmentCustomers,
           controlCustomers: COHORT.controlCustomers,
@@ -190,18 +193,15 @@ export default function OutcomesPage() {
           significant: false,
           underpowered: false,
           incrementalRevenue,
-          baseMonthly: FEE.baseMonthly,
-          performanceRate: FEE.performanceRate,
-          performanceFee,
-          totalFee: FEE.baseMonthly + performanceFee,
         };
       })();
 
   const liftPerCustomer = model.liftPerCustomer;
   const liftPct = model.liftPct;
   const incrementalRevenue = model.incrementalRevenue;
-  const performanceFee = model.performanceFee;
-  const totalFee = model.totalFee;
+  const measuredBasis = isReal && liftData?.basis === "margin" ? "contribution margin" : "net revenue";
+  const totalFee = billingData?.total ?? 0;
+  const displayCurrency = ledgerData?.[0]?.currency ?? billingData?.currency ?? "INR";
 
   // --- Reasoning story: the decision behind the result, in joon's voice -----
   // Predicted upside (the lift) → NAMED downside (control gives up revenue;
@@ -221,10 +221,10 @@ export default function OutcomesPage() {
           text: `measured both over ${model.windowDays} days · same window, same store`,
         },
         {
-          text: `predicted upside · +${moneyExact(liftPerCustomer)}/customer · ${moneyExact(incrementalRevenue)} incremental`,
+          text: `predicted upside · +${moneyExact(liftPerCustomer, displayCurrency)}/customer · ${moneyExact(incrementalRevenue, displayCurrency)} incremental`,
         },
         {
-          text: "named downside · the held-out cohort earns joon nothing · a few may unsubscribe",
+          text: "named downside · a random control misses this message · a few treated customers may unsubscribe",
         },
         {
           text: isReal
@@ -288,13 +288,61 @@ export default function OutcomesPage() {
           Outcomes
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          joon grows revenue by sending <b>less</b>, not more — concentrating on the customers a
-          held-out control proves will respond, and holding back the ones who&apos;d have bought
-          anyway. Below: what that earned, and the causal proof underneath it.
+          joon grows revenue by sending <b>less</b>, not more. A random holdout separates
+          revenue the email caused from revenue that would have happened anyway. Below:
+          what that earned, and the causal proof underneath it.
         </p>
       </div>
 
-      {/* 0. Growth intelligence — the hero: do more by sending less ---------- */}
+      <ConsoleFrame title="joon · measured campaign outcomes" live={false} clock={false}>
+        <p className="font-sans text-[13px] leading-relaxed text-foreground">
+          Joon emails most of your customers and holds back a few at random. What the emailed ones spend beyond the held-back ones is what Joon caused.
+        </p>
+        <p className="mt-2 font-sans text-[12px] leading-relaxed text-muted-foreground">
+          Doesn&apos;t holding people back cost me sales? A little - they still buy as usual; they just miss one email. It&apos;s how you know the rest is real.
+        </p>
+        {ledgerData && ledgerData.length > 0 ? (
+          <div className="mt-5 space-y-3">
+            {ledgerData.map((row) => {
+              const treatmentPerCustomer = row.assignedTreated ? row.treatedNetRevenue / row.assignedTreated : 0;
+              const controlPerCustomer = row.assignedControl ? row.controlNetRevenue / row.assignedControl : 0;
+              const holdoutRate = row.assignedControl + row.assignedTreated > 0
+                ? row.assignedControl / (row.assignedControl + row.assignedTreated) * 100 : 0;
+              return (
+                <article key={row.id} className="rounded-xl border border-border bg-card p-4 text-card-foreground">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-sans text-[13px] font-semibold">{row.campaign?.name ?? "Campaign"}</p>
+                      <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                        measured · {row.tier.replaceAll("_", " ")} · {holdoutRate.toFixed(0)}% held back
+                      </p>
+                    </div>
+                    <span className={`rounded-full border px-2 py-1 font-mono text-[10px] ${row.billable ? "border-outcome/30 text-outcome" : "border-measure/30 text-measure"}`}>
+                      {row.billable ? "measured · billable after early access" : "measured · not billed"}
+                    </span>
+                  </div>
+                  <p className="mt-4 font-mono text-[12px] leading-relaxed tabular-nums">
+                    Emailed {moneyExact(treatmentPerCustomer, row.currency)} per customer · Held back {moneyExact(controlPerCustomer, row.currency)} · <span className="font-semibold text-outcome">Caused {moneyExact(row.causedRevenue, row.currency)}</span>
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[10px] text-muted-foreground">
+                    <span>Attributed {moneyExact(row.attributedRevenue, row.currency)}</span>
+                    {row.intervalLow !== null && row.intervalHigh !== null && <span>95% interval {moneyExact(row.intervalLow, row.currency)} to {moneyExact(row.intervalHigh, row.currency)}</span>}
+                    {!row.billable && row.nonBillableReason && <span>{row.nonBillableReason}</span>}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl border border-border bg-card p-4 font-mono text-[11px] text-muted-foreground">
+            No closed measured campaign yet. This fills in after the seven-day control window closes.
+          </p>
+        )}
+      </ConsoleFrame>
+
+      {/* Measured ledger rows are the primary source of truth. The aggregate
+          intelligence panel follows them and remains representative until a
+          closed ledger row exists. */}
       <GrowthImpactPanel storeId={storeId} windowDays={COHORT.windowDays} />
 
       {/* 1. The control comparison — the most important pixel ---------------- */}
@@ -329,7 +377,7 @@ export default function OutcomesPage() {
                 />
                 <div className="block">
                   <MetricReadout
-                    label="₹ / customer"
+                    label={`${measuredBasis} / customer`}
                     value={model.treatmentRevPerCustomer}
                     money
                   />
@@ -354,7 +402,7 @@ export default function OutcomesPage() {
                 <MetricReadout label="cohort" value={model.controlCustomers} />
                 <div className="block">
                   <MetricReadout
-                    label="₹ / customer"
+                    label={`${measuredBasis} / customer`}
                     value={model.controlRevPerCustomer}
                     money
                   />
@@ -374,10 +422,10 @@ export default function OutcomesPage() {
                 lift / customer · treatment − control
               </span>
               <span className="font-mono text-[13px] text-foreground tabular-nums">
-                {moneyExact(model.treatmentRevPerCustomer)} −{" "}
-                {moneyExact(model.controlRevPerCustomer)} ={" "}
+                {moneyExact(model.treatmentRevPerCustomer, displayCurrency)} −{" "}
+                {moneyExact(model.controlRevPerCustomer, displayCurrency)} ={" "}
                 <b className="text-foreground font-semibold">
-                  {moneyExact(liftPerCustomer)}
+                  {moneyExact(liftPerCustomer, displayCurrency)}
                 </b>{" "}
                 <span className="text-muted-foreground">
                   (↗ +{liftPct.toFixed(0)}%)
@@ -391,7 +439,7 @@ export default function OutcomesPage() {
                 </span>
                 <span className="font-mono text-[11px] tabular-nums">
                   <span className="text-muted-foreground">
-                    {moneyExact(model.liftCiLow)} … {moneyExact(model.liftCiHigh)}
+                    {moneyExact(model.liftCiLow, displayCurrency)} … {moneyExact(model.liftCiHigh, displayCurrency)}
                   </span>{" "}
                   {model.underpowered ? (
                     <span className="text-warning">· underpowered — gathering data</span>
@@ -405,10 +453,10 @@ export default function OutcomesPage() {
             )}
             <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <span className="font-mono text-[11px] text-muted-foreground lowercase">
-                incremental revenue · lift × {model.treatmentCustomers.toLocaleString("en-IN")} treated
+                incremental {measuredBasis} · lift × {model.treatmentCustomers.toLocaleString("en-IN")} treated
               </span>
               <span className="font-mono text-[18px] text-[hsl(var(--accent))] tabular-nums font-semibold">
-                {moneyExact(incrementalRevenue)}
+                {moneyExact(incrementalRevenue, displayCurrency)}
               </span>
             </div>
           </div>
@@ -450,46 +498,43 @@ export default function OutcomesPage() {
         </div>
       </ConsoleFrame>
 
-      {/* 2. Fee = base + performance on proven lift -------------------------- */}
-      <ConsoleFrame title="joon · what this earns" live={false} clock={false}>
+      {/* 2. Early-access shadow invoice ------------------------------------- */}
+      <ConsoleFrame title="joon · billing preview" live={false} clock={false}>
         <p className="font-sans text-[13px] text-foreground leading-relaxed mb-4">
-          A flat fee keeps your retention running. On top of that, joon takes a
-          small cut of the lift it proved against control, so we only win more
-          when you do.
+          Not charged during early access. Joon keeps ₹1 of every ₹5 it can show it caused. You keep the rest. Blasts you ask for carry postage at cost; Joon never profits from sending.
         </p>
 
         <div className="rounded-xl border border-border bg-background/40 p-4 font-mono text-[13px]">
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              base · keeps your retention running
+              caused revenue · measured, non-overlapping campaigns
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(model.baseMonthly)}
-              <span className="text-muted-foreground"> / mo</span>
+              {moneyExact(billingData?.billableCausedRevenue ?? 0, billingData?.currency)}
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              performance · {(model.performanceRate * 100).toFixed(0)}% of the{" "}
-              {moneyExact(incrementalRevenue)} lift proved vs control
+              {billingData?.status === "ready" ? "lift fee · capped performance share" : "lift fee · pending approved cap"}
             </span>
             <span className="text-foreground tabular-nums">
-              + {moneyExact(performanceFee)}
+              {moneyExact(billingData?.liftFee ?? 0, billingData?.currency)}
             </span>
           </div>
           <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
             <span className="text-foreground lowercase font-semibold">
-              total · base + only what joon earned you
+              total preview · lift fee + merchant-requested postage
             </span>
             <span className="text-[hsl(var(--accent))] tabular-nums text-[16px] font-semibold">
-              {moneyExact(totalFee)}
+              {moneyExact(totalFee, billingData?.currency)}
             </span>
           </div>
         </div>
 
         <p className="font-mono text-[10.5px] text-muted-foreground mt-3">
-          base fixed · performance scales only with proven lift vs control
-          {isReal ? "" : " · figures representative while control measurement is wired up"}
+          {billingData?.status === "ready"
+            ? "shadow invoice only · no Shopify Billing API call · no charge during early access"
+            : `cap pending · ${billingData?.pendingReason ?? "approved cap evidence is not configured"} · postage remains visible`}
         </p>
       </ConsoleFrame>
 
@@ -514,9 +559,8 @@ export default function OutcomesPage() {
             revenue vs control. The spend rounds to nothing next to the lift
           </StreamRow>
           <StreamRow tick="ok">
-            you pay <b>{moneyExact(totalFee)}</b> for{" "}
-            <b>{moneyExact(incrementalRevenue)}</b> you wouldn&apos;t have earned
-            on your own
+            early access charge <b>{moneyExact(0, billingData?.currency)}</b> · shadow invoice{" "}
+            <b>{moneyExact(totalFee, billingData?.currency)}</b>
           </StreamRow>
         </StreamOutput>
 

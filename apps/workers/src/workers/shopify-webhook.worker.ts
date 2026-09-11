@@ -275,6 +275,7 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
           await prisma.$transaction([
             prisma.orderAttribution.deleteMany({ where: { orderId: order.id } }),
             prisma.experimentOrderOutcome.deleteMany({ where: { orderId: order.id } }),
+            prisma.measurementOrderOutcome.deleteMany({ where: { orderId: order.id } }),
             prisma.formSubmission.updateMany({
               where: { attributedOrderId: order.id },
               data: {
@@ -293,6 +294,7 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             prisma.formSubmission.updateMany({ where: { attributedOrderId: order.id }, data: { attributedRevenue: netRevenue } }),
             prisma.formExperimentExposure.updateMany({ where: { orderId: order.id }, data: { revenue: netRevenue } }),
             prisma.experimentOrderOutcome.updateMany({ where: { orderId: order.id }, data: { revenue: netRevenue } }),
+            prisma.measurementOrderOutcome.updateMany({ where: { orderId: order.id }, data: { netRevenue } }),
           ]);
         }
         break;

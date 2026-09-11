@@ -3,7 +3,8 @@ import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
-import { DEMO_STORE_DOMAIN, messagingCostFor } from "@allohq/database";
+import { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "../lib/campaign-approval";
+import { DEMO_STORE_DOMAIN, messagingCostFor, type PrismaClient } from "@allohq/database";
 import { campaignApprovalChecksum, findBannedTerms, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
 import {
   assignStratifiedCohortArms,
@@ -33,17 +34,39 @@ function planCampaignHoldout(
   assignmentSeed: string,
   proposal: unknown,
   eligible: Array<{ id: string; rfmStratum: string | null }>,
+  evidence: Parameters<typeof holdoutRateFor>[3] = null,
 ) {
   const family = campaignFamily(proposal);
-  // Until the immutable caused-revenue ledger lands, there is deliberately no
-  // evidence adapter here. Missing evidence means the conservative 30% policy.
-  const decision = holdoutRateFor(storeId, family, "all", null);
+  const decision = holdoutRateFor(storeId, family, "all", evidence);
   const assignment = assignStratifiedCohortArms({
     assignmentSeed,
     customers: eligible.map((customer) => ({ customerId: customer.id, stratum: customer.rfmStratum })),
-    rateForStratum: (stratum) => holdoutRateFor(storeId, family, stratum, null).rate,
+    rateForStratum: (stratum) => holdoutRateFor(storeId, family, stratum, evidence).rate,
   });
   return { family, decision, assignment };
+}
+
+async function campaignEvidence(prisma: PrismaClient, storeId: string, family: string) {
+  const ledgers = await prisma.causedRevenueLedger.findMany({
+    where: { storeId, family, tier: "measurement_ready", overlapsAnotherUnit: false },
+    orderBy: [{ unitId: "asc" }, { version: "desc" }],
+  });
+  const latest = [...ledgers.reduce((map, row) => {
+    if (!map.has(row.unitId)) map.set(row.unitId, row);
+    return map;
+  }, new Map<string, (typeof ledgers)[number]>()).values()];
+  const measurable = latest.filter((row) => row.intervalLow !== null && row.intervalHigh !== null);
+  const caused = measurable.reduce((sum, row) => sum + Number(row.causedRevenue), 0);
+  const pooledVariance = measurable.reduce((sum, row) => {
+    const standardError = (Number(row.intervalHigh) - Number(row.intervalLow)) / (2 * 1.96);
+    return sum + standardError ** 2;
+  }, 0);
+  const margin = 1.96 * Math.sqrt(pooledVariance);
+  return {
+    measurementReadyNonOverlappingUnits: measurable.length,
+    pooledCiLow: measurable.length ? caused - margin : null,
+    pooledCiHigh: measurable.length ? caused + margin : null,
+  };
 }
 
 export const campaignsRouter = router({
@@ -78,7 +101,9 @@ export const campaignsRouter = router({
       const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
       const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
       const previewSeed = `campaign-preview:${campaign.id}`;
-      const holdout = planCampaignHoldout(campaign.storeId, previewSeed, campaign.agentProposal, audience.eligible);
+      const family = campaignFamily(campaign.agentProposal);
+      const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
+      const holdout = planCampaignHoldout(campaign.storeId, previewSeed, campaign.agentProposal, audience.eligible, evidence);
       const control = Object.values(holdout.assignment.strata).reduce((sum, stratum) => sum + stratum.controlCount, 0);
       const effectiveRate = audience.eligible.length > 0 ? control / audience.eligible.length : holdout.decision.rate;
       const measurement = {
@@ -296,6 +321,7 @@ export const campaignsRouter = router({
           templateId: input.templateId,
           segmentId: input.segmentId,
           status: input.scheduledAt ? "scheduled" : "draft",
+          origin: "merchant",
           scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
         },
       });
@@ -373,6 +399,19 @@ export const campaignsRouter = router({
       if (!campaign.template) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
       }
+      const frozenAssignmentCount = await ctx.prisma.measurementAssignment.count({
+        where: { unitType: "campaign", unitId: campaign.id },
+      });
+      if (frozenAssignmentCount > 0 && campaign.approvedAt && campaign.approvalChecksum) {
+        await ctx.prisma.campaign.update({ where: { id: campaign.id }, data: { status: "sending" } });
+        try {
+          await emailSendQueue.add("campaign-send", { campaignId: campaign.id }, { jobId: `campaign-send-${campaign.id}` });
+        } catch (error) {
+          await ctx.prisma.campaign.update({ where: { id: campaign.id }, data: campaignDispatchFailureUpdate() });
+          throw error;
+        }
+        return { status: "sending" as const };
+      }
       const brand = await ctx.prisma.brandProfile.findFirst({
         where: { storeId: campaign.storeId },
         select: { vocabulary: true },
@@ -388,7 +427,8 @@ export const campaignsRouter = router({
 
       const audience = await resolveCampaignAudience(campaign.id);
       const family = campaignFamily(campaign.agentProposal);
-      const policy = holdoutRateFor(campaign.storeId, family, "all", null);
+      const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
+      const policy = holdoutRateFor(campaign.storeId, family, "all", evidence);
       const experiment = await getOrCreateExperiment(campaign.storeId, {
         label: `campaign:${campaign.id}:stratified:v1`,
         source: "campaign",
@@ -397,7 +437,7 @@ export const campaignsRouter = router({
         segmentId: campaign.segmentId ?? null,
         segmentName: campaign.segment?.name ?? null,
       }, policy.rate);
-      const holdout = planCampaignHoldout(campaign.storeId, experiment.assignmentSeed, campaign.agentProposal, audience.eligible);
+      const holdout = planCampaignHoldout(campaign.storeId, experiment.assignmentSeed, campaign.agentProposal, audience.eligible, evidence);
       const approvedProposal = withCampaignAudienceSnapshot(campaign.agentProposal, audience, new Date(), {
         experimentId: experiment.id,
         splitRatio: policy.rate,
@@ -428,17 +468,57 @@ export const campaignsRouter = router({
         agentProposal: approvedProposal,
       });
 
-      await ctx.prisma.campaign.update({
-        where: { id: input.id },
-        // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
-        data: {
-          status: "sending",
-          humanDecision: buildHumanDecision(campaign) as object,
-          agentProposal: approvedProposal as object,
-          approvalChecksum,
-          approvedAt: new Date(),
-        },
+      const existingAssignment = await ctx.prisma.measurementAssignment.findFirst({
+        where: { unitType: "campaign", unitId: campaign.id },
+        orderBy: { assignedAt: "asc" },
       });
+      const approvedAt = existingAssignment?.assignedAt ?? new Date();
+      const windowStartsAt = existingAssignment?.windowStartsAt
+        ?? (campaign.scheduledAt && campaign.scheduledAt > approvedAt ? campaign.scheduledAt : approvedAt);
+      const windowEndsAt = existingAssignment?.windowEndsAt
+        ?? new Date(windowStartsAt.getTime() + 7 * 86_400_000);
+      const controlCount = Object.values(holdout.assignment.strata).reduce((sum, stratum) => sum + stratum.controlCount, 0);
+      const effectiveRate = audience.eligible.length ? controlCount / audience.eligible.length : policy.rate;
+      const measurement = campaignMeasurementPolicy(audience.eligible.length, effectiveRate);
+      await ctx.prisma.$transaction(async (tx) => {
+        const claimed = await tx.campaign.updateMany({
+          where: campaignApprovalClaimWhere(input.id),
+          // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
+          data: {
+            status: "sending",
+            humanDecision: buildHumanDecision(campaign) as object,
+            agentProposal: approvedProposal as object,
+            approvalChecksum,
+            approvedAt,
+          },
+        });
+        if (claimed.count !== 1) {
+          throw new TRPCError({ code: "CONFLICT", message: "Campaign was approved concurrently; retry to dispatch its frozen cohort" });
+        }
+        await tx.measurementAssignment.createMany({
+          data: Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
+            storeId: campaign.storeId,
+            experimentId: experiment.id,
+            campaignId: campaign.id,
+            unitType: "campaign",
+            unitId: campaign.id,
+            customerId,
+            arm: detail.arm,
+            stratum: detail.assignmentStratum,
+            holdoutRate: detail.holdoutRate,
+            assignedAt: approvedAt,
+            windowStartsAt,
+            windowEndsAt,
+            assignmentData: {
+              tier: measurement.tier,
+              family,
+              policyReason: policy.reason,
+              originalStratum: detail.stratum,
+            },
+          })),
+          skipDuplicates: true,
+        });
+      }, { isolationLevel: "Serializable" });
 
       try {
         await emailSendQueue.add(
@@ -447,9 +527,12 @@ export const campaignsRouter = router({
           { jobId: `campaign-send-${input.id}` },
         );
       } catch (error) {
+        // Approval truth and frozen assignments are immutable. A queue outage
+        // moves the campaign to scheduled so the same approved snapshot can be
+        // retried without allowing edits or drawing a new control.
         await ctx.prisma.campaign.update({
           where: { id: input.id },
-          data: { status: "draft", approvalChecksum: null, approvedAt: null },
+            data: campaignDispatchFailureUpdate(),
         });
         throw error;
       }

@@ -672,6 +672,59 @@ function SuppressionStatsSection() {
   );
 }
 
+function BillingPreviewSection({ storeId }: { storeId: string }) {
+  const { data, isLoading } = (trpc.analytics.billingPreview as any).useQuery(
+    { storeId },
+    { enabled: !!storeId },
+  ) as { data: null | {
+    currency: string; periodStart: string; periodEnd: string; billableCausedRevenue: number;
+    carryIn: number; carryOut: number; liftFee: number; postageEmails: number; postage: number;
+    performanceFeeCap: number | null; total: number;
+    status: string; pendingReason: string | null;
+  } | undefined; isLoading: boolean };
+  const money = (value: number) => new Intl.NumberFormat(data?.currency === "INR" ? "en-IN" : "en-US", {
+    style: "currency", currency: data?.currency === "INR" ? "INR" : "USD", maximumFractionDigits: 0,
+  }).format(value);
+  return (
+    <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
+      <div className="flex items-center gap-3 mb-2">
+        <CreditCard className="w-4 h-4 text-decision-ink" />
+        <h2 className="section-header accent-bar-left text-[13px]">Billing preview</h2>
+      </div>
+      <p className="text-[11px] font-medium text-decision-ink">Not charged during early access</p>
+      {isLoading ? <div className="mt-5 h-24 glass-skeleton rounded-xl" /> : !data ? (
+        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+          Your first shadow invoice appears after a measured campaign window closes. It shows what you would have paid, without creating a charge.
+        </p>
+      ) : (
+        <div className="mt-5 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ["Caused revenue", money(data.billableCausedRevenue)],
+              ["Joon's lift fee", money(data.liftFee)],
+              ["You kept", money(Math.max(0, data.billableCausedRevenue - data.liftFee))],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-border bg-card p-3 text-card-foreground">
+                <p className="text-[10px] text-muted-foreground">{label}</p>
+                <p className="mt-1 font-mono text-[17px] font-semibold tabular-nums text-foreground">{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="divide-y divide-border rounded-lg border border-border bg-card px-3 text-[11px] text-card-foreground">
+            <div className="flex justify-between gap-4 py-2.5"><span className="text-muted-foreground">Lift fee</span><span className="font-mono tabular-nums">{money(data.liftFee)}</span></div>
+            <div className="flex justify-between gap-4 py-2.5"><span className="text-muted-foreground">Postage · {data.postageEmails.toLocaleString()} merchant-requested emails</span><span className="font-mono tabular-nums">{money(data.postage)}</span></div>
+            <div className="flex justify-between gap-4 py-2.5 font-semibold"><span>Total preview</span><span className="font-mono tabular-nums text-decision-ink">{money(data.total)}</span></div>
+          </div>
+          <p className="text-[10px] leading-relaxed text-muted-foreground">
+            Joon never profits from sending. Postage applies only to blasts you ask for. Performance fees are capped; a missing comparison cap remains visibly pending rather than being guessed.
+          </p>
+          {data.status !== "ready" && <p className="text-[10px] font-medium text-measure">Cap pending · {data.pendingReason}</p>}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useUser();
   const { toast } = useToast();
@@ -853,21 +906,7 @@ export default function SettingsPage() {
       {/* Notification Preferences */}
       <NotificationPreferencesSection />
 
-      {/* Billing — Coming Soon */}
-      <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <CreditCard className="w-4 h-4 text-muted-foreground" />
-          <h2 className="section-header accent-bar-left text-[13px]">Billing</h2>
-        </div>
-        <div className="py-6">
-          <p className="text-[12px] text-muted-foreground font-sans leading-relaxed">
-            Subscriptions and payment methods are on the way in our next update.
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-3">
-            We&apos;ll let you know the moment it&apos;s ready
-          </p>
-        </div>
-      </motion.div>
+      <BillingPreviewSection storeId={storeId} />
     </motion.div>
   );
 }

@@ -503,6 +503,7 @@ async function executeCreateCampaign(
       templateId: template.id,
       segmentId: segmentId ?? null,
       status: "draft",
+      origin: "merchant",
       scheduledAt: parsed.params.scheduledAt ? new Date(parsed.params.scheduledAt) : null,
       agentProposal: {
         source: "natural_language_instruction",

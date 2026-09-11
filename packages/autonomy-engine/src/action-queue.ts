@@ -275,6 +275,7 @@ export async function executeApprovedAction(
         name: (payload.campaignName as string) || (payload.name as string) || "AI Campaign",
         templateId,
         status: "draft",
+        origin: "joon",
       },
     });
     await markExecuted(actionId);

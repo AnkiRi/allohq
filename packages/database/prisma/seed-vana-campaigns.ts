@@ -100,7 +100,7 @@ async function main() {
     await prisma.campaign.create({
       data: {
         id: campaignId, workspaceId, storeId, name: spec.name,
-        status: "sent", sentAt, recipientCount: treatment.length,
+        status: "sent", origin: "joon", sentAt, recipientCount: treatment.length,
         openCount: Math.round(treatment.length * 0.42), clickCount: Math.round(treatment.length * 0.11),
         // What joon PROPOSED — powers the in-product decision trace ("How joon decided").
         agentProposal: {

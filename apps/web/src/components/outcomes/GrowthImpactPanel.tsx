@@ -9,8 +9,7 @@ import { ConsoleFrame } from "@/components/console";
 // The holdout isn't the pitch; it's the training signal underneath. What the
 // founder (and a VC) sees here is the DECISION it produces: joon sends where a
 // control group PROVES incremental lift, and holds back where it doesn't (the
-// loyalists who'd have bought anyway) — same revenue, fewer sends, a channel
-// that stays worth opening.
+// aggregate lift is supported, and keeps learning where it is not.
 //
 // Every number comes from analytics.camImpact — the same real machinery as the
 // control comparison below, grouped per segment. The send/hold call is DERIVED
@@ -48,9 +47,6 @@ type CamImpact = {
     provenIncremental: number;
     sendsAvoidable: number;
     sendsAvoidablePct: number;
-    baseMonthly: number;
-    performanceFee: number;
-    totalFee: number;
   };
 };
 
@@ -97,8 +93,8 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
         Do more by sending less.
       </p>
       <p className="font-sans text-[12.5px] text-muted-foreground leading-relaxed mb-5">
-        joon concentrated sends on the segments a held-out control proved would respond, and held
-        back the ones that would have bought anyway.
+        joon uses random controls to find segments with aggregate incremental lift. It does not
+        claim to know which individual customers would have bought anyway.
       </p>
 
       {/* Roll-up readouts — the money row. */}
@@ -109,7 +105,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
           </div>
           <div className="font-mono text-[22px] tabular-nums text-foreground">{inr(t.provenIncremental)}</div>
           <div className="font-sans text-[11px] text-muted-foreground mt-1">
-            from {t.sendSegments} of {t.campaigns} segments — the rest earned nothing extra
+            from {t.sendSegments} of {t.campaigns} segments — the rest did not yet show reliable lift
           </div>
         </div>
         <div className="rounded-xl border border-border bg-background/40 p-4">

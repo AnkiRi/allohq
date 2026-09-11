@@ -67,6 +67,7 @@ export const campaignTools: ToolDefinition[] = [
           templateId,
           segmentId: segment?.id,
           status: "draft",
+          origin: "merchant",
           recipientCount: segment?.customerCount ?? 0,
         },
       });
