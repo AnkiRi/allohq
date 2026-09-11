@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default function V3LandingPage(props: {
-  searchParams: Promise<{ pal?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   return <V3Landing {...props} />;
 }

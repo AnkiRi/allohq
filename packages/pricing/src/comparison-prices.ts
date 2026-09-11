@@ -42,6 +42,14 @@ export interface ComparisonPriceResult {
   basis: { kind: "active_profiles" | "monthly_sends"; quantity: number };
 }
 
+/** A real invoice cannot be finalized until approved cap evidence exists. */
+export class MissingComparisonCapEvidenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MissingComparisonCapEvidenceError";
+  }
+}
+
 export const SHOPIFY_EMAIL_USD_EVIDENCE: ComparisonPriceEvidence = {
   tool: "shopify_email",
   model: "monthly_sends_progressive",
@@ -112,7 +120,7 @@ export function comparisonPrice(
     ? evidence.find((entry) => entry.tool === tool && entry.currency === "USD")
     : undefined;
   const record = exact ?? derived;
-  if (!record) throw new Error(`No verified ${tool} comparison price for ${input.currency}`);
+  if (!record) throw new MissingComparisonCapEvidenceError(`No verified ${tool} comparison price for ${input.currency}`);
   if (input.publicDisplay && record.evidenceStatus !== "public_approved") {
     throw new Error(`${tool} comparison price is not approved for public display`);
   }

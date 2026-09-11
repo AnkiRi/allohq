@@ -42,6 +42,8 @@ export interface MonthlyInvoiceInput {
   subscriberSnapshotAt: string;
   comparisonEvidence?: readonly ComparisonPriceEvidence[];
   config?: PricingConfig;
+  /** Public estimator only. Real invoices remain fail-closed until cap evidence exists. */
+  allowUncappedPreview?: boolean;
 }
 
 export interface MonthlyInvoice {
@@ -52,7 +54,8 @@ export interface MonthlyInvoice {
   carryOutMinor: number;
   uncappedPerformanceFeeMinor: number;
   performanceFeeCapMinor: number | null;
-  performanceFeeCapStatus: "available" | "not_required_unavailable";
+  performanceFeeCapStatus: "available" | "not_required" | "unavailable_preview";
+  calculationKind: "invoice" | "uncapped_preview";
   liftFeeMinor: number;
   postageEmails: number;
   postageMinor: number;
@@ -132,22 +135,23 @@ export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoic
   const netMinor = billableCausedMinor + input.carryInMinor;
   const carryOutMinor = Math.min(0, netMinor);
   const uncappedPerformanceFeeMinor = applyBasisPoints(Math.max(0, netMinor), config.liftFeeBasisPoints);
-  const comparison = uncappedPerformanceFeeMinor > 0
-    ? comparisonPrice(
-        "klaviyo",
-        {
-          currency: input.currency,
-          activeSubscribers: input.activeSubscribers,
-          monthlySends: input.monthlySends,
-        },
-        input.comparisonEvidence,
-      )
-    : null;
+  let comparison: ComparisonPriceResult | null = null;
+  if (uncappedPerformanceFeeMinor > 0) {
+    try {
+      comparison = comparisonPrice("klaviyo", {
+        currency: input.currency,
+        activeSubscribers: input.activeSubscribers,
+        monthlySends: input.monthlySends,
+      }, input.comparisonEvidence);
+    } catch (error) {
+      if (!input.allowUncappedPreview) throw error;
+    }
+  }
   const performanceFeeCapMinor = comparison === null
     ? null
     : applyBasisPoints(comparison.priceMinor, config.capFactorBasisPoints);
   const liftFeeMinor = performanceFeeCapMinor === null
-    ? 0
+    ? (input.allowUncappedPreview ? uncappedPerformanceFeeMinor : 0)
     : Math.min(uncappedPerformanceFeeMinor, performanceFeeCapMinor);
   const postageMinor = safeNumber(
     roundedRatio(
@@ -165,7 +169,14 @@ export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoic
     carryOutMinor,
     uncappedPerformanceFeeMinor,
     performanceFeeCapMinor,
-    performanceFeeCapStatus: performanceFeeCapMinor === null ? "not_required_unavailable" : "available",
+    performanceFeeCapStatus: performanceFeeCapMinor !== null
+      ? "available"
+      : uncappedPerformanceFeeMinor === 0
+        ? "not_required"
+        : "unavailable_preview",
+    calculationKind: input.allowUncappedPreview && uncappedPerformanceFeeMinor > 0 && comparison === null
+      ? "uncapped_preview"
+      : "invoice",
     liftFeeMinor,
     postageEmails: input.postageEmails,
     postageMinor,
@@ -230,6 +241,7 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
     subscriberSnapshotAt: input.subscriberSnapshotAt,
     comparisonEvidence: input.comparisonEvidence,
     config: input.config,
+    allowUncappedPreview: true,
   });
   const traditional = input.enteredBillMinor === undefined
     ? comparisonPrice(input.comparisonTool, {
@@ -246,6 +258,16 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
           basis: { kind: "entered_bill" as const },
         };
       })();
+  const availableForFeeMinor = traditional.priceMinor - invoice.postageMinor;
+  const costsMoreAtZeroLift = availableForFeeMinor < 0;
+  const breakEvenCausedMinor = costsMoreAtZeroLift
+    ? 0
+    : safeNumber(
+        (BigInt(availableForFeeMinor + 1) * 10_000n - 5_001n)
+          / BigInt((input.config ?? PRICING_CONFIG).liftFeeBasisPoints),
+        "breakEvenCausedMinor",
+      );
+  const breakEvenFeeMinor = applyBasisPoints(breakEvenCausedMinor, (input.config ?? PRICING_CONFIG).liftFeeBasisPoints);
   return {
     emailRevenueMinor,
     causedMinor,
@@ -253,5 +275,11 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
     invoice,
     traditional,
     merchantKeepsMinor: causedMinor - invoice.liftFeeMinor,
+    breakEven: {
+      costsMoreAtZeroLift,
+      causedMinor: breakEvenCausedMinor,
+      merchantKeepsMinor: breakEvenCausedMinor - breakEvenFeeMinor,
+      currentlyCostsMore: invoice.totalMinor > traditional.priceMinor,
+    },
   };
 }

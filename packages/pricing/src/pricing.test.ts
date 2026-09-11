@@ -145,7 +145,7 @@ test("postage-only months work in INR and USD", () => {
   assert.equal(inr.totalMinor, inr.postageMinor);
   assert.equal(usd.totalMinor, usd.postageMinor);
   assert.equal(inr.performanceFeeCapMinor, null);
-  assert.equal(inr.performanceFeeCapStatus, "not_required_unavailable");
+  assert.equal(inr.performanceFeeCapStatus, "not_required");
   assert.equal(inr.comparison, null);
 });
 
@@ -215,6 +215,14 @@ test("a positive performance fee fails closed without approved cap evidence", ()
   }), /No verified klaviyo comparison price/);
 });
 
+test("uncapped estimation is available only through the explicit preview flag", () => {
+  const invoice = computeMonthlyInvoice({ units: [unit(100_000)], carryInMinor: 0, postageEmails: 1_000, activeSubscribers: 10_000, monthlySends: 1_000, currency: "INR", subscriberSnapshotAt: "2026-09-11T00:00:00.000Z", allowUncappedPreview: true });
+  assert.equal(invoice.performanceFeeCapStatus, "unavailable_preview");
+  assert.equal(invoice.calculationKind, "uncapped_preview");
+  assert.equal(invoice.liftFeeMinor, 20_000);
+  assert.equal(invoice.totalMinor, 20_900);
+});
+
 test("calculator and invoice paths have exact parity", () => {
   const scenario = computeCalculatorScenario({
     activeSubscribers: 70_000,
@@ -258,4 +266,38 @@ test("calculator accepts a merchant-entered current bill without using it as the
   });
   assert.equal(scenario.traditional.priceMinor, 123_456);
   assert.equal(scenario.invoice.performanceFeeCapMinor, 6_000_000);
+});
+
+test("calculator computes the uncapped break-even in the pricing module", () => {
+  const scenario = computeCalculatorScenario({
+    activeSubscribers: 70_000,
+    monthlyRevenueMinor: 150_000_000,
+    emailRevenueShareBasisPoints: 2_000,
+    causedShareBasisPoints: 4_000,
+    merchantBlastCount: 4,
+    currency: "INR",
+    comparisonTool: "shopify_email",
+    subscriberSnapshotAt: "2026-09-11T00:00:00.000Z",
+  });
+  assert.equal(scenario.breakEven.costsMoreAtZeroLift, false);
+  assert.equal(scenario.breakEven.causedMinor, 10_215_002);
+  assert.equal(scenario.breakEven.merchantKeepsMinor, 8_172_002);
+  assert.equal(scenario.breakEven.currentlyCostsMore, true);
+});
+
+test("calculator calls out when postage alone exceeds the comparison", () => {
+  const scenario = computeCalculatorScenario({
+    activeSubscribers: 70_000,
+    monthlyRevenueMinor: 0,
+    emailRevenueShareBasisPoints: 2_000,
+    causedShareBasisPoints: 0,
+    merchantBlastCount: 4,
+    currency: "INR",
+    comparisonTool: "shopify_email",
+    enteredBillMinor: 100,
+    subscriberSnapshotAt: "2026-09-11T00:00:00.000Z",
+  });
+  assert.equal(scenario.breakEven.costsMoreAtZeroLift, true);
+  assert.equal(scenario.breakEven.causedMinor, 0);
+  assert.equal(scenario.breakEven.currentlyCostsMore, true);
 });

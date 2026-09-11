@@ -25,9 +25,9 @@ type Line = {
 const LINES: Line[] = [
   {
     id: "emails",
-    k: "Emails sent",
-    note: "volume is not the product",
-    amount: "₹0 · never",
+    k: "Joon's own sends",
+    note: "journeys and campaigns Joon proposes",
+    amount: "₹0",
     variant: "zero",
   },
   {
@@ -46,9 +46,9 @@ const LINES: Line[] = [
   },
   {
     id: "lift",
-    k: "Lift proven against your control",
-    note: "added only after a real holdout proves it",
-    amount: "the only line we will ever add",
+    k: "Lift measured against your control",
+    note: "Joon keeps a share only when a real holdout measures lift",
+    amount: "plus requested-blast postage at cost",
     variant: "lift",
   },
 ];
@@ -71,14 +71,14 @@ export function BillStatement() {
       }`}
       ref={ref}
       role="figure"
-      aria-label="Joon pricing principle: no charge for emails, contacts, or gross revenue; only proven lift may become a future charge."
+      aria-label="Joon pricing principle: Joon's own sends are free, requested blasts carry postage at cost, and only measured lift may carry a fee."
     >
       <div className="v2-bill__head">
         <div className="v2-bill__masthead">
           <span className="v2-bill__mark">joon</span>
           <span className="v2-bill__doc mono">Public v1</span>
         </div>
-        <p className="v2-bill__principle mono">Free now · never priced by volume</p>
+        <p className="v2-bill__principle mono">Free during early access · Joon never profits from sending</p>
       </div>
 
       <div className="v2-bill__body">
@@ -109,7 +109,7 @@ export function BillStatement() {
       </div>
 
       <p className="v2-bill__foot" style={posted(4)}>
-        No fabricated lift. No charge until a held-out control produces evidence.
+        No fabricated lift. Requested blasts carry about ₹9 postage per 1,000 accepted emails.
       </p>
     </div>
   );

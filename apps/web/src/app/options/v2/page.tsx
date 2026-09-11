@@ -10,7 +10,6 @@ import { KineticHeadline } from "./Kinetic";
 import { HoldoutField } from "./Holdout";
 import { SwarmField } from "./Swarm";
 import { MorningBrief } from "./Brief";
-import { BillStatement } from "./Bill";
 import {
   DayRail,
   SkyWash,
@@ -23,6 +22,8 @@ import {
 import { DecisionMarquee, CustomerStories } from "../v3-landing/V3Sections";
 import { ChannelsStrip, FormsSection, JourneySection, SharperDecisions } from "../v3-landing/StaticSections";
 import { CrmCapture } from "../v3-landing/CrmCapture";
+import { PricingCalculator } from "../v3-landing/PricingCalculator";
+import type { PricingCalculatorInitialState } from "../v3-landing/pricing-calculator-state";
 
 export const metadata: Metadata = {
   title: "joon · one marketer for every customer",
@@ -89,12 +90,14 @@ export function V2Landing({
   enhanced = false,
   crmFormId = null,
   crmConfigured = false,
+  initialCalculator,
 }: {
   showBanner?: boolean;
   initialPal?: PalId;
   enhanced?: boolean;
   crmFormId?: string | null;
   crmConfigured?: boolean;
+  initialCalculator?: PricingCalculatorInitialState;
 }) {
   return (
     <div className={`opt-v2${enhanced ? " v3-landing" : ""}`} data-pal={initialPal} suppressHydrationWarning>
@@ -175,6 +178,8 @@ export function V2Landing({
                     connect Shopify in one click
                   </span>
                 </div>
+                {enhanced && <p className="v3-hero__pricing-promise">No lift, no Joon fee. Joon&rsquo;s fee is capped at what a leading email platform charges for your list. Requested blasts pay postage at cost.</p>}
+                {enhanced && <a className="v3-hero__pricing-link mono" href="#bill">See what you&rsquo;d pay</a>}
 
                 {/* slim live proof strip */}
                 <dl className="v2-proofstrip mono" aria-label="Live store, right now">
@@ -325,6 +330,7 @@ export function V2Landing({
                   Holdouts are one-way: you can&rsquo;t run a control on history.
                   Every campaign that runs without one loses that proof forever.
                 </p>
+                {enhanced && <div className="v3-holdout-answer"><p>Joon emails most eligible customers and holds a few back at random. What the emailed group spends beyond the held-back group is what Joon caused.</p><p><strong>Doesn&rsquo;t holding people back cost sales?</strong> A little - they still buy as usual; they just miss one email. It&rsquo;s how you know the rest is real.</p></div>}
               </Rise>
             </div>
           </section>
@@ -531,21 +537,21 @@ export function V2Landing({
           <section className="v2-section" id="bill">
             <div className="v2-wrap v2-half v2-half--art-right v2-half--wide-art">
               <Rise className="v2-half__copy">
-                <p className="v2-eyebrow mono">free public v1</p>
+                <p className="v2-eyebrow mono">{enhanced ? <>what you&rsquo;d pay</> : <>free public v1</>}</p>
                 <h2 className="v2-section__h">
-                  {enhanced ? <>Free in v1. <em>Never per message.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
+                  {enhanced ? <>No lift, no Joon fee. <em>You pay requested-blast postage at cost.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
                 </h2>
                 <p className="v2-section__lede">
                   {enhanced
-                    ? "No subscription and no per-email charge. When we do charge, it will be a share of the lift the held-out group proves, and nothing else. Not your revenue. Not your list size. Not your volume."
+                    ? "Joon keeps ₹1 of every ₹5 it can show it caused. Blasts you ask for pay postage at cost. Joon's own sends do not."
                     : "Joon is free at launch. There is no per-email charge and no performance fee in v1. We are earning the right to price the decision layer only after real holdout evidence exists."}
                 </p>
                 <p className="v2-half__aside mono">
-                  free plan · email only · merchant approval required
+                  {enhanced ? "free during early access · email only · merchant approval required" : "free plan · email only · merchant approval required"}
                 </p>
               </Rise>
               <Rise className="v2-half__art">
-                {enhanced ? <BillStatement /> : <div className="v2-bill" aria-label="Joon public v1 pricing">
+                {enhanced ? <PricingCalculator initial={initialCalculator} /> : <div className="v2-bill" aria-label="Joon public v1 pricing">
                   <div className="v2-bill__head">
                     <div className="v2-bill__masthead">
                       <span className="v2-bill__mark">joon</span>

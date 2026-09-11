@@ -36,7 +36,7 @@ export function JourneySection() {
             <strong>Left alone, and why</strong>
             <span>Priya · bought 2h ago <b>already purchased</b></span>
             <span>Dev · 3 emails this week <b>fatigue cap</b></span>
-            <span>Nisha · 22:40 local <b>quiet hours</b></span>
+            <span>Nisha · 22:40 local <b>quiet hours · sends 07:00</b></span>
           </div>
           <p className="v3-illustrative mono">Conceptual decision outcome - not shown as a draggable editor node.</p>
         </Rise>

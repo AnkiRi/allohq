@@ -17,6 +17,7 @@ const isPublicRoute = createRouteMatcher([
   "/join(.*)",
   "/confirm(.*)",
   "/api/public/forms(.*)",
+  "/api/public/landing-events(.*)",
   // Carries only a short-lived, single-use opaque handoff. The page itself
   // must render while signed out so Clerk can present sign-up/sign-in; the API
   // redeems it only after a valid Clerk session exists.
