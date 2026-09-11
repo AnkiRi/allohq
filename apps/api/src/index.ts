@@ -19,9 +19,11 @@ import {
   assertEmailDeliveryConfigured,
   assertUnsubscribeSigningConfigured,
 } from "@allohq/messaging";
+import { captureApiError, initObservability, shouldCaptureApiError } from "./observability";
 
 // Load environment variables
 config();
+initObservability();
 
 if (process.env.NODE_ENV === "production") {
   assertDataEncryptionConfigured();
@@ -51,6 +53,9 @@ const corsMiddleware = cors({
 const trpcHandler = createHTTPHandler({
   router: appRouter,
   createContext,
+  onError({ error, path }) {
+    if (shouldCaptureApiError(error.code, undefined)) captureApiError(error, path ?? "unknown");
+  },
 });
 
 /**

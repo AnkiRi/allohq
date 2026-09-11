@@ -69,6 +69,9 @@ Goal: prove the deployed system is known, recoverable and unable to send broadly
 - [ ] Confirm Shopify, Clerk, messaging-provider and infrastructure credentials are current; rotate any credential known to have been exposed.
 - [ ] Confirm logs, traces and error reporting redact tokens, email bodies and unnecessary personal data.
 - [ ] Confirm alert ownership for API errors, worker failures, queue depth, provider failures and complaint pause.
+- [ ] Configure and exercise error reporting in web, API and workers. With no DSN it must remain disabled; with a test DSN, a synthetic exception must arrive without request bodies, tokens, email addresses, phone numbers, customer identifiers or recipient data.
+- [ ] Configure Railway alerts for API/worker crash loops, sustained 5xx rate, queue/dead-letter growth, database disk at 70% warning and 85% critical, database connection use at 70% warning and 85% critical, Redis memory/evictions and provider complaint pause. Record the notification channel, primary owner and backup owner.
+- [ ] Configure and load-test an edge/WAF or shared distributed rate limit for the public landing-event endpoint; the process-local limiter alone does not pass this gate in a multi-instance deployment.
 - [ ] Confirm backup/PITR status and name the restore owner.
 
 Evidence: deployment URLs/IDs, migration output, health responses, redacted environment screenshots, worker boot logs and alert destinations.
@@ -135,6 +138,7 @@ Test popup, inline, hosted and multi-step forms on desktop and mobile.
 - [ ] Submit each format with valid data and with every validation failure.
 - [ ] Confirm fields not defined by the form cannot be submitted or persisted.
 - [ ] Verify US, EU/UK, Canada and Australia market presets against the approved product policy.
+- [ ] Verify the India consent preset, including the approved disclosure, purpose, proof fields, unsubscribe path and any double-opt-in decision recorded by the founder or counsel.
 - [ ] Confirm evidence records disclosure version, policy reference, market, source, time, user-agent and the approved IP representation.
 - [ ] Confirm double-opt-in mail uses the transactional consent lane, including while marketing delivery is disabled or the store is complaint-paused.
 - [ ] Confirm DOI tokens are digest-only, expire, and succeed exactly once.
@@ -196,6 +200,36 @@ Goal: prove an approved campaign is frozen, measurable and cannot drift on retry
 - [ ] Confirm controls create withheld ledger entries and never call the provider.
 - [ ] Confirm unapproved campaigns cannot enter a delivery job.
 
+## Stage 7A — SES sandbox, tenant isolation and event reconciliation
+
+Goal: replace provider assumptions before any Stage 8 delivery evidence is collected.
+
+- [ ] Keep `MESSAGING_SEND_MODE=disabled` and SES in its sandbox. Do not set `EMAIL_PROVIDER=ses` in a deployed environment until this stage passes.
+- [ ] Confirm the selected SES region supports the required tenant features. Record the account, region, sandbox state, granted daily quota and granted maximum send rate without recording credentials.
+- [ ] Provision one SES tenant per store with the Standard reputation policy, a store-owned Easy DKIM identity and custom MAIL FROM domain.
+- [ ] Create separate `triggered` and `broadcast` configuration sets and prove every submission carries store, campaign/automation, delivery-key and stream tags.
+- [ ] Verify pending, failed and unverified identities fail closed and the DNS panel shows DKIM CNAME, MAIL FROM MX/TXT and DMARC guidance accurately.
+- [ ] Exercise success, bounce and complaint mailbox-simulator addresses. Confirm events arrive through the chosen signed/idempotent event path and map once onto delivery, suppression and complaint-pause state.
+- [ ] Exercise delay, open, click, reject and rendering-failure fixtures and out-of-order/duplicate events.
+- [ ] Run the ambiguity drill: the fake SES client accepts a message and then returns an error. The delivery becomes `ambiguous`, is never retried blindly, reconciles by delivery-key tag, and retries only after 15 minutes with no Send event.
+- [ ] Confirm tenant reputation isolation and store-level complaint pause. One store's simulated complaint must not pause another store.
+- [ ] Review the least-privilege IAM policy, production-access request and quota-increase request. Founder actions remain unexecuted.
+
+Gate: **Stage 8 cannot begin on SES until sandbox event mapping, tenant isolation and the ambiguity drill pass. Evidence gathered against Resend does not count as SES acceptance evidence.**
+
+## Stage 7B — capacity and resumability
+
+Goal: prove representative scale without real recipients or an unrestricted send mode.
+
+- [ ] Sync a synthetic 100,000-customer store, interrupt the import after durable progress, restart it and prove it resumes without duplicate customers, orders, consent rows or queued work.
+- [ ] Record peak database connections, database disk growth, Redis memory, queue depth, worker memory/CPU, time to first usable customer and total sync duration.
+- [ ] Plan a 70,000-recipient broadcast using SES mailbox-simulator recipients only. Keep actual sandbox submissions within the account's sandbox quota; use the fake provider/load harness for the full queue-throughput run unless AWS approves a larger simulator quota in writing.
+- [ ] Record accepted, deferred, ambiguous, failed and reconciled counts, peak queue depth, worker throughput and total drain duration.
+- [ ] Read SES `MaxSendRate` at runtime. The theoretical provider floor is `70,000 / MaxSendRate` seconds: 14,000 seconds (3h 53m) at 5/s, 5,600 seconds (1h 33m) at 12.5/s, 1,400 seconds (23m 20s) at 50/s, or 700 seconds (11m 40s) at 100/s. Report the granted rate and measured duration; do not promise a generic blast time.
+- [ ] Stop and resume workers midway. Reconcile every delivery key to exactly one terminal or explicitly ambiguous record, with no blind duplicate submission.
+
+Gate: the sync must resume cleanly and the broadcast harness must drain within the operational window agreed with the founder before a representative merchant is onboarded.
+
 ## Stage 8 — sender domain and controlled seed delivery
 
 Goal: establish deliverability, then permit only controlled recipients.
@@ -212,6 +246,10 @@ Goal: establish deliverability, then permit only controlled recipients.
 - [ ] Confirm an unlisted address is blocked before the provider call.
 - [ ] Exercise hard bounce, complaint and unsubscribe webhooks and verify suppression.
 - [ ] Confirm store cap, concurrency, provider accounting, kill switch and complaint pause.
+- [ ] Confirm the store warmup state is visible and enforced: daily cap, deferred remainder, health hold, complaint pause and founder override with recorded reason.
+- [ ] Confirm warmup prioritizes customers who clicked or bought in the last 30 days, then 90 days, then the remaining eligible audience; opens alone must not outrank stronger signals.
+- [ ] Confirm sends over the warmup cap defer rather than drop and keep their frozen treatment/control assignments.
+- [ ] Confirm rolling seven-day bounce above 2% or complaint above 0.1% holds growth for three days, and complaint above 0.3% pauses the store and alerts the owner.
 
 Gate: moving from `disabled` to `allowlist` requires the founder to record the exact recipients and rollback owner. Moving to `live` is outside this plan until the limited-live ramp is approved.
 
@@ -247,7 +285,7 @@ Run welcome, abandoned checkout, post-purchase, replenishment, win-back and anni
 Goal: establish recovery behavior before a real audience is possible.
 
 - [ ] Provider 429, provider 500 and network timeout.
-- [ ] Timeout after provider acceptance; verify stable idempotency and no duplicate delivery.
+- [ ] Timeout after provider acceptance; quarantine the attempt as ambiguous, reconcile provider evidence and never retry blindly. Verify at most one provider submission for the delivery key where provider evidence is available; where the provider cannot prove acceptance, retain an explicit ambiguous state rather than claiming exactly-once delivery.
 - [ ] API, worker and Redis restart during campaign and journey work.
 - [ ] Duplicate and out-of-order Shopify/provider webhooks.
 - [ ] Revoked, expired and rotated Shopify access token.
@@ -257,7 +295,7 @@ Goal: establish recovery behavior before a real audience is possible.
 - [ ] Global kill, store pause and quota exhaustion mid-campaign.
 - [ ] Restore a backup into an isolated environment and reconcile queues without duplicate effects.
 
-Invariant: **one correct delivery or none — never two, never unapproved.**
+Invariant: **one approved logical delivery may produce at most one provider submission. An ambiguous provider response is quarantined and reconciled before retry; the system never claims exactly-once delivery when provider evidence is unavailable.**
 
 ## Stage 12 — privacy and data-subject behavior
 
@@ -293,6 +331,7 @@ Goal: convert acceptance evidence into a controlled launch decision.
 - [ ] Define support owner, incident owner, delivery rollback owner and tester communication channel.
 - [ ] Publish Privacy Policy, Terms, DPA, subprocessors and support information.
 - [ ] Complete Protected Customer Data Level 2 answers.
+- [ ] Start the Protected Customer Data Level 2 submission now, in parallel with technical acceptance; record Shopify questions, owner, submission date and requested follow-ups rather than waiting for Stage 14.
 - [ ] Verify scopes and Partner Dashboard / `shopify.app.toml` parity; remove unnecessary scopes.
 - [ ] Choose distribution deliberately.
 - [ ] Prepare truthful listing copy, icon, approved screenshots and reviewer instructions.
@@ -300,6 +339,9 @@ Goal: convert acceptance evidence into a controlled launch decision.
 - [ ] Run the Partner Dashboard self-review and resolve every blocking item.
 - [ ] Approve the limited-live ramp: employees/seeds → 7 → 25 → 100 → 10% of one design-partner audience.
 - [ ] Keep capacity gated while onboarding the first design partners.
+- [ ] Review one shadow invoice with every tester: measured units, non-billable units, negative carry, lift fee, merchant-requested postage, cap status and all three founder comparison variants. Record comprehension and objections; never create a Billing API charge.
+- [ ] Approve the external-tester protocol: named cohort, target count, eligibility, 30/60/90-day duration, permitted stores/data, delivery mode, success criteria, stop conditions, weekly feedback channel, incident contact and signed tester/data terms.
+- [ ] Record success criteria at minimum for install completion, time to first approved campaign, zero unsafe sends, measurement readiness, shadow-invoice comprehension, weekly active use and willingness to continue.
 
 ## Completion criteria
 
@@ -312,6 +354,22 @@ External acceptance is complete only when:
 - Founder sign-off in Stage 14 is recorded.
 
 Shopify submission readiness is separate from permission to send to a real merchant list. Passing the UI and install review does not waive delivery, domain, privacy or failure-drill gates.
+
+## Operations configuration hand-off
+
+Error reporting is wired for web, API and workers but disabled when their Sentry DSN is blank. The founder must create separate projects or environment filters, place DSNs only in the deployment secret managers, set the release to the deployed commit and begin with trace sampling at zero. Before enabling traces, repeat the PII review. Synthetic acceptance exceptions must use invented identifiers only.
+
+The capture boundary removes user objects, cookies, request bodies, breadcrumb messages and fields whose names indicate tokens, credentials, message content, recipients or customer data. This is defense in depth, not permission to attach sensitive values to exceptions. Application code must continue logging stable internal job/event IDs and coarse operational state rather than content.
+
+Railway alerts to configure and route to both a primary and backup owner:
+
+- API and worker deployment failure, restart/crash loop and sustained 5xx/error rate.
+- Worker queue depth, oldest-job age, dead-letter creation and repeated provider ambiguity.
+- PostgreSQL disk at 70% warning and 85% critical; connections at 70% warning and 85% critical; backup/PITR failure.
+- Redis memory pressure, eviction and connection saturation.
+- SES bounce/complaint warmup holds, tenant pause, account quota exhaustion and store complaint pause.
+
+The landing analytics endpoint stores only enumerated, bucketed events. It accepts same-origin browser requests of at most 2 KiB, returns an opaque 204 for accepted or rejected input, and applies per-process IP-hash and global request limits without persisting an IP. The gated daily privacy-retention worker deletes raw events older than 90 days using the dedicated `createdAt` index. The in-process limiter is not shared across instances and is not sufficient production abuse protection: Stage 0 must configure and verify an external edge/WAF or shared distributed limiter before public launch.
 
 ## Interruption and resume log
 

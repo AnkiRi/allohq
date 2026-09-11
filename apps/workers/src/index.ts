@@ -11,6 +11,9 @@ import { isScheduleAllowed, isV1ReleaseMode } from "@allohq/release-gate";
 import { assertDataEncryptionConfigured } from "@allohq/database";
 import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
 import { startCriticalDeadLetterCapture } from "./dead-letter";
+import { flushObservability, initObservability, monitorWorkerFailures } from "./observability";
+
+initObservability();
 
 if (process.env.NODE_ENV === "production") {
   assertDataEncryptionConfigured();
@@ -146,6 +149,23 @@ import Redis from "ioredis";
 console.log("Starting AlloHQ workers...");
 const sesEventWorker = startSesEventWorker();
 const criticalDeadLetterCapture = startCriticalDeadLetterCapture();
+const stopWorkerFailureMonitoring = monitorWorkerFailures([
+  syncWorker, rfmWorker, sendWorker, shopifyWebhookWorker, brandAnalysisWorker,
+  automationGeneratorWorker, agentPipelineWorker, automationRunnerWorker,
+  triggerListenerWorker, embeddingWorker, agentObserveWorker, conversationProcessWorker,
+  abandonedCartWorker, segmentChangeWorker, customerStateUpdaterWorker,
+  guardrailValidatorWorker, brandKitExtractorWorker, productImageProcessorWorker,
+  creativeGeneratorWorker, opportunityScannerWorker, campaignFactoryWorker,
+  productCycleAnalyzerWorker, briefingGeneratorWorker, baselineCaptureWorker,
+  weeklyReportWorker, journeyStepperWorker, abTestEvaluatorWorker, revenueForecastWorker,
+  productRecommendationWorker, shippingUpdateWorker, restockAlertWorker, priceDropWorker,
+  repurchaseReminderWorker, inventoryMonitorWorker, storeActivationWorker,
+  outcomeAttributionWorker, churnInterventionWorker, benchmarkAggregatorWorker,
+  customerVoiceWorker, memoryWriterWorker, dailyRevenueEmailWorker, overnightOpsWorker,
+  eventReactorWorker, browseAbandonmentWorker, copyLearnerWorker, basketAnalysisWorker,
+  productSegmentsWorker, privacyRetentionWorker,
+  ...(sesEventWorker ? [sesEventWorker] : []),
+]);
 console.log(`  - sync worker: ${syncWorker.name}`);
 console.log(`  - rfm worker: ${rfmWorker.name}`);
 console.log(`  - send worker: ${sendWorker.name}`);
@@ -554,6 +574,9 @@ const shutdown = async () => {
     ]);
   } catch (err) {
     console.error("Error during shutdown:", (err as Error).message);
+  } finally {
+    stopWorkerFailureMonitoring();
+    await flushObservability();
   }
   clearTimeout(forceExitTimer);
   process.exit(0);

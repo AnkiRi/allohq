@@ -4,6 +4,7 @@ export const PRIVACY_PAYLOAD_RETENTION_DAYS = 30;
 export const PRIVACY_AUDIT_RETENTION_DAYS = 365;
 export const PROVIDER_EVENT_RETENTION_DAYS = 90;
 export const ACQUISITION_EVIDENCE_RETENTION_DAYS = 730;
+export const LANDING_ANALYTICS_RETENTION_DAYS = 90;
 
 export function privacyRetentionCutoffs(now = new Date()) {
   const at = now.getTime();
@@ -14,5 +15,6 @@ export function privacyRetentionCutoffs(now = new Date()) {
       at - PROVIDER_EVENT_RETENTION_DAYS * DAY_MS,
     ),
     acquisitionEvidenceDeleteBefore: new Date(at - ACQUISITION_EVIDENCE_RETENTION_DAYS * DAY_MS),
+    landingAnalyticsDeleteBefore: new Date(at - LANDING_ANALYTICS_RETENTION_DAYS * DAY_MS),
   };
 }
