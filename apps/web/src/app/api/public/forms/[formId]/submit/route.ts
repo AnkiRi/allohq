@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@allohq/database";
+import { prisma, withSesDeliveryAttempt } from "@allohq/database";
 import { canSendConsentConfirmation, captureSubmission, consentPreset, consentRequestEvidence, createConsentConfirmation, deliverIncentive, shouldSuppressKnownCustomerIncentive } from "@allohq/forms-and-popups";
-import { sendTransactionalEmail } from "@allohq/messaging";
+import { sendTransactionalEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 
 export async function POST(request:NextRequest,{params}:{params:Promise<{formId:string}>}){
   const {formId}=await params;
-  const form=await prisma.form.findFirst({where:{id:formId,status:"active"},include:{store:{select:{storeName:true}}}});
+  const form=await prisma.form.findFirst({where:{id:formId,status:"active"},include:{store:{select:{id:true,storeName:true}}}});
   if(!form)return NextResponse.json({error:"Form unavailable"},{status:404});
   const input=await request.formData();
   const email=String(input.get("email")??"").trim().toLowerCase();
@@ -32,7 +32,8 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{formId:
   if(!(await canSendConsentConfirmation(result.customerId)))return NextResponse.json({error:"This address cannot receive a confirmation email."},{status:422});
   const token=await createConsentConfirmation(result.customerId,form.storeId,"email",result.submissionId);
   const origin=process.env.NEXT_PUBLIC_APP_URL??"https://agent.joonhq.com";
-  const delivery=await sendTransactionalEmail({channel:"email",to:email,subject:`Confirm your subscription to ${form.store.storeName??"this store"}`,html:`<p>Confirm that you want to receive marketing email.</p><p><a href="${origin}/confirm/${token}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`,idempotencyKey:`consent-${result.customerId}-${token.slice(0,12)}`});
+  const deliveryKey=`consent-${result.customerId}-${token.slice(0,12)}`;
+  const delivery=await withSesDeliveryAttempt(prisma,{enabled:selectedEmailProvider()==="ses",deliveryKey,storeId:form.store.id,providerTag:sesSafeTag(deliveryKey)},()=>sendTransactionalEmail({channel:"email",to:email,subject:`Confirm your subscription to ${form.store.storeName??"this store"}`,html:`<p>Confirm that you want to receive marketing email.</p><p><a href="${origin}/confirm/${token}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`,idempotencyKey:deliveryKey,storeId:form.store.id,emailStream:"triggered"}));
   if(delivery.status!=="sent")return NextResponse.json({error:"Confirmation could not be sent. Please try again later."},{status:503});
   return NextResponse.json({message:"Check your inbox to confirm your subscription."});
 }

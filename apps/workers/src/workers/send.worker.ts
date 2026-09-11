@@ -4,10 +4,11 @@ import {
   messagingCostFor,
   getMarketingDeliveryPermission,
   requireVerifiedSenderDomain,
+  withSesDeliveryAttempt,
 } from "@allohq/database";
 import { renderBrandedEmail, loadBrandKit, getOptimalSendTime, planCustomerDelivery } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
-import { sendEmail } from "@allohq/messaging";
+import { sendEmail, selectedEmailProvider, sesSafeTag, engagementRank } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
@@ -26,6 +27,7 @@ import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
+import { nextSesWarmupDelay, nextSesWarmupResume } from "../utils/ses-warmup-defer";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
@@ -168,6 +170,17 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       lifetimeValue: { select: { historicalLtv: true, predictedLtv: true, churnProbability: true } },
     },
   });
+  if (selectedEmailProvider() === "ses") {
+    const rankedAt = new Date();
+    const clicks = await prisma.messageLog.groupBy({ by: ["customerId"], where: { customerId: { in: customers.map((customer) => customer.id) }, clickedAt: { not: null } }, _max: { clickedAt: true } });
+    const latestClick = new Map(clicks.map((row) => [row.customerId, row._max.clickedAt]));
+    const signal = (customer: typeof customers[number]) => {
+      const click = latestClick.get(customer.id);
+      const purchase = customer.rfmScore?.lastOrderAt;
+      return click && (!purchase || click > purchase) ? click : purchase;
+    };
+    customers.sort((a, b) => engagementRank({ clickedOrBoughtAt: signal(a) }, rankedAt) - engagementRank({ clickedOrBoughtAt: signal(b) }, rankedAt));
+  }
 
   const activeSubjectTest = await getActiveTestForStore(campaign.storeId, "subject_line");
   console.log(`Audience resolved for ${campaign.name}: ${audience.requested} requested, ${customers.length} eligible`, audience.exclusions);
@@ -734,18 +747,41 @@ export async function deliverOne(data: DeliverOneData) {
   });
 
   // Demo/sandbox safety: the seeded demo store NEVER hits a real provider.
-  const capacity = campaign.store?.shopDomain === DEMO_STORE_DOMAIN
+  const usingSes = selectedEmailProvider() === "ses" && campaign.store?.shopDomain !== DEMO_STORE_DOMAIN;
+  const capacity = campaign.store?.shopDomain === DEMO_STORE_DOMAIN || usingSes
     ? null
     : await acquireEmailCapacity(campaign.storeId, campaign.store.installedAt);
   if (capacity && !capacity.allowed) {
     await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${capacity.reason}` } });
+    if (selectedEmailProvider() === "ses" && capacity.reason === "daily_cap") {
+      const nextDay = nextSesWarmupResume();
+      await emailSendQueue.add("deliver-one", { deliverOne: true, campaignId, customerId, experimentId, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan }, { jobId: `${deliveryKey}-warmup-${nextDay.toISOString().slice(0, 10)}`, delay: nextSesWarmupDelay() });
+      return { sent: false, deferred: true };
+    }
     throw new Error(`Email capacity unavailable: ${capacity.reason}`);
   }
   let result;
   try {
     result = campaign.store?.shopDomain === DEMO_STORE_DOMAIN
       ? ({ status: "sent", externalId: `demo-${messageLog.id}`, provider: "demo" } as any)
-      : await sendEmail({
+      : await withSesDeliveryAttempt(prisma, {
+          enabled: usingSes,
+          deliveryKey,
+          storeId: campaign.storeId,
+          providerTag: sesSafeTag(deliveryKey),
+          acquireSubmissionLease: usingSes ? async () => {
+            const lease = await acquireEmailCapacity(campaign.storeId, campaign.store.installedAt);
+            if (!lease.allowed) {
+              await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${lease.reason}` } });
+              if (lease.reason === "daily_cap") {
+                const nextDay = nextSesWarmupResume();
+                await emailSendQueue.add("deliver-one", { deliverOne: true, campaignId, customerId, experimentId, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan }, { jobId: `${deliveryKey}-warmup-${nextDay.toISOString().slice(0, 10)}`, delay: nextSesWarmupDelay() });
+              }
+              throw new Error(`Email capacity unavailable: ${lease.reason}`);
+            }
+            return lease;
+          } : undefined,
+        }, () => sendEmail({
           channel: "email",
           to: customer.email,
           subject: effectiveSubject,
@@ -754,7 +790,10 @@ export async function deliverOne(data: DeliverOneData) {
           replyTo: brandSender?.replyToEmail ?? undefined,
           headers: { "List-Unsubscribe": `<${variables.unsubscribe_url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
           idempotencyKey: deliveryKey,
-        });
+          storeId: campaign.storeId,
+          campaignId,
+          emailStream: "broadcast",
+        }));
   } finally {
     await capacity?.release();
   }

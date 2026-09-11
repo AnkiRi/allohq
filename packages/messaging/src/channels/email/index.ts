@@ -4,6 +4,8 @@ import type { Message, SendResult } from "../../types";
 import { getEmailDeliveryDecision, type EmailDeliveryClass } from "../../delivery-mode";
 import { isTransientProviderError, withProviderRetry } from "../../provider-retry";
 import { htmlToPlainText } from "../../plain-text";
+import { selectedEmailProvider } from "./provider";
+import { SesEmailProvider } from "./ses";
 
 let resendClient: Resend | null = null;
 
@@ -32,6 +34,9 @@ async function deliverEmail(message: Message, deliveryClass: EmailDeliveryClass)
   }
 
   try {
+    if (selectedEmailProvider() === "ses") {
+      return new SesEmailProvider().send(message, deliveryClass);
+    }
     const client = getResendClient();
 
     const fromEmail =

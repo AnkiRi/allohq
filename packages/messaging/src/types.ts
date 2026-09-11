@@ -2,7 +2,7 @@
 
 export type Channel = "email" | "sms" | "whatsapp" | "rcs";
 
-export type Provider = "twilio" | "gupshup" | "resend" | "demo";
+export type Provider = "twilio" | "gupshup" | "resend" | "ses" | "demo";
 
 export type MessagingChannel = "sms" | "whatsapp" | "rcs";
 
@@ -32,6 +32,11 @@ export interface Message {
   headers?: Record<string, string>;
   // Stable identifier for provider-side exactly-once protection.
   idempotencyKey?: string;
+  storeId?: string;
+  campaignId?: string;
+  automationId?: string;
+  /** Broadcasts use an isolated reputation stream; journeys and service mail use triggered. */
+  emailStream?: "triggered" | "broadcast";
   // RCS specific
   cardTitle?: string;
   cardImageUrl?: string;

@@ -3,10 +3,11 @@ import {
   prisma,
   getMarketingDeliveryPermission,
   requireVerifiedSenderDomain,
+  withSesDeliveryAttempt,
 } from "@allohq/database";
 import { getOptimalSendTime, renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
-import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone } from "@allohq/messaging";
+import { sendEmail, sendSms, sendWhatsApp, sendRcs, isValidE164, normalizePhone, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import type { StoreMessagingConfig } from "@allohq/messaging";
 import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-governor";
 import { redisConnection, QUEUE_NAMES } from "../config";
@@ -21,6 +22,7 @@ import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
 import { automationContinuationJobId } from "../utils/automation-continuation";
 import { quietHoursDeferralMs } from "../utils/automation-quiet-hours";
+import { nextSesWarmupDelay } from "../utils/ses-warmup-defer";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -392,14 +394,33 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
           // Send via Resend with List-Unsubscribe headers (RFC 2369 + RFC 8058)
           const unsubscribeUrl = variables.unsubscribe_url;
           if (!storeForConfig) throw new Error("Store missing before email delivery");
-          const capacity = await acquireEmailCapacity(automation.storeId, storeForConfig.installedAt);
-          if (!capacity.allowed) {
+          const usingSes = selectedEmailProvider() === "ses";
+          const capacity = usingSes ? null : await acquireEmailCapacity(automation.storeId, storeForConfig.installedAt);
+          if (capacity && !capacity.allowed) {
             await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${capacity.reason}` } });
+            if (selectedEmailProvider() === "ses" && capacity.reason === "daily_cap") {
+              await automationTriggerQueue.add("ses-warmup-deferred", job.data, { jobId: `${deliveryKey}-warmup`, delay: nextSesWarmupDelay() });
+              return { status: "deferred", reason: capacity.reason };
+            }
             throw new Error(`Email capacity unavailable: ${capacity.reason}`);
           }
           let result;
           try {
-            result = await sendEmail({
+            result = await withSesDeliveryAttempt(prisma, {
+              enabled: usingSes,
+              deliveryKey,
+              storeId: automation.storeId,
+              providerTag: sesSafeTag(deliveryKey),
+              acquireSubmissionLease: usingSes ? async () => {
+                const lease = await acquireEmailCapacity(automation.storeId, storeForConfig.installedAt);
+                if (!lease.allowed) {
+                  await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${lease.reason}` } });
+                  if (lease.reason === "daily_cap") await automationTriggerQueue.add("ses-warmup-deferred", job.data, { jobId: `${deliveryKey}-warmup`, delay: nextSesWarmupDelay() });
+                  throw new Error(`Email capacity unavailable: ${lease.reason}`);
+                }
+                return lease;
+              } : undefined,
+            }, () => sendEmail({
               channel: "email",
               to: customer.email,
               subject: template.subject,
@@ -411,9 +432,12 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
               },
               idempotencyKey: deliveryKey,
-            });
+              storeId: automation.storeId,
+              automationId,
+              emailStream: "triggered",
+            }));
           } finally {
-            await capacity.release();
+            await capacity?.release();
           }
 
           // Update MessageLog with result

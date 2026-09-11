@@ -2,8 +2,9 @@ import { Worker, Queue } from "bullmq";
 import {
   prisma,
   getMarketingDeliveryPermission,
+  withSesDeliveryAttempt,
 } from "@allohq/database";
-import { sendEmail, sendSms, sendWhatsApp, sendRcs } from "@allohq/messaging";
+import { sendEmail, sendSms, sendWhatsApp, sendRcs, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import type { Channel } from "@allohq/messaging";
 import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock } from "@allohq/email-builder";
@@ -17,6 +18,8 @@ import { getOptimalSendTime } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { isV1ReleaseMode } from "@allohq/release-gate";
+import { acquireEmailCapacity } from "../utils/email-capacity";
+import { nextSesWarmupDelay } from "../utils/ses-warmup-defer";
 
 // Time-sensitive automation categories that should not be delayed
 const TIME_SENSITIVE_CATEGORIES = ["cart_recovery", "abandoned_cart", "shipping_updates"];
@@ -183,7 +186,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
       // Look up workspace for MessageLog
       const storeRecord = await prisma.store.findUnique({
         where: { id: storeId },
-        select: { workspaceId: true },
+        select: { workspaceId: true, installedAt: true },
       });
       const workspaceId = storeRecord?.workspaceId ?? storeId;
       const permission = await getMarketingDeliveryPermission(
@@ -222,13 +225,31 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
         let sendResult: { status: string; externalId?: string; provider?: string; error?: string } = { status: "sent" };
 
         if (channel === "email") {
+          if (!storeRecord) return { status: "error", reason: "Store not found" };
+          const usingSes = selectedEmailProvider() === "ses";
+          const capacity = usingSes ? null : await acquireEmailCapacity(storeId, storeRecord.installedAt);
+          if (capacity && !capacity.allowed) {
+            return { status: "deferred", reason: capacity.reason };
+          }
+          try {
           sendResult = await sendJourneyEmail(
             customer,
             node,
             context,
             storeId,
             customerId,
+            automationId,
+            journeyId,
+            usingSes ? async () => {
+              const lease = await acquireEmailCapacity(storeId, storeRecord.installedAt);
+              if (!lease.allowed) {
+                if (lease.reason === "daily_cap") await journeyStepQueue.add("ses-warmup-deferred", job.data, { jobId: `${job.id}-warmup`, delay: nextSesWarmupDelay() });
+                throw new Error(`Email capacity unavailable: ${lease.reason}`);
+              }
+              return lease;
+            } : undefined,
           );
+          } finally { await capacity?.release(); }
         } else {
           const body = personaliseContent(
             (node.config["body"] as string) ?? "",
@@ -254,6 +275,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
             status: sendResult.status === "sent" ? "sent" : "failed",
             externalId: sendResult.externalId,
             provider: sendResult.provider,
+            deliveryKey: channel === "email" ? `journey-${journeyId ?? automationId ?? "none"}-${customerId}-${node.id}` : undefined,
             sentAt: sendResult.status === "sent" ? new Date() : undefined,
             error: sendResult.error,
             metadata: { source: "journey", journeyId } as any,
@@ -357,6 +379,9 @@ async function sendJourneyEmail(
   context: Awaited<ReturnType<typeof getPersonalisationContext>>,
   storeId: string,
   customerId: string,
+  automationId?: string,
+  journeyId?: string,
+  acquireSubmissionLease?: () => Promise<{ release(): Promise<void> }>,
 ): Promise<{ status: string; externalId?: string; provider?: string; error?: string }> {
   const templateId = node.config["templateId"] as string | undefined;
   let html: string;
@@ -395,16 +420,21 @@ async function sendJourneyEmail(
 
   const unsubscribeUrl = getUnsubscribeUrl(customerId);
 
-  return sendEmail({
+  const deliveryKey = `journey-${journeyId ?? automationId ?? "none"}-${customerId}-${node.id}`;
+  return withSesDeliveryAttempt(prisma, { enabled: selectedEmailProvider() === "ses", deliveryKey, storeId, providerTag: sesSafeTag(deliveryKey), acquireSubmissionLease }, () => sendEmail({
     channel: "email",
     to: customer.email,
     subject,
     html,
+    storeId,
+    automationId: automationId ?? undefined,
+    emailStream: "triggered",
+    idempotencyKey: deliveryKey,
     headers: {
       "List-Unsubscribe": `<${unsubscribeUrl}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     },
-  });
+  }));
 }
 
 async function sendByChannel(

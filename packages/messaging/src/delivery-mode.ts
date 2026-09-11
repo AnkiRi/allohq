@@ -25,7 +25,20 @@ export function getMessagingSendMode(
 export function assertEmailDeliveryConfigured(): void {
   const mode = getMessagingSendMode();
   if (mode === "disabled") return;
-  if (!process.env["RESEND_API_KEY"]?.trim()) {
+  const provider = process.env["EMAIL_PROVIDER"] === "ses" ? "ses" : "resend";
+  if (provider === "ses") {
+    const region = process.env["AWS_SES_REGION"]?.trim();
+    const account = process.env["AWS_ACCOUNT_ID"]?.trim();
+    const topic = process.env["SES_EVENT_TOPIC_ARN"]?.trim();
+    if (!region) throw new Error("AWS_SES_REGION must be configured when SES delivery is enabled");
+    if (process.env["SES_TENANT_REGION_CONFIRMED"] !== "true") throw new Error("SES_TENANT_REGION_CONFIRMED=true is required before SES delivery is enabled");
+    if (!/^\d{12}$/.test(account ?? "")) throw new Error("AWS_ACCOUNT_ID must be a 12-digit account id");
+    if (!process.env["SES_FROM_EMAIL"]?.trim()) throw new Error("SES_FROM_EMAIL must be configured when SES delivery is enabled");
+    if (!process.env["SES_EVENT_QUEUE_URL"]?.trim()) throw new Error("SES_EVENT_QUEUE_URL must be configured when SES delivery is enabled");
+    if (!process.env["SES_STANDARD_REPUTATION_POLICY"]?.trim()) throw new Error("SES_STANDARD_REPUTATION_POLICY must be configured when SES delivery is enabled");
+    if (!topic?.startsWith(`arn:aws:sns:${region}:${account}:`)) throw new Error("SES_EVENT_TOPIC_ARN must match the configured region and account");
+  }
+  if (provider === "resend" && !process.env["RESEND_API_KEY"]?.trim()) {
     throw new Error("RESEND_API_KEY must be configured when email delivery is enabled");
   }
   if (

@@ -101,6 +101,7 @@ import { copyLearnerWorker } from "./workers/copy-learner.worker";
 import { basketAnalysisWorker } from "./workers/basket-analysis.worker";
 import { productSegmentsWorker } from "./workers/product-segments.worker";
 import { privacyRetentionWorker } from "./workers/privacy-retention.worker";
+import { startSesEventWorker } from "./workers/ses-events.worker";
 
 // Clean up stale Redis connections from previous ungraceful shutdowns.
 // When workers are force-killed (SIGKILL/kill -9), their blocking BullMQ
@@ -143,6 +144,7 @@ import Redis from "ioredis";
 })();
 
 console.log("Starting AlloHQ workers...");
+const sesEventWorker = startSesEventWorker();
 const criticalDeadLetterCapture = startCriticalDeadLetterCapture();
 console.log(`  - sync worker: ${syncWorker.name}`);
 console.log(`  - rfm worker: ${rfmWorker.name}`);
@@ -192,6 +194,7 @@ console.log(`  - copy-learner worker: ${copyLearnerWorker.name}`);
 console.log(`  - basket-analysis worker: ${basketAnalysisWorker.name}`);
 console.log(`  - product-segments worker: ${productSegmentsWorker.name}`);
 console.log(`  - privacy-retention worker: ${privacyRetentionWorker.name}`);
+if (sesEventWorker) console.log(`  - SES event worker: ${sesEventWorker.name}`);
 
 // Daily/weekly jobs are CLOCK-ALIGNED via cron patterns in the brand's timezone
 // (allo's market is Indian D2C — ₹/IST — so this makes "drafts before sunrise,
@@ -546,6 +549,7 @@ const shutdown = async () => {
       copyLearnerWorker.close(),
       basketAnalysisWorker.close(),
       productSegmentsWorker.close(),
+      sesEventWorker?.close(),
       criticalDeadLetterCapture.close(),
     ]);
   } catch (err) {

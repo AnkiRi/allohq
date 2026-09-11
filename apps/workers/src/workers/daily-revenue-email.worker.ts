@@ -1,8 +1,12 @@
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import type { Job } from "bullmq";
-import { prisma } from "@allohq/database";
-import { sendEmail } from "@allohq/messaging";
+import { prisma, withSesDeliveryAttempt } from "@allohq/database";
+import { sendEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { acquireEmailCapacity } from "../utils/email-capacity";
+import { nextSesWarmupDelay } from "../utils/ses-warmup-defer";
+
+const dailyRevenueQueue = new Queue(QUEUE_NAMES.DAILY_REVENUE_EMAIL, { connection: redisConnection });
 
 interface DailyEmailJobData {
   storeId?: string;
@@ -78,6 +82,7 @@ async function sendDailyEmail(storeId: string): Promise<void> {
       shopDomain: true,
       currency: true,
       workspaceId: true,
+      installedAt: true,
     },
   });
 
@@ -198,17 +203,41 @@ async function sendDailyEmail(storeId: string): Promise<void> {
     forecastConfidence,
   });
 
-  // 7. Send via Resend
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL || "updates@allo.so";
+  // 7. Send through the selected provider using an explicit operational identity.
+  const usingSes = selectedEmailProvider() === "ses";
+  const fromEmail = usingSes
+    ? process.env["SES_OPERATIONAL_FROM_EMAIL"] || process.env["SES_FROM_EMAIL"]
+    : process.env["RESEND_FROM_EMAIL"] || "updates@allo.so";
+  if (!fromEmail) throw new Error("SES_OPERATIONAL_FROM_EMAIL is required for daily operational email through SES");
 
-  await sendEmail({
+  const deliveryKey = `daily-revenue-${store.id}-${startOfYesterday.toISOString().slice(0, 10)}`;
+  const capacity = usingSes ? null : await acquireEmailCapacity(store.id, store.installedAt);
+  if (capacity && !capacity.allowed) {
+    return;
+  }
+  try { await withSesDeliveryAttempt(prisma, {
+    enabled: usingSes,
+    deliveryKey,
+    storeId: store.id,
+    providerTag: sesSafeTag(deliveryKey),
+    acquireSubmissionLease: usingSes ? async () => {
+      const lease = await acquireEmailCapacity(store.id, store.installedAt);
+      if (!lease.allowed) {
+        if (lease.reason === "daily_cap") await dailyRevenueQueue.add("ses-warmup-deferred", { storeId: store.id }, { jobId: `${deliveryKey}-warmup`, delay: nextSesWarmupDelay() });
+        throw new Error(`Email capacity unavailable: ${lease.reason}`);
+      }
+      return lease;
+    } : undefined,
+  }, () => sendEmail({
     channel: "email",
-    to: store.storeEmail,
+    to: store.storeEmail!,
     from: `Allo AI <${fromEmail}>`,
     subject,
     html,
-  });
+    storeId: store.id,
+    emailStream: "triggered",
+    idempotencyKey: deliveryKey,
+  })); } finally { await capacity?.release(); }
 
   console.log(
     `[DailyRevenueEmail] Sent to ${store.storeEmail}: ${currencySymbol}${formatNumber(totalRevenue)} revenue, ${aiPercent}% AI-attributed`

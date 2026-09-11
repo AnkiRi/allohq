@@ -1,6 +1,8 @@
 import Redis from "ioredis";
 import { randomUUID } from "node:crypto";
 import { redisConnection } from "../config";
+import { prisma } from "@allohq/database";
+import { selectedEmailProvider, SesProvisioningService, warmupDailyCap } from "@allohq/messaging";
 
 export type EmailCapacityReason = "daily_cap" | "store_concurrency" | "provider_rate";
 
@@ -8,6 +10,7 @@ export interface EmailCapacityPolicy {
   dailyCap: number;
   storeConcurrency: number;
   providerPerMinute: number;
+  providerWindowMs: number;
   leaseMs: number;
 }
 
@@ -27,6 +30,7 @@ export function emailCapacityPolicy(installedAt: Date, now = new Date()): EmailC
       : positiveInt(process.env["EMAIL_STORE_DAILY_CAP"], 10_000),
     storeConcurrency: positiveInt(process.env["EMAIL_STORE_CONCURRENCY"], 2),
     providerPerMinute: positiveInt(process.env["EMAIL_PROVIDER_PER_MINUTE"], 100),
+    providerWindowMs: 60_000,
     leaseMs: positiveInt(process.env["EMAIL_CAPACITY_LEASE_MS"], 120_000),
   };
 }
@@ -69,9 +73,19 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
   const client = capacityRedis();
   const now = new Date();
   const policy = emailCapacityPolicy(installedAt, now);
+  if (selectedEmailProvider() === "ses") {
+    const warmup = await prisma.sesWarmupState.upsert({ where: { storeId }, create: { storeId, startedAt: now }, update: {} });
+    if (warmup?.pausedAt || (warmup?.heldUntil && warmup.heldUntil > now)) return { allowed: false, reason: "daily_cap", release: async () => undefined };
+    const elapsedHealthyDays = Math.max(0, Math.floor((now.getTime() - warmup.lastGrowthAt.getTime()) / DAY_MS));
+    const healthyDay = Math.min(31, warmup.healthyDay + elapsedHealthyDays);
+    if (healthyDay !== warmup.healthyDay) await prisma.sesWarmupState.update({ where: { storeId }, data: { healthyDay, lastGrowthAt: now } });
+    policy.dailyCap = warmupDailyCap(healthyDay, Number.MAX_SAFE_INTEGER);
+    policy.providerPerMinute = await sesProviderPerMinute();
+    policy.providerWindowMs = 1_000;
+  }
   const token = randomUUID();
   const dateKey = now.toISOString().slice(0, 10);
-  const minuteKey = Math.floor(now.getTime() / 60_000);
+  const minuteKey = Math.floor(now.getTime() / policy.providerWindowMs);
   const concurrencyKey = `joon:email:store:${storeId}:active`;
   const result = await client.eval(
     ACQUIRE_SCRIPT,
@@ -80,7 +94,7 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
     concurrencyKey,
     `joon:email:provider:minute:${minuteKey}`,
     String(now.getTime()), token, String(policy.dailyCap), String(policy.storeConcurrency),
-    String(policy.providerPerMinute), String(policy.leaseMs), String(DAY_MS * 2), "120000",
+    String(policy.providerPerMinute), String(policy.leaseMs), String(DAY_MS * 2), String(policy.providerWindowMs * 2),
   ) as string[];
   const reason = result[0];
   if (reason !== "allowed") {
@@ -95,6 +109,15 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
       await client.zrem(concurrencyKey, token);
     },
   };
+}
+
+let quotaCache: { value: number; until: number } | undefined;
+async function sesProviderPerMinute(): Promise<number> {
+  if (quotaCache && quotaCache.until > Date.now()) return quotaCache.value;
+  const perSecond = await new SesProvisioningService().maximumSendRate();
+  const value = Math.max(1, Math.floor(perSecond * 0.9));
+  quotaCache = { value, until: Date.now() + 5 * 60_000 };
+  return value;
 }
 
 export async function closeEmailCapacityRedis(): Promise<void> {

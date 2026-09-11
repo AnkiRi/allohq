@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { prisma } from "@allohq/database";
+import { prisma, withSesDeliveryAttempt } from "@allohq/database";
 import { Queue } from "bullmq";
 import {
   renderFormHtml,
@@ -12,7 +12,7 @@ import {
   canSendConsentConfirmation,
   consentRequestEvidence,
 } from "@allohq/forms-and-popups";
-import { sendTransactionalEmail } from "@allohq/messaging";
+import { sendTransactionalEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import type { FormField, FormStyling, IncentiveConfig, PopupTriggerConfig, PopupStyling } from "@allohq/forms-and-popups";
 import {
   authenticateWidgetStore,
@@ -454,7 +454,8 @@ export async function handleWidgetPopups(
         }
         const confirmationToken = await createConsentConfirmation(result.customerId, store.id, "email", result.submissionId);
         const appOrigin = process.env["WEB_APP_URL"] ?? "https://agent.joonhq.com";
-        const delivery = await sendTransactionalEmail({ channel: "email", to: normalizedEmail, subject: `Confirm your subscription to ${store.storeName ?? "this store"}`, html: `<p>Confirm that you want to receive marketing email.</p><p><a href="${appOrigin}/confirm/${confirmationToken}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`, idempotencyKey: `consent-${result.customerId}-${confirmationToken.slice(0,12)}` });
+        const deliveryKey = `consent-${result.customerId}-${confirmationToken.slice(0,12)}`;
+        const delivery = await withSesDeliveryAttempt(prisma, { enabled: selectedEmailProvider() === "ses", deliveryKey, storeId: store.id, providerTag: sesSafeTag(deliveryKey) }, () => sendTransactionalEmail({ channel: "email", to: normalizedEmail, subject: `Confirm your subscription to ${store.storeName ?? "this store"}`, html: `<p>Confirm that you want to receive marketing email.</p><p><a href="${appOrigin}/confirm/${confirmationToken}">Confirm subscription</a></p><p>This link expires in 24 hours.</p>`, idempotencyKey: deliveryKey, storeId: store.id, emailStream: "triggered" }));
         confirmationRequired = delivery.status === "sent";
         if (!confirmationRequired) {
           json(res, 503, { error: "Confirmation could not be sent. Please try again later." });

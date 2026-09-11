@@ -1,8 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { prisma } from "@allohq/database";
+import { prisma, applyEmailProviderSafetyEffects } from "@allohq/database";
 import crypto from "crypto";
 import { Queue } from "bullmq";
-import { deliverabilityPauseReason } from "../lib/deliverability-threshold";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -252,6 +251,12 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
         data: updateData,
       });
       console.log(`[resend-webhook] Updated message ${messageLog.id} → ${updateData.status ?? "no status change"}`);
+      if (eventType === "email.complained" || eventType === "email.bounced" || eventType === "email.failed") {
+        const bounceType = String(data.bounce?.type ?? "").toLowerCase();
+        if (eventType !== "email.bounced" || bounceType.includes("permanent") || bounceType.includes("hard") || bounceType === "") {
+          await applyEmailProviderSafetyEffects(prisma, { messageLogId: messageLog.id, event: eventType === "email.complained" ? "complaint" : eventType === "email.bounced" ? "permanent_bounce" : "failure", provider: "resend", occurredAt: now });
+        }
+      }
 
       // Update campaign aggregated stats
       if (messageLog.campaignId) {
@@ -314,112 +319,6 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
           }).catch(() => {});
         }
 
-        const bounceType = String(data.bounce?.type ?? "").toLowerCase();
-        const shouldSuppress =
-          eventType === "email.complained" ||
-          (eventType === "email.bounced" &&
-            (bounceType.includes("permanent") ||
-              bounceType.includes("hard") ||
-              bounceType === ""));
-        if (shouldSuppress) {
-          const reason =
-            eventType === "email.complained" ? "complaint" : "hard_bounce";
-          await prisma.$transaction([
-            prisma.contactSuppression.upsert({
-              where: {
-                customerId_channel: {
-                  customerId: messageLog.customerId,
-                  channel: "email",
-                },
-              },
-              create: {
-                storeId: messageLog.storeId,
-                customerId: messageLog.customerId,
-                channel: "email",
-                reason,
-                source: "resend",
-              },
-              update: {
-                reason,
-                source: "resend",
-                expiresAt: null,
-              },
-            }),
-            prisma.contactConsent.upsert({
-              where: {
-                customerId_channel: {
-                  customerId: messageLog.customerId,
-                  channel: "email",
-                },
-              },
-              create: {
-                storeId: messageLog.storeId,
-                customerId: messageLog.customerId,
-                channel: "email",
-                status: "opted_out",
-                source: "provider",
-                revokedAt: now,
-              },
-              update: {
-                status: "opted_out",
-                source: "provider",
-                revokedAt: now,
-              },
-            }),
-            prisma.customer.update({
-              where: { id: messageLog.customerId },
-              data: { acceptsMarketing: false },
-            }),
-          ]);
-        }
-
-        if (["email.complained", "email.bounced", "email.failed"].includes(eventType)) {
-          const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000);
-          const [complaints, hardBounces, rejections, attempted] = await Promise.all([
-            prisma.messageLog.count({
-              where: {
-                storeId: messageLog.storeId,
-                sentAt: { gte: since },
-                error: "spam_complaint",
-              },
-            }),
-            prisma.messageLog.count({
-              where: {
-                storeId: messageLog.storeId,
-                sentAt: { gte: since },
-                status: "bounced",
-                OR: [
-                  { error: { contains: "hard", mode: "insensitive" } },
-                  { error: { contains: "permanent", mode: "insensitive" } },
-                  { error: "bounced" },
-                ],
-              },
-            }),
-            prisma.messageLog.count({
-              where: { storeId: messageLog.storeId, sentAt: { gte: since }, status: "failed" },
-            }),
-            prisma.messageLog.count({
-              where: {
-                storeId: messageLog.storeId,
-                sentAt: { gte: since },
-                status: { in: ["sent", "delivered", "opened", "clicked", "bounced", "failed"] },
-              },
-            }),
-          ]);
-          const reason = deliverabilityPauseReason({ complaints, hardBounces, rejections, attempted });
-          if (reason) {
-            await prisma.store.updateMany({
-              where: { id: messageLog.storeId, emailSendingPausedAt: null },
-              data: {
-                emailSendingPausedAt: now,
-                emailSendingPauseReason: `Auto-paused for ${reason}: ${complaints} complaints, ${hardBounces} hard bounces, ${rejections} provider rejections across ${attempted} attempts in 7 days`,
-              },
-            });
-            console.error(
-              `[resend-webhook] Auto-paused store ${messageLog.storeId}: reason=${reason} complaints=${complaints} hardBounces=${hardBounces} rejections=${rejections} attempted=${attempted}`,
-            );
-          }
-        }
       }
 
       // Update automation aggregated stats

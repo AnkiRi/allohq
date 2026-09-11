@@ -37,6 +37,13 @@ test("enabled delivery requires provider credentials and allowlist recipients", 
   });
 });
 
+test("SES remains fail-closed until tenant region, identity, queue and matching topic are explicit", () => {
+  const base = { MESSAGING_SEND_MODE: "live", EMAIL_PROVIDER: "ses", AWS_SES_REGION: "ap-south-1", AWS_ACCOUNT_ID: "123456789012", SES_FROM_EMAIL: "Joon <send@example.com>", SES_EVENT_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/123456789012/events", SES_EVENT_TOPIC_ARN: "arn:aws:sns:ap-south-1:123456789012:events", SES_STANDARD_REPUTATION_POLICY: "standard", SES_TENANT_REGION_CONFIRMED: "false" };
+  withEnv(base, () => assert.throws(assertEmailDeliveryConfigured, /SES_TENANT_REGION_CONFIRMED/));
+  withEnv({ ...base, SES_TENANT_REGION_CONFIRMED: "true", SES_EVENT_TOPIC_ARN: "arn:aws:sns:us-east-1:123456789012:events" }, () => assert.throws(assertEmailDeliveryConfigured, /SES_EVENT_TOPIC_ARN/));
+  withEnv({ ...base, SES_TENANT_REGION_CONFIRMED: "true" }, () => assert.doesNotThrow(assertEmailDeliveryConfigured));
+});
+
 test("production unsubscribe configuration requires a strong secret and HTTPS origin", () => {
   withEnv({ NODE_ENV: "production", UNSUBSCRIBE_SIGNING_SECRET: "short", API_BASE_URL: "https://api.joonhq.com" }, () => {
     assert.throws(assertUnsubscribeSigningConfigured, /32 characters/);

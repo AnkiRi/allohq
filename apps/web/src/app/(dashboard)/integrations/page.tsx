@@ -109,6 +109,12 @@ function SenderDomainSetup({ storeId }: { storeId: string }) {
               <span className="break-all text-muted-foreground">{String(record.value ?? "")}</span>
             </div>
           ))}
+          {data.provider === "ses" && (
+            <div className="rounded-lg border border-border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+              <p><span className="font-semibold text-foreground">DMARC:</span> add a TXT record at <span className="font-mono">_dmarc.{data.domain}</span>. Start with <span className="font-mono">p=none</span>, monitor reports, then tighten the policy with your domain administrator.</p>
+              <p className="mt-2"><span className="font-semibold text-foreground">Warmup:</span> {data.warmup?.pausedAt ? "paused for deliverability review" : data.warmup?.heldUntil ? `volume held until ${new Date(data.warmup.heldUntil).toLocaleDateString()}` : data.warmup ? `healthy day ${data.warmup.healthyDay}; Joon increases volume gradually` : "starts after verification; Joon sends to recent clickers and buyers first"}.</p>
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
             <button onClick={() => verify.mutate({ storeId })} disabled={verify.isPending || data.status === "verified"} className="px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-[11px] disabled:opacity-50">I added the records</button>
             <button onClick={() => refresh.mutate({ storeId })} disabled={refresh.isPending} className="px-3 py-2 rounded-lg border border-border text-[11px] flex items-center gap-1.5"><RefreshCw className="w-3 h-3" /> Refresh</button>

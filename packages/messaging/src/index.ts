@@ -24,7 +24,7 @@ export {
   assertUnsubscribeSigningConfigured,
 } from "./unsubscribe";
 export type { UnsubscribeChannel } from "./unsubscribe";
-export { createSenderDomain, getSenderDomain, requestSenderDomainVerification } from "./sender-domains";
+export { createSenderDomain, getSenderDomain, requestSenderDomainVerification, type SenderDomainProvider } from "./sender-domains";
 export { isTransientProviderError, withProviderRetry } from "./provider-retry";
 export { htmlToPlainText } from "./plain-text";
 export {
@@ -64,6 +64,12 @@ export async function send(message: Message): Promise<SendResult> {
 // ── Re-export channel functions ────────────────────────────────────────────
 
 export { sendEmail, sendTransactionalEmail } from "./channels/email";
+export { selectedEmailProvider, type EmailProvider } from "./channels/email/provider";
+export { SesEmailProvider, sesSafeTag } from "./channels/email/ses";
+export * from "./ses-events";
+export * from "./warmup";
+export * from "./ses-queue";
+export * from "./ses-admin";
 export { sendSms } from "./channels/sms";
 export { sendWhatsApp } from "./channels/whatsapp";
 export { sendRcs } from "./channels/rcs";
