@@ -1,16 +1,16 @@
 # Joon billing moat phase audit
 
-Status date: 11 September 2026  
-Branch: `send-path`  
-Committed boundary before this document's final update: `aa8ac58`  
+Status date: 11 September 2026
+Branch: `send-path`
+Committed implementation boundary: `f2e4055`
 Production safety: sending remains disabled; SES is not enabled; nothing in this plan deploys or pushes to `main`
 
 This is the authoritative restart document for the large pricing, causal measurement, landing, SES and external-acceptance pass. It distinguishes shipped branch commits from uncommitted implementation, review findings, local-environment prerequisites and founder-only work.
 
 ## Executive status
 
-- Eleven reviewable implementation commits are complete and pushed to `origin/send-path`; four were created during the resumed phased pass.
-- The landing calculator, causal ledger and disabled SES provider are now committed separately. Observability and acceptance documentation are the final uncommitted implementation phase.
+- Eleven reviewable implementation commits are complete and pushed to `origin/send-path`; six were created during the resumed phased pass.
+- The data foundation, dependencies, landing calculator, causal ledger, disabled SES provider, observability and acceptance documentation are committed as separate reviewable phases.
 - No specialist agent or verification job remains in progress. The prior interruption occurred while reloading design-skill instructions; it made no code change.
 - Phase 0 is complete locally: the three additive migrations were reviewed, a historical ordering defect was repaired, all 76 migrations were applied, and one canonical stack started without the prior schema errors.
 - The local database is `allohq` on `localhost:5432`. No deployed database was touched.
@@ -131,7 +131,7 @@ The local database previously reported 17 unapplied migrations. All 76 repositor
 - `20260911150000_add_landing_analytics`
 - `20260911160000_add_ses_delivery_operations`
 
-The first 14 already exist in repository history. The final three are uncommitted work from this pass. During application, the historical `20260905120000` migration was found to alter a table created by `20260905150000`; the former is now conditional and the latter creates `dedupeKey` and its unique index directly. Prisma validation, client generation, migration deployment and migration status all pass locally.
+The first 14 already exist in repository history. The final three were added by this pass. During application, the historical `20260905120000` migration was found to alter a table created by `20260905150000`; the former is now conditional and the latter creates `dedupeKey` and its unique index directly. Prisma validation, client generation, migration deployment and migration status all pass locally.
 
 ## Revised execution phases
 
@@ -148,7 +148,7 @@ Goal: establish a trustworthy development and database baseline.
 
 Exit proof: migration status current, schema validation clean, web/API/workers start without schema errors, no deployed database touched.
 
-### Phase 1 - Isolate and finish the anchor landing
+### Phase 1 - Isolate and finish the anchor landing - complete
 
 Goal: close the public message and calculator before backend operational work.
 
@@ -161,7 +161,7 @@ Goal: close the public message and calculator before backend operational work.
 
 Exit proof: named DOM measurements, zero new AA failures, truthful uncapped state, legacy `/options/v2` unchanged, dedicated commit.
 
-### Phase 2 - Finalize the causal ledger and shadow invoices
+### Phase 2 - Finalize the causal ledger and shadow invoices - complete
 
 Goal: make the causal billing record database-safe and independently reviewable.
 
@@ -173,7 +173,7 @@ Goal: make the causal billing record database-safe and independently reviewable.
 
 Exit proof: migration and concurrency evidence, focused tests, tenant-scoped reads, no parallel billing maths.
 
-### Phase 3 - Close the SES code findings
+### Phase 3 - Close the SES code findings - complete in code; AWS acceptance pending
 
 Goal: make the disabled SES path internally ready for sandbox acceptance.
 
@@ -185,7 +185,7 @@ Goal: make the disabled SES path internally ready for sandbox acceptance.
 
 Exit proof: focused SES tests, messaging/API/workers typechecks, operational handoff updated, SES still disabled.
 
-### Phase 4 - Close observability and acceptance-plan findings
+### Phase 4 - Close observability and acceptance-plan findings - complete in code; service configuration pending
 
 Goal: make local code truthful and safe before external configuration.
 
@@ -197,7 +197,7 @@ Goal: make local code truthful and safe before external configuration.
 
 Exit proof: adversarial scrub tests, terminal-failure tests, shutdown tests, DSN-absent behavior clean.
 
-### Phase 5 - Integrated repository verification
+### Phase 5 - Integrated repository verification - complete
 
 Goal: prove the combined branch rather than extrapolate from workstream tests.
 
@@ -213,7 +213,18 @@ Run sequentially with no Next server sharing `.next`:
 
 Exit proof: exact command results and a clean pushed `origin/send-path` boundary.
 
-### Phase 6 - Local acceptance rehearsal
+Final integrated results at `f2e4055`:
+
+- `pnpm test`: 72 files, 229 tests, 229 passed, 0 failed.
+- `pnpm -r typecheck`: all 31 participating workspaces passed.
+- `pnpm -r lint`: exit 0 with warnings and no errors.
+- `pnpm -r build`: all workspaces passed; web generated 57 of 57 static pages.
+- `prisma validate`: passed.
+- `prisma migrate status`: 76 migrations found; the local schema is up to date.
+- Safety searches found no enabled SES provider or live/allowlist sending assignment. Documentation mentions of those modes are operational instructions, not active configuration.
+- The only active stale-pricing phrase match is the message house's explicit banned-claims list. Historical, untracked design explorations remain outside this pass.
+
+### Phase 6 - Local acceptance rehearsal - complete for locally reproducible states
 
 Goal: exercise the product locally before asking for founder or production actions.
 
@@ -225,9 +236,27 @@ Goal: exercise the product locally before asking for founder or production actio
 
 Exit proof: local acceptance matrix with anything requiring AWS, Shopify, DNS, Sentry or production data clearly separated.
 
+Final rehearsal results:
+
+- Exactly one Turbo tree is running: one Next listener on `3000` and one API listener on `3001`, with the widget watcher and worker process managed by that same tree.
+- `/`, `/options/v3-landing`, `/options/v3-landing?pal=light`, `/settings`, `/outcomes` and `/sign-up` returned HTTP 200 with substantive bodies.
+- The landing browser check rendered the causal calculator with URL-backed inputs, two balanced comparison outputs, the uncapped-evidence disclosure, the true comparison curve, a working `/sign-up` CTA and the requested-blast postage line.
+- Settings rendered the theme controls and a complete empty Billing preview labelled `Not charged during early access`.
+- Outcomes rendered a complete empty state that explains held-out control measurement without inventing results.
+- Web, API and workers started without missing-table or missing-column errors. The v1 gate remained active and logged email-only with proactive schedules disabled.
+- Populated ledger and invoice behavior is covered by the disposable database fixtures and tests; a real merchant-populated browser state remains a production acceptance item rather than fabricated local evidence.
+
 ### Phase 7 - Founder and external acceptance
 
 This phase starts only after Phases 0-6 pass. It includes AWS/IAM, SES sandbox and quota requests, DNS, mailbox simulator, production-key authentication checks, Sentry/Railway alerts, PCD Level 2, official comparison-price approval and limited live testing. No repository-only defect is deferred into this phase.
+
+## What remains after repository completion
+
+- AWS: account/IAM, SES regional tenant confirmation, sandbox simulator evidence, production-access and quota requests, configuration sets, DNS and the exact Standard reputation-policy identifier.
+- Monitoring: Sentry DSNs, Railway database/connection alerts, Sentry alert rules and synthetic checks.
+- Commerce and legal: founder approval of sourced Klaviyo cap tiers, later Shopify Billing API integration, comparison-claim review, privacy/terms publication and Protected Customer Data Level 2 submission.
+- Production acceptance: populated merchant data, first-paint Shopify handoff, real-domain warmup, capacity evidence and the limited-live seed-inbox ramp.
+- Performance: the repository does not contain Lighthouse. The mobile performance budget therefore remains a measured browser/CI acceptance item rather than a claimed local pass.
 
 ## Commit policy
 

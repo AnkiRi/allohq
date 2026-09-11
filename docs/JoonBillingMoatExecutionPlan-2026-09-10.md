@@ -1,9 +1,9 @@
 # Joon billing moat execution plan
 
-Status date: 10 September 2026  
-Source brief: founder discussion and implementation brief supplied on 10 September 2026  
-Branch baseline: `send-path` at `a7c2588a0f587168a229aefa7ab4280073dc5a28`  
-Status: **preflight complete; founder defaults approved; implementation in progress**
+Status date: 10 September 2026
+Source brief: founder discussion and implementation brief supplied on 10 September 2026
+Branch baseline: `send-path` at `a7c2588a0f587168a229aefa7ab4280073dc5a28`
+Status: **repository implementation complete; founder and external acceptance pending**
 
 This document is the durable restart point for the pricing, causal measurement, SES, landing and acceptance work. It records the verified repository state, corrections to the supplied brief and the order in which implementation should proceed. Production sending remains disabled throughout repository work.
 

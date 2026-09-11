@@ -6,4 +6,3 @@ export function parseCampaignOrigin(value: unknown): CampaignOriginValue {
   if (value === "merchant" || value === "joon") return value;
   throw new TypeError("campaign origin must be merchant or joon");
 }
-
