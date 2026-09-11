@@ -132,6 +132,19 @@ model ProviderWebhookEvent {
   @@map("provider_webhook_events")
 }
 
+/// Cookieless, PII-free aggregate events for the public landing. Values are
+/// deliberately bucketed before they leave the browser.
+model LandingAnalyticsEvent {
+  id        String   @id @default(cuid())
+  event     String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@index([createdAt])
+  @@map("landing_analytics_events")
+}
+
 model WorkspaceMember {
   id          String   @id @default(cuid())
   workspaceId String
@@ -186,6 +199,11 @@ enum TreatmentArm {
   TREATMENT
 }
 
+enum CampaignOrigin {
+  merchant
+  joon
+}
+
 /// A holdout experiment: deterministically splits a store cohort into CONTROL
 /// (withheld) and TREATMENT (messaged) arms so the incremental lift of agent
 /// decisions can be measured. The substrate of outcome-based pricing.
@@ -204,9 +222,10 @@ model Experiment {
   stats            Json?
   createdAt        DateTime  @default(now())
 
-  store         Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messageLogs   MessageLog[]
-  orderOutcomes ExperimentOrderOutcome[]
+  store                  Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messageLogs            MessageLog[]
+  orderOutcomes          ExperimentOrderOutcome[]
+  measurementAssignments MeasurementAssignment[]
 
   @@index([storeId])
   @@map("experiments")
@@ -269,6 +288,9 @@ model Store {
   orders                   Order[]
   collections              Collection[]
   campaigns                Campaign[]
+  measurementAssignments   MeasurementAssignment[]
+  causedRevenueLedgers     CausedRevenueLedger[]
+  shadowInvoices           ShadowInvoice[]
   brandProfiles            BrandProfile[]
   automations              Automation[]
   brandAssets              BrandAsset[]
@@ -341,6 +363,8 @@ model Store {
   productSegments             ProductSegment[]
   senderDomain                SenderDomain?
   migrationAssistanceRequests MigrationAssistanceRequest[]
+  sesDeliveryAttempts        SesDeliveryAttempt[]
+  sesWarmupState             SesWarmupState?
 
   // Basket Intelligence
   basketArchetypes BasketArchetype[]
@@ -517,6 +541,7 @@ model Customer {
   customerProductRecommendations CustomerProductRecommendation[]
   proactiveOutreachLogs          ProactiveOutreachLog[]
   contactConsents                ContactConsent[]
+  measurementAssignments         MeasurementAssignment[]
   contactSuppressions            ContactSuppression[]
   traits                         CustomerTrait[]
   consentConfirmations           ConsentConfirmation[]
@@ -641,12 +666,13 @@ model Order {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  store              Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer           Customer                 @relation(fields: [customerId], references: [id])
-  items              OrderItem[]
-  attribution        OrderAttribution?
-  experimentOutcomes ExperimentOrderOutcome[]
-  fulfillments       Fulfillment[]
+  store               Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer            Customer                  @relation(fields: [customerId], references: [id])
+  items               OrderItem[]
+  attribution         OrderAttribution?
+  experimentOutcomes  ExperimentOrderOutcome[]
+  measurementOutcomes MeasurementOrderOutcome[]
+  fulfillments        Fulfillment[]
 
   @@unique([storeId, externalId])
   @@index([customerId])
@@ -874,18 +900,18 @@ model EmailTemplate {
 }
 
 model Campaign {
-  id               String         @id @default(cuid())
+  id               String          @id @default(cuid())
   workspaceId      String
   storeId          String
   name             String
   templateId       String?
   segmentId        String?
-  status           CampaignStatus @default(draft)
+  status           CampaignStatus  @default(draft)
   scheduledAt      DateTime?
   sentAt           DateTime?
-  recipientCount   Int            @default(0)
-  openCount        Int            @default(0)
-  clickCount       Int            @default(0)
+  recipientCount   Int             @default(0)
+  openCount        Int             @default(0)
+  clickCount       Int             @default(0)
   // Human-in-the-loop judgment signal (can't-backfill). agentProposal = the action
   // bundle allo proposed at draft time (segment/discount/channel/timing/intent), frozen.
   // humanDecision = structured agent_proposed → human_final diff on those action
@@ -894,18 +920,148 @@ model Campaign {
   humanDecision    Json?
   approvalChecksum String?
   approvedAt       DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  origin           CampaignOrigin?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  template  EmailTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  segment   CustomerSegment? @relation(fields: [segmentId], references: [id])
+  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  store                  Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  template               EmailTemplate?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  segment                CustomerSegment?        @relation(fields: [segmentId], references: [id])
+  measurementAssignments MeasurementAssignment[]
+  causedRevenueLedgers   CausedRevenueLedger[]
 
   @@index([workspaceId])
   @@index([storeId])
   @@index([status])
   @@map("campaigns")
+}
+
+/// Frozen intent-to-treat assignment. Rows are created at approval before any
+/// delivery-time suppression or deferral and are never updated in place.
+model MeasurementAssignment {
+  id             String       @id @default(cuid())
+  storeId        String
+  experimentId   String?
+  campaignId     String?
+  unitType       String
+  unitId         String
+  customerId     String
+  arm            TreatmentArm
+  stratum        String
+  holdoutRate    Float
+  assignedAt     DateTime
+  windowStartsAt DateTime
+  windowEndsAt   DateTime
+  assignmentData Json         @default("{}")
+  createdAt      DateTime     @default(now())
+
+  store      Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  experiment Experiment?               @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+  campaign   Campaign?                 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer   Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  outcomes   MeasurementOrderOutcome[]
+
+  @@unique([unitType, unitId, customerId])
+  @@index([storeId, windowEndsAt])
+  @@index([customerId, windowStartsAt, windowEndsAt])
+  @@index([campaignId, arm, stratum])
+  @@map("measurement_assignments")
+}
+
+/// Net purchase evidence tied directly to the immutable intent-to-treat row.
+/// Shopify order updates revise the net amount; ledger snapshots remain versioned.
+model MeasurementOrderOutcome {
+  id           String   @id @default(cuid())
+  assignmentId String
+  orderId      String
+  netRevenue   Decimal  @db.Decimal(14, 2)
+  occurredAt   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignment MeasurementAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  order      Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, orderId])
+  @@index([assignmentId, occurredAt])
+  @@index([orderId])
+  @@map("measurement_order_outcomes")
+}
+
+/// Immutable, versioned causal result for one closed measurement window.
+/// A late refund creates a new version; historical invoice inputs remain stable.
+model CausedRevenueLedger {
+  id                     String   @id @default(cuid())
+  storeId                String
+  campaignId             String?
+  unitType               String
+  unitId                 String
+  family                 String?
+  windowStartsAt         DateTime
+  windowEndsAt           DateTime
+  strata                 Json
+  assignedTreated        Int
+  assignedControl        Int
+  treatedNetRevenue      Decimal  @db.Decimal(14, 2)
+  controlNetRevenue      Decimal  @db.Decimal(14, 2)
+  attributedRevenue      Decimal  @db.Decimal(14, 2)
+  causedRevenue          Decimal  @db.Decimal(14, 2)
+  intervalLow            Decimal? @db.Decimal(14, 2)
+  intervalHigh           Decimal? @db.Decimal(14, 2)
+  tier                   String
+  overlapsAnotherUnit    Boolean  @default(false)
+  billable               Boolean  @default(false)
+  nonBillableReason      String?
+  version                Int
+  supersedesLedgerId     String?
+  computationVersion     String
+  computedAt             DateTime @default(now())
+  refundRevisionClosesAt DateTime
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([unitType, unitId, version])
+  @@index([storeId, computedAt])
+  @@index([storeId, billable, windowEndsAt])
+  @@map("caused_revenue_ledgers")
+}
+
+/// Early-access invoice preview. Lines mirror future Shopify usage records,
+/// but this table never initiates billing.
+model ShadowInvoice {
+  id                    String   @id @default(cuid())
+  storeId               String
+  periodStart           DateTime
+  periodEnd             DateTime
+  currency              String
+  activeSubscribers     Int
+  subscriberSnapshotAt  DateTime
+  billableCausedRevenue Decimal  @db.Decimal(14, 2)
+  carryIn               Decimal  @db.Decimal(14, 2)
+  carryOut              Decimal  @db.Decimal(14, 2)
+  liftFee               Decimal  @db.Decimal(14, 2)
+  postageEmails         Int
+  postage               Decimal  @db.Decimal(14, 2)
+  performanceFeeCap     Decimal? @db.Decimal(14, 2)
+  total                 Decimal  @db.Decimal(14, 2)
+  variants              Json
+  lines                 Json
+  ledgerVersions        Json
+  pricingVersion        String
+  version               Int      @default(1)
+  supersedesInvoiceId   String?
+  inputFingerprint      String
+  status                String   @default("ready")
+  pendingReason         String?
+  computedAt            DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, periodStart, periodEnd, pricingVersion, version])
+  @@index([storeId, computedAt])
+  @@map("shadow_invoices")
 }
 
 model BrandProfile {
@@ -1197,6 +1353,7 @@ model MessageLog {
   deliveredAt  DateTime?
   openedAt     DateTime?
   clickedAt    DateTime?
+  providerEventAt DateTime? // monotonic provider-event watermark
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -1232,6 +1389,58 @@ model MessageLog {
   @@index([outcome, createdAt])
   @@index([experimentId])
   @@map("message_logs")
+}
+
+model SesDeliveryAttempt {
+  id             String    @id @default(cuid())
+  deliveryKey    String    @unique
+  storeId        String
+  providerTag    String    @unique
+  externalId     String?   @unique
+  state          String    @default("reserved") // reserved|submitting|accepted|ambiguous|failed|manual_review
+  ownerToken     String?
+  lastError      String?
+  submittedAt    DateTime?
+  reconciledAt   DateTime?
+  manualReviewAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([state, updatedAt])
+  @@index([storeId, createdAt])
+  @@map("ses_delivery_attempts")
+}
+
+model SesEventReceipt {
+  id         String   @id @default(cuid())
+  eventId    String   @unique
+  messageId  String?
+  eventType  String
+  receivedAt DateTime @default(now())
+  payload    Json
+
+  @@index([messageId])
+  @@index([receivedAt])
+  @@map("ses_event_receipts")
+}
+
+model SesWarmupState {
+  id                 String    @id @default(cuid())
+  storeId            String    @unique
+  startedAt          DateTime
+  healthyDay         Int       @default(1)
+  lastGrowthAt       DateTime  @default(now())
+  heldUntil          DateTime?
+  pausedAt           DateTime?
+  overrideReason     String?
+  overrideRecordedAt DateTime?
+  unengagedSunsetOn  Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  store              Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("ses_warmup_states")
 }
 
 // ============================================================================

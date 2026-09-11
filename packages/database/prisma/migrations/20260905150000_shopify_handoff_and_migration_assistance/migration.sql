@@ -21,12 +21,14 @@ CREATE TABLE "migration_assistance_requests" (
   "notes" TEXT,
   "status" TEXT NOT NULL DEFAULT 'requested',
   "requestedBy" TEXT NOT NULL,
+  "dedupeKey" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "migration_assistance_requests_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX "migration_assistance_requests_workspaceId_status_idx" ON "migration_assistance_requests"("workspaceId", "status");
 CREATE INDEX "migration_assistance_requests_storeId_createdAt_idx" ON "migration_assistance_requests"("storeId", "createdAt");
+CREATE UNIQUE INDEX "migration_assistance_requests_dedupeKey_key" ON "migration_assistance_requests"("dedupeKey");
 ALTER TABLE "migration_assistance_requests" ADD CONSTRAINT "migration_assistance_requests_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "stores"
