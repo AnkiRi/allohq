@@ -250,6 +250,33 @@ Final rehearsal results:
 
 This phase starts only after Phases 0-6 pass. It includes AWS/IAM, SES sandbox and quota requests, DNS, mailbox simulator, production-key authentication checks, Sentry/Railway alerts, PCD Level 2, official comparison-price approval and limited live testing. No repository-only defect is deferred into this phase.
 
+### Phase 8 - Conversational email and image studio - planned after external acceptance
+
+Goal: let a merchant move from a Joon-proposed email to a merchant-created, brand-faithful email without leaving the approval workflow.
+
+Verified starting point:
+
+- Brand-kit extraction already stores the logo, colours, heading and body font names, visual design tokens and tone in `BrandProfile` and `BrandVisualProfile`.
+- Brand Voice already lets a merchant review and edit its logo URL, colours and font-family names.
+- The creative engine, email builder and rendered preview already consume the stored brand kit.
+- Uploaded font binaries, durable merchant-asset storage, conversational email construction and generative image editing are not implemented.
+
+Planned work:
+
+1. Add `Create your own email` beside every generated-email review surface. It opens a conversational workspace with the current draft, audience, offer, selected products and brand kit in context.
+2. Support chat instructions that change copy, structure and imagery while showing a versioned email preview. Every change remains a draft until the merchant explicitly approves it; the existing frozen audience, holdout and send-safety boundaries remain unchanged.
+3. Add text-to-image requests such as placing a selected snowboard in a model's hand and adding a 15% offer, with the merchant's actual product image supplied as a grounded reference rather than relying on model memory.
+4. Add merchant image upload and image-to-image editing, including selecting the precise source product to replace. Preserve an untouched original, make generated provenance visible and allow undo/version comparison.
+5. Add a provider-neutral media-generation service with tenant-scoped jobs, idempotency, moderation, cost accounting, timeouts and fallbacks. Generated assets live in durable object storage behind tenant-checked signed URLs, not in base64 database fields.
+6. Extend Brand Voice with controlled logo and font uploads, licensing confirmation, font-format validation and previews. Keep email-safe fallbacks because many inboxes will not load custom web fonts even when the merchant owns them.
+7. Enforce asset safety: file-type and size checks, malware scanning, metadata stripping, prompt-injection isolation, no cross-store asset access, content-policy handling, and explicit confirmation that the merchant owns or may transform uploaded material and likenesses.
+8. Keep generation economics visible internally: record model, tokens, image operations and storage per store. Apply usage limits during early access without introducing a wallet or interrupting the merchant's composing flow.
+9. Verify desktop and mobile authoring, keyboard access, reduced motion, failure/retry states, long copy, image cropping, major email-client rendering, unsubscribe/footer preservation and approval-checksum behavior.
+
+Exit proof: a merchant can start from a Joon proposal or a blank branded draft, create or edit grounded product imagery conversationally, inspect every revision, and approve one exact email without bypassing consent, holdouts, sender-domain verification or delivery controls.
+
+This is deliberately scheduled after Phase 7. It should not expand the current external-acceptance surface or delay validating measurement, delivery and billing with the product that exists today.
+
 ## What remains after repository completion
 
 - AWS: account/IAM, SES regional tenant confirmation, sandbox simulator evidence, production-access and quota requests, configuration sets, DNS and the exact Standard reputation-policy identifier.
