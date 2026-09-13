@@ -246,16 +246,6 @@ export async function GET(request: NextRequest) {
       console.error("Failed to queue initial sync:", syncError);
     }
 
-    try {
-      const brandKitQueue = new Queue("brand-analysis", { connection: redisConnection });
-      await brandKitQueue.add("brand-kit", {
-        storeId: store.id,
-      }, { delay: 30_000 });
-      await brandKitQueue.close();
-    } catch {
-      console.error("Failed to queue brand kit extraction");
-    }
-
     // Clear the state cookie and redirect to dashboard (which handles onboarding inline)
     const response = NextResponse.redirect(
       new URL("/dashboard", request.nextUrl.origin)

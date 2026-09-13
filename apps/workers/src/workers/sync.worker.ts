@@ -17,6 +17,7 @@ import { logActivity } from "@allohq/agent-core";
 
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
 const brandKitQueue = new Queue(QUEUE_NAMES.BRAND_KIT, { connection: redisConnection });
+const brandAnalysisQueue = new Queue(QUEUE_NAMES.BRAND_ANALYSIS, { connection: redisConnection });
 const baselineQueue = new Queue(QUEUE_NAMES.BASELINE, { connection: redisConnection });
 
 interface SyncJobData {
@@ -207,6 +208,23 @@ export const syncWorker = new Worker<SyncJobData>(
     // 8. Queue brand kit extraction
     await brandKitQueue.add("brand-kit", { storeId });
     console.log(`Brand kit extraction enqueued for store ${storeId}`);
+
+    // Brand voice depends on imported product context. Queue it only after the
+    // core sync succeeds, rather than racing product import on a fixed timer.
+    // A transient model/provider failure is retryable; BullMQ deduplication
+    // prevents overlapping analyses for the same store.
+    const sourceJobId = `${String(job.id ?? "sync").replaceAll(":", "-")}-${job.timestamp}`;
+    await brandAnalysisQueue.add(
+      "analyze-brand",
+      { storeId },
+      {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5_000 },
+        jobId: `brand-analysis-${storeId}-${sourceJobId}`,
+        deduplication: { id: `store-brand-analysis-${storeId}` },
+      },
+    );
+    console.log(`Brand analysis enqueued for store ${storeId}`);
 
     // 9. Queue baseline capture
     await baselineQueue.add("baseline", { storeId });

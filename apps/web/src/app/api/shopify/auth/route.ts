@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Sign in to Joon before connecting Shopify" }, { status: 401 });
   }
 
-  // Use the real request origin (e.g. https://agent.allohq.ai) so the OAuth
-  // redirect_uri is correct in every environment — never a hardcoded localhost.
-  // NEXT_PUBLIC_APP_URL overrides it if you need to pin a canonical domain.
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  // Keep the callback on the exact host that set the signed state cookie.
+  // Overriding this with a legacy canonical domain loses the cookie during
+  // Shopify's cross-site return and makes a successful install look empty.
+  const appUrl = request.nextUrl.origin;
   const redirectUri = `${appUrl}/api/shopify/callback`;
 
   // Generate CSRF state token

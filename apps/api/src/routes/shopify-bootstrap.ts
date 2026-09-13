@@ -118,7 +118,6 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
     });
 
     const syncQueue = new Queue("sync", { connection: redisConnection });
-    const brandQueue = new Queue("brand-analysis", { connection: redisConnection });
     try {
       const syncJobId = `initial-sync-${store.id}`;
       const existingSyncJob = await syncQueue.getJob(syncJobId);
@@ -140,13 +139,8 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
           deduplication: { id: `store-sync-${store.id}` },
         },
       );
-      await brandQueue.add(
-        "brand-kit",
-        { storeId: store.id },
-        { delay: 30_000, jobId: `initial-brand-kit-${store.id}` },
-      );
     } finally {
-      await Promise.all([syncQueue.close(), brandQueue.close()]);
+      await syncQueue.close();
     }
 
     json(res, 200, { ready: true, shop: identity.shopDomain });
