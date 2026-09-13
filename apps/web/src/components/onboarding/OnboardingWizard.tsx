@@ -448,6 +448,8 @@ function StepWrapper({ children }: { children: React.ReactNode }) {
 type StatusData = {
   counts: { products: number; customers: number; orders: number };
   syncComplete: boolean;
+  syncRunning: boolean;
+  syncProgress: number | null;
   brandVoiceComplete: boolean;
   brandVisualComplete: boolean;
   productImagesComplete: boolean;
@@ -458,7 +460,7 @@ type StatusData = {
 // Watchdog thresholds: how long a step may run before we surface a "taking
 // longer than expected" retry. Non-destructive — retry just re-enqueues the job,
 // so these can be generous enough not to false-alarm a large store's first sync.
-const SYNC_STUCK_MS = 75_000;
+const SYNC_STUCK_MS = 10 * 60_000;
 const ANALYSIS_STUCK_MS = 120_000;
 type RetryKey = "sync" | "brandVoice" | "brandVisual" | "productImages" | "rfm" | "baseline";
 
@@ -475,7 +477,8 @@ function BackgroundAnalysisStep({
   onContinue: () => void;
   isAdvancing: boolean;
 }) {
-  const productsDone = (status?.counts.products ?? 0) > 0;
+  const syncComplete = status?.syncComplete ?? false;
+  const productsDone = syncComplete || (status?.counts.products ?? 0) > 0;
   const syncRows = [
     {
       icon: Package,
@@ -487,13 +490,13 @@ function BackgroundAnalysisStep({
       icon: Users,
       label: "Syncing customers",
       count: status?.counts.customers,
-      done: (status?.counts.customers ?? 0) > 0,
+      done: syncComplete || (status?.counts.customers ?? 0) > 0,
     },
     {
       icon: ShoppingBag,
       label: "Syncing orders",
       count: status?.counts.orders,
-      done: productsDone,
+      done: syncComplete,
     },
   ];
   const analysisRows: {
@@ -533,7 +536,7 @@ function BackgroundAnalysisStep({
       done: status?.baselineComplete ?? false,
     },
   ];
-  const syncDone = syncRows.every((r) => r.done);
+  const syncDone = syncComplete;
   const analysisDone = analysisRows.every((r) => r.done);
   // Only the DATA SYNC gates Continue. The background analysis (brand voice, RFM,
   // etc.) finishes on its own and can be re-run later from its page — so a single
@@ -554,11 +557,31 @@ function BackgroundAnalysisStep({
   }, []);
 
   const retry = trpc.onboarding.retryStep.useMutation({ onSuccess: () => onRefetch() });
+  const autoRecoveryAttempted = useRef(false);
+  useEffect(() => {
+    if (
+      autoRecoveryAttempted.current ||
+      !status ||
+      status.syncComplete ||
+      status.syncRunning
+    ) {
+      return;
+    }
+    // The OAuth grant is already safely stored at this point. If its enqueue
+    // was lost to a transient Redis error, recover without making the merchant
+    // discover and press Retry. Queue-level deduplication prevents overlap.
+    const timer = setTimeout(() => {
+      autoRecoveryAttempted.current = true;
+      retry.mutate({ storeId, step: "sync" });
+    }, 8_000);
+    return () => clearTimeout(timer);
+  }, [retry, status, storeId]);
   const baseFor = (key: RetryKey) => Math.max(startRef.current, retriedAt[key] ?? 0);
   const isStuck = (key: RetryKey, done: boolean, thresholdMs: number) =>
     !done && now - baseFor(key) > thresholdMs;
 
-  const syncStuck = isStuck("sync", syncDone, SYNC_STUCK_MS);
+  const syncStuck =
+    !status?.syncRunning && isStuck("sync", syncDone, SYNC_STUCK_MS);
   const handleRetry = (key: RetryKey) => {
     // Retrying the sync re-runs the whole cascade, so reset every timer with it.
     const keys: RetryKey[] =
@@ -591,8 +614,9 @@ function BackgroundAnalysisStep({
           joon is getting to know your store
         </h2>
         <p className="text-sm text-muted-foreground">
-          We&apos;re bringing in your data and learning the details. This usually takes a minute or
-          two.
+          {status?.syncRunning
+            ? `We’re importing your store now${status.syncProgress != null ? ` · ${status.syncProgress}%` : ""}. Large stores can take several minutes; you can leave this page open.`
+            : "We’re bringing in your data and learning the details. This usually takes a minute or two."}
         </p>
       </div>
 

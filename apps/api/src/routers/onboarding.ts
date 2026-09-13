@@ -26,6 +26,15 @@ const retryRfmQueue = new Queue("rfm", { connection: redisConnection });
 const retryBaselineQueue = new Queue("baseline", { connection: redisConnection });
 const retryProductImageQueue = new Queue("product-image", { connection: redisConnection });
 
+async function findRunningStoreSync(storeId: string) {
+  const jobs = await retrySyncQueue.getJobs(
+    ["active", "waiting", "delayed", "prioritized"],
+    0,
+    200,
+  );
+  return jobs.find((job) => job.data?.storeId === storeId) ?? null;
+}
+
 export const onboardingRouter = router({
   readiness: workspaceProcedure
     .input(z.object({ storeId: z.string() }))
@@ -203,10 +212,11 @@ export const onboardingRouter = router({
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
       // Counts
-      const [productCount, customerCount, orderCount] = await Promise.all([
+      const [productCount, customerCount, orderCount, runningSync] = await Promise.all([
         ctx.prisma.product.count({ where: { storeId: input.storeId } }),
         ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
         ctx.prisma.order.count({ where: { storeId: input.storeId } }),
+        findRunningStoreSync(input.storeId),
       ]);
 
       // Background job flags
@@ -232,7 +242,12 @@ export const onboardingRouter = router({
         currentStep: store.onboardingStep,
         onboardingCompletedAt: store.onboardingCompletedAt,
         counts: { products: productCount, customers: customerCount, orders: orderCount },
-        syncComplete: productCount > 0 && customerCount > 0 && orderCount > 0,
+        // lastSyncAt is written only after all core imports succeed. Counts are
+        // not a completion signal: a valid new store can have zero orders.
+        syncComplete: Boolean(store.lastSyncAt),
+        syncRunning: Boolean(runningSync),
+        syncProgress:
+          typeof runningSync?.progress === "number" ? runningSync.progress : null,
         brandVoiceComplete: !!brandProfile,
         brandVisualComplete: !!brandVisualProfile,
         productImagesComplete: processedImageCount > 0,
@@ -266,13 +281,21 @@ export const onboardingRouter = router({
 
       switch (input.step) {
         case "sync":
+          if (await findRunningStoreSync(store.id)) {
+            return { status: "already_running" as const };
+          }
           await retrySyncQueue.add(
             "full-sync",
             {
               storeId: store.id,
               platform: store.platform,
             },
-            { jobId: `retry-sync-${store.id}-${win}` }
+            {
+              attempts: 3,
+              backoff: { type: "exponential", delay: 5_000 },
+              jobId: `retry-sync-${store.id}-${win}`,
+              deduplication: { id: `store-sync-${store.id}` },
+            }
           );
           break;
         case "brandVoice":

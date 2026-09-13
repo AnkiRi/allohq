@@ -121,10 +121,13 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
     try {
       const syncJobId = `initial-sync-${store.id}`;
       const existingSyncJob = await syncQueue.getJob(syncJobId);
-      if (existingSyncJob && (await existingSyncJob.getState()) === "failed") {
-        // A corrected deployment must be able to recover onboarding without
-        // requiring the merchant to uninstall and reinstall the app.
-        await existingSyncJob.remove();
+      if (existingSyncJob) {
+        const state = await existingSyncJob.getState();
+        if (state === "failed" || state === "completed") {
+          // A reinstall/reconnect is an explicit request for a fresh import.
+          // BullMQ otherwise keeps returning the terminal fixed-id job.
+          await existingSyncJob.remove();
+        }
       }
       await syncQueue.add(
         "full-sync",
@@ -133,6 +136,7 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
           attempts: 3,
           backoff: { type: "exponential", delay: 5_000 },
           jobId: syncJobId,
+          deduplication: { id: `store-sync-${store.id}` },
         },
       );
       await brandQueue.add(

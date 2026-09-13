@@ -213,15 +213,30 @@ export async function GET(request: NextRequest) {
     // Queue sync and brand kit jobs via BullMQ
     try {
       const syncQueue = new Queue("sync", { connection: redisConnection });
-      await syncQueue.add("full-sync", {
-        storeId: store.id,
-        platform: "shopify",
-      }, {
-        attempts: 3,
-        backoff: { type: "exponential", delay: 5_000 },
-        jobId: `initial-sync-${store.id}`,
-      });
-      await syncQueue.close();
+      try {
+        const syncJobId = `initial-sync-${store.id}`;
+        const existingSyncJob = await syncQueue.getJob(syncJobId);
+        if (existingSyncJob) {
+          const state = await existingSyncJob.getState();
+          // BullMQ deduplicates by job id even when the old job has already
+          // failed or completed. Remove terminal jobs so a reconnect actually
+          // starts a fresh import; leave a live import alone.
+          if (state === "failed" || state === "completed") {
+            await existingSyncJob.remove();
+          }
+        }
+        await syncQueue.add("full-sync", {
+          storeId: store.id,
+          platform: "shopify",
+        }, {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5_000 },
+          jobId: syncJobId,
+          deduplication: { id: `store-sync-${store.id}` },
+        });
+      } finally {
+        await syncQueue.close();
+      }
     } catch (syncError) {
       console.error("Failed to queue initial sync:", syncError);
     }

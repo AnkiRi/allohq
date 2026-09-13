@@ -408,6 +408,15 @@ export const storesRouter = router({
       });
       if (!store) throw new Error("Store not found");
 
+      const runningJobs = await syncQueue.getJobs(
+        ["active", "waiting", "delayed", "prioritized"],
+        0,
+        200,
+      );
+      if (runningJobs.some((job) => job.data?.storeId === store.id)) {
+        return { status: "already_running" as const };
+      }
+
       await syncQueue.add("full-sync", {
         storeId: store.id,
         platform: store.platform,
@@ -415,6 +424,7 @@ export const storesRouter = router({
         attempts: 3,
         backoff: { type: "exponential", delay: 5_000 },
         jobId: `manual-sync-${store.id}-${Math.floor(Date.now() / 30_000)}`,
+        deduplication: { id: `store-sync-${store.id}` },
       });
 
       return { status: "queued" as const };
