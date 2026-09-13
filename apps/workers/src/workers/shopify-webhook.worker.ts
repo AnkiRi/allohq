@@ -4,6 +4,7 @@ import { redisConnection, QUEUE_NAMES } from "../config";
 import { checkEventTriggers } from "../utils/event-triggers";
 import { redactAcquisitionEvidence } from "../acquisition-privacy";
 import { calculateNetOrderRevenue } from "../refund-revenue";
+import { isWebhookOlderThanInstall } from "../shopify-webhook-ordering";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
@@ -17,12 +18,13 @@ interface WebhookJobData {
   shopDomain: string;
   payload: Record<string, unknown>;
   eventId?: string | null;
+  triggeredAt?: string | null;
 }
 
 export const shopifyWebhookWorker = new Worker<WebhookJobData>(
   QUEUE_NAMES.SHOPIFY_WEBHOOK,
   async (job) => {
-    const { topic, shopDomain, payload, eventId } = job.data;
+    const { topic, shopDomain, payload, eventId, triggeredAt } = job.data;
     console.log(`Processing webhook: ${topic} from ${shopDomain}`);
 
     // Find the store by shop domain
@@ -338,6 +340,10 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
 
       // --- App ---
       case "app/uninstalled":
+        if (isWebhookOlderThanInstall(triggeredAt, store.installedAt)) {
+          console.log(`Ignored stale uninstall webhook for store ${store.id}`);
+          break;
+        }
         await prisma.store.update({
           where: { id: store.id },
           data: { isActive: false },

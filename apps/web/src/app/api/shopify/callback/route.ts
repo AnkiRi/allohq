@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { exchangeCodeForToken, normalizeShopDomain, verifyOAuthHmac } = shopify;
 import { encryptSecret, prisma } from "@allohq/database";
-import { auth } from "@clerk/nextjs/server";
 import { Queue } from "bullmq";
 import { randomBytes } from "node:crypto";
+import { verifyShopifyOAuthState } from "@/lib/shopify-oauth-state";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -22,9 +22,14 @@ export async function GET(request: NextRequest) {
       new URL(`/integrations?shopify_error=${encodeURIComponent(code)}`, request.nextUrl.origin),
     );
 
-  // Validate CSRF state
+  const apiSecret = process.env.SHOPIFY_API_SECRET;
+  if (!apiSecret) return integrationError("configuration_error");
+
+  // Validate CSRF and recover the initiating Joon identity. Clerk cookies can
+  // be unavailable on Shopify's cross-site redirect.
   const savedState = request.cookies.get("shopify_oauth_state")?.value;
-  if (!state || state !== savedState) {
+  const initiatingUserId = verifyShopifyOAuthState(savedState, state, apiSecret);
+  if (!initiatingUserId) {
     return integrationError("invalid_state");
   }
 
@@ -33,8 +38,7 @@ export async function GET(request: NextRequest) {
   }
 
   const apiKey = process.env.SHOPIFY_API_KEY;
-  const apiSecret = process.env.SHOPIFY_API_SECRET;
-  if (!apiKey || !apiSecret) {
+  if (!apiKey) {
     return integrationError("configuration_error");
   }
 
@@ -80,18 +84,17 @@ export async function GET(request: NextRequest) {
     // cookie. If one exists, preserve the standalone user's workspace;
     // otherwise create/reuse the tenant deterministically from the verified
     // shop. The first verified App Bridge staff session claims admin once.
-    const { userId } = await auth();
-    let user = userId ? await prisma.user.findUnique({
-      where: { clerkId: userId },
+    let user = await prisma.user.findUnique({
+      where: { clerkId: initiatingUserId },
       include: {
         workspaceMembers: {
           take: 1,
           select: { workspaceId: true },
         },
       },
-    }) : null;
+    });
 
-    if (userId && !user) {
+    if (!user) {
       // Auto-provision user + default workspace on first Shopify connect
       const workspace = await prisma.workspace.create({
         data: {
@@ -101,8 +104,8 @@ export async function GET(request: NextRequest) {
       });
       user = await prisma.user.create({
         data: {
-          clerkId: userId,
-          email: `${userId}@clerk.dev`, // placeholder, updated on next sign-in
+          clerkId: initiatingUserId,
+          email: `${initiatingUserId}@clerk.dev`, // placeholder, updated on next sign-in
           workspaceMembers: {
             create: { workspaceId: workspace.id, role: "admin" },
           },
@@ -174,6 +177,7 @@ export async function GET(request: NextRequest) {
         widgetPublicKey,
         widgetAllowedOrigins: [`https://${normalizedShop}`],
         isActive: true,
+        installedAt: new Date(),
         onboardingStep: 1,
       },
       update: {
@@ -188,6 +192,7 @@ export async function GET(request: NextRequest) {
         tokenScopes: grantedScopes,
         widgetPublicKey,
         isActive: true,
+        installedAt: new Date(),
         onboardingStep: 1,
         onboardingCompletedAt: null,
         // Only a genuine reinstall resets the one-time installer claim. A

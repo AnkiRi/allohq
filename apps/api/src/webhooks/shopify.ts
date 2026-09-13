@@ -48,6 +48,7 @@ export async function handleShopifyWebhook(
     const topic = req.headers["x-shopify-topic"] as string;
     const shopDomain = req.headers["x-shopify-shop-domain"] as string;
     const eventId = req.headers["x-shopify-event-id"] as string | undefined;
+    const triggeredAt = req.headers["x-shopify-triggered-at"] as string | undefined;
 
     if (!hmacHeader || !topic || !shopDomain) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -83,6 +84,7 @@ export async function handleShopifyWebhook(
       shopDomain,
       payload,
       eventId: eventId ?? null,
+      triggeredAt: triggeredAt ?? null,
     }, {
       ...(eventId ? { jobId: `shopify-${eventId}` } : {}),
       attempts: 5,

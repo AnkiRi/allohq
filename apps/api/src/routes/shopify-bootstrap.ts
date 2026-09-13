@@ -112,6 +112,7 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
         widgetPublicKey,
         widgetAllowedOrigins: [`https://${identity.shopDomain}`],
         isActive: true,
+        installedAt: new Date(),
         ...(!existing?.isActive ? { shopifyInstallerClaimedAt: null } : {}),
       },
     });
