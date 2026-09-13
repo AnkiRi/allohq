@@ -22,6 +22,14 @@ const isPublicRoute = createRouteMatcher([
   // must render while signed out so Clerk can present sign-up/sign-in; the API
   // redeems it only after a valid Clerk session exists.
   "/shopify/continue(.*)",
+  // Shopify's OAuth entry and callback authenticate themselves: the entry
+  // requires a Clerk session inside the handler (401 without one) and the
+  // callback verifies a signed, shop-bound state plus Shopify's HMAC. Behind
+  // Clerk's middleware, a cross-site return that arrived without the session
+  // cookie was rewritten to a bare 404, so the install failed with no error
+  // and no log line.
+  "/api/shopify/auth(.*)",
+  "/api/shopify/callback(.*)",
 ]);
 
 // Embedded Shopify pages are an authenticated *client shell*: their API calls

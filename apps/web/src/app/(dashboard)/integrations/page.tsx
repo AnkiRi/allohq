@@ -144,7 +144,10 @@ export default function IntegrationsPage() {
       workspace_missing: "We could not find your joon workspace. Please sign in again and retry.",
       connection_failed: "We couldn't connect Shopify. No changes were made—please try again.",
     };
-    setError(messages[code] ?? messages.connection_failed!);
+    // Keep the machine-readable code on screen. The URL is cleaned immediately
+    // below, so this message is the only diagnosis a merchant can report back.
+    setError(`${messages[code] ?? messages.connection_failed!} (${code})`);
+    console.error("Shopify connect failed:", code);
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
 

@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   const redirectUri = `${appUrl}/api/shopify/callback`;
 
   // Generate CSRF state token
-  const { state, cookie } = createShopifyOAuthState(userId, apiSecret);
+  const { state, cookie } = createShopifyOAuthState(userId, shop, apiSecret);
 
   const authUrl = generateAuthUrl({
     shopDomain: shop,

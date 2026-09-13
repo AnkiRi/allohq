@@ -25,16 +25,18 @@ export async function GET(request: NextRequest) {
   const apiSecret = process.env.SHOPIFY_API_SECRET;
   if (!apiSecret) return integrationError("configuration_error");
 
-  // Validate CSRF and recover the initiating Joon identity. Clerk cookies can
-  // be unavailable on Shopify's cross-site redirect.
-  const savedState = request.cookies.get("shopify_oauth_state")?.value;
-  const initiatingUserId = verifyShopifyOAuthState(savedState, state, apiSecret);
-  if (!initiatingUserId) {
-    return integrationError("invalid_state");
-  }
-
   if (!shop || !code) {
     return integrationError("missing_callback_parameters");
+  }
+
+  // Validate CSRF and recover the initiating Joon identity. The signed state
+  // rides in Shopify's `state` parameter, so an install completes even when the
+  // browser drops the cookie on the cross-site return; the cookie is a second
+  // copy that must match when present, and the state is bound to this shop.
+  const savedState = request.cookies.get("shopify_oauth_state")?.value;
+  const initiatingUserId = verifyShopifyOAuthState(savedState, state, apiSecret, { shop });
+  if (!initiatingUserId) {
+    return integrationError("invalid_state");
   }
 
   const apiKey = process.env.SHOPIFY_API_KEY;
@@ -99,7 +101,9 @@ export async function GET(request: NextRequest) {
       const workspace = await prisma.workspace.create({
         data: {
           name: normalizedShop.replace(".myshopify.com", ""),
-          slug: normalizedShop.replace(".myshopify.com", ""),
+          // A retried install must not collide with the slug an earlier attempt
+          // left behind: the slug is unique, the display name is not.
+          slug: `${normalizedShop.replace(".myshopify.com", "")}-${randomBytes(4).toString("hex")}`,
         },
       });
       user = await prisma.user.create({
