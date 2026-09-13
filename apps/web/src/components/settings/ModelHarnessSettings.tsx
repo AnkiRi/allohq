@@ -186,6 +186,13 @@ export function ModelHarnessSettings() {
   const selectedDefault = models.find(
     (model) => model.id === draft.defaultRoute.primary,
   );
+  const effectiveDefault = [
+    draft.defaultRoute.primary,
+    ...draft.defaultRoute.fallbacks,
+    ...models.map((model) => model.id),
+  ]
+    .map((id) => models.find((model) => model.id === id))
+    .find((model) => model?.available);
 
   const saveHarness = (trpc.ai.setModelHarness as any).useMutation({
     onSuccess: (result: { harness: ModelHarness }) => {
@@ -206,11 +213,13 @@ export function ModelHarnessSettings() {
   const routeSummary = useMemo(
     () =>
       WORKLOADS.reduce<Record<string, number>>((acc, workload) => {
-        const model = routeFor(draft, workload.id).primary;
+        const route = routeFor(draft, workload.id);
+        const model = [route.primary, ...route.fallbacks, ...models.map((item) => item.id)]
+          .find((id) => models.find((item) => item.id === id)?.available) ?? route.primary;
         acc[model] = (acc[model] ?? 0) + 1;
         return acc;
       }, {}),
-    [draft],
+    [draft, models],
   );
 
   function setDefaultPrimary(primary: ModelId) {
@@ -469,7 +478,11 @@ export function ModelHarnessSettings() {
             <div className="mt-5 flex flex-col gap-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
               <p>
                 {draft.mode === "unified"
-                  ? `${selectedDefault?.label ?? draft.defaultRoute.primary} will handle every AI job.`
+                  ? selectedDefault?.available
+                    ? `${selectedDefault.label} will handle every AI job.`
+                    : effectiveDefault
+                      ? `${selectedDefault?.label ?? draft.defaultRoute.primary} is unavailable. Joon is using ${effectiveDefault.label}.`
+                      : "No configured AI provider is available. Add a provider key before starting new AI work."
                   : `${Object.keys(draft.routes).length} custom route${Object.keys(draft.routes).length === 1 ? "" : "s"}; the rest inherit the default.`}
               </p>
               <div className="flex flex-wrap gap-x-3 gap-y-1">
