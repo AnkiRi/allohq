@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { shopify } from "@allohq/ecommerce-integrations";
 import { auth } from "@clerk/nextjs/server";
-import { createShopifyOAuthState } from "@/lib/shopify-oauth-state";
-const { generateAuthUrl } = shopify;
+const { generateAuthUrl, createShopifyOAuthState } = shopify;
 
 export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");

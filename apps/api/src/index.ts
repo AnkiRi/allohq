@@ -13,6 +13,7 @@ import { handleWidgetApi } from "./routes/widget-api";
 import { handleAgentStream } from "./routes/agent-stream";
 import { handleWidgetPopups } from "./routes/widget-popups";
 import { handleShopifyBootstrap } from "./routes/shopify-bootstrap";
+import { handleShopifyInstall } from "./routes/shopify-install";
 import { handleShopifyHandoff, handleShopifyHandoffRedeem } from "./routes/shopify-handoff";
 import { assertDataEncryptionConfigured, prisma } from "@allohq/database";
 import {
@@ -109,6 +110,15 @@ const server = http.createServer((req, res) => {
   if (req.url?.startsWith("/v1/shopify/bootstrap")) {
     corsMiddleware(req, res, () => {
       void handleShopifyBootstrap(req, res);
+    });
+    return;
+  }
+  // Website-initiated installs: the Next.js OAuth callback forwards Shopify's
+  // signed query here so this service stays the only holder of the encryption
+  // key. Authenticity is re-verified from the HMAC and the signed state.
+  if (req.url?.startsWith("/v1/shopify/install")) {
+    corsMiddleware(req, res, () => {
+      void handleShopifyInstall(req, res);
     });
     return;
   }

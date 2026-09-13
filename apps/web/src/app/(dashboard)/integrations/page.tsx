@@ -140,6 +140,7 @@ export default function IntegrationsPage() {
       invalid_signature: "We could not verify Shopify's response. Please restart the connection.",
       expired_callback: "The Shopify connection took too long and expired. Please try again.",
       configuration_error: "Shopify connections are temporarily unavailable. Our team has been notified.",
+      encryption_unavailable: "Shopify connections are temporarily unavailable. Our team has been notified.",
       missing_scopes: "The required Shopify permissions were not granted. Please reconnect and approve them.",
       workspace_missing: "We could not find your joon workspace. Please sign in again and retry.",
       connection_failed: "We couldn't connect Shopify. No changes were made—please try again.",

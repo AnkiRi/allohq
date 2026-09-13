@@ -8,6 +8,7 @@ export {
   verifyOAuthHmac,
 } from "./oauth";
 export type { ShopifyOfflineToken } from "./oauth";
+export { createShopifyOAuthState, verifyShopifyOAuthState } from "./oauth-state";
 export { getShopifyAdminClient } from "./token-manager";
 export { registerWebhooks, registerWebPixel, verifyWebhookHmac } from "./webhooks";
 export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections } from "./sync";

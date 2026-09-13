@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createShopifyOAuthState, verifyShopifyOAuthState } from "./shopify-oauth-state";
+import { createShopifyOAuthState, verifyShopifyOAuthState } from "./oauth-state";
 
 const SHOP = "joon-test.myshopify.com";
 

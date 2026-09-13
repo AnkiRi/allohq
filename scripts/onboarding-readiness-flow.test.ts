@@ -8,6 +8,7 @@ const wizard = fromRoot("apps/web/src/components/onboarding/OnboardingWizard.tsx
 const sidebar = fromRoot("apps/web/src/components/layout/Sidebar.tsx");
 const dashboard = fromRoot("apps/web/src/app/(dashboard)/dashboard/page.tsx");
 const callback = fromRoot("apps/web/src/app/api/shopify/callback/route.ts");
+const install = fromRoot("apps/api/src/routes/shopify-install.ts");
 const onboardingApi = fromRoot("apps/api/src/routers/onboarding.ts");
 const brandKit = fromRoot("packages/emails/src/brand-kit.ts");
 
@@ -38,8 +39,28 @@ test("launch readiness remains reachable after guided onboarding", () => {
 });
 
 test("a verified direct OAuth install exposes the Shopify tenant to its initiating user", () => {
-  assert.match(callback, /if \(user\)/);
-  assert.match(callback, /workspaceMember\.upsert/);
-  assert.match(callback, /workspaceId_userId/);
-  assert.match(callback, /existingStore\?\.shopifyInstallerClaimedAt \?\? new Date\(\)/);
+  assert.match(install, /if \(user\)/);
+  assert.match(install, /workspaceMember\.upsert/);
+  assert.match(install, /workspaceId_userId/);
+  assert.match(install, /existingStore\?\.shopifyInstallerClaimedAt \?\? new Date\(\)/);
+});
+
+test("the website OAuth callback holds no secret and writes no store", () => {
+  // One service owns the encryption key, the database and the job queue. The
+  // callback only forwards Shopify's signed query to it, so a web deployment
+  // without the key can no longer fail after the single-use code is spent.
+  assert.doesNotMatch(callback, /encryptSecret/);
+  assert.doesNotMatch(callback, /prisma\./);
+  assert.doesNotMatch(callback, /new Queue\(/);
+  assert.match(callback, /\/v1\/shopify\/install/);
+});
+
+test("a missing encryption key is refused before Shopify's code is spent", () => {
+  assert.match(install, /DATA_ENCRYPTION_KEY/);
+  assert.match(install, /encryption_unavailable/);
+  // The guard runs before the token exchange, not in the failure handler.
+  assert.ok(
+    install.indexOf("encryption_unavailable") < install.indexOf("exchangeCodeForToken"),
+    "the encryption-key guard must precede the Shopify code exchange",
+  );
 });

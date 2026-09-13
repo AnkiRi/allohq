@@ -22,6 +22,9 @@ function equals(a: string, b: string) {
  * echoes back verbatim, so an install still completes in a browser that drops
  * the cookie on the cross-site return. The cookie carries the same value as a
  * second copy and must match whenever it survives.
+ *
+ * It lives in this package rather than the web app because both the OAuth
+ * entry point (web) and the install completion (API) must agree on it.
  */
 export function createShopifyOAuthState(
   userId: string,
