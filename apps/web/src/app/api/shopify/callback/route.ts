@@ -146,7 +146,11 @@ export async function GET(request: NextRequest) {
           shopDomain: normalizedShop,
         },
       },
-      select: { widgetPublicKey: true, isActive: true },
+      select: {
+        widgetPublicKey: true,
+        isActive: true,
+        shopifyInstallerClaimedAt: true,
+      },
     });
     const widgetPublicKey =
       existingStore?.widgetPublicKey ??
@@ -201,16 +205,24 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Reclaiming an uninstalled store through a fresh, verified Shopify OAuth
-    // grant must also make that store visible to the signed-in Joon account.
-    // Active installations are deliberately excluded: a staff member with
-    // install permission must not silently promote themselves into an existing
-    // tenant. Embedded App Bridge handles those staff identities as pending.
-    if (user && !existingStore?.isActive) {
+    // A managed-install bootstrap can create an active Store before this
+    // direct OAuth callback finishes. Link the signed-in initiator only while
+    // the one-time installer claim remains unclaimed. Once an embedded staff
+    // identity has claimed the tenant, a later OAuth grant cannot promote a
+    // different Joon account into it.
+    if (
+      user &&
+      (!existingStore?.isActive || !existingStore?.shopifyInstallerClaimedAt)
+    ) {
       await prisma.$transaction(async (tx) => {
-        await tx.workspaceMember.deleteMany({ where: { workspaceId, userId: user.id } });
-        await tx.workspaceMember.create({
-          data: { workspaceId, userId: user.id, role: "admin" },
+        await tx.workspaceMember.upsert({
+          where: { workspaceId_userId: { workspaceId, userId: user.id } },
+          create: { workspaceId, userId: user.id, role: "admin" },
+          update: {},
+        });
+        await tx.store.update({
+          where: { id: store.id },
+          data: { shopifyInstallerClaimedAt: new Date() },
         });
       });
     }

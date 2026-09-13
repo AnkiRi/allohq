@@ -37,8 +37,9 @@ test("launch readiness remains reachable after guided onboarding", () => {
   assert.match(wizard, /live sending stays blocked until the required checks pass/);
 });
 
-test("an OAuth reconnect only relinks a signed-in account when the prior install is inactive", () => {
-  assert.match(callback, /if \(user && !existingStore\?\.isActive\)/);
-  assert.match(callback, /workspaceMember\.deleteMany/);
-  assert.match(callback, /workspaceMember\.create/);
+test("a verified direct OAuth install claims an unclaimed Shopify tenant exactly once", () => {
+  assert.match(callback, /!existingStore\?\.isActive \|\| !existingStore\?\.shopifyInstallerClaimedAt/);
+  assert.match(callback, /workspaceMember\.upsert/);
+  assert.match(callback, /workspaceId_userId/);
+  assert.match(callback, /shopifyInstallerClaimedAt: new Date\(\)/);
 });
