@@ -6,15 +6,17 @@
  *   pnpm --dir apps/api exec tsx ../../scripts/upload-mock-to-shopify.ts
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const store = process.env["SHOPIFY_STORE"] ?? "joon-136.myshopify.com";
 const token = process.env["SHOPIFY_DEMO_ADMIN_TOKEN"];
-const progressPath = `scripts/.shopify-demo-seed-${store.replace(/[^a-z0-9-]/gi, "-")}.json`;
+const progressPath = join(dirname(fileURLToPath(import.meta.url)), `.shopify-demo-seed-${store.replace(/[^a-z0-9-]/gi, "-")}.json`);
 if (!token) throw new Error("Set SHOPIFY_DEMO_ADMIN_TOKEN to a dev-store custom-app token");
 if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(store)) throw new Error("SHOPIFY_STORE must be a myshopify.com domain");
 
 type Progress = { customerIds: Record<string, string>; completedOrders: string[] };
-type Envelope<T> = { data?: T; errors?: Array<{ message: string }> };
+type Envelope<T> = { data?: T; errors?: unknown };
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const progress: Progress = existsSync(progressPath)
   ? JSON.parse(readFileSync(progressPath, "utf8")) as Progress
@@ -32,8 +34,13 @@ async function graphql<T>(query: string, variables: Record<string, unknown>, ret
     return graphql<T>(query, variables, retries - 1);
   }
   const body = await response.json() as Envelope<T>;
-  if (!response.ok || body.errors?.length || !body.data) {
-    throw new Error(`Shopify GraphQL ${response.status}: ${body.errors?.map((error) => error.message).join("; ") ?? "no data"}`);
+  if (!response.ok || body.errors || !body.data) {
+    const detail = Array.isArray(body.errors)
+      ? body.errors.map((error) => error && typeof error === "object" && "message" in error ? String(error.message) : String(error)).join("; ")
+      : body.errors && typeof body.errors === "object" && "message" in body.errors
+        ? String(body.errors.message)
+        : body.errors ? JSON.stringify(body.errors) : "no data";
+    throw new Error(`Shopify GraphQL ${response.status}: ${detail}`);
   }
   return body.data;
 }
@@ -53,6 +60,9 @@ const people = [
 const createCustomer = `mutation DemoCustomer($input: CustomerInput!) {
   customerCreate(input: $input) { customer { id } userErrors { message } }
 }`;
+const findCustomer = `query DemoCustomerByEmail($query: String!) {
+  customers(first: 1, query: $query) { nodes { id } }
+}`;
 const createOrder = `mutation DemoOrder($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
   orderCreate(order: $order, options: $options) {
     order { name totalPriceSet { shopMoney { amount currencyCode } } }
@@ -70,19 +80,24 @@ async function main() {
   for (const [index, [firstName, lastName, archetype]] of people.entries()) {
     const email = `joon.demo.${String(index + 1).padStart(2, "0")}@example.com`;
     if (!progress.customerIds[email]) {
-      const result = await graphql<{ customerCreate: { customer: { id: string } | null; userErrors: Array<{ message: string }> } }>(createCustomer, {
-        input: {
-          firstName, lastName, email,
-          note: "Synthetic Joon demo customer — never contact",
-          tags: ["joon-demo", `demo-${archetype}`],
-          emailMarketingConsent: { marketingState: "SUBSCRIBED", marketingOptInLevel: "SINGLE_OPT_IN" },
-        },
-      });
-      const failure = result.customerCreate.userErrors[0];
-      if (failure || !result.customerCreate.customer) throw new Error(`Customer ${index + 1}: ${failure?.message ?? "not created"}`);
-      progress.customerIds[email] = result.customerCreate.customer.id;
+      const existing = await graphql<{ customers: { nodes: Array<{ id: string }> } }>(findCustomer, { query: `email:${email}` });
+      if (existing.customers.nodes[0]) {
+        progress.customerIds[email] = existing.customers.nodes[0].id;
+      } else {
+        const result = await graphql<{ customerCreate: { customer: { id: string } | null; userErrors: Array<{ message: string }> } }>(createCustomer, {
+          input: {
+            firstName, lastName, email,
+            note: "Synthetic Joon demo customer — never contact",
+            tags: ["joon-demo", `demo-${archetype}`],
+            emailMarketingConsent: { marketingState: "SUBSCRIBED", marketingOptInLevel: "SINGLE_OPT_IN" },
+          },
+        });
+        const failure = result.customerCreate.userErrors[0];
+        if (failure || !result.customerCreate.customer) throw new Error(`Customer ${index + 1}: ${failure?.message ?? "not created"}`);
+        progress.customerIds[email] = result.customerCreate.customer.id;
+      }
       save();
-      console.log(`customer ${index + 1}/25 created · ${archetype}`);
+      console.log(`customer ${index + 1}/25 ready · ${archetype}`);
     }
 
     for (let orderIndex = 0; orderIndex < 2; orderIndex += 1) {
@@ -93,7 +108,7 @@ async function main() {
       const result = await graphql<{ orderCreate: { order: { name: string; totalPriceSet: { shopMoney: { amount: string } } } | null; userErrors: Array<{ message: string }> } }>(createOrder, {
         order: {
           lineItems: [{ variantId: variant.id, quantity: 1 + ((index + orderIndex) % 2) }],
-          customer: { toAssociate: progress.customerIds[email] },
+          customer: { toAssociate: { id: progress.customerIds[email] } },
           email, financialStatus: "PAID",
           processedAt: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
           sourceName: "Joon synthetic demo seed", sourceIdentifier: key,
