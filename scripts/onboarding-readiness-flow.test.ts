@@ -11,6 +11,10 @@ const callback = fromRoot("apps/web/src/app/api/shopify/callback/route.ts");
 const install = fromRoot("apps/api/src/routes/shopify-install.ts");
 const onboardingApi = fromRoot("apps/api/src/routers/onboarding.ts");
 const brandKit = fromRoot("packages/emails/src/brand-kit.ts");
+const handoffApi = fromRoot("apps/api/src/routes/shopify-handoff.ts");
+const teamApi = fromRoot("apps/api/src/routers/team.ts");
+const settings = fromRoot("apps/web/src/app/(dashboard)/settings/page.tsx");
+const clerkProfile = fromRoot("apps/api/src/auth/clerk-profile.ts");
 
 test("email v1 onboarding presents copilot as policy, not a fake one-option choice", () => {
   assert.doesNotMatch(wizard, /const TIER_OPTIONS/);
@@ -43,6 +47,21 @@ test("a verified direct OAuth install exposes the Shopify tenant to its initiati
   assert.match(install, /workspaceMember\.upsert/);
   assert.match(install, /workspaceId_userId/);
   assert.match(install, /existingStore\?\.shopifyInstallerClaimedAt \?\? new Date\(\)/);
+});
+
+test("Shopify handoff stores the linked Clerk user's real display identity", () => {
+  assert.match(handoffApi, /getClerkDisplayProfile\(clerk\.sub\)/);
+  assert.match(clerkProfile, /users\.getUser\(userId\)/);
+  assert.match(clerkProfile, /primaryEmailAddressId/);
+  assert.match(clerkProfile, /firstName, user\.lastName/);
+  assert.match(teamApi, /getClerkDisplayProfile\(member\.user\.clerkId\)/);
+  assert.doesNotMatch(settings, /shopifyUserId\.slice/);
+});
+
+test("admins can grant admin access while workspace ownership remains immutable", () => {
+  assert.match(teamApi, /role: z\.enum\(\["admin"/);
+  assert.match(teamApi, /target\.role === "owner"/);
+  assert.doesNotMatch(teamApi, /Only the owner can grant administrator access/);
 });
 
 test("the website OAuth callback holds no secret and writes no store", () => {

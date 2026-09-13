@@ -10,6 +10,7 @@ import {
   isRedeemableHandoff,
   SHOPIFY_HANDOFF_TTL_MS,
 } from "../auth/shopify-handoff-token";
+import { getClerkDisplayProfile } from "../auth/clerk-profile";
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
@@ -67,6 +68,7 @@ export async function handleShopifyHandoffRedeem(req: IncomingMessage, res: Serv
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
   try {
     const clerk = await verifyToken(bearer(req), { secretKey: process.env.CLERK_SECRET_KEY! });
+    const clerkProfile = await getClerkDisplayProfile(clerk.sub);
     const payload = await body(req);
     const rawToken = typeof payload.token === "string" ? payload.token : "";
     if (!rawToken) return json(res, 400, { error: "Missing handoff token" });
@@ -96,8 +98,15 @@ export async function handleShopifyHandoffRedeem(req: IncomingMessage, res: Serv
         )?.role ?? "pending";
       const clerkUser = await tx.user.upsert({
         where: { clerkId: clerk.sub },
-        update: {},
-        create: { clerkId: clerk.sub, email: `${clerk.sub}@clerk.dev` },
+        update: {
+          ...(clerkProfile?.email ? { email: clerkProfile.email } : {}),
+          ...(clerkProfile?.name ? { name: clerkProfile.name } : {}),
+        },
+        create: {
+          clerkId: clerk.sub,
+          email: clerkProfile?.email ?? `${clerk.sub}@clerk.dev`,
+          name: clerkProfile?.name,
+        },
       });
       const currentMembership = await tx.workspaceMember.findUnique({
         where: {

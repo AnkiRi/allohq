@@ -132,7 +132,7 @@ function TeamAccessSection() {
         {members.map((member) => (
           <div key={member.id} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-medium text-foreground">{member.name || member.email || `Shopify staff ${member.shopifyIdentities[0]?.shopifyUserId.slice(-6) ?? "member"}`}{member.isCurrentUser ? " · You" : ""}</p>
+              <p className="text-[12px] font-medium text-foreground">{member.name || member.email || "Shopify staff member"}{member.isCurrentUser ? " · You" : ""}</p>
               <p className="text-[10px] text-muted-foreground">{member.role === "pending" || member.role === "member" ? "Waiting for access" : member.role.replaceAll("_", " ")}</p>
             </div>
             {member.role === "owner" ? <span className="text-[11px] font-medium">Owner</span> : (
