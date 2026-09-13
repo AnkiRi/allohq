@@ -82,6 +82,19 @@ Gate: **do not install on a real merchant store and do not enable allowlist deli
 
 Goal: prove a new merchant can install, authenticate and reach exactly one correctly linked workspace.
 
+### Website-initiated installation
+
+- [ ] Sign in to `agent.joonhq.com` with a Joon account that is not already linked to the test shop.
+- [ ] Enter the shop's canonical `*.myshopify.com` domain in Joon; confirm the Shopify permission screen requires an authenticated Shopify user with app-install permission.
+- [ ] Approve the expected scopes and confirm Shopify returns directly to `/dashboard`, not `/integrations` and not a bare 404.
+- [ ] Confirm `/api/shopify/callback` remains reachable when the cross-site return has no Clerk cookie; the signed, shop-bound OAuth state must authenticate the initiating Joon user.
+- [ ] Confirm a present but mismatched state cookie fails closed as tampering.
+- [ ] Without opening Joon from Shopify Admin, confirm exactly one store appears in Joon and the initial sync starts automatically.
+- [ ] Confirm products arrive before brand analysis starts, and a transient brand-analysis failure retries without restarting the commerce sync.
+- [ ] Repeat after uninstall/reinstall and confirm the existing tenant is reused without a duplicate store or workspace.
+
+### Shopify-initiated installation
+
 - [ ] Uninstall Joon from the development store through Shopify Admin.
 - [ ] Confirm `app/uninstalled` deactivates the store in Joon.
 - [ ] Reinstall from the Partner Dashboard and approve the expected scopes.
@@ -96,8 +109,10 @@ Goal: prove a new merchant can install, authenticate and reach exactly one corre
 - [ ] Test expired/reused handoff, multiple tabs, back navigation and interrupted authentication.
 - [ ] Test a second store under the same account and prove isolation.
 - [ ] Uninstall and reinstall again; confirm no duplicate active mapping or confused account linkage.
+- [ ] With a Shopify account that has never used Joon, confirm the first authorized installer receives usable access rather than the `pending` fallback.
+- [ ] Confirm a second authorized Shopify staff member starts unassigned and cannot see merchant data until assigned.
 
-Evidence: recording of clean install and handoff, scope screen, workspace/store IDs, staff-role matrix and sanitized callback logs.
+Evidence: recording of both clean install paths, scope screen, final URL, workspace/store IDs, sync job ID, staff-role matrix and sanitized web/API/worker logs.
 
 ## Stage 2 — synchronization, onboarding and readiness
 
