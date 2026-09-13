@@ -1,6 +1,11 @@
 "use client";
 
-import { computeCalculatorScenario, type Currency } from "@allohq/pricing";
+import {
+  computeCalculatorScenario,
+  KLAVIYO_EMAIL_USD_EVIDENCE,
+  SHOPIFY_EMAIL_USD_EVIDENCE,
+  type Currency,
+} from "@allohq/pricing";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   PRICING_CALCULATOR_DEFAULTS,
@@ -61,7 +66,8 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     causedShareBasisPoints: causedShare * 100,
     merchantBlastCount: blasts,
     currency,
-    comparisonTool: "shopify_email",
+    comparisonTool: tool === "klaviyo" ? "klaviyo" : "shopify_email",
+    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE, SHOPIFY_EMAIL_USD_EVIDENCE],
     ...(tool === "entered_bill" ? { enteredBillMinor: enteredBill * 100 } : {}),
     subscriberSnapshotAt: "illustrative-calculator",
   }), [blasts, causedShare, currency, emailShare, enteredBill, revenue, subscribers, tool]);
@@ -117,14 +123,15 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     causedShareBasisPoints: share * 100,
     merchantBlastCount: blasts,
     currency,
-    comparisonTool: "shopify_email",
+    comparisonTool: tool === "klaviyo" ? "klaviyo" : "shopify_email",
+    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE, SHOPIFY_EMAIL_USD_EVIDENCE],
     ...(tool === "entered_bill" ? { enteredBillMinor: enteredBill * 100 } : {}),
     subscriberSnapshotAt: "illustrative-calculator",
   }));
   const chartMax = Math.max(...curve.map((item) => item.invoice.totalMinor), scenario.traditional.priceMinor, 1);
   const points = curve.map((item, index) => `${index * (100 / 7)},${100 - item.invoice.totalMinor / chartMax * 92}`).join(" ");
   const traditionalY = 100 - scenario.traditional.priceMinor / chartMax * 92;
-  const currentToolName = tool === "shopify_email" ? "Shopify Email" : "your entered bill";
+  const currentToolName = tool === "klaviyo" ? "Klaviyo" : tool === "shopify_email" ? "Shopify Email" : "your entered bill";
 
   const copyLink = async () => {
     markInteraction();
@@ -150,6 +157,7 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
         <div className="v3-calc__field">
           <label htmlFor="pricing-tool">Your current tool</label>
           <select id="pricing-tool" value={tool} onChange={(event) => setTool(event.target.value as Tool)}>
+            <option value="klaviyo">Klaviyo</option>
             <option value="shopify_email">Shopify Email</option>
             <option value="entered_bill">Enter my bill</option>
           </select>
@@ -177,7 +185,7 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
           : `Before the cap, Joon costs more than ${currentToolName} only when it causes more than ${money(scenario.breakEven.causedMinor, currency)} a month - and you'd keep ${money(scenario.breakEven.merchantKeepsMinor, currency)} of that.`}
       </p>
       <p className="v3-calc__explain">{money(0, currency)} Joon fee if Joon causes nothing - postage only on blasts you ask for. Joon never profits from sending.</p>
-      <p className="v3-calc__fine mono">Assumes each requested blast goes to every active subscriber and is accepted by the provider. Journeys are not included. Estimates. Joon&rsquo;s fee is measured against a random holdout. The public cap is omitted until its comparison evidence is approved. {scenario.traditional.tool === "shopify_email" && <>Shopify Email&rsquo;s <a href={scenario.traditional.sourceUrl} target="_blank" rel="noreferrer">published send pricing</a>, sourced {scenario.traditional.sourcedAt}.</>}</p>
+      <p className="v3-calc__fine mono">Assumes each requested blast goes to every active subscriber and is accepted by the provider. Journeys are not included. Estimates. Joon&rsquo;s fee is measured against a random holdout. The public cap is omitted until its comparison evidence is approved. {scenario.traditional.tool !== "entered_bill" && <>{currentToolName}&rsquo;s <a href={scenario.traditional.sourceUrl} target="_blank" rel="noreferrer">published pricing</a>, sourced {scenario.traditional.sourcedAt}.{tool === "klaviyo" && subscribers > 200_000 ? " Klaviyo quotes larger accounts; the comparison uses its published 200,000-profile starting price." : ""}</>}</p>
       <button className="v3-calc__share mono" type="button" onClick={copyLink}>{copied ? "Link copied" : "Copy this estimate"}</button>
     </div>
   );

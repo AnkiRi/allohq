@@ -1,6 +1,6 @@
 import type { Currency } from "@allohq/pricing";
 
-export type PricingCalculatorTool = "shopify_email" | "entered_bill";
+export type PricingCalculatorTool = "klaviyo" | "shopify_email" | "entered_bill";
 
 export interface PricingCalculatorInitialState {
   subscribers: number;
@@ -20,6 +20,6 @@ export const PRICING_CALCULATOR_DEFAULTS: PricingCalculatorInitialState = {
   causedShare: 40,
   blasts: 4,
   currency: "INR",
-  tool: "shopify_email",
+  tool: "klaviyo",
   enteredBill: 25_000,
 };

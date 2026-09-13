@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  KLAVIYO_EMAIL_USD_EVIDENCE,
   PRICING_CONFIG,
   comparisonPrice,
   computeCalculatorScenario,
@@ -201,6 +202,22 @@ test("official Shopify Email progressive pricing charges $270 for 280k sends", (
   assert.equal(inr.priceMinor, 2_295_000);
   assert.equal(inr.derivedFromCurrency, "USD");
   assert.equal(inr.fxVersion, PRICING_CONFIG.version);
+});
+
+test("public Klaviyo comparison evidence does not activate the invoice cap", () => {
+  const scenario = computeCalculatorScenario({
+    activeSubscribers: 70_000,
+    monthlyRevenueMinor: 150_000_000,
+    emailRevenueShareBasisPoints: 2_000,
+    causedShareBasisPoints: 4_000,
+    merchantBlastCount: 4,
+    currency: "INR",
+    comparisonTool: "klaviyo",
+    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+    subscriberSnapshotAt: "2026-09-13T00:00:00.000Z",
+  });
+  assert.equal(scenario.traditional.priceMinor, 8_500_000);
+  assert.equal(scenario.invoice.performanceFeeCapStatus, "unavailable_preview");
 });
 
 test("a positive performance fee fails closed without approved cap evidence", () => {

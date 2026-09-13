@@ -212,6 +212,8 @@ export interface CalculatorScenarioInput {
   comparisonTool: ComparisonTool;
   enteredBillMinor?: number;
   comparisonEvidence?: readonly ComparisonPriceEvidence[];
+  /** Visible alternative-tool evidence; it cannot approve Joon's billing cap. */
+  traditionalComparisonEvidence?: readonly ComparisonPriceEvidence[];
   subscriberSnapshotAt: string;
   config?: PricingConfig;
 }
@@ -248,7 +250,7 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
         currency: input.currency,
         activeSubscribers: input.activeSubscribers,
         monthlySends,
-      }, input.comparisonEvidence)
+      }, input.traditionalComparisonEvidence ?? input.comparisonEvidence)
     : (() => {
         assertInteger(input.enteredBillMinor, "enteredBillMinor");
         return {

@@ -65,6 +65,44 @@ export const SHOPIFY_EMAIL_USD_EVIDENCE: ComparisonPriceEvidence = {
   evidenceStatus: "public_approved",
 };
 
+/**
+ * Klaviyo's public Email plan, priced by active profiles. Values were checked
+ * against the live calculator; the final open tier is deliberately the
+ * published 200k starting price because larger accounts require a quote.
+ */
+export const KLAVIYO_EMAIL_USD_EVIDENCE: ComparisonPriceEvidence = {
+  tool: "klaviyo",
+  model: "active_profiles",
+  currency: "USD",
+  tiers: [
+    { upTo: 250, priceMinor: 0 },
+    { upTo: 500, priceMinor: 2_000 },
+    { upTo: 1_000, priceMinor: 3_000 },
+    { upTo: 1_500, priceMinor: 4_500 },
+    { upTo: 2_500, priceMinor: 6_000 },
+    { upTo: 5_000, priceMinor: 10_000 },
+    { upTo: 10_000, priceMinor: 15_000 },
+    { upTo: 15_000, priceMinor: 20_000 },
+    { upTo: 20_000, priceMinor: 35_000 },
+    { upTo: 25_000, priceMinor: 40_000 },
+    { upTo: 30_000, priceMinor: 45_000 },
+    { upTo: 40_000, priceMinor: 55_000 },
+    { upTo: 50_000, priceMinor: 72_000 },
+    { upTo: 55_000, priceMinor: 78_500 },
+    { upTo: 60_000, priceMinor: 86_000 },
+    { upTo: 65_000, priceMinor: 93_000 },
+    { upTo: 70_000, priceMinor: 100_000 },
+    { upTo: 75_000, priceMinor: 107_000 },
+    { upTo: 80_000, priceMinor: 114_000 },
+    { upTo: 100_000, priceMinor: 138_000 },
+    { upTo: 150_000, priceMinor: 195_500 },
+    { upTo: null, priceMinor: 231_500 },
+  ],
+  sourceUrl: "https://www.klaviyo.com/pricing/",
+  sourcedAt: "2026-09-13",
+  evidenceStatus: "public_approved",
+};
+
 export const COMPARISON_PRICE_EVIDENCE: readonly ComparisonPriceEvidence[] = [
   SHOPIFY_EMAIL_USD_EVIDENCE,
 ];
