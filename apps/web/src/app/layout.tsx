@@ -81,13 +81,12 @@ export default function RootLayout({
               <meta name="shopify-disabled-features" content="fetch" />
               {/* Shopify requires App Bridge before every other script. The CDN
                   bootstrap supplies fresh ID tokens and embedded navigation. */}
-              {/* Keep public marketing pages static and free of App Bridge.
-                  On agent.joonhq.com this parser-time loader preserves
-                  Shopify's requirement that App Bridge precede app scripts. */}
+              {/* Load App Bridge only inside Shopify. Standalone agent.joonhq.com
+                  sessions have no shop context and must not initialize it. */}
               <script
                 dangerouslySetInnerHTML={{
                   __html:
-                    'if(location.hostname.startsWith("agent.")){document.write(\'<script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"><\\/script>\')}',
+                    'if(self!==top&&(new URLSearchParams(location.search).has("host")||new URLSearchParams(location.search).get("embedded")==="1")){document.write(\'<script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"><\\/script>\')}',
                 }}
               />
             </>

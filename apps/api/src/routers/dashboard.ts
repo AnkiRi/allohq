@@ -38,7 +38,7 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       // Verify store belongs to workspace
       const store = await ctx.prisma.store.findFirst({
-        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        where: { id: input.storeId, workspaceId: ctx.workspaceId, isActive: true },
         select: { id: true },
       });
       if (!store) {
@@ -90,7 +90,7 @@ export const dashboardRouter = router({
   /** Dashboard stats overview */
   stats: workspaceProcedure.query(async ({ ctx }) => {
     const stores = await ctx.prisma.store.findMany({
-      where: { workspaceId: ctx.workspaceId },
+      where: { workspaceId: ctx.workspaceId, isActive: true },
       select: { id: true },
     });
     const storeIds = stores.map((s) => s.id);
@@ -207,7 +207,7 @@ export const dashboardRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const stores = await ctx.prisma.store.findMany({
-        where: { workspaceId: ctx.workspaceId },
+        where: { workspaceId: ctx.workspaceId, isActive: true },
         select: { id: true },
       });
       const storeIds = stores.map((s) => s.id);
@@ -264,6 +264,7 @@ export const dashboardRouter = router({
       const stores = await ctx.prisma.store.findMany({
         where: {
           workspaceId: ctx.workspaceId,
+          isActive: true,
           ...(input?.storeId ? { id: input.storeId } : {}),
         },
         select: { id: true },
@@ -305,7 +306,7 @@ export const dashboardRouter = router({
       const days = input?.days ?? 7;
       const since = new Date(Date.now() - days * 86400000);
       const stores = await ctx.prisma.store.findMany({
-        where: { workspaceId: ctx.workspaceId },
+        where: { workspaceId: ctx.workspaceId, isActive: true },
         select: { id: true },
       });
       const storeIds = stores.map((s) => s.id);
