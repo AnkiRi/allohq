@@ -205,15 +205,12 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // A managed-install bootstrap can create an active Store before this
-    // direct OAuth callback finishes. Link the signed-in initiator only while
-    // the one-time installer claim remains unclaimed. Once an embedded staff
-    // identity has claimed the tenant, a later OAuth grant cannot promote a
-    // different Joon account into it.
-    if (
-      user &&
-      (!existingStore?.isActive || !existingStore?.shopifyInstallerClaimedAt)
-    ) {
+    // A typed shop domain grants nothing. This path links an account only
+    // after both an authenticated Joon session and Shopify's signed OAuth
+    // callback prove that the Shopify user may install the app for this shop.
+    // That verified installer can connect or reconnect the shop whether the
+    // managed-install bootstrap created its tenant first or it existed before.
+    if (user) {
       await prisma.$transaction(async (tx) => {
         await tx.workspaceMember.upsert({
           where: { workspaceId_userId: { workspaceId, userId: user.id } },
@@ -222,7 +219,10 @@ export async function GET(request: NextRequest) {
         });
         await tx.store.update({
           where: { id: store.id },
-          data: { shopifyInstallerClaimedAt: new Date() },
+          data: {
+            shopifyInstallerClaimedAt:
+              existingStore?.shopifyInstallerClaimedAt ?? new Date(),
+          },
         });
       });
     }
