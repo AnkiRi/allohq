@@ -4,17 +4,16 @@ Project context so you never have to be re-explained. Read this fully before any
 ## What allo is
 An approval-first email operator for consumer (D2C) brands. A founder types a
 plain-language goal ("win back my lapsed buyers before Diwali"); allo builds segments,
-writes brand-voice email, holds out a control group and measures caused revenue. Public
-v1 sends email only and early access is free. Shadow invoices preview the approved
-future outcome model; no billing is active. It does the job, not "a tool to do the job."
-One-liner: "allo runs retention email for consumer brands - and its future performance
-fee applies only when it can measure what worked."
+writes brand-voice email, deliberately leaves unnecessary sends alone and uses campaign
+control groups to measure lift over time. Public v1 sends email only and early access is
+free. Shadow invoices preview 5%, 6% and 8% of Joon-attributed revenue; no billing is active.
+It does the job, not "a tool to do the job."
 
 ## Non-negotiable product facts (do not contradict these in code or copy)
 - PRICING during early access is FREE with SHADOW INVOICES ONLY. No Billing API calls.
-  The approved future model is a capped share of non-overlapping, measurement-ready
-  caused revenue, plus provider postage at cost for merchant-requested blasts. Joon
-  absorbs postage for its own sends and never profits from sending. Rates and caps
+  The approved future model is 5% of non-cancelled order revenue attributed to an email
+  Joon actually sent within seven days, capped at the sourced comparable Klaviyo tier.
+  Shadow invoices also compute 6% and 8%. Joon absorbs all sending cost. Rates and caps
   belong in the pricing module, never hardcoded in copy or feature code.
 - The MOAT is the control-group causal data + the decision engine (CAM) trained on it.
   It "exists" only when control rows actually accumulate from real campaign runs. A
@@ -24,7 +23,7 @@ fee applies only when it can measure what worked."
   runs without a holdout loses that causal data forever. Control-group capture must be
   live before any real brand's first real campaign.
 - OUTCOMES screen shows lift = treatment mean - control mean (same window, matched
-  cohort), and the shadow performance fee from that. Keep the "figures representative
+  cohort) as periodic proof, separately from the attributed-revenue shadow fee. Keep the "figures representative
   while control measurement is wired up" disclaimer until the numbers are REAL.
 
 ## Architecture / ownership (3 layers)
@@ -38,7 +37,7 @@ fee applies only when it can measure what worked."
   high-volume generation, frontier for reasoning) with caching. This is the margin lever.
 - Public v1 sends email only. Joon-hosted delivery remains the intended low-friction
   experience: Resend is the default until the flagged SES path passes acceptance.
-  Merchant-requested blasts carry provider postage at cost; Joon absorbs its own sends.
+  Joon absorbs sending cost; there is no merchant postage line.
 
 ## Schema discipline
 - Additive migrations only. The substrate already exists (MessageLog captures
@@ -73,7 +72,7 @@ fee applies only when it can measure what worked."
   CONSISTENT across every screen (no 96-vs-93,938 contradictions). Templates/email-builder
   stay off the demo path unless explicitly being worked on.
 - The 3-tap demo path: Home console (type a goal -> reasoning streams) -> approve a
-  decision -> Outcomes (treatment vs control, shadow performance fee, AI cost). Keep it
+  decision -> Outcomes (treatment vs control proof, attributed shadow fee, AI cost). Keep it
   walkable at mobile width (~380px).
 
 ## Standing reminders

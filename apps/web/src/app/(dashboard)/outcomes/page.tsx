@@ -147,7 +147,7 @@ export default function OutcomesPage() {
     { storeId: storeId ?? "" },
     { enabled: !!storeId && onboardingDone },
   ) as { data: null | {
-    currency: "INR" | "USD"; liftFee: number; postage: number; total: number; billableCausedRevenue: number;
+    currency: "INR" | "USD"; attributedFee: number; total: number; attributedRevenue: number;
     performanceFeeCap: number | null; status: string; pendingReason: string | null;
   } | undefined };
 
@@ -501,29 +501,29 @@ export default function OutcomesPage() {
       {/* 2. Early-access shadow invoice ------------------------------------- */}
       <ConsoleFrame title="joon · billing preview" live={false} clock={false}>
         <p className="font-sans text-[13px] text-foreground leading-relaxed mb-4">
-          Not charged during early access. Joon keeps ₹1 of every ₹5 it can show it caused. You keep the rest. Blasts you ask for carry postage at cost; Joon never profits from sending.
+          Not charged during early access. This preview is 5% of non-cancelled order revenue attributed to an email Joon actually sent within seven days. Sending is included.
         </p>
 
         <div className="rounded-xl border border-border bg-background/40 p-4 font-mono text-[13px]">
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              caused revenue · measured, non-overlapping campaigns
+              Joon-attributed revenue · campaigns and journeys
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(billingData?.billableCausedRevenue ?? 0, billingData?.currency)}
+              {moneyExact(billingData?.attributedRevenue ?? 0, billingData?.currency)}
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-muted-foreground lowercase">
-              {billingData?.status === "ready" ? "lift fee · capped performance share" : "lift fee · pending approved cap"}
+              {billingData?.status === "ready" ? "Joon fee · 5%, capped" : "Joon fee · pending approved cap"}
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(billingData?.liftFee ?? 0, billingData?.currency)}
+              {moneyExact(billingData?.attributedFee ?? 0, billingData?.currency)}
             </span>
           </div>
           <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
             <span className="text-foreground lowercase font-semibold">
-              total preview · lift fee + merchant-requested postage
+              total preview · sending included
             </span>
             <span className="text-[hsl(var(--accent))] tabular-nums text-[16px] font-semibold">
               {moneyExact(totalFee, billingData?.currency)}
@@ -534,7 +534,7 @@ export default function OutcomesPage() {
         <p className="font-mono text-[10.5px] text-muted-foreground mt-3">
           {billingData?.status === "ready"
             ? "shadow invoice only · no Shopify Billing API call · no charge during early access"
-            : `cap pending · ${billingData?.pendingReason ?? "approved cap evidence is not configured"} · postage remains visible`}
+            : `cap pending · ${billingData?.pendingReason ?? "approved cap evidence is not configured"}`}
         </p>
       </ConsoleFrame>
 

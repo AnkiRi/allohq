@@ -677,8 +677,8 @@ function BillingPreviewSection({ storeId }: { storeId: string }) {
     { storeId },
     { enabled: !!storeId },
   ) as { data: null | {
-    currency: string; periodStart: string; periodEnd: string; billableCausedRevenue: number;
-    carryIn: number; carryOut: number; liftFee: number; postageEmails: number; postage: number;
+    currency: string; periodStart: string; periodEnd: string; attributedRevenue: number;
+    attributedFee: number;
     performanceFeeCap: number | null; total: number;
     status: string; pendingReason: string | null;
   } | undefined; isLoading: boolean };
@@ -694,15 +694,15 @@ function BillingPreviewSection({ storeId }: { storeId: string }) {
       <p className="text-[11px] font-medium text-decision-ink">Not charged during early access</p>
       {isLoading ? <div className="mt-5 h-24 glass-skeleton rounded-xl" /> : !data ? (
         <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-          Your first shadow invoice appears after a measured campaign window closes. It shows what you would have paid, without creating a charge.
+          Your first shadow invoice appears after attributed orders close for the month. It shows what you would have paid, without creating a charge.
         </p>
       ) : (
         <div className="mt-5 space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              ["Caused revenue", money(data.billableCausedRevenue)],
-              ["Joon's lift fee", money(data.liftFee)],
-              ["You kept", money(Math.max(0, data.billableCausedRevenue - data.liftFee))],
+              ["Attributed revenue", money(data.attributedRevenue)],
+              ["Joon at 5%", money(data.attributedFee)],
+              ["You kept", money(Math.max(0, data.attributedRevenue - data.attributedFee))],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-border bg-card p-3 text-card-foreground">
                 <p className="text-[10px] text-muted-foreground">{label}</p>
@@ -711,12 +711,11 @@ function BillingPreviewSection({ storeId }: { storeId: string }) {
             ))}
           </div>
           <div className="divide-y divide-border rounded-lg border border-border bg-card px-3 text-[11px] text-card-foreground">
-            <div className="flex justify-between gap-4 py-2.5"><span className="text-muted-foreground">Lift fee</span><span className="font-mono tabular-nums">{money(data.liftFee)}</span></div>
-            <div className="flex justify-between gap-4 py-2.5"><span className="text-muted-foreground">Postage · {data.postageEmails.toLocaleString()} merchant-requested emails</span><span className="font-mono tabular-nums">{money(data.postage)}</span></div>
+            <div className="flex justify-between gap-4 py-2.5"><span className="text-muted-foreground">5% of attributed revenue</span><span className="font-mono tabular-nums">{money(data.attributedFee)}</span></div>
             <div className="flex justify-between gap-4 py-2.5 font-semibold"><span>Total preview</span><span className="font-mono tabular-nums text-decision-ink">{money(data.total)}</span></div>
           </div>
           <p className="text-[10px] leading-relaxed text-muted-foreground">
-            Joon never profits from sending. Postage applies only to blasts you ask for. Performance fees are capped; a missing comparison cap remains visibly pending rather than being guessed.
+            Sending is included. Deliberately-left-alone and control customers are not attributed or billed. The fee is capped; missing comparison evidence remains visibly pending rather than being guessed.
           </p>
           {data.status !== "ready" && <p className="text-[10px] font-medium text-measure">Cap pending · {data.pendingReason}</p>}
         </div>

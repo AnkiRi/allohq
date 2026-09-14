@@ -38,13 +38,13 @@ This differs from blast-oriented lifecycle tools that optimize gross attributed 
 
 - Public v1 creates and delivers email only. SMS, WhatsApp and RCS delivery remain blocked at the release gate and provider chokepoint.
 - Merchant approval is required before campaigns or journeys send. Background workers may analyze data and prepare drafts; they cannot approve them.
-- Finite campaign audiences use an exact, deterministic control quota frozen before fan-out. Streaming journeys use deterministic per-entrant assignment because their cohort is not known in advance.
+- Finite campaign audiences use an exact, deterministic control quota frozen before fan-out. Journeys have no random control assignment and reach every customer who remains eligible under their delivery and exit rules.
 - Cohorts smaller than seven are explicitly unmeasured. Larger cohorts remain labelled directional until the evidence threshold is met; volume alone does not authorize individualized decisions.
 - Brand tone, formality, humor, energy, banned language, colours and sender identity inform current generation. Joon does not claim autonomous tone learning without an outcome-to-future-selection loop.
 - RFM, category affinity, churn risk estimates, LTV estimates and historical send-time signals are deterministic or heuristic analytics today. They must not be marketed as calibrated probability, trained uplift or cross-brand learning.
 - Personal incremental-lift prediction and cross-brand learning are not live in v1. Their future activation requires the documented training schema, evidence thresholds, privacy boundary and merchant-safe evaluation.
 - Delivery fails closed unless an explicit mode is configured. Sender-domain verification, consent, suppression, complaints, store pause, approval checksum and idempotency are enforced before live delivery.
-- Early access is free and any invoice is a shadow preview only; Joon makes no billing API calls. The approved future model uses a capped share of non-overlapping, measurement-ready caused revenue, while merchant-requested blasts carry provider postage at cost and Joon absorbs its own sends.
+- Early access is free and any invoice is a shadow preview only; Joon makes no billing API calls. The approved future model is 5% of non-cancelled order revenue attributed to an email Joon actually sent within seven days, capped at a sourced comparable Klaviyo email-plan tier. Shadow previews also compute 6% and 8%. Joon absorbs sending cost.
 - Protected customer data is minimized to the approved use case. Email and SMS consent remain separate, double opt-in is market-aware and transactional confirmation is independent of marketing delivery controls.
 
 ## Brand Commitments
