@@ -7,6 +7,7 @@ import {
   computeCalculatorScenario,
   computeCaused,
   computeMonthlyInvoice,
+  deriveMonthlyRevenueMinor,
   type ComparisonPriceEvidence,
 } from "./index";
 
@@ -105,7 +106,7 @@ test("negative net carries forward and is never charged", () => {
   assert.equal(invoice.liftFeeMinor, 0);
 });
 
-test("performance cap binds while transparent postage remains separate", () => {
+test("the cap covers the whole bill, so postage can push the fee to zero", () => {
   const cappedEvidence: ComparisonPriceEvidence[] = [{
     tool: "klaviyo",
     model: "active_profiles",
@@ -125,9 +126,12 @@ test("performance cap binds while transparent postage remains separate", () => {
     subscriberSnapshotAt: "2026-09-10T00:00:00.000Z",
     comparisonEvidence: cappedEvidence,
   });
-  assert.equal(invoice.liftFeeMinor, 10_000);
+  // Postage is passed through at cost and is never reduced by the cap, so a
+  // cap smaller than postage simply leaves no room for a fee.
+  assert.equal(invoice.performanceFeeCapMinor, 10_000);
   assert.equal(invoice.postageMinor, 63_000);
-  assert.equal(invoice.totalMinor, 73_000);
+  assert.equal(invoice.liftFeeMinor, 0);
+  assert.equal(invoice.totalMinor, 63_000);
 });
 
 test("postage-only months work in INR and USD", () => {
@@ -223,7 +227,7 @@ test("public calculator cap evidence caps the displayed Joon total", () => {
   assert.ok(scenario.invoice.totalMinor <= scenario.traditional.priceMinor);
 });
 
-test("a 10k-subscriber calculator caps the Joon fee at the Klaviyo benchmark", () => {
+test("the capped total lands exactly on the benchmark, postage included", () => {
   const scenario = computeCalculatorScenario({
     activeSubscribers: 10_000,
     monthlyRevenueMinor: 150_000_000,
@@ -237,9 +241,57 @@ test("a 10k-subscriber calculator caps the Joon fee at the Klaviyo benchmark", (
     subscriberSnapshotAt: "2026-09-13T00:00:00.000Z",
   });
   assert.equal(scenario.traditional.priceMinor, 1_275_000);
-  assert.equal(scenario.invoice.liftFeeMinor, 1_275_000);
+  // The fee yields to postage so that fee + postage equals the cap, rather
+  // than the fee alone matching it and the bill exceeding it.
   assert.equal(scenario.invoice.postageMinor, 36_000);
-  assert.equal(scenario.invoice.totalMinor, 1_311_000);
+  assert.equal(scenario.invoice.liftFeeMinor, 1_239_000);
+  assert.equal(scenario.invoice.totalMinor, 1_275_000);
+  assert.ok(scenario.invoice.totalMinor <= scenario.traditional.priceMinor);
+});
+
+test("revenue is derived from list size so the two inputs cannot contradict", () => {
+  assert.equal(deriveMonthlyRevenueMinor(70_000, "INR"), 168_000_000);
+  assert.equal(deriveMonthlyRevenueMinor(150_000, "INR"), 360_000_000);
+  assert.equal(deriveMonthlyRevenueMinor(70_000, "USD"), 1_680_000);
+  assert.equal(deriveMonthlyRevenueMinor(0, "INR"), 0);
+});
+
+test("the benchmark refuses list sizes it has no published price for", () => {
+  const atCeiling = comparisonPrice("klaviyo", {
+    currency: "INR",
+    activeSubscribers: 150_000,
+    monthlySends: 0,
+    publicDisplay: true,
+  }, [KLAVIYO_EMAIL_USD_EVIDENCE]);
+  assert.equal(atCeiling.priceMinor, 16_617_500);
+  // Beyond the published table there is no honest number to quote, so the
+  // estimator fails closed instead of repeating a starting price.
+  assert.throws(() => comparisonPrice("klaviyo", {
+    currency: "INR",
+    activeSubscribers: 150_001,
+    monthlySends: 0,
+    publicDisplay: true,
+  }, [KLAVIYO_EMAIL_USD_EVIDENCE]), /does not cover/);
+});
+
+test("at the comparable ceiling the derived scenario stays well under the benchmark", () => {
+  const scenario = computeCalculatorScenario({
+    activeSubscribers: 150_000,
+    monthlyRevenueMinor: deriveMonthlyRevenueMinor(150_000, "INR"),
+    emailRevenueShareBasisPoints: 2_000,
+    causedShareBasisPoints: 4_000,
+    merchantBlastCount: 4,
+    currency: "INR",
+    comparisonTool: "klaviyo",
+    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+    calculatorCapEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+    subscriberSnapshotAt: "2026-09-13T00:00:00.000Z",
+  });
+  assert.equal(scenario.traditional.priceMinor, 16_617_500);
+  assert.equal(scenario.invoice.liftFeeMinor, 5_760_000);
+  assert.equal(scenario.invoice.postageMinor, 540_000);
+  assert.equal(scenario.invoice.totalMinor, 6_300_000);
+  assert.ok(scenario.invoice.totalMinor < scenario.traditional.priceMinor);
 });
 
 test("a positive performance fee fails closed without approved cap evidence", () => {

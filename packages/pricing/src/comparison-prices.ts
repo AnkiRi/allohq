@@ -66,9 +66,21 @@ export const SHOPIFY_EMAIL_USD_EVIDENCE: ComparisonPriceEvidence = {
 };
 
 /**
- * Klaviyo's public Email plan, priced by active profiles. Values were checked
- * against the live calculator; the final open tier is deliberately the
- * published 200k starting price because larger accounts require a quote.
+ * The published Email-plan price of the leading profile-billed platform,
+ * checked against its live calculator.
+ *
+ * Two deliberate limits:
+ *
+ * 1. The table STOPS at 150,000 profiles. Larger accounts are quote-only, so
+ *    there is no published number to cite. An open-ended final tier would
+ *    quote a starting price as though it were the real one — at 1,000,000
+ *    profiles that understated the benchmark several-fold, and because Joon's
+ *    cap is derived from it, understated Joon's own cap too. Above the last
+ *    tier `comparisonPrice` now throws and the estimator fails closed.
+ * 2. It covers the Email plan ALONE. Add-ons a real account usually carries
+ *    (SMS, reviews, the customer data platform) are excluded, so this
+ *    understates a genuine bill. That bias is deliberate: it runs against
+ *    Joon's own argument rather than for it.
  */
 export const KLAVIYO_EMAIL_USD_EVIDENCE: ComparisonPriceEvidence = {
   tool: "klaviyo",
@@ -96,7 +108,6 @@ export const KLAVIYO_EMAIL_USD_EVIDENCE: ComparisonPriceEvidence = {
     { upTo: 80_000, priceMinor: 114_000 },
     { upTo: 100_000, priceMinor: 138_000 },
     { upTo: 150_000, priceMinor: 195_500 },
-    { upTo: null, priceMinor: 231_500 },
   ],
   sourceUrl: "https://www.klaviyo.com/pricing/",
   sourcedAt: "2026-09-13",

@@ -150,9 +150,6 @@ export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoic
   const performanceFeeCapMinor = comparison === null
     ? null
     : applyBasisPoints(comparison.priceMinor, config.capFactorBasisPoints);
-  const liftFeeMinor = performanceFeeCapMinor === null
-    ? (input.allowUncappedPreview ? uncappedPerformanceFeeMinor : 0)
-    : Math.min(uncappedPerformanceFeeMinor, performanceFeeCapMinor);
   const postageMinor = safeNumber(
     roundedRatio(
       BigInt(input.postageEmails) * BigInt(config.postagePerThousandMinor[input.currency]),
@@ -160,6 +157,16 @@ export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoic
     ),
     "postageMinor",
   );
+  // The cap covers what the merchant actually pays, so postage counts against
+  // it. Capping the fee alone let the total exceed the benchmark the promise is
+  // written against. Postage itself is never reduced: it is passed through at
+  // cost, so when it alone exceeds the cap the fee simply falls to zero.
+  const feeAllowedByCapMinor = performanceFeeCapMinor === null
+    ? null
+    : Math.max(0, performanceFeeCapMinor - postageMinor);
+  const liftFeeMinor = feeAllowedByCapMinor === null
+    ? (input.allowUncappedPreview ? uncappedPerformanceFeeMinor : 0)
+    : Math.min(uncappedPerformanceFeeMinor, feeAllowedByCapMinor);
   const totalMinor = liftFeeMinor + postageMinor;
   return {
     currency: input.currency,
