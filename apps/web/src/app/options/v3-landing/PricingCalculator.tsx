@@ -7,11 +7,10 @@ import {
 } from "@allohq/pricing";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  clampRevenueMajor,
+  derivedRevenueMajor,
   MAX_COMPARABLE_SUBSCRIBERS,
   MIN_SUBSCRIBERS,
   PRICING_CALCULATOR_DEFAULTS,
-  revenueBoundsMajor,
   type PricingCalculatorInitialState,
 } from "./pricing-calculator-state";
 
@@ -46,8 +45,6 @@ function recordLandingEvent(event: string, data?: Record<string, string>) {
 export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { initial?: PricingCalculatorInitialState }) {
   const [currency, setCurrency] = useState<Currency>(initial.currency);
   const [subscribers, setSubscribers] = useState(initial.subscribers);
-  const [revenue, setRevenue] = useState(initial.revenue);
-  const [revenueTouched, setRevenueTouched] = useState(initial.revenueTouched);
   const [emailShare, setEmailShare] = useState(initial.emailShare);
   const [causedShare, setCausedShare] = useState(initial.causedShare);
   const [blasts, setBlasts] = useState(initial.blasts);
@@ -55,13 +52,10 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
   const interacted = useRef(false);
   const viewed = useRef(false);
 
-  const bounds = revenueBoundsMajor(subscribers, currency);
-  // Revenue follows list size until the merchant states their own, and stays
-  // within what a list that size can support either way. Unlinked, the two
-  // inputs described stores that cannot exist.
-  useEffect(() => {
-    setRevenue((current) => (revenueTouched ? clampRevenueMajor(current, subscribers, currency) : bounds.derived));
-  }, [bounds.derived, currency, revenueTouched, subscribers]);
+  // Revenue follows list size rather than being typed. As a free input it could
+  // describe a store that cannot exist, which pinned the fee to its cap and made
+  // the page look stuck.
+  const revenue = derivedRevenueMajor(subscribers, currency);
 
   const markInteraction = () => {
     if (interacted.current) return;
@@ -102,30 +96,28 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     query.set("subs", String(subscribers));
-    // Only a stated revenue travels in the link; otherwise it re-derives.
-    if (revenueTouched) query.set("rev", String(revenue)); else query.delete("rev");
     query.set("email", String(emailShare));
     query.set("caused", String(causedShare));
     query.set("blasts", String(blasts));
     query.set("currency", currency);
+    // Revenue is derived, so it never travels in the link.
+    query.delete("rev");
     query.delete("tool");
     query.delete("bill");
     window.history.replaceState(null, "", `${window.location.pathname}?${query.toString()}${window.location.hash}`);
-  }, [blasts, causedShare, currency, emailShare, revenue, revenueTouched, subscribers]);
+  }, [blasts, causedShare, currency, emailShare, subscribers]);
 
   useEffect(() => {
     if (!interacted.current) return;
     const timer = window.setTimeout(() => recordLandingEvent("calculator_result", {
       subscribers: analyticsBucket(subscribers, [5_000, 30_000, 70_000, 150_000]),
-      revenue: analyticsBucket(revenue, [500_000, 2_000_000, 10_000_000, 50_000_000]),
       emailShare: analyticsBucket(emailShare, [10, 20, 30]),
       causedShare: analyticsBucket(causedShare, [10, 30, 50]),
       blasts: analyticsBucket(blasts, [0, 4, 8, 16]),
       currency,
-      result: scenario.breakEven.currentlyCostsMore ? "above_current_tool" : "at_or_below_current_tool",
     }), 800);
     return () => window.clearTimeout(timer);
-  }, [blasts, causedShare, currency, emailShare, revenue, scenario.breakEven.currentlyCostsMore, subscribers]);
+  }, [blasts, causedShare, currency, emailShare, subscribers]);
 
   const curve = CAUSED_SHARES.map((share) => scenarioFor(share));
   const chartMax = Math.max(...curve.map((item) => item.invoice.totalMinor), scenario.traditional.priceMinor, 1);
@@ -133,8 +125,7 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     .map((item, index) => `${index * (100 / (CAUSED_SHARES.length - 1))},${100 - item.invoice.totalMinor / chartMax * 92}`)
     .join(" ");
   const traditionalY = 100 - scenario.traditional.priceMinor / chartMax * 92;
-  const atCap = scenario.invoice.performanceFeeCapMinor !== null
-    && scenario.invoice.totalMinor >= scenario.invoice.performanceFeeCapMinor;
+  const savingMinor = scenario.traditional.priceMinor - scenario.invoice.totalMinor;
 
   const copyLink = async () => {
     markInteraction();
@@ -152,19 +143,15 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     <div className="v3-calc" aria-label="Illustrative Joon pricing calculator">
       <div className="v3-calc__banner mono">Free during early access. This is what you&rsquo;d pay after.</div>
       <div className="v3-calc__inputs" onInput={markInteraction} onChange={markInteraction}>
-        <LogSubscribers value={subscribers} set={setSubscribers} />
-        <CurrencyAmount
-          label="Monthly store revenue"
-          currency={currency}
-          setCurrency={setCurrency}
-          value={revenue}
-          setValue={(next) => { setRevenueTouched(true); setRevenue(clampRevenueMajor(next, subscribers, currency)); }}
-          min={bounds.min}
-          max={bounds.max}
-          helper={revenueTouched
-            ? `A list this size supports ${money(bounds.min * 100, currency)}–${money(bounds.max * 100, currency)} a month.`
-            : "Derived from your list size. Edit it if yours differs."}
-        />
+        <LogSubscribers value={subscribers} set={setSubscribers} currency={currency} setCurrency={setCurrency} />
+        <div className="v3-calc__field v3-calc__derived">
+          <span>Monthly store revenue</span>
+          <strong>{money(revenue * 100, currency)}</strong>
+          <small>
+            Taken from your list size: as many monthly visits as subscribers, 1% of them buying at
+            {" "}{money(currency === "INR" ? 200_000 : 2_000, currency)}, plus 20% again from the list itself.
+          </small>
+        </div>
         <NumberRange label="Share of revenue from email" value={emailShare} min={5} max={40} step={1} set={setEmailShare} valueText={`${emailShare}%`} />
         <NumberRange label="How much of that Joon actually causes" value={causedShare} min={0} max={70} step={1} set={setCausedShare} valueText={`${causedShare}%`} helper="The part that would not have happened without the email, measured against a random holdout." />
         <NumberRange label="Blasts you'll ask for each month" value={blasts} min={0} max={31} step={1} set={setBlasts} valueText={`${blasts} blasts`} />
@@ -183,19 +170,20 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
             {" + "}
             {money(scenario.invoice.postageMinor, currency)} postage at cost
           </p>
-          <b>You keep {money(scenario.merchantKeepsMinor, currency)} of what Joon caused.</b>
+          <b>{money(savingMinor, currency)} less, and you keep {money(scenario.merchantKeepsMinor, currency)} of what Joon caused.</b>
         </article>
       </div>
       <p className="v3-sr-only" aria-live="polite" aria-atomic="true">
         Joon costs {money(scenario.invoice.totalMinor, currency)} a month all in:
         {" "}{money(scenario.invoice.liftFeeMinor, currency)} outcome fee plus
         {" "}{money(scenario.invoice.postageMinor, currency)} postage. The published platform benchmark is
-        {" "}{money(scenario.traditional.priceMinor, currency)} a month.
+        {" "}{money(scenario.traditional.priceMinor, currency)} a month, so Joon is
+        {" "}{money(savingMinor, currency)} less.
       </p>
       <div className="v3-calc__chart">
         <svg viewBox="0 0 100 104" role="img" aria-labelledby="pricing-chart-title pricing-chart-desc">
           <title id="pricing-chart-title">Monthly total as caused share rises from zero to seventy percent</title>
-          <desc id="pricing-chart-desc">The platform benchmark stays at {money(scenario.traditional.priceMinor, currency)}. Joon&rsquo;s total starts at postage alone, rises only with caused revenue, and stops at the cap.</desc>
+          <desc id="pricing-chart-desc">The platform benchmark stays at {money(scenario.traditional.priceMinor, currency)}. Joon&rsquo;s total starts at postage alone, rises only with caused revenue, and always stays below the benchmark.</desc>
           <line x1="0" x2="100" y1={traditionalY} y2={traditionalY} className="is-traditional" />
           <polyline points={points} className="is-joon" />
         </svg>
@@ -203,14 +191,11 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
         <div><span>0% caused</span><span>70% caused</span></div>
       </div>
       <p className="v3-calc__crossing">
-        {atCap
-          ? `Joon has reached its cap here: however much more it causes, the bill stops at ${money(scenario.traditional.priceMinor, currency)}.`
-          : `Joon's total never exceeds the benchmark: the outcome fee is capped so that fee plus postage stays at or below it.`}
+        Joon stays below your platform at every level: the outcome fee is capped so that fee plus postage never reaches the benchmark.
       </p>
       <p className="v3-calc__explain">{money(0, currency)} outcome fee if Joon causes nothing &mdash; postage only on blasts you ask for. Joon never profits from sending.</p>
       <p className="v3-calc__fine mono">
-        Revenue is derived from your list size (1% of visits convert at {money(currency === "INR" ? 200_000 : 2_000, currency)}, plus 20% from the existing list) until you state your own, and stays within what a list that size can support.
-        {" "}Assumes every blast reaches every subscriber; Joon&rsquo;s suppression usually sends fewer.
+        Assumes every blast reaches every subscriber; Joon&rsquo;s suppression usually sends fewer.
         {" "}Journeys are not included. Estimates. Joon&rsquo;s fee is measured against a random holdout.
         {scenario.traditional.tool !== "entered_bill" && <>
           {" "}Benchmark is the platform&rsquo;s <a href={scenario.traditional.sourceUrl} target="_blank" rel="noreferrer">published Email-plan pricing</a>, sourced {scenario.traditional.sourcedAt}.
@@ -236,23 +221,9 @@ function EditableNumber({ label, value, set, min, max }: { label: string; value:
   return <><label className="v3-sr-only" htmlFor={id}>{label}</label><input id={id} type="number" inputMode="numeric" min={min} max={max} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></>;
 }
 
-function CurrencyAmount({ label, currency, setCurrency, value, setValue, min, max, helper }: { label: string; currency: Currency; setCurrency: (value: Currency) => void; value: number; setValue: (value: number) => void; min: number; max: number; helper?: string }) {
-  const selectId = useId();
-  return (
-    <div className="v3-calc__field">
-      <span>{label}</span>
-      <span className="v3-calc__money">
-        <label className="v3-sr-only" htmlFor={selectId}>Currency</label>
-        <select id={selectId} value={currency} onChange={(event) => setCurrency(event.target.value as Currency)}><option>INR</option><option>USD</option></select>
-        <EditableNumber label={label} value={value} set={setValue} min={min} max={max} />
-      </span>
-      {helper && <small>{helper}</small>}
-    </div>
-  );
-}
-
-function LogSubscribers({ value, set }: { value: number; set: (value: number) => void }) {
+function LogSubscribers({ value, set, currency, setCurrency }: { value: number; set: (value: number) => void; currency: Currency; setCurrency: (value: Currency) => void }) {
   const sliderId = useId();
+  const selectId = useId();
   const span = MAX_COMPARABLE_SUBSCRIBERS / MIN_SUBSCRIBERS;
   const position = Math.log(value / MIN_SUBSCRIBERS) / Math.log(span) * 1000;
   return (
@@ -267,7 +238,11 @@ function LogSubscribers({ value, set }: { value: number; set: (value: number) =>
         aria-valuetext={`${value.toLocaleString("en-IN")} subscribers`}
         onChange={(event) => set(clamp(MIN_SUBSCRIBERS * Math.pow(span, Number(event.target.value) / 1000), MIN_SUBSCRIBERS, MAX_COMPARABLE_SUBSCRIBERS))}
       />
-      <EditableNumber label="Active email subscribers" value={value} set={set} min={MIN_SUBSCRIBERS} max={MAX_COMPARABLE_SUBSCRIBERS} />
+      <span className="v3-calc__money">
+        <EditableNumber label="Active email subscribers" value={value} set={set} min={MIN_SUBSCRIBERS} max={MAX_COMPARABLE_SUBSCRIBERS} />
+        <label className="v3-sr-only" htmlFor={selectId}>Currency</label>
+        <select id={selectId} value={currency} onChange={(event) => setCurrency(event.target.value as Currency)}><option>INR</option><option>USD</option></select>
+      </span>
     </div>
   );
 }

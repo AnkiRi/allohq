@@ -25,7 +25,11 @@ export interface PricingConfig {
 export const PRICING_CONFIG = Object.freeze<PricingConfig>({
   version: "2026-09-10.v1",
   liftFeeBasisPoints: 2_000,
-  capFactorBasisPoints: 10_000,
+  // Deliberately below 100%: the promise is that Joon costs LESS than the
+  // platform it replaces, so the bill must land under the benchmark rather
+  // than exactly on it. At parity the two figures rendered identically and
+  // read as a fault.
+  capFactorBasisPoints: 8_000,
   postagePerThousandMinor: { INR: 900, USD: 10 },
   providerCostPerThousandMinor: { INR: 850, USD: 10 },
   fx: {

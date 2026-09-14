@@ -127,8 +127,9 @@ test("the cap covers the whole bill, so postage can push the fee to zero", () =>
     comparisonEvidence: cappedEvidence,
   });
   // Postage is passed through at cost and is never reduced by the cap, so a
-  // cap smaller than postage simply leaves no room for a fee.
-  assert.equal(invoice.performanceFeeCapMinor, 10_000);
+  // cap smaller than postage simply leaves no room for a fee. The cap is 80%
+  // of the benchmark, so ₹100 of evidence yields an ₹80 ceiling.
+  assert.equal(invoice.performanceFeeCapMinor, 8_000);
   assert.equal(invoice.postageMinor, 63_000);
   assert.equal(invoice.liftFeeMinor, 0);
   assert.equal(invoice.totalMinor, 63_000);
@@ -227,7 +228,7 @@ test("public calculator cap evidence caps the displayed Joon total", () => {
   assert.ok(scenario.invoice.totalMinor <= scenario.traditional.priceMinor);
 });
 
-test("the capped total lands exactly on the benchmark, postage included", () => {
+test("the capped total lands below the benchmark, postage included", () => {
   const scenario = computeCalculatorScenario({
     activeSubscribers: 10_000,
     monthlyRevenueMinor: 150_000_000,
@@ -241,12 +242,43 @@ test("the capped total lands exactly on the benchmark, postage included", () => 
     subscriberSnapshotAt: "2026-09-13T00:00:00.000Z",
   });
   assert.equal(scenario.traditional.priceMinor, 1_275_000);
-  // The fee yields to postage so that fee + postage equals the cap, rather
-  // than the fee alone matching it and the bill exceeding it.
+  // The fee yields to postage so that fee + postage lands on the cap, rather
+  // than the fee alone matching it and the bill exceeding it. The cap is 80%
+  // of the benchmark, so the bill stays strictly below what it replaces.
   assert.equal(scenario.invoice.postageMinor, 36_000);
-  assert.equal(scenario.invoice.liftFeeMinor, 1_239_000);
-  assert.equal(scenario.invoice.totalMinor, 1_275_000);
-  assert.ok(scenario.invoice.totalMinor <= scenario.traditional.priceMinor);
+  assert.equal(scenario.invoice.liftFeeMinor, 984_000);
+  assert.equal(scenario.invoice.totalMinor, 1_020_000);
+  assert.ok(scenario.invoice.totalMinor < scenario.traditional.priceMinor);
+});
+
+test("the bill stays strictly under the benchmark at every slider position", () => {
+  // The promise is that Joon costs less than the platform it replaces. Parity
+  // rendered two identical figures and read as a fault, so the cap sits below
+  // the benchmark rather than on it.
+  for (const subscribers of [1_000, 10_000, 70_000, 150_000]) {
+    for (const emailShare of [5, 40]) {
+      for (const causedShare of [0, 70]) {
+        for (const merchantBlastCount of [0, 31]) {
+          const scenario = computeCalculatorScenario({
+            activeSubscribers: subscribers,
+            monthlyRevenueMinor: deriveMonthlyRevenueMinor(subscribers, "INR"),
+            emailRevenueShareBasisPoints: emailShare * 100,
+            causedShareBasisPoints: causedShare * 100,
+            merchantBlastCount,
+            currency: "INR",
+            comparisonTool: "klaviyo",
+            traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+            calculatorCapEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+            subscriberSnapshotAt: "2026-09-14T00:00:00.000Z",
+          });
+          assert.ok(
+            scenario.invoice.totalMinor < scenario.traditional.priceMinor,
+            `${subscribers} subscribers, ${emailShare}% email, ${causedShare}% caused, ${merchantBlastCount} blasts: ${scenario.invoice.totalMinor} should be under ${scenario.traditional.priceMinor}`,
+          );
+        }
+      }
+    }
+  }
 });
 
 test("revenue is derived from list size so the two inputs cannot contradict", () => {
@@ -356,7 +388,9 @@ test("calculator accepts a merchant-entered current bill without using it as the
     subscriberSnapshotAt: "2026-09-10T00:00:00.000Z",
   });
   assert.equal(scenario.traditional.priceMinor, 123_456);
-  assert.equal(scenario.invoice.performanceFeeCapMinor, 6_000_000);
+  // The cap still comes from published evidence at 80%, never from the figure
+  // the merchant typed.
+  assert.equal(scenario.invoice.performanceFeeCapMinor, 4_800_000);
 });
 
 test("calculator computes the uncapped break-even in the pricing module", () => {
