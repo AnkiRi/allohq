@@ -28,16 +28,22 @@ function boundedParam(value: string | string[] | undefined, fallback: number, mi
 function calculatorState(params: Record<string, string | string[] | undefined>): PricingCalculatorInitialState {
   const currency = first(params.currency) === "USD" ? "USD" : "INR";
   return {
-    // Revenue is derived from list size, so no revenue parameter is accepted.
     subscribers: boundedParam(
       params.subs,
       PRICING_CALCULATOR_DEFAULTS.subscribers,
       MIN_SUBSCRIBERS,
       MAX_COMPARABLE_SUBSCRIBERS,
     ),
-    emailShare: boundedParam(params.email, PRICING_CALCULATOR_DEFAULTS.emailShare, 5, 40),
-    causedShare: boundedParam(params.caused, PRICING_CALCULATOR_DEFAULTS.causedShare, 0, 70),
-    blasts: boundedParam(params.blasts, PRICING_CALCULATOR_DEFAULTS.blasts, 0, 31),
+    campaigns: boundedParam(params.campaigns, PRICING_CALCULATOR_DEFAULTS.campaigns, 0, 31),
+    suppression: boundedParam(params.suppression, PRICING_CALCULATOR_DEFAULTS.suppression, 0, 80),
+    control: boundedParam(params.control, PRICING_CALCULATOR_DEFAULTS.control, 0, 30),
+    openRate: boundedParam(params.open, PRICING_CALCULATOR_DEFAULTS.openRate, 0, 100),
+    clickThroughRate: boundedParam(params.ctr, PRICING_CALCULATOR_DEFAULTS.clickThroughRate, 0, 30),
+    conversionRate: boundedParam(params.conversion, PRICING_CALCULATOR_DEFAULTS.conversionRate, 0, 30),
+    averageOrderValue: boundedParam(params.aov, currency === "INR" ? 2_000 : 20, 1, 1_000_000),
+    sessions: boundedParam(params.sessions, PRICING_CALCULATOR_DEFAULTS.sessions, 0, 10_000_000),
+    cartIncidence: boundedParam(params.cart, PRICING_CALCULATOR_DEFAULTS.cartIncidence, 0, 50),
+    recoveryRate: boundedParam(params.recovery, PRICING_CALCULATOR_DEFAULTS.recoveryRate, 0, 50),
     currency,
   };
 }

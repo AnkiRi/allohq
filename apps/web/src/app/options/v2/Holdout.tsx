@@ -105,7 +105,7 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
       <div className="v2-hf__head">
         <span className="v2-hf__cohort-id mono">cohort · vana-spring-lapsed</span>
         <span className="v2-hf__cohort-meta">
-          187 buyers · matched on past spend · 14-day window
+          187 campaign candidates · balanced on past spend · 14-day window
         </span>
       </div>
 
@@ -193,7 +193,7 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
             <span className="v2-hf__swatch v2-hf__swatch--worked" aria-hidden="true" />
-            Worked · {treatmentCount} buyers
+            Sent · {treatmentCount} reached
           </div>
           <div className="v2-hf__track" role="presentation">
             <motion.span
@@ -209,14 +209,14 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
           </div>
           <div className="v2-hf__amount mono">
             <CountUp to={TREATMENT_PER} reduced={reduced} start={start} prefix="₹" />
-            <span className="v2-hf__per">/ buyer</span>
+            <span className="v2-hf__per">/ reached</span>
           </div>
         </div>
 
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
             <span className="v2-hf__swatch v2-hf__swatch--held" aria-hidden="true" />
-            Held out · {controlCount} buyers
+            Control · {controlCount} reached
           </div>
           <div className="v2-hf__track" role="presentation">
             <motion.span
@@ -232,7 +232,7 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
           </div>
           <div className="v2-hf__amount v2-hf__amount--held mono">
             <CountUp to={CONTROL_PER} reduced={reduced} start={start} prefix="₹" />
-            <span className="v2-hf__per">/ buyer</span>
+            <span className="v2-hf__per">/ reached</span>
           </div>
         </div>
 
@@ -240,8 +240,8 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
           <div className="v2-hf__gap-k mono">Measured lift · the gap</div>
           <div className="v2-hf__gap-v mono">₹{inr(liftTotal)}</div>
           <p className="v2-hf__gap-sub">
-            Recovered above the held-back baseline. The gap is the only thing joon
-            bills a performance fee on, never the gross.
+            Recovered above the control baseline. This pooled evidence teaches Joon which
+            campaigns to repeat; the invoice uses attributed orders from emails actually sent.
           </p>
         </div>
       </div>

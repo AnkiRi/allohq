@@ -167,7 +167,7 @@ export function V2Landing({
                 {enhanced ? <h1 className="v2-hero__headline">The email tool that gets paid to send less.</h1> : <KineticHeadline />}
                 <p className="v2-hero__sub">
                   {enhanced
-                    ? "Joon connects to Shopify, learns your brand and sends fewer, better emails. You approve every send, and a held-out control measures what changed."
+                    ? "Joon connects to Shopify, learns your brand and sends fewer, better emails. You approve every campaign, and random controls help prove what changed."
                     : "joon connects to Shopify, learns your brand, and helps you send fewer, better emails—with an explicit approval before anything leaves and a held-out control to measure what followed."}
                 </p>
                 <div className="v2-hero__cta">
@@ -178,7 +178,7 @@ export function V2Landing({
                     connect Shopify in one click
                   </span>
                 </div>
-                {enhanced && <p className="v3-hero__pricing-promise">No lift, no Joon fee. Joon&rsquo;s fee is capped at what a leading email platform charges for your list.</p>}
+                {enhanced && <p className="v3-hero__pricing-promise">No attributed revenue, no fee. You keep 95%. Sending and the email creator are included.</p>}
                 {enhanced && <a className="v3-hero__pricing-link mono" href="#bill">See what you&rsquo;d pay</a>}
 
                 {/* slim live proof strip */}
@@ -321,16 +321,16 @@ export function V2Landing({
                 </h2>
                 <p className="v2-section__lede">
                   Reaching the right customer at the right moment grows revenue without
-                  adding sends. And it isn&rsquo;t a guess: {enhanced ? "on every campaign big enough to measure" : "on every campaign"} joon holds
-                  a few back, matched on past spend and left untouched, so the lift is
-                  measured against that control, never claimed.
+                  adding sends. On measurable campaigns Joon first decides who the message may
+                  help, then holds a small random sample of those candidates back. Results pool
+                  over time, so proof is reported only when the evidence supports it.
                 </p>
                 <p className="v2-half__aside">
                   {enhanced && <><strong>Holdouts are not a setting.</strong>{" "}</>}
                   Holdouts are one-way: you can&rsquo;t run a control on history.
                   Every campaign that runs without one loses that proof forever.
                 </p>
-                {enhanced && <div className="v3-holdout-answer"><p>Joon emails most eligible customers and holds a few back at random. What the emailed group spends beyond the held-back group is what Joon caused.</p><p><strong>Doesn&rsquo;t holding people back cost sales?</strong> A little - they still buy as usual; they just miss one email. It&rsquo;s how you know the rest is real.</p></div>}
+                {enhanced && <div className="v3-holdout-answer"><p><strong>Left alone is a decision.</strong> A regular full-price buyer may not need this discount. If her state changes, she becomes a candidate again.</p><p><strong>A control is random.</strong> A small, rotating sample of campaign candidates misses one email so Joon can learn what the campaign changed. Controls are proof, never the billing base.</p></div>}
               </Rise>
             </div>
           </section>
@@ -489,10 +489,10 @@ export function V2Landing({
                             The Diwali win-back goes out.
                           </h3>
                           <p className="v2-event__detail">
-                            187 lapsed buyers included in an email campaign,
+                            187 lapsed campaign candidates,
                             with{" "}
                             <span className="v2-noticed">28 held back</span> as a
-                            control, so the lift is proven, not claimed.
+                            control, so results can be pooled into honest evidence.
                           </p>
                           <p className="v2-event__meta v2-event__meta--control mono">
                             held back 28 as control · lift measured
@@ -539,11 +539,11 @@ export function V2Landing({
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">{enhanced ? <>what you&rsquo;d pay</> : <>free public v1</>}</p>
                 <h2 className="v2-section__h">
-                  {enhanced ? <>No lift, no Joon fee. <em>You pay requested-blast postage at cost.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
+                  {enhanced ? <>They charge for the list. <em>Joon charges for attributed revenue.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
                 </h2>
                 <p className="v2-section__lede">
                   {enhanced
-                    ? "Joon keeps ₹1 of every ₹5 it can show it caused. Blasts you ask for pay postage at cost. Joon's own sends do not."
+                    ? "After early access, Joon charges 5% of non-cancelled order revenue attributed to an email it actually sent within seven days. If that revenue is ₹0, the fee is ₹0. Sending is included."
                     : "Joon is free at launch. There is no per-email charge and no performance fee in v1. We are earning the right to price the decision layer only after real holdout evidence exists."}
                 </p>
                 <p className="v2-half__aside mono">
@@ -607,9 +607,9 @@ export function V2Landing({
                   <span className="v2-step__k mono">$ joon learn</span>
                   <h3 className="v2-step__h">It holds out a control first.</h3>
                   <p className="v2-step__p">
-                    From the 187, joon holds back <strong>28</strong>, matched on
-                    past spend, and leaves them untouched. Everything next is
-                    measured against them, proven, not assumed.
+                    From the 187 candidates, joon randomly assigns <strong>28</strong> to
+                    control, balanced on past spend. They miss this campaign; the rest
+                    are assigned treatment.
                   </p>
                 </Rise>
                 <Rise className="v2-step" delay={0.16}>
@@ -641,7 +641,7 @@ export function V2Landing({
                       </span>
                       <span className="v2-consequence__v">₹1.2L recovered</span>
                       <span className="v2-consequence__d">
-                        lift vs the 28 held-back buyers
+                        directional estimate vs 28 control customers
                       </span>
                     </div>
                     <div className="v2-consequence__cell">

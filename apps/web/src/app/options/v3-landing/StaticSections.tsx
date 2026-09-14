@@ -6,7 +6,6 @@ export function JourneySection() {
     ["Wait", "3 hours", ""],
     ["Condition", "Has made a purchase?", ""],
     ["Silence", "Leave alone", "bought already · logged"],
-    ["Holdout", "15% held back", "per entrant · deterministic"],
     ["Send email", "In your voice", "from BrandProfile"],
   ] as const;
   return (
@@ -55,7 +54,7 @@ export function SharperDecisions() {
     ],
     [
       "Measured against control",
-      "His untreated purchases establish what would have happened anyway.",
+              "Across comparable campaigns, the random control shows whether the nudge helped.",
       "Measured",
     ],
   ] as const;
@@ -64,14 +63,15 @@ export function SharperDecisions() {
       <div className="v2-wrap">
         <Rise className="v3-sharper__copy">
           <p className="v2-eyebrow mono">more campaigns, sharper decisions</p>
-          <h2 className="v2-section__h">Day one, a control. Month three, your own evidence.</h2>
+          <h2 className="v2-section__h">A small control stays random. Deliberate restraint grows.</h2>
           <p className="v2-section__lede">
-            The first campaigns use careful general rules. Every campaign after that can use what
-            your store has observed - who returned without being asked, who only bought on a code,
-            who needed a nudge and who needed nothing.
+            Joon can start with order history: who buys at full price, their usual reorder rhythm
+            and what they buy. As fresh campaigns add evidence, more customers can be left alone
+            for offers they do not need—and brought back the moment their state changes.
           </p>
           <p className="v3-sharper__rule">
-            The control group is what turns one campaign into evidence the next campaign can use.
+            Suppression changes with the customer. The control remains a small random sample of
+            current campaign candidates.
           </p>
         </Rise>
         <div className="v3-sharper__states">
@@ -147,8 +147,8 @@ export function ChannelsStrip() {
   return (
     <section className="v3-channels" id="channels">
       <div className="v2-wrap">
-        <strong>Email today. WhatsApp, SMS and RCS coming.</strong>
-        <p>The decision layer underneath already works with all three.</p>
+        <strong>Email today.</strong>
+        <p>Campaigns, journeys, customer state and approval—one channel, made accountable.</p>
       </div>
     </section>
   );

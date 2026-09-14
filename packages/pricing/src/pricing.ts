@@ -98,6 +98,117 @@ export interface AttributedInvoice {
   lines: Array<{ kind: "attributed_revenue" | "attributed_fee" | "cap"; amountMinor: number }>;
 }
 
+export interface AttributedFunnelScenarioInput {
+  activeSubscribers: number;
+  campaignsPerMonth: number;
+  suppressionBasisPoints: number;
+  controlBasisPoints: number;
+  openRateBasisPoints: number;
+  clickThroughRateBasisPoints: number;
+  conversionRateBasisPoints: number;
+  averageOrderValueMinor: number;
+  monthlySessions: number;
+  abandonedCartIncidenceBasisPoints: number;
+  abandonedCartRecoveryBasisPoints: number;
+  currency: Currency;
+  subscriberSnapshotAt: string;
+  comparisonEvidence?: readonly ComparisonPriceEvidence[];
+  config?: PricingConfig;
+}
+
+/** Pure, executable pitch maths. CTR is based on delivered emails; opens are diagnostic. */
+export function computeAttributedFunnelScenario(input: AttributedFunnelScenarioInput) {
+  const integerFields = [
+    "activeSubscribers",
+    "campaignsPerMonth",
+    "suppressionBasisPoints",
+    "controlBasisPoints",
+    "openRateBasisPoints",
+    "clickThroughRateBasisPoints",
+    "conversionRateBasisPoints",
+    "averageOrderValueMinor",
+    "monthlySessions",
+    "abandonedCartIncidenceBasisPoints",
+    "abandonedCartRecoveryBasisPoints",
+  ] as const;
+  for (const field of integerFields) assertInteger(input[field], field);
+  for (const field of [
+    "suppressionBasisPoints",
+    "controlBasisPoints",
+    "openRateBasisPoints",
+    "clickThroughRateBasisPoints",
+    "conversionRateBasisPoints",
+    "abandonedCartIncidenceBasisPoints",
+    "abandonedCartRecoveryBasisPoints",
+  ] as const) {
+    if (input[field] > 10_000) throw new RangeError(`${field} cannot exceed 100%`);
+  }
+  const traditionalDelivered = input.activeSubscribers * input.campaignsPerMonth;
+  assertInteger(traditionalDelivered, "traditionalDelivered");
+  const campaignCandidates = applyBasisPoints(
+    traditionalDelivered,
+    10_000 - input.suppressionBasisPoints
+  );
+  const joonDelivered = applyBasisPoints(campaignCandidates, 10_000 - input.controlBasisPoints);
+  const campaignOpens = applyBasisPoints(joonDelivered, input.openRateBasisPoints);
+  const campaignClicks = applyBasisPoints(joonDelivered, input.clickThroughRateBasisPoints);
+  const campaignOrders = applyBasisPoints(campaignClicks, input.conversionRateBasisPoints);
+  const campaignAttributedRevenueMinor = campaignOrders * input.averageOrderValueMinor;
+  assertInteger(campaignAttributedRevenueMinor, "campaignAttributedRevenueMinor");
+  const abandonedCarts = applyBasisPoints(
+    input.monthlySessions,
+    input.abandonedCartIncidenceBasisPoints
+  );
+  const recoveredJourneyOrders = applyBasisPoints(
+    abandonedCarts,
+    input.abandonedCartRecoveryBasisPoints
+  );
+  const journeyAttributedRevenueMinor = recoveredJourneyOrders * input.averageOrderValueMinor;
+  assertInteger(journeyAttributedRevenueMinor, "journeyAttributedRevenueMinor");
+  const attributedRevenueMinor = campaignAttributedRevenueMinor + journeyAttributedRevenueMinor;
+  const invoice = computeAttributedInvoice({
+    attributedRevenueMinor,
+    activeSubscribers: input.activeSubscribers,
+    monthlySends: joonDelivered,
+    currency: input.currency,
+    subscriberSnapshotAt: input.subscriberSnapshotAt,
+    comparisonEvidence: input.comparisonEvidence,
+    config: input.config,
+    allowUncappedPreview: true,
+  });
+  let traditional: ComparisonPriceResult | null = null;
+  try {
+    traditional = comparisonPrice(
+      "klaviyo",
+      {
+        currency: input.currency,
+        activeSubscribers: input.activeSubscribers,
+        monthlySends: traditionalDelivered,
+      },
+      input.comparisonEvidence
+    );
+  } catch {
+    // Public evidence currently stops at the last sourced tier. Never extrapolate it.
+  }
+  return {
+    traditionalDelivered,
+    campaignCandidates,
+    deliberatelyLeftAlone: traditionalDelivered - campaignCandidates,
+    controlCount: campaignCandidates - joonDelivered,
+    joonDelivered,
+    campaignOpens,
+    campaignClicks,
+    campaignOrders,
+    campaignAttributedRevenueMinor,
+    abandonedCarts,
+    recoveredJourneyOrders,
+    journeyAttributedRevenueMinor,
+    attributedRevenueMinor,
+    invoice,
+    traditional,
+  };
+}
+
 function assertInteger(value: number, name: string, allowNegative = false): void {
   if (!Number.isSafeInteger(value) || (!allowNegative && value < 0)) {
     throw new RangeError(`${name} must be ${allowNegative ? "a" : "a non-negative"} safe integer`);

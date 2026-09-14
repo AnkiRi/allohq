@@ -55,8 +55,8 @@ const stories: readonly Story[] = [
     name: "Ankita",
     hook: "The revenue your email tool was taking credit for",
     rows: [
-      { when: "Day 0", saw: "Champion · 34-day cycle · due to buy", did: "**Held her out of the 15% blast**", got: "Bought day 6 — full price, uncontacted" },
-      { when: "Day 28", saw: "Same pattern, second time", did: "Held her out again", got: "Bought again — **₹4,900 email never caused**" },
+      { when: "Day 0", saw: "Champion · 34-day cycle · due to buy", did: "**Left her out of the discount by decision**", got: "Bought day 6 — full price, uncontacted" },
+      { when: "Day 28", saw: "Same pattern, second time", did: "Kept her off this discount", got: "Bought again — **₹4,900 without a nudge**" },
       { when: "Day 129", saw: "**Gap 68 days — 2× her own cycle**", did: "Two win-backs, no discount", got: "Both ignored" },
       { when: "Day 145", saw: "**11 of 14 opens land 13:40–15:10**", did: "Sent 14:20 · restock · no code", got: "Opened in 9 min · bought ₹2,900" },
     ],

@@ -7,6 +7,7 @@ import {
   computeCalculatorScenario,
   computeCaused,
   computeAttributedInvoice,
+  computeAttributedFunnelScenario,
   computeMonthlyInvoice,
   deriveMonthlyRevenueMinor,
   type ComparisonPriceEvidence,
@@ -32,6 +33,34 @@ test("attributed billing computes 5/6/8 percent and charges no postage", () => {
     invoice.lines.map((line) => line.kind),
     ["attributed_revenue", "attributed_fee", "cap"]
   );
+});
+
+test("attributed funnel keeps suppression, control, campaigns and journeys distinct", () => {
+  const result = computeAttributedFunnelScenario({
+    activeSubscribers: 50_000,
+    campaignsPerMonth: 4,
+    suppressionBasisPoints: 2_000,
+    controlBasisPoints: 1_500,
+    openRateBasisPoints: 2_000,
+    clickThroughRateBasisPoints: 400,
+    conversionRateBasisPoints: 200,
+    averageOrderValueMinor: 200_000,
+    monthlySessions: 50_000,
+    abandonedCartIncidenceBasisPoints: 500,
+    abandonedCartRecoveryBasisPoints: 500,
+    currency: "INR",
+    subscriberSnapshotAt: "2026-09-14",
+    comparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+  });
+  assert.equal(result.traditionalDelivered, 200_000);
+  assert.equal(result.deliberatelyLeftAlone, 40_000);
+  assert.equal(result.controlCount, 24_000);
+  assert.equal(result.joonDelivered, 136_000);
+  assert.equal(result.campaignClicks, 5_440);
+  assert.equal(result.campaignOrders, 109);
+  assert.equal(result.recoveredJourneyOrders, 125);
+  assert.equal(result.attributedRevenueMinor, 46_800_000);
+  assert.equal(result.invoice.totalMinor, 2_340_000);
 });
 
 test("zero attributed revenue means zero fee without comparison evidence", () => {
