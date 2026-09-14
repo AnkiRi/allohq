@@ -17,7 +17,6 @@ import {
   automationActivationChecksum,
   loadAutomationActivationSnapshot,
 } from "@allohq/campaign-engine";
-import { assignArm, getOrCreateExperiment } from "@allohq/customer-state";
 import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
 import { automationContinuationJobId } from "../utils/automation-continuation";
@@ -98,51 +97,6 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
     const messagingConfig = (storeForConfig?.messagingConfig as StoreMessagingConfig | null) ?? null;
 
     const nodes = (automation.nodes as unknown as WorkflowNode[]) ?? [];
-
-    // One stable holdout assignment measures the incremental effect of the
-    // complete journey, not just an individual step. A control customer receives
-    // no step in this automation and leaves an auditable decision row instead.
-    const experiment = await getOrCreateExperiment(automation.storeId, {
-      label: `automation:${automation.id}:version:${automation.activeVersion}`,
-      source: "automation",
-      automationId: automation.id,
-      automationVersion: automation.activeVersion,
-    });
-    if (assignArm(experiment, customer.id) === "CONTROL") {
-      const firstEmailNode = nodes.find((candidate) => candidate.type === "send_email");
-      const templateId = firstEmailNode?.config.templateId as string | undefined;
-      const template = templateId
-        ? await prisma.emailTemplate.findUnique({ where: { id: templateId }, select: { subject: true } })
-        : null;
-      await prisma.messageLog.upsert({
-        where: { deliveryKey: `automation:${automationId}:version:${automation.activeVersion}:execution:${executionId}:control` },
-        create: {
-          deliveryKey: `automation:${automationId}:version:${automation.activeVersion}:execution:${executionId}:control`,
-          workspaceId: automation.workspaceId,
-          storeId: automation.storeId,
-          customerId: customer.id,
-          channel: "email",
-          to: customer.email,
-          subject: template?.subject,
-          templateId,
-          automationId,
-          status: "withheld",
-          treatmentArm: "CONTROL",
-          experimentId: experiment.id,
-          customerStateSnap: {
-            capturedAt: new Date().toISOString(),
-            segment: customer.rfmScore?.segment ?? null,
-            orderCount: customer.rfmScore?.orderCount ?? null,
-            totalSpent: customer.rfmScore?.totalSpent ?? null,
-            lastOrderAt: customer.rfmScore?.lastOrderAt?.toISOString() ?? null,
-            historicalLtv: customer.lifetimeValue?.historicalLtv ?? null,
-          },
-          metadata: { withheld: true, reason: "control_group", triggeredBy, executionId, holdoutRate: experiment.splitRatio },
-        },
-        update: {},
-      });
-      return { status: "withheld_control" };
-    }
 
     for (let i = currentNodeIndex; i < nodes.length; i++) {
       const node = nodes[i]!;
@@ -246,10 +200,8 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
                 to: customer.email,
                 automationId,
                 status: "suppressed",
-                treatmentArm: "TREATMENT",
-                experimentId: experiment.id,
                 error: emailGovCheck.reason,
-                metadata: { rule: emailGovCheck.rule, triggeredBy, executionId, nodeId: node.id, holdoutRate: experiment.splitRatio } as any,
+                metadata: { rule: emailGovCheck.rule, triggeredBy, executionId, nodeId: node.id } as any,
               },
               update: { status: "suppressed", error: emailGovCheck.reason },
             });
@@ -339,8 +291,6 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
               templateId,
               automationId,
               status: "queued",
-              treatmentArm: "TREATMENT",
-              experimentId: experiment.id,
               customerStateSnap: {
                 capturedAt: now.toISOString(),
                 segment: customer.rfmScore?.segment ?? null,
@@ -362,7 +312,7 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
                 nodeIndex: i,
               },
               messageVariantId: (node.config.variantId as string | undefined) ?? templateId,
-              metadata: { triggeredBy, executionId, nodeId: node.id, holdoutRate: experiment.splitRatio },
+              metadata: { triggeredBy, executionId, nodeId: node.id },
             } });
 
           // Render email HTML — brand-styled via the store's BrandKit
