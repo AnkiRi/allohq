@@ -1068,6 +1068,8 @@ model ShadowInvoice {
   activeSubscribers     Int
   subscriberSnapshotAt  DateTime
   billableCausedRevenue Decimal  @db.Decimal(14, 2)
+  attributedRevenue     Decimal? @db.Decimal(14, 2)
+  attributedFee         Decimal? @db.Decimal(14, 2)
   carryIn               Decimal  @db.Decimal(14, 2)
   carryOut              Decimal  @db.Decimal(14, 2)
   liftFee               Decimal  @db.Decimal(14, 2)

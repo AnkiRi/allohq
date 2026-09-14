@@ -72,6 +72,32 @@ export interface MonthlyInvoice {
   lines: InvoiceLine[];
 }
 
+export interface AttributedInvoiceInput {
+  attributedRevenueMinor: number;
+  activeSubscribers: number;
+  monthlySends: number;
+  currency: Currency;
+  subscriberSnapshotAt: string;
+  comparisonEvidence?: readonly ComparisonPriceEvidence[];
+  config?: PricingConfig;
+  allowUncappedPreview?: boolean;
+}
+
+export interface AttributedInvoice {
+  currency: Currency;
+  pricingVersion: string;
+  attributedRevenueMinor: number;
+  uncappedFeeMinor: number;
+  feeMinor: number;
+  capMinor: number | null;
+  totalMinor: number;
+  variants: { fivePercentMinor: number; sixPercentMinor: number; eightPercentMinor: number };
+  comparison: ComparisonPriceResult | null;
+  calculationKind: "invoice" | "uncapped_preview";
+  subscriberSnapshotAt: string;
+  lines: Array<{ kind: "attributed_revenue" | "attributed_fee" | "cap"; amountMinor: number }>;
+}
+
 function assertInteger(value: number, name: string, allowNegative = false): void {
   if (!Number.isSafeInteger(value) || (!allowNegative && value < 0)) {
     throw new RangeError(`${name} must be ${allowNegative ? "a" : "a non-negative"} safe integer`);
@@ -99,7 +125,9 @@ export function computeCaused(strata: readonly CausedStratum[]): CausedResult {
     assertInteger(stratum.treatedNetRevenueMinor, "treatedNetRevenueMinor", true);
     assertInteger(stratum.controlNetRevenueMinor, "controlNetRevenueMinor", true);
     if (stratum.assignedTreated === 0 || stratum.assignedControl === 0) {
-      throw new RangeError(`stratum ${stratum.stratum} requires both treatment and control assignments`);
+      throw new RangeError(
+        `stratum ${stratum.stratum} requires both treatment and control assignments`
+      );
     }
     const treatedRevenue = BigInt(stratum.treatedNetRevenueMinor);
     const controlRevenue = BigInt(stratum.controlNetRevenueMinor);
@@ -120,6 +148,64 @@ function applyBasisPoints(amountMinor: number, basisPoints: number): number {
   return safeNumber(roundedRatio(BigInt(amountMinor) * BigInt(basisPoints), 10_000n), "fee");
 }
 
+export function computeAttributedInvoice(input: AttributedInvoiceInput): AttributedInvoice {
+  const config = input.config ?? PRICING_CONFIG;
+  assertInteger(input.attributedRevenueMinor, "attributedRevenueMinor");
+  assertInteger(input.activeSubscribers, "activeSubscribers");
+  assertInteger(input.monthlySends, "monthlySends");
+  const uncappedFeeMinor = applyBasisPoints(
+    input.attributedRevenueMinor,
+    config.attributedFeeBasisPoints
+  );
+  let comparison: ComparisonPriceResult | null = null;
+  if (uncappedFeeMinor > 0) {
+    try {
+      comparison = comparisonPrice(
+        "klaviyo",
+        {
+          currency: input.currency,
+          activeSubscribers: input.activeSubscribers,
+          monthlySends: input.monthlySends,
+        },
+        input.comparisonEvidence
+      );
+    } catch (error) {
+      if (!input.allowUncappedPreview) throw error;
+    }
+  }
+  const capMinor = comparison
+    ? applyBasisPoints(comparison.priceMinor, config.capFactorBasisPoints)
+    : null;
+  const feeMinor =
+    capMinor === null
+      ? input.allowUncappedPreview
+        ? uncappedFeeMinor
+        : 0
+      : Math.min(uncappedFeeMinor, capMinor);
+  return {
+    currency: input.currency,
+    pricingVersion: config.version,
+    attributedRevenueMinor: input.attributedRevenueMinor,
+    uncappedFeeMinor,
+    feeMinor,
+    capMinor,
+    totalMinor: feeMinor,
+    variants: {
+      fivePercentMinor: applyBasisPoints(input.attributedRevenueMinor, 500),
+      sixPercentMinor: applyBasisPoints(input.attributedRevenueMinor, 600),
+      eightPercentMinor: applyBasisPoints(input.attributedRevenueMinor, 800),
+    },
+    comparison,
+    calculationKind: comparison || uncappedFeeMinor === 0 ? "invoice" : "uncapped_preview",
+    subscriberSnapshotAt: input.subscriberSnapshotAt,
+    lines: [
+      { kind: "attributed_revenue", amountMinor: input.attributedRevenueMinor },
+      { kind: "attributed_fee", amountMinor: feeMinor },
+      ...(capMinor === null ? [] : [{ kind: "cap" as const, amountMinor: capMinor }]),
+    ],
+  };
+}
+
 export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoice {
   const config = input.config ?? PRICING_CONFIG;
   assertInteger(input.postageEmails, "postageEmails");
@@ -127,46 +213,61 @@ export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoic
   assertInteger(input.monthlySends, "monthlySends");
   assertInteger(input.carryInMinor, "carryInMinor", true);
   const billableCausedMinor = input.units
-    .filter((unit) => unit.unitType === "campaign" && unit.tier === "measurement_ready" && !unit.overlapsAnotherUnit)
+    .filter(
+      (unit) =>
+        unit.unitType === "campaign" &&
+        unit.tier === "measurement_ready" &&
+        !unit.overlapsAnotherUnit
+    )
     .reduce((sum, unit) => {
       assertInteger(unit.causedMinor, "unit.causedMinor", true);
       return sum + unit.causedMinor;
     }, 0);
   const netMinor = billableCausedMinor + input.carryInMinor;
   const carryOutMinor = Math.min(0, netMinor);
-  const uncappedPerformanceFeeMinor = applyBasisPoints(Math.max(0, netMinor), config.liftFeeBasisPoints);
+  const uncappedPerformanceFeeMinor = applyBasisPoints(
+    Math.max(0, netMinor),
+    config.liftFeeBasisPoints
+  );
   let comparison: ComparisonPriceResult | null = null;
   if (uncappedPerformanceFeeMinor > 0) {
     try {
-      comparison = comparisonPrice("klaviyo", {
-        currency: input.currency,
-        activeSubscribers: input.activeSubscribers,
-        monthlySends: input.monthlySends,
-      }, input.comparisonEvidence);
+      comparison = comparisonPrice(
+        "klaviyo",
+        {
+          currency: input.currency,
+          activeSubscribers: input.activeSubscribers,
+          monthlySends: input.monthlySends,
+        },
+        input.comparisonEvidence
+      );
     } catch (error) {
       if (!input.allowUncappedPreview) throw error;
     }
   }
-  const performanceFeeCapMinor = comparison === null
-    ? null
-    : applyBasisPoints(comparison.priceMinor, config.capFactorBasisPoints);
+  const performanceFeeCapMinor =
+    comparison === null
+      ? null
+      : applyBasisPoints(comparison.priceMinor, config.capFactorBasisPoints);
   const postageMinor = safeNumber(
     roundedRatio(
       BigInt(input.postageEmails) * BigInt(config.postagePerThousandMinor[input.currency]),
-      1_000n,
+      1_000n
     ),
-    "postageMinor",
+    "postageMinor"
   );
   // The cap covers what the merchant actually pays, so postage counts against
   // it. Capping the fee alone let the total exceed the benchmark the promise is
   // written against. Postage itself is never reduced: it is passed through at
   // cost, so when it alone exceeds the cap the fee simply falls to zero.
-  const feeAllowedByCapMinor = performanceFeeCapMinor === null
-    ? null
-    : Math.max(0, performanceFeeCapMinor - postageMinor);
-  const liftFeeMinor = feeAllowedByCapMinor === null
-    ? (input.allowUncappedPreview ? uncappedPerformanceFeeMinor : 0)
-    : Math.min(uncappedPerformanceFeeMinor, feeAllowedByCapMinor);
+  const feeAllowedByCapMinor =
+    performanceFeeCapMinor === null ? null : Math.max(0, performanceFeeCapMinor - postageMinor);
+  const liftFeeMinor =
+    feeAllowedByCapMinor === null
+      ? input.allowUncappedPreview
+        ? uncappedPerformanceFeeMinor
+        : 0
+      : Math.min(uncappedPerformanceFeeMinor, feeAllowedByCapMinor);
   const totalMinor = liftFeeMinor + postageMinor;
   return {
     currency: input.currency,
@@ -176,14 +277,16 @@ export function computeMonthlyInvoice(input: MonthlyInvoiceInput): MonthlyInvoic
     carryOutMinor,
     uncappedPerformanceFeeMinor,
     performanceFeeCapMinor,
-    performanceFeeCapStatus: performanceFeeCapMinor !== null
-      ? "available"
-      : uncappedPerformanceFeeMinor === 0
-        ? "not_required"
-        : "unavailable_preview",
-    calculationKind: input.allowUncappedPreview && uncappedPerformanceFeeMinor > 0 && comparison === null
-      ? "uncapped_preview"
-      : "invoice",
+    performanceFeeCapStatus:
+      performanceFeeCapMinor !== null
+        ? "available"
+        : uncappedPerformanceFeeMinor === 0
+          ? "not_required"
+          : "unavailable_preview",
+    calculationKind:
+      input.allowUncappedPreview && uncappedPerformanceFeeMinor > 0 && comparison === null
+        ? "uncapped_preview"
+        : "invoice",
     liftFeeMinor,
     postageEmails: input.postageEmails,
     postageMinor,
@@ -232,18 +335,23 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
   assertInteger(input.emailRevenueShareBasisPoints, "emailRevenueShareBasisPoints");
   assertInteger(input.causedShareBasisPoints, "causedShareBasisPoints");
   assertInteger(input.merchantBlastCount, "merchantBlastCount");
-  const emailRevenueMinor = applyBasisPoints(input.monthlyRevenueMinor, input.emailRevenueShareBasisPoints);
+  const emailRevenueMinor = applyBasisPoints(
+    input.monthlyRevenueMinor,
+    input.emailRevenueShareBasisPoints
+  );
   const causedMinor = applyBasisPoints(emailRevenueMinor, input.causedShareBasisPoints);
   const monthlySends = input.activeSubscribers * input.merchantBlastCount;
   assertInteger(monthlySends, "monthlySends");
   const invoice = computeMonthlyInvoice({
-    units: [{
-      unitType: "campaign",
-      unitId: "calculator-scenario",
-      causedMinor,
-      tier: "measurement_ready",
-      overlapsAnotherUnit: false,
-    }],
+    units: [
+      {
+        unitType: "campaign",
+        unitId: "calculator-scenario",
+        causedMinor,
+        tier: "measurement_ready",
+        overlapsAnotherUnit: false,
+      },
+    ],
     carryInMinor: 0,
     postageEmails: monthlySends,
     activeSubscribers: input.activeSubscribers,
@@ -254,31 +362,39 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
     config: input.config,
     allowUncappedPreview: true,
   });
-  const traditional = input.enteredBillMinor === undefined
-    ? comparisonPrice(input.comparisonTool, {
-        currency: input.currency,
-        activeSubscribers: input.activeSubscribers,
-        monthlySends,
-      }, input.traditionalComparisonEvidence ?? input.comparisonEvidence)
-    : (() => {
-        assertInteger(input.enteredBillMinor, "enteredBillMinor");
-        return {
-          tool: "entered_bill" as const,
-          currency: input.currency,
-          priceMinor: input.enteredBillMinor,
-          basis: { kind: "entered_bill" as const },
-        };
-      })();
+  const traditional =
+    input.enteredBillMinor === undefined
+      ? comparisonPrice(
+          input.comparisonTool,
+          {
+            currency: input.currency,
+            activeSubscribers: input.activeSubscribers,
+            monthlySends,
+          },
+          input.traditionalComparisonEvidence ?? input.comparisonEvidence
+        )
+      : (() => {
+          assertInteger(input.enteredBillMinor, "enteredBillMinor");
+          return {
+            tool: "entered_bill" as const,
+            currency: input.currency,
+            priceMinor: input.enteredBillMinor,
+            basis: { kind: "entered_bill" as const },
+          };
+        })();
   const availableForFeeMinor = traditional.priceMinor - invoice.postageMinor;
   const costsMoreAtZeroLift = availableForFeeMinor < 0;
   const breakEvenCausedMinor = costsMoreAtZeroLift
     ? 0
     : safeNumber(
-        (BigInt(availableForFeeMinor + 1) * 10_000n - 5_001n)
-          / BigInt((input.config ?? PRICING_CONFIG).liftFeeBasisPoints),
-        "breakEvenCausedMinor",
+        (BigInt(availableForFeeMinor + 1) * 10_000n - 5_001n) /
+          BigInt((input.config ?? PRICING_CONFIG).liftFeeBasisPoints),
+        "breakEvenCausedMinor"
       );
-  const breakEvenFeeMinor = applyBasisPoints(breakEvenCausedMinor, (input.config ?? PRICING_CONFIG).liftFeeBasisPoints);
+  const breakEvenFeeMinor = applyBasisPoints(
+    breakEvenCausedMinor,
+    (input.config ?? PRICING_CONFIG).liftFeeBasisPoints
+  );
   return {
     emailRevenueMinor,
     causedMinor,

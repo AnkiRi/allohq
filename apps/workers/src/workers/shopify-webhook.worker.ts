@@ -68,10 +68,17 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         let oldPrice = 0;
 
         if (topic === "products/update") {
-          const p = payload as { id: number; variants?: Array<{ price: string; inventory_quantity: number }> };
+          const p = payload as {
+            id: number;
+            variants?: Array<{ price: string; inventory_quantity: number }>;
+          };
           const existingProduct = await prisma.product.findUnique({
             where: { storeId_externalId: { storeId: store.id, externalId: String(p.id) } },
-            select: { id: true, price: true, variants: { select: { inventory: true, externalId: true } } },
+            select: {
+              id: true,
+              price: true,
+              variants: { select: { inventory: true, externalId: true } },
+            },
           });
 
           if (existingProduct && p.variants?.[0]) {
@@ -127,7 +134,9 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
                 newPrice,
               },
             });
-            console.log(`[shopify-webhook] Price drop detected for product ${product.id}: $${oldPrice} → $${newPrice}`);
+            console.log(
+              `[shopify-webhook] Price drop detected for product ${product.id}: $${oldPrice} → $${newPrice}`
+            );
           }
 
           if (restockDetected) {
@@ -162,18 +171,32 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       }
       case "customers/update": {
         const customerPayload = payload as { id?: number | string; tags?: string };
-        const before = customerPayload.id == null ? null : await prisma.customer.findUnique({
-          where: { storeId_externalId: { storeId: store.id, externalId: String(customerPayload.id) } },
-          select: { tags: true },
-        });
+        const before =
+          customerPayload.id == null
+            ? null
+            : await prisma.customer.findUnique({
+                where: {
+                  storeId_externalId: { storeId: store.id, externalId: String(customerPayload.id) },
+                },
+                select: { tags: true },
+              });
         const customer = await upsertCustomer(store.id, payload);
-        const incomingTags = typeof customerPayload.tags === "string"
-          ? customerPayload.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
-          : [];
+        const incomingTags =
+          typeof customerPayload.tags === "string"
+            ? customerPayload.tags
+                .split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean)
+            : [];
         if (customer && before) {
           const addedTags = incomingTags.filter((tag) => !before.tags.includes(tag));
           if (addedTags.length > 0) {
-            await checkEventTriggers(store.id, "tag_added", customer.id, `${eventId ?? job.id}:${addedTags.sort().join(",")}`);
+            await checkEventTriggers(
+              store.id,
+              "tag_added",
+              customer.id,
+              `${eventId ?? job.id}:${addedTags.sort().join(",")}`
+            );
           }
         }
         break;
@@ -203,21 +226,27 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             capturedAt: { gte: signupWindowStart, lte: order.createdAt },
             form: { storeId: store.id },
           };
-          const exactSubmission = discountCodes.length > 0
-            ? await prisma.formSubmission.findFirst({
-                where: { ...baseSubmissionWhere, incentiveCode: { in: discountCodes, mode: "insensitive" as const } },
-                orderBy: { capturedAt: "desc" },
-                select: { id: true, incentiveCode: true },
-              })
-            : null;
-          const submission = exactSubmission ?? await prisma.formSubmission.findFirst({
-            where: {
-              ...baseSubmissionWhere,
-              incentiveCode: null,
-            },
-            orderBy: { capturedAt: "desc" },
-            select: { id: true, incentiveCode: true },
-          });
+          const exactSubmission =
+            discountCodes.length > 0
+              ? await prisma.formSubmission.findFirst({
+                  where: {
+                    ...baseSubmissionWhere,
+                    incentiveCode: { in: discountCodes, mode: "insensitive" as const },
+                  },
+                  orderBy: { capturedAt: "desc" },
+                  select: { id: true, incentiveCode: true },
+                })
+              : null;
+          const submission =
+            exactSubmission ??
+            (await prisma.formSubmission.findFirst({
+              where: {
+                ...baseSubmissionWhere,
+                incentiveCode: null,
+              },
+              orderBy: { capturedAt: "desc" },
+              select: { id: true, incentiveCode: true },
+            }));
           if (submission) {
             const exactCode = submission.incentiveCode
               ? discountCodes.includes(submission.incentiveCode.toUpperCase())
@@ -237,12 +266,20 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             });
             if (submission.incentiveCode && exactCode) {
               await prisma.formIncentiveGrant.updateMany({
-                where: { code: { equals: submission.incentiveCode, mode: "insensitive" }, status: "issued" },
+                where: {
+                  code: { equals: submission.incentiveCode, mode: "insensitive" },
+                  status: "issued",
+                },
                 data: { status: "redeemed", redeemedAt: order.createdAt, orderId: order.id },
               });
             }
           }
-          await checkEventTriggers(store.id, "order_placed", order.customerId, eventId ?? undefined);
+          await checkEventTriggers(
+            store.id,
+            "order_placed",
+            order.customerId,
+            eventId ?? undefined
+          );
           // Mark any open/abandoned checkouts as recovered
           await prisma.abandonedCheckout.updateMany({
             where: {
@@ -287,16 +324,34 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
                 convertedAt: null,
               },
             }),
-            prisma.formExperimentExposure.updateMany({ where: { orderId: order.id }, data: { orderId: null, revenue: null, convertedAt: null } }),
-            prisma.formIncentiveGrant.updateMany({ where: { orderId: order.id }, data: { orderId: null, redeemedAt: null, status: "issued" } }),
+            prisma.formExperimentExposure.updateMany({
+              where: { orderId: order.id },
+              data: { orderId: null, revenue: null, convertedAt: null },
+            }),
+            prisma.formIncentiveGrant.updateMany({
+              where: { orderId: order.id },
+              data: { orderId: null, redeemedAt: null, status: "issued" },
+            }),
           ]);
         } else if (order) {
           const netRevenue = calculateNetOrderRevenue(payload, order.totalPrice);
           await prisma.$transaction([
-            prisma.formSubmission.updateMany({ where: { attributedOrderId: order.id }, data: { attributedRevenue: netRevenue } }),
-            prisma.formExperimentExposure.updateMany({ where: { orderId: order.id }, data: { revenue: netRevenue } }),
-            prisma.experimentOrderOutcome.updateMany({ where: { orderId: order.id }, data: { revenue: netRevenue } }),
-            prisma.measurementOrderOutcome.updateMany({ where: { orderId: order.id }, data: { netRevenue } }),
+            prisma.formSubmission.updateMany({
+              where: { attributedOrderId: order.id },
+              data: { attributedRevenue: netRevenue },
+            }),
+            prisma.formExperimentExposure.updateMany({
+              where: { orderId: order.id },
+              data: { revenue: netRevenue },
+            }),
+            prisma.experimentOrderOutcome.updateMany({
+              where: { orderId: order.id },
+              data: { revenue: netRevenue },
+            }),
+            prisma.measurementOrderOutcome.updateMany({
+              where: { orderId: order.id },
+              data: { netRevenue },
+            }),
           ]);
         }
         break;
@@ -389,10 +444,7 @@ async function processPrivacyWebhook(params: {
       if (!params.storeId || !customerExternalId) {
         throw new Error("Customer data request did not resolve a store/customer");
       }
-      const result = await exportCustomerData(
-        params.storeId,
-        customerExternalId,
-      );
+      const result = await exportCustomerData(params.storeId, customerExternalId);
       await prisma.privacyRequest.update({
         where: { eventId: params.eventId },
         data: {
@@ -444,7 +496,7 @@ async function processPrivacyWebhook(params: {
 
 async function exportCustomerData(
   storeId: string,
-  externalId: string,
+  externalId: string
 ): Promise<Record<string, unknown>> {
   const customer = await prisma.customer.findUnique({
     where: { storeId_externalId: { storeId, externalId } },
@@ -478,7 +530,9 @@ async function exportCustomerData(
     prisma.proactiveOutreachLog.findMany({
       where: { customerId: customer.id },
     }),
-    prisma.formExperimentExposure.findMany({ where: { submissionId: { in: customer.formSubmissions.map((row) => row.id) } } }),
+    prisma.formExperimentExposure.findMany({
+      where: { submissionId: { in: customer.formSubmissions.map((row) => row.id) } },
+    }),
     prisma.experimentOrderOutcome.findMany({ where: { customerId: customer.id } }),
   ]);
 
@@ -494,10 +548,7 @@ async function exportCustomerData(
   };
 }
 
-async function redactCustomer(
-  storeId: string,
-  externalId: string,
-): Promise<void> {
+async function redactCustomer(storeId: string, externalId: string): Promise<void> {
   const customer = await prisma.customer.findUnique({
     where: { storeId_externalId: { storeId, externalId } },
     select: { id: true, identityId: true },
@@ -633,10 +684,7 @@ async function upsertProduct(
   return { id: product.id };
 }
 
-async function deleteProduct(
-  storeId: string,
-  data: Record<string, unknown>
-) {
+async function deleteProduct(storeId: string, data: Record<string, unknown>) {
   const { id } = data as { id: number };
   await prisma.product.deleteMany({
     where: { storeId, externalId: String(id) },
@@ -663,12 +711,14 @@ async function upsertCustomer(
   };
 
   const tags = c.tags
-    ? c.tags.split(",").map((t) => t.trim()).filter(Boolean)
+    ? c.tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
     : [];
 
   const shopifyState =
-    c.email_marketing_consent?.state ??
-    (c.accepts_marketing === true ? "subscribed" : "unknown");
+    c.email_marketing_consent?.state ?? (c.accepts_marketing === true ? "subscribed" : "unknown");
   const acceptsMarketing = shopifyState === "subscribed";
   const customer = await prisma.customer.upsert({
     where: {
@@ -700,8 +750,7 @@ async function upsertCustomer(
       : shopifyState === "unsubscribed"
         ? "opted_out"
         : "unknown";
-  const consentUpdatedAt =
-    c.email_marketing_consent?.consent_updated_at;
+  const consentUpdatedAt = c.email_marketing_consent?.consent_updated_at;
   await prisma.contactConsent.upsert({
     where: {
       customerId_channel: { customerId: customer.id, channel: "email" },
@@ -734,10 +783,7 @@ async function upsertCustomer(
   return { id: customer.id };
 }
 
-async function deleteCustomer(
-  storeId: string,
-  data: Record<string, unknown>
-) {
+async function deleteCustomer(storeId: string, data: Record<string, unknown>) {
   const { id } = data as { id: number };
   await prisma.customer.deleteMany({
     where: { storeId, externalId: String(id) },
@@ -747,7 +793,13 @@ async function deleteCustomer(
 async function upsertOrder(
   storeId: string,
   data: Record<string, unknown>
-): Promise<{ id: string; customerId: string; totalPrice: number; createdAt: Date; status: string } | null> {
+): Promise<{
+  id: string;
+  customerId: string;
+  totalPrice: number;
+  createdAt: Date;
+  status: string;
+} | null> {
   const o = data as {
     id: number;
     name: string;
@@ -760,6 +812,8 @@ async function upsertOrder(
     currency: string;
     financial_status: string;
     fulfillment_status: string | null;
+    total_discounts?: string;
+    discount_codes?: Array<{ code?: string }>;
     line_items: Array<{
       product_id: number | null;
       variant_id: number | null;
@@ -780,13 +834,11 @@ async function upsertOrder(
   if (!customer) return null;
 
   let status = "pending";
-  if (o.financial_status === "refunded") status = "cancelled";
+  if (o.financial_status === "refunded") status = "refunded";
   else if (o.fulfillment_status === "fulfilled") status = "fulfilled";
   else if (o.financial_status === "paid") status = "paid";
 
-  const shipping = parseFloat(
-    o.total_shipping_price_set?.shop_money?.amount ?? "0"
-  );
+  const shipping = parseFloat(o.total_shipping_price_set?.shop_money?.amount ?? "0");
   const sourceCreatedAt =
     o.created_at && !Number.isNaN(new Date(o.created_at).getTime())
       ? new Date(o.created_at)
@@ -805,6 +857,10 @@ async function upsertOrder(
       subtotal: parseFloat(o.subtotal_price),
       tax: parseFloat(o.total_tax),
       shipping,
+      totalDiscounts: parseFloat(o.total_discounts ?? "0"),
+      discountCodes: (o.discount_codes ?? [])
+        .map((entry) => entry.code)
+        .filter((code): code is string => Boolean(code)),
       currency: o.currency,
       status,
       ...(sourceCreatedAt ? { createdAt: sourceCreatedAt } : {}),
@@ -816,6 +872,10 @@ async function upsertOrder(
       subtotal: parseFloat(o.subtotal_price),
       tax: parseFloat(o.total_tax),
       shipping,
+      totalDiscounts: parseFloat(o.total_discounts ?? "0"),
+      discountCodes: (o.discount_codes ?? [])
+        .map((entry) => entry.code)
+        .filter((code): code is string => Boolean(code)),
       currency: o.currency,
       status,
       ...(sourceCreatedAt ? { createdAt: sourceCreatedAt } : {}),
@@ -856,10 +916,7 @@ async function upsertOrder(
   };
 }
 
-async function upsertCheckout(
-  storeId: string,
-  data: Record<string, unknown>
-): Promise<void> {
+async function upsertCheckout(storeId: string, data: Record<string, unknown>): Promise<void> {
   const c = data as {
     id: number;
     token: string;
@@ -932,10 +989,7 @@ async function upsertCheckout(
   });
 }
 
-async function upsertCollection(
-  storeId: string,
-  data: Record<string, unknown>
-) {
+async function upsertCollection(storeId: string, data: Record<string, unknown>) {
   const c = data as {
     id: number;
     title: string;
@@ -976,7 +1030,7 @@ async function upsertCollection(
 
 async function upsertFulfillment(
   storeId: string,
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ): Promise<{ id: string } | null> {
   const f = data as {
     id: number;
@@ -995,7 +1049,9 @@ async function upsertFulfillment(
   });
 
   if (!order) {
-    console.warn(`[shopify-webhook] Order not found for fulfillment ${f.id} (order_id: ${f.order_id})`);
+    console.warn(
+      `[shopify-webhook] Order not found for fulfillment ${f.id} (order_id: ${f.order_id})`
+    );
     return null;
   }
 
@@ -1026,7 +1082,9 @@ async function upsertFulfillment(
     },
   });
 
-  console.log(`Fulfillment ${f.id} upserted for order ${order.id} (status: ${f.status}, shipment: ${f.shipment_status})`);
+  console.log(
+    `Fulfillment ${f.id} upserted for order ${order.id} (status: ${f.status}, shipment: ${f.shipment_status})`
+  );
   return { id: fulfillment.id };
 }
 

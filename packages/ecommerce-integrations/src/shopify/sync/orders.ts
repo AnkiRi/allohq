@@ -38,7 +38,7 @@ function legacyId(gid: string): string {
 }
 
 function mapOrderStatus(order: GraphqlOrder): string {
-  if (order.displayFinancialStatus === "REFUNDED") return "cancelled";
+  if (order.displayFinancialStatus === "REFUNDED") return "refunded";
   if (order.displayFulfillmentStatus === "FULFILLED") return "fulfilled";
   if (order.displayFinancialStatus === "PAID" || order.displayFinancialStatus === "PARTIALLY_PAID")
     return "paid";

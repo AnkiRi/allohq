@@ -6,10 +6,59 @@ import {
   comparisonPrice,
   computeCalculatorScenario,
   computeCaused,
+  computeAttributedInvoice,
   computeMonthlyInvoice,
   deriveMonthlyRevenueMinor,
   type ComparisonPriceEvidence,
 } from "./index";
+
+test("attributed billing computes 5/6/8 percent and charges no postage", () => {
+  const invoice = computeAttributedInvoice({
+    attributedRevenueMinor: 30_000_000,
+    activeSubscribers: 50_000,
+    monthlySends: 136_000,
+    currency: "INR",
+    subscriberSnapshotAt: "2026-09-14T00:00:00.000Z",
+    comparisonEvidence: evidence,
+  });
+  assert.equal(invoice.feeMinor, 1_500_000);
+  assert.deepEqual(invoice.variants, {
+    fivePercentMinor: 1_500_000,
+    sixPercentMinor: 1_800_000,
+    eightPercentMinor: 2_400_000,
+  });
+  assert.equal(invoice.totalMinor, invoice.feeMinor);
+  assert.deepEqual(
+    invoice.lines.map((line) => line.kind),
+    ["attributed_revenue", "attributed_fee", "cap"]
+  );
+});
+
+test("zero attributed revenue means zero fee without comparison evidence", () => {
+  const invoice = computeAttributedInvoice({
+    attributedRevenueMinor: 0,
+    activeSubscribers: 10_000,
+    monthlySends: 0,
+    currency: "INR",
+    subscriberSnapshotAt: "2026-09-14T00:00:00.000Z",
+  });
+  assert.equal(invoice.feeMinor, 0);
+  assert.equal(invoice.totalMinor, 0);
+  assert.equal(invoice.comparison, null);
+});
+
+test("the configured comparison cap binds attributed fees", () => {
+  const invoice = computeAttributedInvoice({
+    attributedRevenueMinor: 1_000_000_000,
+    activeSubscribers: 50_000,
+    monthlySends: 100_000,
+    currency: "INR",
+    subscriberSnapshotAt: "2026-09-14T00:00:00.000Z",
+    comparisonEvidence: evidence,
+  });
+  assert.equal(invoice.capMinor, 4_800_000);
+  assert.equal(invoice.feeMinor, 4_800_000);
+});
 
 const evidence: ComparisonPriceEvidence[] = [
   {
@@ -57,13 +106,15 @@ function unit(causedMinor: number) {
 }
 
 test("reference treatment/control case causes ₹95,200 and a ₹19,040 fee", () => {
-  const caused = computeCaused([{
-    stratum: "all",
-    assignedTreated: 59_500,
-    assignedControl: 10_500,
-    treatedNetRevenueMinor: 23_800_000,
-    controlNetRevenueMinor: 2_520_000,
-  }]);
+  const caused = computeCaused([
+    {
+      stratum: "all",
+      assignedTreated: 59_500,
+      assignedControl: 10_500,
+      treatedNetRevenueMinor: 23_800_000,
+      controlNetRevenueMinor: 2_520_000,
+    },
+  ]);
   assert.equal(caused.causedMinor, 9_520_000);
   const invoice = computeMonthlyInvoice({
     units: [unit(caused.causedMinor)],
@@ -81,13 +132,15 @@ test("reference treatment/control case causes ₹95,200 and a ₹19,040 fee", ()
 });
 
 test("zero effect produces no performance fee", () => {
-  const caused = computeCaused([{
-    stratum: "champions",
-    assignedTreated: 100,
-    assignedControl: 100,
-    treatedNetRevenueMinor: 50_000,
-    controlNetRevenueMinor: 50_000,
-  }]);
+  const caused = computeCaused([
+    {
+      stratum: "champions",
+      assignedTreated: 100,
+      assignedControl: 100,
+      treatedNetRevenueMinor: 50_000,
+      controlNetRevenueMinor: 50_000,
+    },
+  ]);
   assert.equal(caused.causedMinor, 0);
 });
 
@@ -107,15 +160,17 @@ test("negative net carries forward and is never charged", () => {
 });
 
 test("the cap covers the whole bill, so postage can push the fee to zero", () => {
-  const cappedEvidence: ComparisonPriceEvidence[] = [{
-    tool: "klaviyo",
-    model: "active_profiles",
-    currency: "INR",
-    tiers: [{ upTo: null, priceMinor: 10_000 }],
-    sourceUrl: "https://example.test/private-klaviyo-evidence",
-    sourcedAt: "2026-09-10",
-    evidenceStatus: "private_unapproved",
-  }];
+  const cappedEvidence: ComparisonPriceEvidence[] = [
+    {
+      tool: "klaviyo",
+      model: "active_profiles",
+      currency: "INR",
+      tiers: [{ upTo: null, priceMinor: 10_000 }],
+      sourceUrl: "https://example.test/private-klaviyo-evidence",
+      sourcedAt: "2026-09-10",
+      evidenceStatus: "private_unapproved",
+    },
+  ];
   const invoice = computeMonthlyInvoice({
     units: [unit(1_000_000)],
     carryInMinor: 0,
@@ -175,19 +230,31 @@ test("only non-overlapping measurement-ready campaigns are billable", () => {
 });
 
 test("Shopify comparison uses sends while Klaviyo uses active profiles", () => {
-  const shopify = comparisonPrice("shopify_email", {
-    currency: "USD",
-    activeSubscribers: 1_000,
-    monthlySends: 400_000,
-    publicDisplay: true,
-  }, evidence);
+  const shopify = comparisonPrice(
+    "shopify_email",
+    {
+      currency: "USD",
+      activeSubscribers: 1_000,
+      monthlySends: 400_000,
+      publicDisplay: true,
+    },
+    evidence
+  );
   assert.deepEqual(shopify.basis, { kind: "monthly_sends", quantity: 400_000 });
-  assert.throws(() => comparisonPrice("klaviyo", {
-    currency: "INR",
-    activeSubscribers: 70_000,
-    monthlySends: 1,
-    publicDisplay: true,
-  }, evidence), /not approved for public display/);
+  assert.throws(
+    () =>
+      comparisonPrice(
+        "klaviyo",
+        {
+          currency: "INR",
+          activeSubscribers: 70_000,
+          monthlySends: 1,
+          publicDisplay: true,
+        },
+        evidence
+      ),
+    /not approved for public display/
+  );
 });
 
 test("official Shopify Email progressive pricing charges $270 for 280k sends", () => {
@@ -273,7 +340,7 @@ test("the bill stays strictly under the benchmark at every slider position", () 
           });
           assert.ok(
             scenario.invoice.totalMinor < scenario.traditional.priceMinor,
-            `${subscribers} subscribers, ${emailShare}% email, ${causedShare}% caused, ${merchantBlastCount} blasts: ${scenario.invoice.totalMinor} should be under ${scenario.traditional.priceMinor}`,
+            `${subscribers} subscribers, ${emailShare}% email, ${causedShare}% caused, ${merchantBlastCount} blasts: ${scenario.invoice.totalMinor} should be under ${scenario.traditional.priceMinor}`
           );
         }
       }
@@ -289,21 +356,33 @@ test("revenue is derived from list size so the two inputs cannot contradict", ()
 });
 
 test("the benchmark refuses list sizes it has no published price for", () => {
-  const atCeiling = comparisonPrice("klaviyo", {
-    currency: "INR",
-    activeSubscribers: 150_000,
-    monthlySends: 0,
-    publicDisplay: true,
-  }, [KLAVIYO_EMAIL_USD_EVIDENCE]);
+  const atCeiling = comparisonPrice(
+    "klaviyo",
+    {
+      currency: "INR",
+      activeSubscribers: 150_000,
+      monthlySends: 0,
+      publicDisplay: true,
+    },
+    [KLAVIYO_EMAIL_USD_EVIDENCE]
+  );
   assert.equal(atCeiling.priceMinor, 16_617_500);
   // Beyond the published table there is no honest number to quote, so the
   // estimator fails closed instead of repeating a starting price.
-  assert.throws(() => comparisonPrice("klaviyo", {
-    currency: "INR",
-    activeSubscribers: 150_001,
-    monthlySends: 0,
-    publicDisplay: true,
-  }, [KLAVIYO_EMAIL_USD_EVIDENCE]), /does not cover/);
+  assert.throws(
+    () =>
+      comparisonPrice(
+        "klaviyo",
+        {
+          currency: "INR",
+          activeSubscribers: 150_001,
+          monthlySends: 0,
+          publicDisplay: true,
+        },
+        [KLAVIYO_EMAIL_USD_EVIDENCE]
+      ),
+    /does not cover/
+  );
 });
 
 test("at the comparable ceiling the derived scenario stays well under the benchmark", () => {
@@ -327,19 +406,32 @@ test("at the comparable ceiling the derived scenario stays well under the benchm
 });
 
 test("a positive performance fee fails closed without approved cap evidence", () => {
-  assert.throws(() => computeMonthlyInvoice({
-    units: [unit(100_000)],
-    carryInMinor: 0,
-    postageEmails: 0,
-    activeSubscribers: 10_000,
-    monthlySends: 0,
-    currency: "INR",
-    subscriberSnapshotAt: "2026-09-11T00:00:00.000Z",
-  }), /No verified klaviyo comparison price/);
+  assert.throws(
+    () =>
+      computeMonthlyInvoice({
+        units: [unit(100_000)],
+        carryInMinor: 0,
+        postageEmails: 0,
+        activeSubscribers: 10_000,
+        monthlySends: 0,
+        currency: "INR",
+        subscriberSnapshotAt: "2026-09-11T00:00:00.000Z",
+      }),
+    /No verified klaviyo comparison price/
+  );
 });
 
 test("uncapped estimation is available only through the explicit preview flag", () => {
-  const invoice = computeMonthlyInvoice({ units: [unit(100_000)], carryInMinor: 0, postageEmails: 1_000, activeSubscribers: 10_000, monthlySends: 1_000, currency: "INR", subscriberSnapshotAt: "2026-09-11T00:00:00.000Z", allowUncappedPreview: true });
+  const invoice = computeMonthlyInvoice({
+    units: [unit(100_000)],
+    carryInMinor: 0,
+    postageEmails: 1_000,
+    activeSubscribers: 10_000,
+    monthlySends: 1_000,
+    currency: "INR",
+    subscriberSnapshotAt: "2026-09-11T00:00:00.000Z",
+    allowUncappedPreview: true,
+  });
   assert.equal(invoice.performanceFeeCapStatus, "unavailable_preview");
   assert.equal(invoice.calculationKind, "uncapped_preview");
   assert.equal(invoice.liftFeeMinor, 20_000);

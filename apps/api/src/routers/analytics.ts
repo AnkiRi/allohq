@@ -17,17 +17,24 @@ export const analyticsRouter = router({
   causedRevenueLedger: storeProcedure
     .input(z.object({ storeId: z.string(), limit: z.number().int().min(1).max(200).default(50) }))
     .query(async ({ ctx, input }) => {
-      const [versions, store] = await Promise.all([ctx.prisma.causedRevenueLedger.findMany({
-        where: { storeId: input.storeId },
-        include: { campaign: { select: { name: true } } },
-        orderBy: [{ computedAt: "desc" }, { version: "desc" }],
-        take: input.limit * 4,
-      }), ctx.prisma.store.findUnique({ where: { id: input.storeId }, select: { currency: true } })]);
-      const latest = [...versions.reduce((map, row) => {
-        const key = `${row.unitType}:${row.unitId}`;
-        if (!map.has(key)) map.set(key, row);
-        return map;
-      }, new Map<string, (typeof versions)[number]>()).values()].slice(0, input.limit);
+      const [versions, store] = await Promise.all([
+        ctx.prisma.causedRevenueLedger.findMany({
+          where: { storeId: input.storeId },
+          include: { campaign: { select: { name: true } } },
+          orderBy: [{ computedAt: "desc" }, { version: "desc" }],
+          take: input.limit * 4,
+        }),
+        ctx.prisma.store.findUnique({ where: { id: input.storeId }, select: { currency: true } }),
+      ]);
+      const latest = [
+        ...versions
+          .reduce((map, row) => {
+            const key = `${row.unitType}:${row.unitId}`;
+            if (!map.has(key)) map.set(key, row);
+            return map;
+          }, new Map<string, (typeof versions)[number]>())
+          .values(),
+      ].slice(0, input.limit);
       return latest.map((row) => ({
         ...row,
         currency: store?.currency?.toUpperCase() === "INR" ? "INR" : "USD",
@@ -66,12 +73,16 @@ export const analyticsRouter = router({
         earlyAccess: true,
         billableNow: false,
         billableCausedRevenue: Number(invoice.billableCausedRevenue),
+        attributedRevenue: Number(invoice.attributedRevenue ?? 0),
+        attributedFee: Number(invoice.attributedFee ?? 0),
         carryIn: Number(invoice.carryIn),
         carryOut: Number(invoice.carryOut),
         liftFee: Number(invoice.liftFee),
         postage: Number(invoice.postage),
-        performanceFeeCap: invoice.performanceFeeCap === null ? null : Number(invoice.performanceFeeCap),
+        performanceFeeCap:
+          invoice.performanceFeeCap === null ? null : Number(invoice.performanceFeeCap),
         total: Number(invoice.total),
+        variants: invoice.variants,
       };
     }),
 
@@ -80,11 +91,13 @@ export const analyticsRouter = router({
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
-        where: { id: input.storeId, workspaceId: ctx.workspaceId }, select: { id: true },
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
       });
       if (!store) return null;
       const invoice = await ctx.prisma.shadowInvoice.findFirst({
-        where: { storeId: input.storeId }, orderBy: [{ periodEnd: "desc" }, { version: "desc" }],
+        where: { storeId: input.storeId },
+        orderBy: [{ periodEnd: "desc" }, { version: "desc" }],
       });
       if (!invoice) return null;
       return {
@@ -198,8 +211,7 @@ export const analyticsRouter = router({
 
       const avgAccuracy =
         pastForecasts.length > 0
-          ? pastForecasts.reduce((sum, f) => sum + (f.accuracy ?? 0), 0) /
-            pastForecasts.length
+          ? pastForecasts.reduce((sum, f) => sum + (f.accuracy ?? 0), 0) / pastForecasts.length
           : null;
 
       return { upcoming: forecasts, avgAccuracy, pastForecasts };
@@ -297,7 +309,9 @@ export const analyticsRouter = router({
       }
 
       // Breakdown by automation category (if available)
-      const automationIds = [...new Set(attributions.filter((a) => a.automationId).map((a) => a.automationId!))];
+      const automationIds = [
+        ...new Set(attributions.filter((a) => a.automationId).map((a) => a.automationId!)),
+      ];
       const byCategory: Record<string, number> = {};
 
       if (automationIds.length > 0) {
@@ -353,7 +367,9 @@ export const analyticsRouter = router({
 
       const totalProposed = allInterventions.length;
       const totalExecuted = allInterventions.filter((a) => a.status === "executed").length;
-      const totalApproved = allInterventions.filter((a) => a.status === "approved" || a.status === "executed").length;
+      const totalApproved = allInterventions.filter(
+        (a) => a.status === "approved" || a.status === "executed"
+      ).length;
       const totalRejected = allInterventions.filter((a) => a.status === "rejected").length;
       const totalPending = allInterventions.filter((a) => a.status === "pending").length;
 
@@ -379,15 +395,16 @@ export const analyticsRouter = router({
 
         if (orderAfter) {
           customersSaved++;
-          revenuePreserved += typeof orderAfter.totalPrice === "number"
-            ? orderAfter.totalPrice
-            : parseFloat(String(orderAfter.totalPrice)) || 0;
+          revenuePreserved +=
+            typeof orderAfter.totalPrice === "number"
+              ? orderAfter.totalPrice
+              : parseFloat(String(orderAfter.totalPrice)) || 0;
         }
       }
 
       const estimatedRevenueAtRisk = allInterventions.reduce(
         (sum, a) => sum + (a.estimatedRevenue ?? 0),
-        0,
+        0
       );
 
       // Breakdown by strategy type
@@ -457,7 +474,13 @@ export const analyticsRouter = router({
       // Per-customer measured outcome by arm, over the window. Prefer margin;
       // fall back to revenue. One row per arm with count + mean + members.
       const rows = await ctx.prisma.$queryRaw<
-        Array<{ arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number; sumsq: number }>
+        Array<{
+          arm: "CONTROL" | "TREATMENT";
+          n: bigint;
+          withOutcome: bigint;
+          mean: number;
+          sumsq: number;
+        }>
       >`
         WITH assignments AS (
           SELECT DISTINCT ON ("experimentId", "customerId")
@@ -499,12 +522,20 @@ export const analyticsRouter = router({
       // Statistical confidence: sample variance per arm (from Σx²) → Welch CI +
       // significance test on the lift, so a small/noisy sample is flagged underpowered
       // rather than reported as a confident number.
-      const controlVar = varianceFromAggregates(control?.sumsq ?? 0, controlWithOutcome, controlMean);
-      const treatmentVar = varianceFromAggregates(treatment?.sumsq ?? 0, treatmentWithOutcome, treatmentMean);
+      const controlVar = varianceFromAggregates(
+        control?.sumsq ?? 0,
+        controlWithOutcome,
+        controlMean
+      );
+      const treatmentVar = varianceFromAggregates(
+        treatment?.sumsq ?? 0,
+        treatmentWithOutcome,
+        treatmentMean
+      );
       const stats = computeLiftStats(
         { n: treatmentWithOutcome, mean: treatmentMean, variance: treatmentVar },
         { n: controlWithOutcome, mean: controlMean, variance: controlVar },
-        MIN_CONTROL_WITH_OUTCOME,
+        MIN_CONTROL_WITH_OUTCOME
       );
 
       // Whether the per-customer figures are margin (preferred) or revenue.
@@ -578,7 +609,14 @@ export const analyticsRouter = router({
 
       // Per-customer measured outcome by (campaign, arm) — same normalisation as controlLift.
       const rows = await ctx.prisma.$queryRaw<
-        Array<{ campaignId: string; arm: "CONTROL" | "TREATMENT"; n: bigint; withOutcome: bigint; mean: number; sumsq: number }>
+        Array<{
+          campaignId: string;
+          arm: "CONTROL" | "TREATMENT";
+          n: bigint;
+          withOutcome: bigint;
+          mean: number;
+          sumsq: number;
+        }>
       >`
         SELECT "campaignId",
                "treatmentArm" AS arm,
@@ -604,7 +642,10 @@ export const analyticsRouter = router({
       `;
 
       // Group the arm rows by campaign.
-      const byCampaign = new Map<string, { control?: (typeof rows)[number]; treatment?: (typeof rows)[number] }>();
+      const byCampaign = new Map<
+        string,
+        { control?: (typeof rows)[number]; treatment?: (typeof rows)[number] }
+      >();
       for (const r of rows) {
         const entry = byCampaign.get(r.campaignId) ?? {};
         if (r.arm === "CONTROL") entry.control = r;
@@ -624,10 +665,18 @@ export const analyticsRouter = router({
 
       // Whether per-customer figures are margin (preferred) or revenue → fee grounding.
       const marginUsed = await ctx.prisma.messageLog.count({
-        where: { storeId: input.storeId, treatmentArm: { not: null }, outcomeMargin: { not: null }, createdAt: { gte: since } },
+        where: {
+          storeId: input.storeId,
+          treatmentArm: { not: null },
+          outcomeMargin: { not: null },
+          createdAt: { gte: since },
+        },
       });
       const basis: "margin" | "revenue" = marginUsed > 0 ? "margin" : "revenue";
-      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId }, select: { defaultContributionMargin: true } });
+      const store = await ctx.prisma.store.findUnique({
+        where: { id: input.storeId },
+        select: { defaultContributionMargin: true },
+      });
       const contributionMargin = store?.defaultContributionMargin ?? 0.6;
 
       const campaigns = campaignIds.map((id) => {
@@ -643,9 +692,17 @@ export const analyticsRouter = router({
         const treatmentMean = treatment?.mean ?? 0;
 
         const stats = computeLiftStats(
-          { n: treatmentWith, mean: treatmentMean, variance: varianceFromAggregates(treatment?.sumsq ?? 0, treatmentWith, treatmentMean) },
-          { n: controlWith, mean: controlMean, variance: varianceFromAggregates(control?.sumsq ?? 0, controlWith, controlMean) },
-          MIN_OBSERVED,
+          {
+            n: treatmentWith,
+            mean: treatmentMean,
+            variance: varianceFromAggregates(treatment?.sumsq ?? 0, treatmentWith, treatmentMean),
+          },
+          {
+            n: controlWith,
+            mean: controlMean,
+            variance: varianceFromAggregates(control?.sumsq ?? 0, controlWith, controlMean),
+          },
+          MIN_OBSERVED
         );
         const lift = treatmentMean - controlMean;
         const incremental = lift * treatmentCount;
@@ -679,7 +736,11 @@ export const analyticsRouter = router({
       });
 
       // Highest proven lift first; holds/learning fall to the bottom.
-      campaigns.sort((a, b) => Number(b.decision === "send") - Number(a.decision === "send") || b.liftPerCustomer - a.liftPerCustomer);
+      campaigns.sort(
+        (a, b) =>
+          Number(b.decision === "send") - Number(a.decision === "send") ||
+          b.liftPerCustomer - a.liftPerCustomer
+      );
 
       // --- roll-up: do MORE by sending LESS -----------------------------------
       const totalMessaged = campaigns.reduce((s, c) => s + c.messaged, 0);
@@ -688,10 +749,14 @@ export const analyticsRouter = router({
       const provenIncrementalRaw = campaigns
         .filter((c) => c.decision === "send")
         .reduce((s, c) => s + Math.max(0, c.incremental), 0);
-      const provenIncrementalMargin = basis === "margin" ? provenIncrementalRaw : provenIncrementalRaw * contributionMargin;
+      const provenIncrementalMargin =
+        basis === "margin" ? provenIncrementalRaw : provenIncrementalRaw * contributionMargin;
       // Sends joon would now AVOID = the treated volume on hold-back segments (no proven lift).
-      const sendsAvoidable = campaigns.filter((c) => c.decision === "hold").reduce((s, c) => s + c.messaged, 0);
-      const sendsAvoidablePct = totalMessaged > 0 ? Math.round((sendsAvoidable / totalMessaged) * 100) : 0;
+      const sendsAvoidable = campaigns
+        .filter((c) => c.decision === "hold")
+        .reduce((s, c) => s + c.messaged, 0);
+      const sendsAvoidablePct =
+        totalMessaged > 0 ? Math.round((sendsAvoidable / totalMessaged) * 100) : 0;
 
       return {
         windowDays: input.days,
@@ -771,18 +836,14 @@ export const analyticsRouter = router({
         select: { id: true, type: true, estimatedRevenue: true, createdAt: true, payload: true },
         orderBy: { createdAt: "desc" },
       });
-      const predictedTotal = executed.reduce(
-        (sum, a) => sum + (a.estimatedRevenue ?? 0),
-        0,
-      );
+      const predictedTotal = executed.reduce((sum, a) => sum + (a.estimatedRevenue ?? 0), 0);
 
       const hasCalibration = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
 
       // Overall accuracy: "forecasts ran within X% of actual". Distance of the
       // actual/predicted ratio from 1, expressed as a percentage gap.
       const ratio = predictedTotal > 0 ? actualIncremental / predictedTotal : null;
-      const withinPct =
-        ratio != null ? Math.round(Math.abs(1 - ratio) * 100) : null;
+      const withinPct = ratio != null ? Math.round(Math.abs(1 - ratio) * 100) : null;
       const accuracyPct = withinPct != null ? Math.max(0, 100 - withinPct) : null;
 
       // A few predicted-vs-actual rows, shown plainly. Distribute the measured
@@ -796,8 +857,7 @@ export const analyticsRouter = router({
         return {
           id: a.id,
           label:
-            (payload.campaignName as string) ??
-            (a.type ? a.type.replace(/_/g, " ") : "decision"),
+            (payload.campaignName as string) ?? (a.type ? a.type.replace(/_/g, " ") : "decision"),
           predicted: Math.round(predicted),
           actual,
         };
@@ -839,57 +899,50 @@ export const analyticsRouter = router({
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 86400000);
 
-      const [
-        sentCount,
-        openedCount,
-        clickedCount,
-        orderCount,
-        aovResult,
-        totalRfm,
-        churnedRfm,
-      ] = await Promise.all([
-        ctx.prisma.messageLog.count({
-          where: {
-            storeId: input.storeId,
-            status: { in: ["sent", "delivered", "opened", "clicked"] },
-            sentAt: { gte: weekAgo, lte: now },
-          },
-        }),
-        ctx.prisma.messageLog.count({
-          where: {
-            storeId: input.storeId,
-            outcome: "opened",
-            sentAt: { gte: weekAgo, lte: now },
-          },
-        }),
-        ctx.prisma.messageLog.count({
-          where: {
-            storeId: input.storeId,
-            outcome: "clicked",
-            sentAt: { gte: weekAgo, lte: now },
-          },
-        }),
-        ctx.prisma.order.count({
-          where: {
-            storeId: input.storeId,
-            createdAt: { gte: weekAgo, lte: now },
-          },
-        }),
-        ctx.prisma.order.aggregate({
-          where: {
-            storeId: input.storeId,
-            createdAt: { gte: weekAgo, lte: now },
-          },
-          _avg: { totalPrice: true },
-        }),
-        ctx.prisma.rfmScore.count({ where: { storeId: input.storeId } }),
-        ctx.prisma.rfmScore.count({
-          where: {
-            storeId: input.storeId,
-            segment: { in: ["At Risk", "Lost", "Hibernating", "About to Sleep"] },
-          },
-        }),
-      ]);
+      const [sentCount, openedCount, clickedCount, orderCount, aovResult, totalRfm, churnedRfm] =
+        await Promise.all([
+          ctx.prisma.messageLog.count({
+            where: {
+              storeId: input.storeId,
+              status: { in: ["sent", "delivered", "opened", "clicked"] },
+              sentAt: { gte: weekAgo, lte: now },
+            },
+          }),
+          ctx.prisma.messageLog.count({
+            where: {
+              storeId: input.storeId,
+              outcome: "opened",
+              sentAt: { gte: weekAgo, lte: now },
+            },
+          }),
+          ctx.prisma.messageLog.count({
+            where: {
+              storeId: input.storeId,
+              outcome: "clicked",
+              sentAt: { gte: weekAgo, lte: now },
+            },
+          }),
+          ctx.prisma.order.count({
+            where: {
+              storeId: input.storeId,
+              createdAt: { gte: weekAgo, lte: now },
+            },
+          }),
+          ctx.prisma.order.aggregate({
+            where: {
+              storeId: input.storeId,
+              createdAt: { gte: weekAgo, lte: now },
+            },
+            _avg: { totalPrice: true },
+          }),
+          ctx.prisma.rfmScore.count({ where: { storeId: input.storeId } }),
+          ctx.prisma.rfmScore.count({
+            where: {
+              storeId: input.storeId,
+              segment: { in: ["At Risk", "Lost", "Hibernating", "About to Sleep"] },
+            },
+          }),
+        ]);
 
       const storeMetrics: Record<string, number> = {};
       if (sentCount > 0) {

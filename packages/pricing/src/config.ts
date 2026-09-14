@@ -3,6 +3,7 @@ export type Currency = "INR" | "USD";
 export interface PricingConfig {
   version: string;
   liftFeeBasisPoints: number;
+  attributedFeeBasisPoints: number;
   capFactorBasisPoints: number;
   postagePerThousandMinor: Record<Currency, number>;
   providerCostPerThousandMinor: Record<Currency, number>;
@@ -23,8 +24,9 @@ export interface PricingConfig {
  * postage is deliberately rounded up from the configured USD/INR conversion.
  */
 export const PRICING_CONFIG = Object.freeze<PricingConfig>({
-  version: "2026-09-10.v1",
+  version: "2026-09-14.attributed-v1",
   liftFeeBasisPoints: 2_000,
+  attributedFeeBasisPoints: 500,
   // Deliberately below 100%: the promise is that Joon costs LESS than the
   // platform it replaces, so the bill must land under the benchmark rather
   // than exactly on it. At parity the two figures rendered identically and
@@ -75,7 +77,7 @@ export const REVENUE_MODEL = Object.freeze<RevenueModel>({
 export function deriveMonthlyRevenueMinor(
   activeSubscribers: number,
   currency: Currency,
-  model: RevenueModel = REVENUE_MODEL,
+  model: RevenueModel = REVENUE_MODEL
 ): number {
   if (!Number.isSafeInteger(activeSubscribers) || activeSubscribers < 0) {
     throw new RangeError("activeSubscribers must be a non-negative safe integer");
@@ -84,7 +86,7 @@ export function deriveMonthlyRevenueMinor(
   const grossMinor = visits * model.averageOrderValueMinor[currency];
   const convertedMinor = Math.round((grossMinor * model.conversionBasisPoints) / 10_000);
   const withUpliftMinor = Math.round(
-    (convertedMinor * (10_000 + model.subscriberUpliftBasisPoints)) / 10_000,
+    (convertedMinor * (10_000 + model.subscriberUpliftBasisPoints)) / 10_000
   );
   if (!Number.isSafeInteger(withUpliftMinor)) {
     throw new RangeError("derived revenue exceeds safe integer range");
