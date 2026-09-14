@@ -59,6 +59,13 @@ export default function CampaignDetailPage() {
     },
     onError: () => toast("We couldn't delete that. Mind trying again?", "error"),
   });
+  const includeLeftAloneMut = trpc.campaigns.includeLeftAloneCustomers.useMutation({
+    onSuccess: () => {
+      utils.campaigns.dryRun.invalidate({ id: campaignId });
+      toast("They'll be reconsidered for this campaign.", "success");
+    },
+    onError: () => toast("We couldn't change that audience. Mind trying again?", "error"),
+  });
 
   if (isLoading) {
     return (
@@ -273,6 +280,52 @@ export default function CampaignDetailPage() {
                   </div>
                 ))}
               </div>
+              {dryRun.leftAloneSamples.length > 0 && (
+                <div className="mt-5 rounded-xl border border-border bg-background/50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-foreground">
+                        Deliberately left alone
+                      </div>
+                      <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted-foreground">
+                        Joon found evidence that these customers may not need this campaign. You can
+                        include them here, or make a separate full-price message for them.
+                      </p>
+                    </div>
+                    <Link
+                      href="/campaigns/new"
+                      className="shrink-0 rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Create separate campaign
+                    </Link>
+                  </div>
+                  <div className="mt-3 divide-y divide-border">
+                    {dryRun.leftAloneSamples.map((customer) => (
+                      <div key={customer.id} className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] font-medium text-foreground">
+                            {[customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                              customer.email}
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                            {customer.decision.reasonText}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={includeLeftAloneMut.isPending}
+                          onClick={() =>
+                            includeLeftAloneMut.mutate({ id: campaignId, customerIds: [customer.id] })
+                          }
+                          className="shrink-0 rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          Include here
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mt-4 pt-4 border-t border-border flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Sender</span>
                 <span className="font-medium">

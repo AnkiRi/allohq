@@ -129,23 +129,55 @@ function getCustomerStory(args: {
 }
 
 function getLtvEmptyStateCta(segment: string | undefined): { label: string; description: string } {
-  if (!segment) return { label: "Send a Campaign", description: "We'll work out lifetime value once this customer places their first order." };
+  if (!segment)
+    return {
+      label: "Send a Campaign",
+      description: "We'll work out lifetime value once this customer places their first order.",
+    };
   const s = segment.toLowerCase();
   if (s.includes("hibernat") || s.includes("lost"))
-    return { label: "Send a Win-Back Offer", description: "We'll work out lifetime value once this customer places their first order." };
+    return {
+      label: "Send a Win-Back Offer",
+      description: "We'll work out lifetime value once this customer places their first order.",
+    };
   if (s.includes("new") || s.includes("recent"))
-    return { label: "Send a Welcome Series", description: "We'll work out lifetime value once this customer places their first order." };
+    return {
+      label: "Send a Welcome Series",
+      description: "We'll work out lifetime value once this customer places their first order.",
+    };
   if (s.includes("risk"))
-    return { label: "Send a Re-Engagement Email", description: "We'll work out lifetime value once this customer places their first order." };
+    return {
+      label: "Send a Re-Engagement Email",
+      description: "We'll work out lifetime value once this customer places their first order.",
+    };
   if (s.includes("potential"))
-    return { label: "Send a Loyalty Incentive", description: "We'll work out lifetime value once this customer places their first order." };
-  return { label: "Send a Campaign", description: "We'll work out lifetime value once this customer places their first order." };
+    return {
+      label: "Send a Loyalty Incentive",
+      description: "We'll work out lifetime value once this customer places their first order.",
+    };
+  return {
+    label: "Send a Campaign",
+    description: "We'll work out lifetime value once this customer places their first order.",
+  };
 }
 
 export default function CustomerDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { data: customer, isLoading } = trpc.customers.getById.useQuery({ id });
+  const { data: decisionHistory } = (trpc.customers.decisionHistory as any).useQuery({
+    customerId: id,
+    limit: 100,
+  }) as {
+    data?: Array<{
+      id: string;
+      decision: string;
+      reasonText: string | null;
+      reasonCode: string | null;
+      contextKey: string;
+      createdAt: Date | string;
+    }>;
+  };
 
   if (isLoading) {
     return (
@@ -216,7 +248,9 @@ export default function CustomerDetailPage() {
                   {customer.firstName} {customer.lastName}
                 </h1>
                 {segment && (
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold border ${getSegmentBadgeColor(segment)}`}>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold border ${getSegmentBadgeColor(segment)}`}
+                  >
                     {segment}
                   </span>
                 )}
@@ -228,7 +262,9 @@ export default function CustomerDetailPage() {
                 )}
                 {rfm && (
                   <div className="flex items-center gap-1.5 ml-1">
-                    <span className="text-[10px] font-mono text-muted-foreground">{rfm.totalScore}/15</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {rfm.totalScore}/15
+                    </span>
                     <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full bg-[hsl(var(--accent))] transition-all"
@@ -251,7 +287,10 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          <Link href="/campaigns/new" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
+          <Link
+            href="/campaigns/new"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+          >
             <Mail className="w-3.5 h-3.5" /> Draft email campaign
           </Link>
         </div>
@@ -283,7 +322,9 @@ export default function CustomerDetailPage() {
           {rfm ? (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
-                <span className={`px-3 py-1.5 rounded text-[11px] font-sans font-bold border ${getSegmentBadgeColor(rfm.segment)}`}>
+                <span
+                  className={`px-3 py-1.5 rounded text-[11px] font-sans font-bold border ${getSegmentBadgeColor(rfm.segment)}`}
+                >
                   {rfm.segment}
                 </span>
                 <span className="text-[11px] text-muted-foreground font-mono">
@@ -294,9 +335,24 @@ export default function CustomerDetailPage() {
               {/* Progress bars */}
               <div className="space-y-4">
                 {[
-                  { label: "RECENCY", score: rfm.recency, context: daysSinceLastOrder !== null ? `Last seen ${daysSinceLastOrder} days ago` : "Hasn't ordered yet" },
-                  { label: "FREQUENCY", score: rfm.frequency, context: `${rfm.orderCount} total orders` },
-                  { label: "MONETARY", score: rfm.monetary, context: `${formatINR(rfm.totalSpent)} total spent` },
+                  {
+                    label: "RECENCY",
+                    score: rfm.recency,
+                    context:
+                      daysSinceLastOrder !== null
+                        ? `Last seen ${daysSinceLastOrder} days ago`
+                        : "Hasn't ordered yet",
+                  },
+                  {
+                    label: "FREQUENCY",
+                    score: rfm.frequency,
+                    context: `${rfm.orderCount} total orders`,
+                  },
+                  {
+                    label: "MONETARY",
+                    score: rfm.monetary,
+                    context: `${formatINR(rfm.totalSpent)} total spent`,
+                  },
                 ].map((dim) => (
                   <div key={dim.label}>
                     <div className="flex items-center justify-between mb-1.5">
@@ -320,7 +376,9 @@ export default function CustomerDetailPage() {
               <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans">ORDERS</div>
-                  <div className="text-lg font-bold font-mono text-foreground">{rfm.orderCount}</div>
+                  <div className="text-lg font-bold font-mono text-foreground">
+                    {rfm.orderCount}
+                  </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans">TOTAL SPENT</div>
@@ -337,7 +395,9 @@ export default function CustomerDetailPage() {
               </div>
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground font-sans">No RFM score yet. joon will add one as orders come in.</p>
+            <p className="text-[13px] text-muted-foreground font-sans">
+              No RFM score yet. joon will add one as orders come in.
+            </p>
           )}
         </motion.div>
 
@@ -348,13 +408,17 @@ export default function CustomerDetailPage() {
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-[11px] text-muted-foreground font-sans mb-1">HISTORICAL LTV</div>
+                  <div className="text-[11px] text-muted-foreground font-sans mb-1">
+                    HISTORICAL LTV
+                  </div>
                   <div className="text-[28px] tabular-nums font-bold font-mono text-foreground">
                     {formatINR(ltv.historicalLtv)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-muted-foreground font-sans mb-1">PREDICTED LTV</div>
+                  <div className="text-[11px] text-muted-foreground font-sans mb-1">
+                    PREDICTED LTV
+                  </div>
                   <div className="text-[28px] tabular-nums font-bold font-mono text-foreground">
                     {formatINR(ltv.predictedLtv)}
                   </div>
@@ -382,7 +446,9 @@ export default function CustomerDetailPage() {
               </div>
               {/* Churn bar */}
               <div>
-                <div className="text-[11px] text-muted-foreground font-sans mb-2">CHURN RISK ESTIMATE · HEURISTIC</div>
+                <div className="text-[11px] text-muted-foreground font-sans mb-2">
+                  CHURN RISK ESTIMATE · HEURISTIC
+                </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-destructive rounded-full"
@@ -394,7 +460,9 @@ export default function CustomerDetailPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <BarChart2 className="w-10 h-10 text-muted-foreground/40 mb-3" />
-              <h3 className="text-[14px] font-bold font-serif text-foreground mb-1">Not enough to go on yet</h3>
+              <h3 className="text-[14px] font-bold font-serif text-foreground mb-1">
+                Not enough to go on yet
+              </h3>
               <p className="text-[12px] text-muted-foreground font-sans mb-4 max-w-[240px]">
                 {ltvCta.description}
               </p>
@@ -422,7 +490,11 @@ export default function CustomerDetailPage() {
             <div className="text-[12px] font-sans text-foreground">Imported from Shopify</div>
             <div className="text-[11px] font-sans text-muted-foreground mt-0.5">
               {customer.createdAt
-                ? new Date(customer.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                ? new Date(customer.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
                 : "Recently"}
             </div>
           </div>
@@ -432,7 +504,12 @@ export default function CustomerDetailPage() {
             <div className="relative pb-5">
               <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-[hsl(var(--success))] border-2 border-background" />
               <div className="text-[12px] font-sans text-foreground">
-                Segmented as <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSegmentBadgeColor(rfm.segment)}`}>{rfm.segment}</span>
+                Segmented as{" "}
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSegmentBadgeColor(rfm.segment)}`}
+                >
+                  {rfm.segment}
+                </span>
               </div>
               <div className="text-[11px] font-sans text-muted-foreground mt-0.5">
                 RFM Score: {rfm.totalScore}/15
@@ -448,8 +525,12 @@ export default function CustomerDetailPage() {
                 Order #{order.orderNumber} &middot; {formatINR(order.totalPrice)}
               </div>
               <div className="text-[11px] font-sans text-muted-foreground mt-0.5">
-                {new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                {" "}&middot;{" "}{order.status}
+                {new Date(order.createdAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}{" "}
+                &middot; {order.status}
               </div>
             </div>
           ))}
@@ -471,6 +552,48 @@ export default function CustomerDetailPage() {
           )}
         </div>
       </motion.div>
+
+      {decisionHistory && decisionHistory.length > 0 && (
+        <motion.div
+          variants={itemVariants}
+          className="glass-card-static rounded-xl overflow-hidden"
+        >
+          <div className="border-b border-border px-6 py-4">
+            <h2 className="section-header text-[13px]">Joon decision history</h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Why this customer was considered, left alone, measured or sent.
+            </p>
+          </div>
+          <div className="divide-y divide-border">
+            {decisionHistory.map((decision) => (
+              <div
+                key={decision.id}
+                className="grid gap-2 px-6 py-4 sm:grid-cols-[120px_1fr_150px]"
+              >
+                <span className="text-[11px] font-medium text-foreground">
+                  {decision.decision.replaceAll("_", " ")}
+                </span>
+                <div>
+                  <p className="text-[12px] text-foreground">
+                    {decision.reasonText ?? decision.reasonCode ?? "Audience decision recorded"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{decision.contextKey}</p>
+                </div>
+                <time
+                  className="text-[11px] tabular-nums text-muted-foreground sm:text-right"
+                  dateTime={new Date(decision.createdAt).toISOString()}
+                >
+                  {new Date(decision.createdAt).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </time>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Tags ── */}
       {customer.tags.length > 0 && (
@@ -506,10 +629,18 @@ export default function CustomerDetailPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Order</th>
-                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Status</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Total</th>
-                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">Date</th>
+                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
+                  Order
+                </th>
+                <th className="text-left px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
+                  Status
+                </th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
+                  Total
+                </th>
+                <th className="text-right px-6 py-3 text-[10px] tracking-[0.5px] font-sans text-muted-foreground uppercase">
+                  Date
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

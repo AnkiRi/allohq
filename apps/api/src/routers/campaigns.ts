@@ -91,6 +91,50 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  includeLeftAloneCustomers: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        customerIds: z.array(z.string()).min(1).max(100),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["draft", "scheduled"] },
+        },
+        select: { id: true, storeId: true, agentProposal: true },
+      });
+      if (!campaign) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campaign not found or its audience is already frozen",
+        });
+      }
+      const customers = await ctx.prisma.customer.findMany({
+        where: { id: { in: input.customerIds }, storeId: campaign.storeId },
+        select: { id: true },
+      });
+      if (customers.length !== input.customerIds.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid customer selection" });
+      }
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+      const existing = Array.isArray(proposal.includeLeftAloneCustomerIds)
+        ? proposal.includeLeftAloneCustomerIds.filter(
+            (customerId): customerId is string => typeof customerId === "string"
+          )
+        : [];
+      const includeLeftAloneCustomerIds = [...new Set([...existing, ...input.customerIds])];
+      return ctx.prisma.campaign.update({
+        where: { id: campaign.id },
+        data: {
+          agentProposal: { ...proposal, includeLeftAloneCustomerIds },
+        },
+      });
+    }),
+
   dryRun: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     const campaign = await ctx.prisma.campaign.findFirst({
       where: { id: input.id, workspaceId: ctx.workspaceId },
@@ -724,6 +768,33 @@ export const campaignsRouter = router({
               })),
             ],
           });
+          if (audience.deliberatelyLeftAlone.length > 0) {
+            const reasonCounts = audience.deliberatelyLeftAlone.reduce<Record<string, number>>(
+              (counts, customer) => {
+                const reason = customer.decision.reasonCode ?? "state_policy";
+                counts[reason] = (counts[reason] ?? 0) + 1;
+                return counts;
+              },
+              {}
+            );
+            await tx.agentActivityLog.create({
+              data: {
+                storeId: campaign.storeId,
+                activityType: "customers_left_alone",
+                summary: `Joon left ${audience.deliberatelyLeftAlone.length.toLocaleString("en-IN")} customers out of ${campaign.name} because their current state suggested a different action.`,
+                category: "campaign",
+                actionTaken: "deliberately_left_alone",
+                entityId: campaign.id,
+                entityType: "campaign",
+                metadata: {
+                  reasonCounts,
+                  customerIds: audience.deliberatelyLeftAlone
+                    .map((customer) => customer.id)
+                    .slice(0, 100),
+                },
+              },
+            });
+          }
         },
         { isolationLevel: "Serializable" }
       );

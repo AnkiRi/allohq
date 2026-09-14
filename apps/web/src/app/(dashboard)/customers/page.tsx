@@ -3,14 +3,9 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, ChevronLeft, ChevronRight, PauseCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import {
-  ConsoleFrame,
-  CommandLine,
-  MetricReadout,
-  formatINR,
-} from "@/components/console";
+import { ConsoleFrame, CommandLine, MetricReadout, formatINR } from "@/components/console";
 
 // ---------------------------------------------------------------------------
 // Segments — the operator's filter vocabulary. "All" means no segment filter.
@@ -34,9 +29,7 @@ const SEGMENTS = [
 // select, or a search term to run. Falls back to free-text search.
 // ---------------------------------------------------------------------------
 
-type CommandIntent =
-  | { kind: "segment"; segment: string }
-  | { kind: "search"; term: string };
+type CommandIntent = { kind: "segment"; segment: string } | { kind: "search"; term: string };
 
 function parseCommand(raw: string): CommandIntent {
   const q = raw.toLowerCase().trim();
@@ -49,7 +42,7 @@ function parseCommand(raw: string): CommandIntent {
   // Lapsed / dormant / hasn't-bought → Hibernating.
   if (
     /\b(lapsed|dormant|inactive|hibernat|asleep|gone quiet|hasn'?t bought|haven'?t bought|90 days|six months)\b/.test(
-      q,
+      q
     )
   ) {
     return { kind: "segment", segment: "Hibernating" };
@@ -161,12 +154,21 @@ function CustomersConsole() {
     <div className="space-y-6 w-full max-w-5xl mx-auto">
       {/* Heading — prose, no motion */}
       <div>
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
-          Who
-        </h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
+            Who
+          </h1>
+          <Link
+            href="/customers/left-alone"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[12px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <PauseCircle className="h-4 w-4" aria-hidden="true" />
+            Left alone by Joon
+          </Link>
+        </div>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          Everyone who&apos;s shopped with you, and where they stand. Ask joon to
-          pull up the cohort you care about.
+          Everyone who&apos;s shopped with you, and where they stand. Ask joon to pull up the cohort
+          you care about.
         </p>
       </div>
 
@@ -192,9 +194,7 @@ function CustomersConsole() {
             <span className="text-muted-foreground">at risk</span>
             <span
               className={`tabular-nums font-medium ${
-                atRiskCount > 0
-                  ? "text-[hsl(var(--accent))]"
-                  : "text-foreground"
+                atRiskCount > 0 ? "text-[hsl(var(--accent))]" : "text-foreground"
               }`}
             >
               {atRiskCount.toLocaleString("en-IN")}
@@ -202,33 +202,23 @@ function CustomersConsole() {
           </span>
           <MetricReadout label="opt-in" value={marketingRate} />
           {stats && (
-            <span
-              aria-hidden="true"
-              className="hidden sm:inline-block w-px h-3.5 bg-border"
-            />
+            <span aria-hidden="true" className="hidden sm:inline-block w-px h-3.5 bg-border" />
           )}
-          {stats && (
-            <MetricReadout label="revenue" value={stats.totalRevenue} money />
-          )}
-          {stats && (
-            <MetricReadout label="avg order" value={stats.avgOrderValue} money />
-          )}
+          {stats && <MetricReadout label="revenue" value={stats.totalRevenue} money />}
+          {stats && <MetricReadout label="avg order" value={stats.avgOrderValue} money />}
         </div>
 
         {/* Command echo — confirms joon understood the last typed goal. Its own
             line so it never collides with or gets clipped by the filter state. */}
         {lastCommand && (
           <div className="font-mono text-[11.5px] text-muted-foreground mb-2 truncate">
-            <span className="text-decision-ink">joon ›</span>{" "}
-            {lastCommand}
+            <span className="text-decision-ink">joon ›</span> {lastCommand}
           </div>
         )}
 
         {/* Active filter line — what joon is showing right now (operator voice) */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="font-mono text-[12px] text-muted-foreground">
-            showing
-          </span>
+          <span className="font-mono text-[12px] text-muted-foreground">showing</span>
           <span className="font-mono text-[12px] text-foreground">
             {segment === "All" ? "all customers" : segment.toLowerCase()}
             {search ? ` · matching "${search}"` : ""}
@@ -299,9 +289,7 @@ function CustomersConsole() {
                 <tr>
                   <td colSpan={5} className="px-5 py-16 text-center">
                     <Users className="w-8 h-8 text-muted-foreground/60 mx-auto mb-3" />
-                    <p className="text-[13px] text-foreground font-sans">
-                      No one here to show.
-                    </p>
+                    <p className="text-[13px] text-foreground font-sans">No one here to show.</p>
                     <p className="text-[12px] text-muted-foreground font-sans mt-1">
                       Try a different cohort, or clear the search to see everyone.
                     </p>
@@ -323,11 +311,7 @@ function CustomersConsole() {
                           className="flex items-center gap-3"
                         >
                           <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold text-muted-foreground font-mono">
-                            {(
-                              customer.firstName?.[0] ??
-                              customer.email[0] ??
-                              "?"
-                            ).toUpperCase()}
+                            {(customer.firstName?.[0] ?? customer.email[0] ?? "?").toUpperCase()}
                           </div>
                           <div>
                             <div className="text-[13px] font-medium text-foreground font-sans">
@@ -340,7 +324,10 @@ function CustomersConsole() {
                         </Link>
                       </td>
                       <td className="px-5 py-4">
-                        <Link href={`/customers/${customer.id}`} className="flex items-center gap-1.5">
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          className="flex items-center gap-1.5"
+                        >
                           <span className="inline-block font-mono text-[11px] lowercase text-muted-foreground">
                             {customer.rfmScore?.segment ?? "·"}
                           </span>
@@ -355,8 +342,7 @@ function CustomersConsole() {
                       </td>
                       <td className="px-5 py-4 text-right text-[13px] font-mono tabular-nums text-foreground">
                         <Link href={`/customers/${customer.id}`} className="block">
-                          {customer.rfmScore?.orderCount ??
-                            customer._count.orders}
+                          {customer.rfmScore?.orderCount ?? customer._count.orders}
                         </Link>
                       </td>
                       <td className="px-5 py-4 text-right text-[13px] font-mono tabular-nums font-semibold text-foreground">
@@ -368,7 +354,7 @@ function CustomersConsole() {
                         <Link href={`/customers/${customer.id}`} className="block">
                           <span
                             className={`inline-block font-mono text-[12px] tabular-nums font-semibold ${rfmScoreClass(
-                              customer.rfmScore?.totalScore,
+                              customer.rfmScore?.totalScore
                             )}`}
                           >
                             {customer.rfmScore?.totalScore ?? "·"}
@@ -386,8 +372,7 @@ function CustomersConsole() {
           {data && data.pages > 1 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-background/40">
               <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-                {data.total.toLocaleString("en-IN")} customers · page {data.page}{" "}
-                of {data.pages}
+                {data.total.toLocaleString("en-IN")} customers · page {data.page} of {data.pages}
               </span>
               <div className="flex gap-1">
                 <button
