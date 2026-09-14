@@ -13,18 +13,18 @@ import { computeChurnRiskEstimate } from "./churn-prediction";
  */
 export async function computeFullState(
   customerId: string,
-  storeId: string,
+  storeId: string
 ): Promise<CustomerStateData> {
   // Fetch all required data in parallel
   const [customer, orders, rfmScore, ltv, fatigueState, channelPref, intentState] =
     await Promise.all([
       prisma.customer.findUnique({
         where: { id: customerId },
-        select: { email: true, acceptsMarketing: true },
+        select: { email: true, acceptsMarketing: true, store: { select: { timezone: true } } },
       }),
       prisma.order.findMany({
         where: { customerId, storeId, status: { not: "cancelled" } },
-        select: { createdAt: true, totalPrice: true },
+        select: { createdAt: true, totalPrice: true, totalDiscounts: true, discountCodes: true },
         orderBy: { createdAt: "asc" },
       }),
       prisma.rfmScore.findUnique({ where: { customerId } }),
@@ -48,17 +48,30 @@ export async function computeFullState(
 
   // Calculate average order interval
   let avgOrderIntervalDays: number | null = null;
+  let medianOrderIntervalDays: number | null = null;
+  let reorderConfidence = 0;
   if (orders.length >= 2) {
     const intervals: number[] = [];
     for (let i = 1; i < orders.length; i++) {
       const curr = orders[i]!;
       const prev = orders[i - 1]!;
-      intervals.push(
-        (curr.createdAt.getTime() - prev.createdAt.getTime()) /
-          (1000 * 60 * 60 * 24),
-      );
+      intervals.push((curr.createdAt.getTime() - prev.createdAt.getTime()) / (1000 * 60 * 60 * 24));
     }
     avgOrderIntervalDays = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const sorted = [...intervals].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    medianOrderIntervalDays =
+      sorted.length % 2 === 0
+        ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
+        : (sorted[middle] ?? null);
+    const variance =
+      intervals.reduce((sum, value) => sum + (value - avgOrderIntervalDays!) ** 2, 0) /
+      intervals.length;
+    const variation = avgOrderIntervalDays > 0 ? Math.sqrt(variance) / avgOrderIntervalDays : 1;
+    reorderConfidence = Math.min(
+      1,
+      Math.max(0, intervals.length / 5) * 0.5 + Math.max(0, 1 - variation) * 0.5
+    );
   }
 
   const lifecycleStage = classifyLifecycleStage({
@@ -77,7 +90,29 @@ export async function computeFullState(
     totalSpend,
     avgOrderIntervalDays,
   });
-  const discountSensitivity = computeDiscountSensitivity(orders);
+  const discountProfile = computeDiscountProfile(orders);
+  const nextExpectedOrderAt =
+    lastOrder && medianOrderIntervalDays
+      ? new Date(lastOrder.createdAt.getTime() + medianOrderIntervalDays * 86_400_000)
+      : null;
+  const cycleRatio =
+    daysSinceLastOrder !== null && medianOrderIntervalDays
+      ? daysSinceLastOrder / medianOrderIntervalDays
+      : null;
+  const purchaseCyclePosition: CustomerStateData["purchaseCyclePosition"] =
+    cycleRatio === null
+      ? "unknown"
+      : cycleRatio < 0.75
+        ? "early"
+        : cycleRatio < 0.95
+          ? "approaching"
+          : cycleRatio <= 1.2
+            ? "due"
+            : "overdue";
+  const nextEvaluationAt =
+    nextExpectedOrderAt && nextExpectedOrderAt > now
+      ? nextExpectedOrderAt
+      : new Date(now.getTime() + 86_400_000);
   const vipLevel = computeVipLevel(orderCount, ltv?.historicalLtv ?? 0);
   const trustScore = computeTrustScore(lifecycleStage, orderCount, churnRisk);
 
@@ -88,7 +123,7 @@ export async function computeFullState(
   const campaignEligibility = computeCampaignEligibility(
     lifecycleStage,
     customer?.acceptsMarketing ?? false,
-    supportState,
+    supportState
   );
 
   const stateData: CustomerStateData = {
@@ -98,9 +133,26 @@ export async function computeFullState(
     churnRisk,
     intentState,
     channelPreference: channelPref,
-    optimalSendWindow: { timezone: "UTC", bestHours: [9, 10, 11, 14, 15] },
+    optimalSendWindow: {
+      timezone: customer?.store.timezone ?? "UTC",
+      bestHours: [9, 10, 11, 14, 15],
+    },
     communicationFatigue: fatigueState,
-    discountSensitivity,
+    discountSensitivity: discountProfile.sensitivity,
+    discountBehavior: discountProfile.behavior,
+    meanOrderIntervalDays: avgOrderIntervalDays,
+    medianOrderIntervalDays,
+    purchaseCyclePosition,
+    reorderConfidence,
+    nextExpectedOrderAt,
+    nextEvaluationAt,
+    stateEvidence: {
+      orderCount,
+      fullPriceOrderCount: discountProfile.fullPriceOrderCount,
+      discountedOrderCount: discountProfile.discountedOrderCount,
+      discountCodes: [...new Set(orders.flatMap((order) => order.discountCodes))].slice(0, 20),
+      computedAt: now.toISOString(),
+    },
     supportState,
     trustScore,
     vipLevel,
@@ -121,6 +173,14 @@ export async function computeFullState(
       optimalSendWindow: stateData.optimalSendWindow as any,
       communicationFatigue: stateData.communicationFatigue as any,
       discountSensitivity: stateData.discountSensitivity,
+      discountBehavior: stateData.discountBehavior,
+      meanOrderIntervalDays: stateData.meanOrderIntervalDays,
+      medianOrderIntervalDays: stateData.medianOrderIntervalDays,
+      purchaseCyclePosition: stateData.purchaseCyclePosition,
+      reorderConfidence: stateData.reorderConfidence,
+      nextExpectedOrderAt: stateData.nextExpectedOrderAt,
+      nextEvaluationAt: stateData.nextEvaluationAt,
+      stateEvidence: stateData.stateEvidence as any,
       supportState: stateData.supportState,
       trustScore: stateData.trustScore,
       vipLevel: stateData.vipLevel,
@@ -136,6 +196,14 @@ export async function computeFullState(
       optimalSendWindow: stateData.optimalSendWindow as any,
       communicationFatigue: stateData.communicationFatigue as any,
       discountSensitivity: stateData.discountSensitivity,
+      discountBehavior: stateData.discountBehavior,
+      meanOrderIntervalDays: stateData.meanOrderIntervalDays,
+      medianOrderIntervalDays: stateData.medianOrderIntervalDays,
+      purchaseCyclePosition: stateData.purchaseCyclePosition,
+      reorderConfidence: stateData.reorderConfidence,
+      nextExpectedOrderAt: stateData.nextExpectedOrderAt,
+      nextEvaluationAt: stateData.nextEvaluationAt,
+      stateEvidence: stateData.stateEvidence as any,
       supportState: stateData.supportState,
       trustScore: stateData.trustScore,
       vipLevel: stateData.vipLevel,
@@ -199,7 +267,7 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
       const eligibility = computeCampaignEligibility(
         LifecycleStage.REPEAT, // will be overridden by actual state
         true,
-        supportState,
+        supportState
       );
       await prisma.customerState.update({
         where: { customerId },
@@ -214,17 +282,21 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
 
     case "form_submitted": {
       // Update channel preferences based on consent from form submission
-      const consent = event.data?.["consent"] as { email?: boolean; sms?: boolean; whatsapp?: boolean } | undefined;
+      const consent = event.data?.["consent"] as
+        | { email?: boolean; sms?: boolean; whatsapp?: boolean }
+        | undefined;
       if (consent) {
         const existing = await prisma.customerState.findUnique({
           where: { customerId },
           select: { channelPreference: true },
         });
-        const currentPref = (existing?.channelPreference as unknown as Record<string, number>) ?? {};
+        const currentPref =
+          (existing?.channelPreference as unknown as Record<string, number>) ?? {};
         // Boost channels the customer consented to
         if (consent.email) currentPref["email"] = Math.min((currentPref["email"] ?? 0.5) + 0.2, 1);
         if (consent.sms) currentPref["sms"] = Math.min((currentPref["sms"] ?? 0.3) + 0.3, 1);
-        if (consent.whatsapp) currentPref["whatsapp"] = Math.min((currentPref["whatsapp"] ?? 0.3) + 0.3, 1);
+        if (consent.whatsapp)
+          currentPref["whatsapp"] = Math.min((currentPref["whatsapp"] ?? 0.3) + 0.3, 1);
         await prisma.customerState.update({
           where: { customerId },
           data: {
@@ -287,17 +359,42 @@ export async function decayStaleStates(storeId: string): Promise<number> {
   return updated;
 }
 
-function computeDiscountSensitivity(
-  orders: { totalPrice: number; createdAt: Date }[],
-): number {
-  if (orders.length === 0) return 0.5;
-  // Low AOV relative to store average suggests higher discount sensitivity
-  // For now, use a simple heuristic based on order count and recency
-  const avgPrice = orders.reduce((s, o) => s + o.totalPrice, 0) / orders.length;
-  if (avgPrice < 30) return 0.8;
-  if (avgPrice < 60) return 0.6;
-  if (avgPrice < 100) return 0.4;
-  return 0.2;
+export function computeDiscountProfile(
+  orders: Array<{ totalDiscounts: number; discountCodes: string[] }>
+): {
+  sensitivity: number;
+  behavior: CustomerStateData["discountBehavior"];
+  fullPriceOrderCount: number;
+  discountedOrderCount: number;
+} {
+  if (orders.length === 0)
+    return {
+      sensitivity: 0.5,
+      behavior: "inconclusive",
+      fullPriceOrderCount: 0,
+      discountedOrderCount: 0,
+    };
+  const discountedOrderCount = orders.filter(
+    (order) => order.totalDiscounts > 0 || order.discountCodes.length > 0
+  ).length;
+  const fullPriceOrderCount = orders.length - discountedOrderCount;
+  const ratio = discountedOrderCount / orders.length;
+  const behavior =
+    orders.length < 3
+      ? "inconclusive"
+      : ratio <= 0.2
+        ? "full_price_likely"
+        : ratio >= 0.8
+          ? "discount_habituated"
+          : ratio >= 0.5
+            ? "discount_responsive"
+            : "inconclusive";
+  return {
+    sensitivity: Math.round(ratio * 100) / 100,
+    behavior,
+    fullPriceOrderCount,
+    discountedOrderCount,
+  };
 }
 
 function computeVipLevel(orderCount: number, historicalLtv: number): VipLevel {
@@ -310,7 +407,7 @@ function computeVipLevel(orderCount: number, historicalLtv: number): VipLevel {
 function computeTrustScore(
   lifecycle: LifecycleStage,
   orderCount: number,
-  churnRisk: number,
+  churnRisk: number
 ): number {
   let score = 0.5;
   // Lifecycle bonus
@@ -332,10 +429,7 @@ function computeTrustScore(
   return Math.min(1, Math.max(0, Math.round(score * 100) / 100));
 }
 
-async function computeSupportState(
-  customerId: string,
-  storeId: string,
-): Promise<SupportState> {
+async function computeSupportState(customerId: string, storeId: string): Promise<SupportState> {
   const activeConversation = await prisma.conversation.findFirst({
     where: { customerId, storeId, status: "active" },
   });
@@ -359,7 +453,7 @@ async function computeSupportState(
 function computeCampaignEligibility(
   lifecycle: LifecycleStage,
   acceptsMarketing: boolean,
-  supportState: SupportState,
+  supportState: SupportState
 ): string[] {
   if (!acceptsMarketing) return [];
   if (supportState === SupportState.ESCALATED) return [];

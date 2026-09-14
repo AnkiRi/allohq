@@ -61,6 +61,18 @@ export interface CustomerStateData {
   optimalSendWindow: SendWindow;
   communicationFatigue: FatigueState;
   discountSensitivity: number;
+  discountBehavior:
+    | "full_price_likely"
+    | "discount_responsive"
+    | "discount_habituated"
+    | "inconclusive";
+  meanOrderIntervalDays: number | null;
+  medianOrderIntervalDays: number | null;
+  purchaseCyclePosition: "early" | "approaching" | "due" | "overdue" | "unknown";
+  reorderConfidence: number;
+  nextExpectedOrderAt: Date | null;
+  nextEvaluationAt: Date | null;
+  stateEvidence: Record<string, unknown>;
   supportState: SupportState;
   trustScore: number;
   vipLevel: VipLevel;

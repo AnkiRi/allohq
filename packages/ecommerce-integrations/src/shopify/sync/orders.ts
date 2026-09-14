@@ -15,6 +15,8 @@ interface GraphqlOrder {
   currentSubtotalPriceSet: MoneyBag;
   currentTotalTaxSet: MoneyBag;
   totalShippingPriceSet: MoneyBag;
+  currentTotalDiscountsSet: MoneyBag;
+  discountCodes: string[];
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string;
   lineItems: {
@@ -38,10 +40,8 @@ function legacyId(gid: string): string {
 function mapOrderStatus(order: GraphqlOrder): string {
   if (order.displayFinancialStatus === "REFUNDED") return "cancelled";
   if (order.displayFulfillmentStatus === "FULFILLED") return "fulfilled";
-  if (
-    order.displayFinancialStatus === "PAID" ||
-    order.displayFinancialStatus === "PARTIALLY_PAID"
-  ) return "paid";
+  if (order.displayFinancialStatus === "PAID" || order.displayFinancialStatus === "PARTIALLY_PAID")
+    return "paid";
   return "pending";
 }
 
@@ -49,7 +49,7 @@ export async function syncAllOrders(
   shopDomain: string,
   accessToken: string,
   storeId: string,
-  prisma: PrismaClient,
+  prisma: PrismaClient
 ): Promise<ShopifySyncResult> {
   const client = new ShopifyClient(shopDomain, accessToken);
   let imported = 0;
@@ -62,7 +62,8 @@ export async function syncAllOrders(
         nodes: GraphqlOrder[];
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
       };
-    } = await client.graphql(`
+    } = await client.graphql(
+      `
       query JoonOrders($after: String) {
         orders(first: 50, after: $after, sortKey: CREATED_AT) {
           nodes {
@@ -74,6 +75,8 @@ export async function syncAllOrders(
             currentSubtotalPriceSet { shopMoney { amount currencyCode } }
             currentTotalTaxSet { shopMoney { amount currencyCode } }
             totalShippingPriceSet { shopMoney { amount currencyCode } }
+            currentTotalDiscountsSet { shopMoney { amount currencyCode } }
+            discountCodes
             displayFinancialStatus
             displayFulfillmentStatus
             lineItems(first: 250) {
@@ -92,7 +95,9 @@ export async function syncAllOrders(
           pageInfo { hasNextPage endCursor }
         }
       }
-    `, { after: cursor });
+    `,
+      { after: cursor }
+    );
 
     const orders = response.orders.nodes;
     const concurrency = 10;
@@ -111,9 +116,7 @@ export async function syncAllOrders(
             select: { id: true },
           });
           if (!customer) {
-            throw new Error(
-              `customer ${customerExternalId} not found; skipped`,
-            );
+            throw new Error(`customer ${customerExternalId} not found; skipped`);
           }
 
           const total = order.currentTotalPriceSet.shopMoney;
@@ -130,11 +133,11 @@ export async function syncAllOrders(
               externalId: legacyId(order.id),
               orderNumber: order.name,
               totalPrice: Number(total.amount),
-              subtotal: Number(
-                order.currentSubtotalPriceSet.shopMoney.amount,
-              ),
+              subtotal: Number(order.currentSubtotalPriceSet.shopMoney.amount),
               tax: Number(order.currentTotalTaxSet.shopMoney.amount),
               shipping: Number(order.totalShippingPriceSet.shopMoney.amount),
+              totalDiscounts: Number(order.currentTotalDiscountsSet.shopMoney.amount),
+              discountCodes: order.discountCodes,
               currency: total.currencyCode,
               status: mapOrderStatus(order),
               createdAt: new Date(order.createdAt),
@@ -143,11 +146,11 @@ export async function syncAllOrders(
               customerId: customer.id,
               orderNumber: order.name,
               totalPrice: Number(total.amount),
-              subtotal: Number(
-                order.currentSubtotalPriceSet.shopMoney.amount,
-              ),
+              subtotal: Number(order.currentSubtotalPriceSet.shopMoney.amount),
               tax: Number(order.currentTotalTaxSet.shopMoney.amount),
               shipping: Number(order.totalShippingPriceSet.shopMoney.amount),
+              totalDiscounts: Number(order.currentTotalDiscountsSet.shopMoney.amount),
+              discountCodes: order.discountCodes,
               currency: total.currencyCode,
               status: mapOrderStatus(order),
               createdAt: new Date(order.createdAt),
@@ -162,40 +165,30 @@ export async function syncAllOrders(
               prisma.orderItem.create({
                 data: {
                   orderId: upserted.id,
-                  productId: item.product
-                    ? legacyId(item.product.id)
-                    : "unknown",
-                  variantId: item.variant
-                    ? legacyId(item.variant.id)
-                    : null,
+                  productId: item.product ? legacyId(item.product.id) : "unknown",
+                  variantId: item.variant ? legacyId(item.variant.id) : null,
                   title: item.name,
                   quantity: item.quantity,
-                  price: Number(
-                    item.originalUnitPriceSet.shopMoney.amount,
-                  ),
+                  price: Number(item.originalUnitPriceSet.shopMoney.amount),
                 },
-              }),
-            ),
+              })
+            )
           );
           imported++;
-        }),
+        })
       );
       results.forEach((result, index) => {
         if (result.status === "rejected") {
           errors.push(
             `Order ${chunk[index]?.id}: ${
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason)
-            }`,
+              result.reason instanceof Error ? result.reason.message : String(result.reason)
+            }`
           );
         }
       });
     }
 
-    cursor = response.orders.pageInfo.hasNextPage
-      ? response.orders.pageInfo.endCursor
-      : null;
+    cursor = response.orders.pageInfo.hasNextPage ? response.orders.pageInfo.endCursor : null;
   } while (cursor);
 
   return { imported, errors };

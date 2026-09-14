@@ -661,6 +661,8 @@ model Order {
   subtotal    Float
   tax         Float
   shipping    Float
+  totalDiscounts Float    @default(0)
+  discountCodes String[]  @default([])
   currency    String   @default("USD")
   status      String // pending, paid, fulfilled, cancelled
   createdAt   DateTime @default(now())
@@ -1668,6 +1670,14 @@ model CustomerState {
   optimalSendWindow    Json     @default("{}") // { timezone: "Asia/Kolkata", bestHours: [10, 14, 19] }
   communicationFatigue Json     @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
   discountSensitivity  Float    @default(0.5) // 0-1
+  discountBehavior     String   @default("inconclusive")
+  meanOrderIntervalDays   Float?
+  medianOrderIntervalDays Float?
+  purchaseCyclePosition  String @default("unknown")
+  reorderConfidence       Float @default(0)
+  nextExpectedOrderAt     DateTime?
+  nextEvaluationAt        DateTime?
+  stateEvidence           Json  @default("{}")
   supportState         String   @default("clear") // clear, open_issue, recent_complaint, escalated
   trustScore           Float    @default(0.5) // 0-1
   vipLevel             String   @default("standard") // standard, silver, gold, platinum
@@ -1682,6 +1692,7 @@ model CustomerState {
   @@index([storeId, lifecycleStage])
   @@index([storeId, churnRisk])
   @@index([storeId, vipLevel])
+  @@index([storeId, nextEvaluationAt])
   @@map("customer_states")
 }
 
