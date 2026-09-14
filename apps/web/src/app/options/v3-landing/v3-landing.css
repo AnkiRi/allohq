@@ -33,6 +33,13 @@
 .v3-landing .v3-calc input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line-2); }
 .v3-landing .v3-calc input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1px var(--decision-text, var(--accent)); }
 .v3-landing .v3-calc__money { display: grid !important; grid-template-columns: 74px 1fr; }
+/* Revenue is stated, not typed: the figure reads as a result, and the currency
+   control sits beside its own label rather than stretching across the row. */
+.v3-landing .v3-calc__derived select { width: auto; min-height: 28px; padding: 2px 6px; font-size: 11px; }
+.v3-landing .v3-calc__derived strong { font-family: "JetBrains Mono", monospace; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--decision-text, var(--accent)); }
+/* The chain spans the input grid: revenue, then what email is credited for,
+   then what Joon proved it caused, then the fee. */
+.v3-landing .v3-calc__chain { grid-column: 1 / -1; margin: 0; padding-top: 2px; border-top: 1px solid var(--line); color: var(--dim); font-size: 10px; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .v3-landing .v3-calc__results { display: grid; grid-template-columns: 1fr 1fr; border-block: 1px solid var(--line); }
 .v3-landing .v3-calc__results article { padding: 24px; }
 .v3-landing .v3-calc__results article + article { border-left: 1px solid var(--line); }

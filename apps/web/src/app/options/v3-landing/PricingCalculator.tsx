@@ -143,17 +143,37 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     <div className="v3-calc" aria-label="Illustrative Joon pricing calculator">
       <div className="v3-calc__banner mono">Free during early access. This is what you&rsquo;d pay after.</div>
       <div className="v3-calc__inputs" onInput={markInteraction} onChange={markInteraction}>
-        <LogSubscribers value={subscribers} set={setSubscribers} currency={currency} setCurrency={setCurrency} />
+        <LogSubscribers value={subscribers} set={setSubscribers} />
         <div className="v3-calc__field v3-calc__derived">
-          <span>Monthly store revenue</span>
+          <span>
+            Monthly store revenue
+            <label className="v3-sr-only" htmlFor="pricing-currency">Currency</label>
+            <select id="pricing-currency" value={currency} onChange={(event) => setCurrency(event.target.value as Currency)}>
+              <option>INR</option><option>USD</option>
+            </select>
+          </span>
           <strong>{money(revenue * 100, currency)}</strong>
           <small>
             Taken from your list size: as many monthly visits as subscribers, 1% of them buying at
-            {" "}{money(currency === "INR" ? 200_000 : 2_000, currency)}, plus 20% again from the list itself.
+            {" "}{money(currency === "INR" ? 200_000 : 2_000, currency)}, plus 20% repeat from the list itself.
           </small>
         </div>
-        <NumberRange label="Share of revenue from email" value={emailShare} min={5} max={40} step={1} set={setEmailShare} valueText={`${emailShare}%`} />
-        <NumberRange label="How much of that Joon actually causes" value={causedShare} min={0} max={70} step={1} set={setCausedShare} valueText={`${causedShare}%`} helper="The part that would not have happened without the email, measured against a random holdout." />
+        <NumberRange
+          label="Of that, what email gets credited for"
+          value={emailShare} min={5} max={40} step={1} set={setEmailShare} valueText={`${emailShare}%`}
+          helper="What your current tool reports as email revenue — every sale that followed an email, whether or not the email mattered."
+        />
+        <NumberRange
+          label="Of that, what Joon actually caused"
+          value={causedShare} min={0} max={70} step={1} set={setCausedShare} valueText={`${causedShare}%`}
+          helper="The part that would not have happened anyway, measured against customers held back at random. Joon charges on this alone."
+        />
+        <p className="v3-calc__chain mono" aria-live="polite">
+          {money(revenue * 100, currency)} revenue
+          {" → "}{money(scenario.emailRevenueMinor, currency)} credited to email
+          {" → "}{money(scenario.causedMinor, currency)} Joon caused
+          {" → "}{money(scenario.invoice.liftFeeMinor, currency)} fee
+        </p>
         <NumberRange label="Blasts you'll ask for each month" value={blasts} min={0} max={31} step={1} set={setBlasts} valueText={`${blasts} blasts`} />
       </div>
       <div className="v3-calc__results">
@@ -221,9 +241,8 @@ function EditableNumber({ label, value, set, min, max }: { label: string; value:
   return <><label className="v3-sr-only" htmlFor={id}>{label}</label><input id={id} type="number" inputMode="numeric" min={min} max={max} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></>;
 }
 
-function LogSubscribers({ value, set, currency, setCurrency }: { value: number; set: (value: number) => void; currency: Currency; setCurrency: (value: Currency) => void }) {
+function LogSubscribers({ value, set }: { value: number; set: (value: number) => void }) {
   const sliderId = useId();
-  const selectId = useId();
   const span = MAX_COMPARABLE_SUBSCRIBERS / MIN_SUBSCRIBERS;
   const position = Math.log(value / MIN_SUBSCRIBERS) / Math.log(span) * 1000;
   return (
@@ -238,11 +257,7 @@ function LogSubscribers({ value, set, currency, setCurrency }: { value: number; 
         aria-valuetext={`${value.toLocaleString("en-IN")} subscribers`}
         onChange={(event) => set(clamp(MIN_SUBSCRIBERS * Math.pow(span, Number(event.target.value) / 1000), MIN_SUBSCRIBERS, MAX_COMPARABLE_SUBSCRIBERS))}
       />
-      <span className="v3-calc__money">
-        <EditableNumber label="Active email subscribers" value={value} set={set} min={MIN_SUBSCRIBERS} max={MAX_COMPARABLE_SUBSCRIBERS} />
-        <label className="v3-sr-only" htmlFor={selectId}>Currency</label>
-        <select id={selectId} value={currency} onChange={(event) => setCurrency(event.target.value as Currency)}><option>INR</option><option>USD</option></select>
-      </span>
+      <EditableNumber label="Active email subscribers" value={value} set={set} min={MIN_SUBSCRIBERS} max={MAX_COMPARABLE_SUBSCRIBERS} />
     </div>
   );
 }
