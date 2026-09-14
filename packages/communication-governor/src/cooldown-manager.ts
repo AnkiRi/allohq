@@ -1,9 +1,24 @@
 import { prisma } from "@allohq/database";
 import type { GovernorDecision } from "./types";
 
+export function latestRedeemedOffer(
+  offers: readonly { sentAt: Date; discountCode: string }[],
+  orders: readonly { createdAt: Date; discountCodes: readonly string[] }[]
+) {
+  return offers.find((offer) =>
+    orders.some(
+      (order) =>
+        order.createdAt >= offer.sentAt &&
+        order.discountCodes.some(
+          (code) => code.trim().toUpperCase() === offer.discountCode.trim().toUpperCase()
+        )
+    )
+  );
+}
+
 /**
  * Enforce cooldown periods:
- * - Post-discount: 14 days after a discount code was sent
+ * - Post-discount: 14 days after a discount code from a Joon email was redeemed
  * - Post-complaint: 7 days after a support issue was resolved
  */
 export async function checkCooldown(
@@ -16,9 +31,10 @@ export async function checkCooldown(
     return { allowed: true };
   }
 
-  // Post-discount cooldown: 14 days
+  // Post-discount cooldown: receiving an offer is not enough. Only an actual,
+  // traceable redemption may silence the customer for fourteen days.
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  const recentDiscount = await prisma.messageLog.findFirst({
+  const recentDiscountMessages = await prisma.messageLog.findMany({
     where: {
       customerId,
       storeId,
@@ -29,10 +45,33 @@ export async function checkCooldown(
       },
     },
     orderBy: { sentAt: "desc" },
-    select: { sentAt: true },
+    take: 20,
+    select: { sentAt: true, metadata: true },
   });
+  const offers = recentDiscountMessages.flatMap((message) => {
+    const metadata = (message.metadata ?? {}) as Record<string, unknown>;
+    const discountCode =
+      typeof metadata.discountCode === "string" ? metadata.discountCode.trim() : "";
+    return message.sentAt && discountCode
+      ? [{ sentAt: message.sentAt, discountCode: discountCode.toUpperCase() }]
+      : [];
+  });
+  const redeemedOrders =
+    offers.length > 0
+      ? await prisma.order.findMany({
+          where: {
+            customerId,
+            storeId,
+            status: { not: "cancelled" },
+            createdAt: { gte: fourteenDaysAgo },
+            discountCodes: { hasSome: [...new Set(offers.map((offer) => offer.discountCode))] },
+          },
+          select: { createdAt: true, discountCodes: true },
+        })
+      : [];
+  const recentDiscount = latestRedeemedOffer(offers, redeemedOrders);
 
-  if (recentDiscount && recentDiscount.sentAt) {
+  if (recentDiscount) {
     const daysAgo = Math.round(
       (Date.now() - recentDiscount.sentAt.getTime()) / (24 * 60 * 60 * 1000),
     );
@@ -40,7 +79,7 @@ export async function checkCooldown(
     if (daysRemaining > 0) {
       return {
         allowed: false,
-        reason: `Post-discount cooldown: ${daysRemaining} days remaining. Last discount sent ${daysAgo} days ago.`,
+        reason: `Post-redemption cooldown: ${daysRemaining} days remaining. Discount redeemed ${daysAgo} days ago.`,
         rule: "cooldown_post_discount",
       };
     }
