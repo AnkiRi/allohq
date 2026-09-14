@@ -2,22 +2,20 @@
 
 import {
   computeCalculatorScenario,
-  deriveMonthlyRevenueMinor,
   KLAVIYO_EMAIL_USD_EVIDENCE,
   type Currency,
 } from "@allohq/pricing";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  clampRevenueMajor,
   MAX_COMPARABLE_SUBSCRIBERS,
   MIN_SUBSCRIBERS,
   PRICING_CALCULATOR_DEFAULTS,
+  revenueBoundsMajor,
   type PricingCalculatorInitialState,
-  type PricingCalculatorTool as Tool,
 } from "./pricing-calculator-state";
 
 const CAUSED_SHARES = [0, 10, 20, 30, 40, 50, 60, 70];
-/** Outside this band, list size and revenue no longer describe a real store. */
-const PLAUSIBLE_REVENUE_PER_SUBSCRIBER = { min: 8, max: 120 };
 
 function money(minor: number, currency: Currency) {
   return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
@@ -53,18 +51,17 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
   const [emailShare, setEmailShare] = useState(initial.emailShare);
   const [causedShare, setCausedShare] = useState(initial.causedShare);
   const [blasts, setBlasts] = useState(initial.blasts);
-  const [tool, setTool] = useState<Tool>(initial.tool);
-  const [enteredBill, setEnteredBill] = useState(initial.enteredBill);
   const [copied, setCopied] = useState(false);
   const interacted = useRef(false);
   const viewed = useRef(false);
 
-  // Revenue follows list size until the merchant states their own. Unlinked,
-  // the two inputs can describe a store that cannot exist.
-  const derivedRevenue = Math.round(deriveMonthlyRevenueMinor(subscribers, currency) / 100);
+  const bounds = revenueBoundsMajor(subscribers, currency);
+  // Revenue follows list size until the merchant states their own, and stays
+  // within what a list that size can support either way. Unlinked, the two
+  // inputs described stores that cannot exist.
   useEffect(() => {
-    if (!revenueTouched) setRevenue(derivedRevenue);
-  }, [derivedRevenue, revenueTouched]);
+    setRevenue((current) => (revenueTouched ? clampRevenueMajor(current, subscribers, currency) : bounds.derived));
+  }, [bounds.derived, currency, revenueTouched, subscribers]);
 
   const markInteraction = () => {
     if (interacted.current) return;
@@ -82,9 +79,8 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     comparisonTool: "klaviyo",
     traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
     calculatorCapEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
-    ...(tool === "entered_bill" ? { enteredBillMinor: enteredBill * 100 } : {}),
     subscriberSnapshotAt: "illustrative-calculator",
-  }), [blasts, currency, emailShare, enteredBill, revenue, subscribers, tool]);
+  }), [blasts, currency, emailShare, revenue, subscribers]);
 
   const scenario = useMemo(() => scenarioFor(causedShare), [causedShare, scenarioFor]);
 
@@ -112,11 +108,10 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     query.set("caused", String(causedShare));
     query.set("blasts", String(blasts));
     query.set("currency", currency);
-    query.set("tool", tool);
-    if (tool === "entered_bill") query.set("bill", String(enteredBill));
-    else query.delete("bill");
+    query.delete("tool");
+    query.delete("bill");
     window.history.replaceState(null, "", `${window.location.pathname}?${query.toString()}${window.location.hash}`);
-  }, [blasts, causedShare, currency, emailShare, enteredBill, revenue, revenueTouched, subscribers, tool]);
+  }, [blasts, causedShare, currency, emailShare, revenue, revenueTouched, subscribers]);
 
   useEffect(() => {
     if (!interacted.current) return;
@@ -127,11 +122,10 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
       causedShare: analyticsBucket(causedShare, [10, 30, 50]),
       blasts: analyticsBucket(blasts, [0, 4, 8, 16]),
       currency,
-      tool,
       result: scenario.breakEven.currentlyCostsMore ? "above_current_tool" : "at_or_below_current_tool",
     }), 800);
     return () => window.clearTimeout(timer);
-  }, [blasts, causedShare, currency, emailShare, enteredBill, revenue, scenario.breakEven.currentlyCostsMore, subscribers, tool]);
+  }, [blasts, causedShare, currency, emailShare, revenue, scenario.breakEven.currentlyCostsMore, subscribers]);
 
   const curve = CAUSED_SHARES.map((share) => scenarioFor(share));
   const chartMax = Math.max(...curve.map((item) => item.invoice.totalMinor), scenario.traditional.priceMinor, 1);
@@ -139,11 +133,8 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     .map((item, index) => `${index * (100 / (CAUSED_SHARES.length - 1))},${100 - item.invoice.totalMinor / chartMax * 92}`)
     .join(" ");
   const traditionalY = 100 - scenario.traditional.priceMinor / chartMax * 92;
-  const currentToolName = tool === "platform" ? "a leading email platform" : "your current bill";
-  const revenuePerSubscriber = subscribers > 0 ? revenue / subscribers : 0;
-  const implausible = revenueTouched
-    && (revenuePerSubscriber < PLAUSIBLE_REVENUE_PER_SUBSCRIBER.min
-      || revenuePerSubscriber > PLAUSIBLE_REVENUE_PER_SUBSCRIBER.max);
+  const atCap = scenario.invoice.performanceFeeCapMinor !== null
+    && scenario.invoice.totalMinor >= scenario.invoice.performanceFeeCapMinor;
 
   const copyLink = async () => {
     markInteraction();
@@ -167,26 +158,16 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
           currency={currency}
           setCurrency={setCurrency}
           value={revenue}
-          setValue={(next) => { setRevenueTouched(true); setRevenue(next); }}
-          max={1_000_000_000}
+          setValue={(next) => { setRevenueTouched(true); setRevenue(clampRevenueMajor(next, subscribers, currency)); }}
+          min={bounds.min}
+          max={bounds.max}
           helper={revenueTouched
-            ? `${money(Math.round(revenuePerSubscriber * 100), currency)} per subscriber a month.`
+            ? `A list this size supports ${money(bounds.min * 100, currency)}–${money(bounds.max * 100, currency)} a month.`
             : "Derived from your list size. Edit it if yours differs."}
-          warning={implausible
-            ? `${money(Math.round(revenuePerSubscriber * 100), currency)} per subscriber is unusual for a store this size.`
-            : undefined}
         />
         <NumberRange label="Share of revenue from email" value={emailShare} min={5} max={40} step={1} set={setEmailShare} valueText={`${emailShare}%`} />
         <NumberRange label="How much of that Joon actually causes" value={causedShare} min={0} max={70} step={1} set={setCausedShare} valueText={`${causedShare}%`} helper="The part that would not have happened without the email, measured against a random holdout." />
         <NumberRange label="Blasts you'll ask for each month" value={blasts} min={0} max={31} step={1} set={setBlasts} valueText={`${blasts} blasts`} />
-        <div className="v3-calc__field">
-          <label htmlFor="pricing-tool">Compare Joon with</label>
-          <select id="pricing-tool" value={tool} onChange={(event) => setTool(event.target.value as Tool)}>
-            <option value="platform">Published platform pricing</option>
-            <option value="entered_bill">Enter my current bill</option>
-          </select>
-          {tool === "entered_bill" && <EditableNumber label="Current monthly email bill" value={enteredBill} set={setEnteredBill} min={0} max={100_000_000} />}
-        </div>
       </div>
       <div className="v3-calc__results">
         <article>
@@ -208,29 +189,27 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
       <p className="v3-sr-only" aria-live="polite" aria-atomic="true">
         Joon costs {money(scenario.invoice.totalMinor, currency)} a month all in:
         {" "}{money(scenario.invoice.liftFeeMinor, currency)} outcome fee plus
-        {" "}{money(scenario.invoice.postageMinor, currency)} postage. {currentToolName} is
+        {" "}{money(scenario.invoice.postageMinor, currency)} postage. The published platform benchmark is
         {" "}{money(scenario.traditional.priceMinor, currency)} a month.
       </p>
       <div className="v3-calc__chart">
         <svg viewBox="0 0 100 104" role="img" aria-labelledby="pricing-chart-title pricing-chart-desc">
           <title id="pricing-chart-title">Monthly total as caused share rises from zero to seventy percent</title>
-          <desc id="pricing-chart-desc">{currentToolName} stays at {money(scenario.traditional.priceMinor, currency)}. Joon&rsquo;s total starts at postage alone, rises only with caused revenue, and stops at the cap.</desc>
+          <desc id="pricing-chart-desc">The platform benchmark stays at {money(scenario.traditional.priceMinor, currency)}. Joon&rsquo;s total starts at postage alone, rises only with caused revenue, and stops at the cap.</desc>
           <line x1="0" x2="100" y1={traditionalY} y2={traditionalY} className="is-traditional" />
           <polyline points={points} className="is-joon" />
         </svg>
-        <div className="v3-calc__legend"><span><i className="is-traditional" />{currentToolName}</span><span><i className="is-joon" />Joon, all in</span></div>
+        <div className="v3-calc__legend"><span><i className="is-traditional" />Your platform today</span><span><i className="is-joon" />Joon, all in</span></div>
         <div><span>0% caused</span><span>70% caused</span></div>
       </div>
       <p className="v3-calc__crossing">
-        {scenario.breakEven.costsMoreAtZeroLift
-          ? `At this blast volume, postage alone is higher than ${currentToolName}.`
-          : scenario.breakEven.currentlyCostsMore
-            ? `Joon costs more than ${currentToolName} here — and only because it caused ${money(scenario.causedMinor, currency)} that would not have happened.`
-            : `Joon's total never exceeds the benchmark: the outcome fee is capped so that fee plus postage stays at or below it.`}
+        {atCap
+          ? `Joon has reached its cap here: however much more it causes, the bill stops at ${money(scenario.traditional.priceMinor, currency)}.`
+          : `Joon's total never exceeds the benchmark: the outcome fee is capped so that fee plus postage stays at or below it.`}
       </p>
       <p className="v3-calc__explain">{money(0, currency)} outcome fee if Joon causes nothing &mdash; postage only on blasts you ask for. Joon never profits from sending.</p>
       <p className="v3-calc__fine mono">
-        Revenue is derived from your list size (1% of visits convert at {money(currency === "INR" ? 200_000 : 2_000, currency)}, plus 20% from the existing list) until you state your own.
+        Revenue is derived from your list size (1% of visits convert at {money(currency === "INR" ? 200_000 : 2_000, currency)}, plus 20% from the existing list) until you state your own, and stays within what a list that size can support.
         {" "}Assumes every blast reaches every subscriber; Joon&rsquo;s suppression usually sends fewer.
         {" "}Journeys are not included. Estimates. Joon&rsquo;s fee is measured against a random holdout.
         {scenario.traditional.tool !== "entered_bill" && <>
@@ -257,7 +236,7 @@ function EditableNumber({ label, value, set, min, max }: { label: string; value:
   return <><label className="v3-sr-only" htmlFor={id}>{label}</label><input id={id} type="number" inputMode="numeric" min={min} max={max} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></>;
 }
 
-function CurrencyAmount({ label, currency, setCurrency, value, setValue, max, helper, warning }: { label: string; currency: Currency; setCurrency: (value: Currency) => void; value: number; setValue: (value: number) => void; max: number; helper?: string; warning?: string }) {
+function CurrencyAmount({ label, currency, setCurrency, value, setValue, min, max, helper }: { label: string; currency: Currency; setCurrency: (value: Currency) => void; value: number; setValue: (value: number) => void; min: number; max: number; helper?: string }) {
   const selectId = useId();
   return (
     <div className="v3-calc__field">
@@ -265,9 +244,9 @@ function CurrencyAmount({ label, currency, setCurrency, value, setValue, max, he
       <span className="v3-calc__money">
         <label className="v3-sr-only" htmlFor={selectId}>Currency</label>
         <select id={selectId} value={currency} onChange={(event) => setCurrency(event.target.value as Currency)}><option>INR</option><option>USD</option></select>
-        <EditableNumber label={label} value={value} set={setValue} min={0} max={max} />
+        <EditableNumber label={label} value={value} set={setValue} min={min} max={max} />
       </span>
-      {warning ? <small role="note">{warning}</small> : helper ? <small>{helper}</small> : null}
+      {helper && <small>{helper}</small>}
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { prisma } from "@allohq/database";
 import { V2Landing } from "../v2/page";
 import {
+  clampRevenueMajor,
   MAX_COMPARABLE_SUBSCRIBERS,
   MIN_SUBSCRIBERS,
   PRICING_CALCULATOR_DEFAULTS,
+  revenueBoundsMajor,
   type PricingCalculatorInitialState,
 } from "./pricing-calculator-state";
 import "./v3-landing.css";
@@ -26,18 +28,27 @@ function boundedParam(value: string | string[] | undefined, fallback: number, mi
 }
 
 function calculatorState(params: Record<string, string | string[] | undefined>): PricingCalculatorInitialState {
+  const subscribers = boundedParam(
+    params.subs,
+    PRICING_CALCULATOR_DEFAULTS.subscribers,
+    MIN_SUBSCRIBERS,
+    MAX_COMPARABLE_SUBSCRIBERS,
+  );
+  const currency = first(params.currency) === "USD" ? "USD" : "INR";
+  const stated = first(params.rev) !== undefined && first(params.rev)?.trim() !== "";
+  const bounds = revenueBoundsMajor(subscribers, currency);
   return {
-    subscribers: boundedParam(params.subs, PRICING_CALCULATOR_DEFAULTS.subscribers, MIN_SUBSCRIBERS, MAX_COMPARABLE_SUBSCRIBERS),
-    revenue: boundedParam(params.rev, PRICING_CALCULATOR_DEFAULTS.revenue, 0, 1_000_000_000),
-    // A shared link that carried revenue is treated as deliberate, so we do not
-    // overwrite it with the derived figure.
-    revenueTouched: first(params.rev) !== undefined && first(params.rev)?.trim() !== "",
+    subscribers,
+    // A shared link that carried revenue is treated as deliberate, but it is
+    // still held to what a list this size can support.
+    revenue: stated
+      ? clampRevenueMajor(boundedParam(params.rev, bounds.derived, 0, 1_000_000_000), subscribers, currency)
+      : bounds.derived,
+    revenueTouched: stated,
     emailShare: boundedParam(params.email, PRICING_CALCULATOR_DEFAULTS.emailShare, 5, 40),
     causedShare: boundedParam(params.caused, PRICING_CALCULATOR_DEFAULTS.causedShare, 0, 70),
     blasts: boundedParam(params.blasts, PRICING_CALCULATOR_DEFAULTS.blasts, 0, 31),
-    currency: first(params.currency) === "USD" ? "USD" : "INR",
-    tool: first(params.tool) === "entered_bill" ? "entered_bill" : "platform",
-    enteredBill: boundedParam(params.bill, PRICING_CALCULATOR_DEFAULTS.enteredBill, 0, 100_000_000),
+    currency,
   };
 }
 

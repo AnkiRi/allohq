@@ -1,15 +1,17 @@
-import type { Currency } from "@allohq/pricing";
-
-/**
- * "platform" is the published Email-plan benchmark. It is deliberately not
- * named in the interface: the comparison rests on a sourced, dated price, not
- * on a competitor's brand.
- */
-export type PricingCalculatorTool = "platform" | "entered_bill";
+import { deriveMonthlyRevenueMinor, type Currency } from "@allohq/pricing";
 
 /** The benchmark evidence stops here; beyond it there is no published price. */
 export const MAX_COMPARABLE_SUBSCRIBERS = 150_000;
 export const MIN_SUBSCRIBERS = 1_000;
+
+/**
+ * How far monthly revenue may stray from what a list of this size implies.
+ * Unbounded, revenue described stores that cannot exist — ₹3.6 crore on twenty
+ * thousand subscribers — and the fee then pinned to the cap, so the page looked
+ * frozen. A third to five times the derived figure covers a genuinely wide
+ * spread of businesses without leaving reality.
+ */
+export const REVENUE_BAND = { minMultiple: 1 / 3, maxMultiple: 5 };
 
 export interface PricingCalculatorInitialState {
   subscribers: number;
@@ -19,8 +21,22 @@ export interface PricingCalculatorInitialState {
   causedShare: number;
   blasts: number;
   currency: Currency;
-  tool: PricingCalculatorTool;
-  enteredBill: number;
+}
+
+/** Revenue a list of this size can plausibly support, in major units. */
+export function revenueBoundsMajor(subscribers: number, currency: Currency) {
+  const derivedMajor = deriveMonthlyRevenueMinor(subscribers, currency) / 100;
+  return {
+    derived: Math.round(derivedMajor),
+    min: Math.round(derivedMajor * REVENUE_BAND.minMultiple),
+    max: Math.round(derivedMajor * REVENUE_BAND.maxMultiple),
+  };
+}
+
+export function clampRevenueMajor(revenue: number, subscribers: number, currency: Currency) {
+  const bounds = revenueBoundsMajor(subscribers, currency);
+  if (!Number.isFinite(revenue)) return bounds.derived;
+  return Math.min(bounds.max, Math.max(bounds.min, Math.round(revenue)));
 }
 
 export const PRICING_CALCULATOR_DEFAULTS: PricingCalculatorInitialState = {
@@ -32,6 +48,4 @@ export const PRICING_CALCULATOR_DEFAULTS: PricingCalculatorInitialState = {
   causedShare: 40,
   blasts: 4,
   currency: "INR",
-  tool: "platform",
-  enteredBill: 25_000,
 };
