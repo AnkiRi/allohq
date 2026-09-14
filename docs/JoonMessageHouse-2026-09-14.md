@@ -1,7 +1,7 @@
 # Joon message house
 
-**Date:** 2026-09-14  
-**Status:** Current decision record for public, Shopify-listing and founder copy  
+**Date:** 2026-09-14
+**Status:** Current decision record for public, Shopify-listing and founder copy
 **Supersedes:** `JoonMessageHouse-2026-09-11.md` wherever pricing, controls or restraint conflict
 
 ## Position
@@ -34,7 +34,8 @@ Controls apply to measurable campaigns only, after deliberate restraint. Journey
 
 ## Human evidence language
 
-Prefer: “All 10 of Maya's previous orders were at full price. She may not need this code.”  
+Prefer: “All 10 of Maya's previous orders were at full price. She may not need this code.”
+
 Avoid: “Maya will buy without a discount.”
 
 For a discount request, explain the alternative: “Maya, ABC, DEF and seven others usually buy at full price. Include them here anyway, or create a separate full-price message for them.”

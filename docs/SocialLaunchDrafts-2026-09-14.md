@@ -1,7 +1,7 @@
 # Social launch drafts
 
-**Date:** 2026-09-14  
-**Status:** Drafts only; do not publish  
+**Date:** 2026-09-14
+**Status:** Drafts only; do not publish
 **Source:** `JoonMessageHouse-2026-09-14.md`
 
 ## 1 — The list tax

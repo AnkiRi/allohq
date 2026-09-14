@@ -1,8 +1,8 @@
 # Joon billing and audience phase audit
 
-**Date:** 2026-09-14  
-**Branch:** `send-path`  
-**Range:** `47a0079..6c923d6`  
+**Date:** 2026-09-14
+**Branch:** `send-path`
+**Range:** `47a0079..6c923d6`
 **Decision source:** `JoonBillingAudienceDecision-2026-09-14.md`
 
 ## Phase-to-commit map

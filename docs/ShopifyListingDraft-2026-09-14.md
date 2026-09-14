@@ -1,7 +1,7 @@
 # Shopify listing draft
 
-**Date:** 2026-09-14  
-**Status:** Draft only; do not publish  
+**Date:** 2026-09-14
+**Status:** Draft only; do not publish
 **Source:** `JoonMessageHouse-2026-09-14.md`
 
 ## App name

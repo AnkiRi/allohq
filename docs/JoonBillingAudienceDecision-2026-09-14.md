@@ -1,7 +1,7 @@
 # Joon billing and audience decision
 
-**Decision date:** 2026-09-14  
-**Status:** authoritative for billing, attribution, suppression, campaign controls and journey eligibility  
+**Decision date:** 2026-09-14
+**Status:** authoritative for billing, attribution, suppression, campaign controls and journey eligibility
 **Supersedes:** earlier caused-revenue, lift-fee, postage and journey-holdout decisions wherever they conflict with this document
 
 ## Product sentence
@@ -83,8 +83,10 @@ Core dimensions:
 
 The merchant sees only the evidence relevant to the present decision, for example:
 
-> Loyal · day 28 of a usual 45-day buying rhythm · all 10 previous orders were full price  
-> Left alone for 30% off: she normally buys without a code  
+> Loyal · day 28 of a usual 45-day buying rhythm · all 10 previous orders were full price
+>
+> Left alone for 30% off: she normally buys without a code
+>
 > Reconsider on day 45 or after she views the new collection
 
 ## Billing
