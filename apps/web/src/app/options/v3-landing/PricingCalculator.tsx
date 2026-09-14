@@ -3,7 +3,6 @@
 import {
   computeCalculatorScenario,
   KLAVIYO_EMAIL_USD_EVIDENCE,
-  SHOPIFY_EMAIL_USD_EVIDENCE,
   type Currency,
 } from "@allohq/pricing";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -66,8 +65,9 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     causedShareBasisPoints: causedShare * 100,
     merchantBlastCount: blasts,
     currency,
-    comparisonTool: tool === "klaviyo" ? "klaviyo" : "shopify_email",
-    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE, SHOPIFY_EMAIL_USD_EVIDENCE],
+    comparisonTool: "klaviyo",
+    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+    calculatorCapEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
     ...(tool === "entered_bill" ? { enteredBillMinor: enteredBill * 100 } : {}),
     subscriberSnapshotAt: "illustrative-calculator",
   }), [blasts, causedShare, currency, emailShare, enteredBill, revenue, subscribers, tool]);
@@ -123,15 +123,16 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
     causedShareBasisPoints: share * 100,
     merchantBlastCount: blasts,
     currency,
-    comparisonTool: tool === "klaviyo" ? "klaviyo" : "shopify_email",
-    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE, SHOPIFY_EMAIL_USD_EVIDENCE],
+    comparisonTool: "klaviyo",
+    traditionalComparisonEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
+    calculatorCapEvidence: [KLAVIYO_EMAIL_USD_EVIDENCE],
     ...(tool === "entered_bill" ? { enteredBillMinor: enteredBill * 100 } : {}),
     subscriberSnapshotAt: "illustrative-calculator",
   }));
-  const chartMax = Math.max(...curve.map((item) => item.invoice.totalMinor), scenario.traditional.priceMinor, 1);
-  const points = curve.map((item, index) => `${index * (100 / 7)},${100 - item.invoice.totalMinor / chartMax * 92}`).join(" ");
+  const chartMax = Math.max(...curve.map((item) => item.invoice.liftFeeMinor), scenario.traditional.priceMinor, 1);
+  const points = curve.map((item, index) => `${index * (100 / 7)},${100 - item.invoice.liftFeeMinor / chartMax * 92}`).join(" ");
   const traditionalY = 100 - scenario.traditional.priceMinor / chartMax * 92;
-  const currentToolName = tool === "klaviyo" ? "Klaviyo" : tool === "shopify_email" ? "Shopify Email" : "your entered bill";
+  const currentToolName = tool === "klaviyo" ? "Klaviyo" : "your entered bill";
 
   const copyLink = async () => {
     markInteraction();
@@ -147,7 +148,7 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
 
   return (
     <div className="v3-calc" aria-label="Illustrative Joon pricing calculator">
-      <div className="v3-calc__banner mono">Free during early access. This is an uncapped estimate of what you&rsquo;d pay after.</div>
+      <div className="v3-calc__banner mono">Free during early access. This is what you&rsquo;d pay after.</div>
       <div className="v3-calc__inputs" onInput={markInteraction} onChange={markInteraction}>
         <LogSubscribers value={subscribers} set={setSubscribers} />
         <CurrencyAmount label="Monthly store revenue" currency={currency} setCurrency={setCurrency} value={revenue} setValue={setRevenue} max={1_000_000_000} />
@@ -155,37 +156,36 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
         <NumberRange label="How much of that Joon actually causes" value={causedShare} min={0} max={70} step={1} set={setCausedShare} valueText={`${causedShare}%`} helper="The part that would not have happened without the email, measured against a random holdout." />
         <NumberRange label="Blasts you'll ask for each month" value={blasts} min={0} max={31} step={1} set={setBlasts} valueText={`${blasts} blasts`} />
         <div className="v3-calc__field">
-          <label htmlFor="pricing-tool">Your current tool</label>
+          <label htmlFor="pricing-tool">Compare Joon with</label>
           <select id="pricing-tool" value={tool} onChange={(event) => setTool(event.target.value as Tool)}>
             <option value="klaviyo">Klaviyo</option>
-            <option value="shopify_email">Shopify Email</option>
-            <option value="entered_bill">Enter my bill</option>
+            <option value="entered_bill">Enter my current bill</option>
           </select>
           {tool === "entered_bill" && <EditableNumber label="Current monthly email bill" value={enteredBill} set={setEnteredBill} min={0} max={100_000_000} />}
         </div>
       </div>
       <div className="v3-calc__results">
-        <article><span className="mono">Your email tool today</span><strong>{money(scenario.traditional.priceMinor, currency)}</strong><p>a month, whether it works or not</p></article>
-        <article className="is-joon"><span className="mono">Joon · before the cap</span><strong>{money(scenario.invoice.totalMinor, currency)}</strong><p>{money(scenario.invoice.liftFeeMinor, currency)} Joon fee + {money(scenario.invoice.postageMinor, currency)} postage</p><b>You keep {money(scenario.merchantKeepsMinor, currency)} of what Joon caused.</b></article>
+        <article><span className="mono">Your email platform today</span><strong>{money(scenario.traditional.priceMinor, currency)}</strong><p>a month, based on list size—not store revenue</p></article>
+        <article className="is-joon"><span className="mono">Joon fee · capped</span><strong>{money(scenario.invoice.liftFeeMinor, currency)}</strong><p>plus {money(scenario.invoice.postageMinor, currency)} pass-through postage on requested blasts</p><b>You keep {money(scenario.merchantKeepsMinor, currency)} of what Joon caused.</b></article>
       </div>
-      <p className="v3-sr-only" aria-live="polite" aria-atomic="true">Joon before the cap is {money(scenario.invoice.totalMinor, currency)} a month. {currentToolName} is {money(scenario.traditional.priceMinor, currency)} a month.</p>
+      <p className="v3-sr-only" aria-live="polite" aria-atomic="true">Joon&rsquo;s capped fee is {money(scenario.invoice.liftFeeMinor, currency)} a month, plus {money(scenario.invoice.postageMinor, currency)} pass-through postage. {currentToolName} is {money(scenario.traditional.priceMinor, currency)} a month.</p>
       <div className="v3-calc__chart">
         <svg viewBox="0 0 100 104" role="img" aria-labelledby="pricing-chart-title pricing-chart-desc">
           <title id="pricing-chart-title">Monthly price as caused share rises from zero to seventy percent</title>
-          <desc id="pricing-chart-desc">{currentToolName} stays at {money(scenario.traditional.priceMinor, currency)}. Joon begins with requested-blast postage and rises with caused revenue. The cap line is omitted until its comparison evidence is approved.</desc>
+          <desc id="pricing-chart-desc">{currentToolName} stays at {money(scenario.traditional.priceMinor, currency)}. Joon&rsquo;s fee begins at zero, rises only with caused revenue, and stops at the cap. Pass-through postage is shown separately.</desc>
           <line x1="0" x2="100" y1={traditionalY} y2={traditionalY} className="is-traditional" />
           <polyline points={points} className="is-joon" />
         </svg>
-        <div className="v3-calc__legend"><span><i className="is-traditional" />{currentToolName}</span><span><i className="is-joon" />Joon · before cap</span></div>
+        <div className="v3-calc__legend"><span><i className="is-traditional" />{currentToolName}</span><span><i className="is-joon" />Joon fee · capped</span></div>
         <div><span>0% caused</span><span>70% caused</span></div>
       </div>
       <p className="v3-calc__crossing">
         {scenario.breakEven.costsMoreAtZeroLift
           ? `At this blast volume, postage alone is higher than ${currentToolName}.`
-          : `Before the cap, Joon costs more than ${currentToolName} only when it causes more than ${money(scenario.breakEven.causedMinor, currency)} a month - and you'd keep ${money(scenario.breakEven.merchantKeepsMinor, currency)} of that.`}
+          : `Joon's fee never exceeds the Klaviyo benchmark. It rises only when Joon causes revenue, then stops at the cap; pass-through postage is itemised separately.`}
       </p>
       <p className="v3-calc__explain">{money(0, currency)} Joon fee if Joon causes nothing - postage only on blasts you ask for. Joon never profits from sending.</p>
-      <p className="v3-calc__fine mono">Assumes each requested blast goes to every active subscriber and is accepted by the provider. Journeys are not included. Estimates. Joon&rsquo;s fee is measured against a random holdout. The public cap is omitted until its comparison evidence is approved. {scenario.traditional.tool !== "entered_bill" && <>{currentToolName}&rsquo;s <a href={scenario.traditional.sourceUrl} target="_blank" rel="noreferrer">published pricing</a>, sourced {scenario.traditional.sourcedAt}.{tool === "klaviyo" && subscribers > 200_000 ? " Klaviyo quotes larger accounts; the comparison uses its published 200,000-profile starting price." : ""}</>}</p>
+      <p className="v3-calc__fine mono">Monthly store revenue affects Joon&rsquo;s outcome fee; it does not affect the platform benchmark, which is based on active profiles. Assumes each requested blast goes to every active subscriber and is accepted by the provider. Journeys are not included. Estimates. Joon&rsquo;s fee is measured against a random holdout. {scenario.traditional.tool !== "entered_bill" && <>{currentToolName}&rsquo;s <a href={scenario.traditional.sourceUrl} target="_blank" rel="noreferrer">published pricing</a>, sourced {scenario.traditional.sourcedAt}.{subscribers > 200_000 ? " Klaviyo quotes larger accounts; the comparison uses its published 200,000-profile starting price." : ""}</>}</p>
       <button className="v3-calc__share mono" type="button" onClick={copyLink}>{copied ? "Link copied" : "Copy this estimate"}</button>
     </div>
   );

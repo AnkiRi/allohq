@@ -31,9 +31,7 @@ function calculatorState(params: Record<string, string | string[] | undefined>):
     causedShare: boundedParam(params.caused, PRICING_CALCULATOR_DEFAULTS.causedShare, 0, 70),
     blasts: boundedParam(params.blasts, PRICING_CALCULATOR_DEFAULTS.blasts, 0, 31),
     currency: first(params.currency) === "USD" ? "USD" : "INR",
-    tool: first(params.tool) === "shopify_email"
-      ? "shopify_email"
-      : first(params.tool) === "entered_bill"
+    tool: first(params.tool) === "entered_bill"
         ? "entered_bill"
         : "klaviyo",
     enteredBill: boundedParam(params.bill, PRICING_CALCULATOR_DEFAULTS.enteredBill, 0, 100_000_000),

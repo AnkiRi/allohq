@@ -214,6 +214,8 @@ export interface CalculatorScenarioInput {
   comparisonEvidence?: readonly ComparisonPriceEvidence[];
   /** Visible alternative-tool evidence; it cannot approve Joon's billing cap. */
   traditionalComparisonEvidence?: readonly ComparisonPriceEvidence[];
+  /** Explicit public estimator evidence for the promised total-price cap. */
+  calculatorCapEvidence?: readonly ComparisonPriceEvidence[];
   subscriberSnapshotAt: string;
   config?: PricingConfig;
 }
@@ -241,7 +243,7 @@ export function computeCalculatorScenario(input: CalculatorScenarioInput) {
     monthlySends,
     currency: input.currency,
     subscriberSnapshotAt: input.subscriberSnapshotAt,
-    comparisonEvidence: input.comparisonEvidence,
+    comparisonEvidence: input.comparisonEvidence ?? input.calculatorCapEvidence,
     config: input.config,
     allowUncappedPreview: true,
   });

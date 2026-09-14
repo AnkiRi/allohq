@@ -178,7 +178,7 @@ export function V2Landing({
                     connect Shopify in one click
                   </span>
                 </div>
-                {enhanced && <p className="v3-hero__pricing-promise">No lift, no Joon fee. Joon&rsquo;s fee is capped at what a leading email platform charges for your list. Requested blasts pay postage at cost.</p>}
+                {enhanced && <p className="v3-hero__pricing-promise">No lift, no Joon fee. Joon&rsquo;s fee is capped at what a leading email platform charges for your list.</p>}
                 {enhanced && <a className="v3-hero__pricing-link mono" href="#bill">See what you&rsquo;d pay</a>}
 
                 {/* slim live proof strip */}

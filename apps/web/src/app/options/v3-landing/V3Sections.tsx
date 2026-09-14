@@ -42,83 +42,67 @@ export function DecisionMarquee() {
 }
 
 type Story = {
+  id: string;
   name: string;
-  report: string;
-  title: string;
-  takeaway: string;
-  state: readonly (readonly [string, string])[];
-  rows: readonly (readonly [string, string, string, string])[];
+  hook: string;
+  rows: readonly { when: string; saw: string; did: string; got: string }[];
+  proof: string;
 };
 
 const stories: readonly Story[] = [
   {
+    id: "ankita",
     name: "Ankita",
-    report: "A campaign report would call her inactive",
-    title: "The message was the product.",
-    takeaway: "Email, not WhatsApp. A relevant nudge, not another discount.",
-    state: [["RFM", "At risk"], ["90d orders", "0"], ["last order", "118d"], ["emails · 7d", "0"], ["discount habit", "low"]],
+    hook: "The revenue your email tool was taking credit for",
     rows: [
-      ["30d", "held", "nothing", "bought full price"],
-      ["90d", "held", "nothing", "did not return"],
-      ["104d", "sent", "WhatsApp reminder", "no response"],
-      ["111d", "sent", "WhatsApp follow-up", "no response"],
-      ["118d", "sent", "email · no discount", "bought full price"],
+      { when: "Day 0", saw: "Champion · 34-day cycle · due to buy", did: "**Held her out of the 15% blast**", got: "Bought day 6 — full price, uncontacted" },
+      { when: "Day 28", saw: "Same pattern, second time", did: "Held her out again", got: "Bought again — **₹4,900 email never caused**" },
+      { when: "Day 129", saw: "**Gap 68 days — 2× her own cycle**", did: "Two win-backs, no discount", got: "Both ignored" },
+      { when: "Day 145", saw: "**11 of 14 opens land 13:40–15:10**", did: "Sent 14:20 · restock · no code", got: "Opened in 9 min · bought ₹2,900" },
     ],
+    proof: "Wrong hour, not wrong price.",
   },
   {
+    id: "rohan",
     name: "Rohan",
-    report: "A campaign report would call every code a conversion",
-    title: "Attribution was lying.",
-    takeaway: "The codes were discounting him, not converting him.",
-    state: [["RFM", "Champion"], ["90d orders", "4"], ["90d value", "₹18,400"], ["full-price", "72%"], ["emails · 7d", "2"]],
+    hook: "The discount habit your own emails taught him",
     rows: [
-      ["71%", "sent", "20% off", "bought with code"],
-      ["62%", "held", "nothing", "bought full price"],
-      ["50%", "held", "nothing", "bought full price"],
-      ["42%", "sent", "new arrivals", "bought full price"],
+      { when: "Today", saw: "**Full price 71% → 42%** · gap 28d → 47d", did: "Traced it: 19 of 19 emails carried a code", got: "He had learned to wait" },
+      { when: "Cycle 1", saw: "Every blast deepens the habit", did: "**Removed him from all coded sends**", got: "Silence, by design" },
+      { when: "Day 39", saw: "New arrival in his repeat category", did: "Full-price email, no code", got: "**Bought ₹2,150 at full price**" },
+      { when: "+3 orders", saw: "Gap narrowed 47d → 34d", did: "Kept him off coded sends", got: "**Full price back to 55% · +₹430/order**" },
     ],
+    proof: "The discount was the disease.",
   },
   {
+    id: "meera",
     name: "Meera",
-    report: "A campaign report would count the revenue",
-    title: "A send has a price.",
-    takeaway: "Silence protected a high-value customer from fatigue.",
-    state: [["RFM", "Loyal"], ["90d orders", "3"], ["90d value", "₹12,800"], ["last order", "31d"], ["emails · 7d", "3"]],
+    hook: "Seven months of silence, on purpose",
     rows: [
-      ["15d", "sent", "member edit", "bought"],
-      ["18d", "sent", "weekend offer", "ignored"],
-      ["24d", "sent", "new collection", "ignored"],
-      ["31d", "held", "nothing", "returned herself"],
+      { when: "Month 7", saw: "**Silent 210 days** — 'lost' to any rule", did: "Read her history before acting", got: "Found an 11-month cycle, ±9 days" },
+      { when: "Months 1–7", saw: "Basket: 6 units, 3 ship-to names", did: "**Suppressed 14 of 16 blasts**", got: "14 unsubscribe risks declined" },
+      { when: "−12 days", saw: "**Her window opens in 12 days**", did: "One email · gift sets · no code", got: "Opened within the hour" },
+      { when: "Day 0", saw: "Diwali window", did: "Left her alone", got: "**₹9,100 — her largest order yet**" },
     ],
+    proof: "Restraint you can measure.",
   },
   {
+    id: "kavya",
     name: "Kavya",
-    report: "A campaign report would claim it moved an order",
-    title: "Moved is not made.",
-    takeaway: "The discount shifted timing. It did not create demand.",
-    state: [["RFM", "Potential loyalist"], ["cadence", "34d"], ["90d orders", "2"], ["90d value", "₹7,600"], ["discount habit", "medium"]],
+    hook: "A 90-day rule would have missed it by 38 days",
     rows: [
-      ["day 27", "held", "nothing", "bought · −8d"],
-      ["day 35", "sent", "10% off", "bought early"],
-      ["day 52", "sent", "reminder", "no order · +17d"],
-      ["day 61", "held", "nothing", "natural cycle returns"],
+      { when: "Cycles 1–6", saw: "**35-day cycle, ±4 days** · one pulled 5d early", did: "Learned her rhythm", got: "No sends needed" },
+      { when: "Day 52", saw: "**17 days late — 1.49× her median**", did: "Reorder reminder, no discount", got: "No response" },
+      { when: "Day 59", saw: "**Viewed the same product page**", did: "Free shipping (₹99), not 20% off", got: "Bought ₹1,890" },
+      { when: "Result", saw: "Caught at day 52, not day 90", did: "Spent ₹99 instead of ₹378", got: "**38 days earlier · ₹279 more margin**" },
     ],
-  },
-  {
-    name: "Maya",
-    report: "A campaign report would reward one more send",
-    title: "Attention has a limit.",
-    takeaway: "Joon protected the next message by refusing this one.",
-    state: [["RFM", "Promising"], ["90d orders", "2"], ["90d value", "₹5,900"], ["last click", "2d"], ["emails · 7d", "3 · cap"]],
-    rows: [
-      ["Mon", "sent", "welcome note", "opened · browsed"],
-      ["Wed", "sent", "category edit", "clicked · no order"],
-      ["Fri", "sent", "cart reminder", "returned · no order"],
-      ["Sat", "excluded", "fatigue cap", "left alone · reason logged"],
-      ["Tue", "eligible", "new arrivals", "next decision reopened"],
-    ],
+    proof: "Her cycle, not your calendar.",
   },
 ] as const;
+
+function Emphasis({ children }: { children: string }) {
+  return <>{children.split("**").map((part, index) => index % 2 ? <strong key={index}>{part}</strong> : part)}</>;
+}
 
 export function CustomerStories() {
   const [active, setActive] = useState(0);
@@ -142,7 +126,7 @@ export function CustomerStories() {
       <div className="v2-wrap">
         <header className="v3-stories__head">
           <div>
-            <p className="v2-eyebrow mono">five customers, five lessons</p>
+            <p className="v2-eyebrow mono">four customers, four decisions</p>
             <h2 className="v2-section__h" id="v3-stories-title">
               What the receipt remembers.
             </h2>
@@ -169,38 +153,28 @@ export function CustomerStories() {
           }}
         >
           <div className="v3-story__intro">
-            <span className="mono">
-              {story.name} · {story.report}
-            </span>
-            <h3>{story.title}</h3>
+            <span className="mono">{story.name}</span>
+            <h3>{story.hook}</h3>
           </div>
-          <dl className="v3-story__state" aria-label={`${story.name}'s state at decision time`}>
-            {story.state.map(([label, value]) => (
-              <div key={label}>
-                <dt className="mono">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
           <div className="v3-story__table">
             <div className="v3-story__labels mono">
-              <span>state</span>
-              <span>arm</span>
+              <span>when</span>
+              <span>what Joon saw</span>
               <span>what Joon did</span>
               <span>what happened</span>
             </div>
             {story.rows.map((row, index) => (
-              <div className="v3-story__row" key={`${row[0]}-${index}`}>
-                <b>{row[0]}</b>
-                <span className={row[1] === "held" ? "is-held" : ""}>{row[1]}</span>
-                <span>{row[2]}</span>
-                <strong>{row[3]}</strong>
+              <div className="v3-story__row" key={`${row.when}-${index}`}>
+                <b>{row.when}</b>
+                <span data-label="Joon saw"><Emphasis>{row.saw}</Emphasis></span>
+                <span data-label="Joon did"><Emphasis>{row.did}</Emphasis></span>
+                <span data-label="What happened"><Emphasis>{row.got}</Emphasis></span>
               </div>
             ))}
           </div>
           <footer>
-            {story.takeaway}
-            <span className="mono">Figures illustrative</span>
+            <div><b>{story.proof}</b><p>Every field is computed from order history alone. The decision is the product.</p></div>
+            <span className="mono">Illustrative composites. Measured merchant results appear here once control data exists.</span>
           </footer>
         </article>
         <div className="v3-stories__dots" role="group" aria-label="Choose customer story">
