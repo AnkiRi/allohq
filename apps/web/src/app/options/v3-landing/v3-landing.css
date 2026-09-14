@@ -189,6 +189,7 @@
 .v3-landing .v3-journey__step span,
 .v3-landing .v3-journey__step small { color: var(--faint); font-size: 9px; }
 .v3-landing .v3-journey__step strong { margin-top: auto; font-size: 14px; line-height: 1.25; }
+.v3-landing .v3-journey__step p { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.4; }
 .v3-landing .v3-left-alone { display: grid; grid-template-columns: 1.2fr repeat(3, 1fr); gap: 1px; margin-top: 22px; background: var(--line); border: 1px solid var(--line); }
 .v3-landing .v3-left-alone > * { margin: 0; padding: 15px; background: var(--surface); font-size: 11px; }
 .v3-landing .v3-left-alone span { color: var(--dim); }

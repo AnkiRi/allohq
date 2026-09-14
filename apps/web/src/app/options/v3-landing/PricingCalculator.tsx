@@ -73,15 +73,15 @@ export function PricingCalculator({ initial = PRICING_CALCULATOR_DEFAULTS }: { i
       <span><b>{scenario.joonDelivered.toLocaleString("en-IN")}</b> sent by Joon ({treatmentShare}%)</span>
     </div>
     <div className="v3-calc__results">
-      <article><span className="mono">List-based platform</span><strong>{incumbent === null ? "No sourced tier" : money(incumbent, values.currency)}</strong><p>every month, based on active profiles—whether the emails work or not</p></article>
+      <article><span className="mono">Illustrative list-based plan</span><strong>{incumbent === null ? "Outside modelled range" : money(incumbent, values.currency)}</strong><p>every month, based on active profiles—whether the emails work or not</p></article>
       <article className="is-joon"><span className="mono">Joon at 5%</span><strong>{money(scenario.invoice.totalMinor, values.currency)}</strong><p>on {money(scenario.attributedRevenueMinor, values.currency)} attributed revenue</p><b>{saving !== null && saving > 0 ? `${money(saving, values.currency)} less in this model` : "Zero attributed revenue means zero fee"}</b></article>
     </div>
     <div className="v3-calc__breakdown mono">
       <p>Campaigns: {scenario.joonDelivered.toLocaleString("en-IN")} delivered × {values.clickThroughRate}% clicked × {values.conversionRate}% ordered = {scenario.campaignOrders.toLocaleString("en-IN")} orders = {money(scenario.campaignAttributedRevenueMinor, values.currency)}</p>
       <p>Abandoned cart: {values.sessions.toLocaleString("en-IN")} sessions × {values.cartIncidence}% carts × {values.recoveryRate}% recovered = {scenario.recoveredJourneyOrders.toLocaleString("en-IN")} orders = {money(scenario.journeyAttributedRevenueMinor, values.currency)}</p>
     </div>
-    <p className="v3-calc__explain">Joon charges only on non-cancelled orders attributed to an email it actually sent within seven days. Deliberately-left-alone and control customers are never billed. Sending and the email creator are included.</p>
-    <p className="v3-calc__fine mono">Illustrative model, not a forecast. Opens are diagnostic; click-through is calculated from delivered emails. The journey example includes abandoned-cart recovery only. Random controls are pooled over time for proof and learning, never used to calculate the invoice.{scenario.traditional && <> Benchmark is the platform&rsquo;s <a href={scenario.traditional.sourceUrl} target="_blank" rel="noreferrer">published Email-plan pricing</a>, sourced {scenario.traditional.sourcedAt}.</>}</p>
+    <p className="v3-calc__explain">Joon charges only 5% of non-cancelled order revenue attributed to an email it actually sent within seven days. Deliberately-left-alone and control customers are never billed. Sending and the email creator are included.</p>
+    <p className="v3-calc__fine mono">Illustrative model, not a forecast. Opens are diagnostic; click-through is calculated from delivered emails. The journey example includes abandoned-cart recovery only. Random controls are pooled over time for proof and learning, never used to calculate the invoice. The list-based figure is an illustrative comparison, not a quote.</p>
     <button className="v3-calc__share mono" type="button" onClick={copyLink}>{copied ? "Link copied" : "Copy this estimate"}</button>
   </div>;
 }

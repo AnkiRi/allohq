@@ -178,8 +178,8 @@ export function V2Landing({
                     connect Shopify in one click
                   </span>
                 </div>
-                {enhanced && <p className="v3-hero__pricing-promise">No attributed revenue, no fee. You keep 95%. Sending and the email creator are included.</p>}
-                {enhanced && <a className="v3-hero__pricing-link mono" href="#bill">See what you&rsquo;d pay</a>}
+                {enhanced && <p className="v3-hero__pricing-promise">Joon charges only 5% of revenue attributed to its emails. If they drive no revenue, you pay nothing. Sending and the email creator are included.</p>}
+                {enhanced && <a className="v3-hero__pricing-link mono" href="#bill">Run your numbers</a>}
 
                 {/* slim live proof strip */}
                 <dl className="v2-proofstrip mono" aria-label="Live store, right now">
@@ -192,14 +192,12 @@ export function V2Landing({
                     <dd>4,820</dd>
                   </div>
                   <div className="v2-proofstrip__cell">
-                    <dt>revenue · 30d</dt>
-                    <dd>
-                      ₹48,213 <span className="v2-accent">↗ +28%</span>
-                    </dd>
+                    <dt>campaign candidates</dt>
+                    <dd>187</dd>
                   </div>
                   <div className="v2-proofstrip__cell">
-                    <dt>at risk</dt>
-                    <dd>187</dd>
+                    <dt>left alone today</dt>
+                    <dd>612</dd>
                   </div>
                 </dl>
                 <p className="v2-proofstrip__note mono">
@@ -336,26 +334,6 @@ export function V2Landing({
           </section>
 
           {enhanced && <CustomerStories />}
-
-          {enhanced && <section className="v2-section v2-founder v3-founder-note" aria-label="Founder">
-            <div className="v2-wrap">
-              <Rise className="v2-founder__pane">
-                <div className="v2-founder__head mono">
-                  // founder · field note
-                </div>
-                <blockquote className="v2-founder__quote">
-                  At Zymrat, the moment I stopped writing every email myself was
-                  the moment retention died.{" "}
-                  <span className="v2-accent">
-                    joon would have given me back my Sundays.
-                  </span>
-                </blockquote>
-                <figcaption className="v2-founder__by mono">
-                  <b>Ujjawal Asthana</b> · ex-founder, Zymrat
-                </figcaption>
-              </Rise>
-            </div>
-          </section>}
 
           {/* ── 6 · ON THE CLOCK, full, scroll-scrub day rail ─────── */}
           <section className="v2-section v2-section--alt v2-day" id="day">
@@ -539,11 +517,11 @@ export function V2Landing({
               <Rise className="v2-half__copy">
                 <p className="v2-eyebrow mono">{enhanced ? <>what you&rsquo;d pay</> : <>free public v1</>}</p>
                 <h2 className="v2-section__h">
-                  {enhanced ? <>They charge for the list. <em>Joon charges for attributed revenue.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
+                  {enhanced ? <>List-based tools charge whether emails work. <em>Joon charges only when its emails drive revenue.</em></> : <>Start with the ledger. <em>Pay nothing.</em></>}
                 </h2>
                 <p className="v2-section__lede">
                   {enhanced
-                    ? "After early access, Joon charges 5% of non-cancelled order revenue attributed to an email it actually sent within seven days. If that revenue is ₹0, the fee is ₹0. Sending is included."
+                    ? "After early access, Joon charges only 5% of non-cancelled order revenue attributed to an email it actually sent within seven days. If that revenue is ₹0, the fee is ₹0. Sending and the email creator are included."
                     : "Joon is free at launch. There is no per-email charge and no performance fee in v1. We are earning the right to price the decision layer only after real holdout evidence exists."}
                 </p>
                 <p className="v2-half__aside mono">
@@ -678,27 +656,6 @@ export function V2Landing({
                   <em>Free in public v1.</em> Built for commerce,
                   from India.
                 </p>
-              </Rise>
-            </div>
-          </section>}
-
-          {/* ── 10 · FOUNDER quote ─────────────────────────────────── */}
-          {!enhanced && <section className="v2-section v2-founder" aria-label="Founder">
-            <div className="v2-wrap">
-              <Rise className="v2-founder__pane">
-                <div className="v2-founder__head mono">
-                  // founder · field note
-                </div>
-                <blockquote className="v2-founder__quote">
-                  At Zymrat, the moment I stopped writing every email myself was
-                  the moment retention died.{" "}
-                  <span className="v2-accent">
-                    joon would have given me back my Sundays.
-                  </span>
-                </blockquote>
-                <figcaption className="v2-founder__by mono">
-                  <b>Ujjawal Asthana</b> · ex-founder, Zymrat
-                </figcaption>
               </Rise>
             </div>
           </section>}

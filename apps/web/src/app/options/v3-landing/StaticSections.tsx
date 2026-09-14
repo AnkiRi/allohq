@@ -1,12 +1,11 @@
 import { Rise } from "../v2/Clock";
 
 export function JourneySection() {
-  const nodes = [
-    ["Trigger", "Checkout started", ""],
-    ["Wait", "3 hours", ""],
-    ["Condition", "Has made a purchase?", ""],
-    ["Silence", "Leave alone", "bought already · logged"],
-    ["Send email", "In your voice", "from BrandProfile"],
+  const decisions = [
+    ["Day 28", "Inside her usual 45-day rhythm", "Left alone", "She normally buys at full price"],
+    ["Day 45", "No order yet", "Watch", "Her usual buying window has just opened"],
+    ["Day 60", "15 days later than usual", "Candidate", "A reminder may now be useful"],
+    ["Today", "Viewed her repeat product", "Send", "Reorder email, no discount"],
   ] as const;
   return (
     <section className="v3-after">
@@ -14,30 +13,31 @@ export function JourneySection() {
         <Rise>
           <div className="v3-after__head">
             <div>
-              <p className="v2-eyebrow mono">email journeys</p>
-              <h2 className="v2-section__h">Journeys that wait for the right moment.</h2>
-              <p className="v2-section__lede">Welcome, abandoned checkout, post-purchase, win-back and reorder. Joon can decide that no email should be sent - and records why.</p>
+              <p className="v2-eyebrow mono">a changing customer, a changing decision</p>
+              <h2 className="v2-section__h">Left alone today. Ready for a nudge tomorrow.</h2>
+              <p className="v2-section__lede">Joon does not put people in a permanent bucket. It checks their buying rhythm, recent behaviour and the campaign in front of it, then explains when the decision changes.</p>
             </div>
           </div>
-          <div className="v3-journey__flow" aria-label="Illustrative abandoned-checkout email journey">
-            {nodes.map(([kind, title, detail], index) => (
-              <div className="v3-journey__step" key={kind}>
+          <div className="v3-journey__flow" aria-label="Illustrative customer decision timeline">
+            {decisions.map(([when, evidence, decision, reason], index) => (
+              <div className="v3-journey__step" key={when}>
                 {index > 0 && <i aria-hidden="true">→</i>}
-                <article className={kind === "Silence" ? "is-silent" : kind === "Send email" ? "is-send" : ""}>
-                  <span className="mono">{kind}</span>
-                  <strong>{title}</strong>
-                  {detail && <small>{detail}</small>}
+                <article className={decision === "Left alone" ? "is-silent" : decision === "Send" ? "is-send" : ""}>
+                  <span className="mono">{when} · Maya</span>
+                  <strong>{decision}</strong>
+                  <small>{evidence}</small>
+                  <p>{reason}</p>
                 </article>
               </div>
             ))}
           </div>
           <div className="v3-left-alone">
-            <strong>Left alone, and why</strong>
-            <span>Priya · bought 2h ago <b>already purchased</b></span>
-            <span>Dev · 3 emails this week <b>fatigue cap</b></span>
-            <span>Nisha · 22:40 local <b>quiet hours · sends 07:00</b></span>
+            <strong>Every quiet decision has a reason</strong>
+            <span>Priya · bought 2h ago <b>left alone · recently purchased</b></span>
+            <span>Dev · 3 emails this week <b>left alone · fatigue cap</b></span>
+            <span>Nisha · 22:40 local <b>deferred · sends 07:00 her time</b></span>
           </div>
-          <p className="v3-illustrative mono">Conceptual decision outcome - not shown as a draggable editor node.</p>
+          <p className="v3-illustrative mono">Illustrative state progression. Joon re-evaluates when orders, browsing or time change the customer&rsquo;s state.</p>
         </Rise>
       </div>
     </section>

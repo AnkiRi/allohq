@@ -193,7 +193,7 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
             <span className="v2-hf__swatch v2-hf__swatch--worked" aria-hidden="true" />
-            Sent · {treatmentCount} reached
+            Sent · {treatmentCount} customers
           </div>
           <div className="v2-hf__track" role="presentation">
             <motion.span
@@ -209,14 +209,14 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
           </div>
           <div className="v2-hf__amount mono">
             <CountUp to={TREATMENT_PER} reduced={reduced} start={start} prefix="₹" />
-            <span className="v2-hf__per">/ reached</span>
+            <span className="v2-hf__per">/ customer</span>
           </div>
         </div>
 
         <div className="v2-hf__row">
           <div className="v2-hf__row-label">
             <span className="v2-hf__swatch v2-hf__swatch--held" aria-hidden="true" />
-            Control · {controlCount} reached
+            Control · {controlCount} customers
           </div>
           <div className="v2-hf__track" role="presentation">
             <motion.span
@@ -232,22 +232,23 @@ export function HoldoutField({ controlCount = 28 }: { controlCount?: number }) {
           </div>
           <div className="v2-hf__amount v2-hf__amount--held mono">
             <CountUp to={CONTROL_PER} reduced={reduced} start={start} prefix="₹" />
-            <span className="v2-hf__per">/ reached</span>
+            <span className="v2-hf__per">/ customer</span>
           </div>
         </div>
 
         <div className="v2-hf__gap">
-          <div className="v2-hf__gap-k mono">Measured lift · the gap</div>
+          <div className="v2-hf__gap-k mono">Illustrative pooled result</div>
           <div className="v2-hf__gap-v mono">₹{inr(liftTotal)}</div>
           <p className="v2-hf__gap-sub">
-            Recovered above the control baseline. This pooled evidence teaches Joon which
-            campaigns to repeat; the invoice uses attributed orders from emails actually sent.
+            The sent group spent ₹865 per customer and the control group spent ₹138. Across
+            159 sent customers, that is ₹1,15,593 above the control baseline. This evidence
+            teaches Joon which campaigns to repeat; it does not calculate the invoice.
           </p>
         </div>
       </div>
 
       <p className="v2-hf__disclaimer mono">
-        Figures representative while control measurement is wired up.
+        Illustrative example. Live results appear only after enough control evidence accumulates.
       </p>
     </div>
   );
