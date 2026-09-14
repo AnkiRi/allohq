@@ -22,7 +22,7 @@ import {
   DecisionCard,
   DecisionDetail,
   MetricReadout,
-  formatINR,
+  formatStoreCurrency,
 } from "@/components/console";
 import type { OpTagKind, DecisionDetailData } from "@/components/console";
 import {
@@ -209,11 +209,13 @@ function DemoReasoning({
   goal,
   atRisk,
   lapsed,
+  currency,
   onDismiss,
 }: {
   goal: string;
   atRisk: number;
   lapsed: { customerCount: number; totalRevenue: number } | null;
+  currency: string;
   onDismiss: () => void;
 }) {
   const reduce = useReducedMotion();
@@ -227,7 +229,7 @@ function DemoReasoning({
           joon noticed <b>{(lapsed?.customerCount ?? atRisk).toLocaleString("en-IN")}</b>{" "}
           who fit
           {lapsed && lapsed.totalRevenue > 0 ? (
-            <> · <b>{formatINR(lapsed.totalRevenue)}</b> of past revenue in play</>
+            <> · <b>{formatStoreCurrency(lapsed.totalRevenue, currency)}</b> of past revenue in play</>
           ) : null}
         </>
       ),
@@ -316,6 +318,7 @@ export default function DashboardPage() {
   const { data: stores, isLoading: storesLoading } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
   const store = stores?.[0];
+  const storeCurrency = store?.currency ?? "INR";
   // Demo (Vana) is always pre-onboarded — skip the wizard and let the data
   // queries (gated on onboardingDone) run, so the console fills instead of
   // hanging on "loading" after entering the demo.
@@ -601,7 +604,7 @@ export default function DashboardPage() {
   }
   if (lapsed && lapsed.customerCount > 0) {
     homeLines.push({
-      text: `joon noticed ${lapsed.customerCount.toLocaleString("en-IN")} who've gone quiet · ${formatINR(lapsed.totalRevenue)} of past revenue`,
+      text: `joon noticed ${lapsed.customerCount.toLocaleString("en-IN")} who've gone quiet · ${formatStoreCurrency(lapsed.totalRevenue, storeCurrency)} of past revenue`,
     });
   }
   if (heldBack > 0) {
@@ -777,6 +780,7 @@ export default function DashboardPage() {
             goal={demoGoal}
             atRisk={atRisk}
             lapsed={lapsed}
+            currency={storeCurrency}
             onDismiss={() => setDemoGoal(null)}
           />
           {demoDecision && (
@@ -821,7 +825,7 @@ export default function DashboardPage() {
         {/* Status line — mono readouts; the live lamp rides the first readout */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
           <MetricReadout label="customers" value={totalCustomers} live />
-          <MetricReadout label="revenue · 30d" value={revenue30d} money />
+          <MetricReadout label="revenue · 30d" value={revenue30d} money currency={storeCurrency} />
           <MetricReadout label="at risk" value={atRisk} />
           <MetricReadout label="AI cost" value={aiCostLabel} />
         </div>

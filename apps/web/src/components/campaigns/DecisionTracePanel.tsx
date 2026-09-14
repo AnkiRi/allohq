@@ -8,12 +8,19 @@ import { trpc } from "@/lib/trpc";
 // Reads the real decision trace: what joon chose + why, the held-out control (the
 // counterfactual), the state each customer was in, and what happened. Honest labels: numbers
 // stay flagged illustrative on demo data, and lift is shown with its significance.
-export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
+export function DecisionTracePanel({
+  campaignId,
+  preview,
+}: {
+  campaignId: string;
+  preview?: { treatmentCount: number; controlCount: number; controlRate: number };
+}) {
   const [open, setOpen] = useState(false);
   const { data } = (trpc.campaigns.decisionTrace as any).useQuery({ id: campaignId }) as {
     data:
       | {
           isSynthetic: boolean;
+          currency: string;
           decision: { intent: string | null; segment: string | null; discountPercent: number | null; channel: string };
           human: { acceptedAsProposed: boolean | null; overrides: Record<string, unknown> } | null;
           experiment: { splitRatio: number | null; controlCount: number; treatmentCount: number };
@@ -26,7 +33,15 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
 
   const d = data.decision;
   const s = data.stats;
-  const money = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+  const frozenCount = data.experiment.treatmentCount + data.experiment.controlCount;
+  const treatmentCount = frozenCount > 0 ? data.experiment.treatmentCount : preview?.treatmentCount ?? 0;
+  const controlCount = frozenCount > 0 ? data.experiment.controlCount : preview?.controlCount ?? 0;
+  const controlRate = frozenCount > 0 ? data.experiment.splitRatio : preview?.controlRate ?? null;
+  const money = (value: number) => new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: data.currency,
+    maximumFractionDigits: 0,
+  }).format(value);
   const n = (x: number) => x.toLocaleString("en-IN");
 
   return (
@@ -60,10 +75,10 @@ export function DecisionTracePanel({ campaignId }: { campaignId: string }) {
                   {" "}with a <b>{d.discountPercent}% offer</b>
                 </>
               ) : null}{" "}
-              to <b>{d.segment ?? "your customers"}</b> ({n(data.experiment.treatmentCount)} people), and{" "}
-              <b>held out {n(data.experiment.controlCount)}</b> as a control
-              {data.experiment.splitRatio ? <> ({Math.round(data.experiment.splitRatio * 100)}%)</> : null} — so the
-              lift can be proven, not guessed.
+              to <b>{d.segment ?? "your customers"}</b> ({n(treatmentCount)} people), with{" "}
+              <b>{n(controlCount)} in a random control group</b>
+              {controlRate ? <> ({Math.round(controlRate * 100)}%)</> : null} — so its results can be
+              compared with customers who did not receive this campaign.
             </p>
             {data.human && data.human.acceptedAsProposed !== null && (
               <p className="text-[12px] text-muted-foreground font-sans mt-1.5">

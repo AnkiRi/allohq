@@ -100,7 +100,8 @@ export function shouldExcludeGovernorDecision(decision: {
 
 export async function resolveCampaignAudience(
   campaignId: string,
-  now = new Date()
+  now = new Date(),
+  options: { enforceDeliveryPauses?: boolean } = {}
 ): Promise<AudienceResolution> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -182,8 +183,14 @@ export async function resolveCampaignAudience(
       acceptsMarketing: customer.acceptsMarketing,
       suppressionReason: suppression?.reason,
       alreadyProcessed: already.has(customer.id),
-      storePaused: Boolean(campaign.store.emailSendingPausedAt),
-      globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
+      storePaused:
+        options.enforceDeliveryPauses === false
+          ? false
+          : Boolean(campaign.store.emailSendingPausedAt),
+      globalPaused:
+        options.enforceDeliveryPauses === false
+          ? false
+          : process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
     });
     if (staticReason) {
       exclude(staticReason, customer);

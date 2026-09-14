@@ -8,9 +8,13 @@ import { cn } from "@allohq/ui";
 // ---------------------------------------------------------------------------
 
 export function formatINR(n: number): string {
+  return formatStoreCurrency(n, "INR");
+}
+
+export function formatStoreCurrency(n: number, currency: string): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "INR",
+    currency,
     maximumFractionDigits: 0,
   }).format(n);
 }
@@ -21,6 +25,8 @@ export interface MetricReadoutProps {
   value: string | number;
   /** When true and value is a number, format as ₹ en-IN currency. */
   money?: boolean;
+  /** Store currency used when money is true. */
+  currency?: string;
   /** Optional small accent suffix, e.g. a delta "↗ +28%". */
   accentSuffix?: string;
   /** Show a pulsing live dot before the label. */
@@ -32,6 +38,7 @@ export function MetricReadout({
   label,
   value,
   money = false,
+  currency = "INR",
   accentSuffix,
   live = false,
   className,
@@ -39,7 +46,7 @@ export function MetricReadout({
   const display =
     typeof value === "number"
       ? money
-        ? formatINR(value)
+        ? formatStoreCurrency(value, currency)
         : value.toLocaleString("en-IN")
       : value;
 

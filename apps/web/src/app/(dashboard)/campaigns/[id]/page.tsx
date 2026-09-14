@@ -124,11 +124,12 @@ export default function CampaignDetailPage() {
           {(campaign.status === "draft" || campaign.status === "scheduled") && (
             <button
               onClick={() => sendMut.mutate({ id: campaignId })}
-              disabled={sendMut.isPending}
+              disabled={sendMut.isPending || dryRun?.deliveryGate?.blocked}
+              title={dryRun?.deliveryGate?.blocked ? dryRun.deliveryGate.reason ?? "Delivery is disabled" : undefined}
               className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               {sendMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              {sendMut.isPending ? "Sending…" : "Send Now"}
+              {sendMut.isPending ? "Sending…" : dryRun?.deliveryGate?.blocked ? "Delivery disabled" : "Send Now"}
             </button>
           )}
           {campaign.status === "scheduled" && (
@@ -166,7 +167,7 @@ export default function CampaignDetailPage() {
           { icon: Mail, label: "OPENED", value: stats ? `${(stats.openRate * 100).toFixed(1)}%` : "0%" },
           { icon: MousePointerClick, label: "CLICKED", value: stats ? `${(stats.clickRate * 100).toFixed(1)}%` : "0%" },
           { icon: ShoppingBag, label: "ATTRIBUTED ORDERS", value: stats?.attributedOrders.toLocaleString() ?? "0" },
-          { icon: TrendingUp, label: "ASSOCIATED REVENUE", value: money(stats?.attributedRevenue ?? 0) },
+          { icon: TrendingUp, label: "ATTRIBUTED REVENUE", value: money(stats?.attributedRevenue ?? 0) },
         ].map((kpi) => (
           <div
             key={kpi.label}
@@ -185,7 +186,7 @@ export default function CampaignDetailPage() {
             <div className="max-w-2xl">
               <h2 id="holdout-result-title" className="text-[15px] font-semibold text-foreground">Incremental result versus holdout</h2>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                Associated revenue is last-touch reporting. This result is different: it compares every treated customer with customers Joon deliberately did not email.
+                Attributed revenue is last-touch reporting. This result is different: it compares campaign candidates randomly assigned to treatment and control.
               </p>
             </div>
             <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${causal && !causal.underpowered ? "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))]" : "bg-muted text-muted-foreground"}`}>
@@ -199,7 +200,7 @@ export default function CampaignDetailPage() {
               <div className="mt-1 font-mono text-[18px] font-bold">{stats.holdout.treatmentAssigned} / {stats.holdout.controlAssigned}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">Incremental margin per treated customer</div>
+              <div className="text-[11px] text-muted-foreground">Revenue difference per treated customer</div>
               <div className="mt-1 font-mono text-[18px] font-bold">{causal ? money(causal.lift ?? 0) : "Measuring…"}</div>
             </div>
             <div>
@@ -252,6 +253,17 @@ export default function CampaignDetailPage() {
           </div>
           {dryRun && (
             <>
+              {dryRun.deliveryGate?.blocked && (
+                <div className="mb-5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-warning">
+                    Delivery safely disabled
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {dryRun.deliveryGate.reason}. The audience below is a planning estimate;
+                    no email can leave Joon while this gate is active.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 {[
                   ["Requested", dryRun.requested],
@@ -332,10 +344,6 @@ export default function CampaignDetailPage() {
                   {dryRun.sender ?? "Sending address not configured"} · {dryRun.senderDomain?.status ?? "domain not configured"}
                 </span>
               </div>
-              <div className="mt-2 flex justify-between text-[11px]">
-                <span className="text-muted-foreground">Estimated provider cost</span>
-                <span className="font-medium">{dryRun.estimatedProviderCostCurrency} {dryRun.estimatedProviderCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-              </div>
               <p className="mt-2 text-[10px] text-muted-foreground">The eligible customer set and complete treatment/control assignment freeze when you approve. Consent, suppression, pauses and delivery limits are checked again immediately before every email.</p>
               {dryRun.marginRisk.discountPercent > 0 && dryRun.marginRisk.recentBuyers > 0 && (
                 <div className="mt-4 rounded-xl border border-warning/30 bg-warning/5 p-4">
@@ -355,7 +363,18 @@ export default function CampaignDetailPage() {
       )}
 
       {/* How joon decided — the moat, made legible */}
-      <DecisionTracePanel campaignId={campaignId} />
+      <DecisionTracePanel
+        campaignId={campaignId}
+        preview={
+          dryRun
+            ? {
+                treatmentCount: dryRun.estimatedTreatment,
+                controlCount: dryRun.estimatedControl,
+                controlRate: dryRun.measurement.holdoutRate,
+              }
+            : undefined
+        }
+      />
 
       {/* Email preview — full width */}
       <div className="border border-border rounded-xl bg-card overflow-hidden">

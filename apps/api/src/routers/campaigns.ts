@@ -157,7 +157,12 @@ export const campaignsRouter = router({
         code: "PRECONDITION_FAILED",
         message: "Campaign has no email template",
       });
-    const audience = await resolveCampaignAudience(campaign.id);
+    // A delivery pause is an operational safety gate, not an audience fact.
+    // Preview the real candidate/control split while surfacing the pause
+    // separately; approval and the send worker continue to enforce it.
+    const audience = await resolveCampaignAudience(campaign.id, new Date(), {
+      enforceDeliveryPauses: false,
+    });
     const proposal = (campaign.agentProposal ?? {}) as { discountPercent?: number };
     const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
     const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
@@ -202,6 +207,17 @@ export const campaignsRouter = router({
     };
     return {
       providerCalled: false,
+      deliveryGate: {
+        blocked:
+          process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true" ||
+          Boolean(campaign.store.emailSendingPausedAt),
+        reason:
+          process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true"
+            ? "Global email delivery is disabled"
+            : campaign.store.emailSendingPausedAt
+              ? "Email delivery is paused for this store"
+              : null,
+      },
       requested: audience.requested,
       eligibleBeforeHoldout: audience.eligible.length,
       deliberatelyLeftAlone: audience.deliberatelyLeftAlone.length,
@@ -347,7 +363,7 @@ export const campaignsRouter = router({
           agentProposal: true,
           humanDecision: true,
           segment: { select: { name: true } },
-          store: { select: { shopDomain: true } },
+          store: { select: { shopDomain: true, currency: true } },
         },
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
@@ -437,6 +453,7 @@ export const campaignsRouter = router({
       } | null;
       return {
         campaignName: campaign.name,
+        currency: campaign.store.currency,
         isSynthetic: campaign.store?.shopDomain === DEMO_STORE_DOMAIN,
         decision: {
           intent: ap.intent ?? null,

@@ -20,5 +20,5 @@ export type { DecisionDetailData } from "./DecisionDetail";
 export { OpTag } from "./OpTag";
 export type { OpTagProps, OpTagKind } from "./OpTag";
 
-export { MetricReadout, formatINR } from "./MetricReadout";
+export { MetricReadout, formatINR, formatStoreCurrency } from "./MetricReadout";
 export type { MetricReadoutProps } from "./MetricReadout";
