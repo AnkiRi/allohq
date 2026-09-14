@@ -1,18 +1,44 @@
 import { prisma, resolveSegmentWhere } from "@allohq/database";
 import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-governor";
+import { evaluateCampaignCandidate, type CandidateDecision } from "./candidate-policy";
 
 export const AUDIENCE_EXCLUSION_REASONS = [
-  "invalid_email", "no_consent", "unsubscribed", "complaint", "hard_bounce",
-  "manual_suppression", "already_processed", "fatigue", "quiet_hours",
-  "collision", "cooldown", "support_state", "recent_purchase", "store_paused", "global_paused",
+  "invalid_email",
+  "no_consent",
+  "unsubscribed",
+  "complaint",
+  "hard_bounce",
+  "manual_suppression",
+  "already_processed",
+  "fatigue",
+  "quiet_hours",
+  "collision",
+  "cooldown",
+  "support_state",
+  "recent_purchase",
+  "store_paused",
+  "global_paused",
 ] as const;
-export type AudienceExclusionReason = typeof AUDIENCE_EXCLUSION_REASONS[number];
+export type AudienceExclusionReason = (typeof AUDIENCE_EXCLUSION_REASONS)[number];
 
 export interface AudienceResolution {
   requested: number;
-  eligible: Array<{ id: string; email: string; firstName: string | null; lastName: string | null; rfmStratum: string | null }>;
+  eligible: Array<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    rfmStratum: string | null;
+  }>;
   exclusions: Record<AudienceExclusionReason, number>;
   samples: Partial<Record<AudienceExclusionReason, Array<{ id: string; email: string }>>>;
+  deliberatelyLeftAlone: Array<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    decision: CandidateDecision;
+  }>;
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,7 +79,7 @@ export function isRecentPurchase(input: {
   if (!input.lastOrderAt) return false;
   // Safety is on by default even when a store has no recent_purchase guardrail
   // row. A row customizes the windows; deleting it restores 72h / 7d defaults.
-  const hours = input.hasDiscount ? input.discountHours ?? 168 : input.standardHours ?? 72;
+  const hours = input.hasDiscount ? (input.discountHours ?? 168) : (input.standardHours ?? 72);
   return input.lastOrderAt.getTime() >= input.now.getTime() - Math.max(0, hours) * 60 * 60 * 1000;
 }
 
@@ -65,14 +91,23 @@ function governorReason(rule?: string): AudienceExclusionReason {
   return "support_state";
 }
 
-export function shouldExcludeGovernorDecision(decision: { allowed: boolean; rule?: string }): boolean {
+export function shouldExcludeGovernorDecision(decision: {
+  allowed: boolean;
+  rule?: string;
+}): boolean {
   return !decision.allowed && decision.rule !== "quiet_hours";
 }
 
-export async function resolveCampaignAudience(campaignId: string, now = new Date()): Promise<AudienceResolution> {
+export async function resolveCampaignAudience(
+  campaignId: string,
+  now = new Date()
+): Promise<AudienceResolution> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { segment: true, store: { select: { id: true, emailSendingPausedAt: true, timezone: true } } },
+    include: {
+      segment: true,
+      store: { select: { id: true, emailSendingPausedAt: true, timezone: true } },
+    },
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
@@ -80,21 +115,45 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
     ? resolveSegmentWhere(campaign.segment, [campaign.storeId])
     : { storeId: campaign.storeId };
   const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
-  const hasDiscount = typeof proposal["discountPercent"] === "number" || typeof proposal["discountCode"] === "string";
+  const hasDiscount =
+    typeof proposal["discountPercent"] === "number" || typeof proposal["discountCode"] === "string";
+  const merchantIncluded = new Set(
+    Array.isArray(proposal["includeLeftAloneCustomerIds"])
+      ? (proposal["includeLeftAloneCustomerIds"] as unknown[]).filter(
+          (value): value is string => typeof value === "string"
+        )
+      : []
+  );
   const [customers, processed, governorConfig] = await Promise.all([
     prisma.customer.findMany({
       where,
       select: {
-        id: true, email: true, firstName: true, lastName: true, acceptsMarketing: true,
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        acceptsMarketing: true,
         rfmScore: { select: { segment: true } },
         contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
         orders: {
-          where: { status: { not: "cancelled" } }, orderBy: { createdAt: "desc" }, take: 1,
+          where: { status: { not: "cancelled" } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
           select: { createdAt: true },
         },
         contactSuppressions: {
           where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-          take: 1, select: { reason: true },
+          take: 1,
+          select: { reason: true },
+        },
+        customerState: {
+          select: {
+            discountBehavior: true,
+            purchaseCyclePosition: true,
+            medianOrderIntervalDays: true,
+            nextExpectedOrderAt: true,
+            stateEvidence: true,
+          },
         },
       },
     }),
@@ -102,12 +161,16 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
     loadStoreGovernorConfig(campaign.storeId),
   ]);
   const already = new Set(processed.map((row) => row.customerId).filter(Boolean));
-  const exclusions = Object.fromEntries(AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])) as Record<AudienceExclusionReason, number>;
+  const exclusions = Object.fromEntries(
+    AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
+  ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
+  const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
   const exclude = (reason: AudienceExclusionReason, customer: { id: string; email: string }) => {
     exclusions[reason]++;
-    if ((samples[reason]?.length ?? 0) < 3) (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
+    if ((samples[reason]?.length ?? 0) < 3)
+      (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
   };
 
   for (const customer of customers) {
@@ -122,17 +185,43 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
       storePaused: Boolean(campaign.store.emailSendingPausedAt),
       globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
     });
-    if (staticReason) { exclude(staticReason, customer); continue; }
-    if (isRecentPurchase({
-      lastOrderAt: customer.orders[0]?.createdAt,
+    if (staticReason) {
+      exclude(staticReason, customer);
+      continue;
+    }
+    if (
+      isRecentPurchase({
+        lastOrderAt: customer.orders[0]?.createdAt,
+        hasDiscount,
+        now,
+        standardHours: governorConfig.recentPurchase?.standardHours,
+        discountHours: governorConfig.recentPurchase?.discountHours,
+      })
+    ) {
+      exclude("recent_purchase", customer);
+      continue;
+    }
+    const candidateDecision = evaluateCampaignCandidate({
+      state: customer.customerState,
       hasDiscount,
-      now,
-      standardHours: governorConfig.recentPurchase?.standardHours,
-      discountHours: governorConfig.recentPurchase?.discountHours,
-    })) { exclude("recent_purchase", customer); continue; }
+      merchantIncluded: merchantIncluded.has(customer.id),
+    });
+    if (!candidateDecision.candidate) {
+      deliberatelyLeftAlone.push({
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        decision: candidateDecision,
+      });
+      continue;
+    }
     const decision = await checkAllRules({
-      customerId: customer.id, storeId: campaign.storeId, channel: "email",
-      messageType: "marketing", campaignId,
+      customerId: customer.id,
+      storeId: campaign.storeId,
+      channel: "email",
+      messageType: "marketing",
+      campaignId,
       timezone: governorConfig.timezone ?? campaign.store.timezone ?? "UTC",
       quietHours: governorConfig.quietHours,
       maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
@@ -140,10 +229,19 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
     });
     // Quiet hours defer treatment delivery; they do not change eligibility or
     // the frozen randomized arm map.
-    if (shouldExcludeGovernorDecision(decision)) { exclude(governorReason(decision.rule), customer); continue; }
-    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName, rfmStratum: customer.rfmScore?.segment ?? null });
+    if (shouldExcludeGovernorDecision(decision)) {
+      exclude(governorReason(decision.rule), customer);
+      continue;
+    }
+    eligible.push({
+      id: customer.id,
+      email: customer.email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      rfmStratum: customer.rfmScore?.segment ?? null,
+    });
   }
-  return { requested: customers.length, eligible, exclusions, samples };
+  return { requested: customers.length, eligible, exclusions, samples, deliberatelyLeftAlone };
 }
 
 /**
@@ -151,7 +249,10 @@ export async function resolveCampaignAudience(campaignId: string, now = new Date
  * not a promise that every store customer will enter the journey: the trigger
  * still selects one customer and the runner rechecks these rules at send time.
  */
-export async function resolveAutomationAudience(automationId: string, now = new Date()): Promise<AudienceResolution> {
+export async function resolveAutomationAudience(
+  automationId: string,
+  now = new Date()
+): Promise<AudienceResolution> {
   const automation = await prisma.automation.findUnique({
     where: { id: automationId },
     include: { store: { select: { id: true, emailSendingPausedAt: true, timezone: true } } },
@@ -161,23 +262,31 @@ export async function resolveAutomationAudience(automationId: string, now = new 
     prisma.customer.findMany({
       where: { storeId: automation.storeId },
       select: {
-        id: true, email: true, firstName: true, lastName: true, acceptsMarketing: true,
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        acceptsMarketing: true,
         rfmScore: { select: { segment: true } },
         contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
         contactSuppressions: {
           where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-          take: 1, select: { reason: true },
+          take: 1,
+          select: { reason: true },
         },
       },
     }),
     loadStoreGovernorConfig(automation.storeId),
   ]);
-  const exclusions = Object.fromEntries(AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])) as Record<AudienceExclusionReason, number>;
+  const exclusions = Object.fromEntries(
+    AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
+  ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
   const exclude = (reason: AudienceExclusionReason, customer: { id: string; email: string }) => {
     exclusions[reason]++;
-    if ((samples[reason]?.length ?? 0) < 3) (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
+    if ((samples[reason]?.length ?? 0) < 3)
+      (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
   };
   for (const customer of customers) {
     const reason = staticAudienceExclusion({
@@ -189,17 +298,31 @@ export async function resolveAutomationAudience(automationId: string, now = new 
       storePaused: Boolean(automation.store.emailSendingPausedAt),
       globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
     });
-    if (reason) { exclude(reason, customer); continue; }
+    if (reason) {
+      exclude(reason, customer);
+      continue;
+    }
     const decision = await checkAllRules({
-      customerId: customer.id, storeId: automation.storeId, channel: "email",
+      customerId: customer.id,
+      storeId: automation.storeId,
+      channel: "email",
       messageType: "automation",
       timezone: governorConfig.timezone ?? automation.store.timezone ?? "UTC",
       quietHours: governorConfig.quietHours,
       maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
       now,
     });
-    if (shouldExcludeGovernorDecision(decision)) { exclude(governorReason(decision.rule), customer); continue; }
-    eligible.push({ id: customer.id, email: customer.email, firstName: customer.firstName, lastName: customer.lastName, rfmStratum: customer.rfmScore?.segment ?? null });
+    if (shouldExcludeGovernorDecision(decision)) {
+      exclude(governorReason(decision.rule), customer);
+      continue;
+    }
+    eligible.push({
+      id: customer.id,
+      email: customer.email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      rfmStratum: customer.rfmScore?.segment ?? null,
+    });
   }
-  return { requested: customers.length, eligible, exclusions, samples };
+  return { requested: customers.length, eligible, exclusions, samples, deliberatelyLeftAlone: [] };
 }

@@ -38,38 +38,35 @@ export {
   listAllRunningTests,
 } from "./ab-test-engine";
 
-export type {
-  VariantStats,
-  TestResults,
-  EvaluationOutcome,
-} from "./ab-test-engine";
+export type { VariantStats, TestResults, EvaluationOutcome } from "./ab-test-engine";
 
 // A/B Test Evolver (Self-Optimizing Agent)
-export {
-  applyWinner,
-  generateNextHypothesis,
-  createFollowUpTest,
-} from "./ab-test-evolver";
+export { applyWinner, generateNextHypothesis, createFollowUpTest } from "./ab-test-evolver";
 
 export type { Hypothesis } from "./ab-test-evolver";
 
 // Copy Learner (Self-Optimizing Agent)
-export {
-  analyzeCopyPatterns,
-  getWinningPatterns,
-  generateCopyBrief,
-} from "./copy-learner";
+export { analyzeCopyPatterns, getWinningPatterns, generateCopyBrief } from "./copy-learner";
 
 export type { PatternRanking } from "./copy-learner";
 
 export { campaignApprovalChecksum } from "./approval-checksum";
 export type { CampaignApprovalSnapshot } from "./approval-checksum";
-export { automationActivationChecksum, loadAutomationActivationSnapshot } from "./automation-activation-checksum";
+export {
+  automationActivationChecksum,
+  loadAutomationActivationSnapshot,
+} from "./automation-activation-checksum";
 export type { AutomationActivationSnapshot } from "./automation-activation-checksum";
-export { resolveCampaignAudience, resolveAutomationAudience, AUDIENCE_EXCLUSION_REASONS } from "./audience-resolver";
+export {
+  resolveCampaignAudience,
+  resolveAutomationAudience,
+  AUDIENCE_EXCLUSION_REASONS,
+} from "./audience-resolver";
 export { withCampaignAudienceSnapshot, campaignAudienceSnapshot } from "./audience-snapshot";
 export type { CampaignAudienceSnapshot } from "./audience-snapshot";
 export type { AudienceResolution, AudienceExclusionReason } from "./audience-resolver";
+export { evaluateCampaignCandidate } from "./candidate-policy";
+export type { CandidateDecision, CandidateState } from "./candidate-policy";
 export { findBannedTerms } from "./content-policy";
 
 // Benchmark Comparison

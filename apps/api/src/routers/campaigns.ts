@@ -3,9 +3,17 @@ import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { buildHumanDecision } from "../lib/human-decision";
-import { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "../lib/campaign-approval";
+import {
+  campaignApprovalClaimWhere,
+  campaignDispatchFailureUpdate,
+} from "../lib/campaign-approval";
 import { DEMO_STORE_DOMAIN, messagingCostFor, type PrismaClient } from "@allohq/database";
-import { campaignApprovalChecksum, findBannedTerms, resolveCampaignAudience, withCampaignAudienceSnapshot } from "@allohq/campaign-engine";
+import {
+  campaignApprovalChecksum,
+  findBannedTerms,
+  resolveCampaignAudience,
+  withCampaignAudienceSnapshot,
+} from "@allohq/campaign-engine";
 import {
   assignStratifiedCohortArms,
   campaignMeasurementPolicy,
@@ -22,10 +30,16 @@ const redisConnection = {
 const emailSendQueue = new Queue("email-send", { connection: redisConnection });
 
 function campaignFamily(proposal: unknown): string {
-  const value = (proposal ?? {}) as { intent?: unknown; discountPercent?: unknown; discountCode?: unknown };
-  const intent = typeof value.intent === "string" && value.intent.trim() ? value.intent.trim() : "broadcast";
-  const discounted = (typeof value.discountPercent === "number" && value.discountPercent > 0)
-    || (typeof value.discountCode === "string" && value.discountCode.trim().length > 0);
+  const value = (proposal ?? {}) as {
+    intent?: unknown;
+    discountPercent?: unknown;
+    discountCode?: unknown;
+  };
+  const intent =
+    typeof value.intent === "string" && value.intent.trim() ? value.intent.trim() : "broadcast";
+  const discounted =
+    (typeof value.discountPercent === "number" && value.discountPercent > 0) ||
+    (typeof value.discountCode === "string" && value.discountCode.trim().length > 0);
   return `${intent}:${discounted ? "discount" : "full_price"}`;
 }
 
@@ -34,13 +48,16 @@ function planCampaignHoldout(
   assignmentSeed: string,
   proposal: unknown,
   eligible: Array<{ id: string; rfmStratum: string | null }>,
-  evidence: Parameters<typeof holdoutRateFor>[3] = null,
+  evidence: Parameters<typeof holdoutRateFor>[3] = null
 ) {
   const family = campaignFamily(proposal);
   const decision = holdoutRateFor(storeId, family, "all", evidence);
   const assignment = assignStratifiedCohortArms({
     assignmentSeed,
-    customers: eligible.map((customer) => ({ customerId: customer.id, stratum: customer.rfmStratum })),
+    customers: eligible.map((customer) => ({
+      customerId: customer.id,
+      stratum: customer.rfmStratum,
+    })),
     rateForStratum: (stratum) => holdoutRateFor(storeId, family, stratum, evidence).rate,
   });
   return { family, decision, assignment };
@@ -51,10 +68,14 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
     where: { storeId, family, tier: "measurement_ready", overlapsAnotherUnit: false },
     orderBy: [{ unitId: "asc" }, { version: "desc" }],
   });
-  const latest = [...ledgers.reduce((map, row) => {
-    if (!map.has(row.unitId)) map.set(row.unitId, row);
-    return map;
-  }, new Map<string, (typeof ledgers)[number]>()).values()];
+  const latest = [
+    ...ledgers
+      .reduce((map, row) => {
+        if (!map.has(row.unitId)) map.set(row.unitId, row);
+        return map;
+      }, new Map<string, (typeof ledgers)[number]>())
+      .values(),
+  ];
   const measurable = latest.filter((row) => row.intervalLow !== null && row.intervalHigh !== null);
   const caused = measurable.reduce((sum, row) => sum + Number(row.causedRevenue), 0);
   const pooledVariance = measurable.reduce((sum, row) => {
@@ -70,86 +91,109 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
-  dryRun: workspaceProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const campaign = await ctx.prisma.campaign.findFirst({
-        where: { id: input.id, workspaceId: ctx.workspaceId },
-        include: {
-          template: { select: { subject: true, previewText: true } },
-          store: {
-            select: {
-              storeEmail: true, emailSendingPausedAt: true, currency: true,
-              senderDomain: { select: { domain: true, status: true } },
-              brandProfiles: { take: 1, select: { fromName: true, fromEmail: true } },
-            },
+  dryRun: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const campaign = await ctx.prisma.campaign.findFirst({
+      where: { id: input.id, workspaceId: ctx.workspaceId },
+      include: {
+        template: { select: { subject: true, previewText: true } },
+        store: {
+          select: {
+            storeEmail: true,
+            emailSendingPausedAt: true,
+            currency: true,
+            senderDomain: { select: { domain: true, status: true } },
+            brandProfiles: { take: 1, select: { fromName: true, fromEmail: true } },
           },
         },
+      },
+    });
+    if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+    if (!campaign.template)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Campaign has no email template",
       });
-      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!campaign.template) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
-      const audience = await resolveCampaignAudience(campaign.id);
-      const proposal = (campaign.agentProposal ?? {}) as { discountPercent?: number };
-      const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
-      const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
-      const recentOrders = audience.eligible.length > 0
+    const audience = await resolveCampaignAudience(campaign.id);
+    const proposal = (campaign.agentProposal ?? {}) as { discountPercent?: number };
+    const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
+    const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
+    const recentOrders =
+      audience.eligible.length > 0
         ? await ctx.prisma.order.findMany({
-            where: { customerId: { in: audience.eligible.map((customer) => customer.id) }, createdAt: { gte: recentSince }, status: { not: "cancelled" } },
+            where: {
+              customerId: { in: audience.eligible.map((customer) => customer.id) },
+              createdAt: { gte: recentSince },
+              status: { not: "cancelled" },
+            },
             select: { customerId: true, subtotal: true },
           })
         : [];
-      const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
-      const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
-      const previewSeed = `campaign-preview:${campaign.id}`;
-      const family = campaignFamily(campaign.agentProposal);
-      const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
-      const holdout = planCampaignHoldout(campaign.storeId, previewSeed, campaign.agentProposal, audience.eligible, evidence);
-      const control = Object.values(holdout.assignment.strata).reduce((sum, stratum) => sum + stratum.controlCount, 0);
-      const effectiveRate = audience.eligible.length > 0 ? control / audience.eligible.length : holdout.decision.rate;
-      const measurement = {
-        ...campaignMeasurementPolicy(audience.eligible.length, effectiveRate),
-        control,
-        treatment: audience.eligible.length - control,
-        holdoutRate: effectiveRate,
-        policyRate: holdout.decision.rate,
-        policyReason: holdout.decision.reason,
-        family: holdout.family,
-        strata: holdout.assignment.strata,
-      };
-      return {
-        providerCalled: false,
-        requested: audience.requested,
-        eligibleBeforeHoldout: audience.eligible.length,
-        estimatedTreatment: audience.eligible.length - control,
-        estimatedControl: control,
-        measurement,
-        estimatedProviderCost: (audience.eligible.length - control) * messagingCostFor("email"),
-        estimatedProviderCostCurrency: "INR" as const,
-        audienceFreezesOnApproval: true,
-        exclusions: audience.exclusions,
-        exclusionSamples: audience.samples,
-        subject: campaign.template.subject,
-        previewText: campaign.template.previewText,
-        sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,
-        senderDomain: campaign.store.senderDomain,
-        storePaused: Boolean(campaign.store.emailSendingPausedAt),
-        currency: campaign.store.currency ?? "USD",
-        marginRisk: {
-          evidenceWindowDays: 7,
-          recentBuyers: recentBuyerIds.size,
-          recentOrders: recentOrders.length,
-          observedRecentSubtotal: recentOrderSubtotal,
-          discountPercent,
-          illustrativeDiscountExposure: recentOrderSubtotal * discountPercent / 100,
-          basis: "observed_recent_orders" as const,
-        },
-      };
-    }),
+    const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
+    const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
+    const previewSeed = `campaign-preview:${campaign.id}`;
+    const family = campaignFamily(campaign.agentProposal);
+    const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
+    const holdout = planCampaignHoldout(
+      campaign.storeId,
+      previewSeed,
+      campaign.agentProposal,
+      audience.eligible,
+      evidence
+    );
+    const control = Object.values(holdout.assignment.strata).reduce(
+      (sum, stratum) => sum + stratum.controlCount,
+      0
+    );
+    const effectiveRate =
+      audience.eligible.length > 0 ? control / audience.eligible.length : holdout.decision.rate;
+    const measurement = {
+      ...campaignMeasurementPolicy(audience.eligible.length, effectiveRate),
+      control,
+      treatment: audience.eligible.length - control,
+      holdoutRate: effectiveRate,
+      policyRate: holdout.decision.rate,
+      policyReason: holdout.decision.reason,
+      family: holdout.family,
+      strata: holdout.assignment.strata,
+    };
+    return {
+      providerCalled: false,
+      requested: audience.requested,
+      eligibleBeforeHoldout: audience.eligible.length,
+      deliberatelyLeftAlone: audience.deliberatelyLeftAlone.length,
+      leftAloneSamples: audience.deliberatelyLeftAlone.slice(0, 10),
+      estimatedTreatment: audience.eligible.length - control,
+      estimatedControl: control,
+      measurement,
+      estimatedProviderCost: (audience.eligible.length - control) * messagingCostFor("email"),
+      estimatedProviderCostCurrency: "INR" as const,
+      audienceFreezesOnApproval: true,
+      exclusions: audience.exclusions,
+      exclusionSamples: audience.samples,
+      subject: campaign.template.subject,
+      previewText: campaign.template.previewText,
+      sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,
+      senderDomain: campaign.store.senderDomain,
+      storePaused: Boolean(campaign.store.emailSendingPausedAt),
+      currency: campaign.store.currency ?? "USD",
+      marginRisk: {
+        evidenceWindowDays: 7,
+        recentBuyers: recentBuyerIds.size,
+        recentOrders: recentOrders.length,
+        observedRecentSubtotal: recentOrderSubtotal,
+        discountPercent,
+        illustrativeDiscountExposure: (recentOrderSubtotal * discountPercent) / 100,
+        basis: "observed_recent_orders" as const,
+      },
+    };
+  }),
   list: workspaceProcedure
     .input(
-      z.object({
-        status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled"]).optional(),
-      }).optional()
+      z
+        .object({
+          status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled"]).optional(),
+        })
+        .optional()
     )
     .query(async ({ ctx, input }) => {
       const campaigns = await ctx.prisma.campaign.findMany({
@@ -176,9 +220,21 @@ export const campaignsRouter = router({
             _sum: { revenue: true },
             _count: true,
           }),
-          ctx.prisma.messageLog.groupBy({ by: ["campaignId"], where: { campaignId: { in: sentIds }, sentAt: { not: null } }, _count: true }),
-          ctx.prisma.messageLog.groupBy({ by: ["campaignId"], where: { campaignId: { in: sentIds }, openedAt: { not: null } }, _count: true }),
-          ctx.prisma.messageLog.groupBy({ by: ["campaignId"], where: { campaignId: { in: sentIds }, clickedAt: { not: null } }, _count: true }),
+          ctx.prisma.messageLog.groupBy({
+            by: ["campaignId"],
+            where: { campaignId: { in: sentIds }, sentAt: { not: null } },
+            _count: true,
+          }),
+          ctx.prisma.messageLog.groupBy({
+            by: ["campaignId"],
+            where: { campaignId: { in: sentIds }, openedAt: { not: null } },
+            _count: true,
+          }),
+          ctx.prisma.messageLog.groupBy({
+            by: ["campaignId"],
+            where: { campaignId: { in: sentIds }, clickedAt: { not: null } },
+            _count: true,
+          }),
         ]);
         for (const a of attributions) {
           if (a.campaignId) {
@@ -189,9 +245,12 @@ export const campaignsRouter = router({
           }
         }
         for (const id of sentIds) deliveryMap[id] = { sent: 0, opened: 0, clicked: 0 };
-        for (const row of sentRows) if (row.campaignId) deliveryMap[row.campaignId]!.sent = row._count;
-        for (const row of openedRows) if (row.campaignId) deliveryMap[row.campaignId]!.opened = row._count;
-        for (const row of clickedRows) if (row.campaignId) deliveryMap[row.campaignId]!.clicked = row._count;
+        for (const row of sentRows)
+          if (row.campaignId) deliveryMap[row.campaignId]!.sent = row._count;
+        for (const row of openedRows)
+          if (row.campaignId) deliveryMap[row.campaignId]!.opened = row._count;
+        for (const row of clickedRows)
+          if (row.campaignId) deliveryMap[row.campaignId]!.clicked = row._count;
       }
 
       return campaigns.map((c) => ({
@@ -199,31 +258,33 @@ export const campaignsRouter = router({
         recipientCount: deliveryMap[c.id]?.sent ?? c.recipientCount,
         openCount: deliveryMap[c.id]?.opened ?? c.openCount,
         clickCount: deliveryMap[c.id]?.clicked ?? c.clickCount,
-        openRate: (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
-          ? (deliveryMap[c.id]?.opened ?? c.openCount) / (deliveryMap[c.id]?.sent ?? c.recipientCount)
-          : 0,
-        clickRate: (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
-          ? (deliveryMap[c.id]?.clicked ?? c.clickCount) / (deliveryMap[c.id]?.sent ?? c.recipientCount)
-          : 0,
+        openRate:
+          (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
+            ? (deliveryMap[c.id]?.opened ?? c.openCount) /
+              (deliveryMap[c.id]?.sent ?? c.recipientCount)
+            : 0,
+        clickRate:
+          (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
+            ? (deliveryMap[c.id]?.clicked ?? c.clickCount) /
+              (deliveryMap[c.id]?.sent ?? c.recipientCount)
+            : 0,
         attributedRevenue: revenueMap[c.id]?.revenue ?? 0,
         attributedOrders: revenueMap[c.id]?.orders ?? 0,
       }));
     }),
 
-  getById: workspaceProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const campaign = await ctx.prisma.campaign.findFirst({
-        where: { id: input.id, workspaceId: ctx.workspaceId },
-        include: {
-          template: true,
-          segment: true,
-          store: { select: { id: true, shopDomain: true } },
-        },
-      });
-      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
-      return campaign;
-    }),
+  getById: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const campaign = await ctx.prisma.campaign.findFirst({
+      where: { id: input.id, workspaceId: ctx.workspaceId },
+      include: {
+        template: true,
+        segment: true,
+        store: { select: { id: true, shopDomain: true } },
+      },
+    });
+    if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+    return campaign;
+  }),
 
   /**
    * How joon decided — a legible, in-product decision trace for a campaign. Reuses what's
@@ -237,7 +298,10 @@ export const campaignsRouter = router({
       const campaign = await ctx.prisma.campaign.findFirst({
         where: { id: input.id, workspaceId: ctx.workspaceId },
         select: {
-          id: true, name: true, agentProposal: true, humanDecision: true,
+          id: true,
+          name: true,
+          agentProposal: true,
+          humanDecision: true,
           segment: { select: { name: true } },
           store: { select: { shopDomain: true } },
         },
@@ -245,26 +309,67 @@ export const campaignsRouter = router({
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
 
       const [armCounts, expRow] = await Promise.all([
-        ctx.prisma.messageLog.groupBy({ by: ["treatmentArm"], where: { campaignId: campaign.id, treatmentArm: { not: null } }, _count: { id: true } }),
-        ctx.prisma.messageLog.findFirst({ where: { campaignId: campaign.id, experimentId: { not: null } }, select: { experimentId: true } }),
+        ctx.prisma.messageLog.groupBy({
+          by: ["treatmentArm"],
+          where: { campaignId: campaign.id, treatmentArm: { not: null } },
+          _count: { id: true },
+        }),
+        ctx.prisma.messageLog.findFirst({
+          where: { campaignId: campaign.id, experimentId: { not: null } },
+          select: { experimentId: true },
+        }),
       ]);
-      const controlCount = Number(armCounts.find((a) => a.treatmentArm === "CONTROL")?._count.id ?? 0);
-      const treatmentCount = Number(armCounts.find((a) => a.treatmentArm === "TREATMENT")?._count.id ?? 0);
+      const controlCount = Number(
+        armCounts.find((a) => a.treatmentArm === "CONTROL")?._count.id ?? 0
+      );
+      const treatmentCount = Number(
+        armCounts.find((a) => a.treatmentArm === "TREATMENT")?._count.id ?? 0
+      );
       const experiment = expRow?.experimentId
-        ? await ctx.prisma.experiment.findUnique({ where: { id: expRow.experimentId }, select: { splitRatio: true, stats: true } })
+        ? await ctx.prisma.experiment.findUnique({
+            where: { id: expRow.experimentId },
+            select: { splitRatio: true, stats: true },
+          })
         : null;
 
       // Sample per-customer traces: a treatment buyer, a treatment non-buyer, a control buyer.
       const pick = (arm: "CONTROL" | "TREATMENT", outcome: string) =>
         ctx.prisma.messageLog.findFirst({
           where: { campaignId: campaign.id, treatmentArm: arm, outcome },
-          select: { customerId: true, treatmentArm: true, outcome: true, outcomeRevenue: true, customerStateSnap: true },
+          select: {
+            customerId: true,
+            treatmentArm: true,
+            outcome: true,
+            outcomeRevenue: true,
+            customerStateSnap: true,
+          },
         });
-      const raw = (await Promise.all([pick("TREATMENT", "purchased"), pick("TREATMENT", "ignored"), pick("CONTROL", "purchased")])).filter(Boolean) as Array<{ customerId: string | null; treatmentArm: string | null; outcome: string | null; outcomeRevenue: unknown; customerStateSnap: unknown }>;
+      const raw = (
+        await Promise.all([
+          pick("TREATMENT", "purchased"),
+          pick("TREATMENT", "ignored"),
+          pick("CONTROL", "purchased"),
+        ])
+      ).filter(Boolean) as Array<{
+        customerId: string | null;
+        treatmentArm: string | null;
+        outcome: string | null;
+        outcomeRevenue: unknown;
+        customerStateSnap: unknown;
+      }>;
       const custIds = raw.map((r) => r.customerId).filter(Boolean) as string[];
-      const custs = custIds.length ? await ctx.prisma.customer.findMany({ where: { id: { in: custIds } }, select: { id: true, firstName: true } }) : [];
+      const custs = custIds.length
+        ? await ctx.prisma.customer.findMany({
+            where: { id: { in: custIds } },
+            select: { id: true, firstName: true },
+          })
+        : [];
       const samples = raw.map((r) => {
-        const st = (r.customerStateSnap ?? {}) as { segment?: string; orderCount?: number; totalSpent?: number };
+        const st = (r.customerStateSnap ?? {}) as {
+          segment?: string;
+          orderCount?: number;
+          totalSpent?: number;
+        };
         return {
           name: custs.find((c) => c.id === r.customerId)?.firstName ?? "A customer",
           segment: st.segment ?? null,
@@ -276,8 +381,16 @@ export const campaignsRouter = router({
         };
       });
 
-      const ap = (campaign.agentProposal ?? {}) as { intent?: string; segmentName?: string; discountPercent?: number; channel?: string };
-      const hd = campaign.humanDecision as { acceptedAsProposed?: boolean; overrides?: Record<string, unknown> } | null;
+      const ap = (campaign.agentProposal ?? {}) as {
+        intent?: string;
+        segmentName?: string;
+        discountPercent?: number;
+        channel?: string;
+      };
+      const hd = campaign.humanDecision as {
+        acceptedAsProposed?: boolean;
+        overrides?: Record<string, unknown>;
+      } | null;
       return {
         campaignName: campaign.name,
         isSynthetic: campaign.store?.shopDomain === DEMO_STORE_DOMAIN,
@@ -287,9 +400,18 @@ export const campaignsRouter = router({
           discountPercent: ap.discountPercent ?? null,
           channel: ap.channel ?? "email",
         },
-        human: hd ? { acceptedAsProposed: hd.acceptedAsProposed ?? null, overrides: hd.overrides ?? {} } : null,
+        human: hd
+          ? { acceptedAsProposed: hd.acceptedAsProposed ?? null, overrides: hd.overrides ?? {} }
+          : null,
         experiment: { splitRatio: experiment?.splitRatio ?? null, controlCount, treatmentCount },
-        stats: (experiment?.stats ?? null) as null | { lift: number; ciLow: number; ciHigh: number; significant: boolean; underpowered: boolean; confidence: number },
+        stats: (experiment?.stats ?? null) as null | {
+          lift: number;
+          ciLow: number;
+          ciHigh: number;
+          significant: boolean;
+          underpowered: boolean;
+          confidence: number;
+        },
         samples,
       };
     }),
@@ -308,7 +430,9 @@ export const campaignsRouter = router({
       // Verify store and template belong to workspace
       const [store, template] = await Promise.all([
         ctx.prisma.store.findFirst({ where: { id: input.storeId, workspaceId: ctx.workspaceId } }),
-        ctx.prisma.emailTemplate.findFirst({ where: { id: input.templateId, workspaceId: ctx.workspaceId } }),
+        ctx.prisma.emailTemplate.findFirst({
+          where: { id: input.templateId, workspaceId: ctx.workspaceId },
+        }),
       ]);
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
       if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
@@ -341,14 +465,19 @@ export const campaignsRouter = router({
       const campaign = await ctx.prisma.campaign.findFirst({
         where: { id: input.id, workspaceId: ctx.workspaceId, status: "draft" },
       });
-      if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found or not editable" });
+      if (!campaign)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found or not editable" });
 
       const { id, ...data } = input;
       return ctx.prisma.campaign.update({
         where: { id },
         data: {
           ...data,
-          scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : data.scheduledAt === null ? null : undefined,
+          scheduledAt: data.scheduledAt
+            ? new Date(data.scheduledAt)
+            : data.scheduledAt === null
+              ? null
+              : undefined,
         },
       });
     }),
@@ -359,7 +488,8 @@ export const campaignsRouter = router({
       const campaign = await ctx.prisma.campaign.findFirst({
         where: { id: input.id, workspaceId: ctx.workspaceId, status: "draft" },
       });
-      if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Only draft campaigns can be deleted" });
+      if (!campaign)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Only draft campaigns can be deleted" });
 
       await ctx.prisma.campaign.delete({ where: { id: input.id } });
       return { success: true };
@@ -397,17 +527,30 @@ export const campaignsRouter = router({
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
       if (!campaign.template) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Campaign has no email template" });
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Campaign has no email template",
+        });
       }
       const frozenAssignmentCount = await ctx.prisma.measurementAssignment.count({
         where: { unitType: "campaign", unitId: campaign.id },
       });
       if (frozenAssignmentCount > 0 && campaign.approvedAt && campaign.approvalChecksum) {
-        await ctx.prisma.campaign.update({ where: { id: campaign.id }, data: { status: "sending" } });
+        await ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: { status: "sending" },
+        });
         try {
-          await emailSendQueue.add("campaign-send", { campaignId: campaign.id }, { jobId: `campaign-send-${campaign.id}` });
+          await emailSendQueue.add(
+            "campaign-send",
+            { campaignId: campaign.id },
+            { jobId: `campaign-send-${campaign.id}` }
+          );
         } catch (error) {
-          await ctx.prisma.campaign.update({ where: { id: campaign.id }, data: campaignDispatchFailureUpdate() });
+          await ctx.prisma.campaign.update({
+            where: { id: campaign.id },
+            data: campaignDispatchFailureUpdate(),
+          });
           throw error;
         }
         return { status: "sending" as const };
@@ -416,7 +559,8 @@ export const campaignsRouter = router({
         where: { storeId: campaign.storeId },
         select: { vocabulary: true },
       });
-      const bannedTerms = ((brand?.vocabulary as Record<string, unknown> | null)?.bannedWords ?? []) as string[];
+      const bannedTerms = ((brand?.vocabulary as Record<string, unknown> | null)?.bannedWords ??
+        []) as string[];
       const violations = findBannedTerms(campaign.template, bannedTerms);
       if (violations.length > 0) {
         throw new TRPCError({
@@ -429,23 +573,38 @@ export const campaignsRouter = router({
       const family = campaignFamily(campaign.agentProposal);
       const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
       const policy = holdoutRateFor(campaign.storeId, family, "all", evidence);
-      const experiment = await getOrCreateExperiment(campaign.storeId, {
-        label: `campaign:${campaign.id}:stratified:v1`,
-        source: "campaign",
-        family,
-        campaignId: campaign.id,
-        segmentId: campaign.segmentId ?? null,
-        segmentName: campaign.segment?.name ?? null,
-      }, policy.rate);
-      const holdout = planCampaignHoldout(campaign.storeId, experiment.assignmentSeed, campaign.agentProposal, audience.eligible, evidence);
-      const approvedProposal = withCampaignAudienceSnapshot(campaign.agentProposal, audience, new Date(), {
-        experimentId: experiment.id,
-        splitRatio: policy.rate,
-        assignments: Object.fromEntries(holdout.assignment.arms),
-        policyReason: policy.reason,
-        strata: holdout.assignment.strata,
-        assignmentDetails: holdout.assignment.assignments,
-      });
+      const experiment = await getOrCreateExperiment(
+        campaign.storeId,
+        {
+          label: `campaign:${campaign.id}:stratified:v1`,
+          source: "campaign",
+          family,
+          campaignId: campaign.id,
+          segmentId: campaign.segmentId ?? null,
+          segmentName: campaign.segment?.name ?? null,
+        },
+        policy.rate
+      );
+      const holdout = planCampaignHoldout(
+        campaign.storeId,
+        experiment.assignmentSeed,
+        campaign.agentProposal,
+        audience.eligible,
+        evidence
+      );
+      const approvedProposal = withCampaignAudienceSnapshot(
+        campaign.agentProposal,
+        audience,
+        new Date(),
+        {
+          experimentId: experiment.id,
+          splitRatio: policy.rate,
+          assignments: Object.fromEntries(holdout.assignment.arms),
+          policyReason: policy.reason,
+          strata: holdout.assignment.strata,
+          assignmentDetails: holdout.assignment.assignments,
+        }
+      );
       const approvalChecksum = campaignApprovalChecksum({
         campaignId: campaign.id,
         storeId: campaign.storeId,
@@ -458,13 +617,15 @@ export const campaignsRouter = router({
           blocks: campaign.template.blocks,
           html: campaign.template.html,
         },
-        segment: campaign.segment ? {
-          id: campaign.segment.id,
-          kind: campaign.segment.kind,
-          customerIds: campaign.segment.customerIds,
-          conditions: campaign.segment.conditions,
-          name: campaign.segment.name,
-        } : null,
+        segment: campaign.segment
+          ? {
+              id: campaign.segment.id,
+              kind: campaign.segment.kind,
+              customerIds: campaign.segment.customerIds,
+              conditions: campaign.segment.conditions,
+              name: campaign.segment.name,
+            }
+          : null,
         agentProposal: approvedProposal,
       });
 
@@ -473,58 +634,105 @@ export const campaignsRouter = router({
         orderBy: { assignedAt: "asc" },
       });
       const approvedAt = existingAssignment?.assignedAt ?? new Date();
-      const windowStartsAt = existingAssignment?.windowStartsAt
-        ?? (campaign.scheduledAt && campaign.scheduledAt > approvedAt ? campaign.scheduledAt : approvedAt);
-      const windowEndsAt = existingAssignment?.windowEndsAt
-        ?? new Date(windowStartsAt.getTime() + 7 * 86_400_000);
-      const controlCount = Object.values(holdout.assignment.strata).reduce((sum, stratum) => sum + stratum.controlCount, 0);
-      const effectiveRate = audience.eligible.length ? controlCount / audience.eligible.length : policy.rate;
+      const windowStartsAt =
+        existingAssignment?.windowStartsAt ??
+        (campaign.scheduledAt && campaign.scheduledAt > approvedAt
+          ? campaign.scheduledAt
+          : approvedAt);
+      const windowEndsAt =
+        existingAssignment?.windowEndsAt ?? new Date(windowStartsAt.getTime() + 7 * 86_400_000);
+      const controlCount = Object.values(holdout.assignment.strata).reduce(
+        (sum, stratum) => sum + stratum.controlCount,
+        0
+      );
+      const effectiveRate = audience.eligible.length
+        ? controlCount / audience.eligible.length
+        : policy.rate;
       const measurement = campaignMeasurementPolicy(audience.eligible.length, effectiveRate);
-      await ctx.prisma.$transaction(async (tx) => {
-        const claimed = await tx.campaign.updateMany({
-          where: campaignApprovalClaimWhere(input.id),
-          // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
-          data: {
-            status: "sending",
-            humanDecision: buildHumanDecision(campaign) as object,
-            agentProposal: approvedProposal as object,
-            approvalChecksum,
-            approvedAt,
-          },
-        });
-        if (claimed.count !== 1) {
-          throw new TRPCError({ code: "CONFLICT", message: "Campaign was approved concurrently; retry to dispatch its frozen cohort" });
-        }
-        await tx.measurementAssignment.createMany({
-          data: Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
-            storeId: campaign.storeId,
-            experimentId: experiment.id,
-            campaignId: campaign.id,
-            unitType: "campaign",
-            unitId: campaign.id,
-            customerId,
-            arm: detail.arm,
-            stratum: detail.assignmentStratum,
-            holdoutRate: detail.holdoutRate,
-            assignedAt: approvedAt,
-            windowStartsAt,
-            windowEndsAt,
-            assignmentData: {
-              tier: measurement.tier,
-              family,
-              policyReason: policy.reason,
-              originalStratum: detail.stratum,
+      await ctx.prisma.$transaction(
+        async (tx) => {
+          const claimed = await tx.campaign.updateMany({
+            where: campaignApprovalClaimWhere(input.id),
+            // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
+            data: {
+              status: "sending",
+              humanDecision: buildHumanDecision(campaign) as object,
+              agentProposal: approvedProposal as object,
+              approvalChecksum,
+              approvedAt,
             },
-          })),
-          skipDuplicates: true,
-        });
-      }, { isolationLevel: "Serializable" });
+          });
+          if (claimed.count !== 1) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Campaign was approved concurrently; retry to dispatch its frozen cohort",
+            });
+          }
+          await tx.measurementAssignment.createMany({
+            data: Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
+              storeId: campaign.storeId,
+              experimentId: experiment.id,
+              campaignId: campaign.id,
+              unitType: "campaign",
+              unitId: campaign.id,
+              customerId,
+              arm: detail.arm,
+              stratum: detail.assignmentStratum,
+              holdoutRate: detail.holdoutRate,
+              assignedAt: approvedAt,
+              windowStartsAt,
+              windowEndsAt,
+              assignmentData: {
+                tier: measurement.tier,
+                family,
+                policyReason: policy.reason,
+                originalStratum: detail.stratum,
+              },
+            })),
+            skipDuplicates: true,
+          });
+          await tx.customerAudienceDecision.createMany({
+            data: [
+              ...audience.deliberatelyLeftAlone.map((customer) => ({
+                storeId: campaign.storeId,
+                customerId: customer.id,
+                campaignId: campaign.id,
+                contextKey: family,
+                decision: "deliberately_left_alone",
+                reasonCode: customer.decision.reasonCode ?? null,
+                reasonText: customer.decision.reasonText ?? null,
+                evidence: customer.decision.evidence as any,
+                reconsiderAt: customer.decision.reconsiderAt ?? null,
+                reconsiderOn: customer.decision.reconsiderOn ?? null,
+              })),
+              ...Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
+                storeId: campaign.storeId,
+                customerId,
+                campaignId: campaign.id,
+                contextKey: family,
+                decision: detail.arm === "CONTROL" ? "control" : "treatment",
+                reasonCode: "experiment_assignment",
+                reasonText:
+                  detail.arm === "CONTROL"
+                    ? "Randomly placed in this campaign's control group."
+                    : "Assigned to receive this campaign.",
+                evidence: {
+                  stratum: detail.stratum,
+                  assignmentStratum: detail.assignmentStratum,
+                  controlRate: detail.holdoutRate,
+                },
+              })),
+            ],
+          });
+        },
+        { isolationLevel: "Serializable" }
+      );
 
       try {
         await emailSendQueue.add(
           "campaign-send",
           { campaignId: input.id },
-          { jobId: `campaign-send-${input.id}` },
+          { jobId: `campaign-send-${input.id}` }
         );
       } catch (error) {
         // Approval truth and frozen assignments are immutable. A queue outage
@@ -532,7 +740,7 @@ export const campaignsRouter = router({
         // retried without allowing edits or drawing a new control.
         await ctx.prisma.campaign.update({
           where: { id: input.id },
-            data: campaignDispatchFailureUpdate(),
+          data: campaignDispatchFailureUpdate(),
         });
         throw error;
       }
@@ -593,15 +801,23 @@ export const campaignsRouter = router({
       });
 
       const statusCounts = Object.fromEntries(totals.map((t) => [t.status, t._count]));
-      const totalSent = (statusCounts["sent"] ?? 0) + (statusCounts["delivered"] ?? 0) +
-                        (statusCounts["opened"] ?? 0) + (statusCounts["clicked"] ?? 0);
+      const totalSent =
+        (statusCounts["sent"] ?? 0) +
+        (statusCounts["delivered"] ?? 0) +
+        (statusCounts["opened"] ?? 0) +
+        (statusCounts["clicked"] ?? 0);
       const totalOpened = (statusCounts["opened"] ?? 0) + (statusCounts["clicked"] ?? 0);
       const totalClicked = statusCounts["clicked"] ?? 0;
       const totalBounced = statusCounts["bounced"] ?? 0;
 
       return {
         timeline,
-        totals: { sent: totalSent, opened: totalOpened, clicked: totalClicked, bounced: totalBounced },
+        totals: {
+          sent: totalSent,
+          opened: totalOpened,
+          clicked: totalClicked,
+          bounced: totalBounced,
+        },
         rates: {
           openRate: totalSent > 0 ? totalOpened / totalSent : 0,
           clickRate: totalSent > 0 ? totalClicked / totalSent : 0,
@@ -610,10 +826,9 @@ export const campaignsRouter = router({
       };
     }),
 
-  stats: workspaceProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const [campaign, attribution, arms, deliveredCount, openedCount, clickedCount] = await Promise.all([
+  stats: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const [campaign, attribution, arms, deliveredCount, openedCount, clickedCount] =
+      await Promise.all([
         ctx.prisma.campaign.findFirst({
           where: { id: input.id, workspaceId: ctx.workspaceId },
           select: {
@@ -649,44 +864,44 @@ export const campaignsRouter = router({
           where: { campaignId: input.id, clickedAt: { not: null } },
         }),
       ]);
-      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+    if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const attributedRevenue = attribution._sum.revenue ?? 0;
-      const attributedOrders = attribution._count;
-      const experimentId = arms.find((row) => row.experimentId)?.experimentId ?? null;
-      const experiment = experimentId
-        ? await ctx.prisma.experiment.findUnique({
-            where: { id: experimentId },
-            select: { stats: true, splitRatio: true, startAt: true, endAt: true },
-          })
-        : null;
-      const controlAssigned = arms
-        .filter((row) => row.treatmentArm === "CONTROL")
-        .reduce((sum, row) => sum + row._count, 0);
-      const treatmentAssigned = arms
-        .filter((row) => row.treatmentArm === "TREATMENT")
-        .reduce((sum, row) => sum + row._count, 0);
+    const attributedRevenue = attribution._sum.revenue ?? 0;
+    const attributedOrders = attribution._count;
+    const experimentId = arms.find((row) => row.experimentId)?.experimentId ?? null;
+    const experiment = experimentId
+      ? await ctx.prisma.experiment.findUnique({
+          where: { id: experimentId },
+          select: { stats: true, splitRatio: true, startAt: true, endAt: true },
+        })
+      : null;
+    const controlAssigned = arms
+      .filter((row) => row.treatmentArm === "CONTROL")
+      .reduce((sum, row) => sum + row._count, 0);
+    const treatmentAssigned = arms
+      .filter((row) => row.treatmentArm === "TREATMENT")
+      .reduce((sum, row) => sum + row._count, 0);
 
-      return {
-        ...campaign,
-        recipientCount: deliveredCount,
-        openCount: openedCount,
-        clickCount: clickedCount,
-        openRate: deliveredCount > 0 ? openedCount / deliveredCount : 0,
-        clickRate: deliveredCount > 0 ? clickedCount / deliveredCount : 0,
-        attributedRevenue: Math.round(attributedRevenue * 100) / 100,
-        attributedOrders,
-        currency: campaign.store.currency ?? "USD",
-        conversionRate: deliveredCount > 0 ? attributedOrders / deliveredCount : 0,
-        holdout: {
-          experimentId,
-          controlAssigned,
-          treatmentAssigned,
-          splitRatio: experiment?.splitRatio ?? null,
-          startAt: experiment?.startAt ?? null,
-          endAt: experiment?.endAt ?? null,
-          stats: experiment?.stats ?? null,
-        },
-      };
-    }),
+    return {
+      ...campaign,
+      recipientCount: deliveredCount,
+      openCount: openedCount,
+      clickCount: clickedCount,
+      openRate: deliveredCount > 0 ? openedCount / deliveredCount : 0,
+      clickRate: deliveredCount > 0 ? clickedCount / deliveredCount : 0,
+      attributedRevenue: Math.round(attributedRevenue * 100) / 100,
+      attributedOrders,
+      currency: campaign.store.currency ?? "USD",
+      conversionRate: deliveredCount > 0 ? attributedOrders / deliveredCount : 0,
+      holdout: {
+        experimentId,
+        controlAssigned,
+        treatmentAssigned,
+        splitRatio: experiment?.splitRatio ?? null,
+        startAt: experiment?.startAt ?? null,
+        endAt: experiment?.endAt ?? null,
+        stats: experiment?.stats ?? null,
+      },
+    };
+  }),
 });

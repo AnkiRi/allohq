@@ -939,6 +939,33 @@ model Campaign {
   @@map("campaigns")
 }
 
+/// Immutable, merchant-auditable record of why a customer was considered,
+/// deliberately left alone, assigned to control/treatment, deferred or sent.
+model CustomerAudienceDecision {
+  id                 String   @id @default(cuid())
+  storeId            String
+  customerId         String
+  campaignId         String?
+  automationId       String?
+  contextKey         String
+  decision           String
+  reasonCode         String?
+  reasonText         String?
+  evidence           Json     @default("{}")
+  reconsiderAt       DateTime?
+  reconsiderOn       String?
+  merchantOverride   Boolean  @default(false)
+  overrideActorId    String?
+  overrideReason     String?
+  createdAt          DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([campaignId, decision])
+  @@index([storeId, contextKey, decision])
+  @@map("customer_audience_decisions")
+}
+
 /// Frozen intent-to-treat assignment. Rows are created at approval before any
 /// delivery-time suppression or deferral and are never updated in place.
 model MeasurementAssignment {
