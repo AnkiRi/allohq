@@ -112,9 +112,10 @@ ${formatProductsForPrompt(input.products, input.storeUrl, input.currency)}`);
     if (input.context.festivity) ctxParts.push(`Festivity/Occasion: ${input.context.festivity}`);
     if (input.context.discount) {
       const d = input.context.discount;
-      const fixedValue = new Intl.NumberFormat(undefined, {
+      const currency = input.currency ?? "USD";
+      const fixedValue = new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
         style: "currency",
-        currency: input.currency ?? "USD",
+        currency,
       }).format(d.value);
       ctxParts.push(`Discount: ${d.type === "percentage" ? `${d.value}%` : fixedValue} off, code: ${d.code}`);
     }

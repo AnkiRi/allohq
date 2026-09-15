@@ -130,14 +130,16 @@ export default function CampaignDetailPage() {
     nTreatment?: number;
     nControl?: number;
   };
-  const money = (value: number) => new Intl.NumberFormat(undefined, {
+  const moneyCurrency = stats?.currency === "INR" ? "INR" : "USD";
+  const money = (value: number) => new Intl.NumberFormat(moneyCurrency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
-    currency: stats?.currency ?? "USD",
+    currency: moneyCurrency,
     maximumFractionDigits: 0,
   }).format(value);
-  const dryRunMoney = (value: number) => new Intl.NumberFormat(undefined, {
+  const dryRunCurrency = dryRun?.currency === "INR" ? "INR" : moneyCurrency;
+  const dryRunMoney = (value: number) => new Intl.NumberFormat(dryRunCurrency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
-    currency: dryRun?.currency ?? stats?.currency ?? "USD",
+    currency: dryRunCurrency,
     maximumFractionDigits: 2,
   }).format(value);
 

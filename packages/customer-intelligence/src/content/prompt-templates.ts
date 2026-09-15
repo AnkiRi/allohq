@@ -147,7 +147,7 @@ export function formatProductsForPrompt(
 
   return products
     .map((p, i) => {
-      const formattedPrice = new Intl.NumberFormat(undefined, {
+      const formattedPrice = new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
         style: "currency",
         currency,
       }).format(p.price);

@@ -410,7 +410,7 @@ export function buildBrandKit(
 
 /** Indian rupee formatting — ₹ with Indian digit grouping (e.g. ₹1,299). */
 export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, {
+  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
