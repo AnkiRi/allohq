@@ -3,7 +3,6 @@ import { router, workspaceProcedure, ownerProcedure } from "../trpc";
 import { buildHumanDecision } from "../lib/human-decision";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
-import type { AIModelId } from "@allohq/customer-intelligence";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -1522,91 +1521,6 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         toolCalls: agentResult.toolCalls.map((t) => t.name),
         campaignPreview,
       };
-    }),
-
-  /** Execute a natural language instruction */
-  executeInstruction: workspaceProcedure
-    .input(z.object({
-      instruction: z.string().min(5).max(1000),
-      pageContext: z.string().default("dashboard"),
-      storeId: z.string(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const store = await ctx.prisma.store.findFirst({
-        where: { id: input.storeId, workspaceId: ctx.workspaceId },
-      });
-      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
-
-      // Fetch context for the instruction parser
-      const [segments, automations, brandProfile, workspaceAiSettings] = await Promise.all([
-        ctx.prisma.customerSegment.findMany({
-          where: { storeId: input.storeId },
-          select: { name: true },
-        }),
-        ctx.prisma.automation.findMany({
-          where: { storeId: input.storeId },
-          select: { name: true },
-        }),
-        ctx.prisma.brandProfile.findFirst({
-          where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
-        }),
-        ctx.prisma.workspace.findUnique({
-          where: { id: ctx.workspaceId },
-          select: { defaultModel: true, modelHarness: true },
-        }),
-      ]);
-
-      const { parseInstruction, executeInstruction } = await import("@allohq/customer-intelligence");
-
-      // Parse the instruction
-      const parsed = await parseInstruction(
-        input.instruction,
-        {
-          page: input.pageContext,
-          existingSegments: segments.map((s) => s.name),
-          existingAutomations: automations.map((a) => a.name),
-        },
-        workspaceAiSettings?.modelHarness
-          ? undefined
-          : (workspaceAiSettings?.defaultModel as AIModelId | null) ?? undefined,
-        workspaceAiSettings?.modelHarness,
-      );
-
-      // Execute the parsed instruction
-      const result = await executeInstruction(parsed, {
-        prisma: ctx.prisma as any,
-        storeId: input.storeId,
-        workspaceId: ctx.workspaceId,
-        brandProfile: brandProfile ? {
-          brandName: brandProfile.brandName,
-          brandDescription: brandProfile.brandDescription,
-          toneAttributes: brandProfile.toneAttributes as Record<string, string>,
-          vocabulary: brandProfile.vocabulary as Record<string, string[]>,
-          visualStyle: brandProfile.visualStyle as Record<string, string | string[]>,
-          sampleCopy: brandProfile.sampleCopy as string[],
-          creativeIntensity: brandProfile.creativeIntensity ?? undefined,
-        } : undefined,
-        model:
-          workspaceAiSettings?.modelHarness
-            ? undefined
-            : (workspaceAiSettings?.defaultModel as AIModelId | null) ?? undefined,
-        modelHarness: workspaceAiSettings?.modelHarness,
-      });
-
-      // Record token usage if any
-      if (result.tokenUsage.input > 0) {
-        await ctx.prisma.tokenUsage.create({
-          data: {
-            workspaceId: ctx.workspaceId,
-            model: result.tokenUsage.model,
-            inputTokens: result.tokenUsage.input,
-            outputTokens: result.tokenUsage.output,
-            purpose: "execute_instruction",
-          },
-        });
-      }
-
-      return result;
     }),
 
   /** Execute an action from the AI chat (approve/reject campaign) */

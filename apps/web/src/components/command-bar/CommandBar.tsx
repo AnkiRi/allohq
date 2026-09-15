@@ -1,113 +1,65 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Zap, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
-import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/Toast";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUp, Sparkles } from "lucide-react";
+import { useAlloAI } from "@/components/ai/AlloAIPanel";
 
 interface CommandBarProps {
   storeId: string;
   pageContext: "automations" | "campaigns" | "templates" | "segments" | "dashboard";
 }
 
-type ResultState = {
-  intent: string;
-  success: boolean;
-  summary: string;
-  created: {
-    automationId?: string;
-    campaignId?: string;
-    templateIds?: string[];
-    segmentId?: string;
-  };
-} | null;
-
-const EXAMPLES: Record<string, string[]> = {
+const EXAMPLES: Record<CommandBarProps["pageContext"], string[]> = {
   automations: [
     "Create a win-back flow for inactive customers who spent over ₹500",
     "Build a three-email welcome series",
     "Set up an abandoned cart automation with 20% discount",
   ],
   campaigns: [
-    "Send a Black Friday campaign to all VIP customers",
-    "Create a spring sale email for the Champions segment",
-    "Send a 15% off campaign to at-risk customers",
+    "Create a festival campaign for my top 10 customers",
+    "Draft a full-price new-product email for loyal customers",
+    "Create a 15% offer for customers who are becoming at risk",
   ],
   templates: [
     "Design a thank-you email for post-purchase follow-up",
     "Create a warm win-back email for dormant customers",
-    "Build a promotional email with visual-heavy design",
+    "Build a product-led promotional email",
   ],
   segments: [
-    "Find customers who spent over ₹200 but haven't ordered in 30 days",
-    "Show me my most valuable customers",
+    "Find customers who spent over ₹500 but haven't ordered in 30 days",
+    "Show me my ten highest-value customers",
     "Create a segment of new customers from the last 7 days",
   ],
   dashboard: [
     "Create an automation for winning back inactive customers",
-    "Analyze my top customer segments",
-    "Send a promotion to my VIP segment",
+    "Analyze my highest-value customer segments",
+    "Draft a promotion for customers who are becoming at risk",
   ],
 };
 
-export function CommandBar({ storeId, pageContext }: CommandBarProps) {
-  const { toast } = useToast();
-  const router = useRouter();
+/** A compact entrance into the same merchant-agent pipeline as the full chat. */
+export function CommandBar({ pageContext }: CommandBarProps) {
+  const { submit } = useAlloAI();
   const inputRef = useRef<HTMLInputElement>(null);
   const [instruction, setInstruction] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState("");
-  const [result, setResult] = useState<ResultState>(null);
   const [isFocused, setIsFocused] = useState(false);
-
-  const examples = EXAMPLES[pageContext] ?? EXAMPLES["dashboard"]!;
-
-  const executeMut = (trpc.ai.executeInstruction as any).useMutation({
-    onSuccess: (data: ResultState) => {
-      setResult(data);
-      setIsProcessing(false);
-      if (data?.success) {
-        toast(data.summary, "success");
-      }
-    },
-    onError: (err: { message?: string }) => {
-      setIsProcessing(false);
-      setProcessingStep("");
-      toast(err.message ?? "I couldn't quite get that done. Mind trying again?", "error");
-    },
-  }) as { mutate: (input: { instruction: string; pageContext: string; storeId: string }) => void; isPending: boolean };
+  const examples = EXAMPLES[pageContext];
 
   const handleSubmit = useCallback(() => {
-    if (!instruction.trim() || isProcessing) return;
+    const nextInstruction = instruction.trim();
+    if (!nextInstruction) return;
+    submit(nextInstruction);
+    setInstruction("");
+    setIsFocused(false);
+  }, [instruction, submit]);
 
-    setIsProcessing(true);
-    setResult(null);
-
-    // Simulate progressive steps
-    setProcessingStep("Making sure I've got this right...");
-    setTimeout(() => {
-      if (isProcessing) setProcessingStep("Writing it up...");
-    }, 2000);
-    setTimeout(() => {
-      if (isProcessing) setProcessingStep("Putting it all together...");
-    }, 5000);
-
-    executeMut.mutate({
-      instruction: instruction.trim(),
-      pageContext,
-      storeId,
-    });
-  }, [instruction, isProcessing, pageContext, storeId]);
-
-  // Keyboard shortcut: Cmd+K to focus
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "k") {
+        event.preventDefault();
         inputRef.current?.focus();
       }
-      if (e.key === "Escape") {
+      if (event.key === "Escape") {
         inputRef.current?.blur();
         setIsFocused(false);
       }
@@ -116,143 +68,58 @@ export function CommandBar({ storeId, pageContext }: CommandBarProps) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const handleNavigate = (path: string) => {
-    router.push(path);
-    setResult(null);
-    setInstruction("");
-  };
-
   return (
     <div className="mb-6">
-      {/* Input bar */}
-      <div
-        className={`relative border rounded-xl transition-all ${
-          isFocused
-            ? "border-foreground shadow-[0_0_0_1px_hsl(var(--foreground))]"
-            : "border-border hover:border-primary/50"
-        }`}
-      >
-        <div className="flex items-center px-4 py-3">
-          <Zap className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      <div className={`relative rounded-xl border bg-card transition-colors ${isFocused ? "border-foreground" : "border-border hover:border-foreground/40"}`}>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
             value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
+            onChange={(event) => setInstruction(event.target.value)}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSubmit();
+            onBlur={() => setTimeout(() => setIsFocused(false), 150)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") handleSubmit();
             }}
-            placeholder="Tell joon what you'd like to do..."
-            disabled={isProcessing}
-            className="flex-1 ml-3 text-[13px] font-sans text-foreground placeholder:text-muted-foreground bg-transparent outline-none disabled:opacity-50"
+            placeholder="Tell Joon what you'd like to do…"
+            aria-label="Ask Joon"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
           />
-          <span className="text-[10px] text-muted-foreground/50 font-mono ml-2">
-            {isProcessing ? "" : "\u2318K"}
-          </span>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!instruction.trim()}
+            aria-label="Send to Joon"
+            className="grid h-7 w-7 place-items-center rounded-lg bg-foreground text-background transition-opacity disabled:opacity-30"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </button>
         </div>
 
-        {/* Examples row (when focused and empty) */}
-        {isFocused && !instruction && !isProcessing && !result && (
-          <div className="px-4 pb-3 flex flex-wrap gap-2">
-            {examples.map((ex, i) => (
+        {isFocused && !instruction && (
+          <div className="flex flex-wrap gap-2 border-t border-border px-4 py-3">
+            {examples.map((example) => (
               <button
-                key={i}
+                key={example}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  setInstruction(ex);
+                  setInstruction(example);
                   inputRef.current?.focus();
                 }}
-                className="text-[11px] font-sans text-muted-foreground px-2.5 py-1 bg-muted rounded-lg hover:bg-muted hover:text-muted-foreground transition-all text-left"
+                className="rounded-full bg-muted px-3 py-1.5 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
               >
-                {ex}
+                {example}
               </button>
             ))}
           </div>
         )}
       </div>
-
-      {/* Processing state */}
-      {isProcessing && (
-        <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-muted border border-border rounded-xl">
-          <Loader2 className="w-4 h-4 text-foreground animate-spin flex-shrink-0" />
-          <div>
-            <p className="text-[13px] font-bold text-foreground font-sans">{processingStep}</p>
-            <p className="text-[11px] text-muted-foreground font-sans mt-0.5">Bigger asks can take up to a minute. Hang tight.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Result card */}
-      {result && (
-        <div
-          className={`mt-3 px-4 py-4 rounded-xl border ${
-            result.success
-              ? "bg-outcome/10 border-outcome/25"
-              : "bg-destructive/10 border-destructive/25"
-          }`}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              {result.success ? (
-                <CheckCircle2 className="w-4 h-4 text-outcome mt-0.5 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
-              )}
-              <div>
-                <p className={`text-[13px] font-bold font-sans ${result.success ? "text-outcome" : "text-destructive"}`}>
-                  {result.summary}
-                </p>
-                {result.success && (
-                  <div className="flex gap-2 mt-3">
-                    {result.created.automationId && (
-                      <button
-                        onClick={() => handleNavigate(`/automations/${result.created.automationId}`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
-                      >
-                        View & Edit
-                      </button>
-                    )}
-                    {result.created.campaignId && (
-                      <button
-                        onClick={() => handleNavigate(`/campaigns`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
-                      >
-                        View Campaign
-                      </button>
-                    )}
-                    {result.created.templateIds && result.created.templateIds.length > 0 && !result.created.automationId && !result.created.campaignId && (
-                      <button
-                        onClick={() => handleNavigate(`/templates/${result.created.templateIds![0]}/edit`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
-                      >
-                        View Template
-                      </button>
-                    )}
-                    {result.created.segmentId && (
-                      <button
-                        onClick={() => handleNavigate(`/segments`)}
-                        className="text-[11px] font-sans px-3 py-1.5 bg-card border border-outcome/35 rounded-lg text-outcome hover:bg-outcome/15 transition-all"
-                      >
-                        View Segment
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setResult(null);
-                setInstruction("");
-              }}
-              className="text-muted-foreground hover:text-muted-foreground transition-all"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <p className="mt-2 px-1 text-[10px] text-muted-foreground">
+        Opens the same reviewable Joon conversation used everywhere else. Nothing sends without your approval.
+      </p>
     </div>
   );
 }
