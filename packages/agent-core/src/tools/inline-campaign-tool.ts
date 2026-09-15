@@ -110,6 +110,52 @@ export const inlineCampaignTools: ToolDefinition[] = [
       });
       if (!store) return { success: false, message: "Store not found" };
 
+      // A full-price alternative is one durable action attached to its source
+      // campaign. Browser retries, double-clicks, and repeated chat submissions
+      // must reopen that draft instead of producing overlapping campaigns.
+      if (directive) {
+        const existingAlternative = await prisma.campaign.findFirst({
+          where: {
+            storeId: ctx.storeId,
+            agentProposal: { path: ["sourceCampaignId"], equals: directive.sourceCampaignId },
+          },
+          orderBy: { createdAt: "desc" },
+          include: {
+            template: { select: { subject: true, previewText: true, html: true, blocks: true } },
+            segment: { select: { name: true } },
+          },
+        });
+        if (existingAlternative?.template) {
+          const { renderBrandedEmail } = await import("@allohq/customer-intelligence");
+          const existingPreviewHtml = existingAlternative.template.html ?? await renderBrandedEmail({
+            storeId: store.id,
+            blocks: existingAlternative.template.blocks as any[],
+            subject: existingAlternative.template.subject,
+            previewText: existingAlternative.template.previewText ?? undefined,
+            variables: {
+              firstName: "Customer",
+              storeName: store.storeName ?? store.shopDomain,
+              storeUrl: `https://${store.shopDomain}`,
+            },
+            previewMode: true,
+          });
+          return {
+            success: true,
+            contentType: "campaign_preview",
+            previewHtml: existingPreviewHtml,
+            subject: existingAlternative.template.subject,
+            previewText: existingAlternative.template.previewText,
+            campaignName: existingAlternative.name,
+            draftCampaignId: existingAlternative.id,
+            templateId: existingAlternative.templateId,
+            estimatedRecipients: existingAlternative.recipientCount,
+            segment: existingAlternative.segment?.name ?? "Selected customers",
+            reusedExistingDraft: true,
+            message: `The full-price alternative already exists. I reopened “${existingAlternative.name}” instead of creating a duplicate.`,
+          };
+        }
+      }
+
       // Resolve the audience: explicit customers (a manual segment) take
       // precedence over a named RFM segment, so "campaign for Archana" targets
       // exactly Archana, not the nearest broad segment.

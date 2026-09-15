@@ -263,6 +263,14 @@ export const campaignsRouter = router({
       requestedAudienceCount?: number;
       overrideRecentPurchaseCustomerIds?: unknown;
     };
+    const linkedAlternative = await ctx.prisma.campaign.findFirst({
+      where: {
+        storeId: campaign.storeId,
+        agentProposal: { path: ["sourceCampaignId"], equals: campaign.id },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, status: true },
+    });
     const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
     const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
     const recentOrders =
@@ -346,6 +354,7 @@ export const campaignsRouter = router({
       recentPurchaseOverrideCount: Array.isArray(proposal.overrideRecentPurchaseCustomerIds)
         ? proposal.overrideRecentPurchaseCustomerIds.filter((value) => typeof value === "string").length
         : 0,
+      linkedAlternative,
       subject: campaign.template.subject,
       previewText: campaign.template.previewText,
       sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,

@@ -20,6 +20,7 @@ export default function CampaignDetailPage() {
   const [showRecentOverride, setShowRecentOverride] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState("");
+  const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
   const { data: campaign, isLoading } = trpc.campaigns.getById.useQuery({ id: campaignId });
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
@@ -89,6 +90,22 @@ export default function CampaignDetailPage() {
     if (!showRecentOverride || !dryRun?.recentPurchaseCustomers) return;
     setSelectedRecentIds(dryRun.recentPurchaseCustomers.map((customer) => customer.id));
   }, [showRecentOverride, dryRun?.recentPurchaseCustomers]);
+
+  useEffect(() => {
+    if (!alternativeSubmitting || dryRun?.linkedAlternative) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(async () => {
+      const result = await refetchDryRun();
+      if (result.data?.linkedAlternative) {
+        setAlternativeSubmitting(false);
+        window.clearInterval(timer);
+      } else if (Date.now() - startedAt > 30_000) {
+        setAlternativeSubmitting(false);
+        window.clearInterval(timer);
+      }
+    }, 1_500);
+    return () => window.clearInterval(timer);
+  }, [alternativeSubmitting, dryRun?.linkedAlternative, refetchDryRun]);
 
   if (isLoading) {
     return (
@@ -415,22 +432,34 @@ export default function CampaignDetailPage() {
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        submitCampaignAlternative(
-                          `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, products, and brand voice, and let me review the draft before anything is sent.`,
-                          {
-                            sourceCampaignId: campaignId,
-                            customerIds: dryRun.recentPurchaseCustomers.map((customer) => customer.id),
-                            forceNoDiscount: true,
-                          },
-                        );
-                      }}
-                      className="rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      Draft a full-price alternative
-                    </button>
+                    {dryRun.linkedAlternative ? (
+                      <Link
+                        href={`/campaigns/${dryRun.linkedAlternative.id}`}
+                        className="rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Open full-price alternative
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={alternativeSubmitting}
+                        onClick={() => {
+                          setAlternativeSubmitting(true);
+                          submitCampaignAlternative(
+                            `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, products, and brand voice, and let me review the draft before anything is sent.`,
+                            {
+                              sourceCampaignId: campaignId,
+                              customerIds: dryRun.recentPurchaseCustomers.map((customer) => customer.id),
+                              forceNoDiscount: true,
+                            },
+                          );
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {alternativeSubmitting && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+                        {alternativeSubmitting ? "Creating alternative…" : "Draft a full-price alternative"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowRecentOverride((value) => !value)}
