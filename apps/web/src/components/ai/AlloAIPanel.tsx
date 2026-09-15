@@ -1602,30 +1602,16 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     },
   }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[] }) => void };
 
-  // Campaign approve/reject mutation
-  const executeChatActionMut = (trpc.ai as any).executeChatAction.useMutation({
-    onSuccess: (data: { success: boolean; status: string }) => {
-      if (data.success && data.status === "sending") {
-        toast("Approved. Your campaign is on its way.", "success");
-      } else if (data.success && data.status === "cancelled") {
-        toast("No problem. I've called that one off.", "success");
-      }
-    },
-    onError: (err: { message?: string }) => {
-      toast(err.message ?? "That didn't go through. Mind trying again?", "error");
-    },
-  }) as { mutate: (input: { actionType: "approve_campaign" | "reject_campaign"; campaignId: string }) => void };
-
   const handleApproveCampaign = useCallback(
     (campaignId: string) => {
-      executeChatActionMut.mutate({ actionType: "approve_campaign", campaignId });
+      router.push(`/campaigns/${campaignId}`);
     },
-    [],
+    [router],
   );
 
   const handleEditCampaign = useCallback(
-    (_campaignId: string) => {
-      router.push("/campaigns");
+    (campaignId: string) => {
+      router.push(`/campaigns/${campaignId}`);
     },
     [router],
   );

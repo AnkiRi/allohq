@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { Send, Pencil, Loader2, Mail, Users, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Pencil, Mail, Users } from "lucide-react";
 import { cn } from "@allohq/ui";
 
 interface CampaignPreviewCardProps {
@@ -23,20 +22,6 @@ export function CampaignPreviewCard({
   onApprove,
   onEdit,
 }: CampaignPreviewCardProps) {
-  const [approving, setApproving] = useState(false);
-  const [approved, setApproved] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-
-  const handleApprove = () => {
-    setApproving(true);
-    onApprove(draftCampaignId);
-    // Optimistic UI — parent will handle actual mutation
-    setTimeout(() => {
-      setApproving(false);
-      setApproved(true);
-    }, 1500);
-  };
-
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden my-2">
       {/* Header */}
@@ -64,13 +49,12 @@ export function CampaignPreviewCard({
 
       {/* Email preview iframe */}
       <div className="flex justify-center bg-muted/20 p-4">
-        <div className="rounded-lg border border-border overflow-hidden bg-card shadow-sm">
+        <div className="w-full max-w-[400px] rounded-lg border border-border overflow-hidden bg-card shadow-sm">
           <iframe
             srcDoc={previewHtml}
             title="Email preview"
-            className="block"
+            className="block w-full"
             style={{
-              width: 400,
               height: 300,
               border: "none",
               pointerEvents: "none",
@@ -96,78 +80,26 @@ export function CampaignPreviewCard({
         <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={() => onEdit(draftCampaignId)}
-            disabled={confirming || approving || approved}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
               "border border-border text-[11px] font-sans font-medium",
               "text-foreground hover:bg-muted transition-colors",
-              "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent",
             )}
           >
             <Pencil className="w-3 h-3" />
-            Tweak it first
+            Open draft
           </button>
-
-          {approved ? (
-            <div
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-outcome text-white text-[11px] font-sans font-medium",
-              )}
-            >
-              <CheckCircle2 className="w-3 h-3" />
-              On its way
-            </div>
-          ) : confirming ? (
-            // Confirm step — never fire a send on a single click; show who it
-            // reaches so it can't go out by accident.
-            <>
-              <button
-                onClick={() => setConfirming(false)}
-                disabled={approving}
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                  "border border-border text-[11px] font-sans font-medium",
-                  "text-foreground hover:bg-muted transition-colors disabled:opacity-50",
-                )}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApprove}
-                disabled={approving}
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                  "bg-decision text-decision-foreground text-[11px] font-sans font-medium",
-                  "hover:opacity-90 transition-opacity",
-                  approving && "opacity-60 cursor-not-allowed",
-                )}
-              >
-                {approving ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Send className="w-3 h-3" />
-                )}
-                {approving
-                  ? "Sending…"
-                  : estimatedRecipients != null
-                    ? `Yes, send to ${estimatedRecipients.toLocaleString("en-IN")}`
-                    : "Yes, send"}
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirming(true)}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-                "bg-decision text-decision-foreground text-[11px] font-sans font-medium",
-                "hover:opacity-90 transition-opacity",
-              )}
-            >
-              <Send className="w-3 h-3" />
-              Send it
-            </button>
-          )}
+          <button
+            onClick={() => onApprove(draftCampaignId)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
+              "bg-decision text-decision-foreground text-[11px] font-sans font-medium",
+              "hover:opacity-90 transition-opacity",
+            )}
+          >
+            Review audience
+            <ArrowRight className="w-3 h-3" />
+          </button>
         </div>
       </div>
     </div>

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { router, workspaceProcedure, ownerProcedure } from "../trpc";
-import { buildHumanDecision } from "../lib/human-decision";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 
@@ -1521,38 +1520,6 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         toolCalls: agentResult.toolCalls.map((t) => t.name),
         campaignPreview,
       };
-    }),
-
-  /** Execute an action from the AI chat (approve/reject campaign) */
-  executeChatAction: workspaceProcedure
-    .input(z.object({
-      actionType: z.enum(["approve_campaign", "reject_campaign"]),
-      campaignId: z.string(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      if (input.actionType === "approve_campaign") {
-        const campaign = await ctx.prisma.campaign.findFirst({
-          where: { id: input.campaignId, workspaceId: ctx.workspaceId },
-        });
-        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
-
-        // Capture the human's judgment (agent_proposed → human_final on the action vars)
-        // at the moment of approval, before it ships. Can't-backfill signal for the CAM.
-        await ctx.prisma.campaign.update({
-          where: { id: input.campaignId },
-          data: { status: "sending", humanDecision: buildHumanDecision(campaign) as object },
-        });
-
-        return { success: true, status: "sending" };
-      }
-
-      // reject_campaign
-      await ctx.prisma.campaign.update({
-        where: { id: input.campaignId },
-        data: { status: "cancelled" },
-      });
-
-      return { success: true, status: "cancelled" };
     }),
 
   // =========================================================================
