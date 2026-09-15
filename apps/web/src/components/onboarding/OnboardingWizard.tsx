@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   Loader2,
   Check,
@@ -1864,6 +1864,7 @@ export function LaunchReadinessPanel({
   isCompleting?: boolean;
   onBack?: () => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const utils = trpc.useUtils();
   const readiness = (trpc.onboarding.readiness as any).useQuery(
     { storeId },
@@ -1895,6 +1896,9 @@ export function LaunchReadinessPanel({
   const records = Array.isArray(sender.data?.dnsRecords)
     ? (sender.data.dnsRecords as Array<Record<string, unknown>>)
     : [];
+  const domainStatus = String(sender.data?.status ?? "not_started").toLowerCase();
+  const domainVerified = domainStatus === "verified";
+  const domainChecking = verifyDomain.isPending || refreshDomain.isPending;
   const rows: Array<[string, { ready: boolean; detail: string; observed?: boolean }]> = checks
     ? [
         ["Account link", checks.account!],
@@ -1993,9 +1997,29 @@ export function LaunchReadinessPanel({
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            <p className="font-mono text-xs text-card-foreground">
-              {sender.data.domain} · {sender.data.status}
-            </p>
+            <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+              <p className="font-mono text-xs text-card-foreground">{sender.data.domain}</p>
+              <motion.span
+                key={domainChecking ? "checking" : domainStatus}
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  domainVerified
+                    ? "bg-decision/10 text-decision"
+                    : "bg-warning/10 text-warning"
+                }`}
+              >
+                {domainChecking ? (
+                  <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
+                ) : domainVerified ? (
+                  <Check className="size-3" />
+                ) : (
+                  <Circle className="size-3" />
+                )}
+                {domainChecking ? "Checking DNS…" : domainVerified ? "Verified" : "Waiting for DNS"}
+              </motion.span>
+            </div>
             {records.map((record, index) => (
               <div
                 key={index}
@@ -2010,18 +2034,24 @@ export function LaunchReadinessPanel({
             ))}
             <div className="flex flex-wrap gap-2">
               <button
-                disabled={verifyDomain.isPending || sender.data.status === "verified"}
+                disabled={domainChecking || domainVerified}
                 onClick={() => verifyDomain.mutate({ storeId })}
-                className="rounded-lg bg-decision px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-decision px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-40"
               >
-                I added these records
+                {verifyDomain.isPending && (
+                  <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
+                )}
+                {domainVerified ? "DNS verified" : verifyDomain.isPending ? "Checking records…" : "I added these records"}
               </button>
               <button
-                disabled={refreshDomain.isPending}
+                disabled={domainChecking}
                 onClick={() => refreshDomain.mutate({ storeId })}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-card-foreground"
               >
-                <RefreshCw className="size-3" /> Refresh status
+                <RefreshCw
+                  className={`size-3 ${refreshDomain.isPending ? "animate-spin motion-reduce:animate-none" : ""}`}
+                />
+                {refreshDomain.isPending ? "Refreshing…" : "Refresh status"}
               </button>
             </div>
             {(verifyDomain.error || refreshDomain.error) && (
