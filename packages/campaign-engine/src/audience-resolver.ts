@@ -44,6 +44,12 @@ export interface AudienceResolution {
     lastName: string | null;
     decision: CandidateDecision;
   }>;
+  recentPurchaseExcluded: Array<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  }>;
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -130,6 +136,13 @@ export async function resolveCampaignAudience(
         )
       : []
   );
+  const recentPurchaseOverrides = new Set(
+    Array.isArray(proposal["overrideRecentPurchaseCustomerIds"])
+      ? (proposal["overrideRecentPurchaseCustomerIds"] as unknown[]).filter(
+          (value): value is string => typeof value === "string"
+        )
+      : []
+  );
   const [customers, processed, governorConfig] = await Promise.all([
     prisma.customer.findMany({
       where,
@@ -173,6 +186,7 @@ export async function resolveCampaignAudience(
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
   const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
+  const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
   const exclude = (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
@@ -210,6 +224,7 @@ export async function resolveCampaignAudience(
       continue;
     }
     if (
+      !recentPurchaseOverrides.has(customer.id) &&
       isRecentPurchase({
         lastOrderAt: customer.orders[0]?.createdAt,
         hasDiscount,
@@ -218,6 +233,12 @@ export async function resolveCampaignAudience(
         discountHours: governorConfig.recentPurchase?.discountHours,
       })
     ) {
+      recentPurchaseExcluded.push({
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+      });
       exclude("recent_purchase", customer);
       continue;
     }
@@ -261,7 +282,14 @@ export async function resolveCampaignAudience(
       rfmStratum: customer.rfmScore?.segment ?? null,
     });
   }
-  return { requested: customers.length, eligible, exclusions, samples, deliberatelyLeftAlone };
+  return {
+    requested: customers.length,
+    eligible,
+    exclusions,
+    samples,
+    deliberatelyLeftAlone,
+    recentPurchaseExcluded,
+  };
 }
 
 /**
@@ -303,6 +331,7 @@ export async function resolveAutomationAudience(
   ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
+  const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
   const exclude = (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
@@ -352,5 +381,12 @@ export async function resolveAutomationAudience(
       rfmStratum: customer.rfmScore?.segment ?? null,
     });
   }
-  return { requested: customers.length, eligible, exclusions, samples, deliberatelyLeftAlone: [] };
+  return {
+    requested: customers.length,
+    eligible,
+    exclusions,
+    samples,
+    deliberatelyLeftAlone: [],
+    recentPurchaseExcluded,
+  };
 }

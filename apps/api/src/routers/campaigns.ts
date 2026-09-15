@@ -91,6 +91,93 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  overrideRecentPurchase: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        customerIds: z.array(z.string()).min(1).max(500),
+        reason: z.string().trim().min(5).max(240),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["draft", "scheduled"] },
+        },
+        select: { id: true, storeId: true, agentProposal: true },
+      });
+      if (!campaign) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campaign not found or its audience is already frozen",
+        });
+      }
+      const uniqueIds = [...new Set(input.customerIds)];
+      const customers = await ctx.prisma.customer.findMany({
+        where: { id: { in: uniqueIds }, storeId: campaign.storeId },
+        select: { id: true },
+      });
+      if (customers.length !== uniqueIds.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid customer selection" });
+      }
+      const currentAudience = await resolveCampaignAudience(campaign.id, new Date(), {
+        enforceDeliveryPauses: false,
+      });
+      const overrideable = new Set(
+        currentAudience.recentPurchaseExcluded.map((customer) => customer.id)
+      );
+      if (uniqueIds.some((customerId) => !overrideable.has(customerId))) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Only customers currently protected by the recent-purchase rule can be overridden here.",
+        });
+      }
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+      const existingRecent = Array.isArray(proposal.overrideRecentPurchaseCustomerIds)
+        ? proposal.overrideRecentPurchaseCustomerIds.filter(
+            (customerId): customerId is string => typeof customerId === "string"
+          )
+        : [];
+      const existingIncluded = Array.isArray(proposal.includeLeftAloneCustomerIds)
+        ? proposal.includeLeftAloneCustomerIds.filter(
+            (customerId): customerId is string => typeof customerId === "string"
+          )
+        : [];
+      await ctx.prisma.$transaction([
+        ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            status: "draft",
+            approvedAt: null,
+            approvalChecksum: null,
+            agentProposal: {
+              ...proposal,
+              overrideRecentPurchaseCustomerIds: [...new Set([...existingRecent, ...uniqueIds])],
+              includeLeftAloneCustomerIds: [...new Set([...existingIncluded, ...uniqueIds])],
+            },
+          },
+        }),
+        ctx.prisma.customerAudienceDecision.createMany({
+          data: uniqueIds.map((customerId) => ({
+            storeId: campaign.storeId,
+            customerId,
+            campaignId: campaign.id,
+            contextKey: campaign.id,
+            decision: "campaign_candidate",
+            reasonCode: "merchant_recent_purchase_override",
+            reasonText: "Merchant chose to include this recent buyer in this campaign.",
+            evidence: { originalDecision: "recent_purchase" },
+            merchantOverride: true,
+            overrideActorId: ctx.userId,
+            overrideReason: input.reason,
+          })),
+        }),
+      ]);
+      return { success: true, included: uniqueIds.length };
+    }),
+
   includeLeftAloneCustomers: workspaceProcedure
     .input(
       z.object({
@@ -230,6 +317,7 @@ export const campaignsRouter = router({
       audienceFreezesOnApproval: true,
       exclusions: audience.exclusions,
       exclusionSamples: audience.samples,
+      recentPurchaseCustomers: audience.recentPurchaseExcluded,
       subject: campaign.template.subject,
       previewText: campaign.template.previewText,
       sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,

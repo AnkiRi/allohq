@@ -7,14 +7,19 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { DecisionTracePanel } from "@/components/campaigns/DecisionTracePanel";
+import { useAlloAI } from "@/components/ai/AlloAIPanel";
 
 export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as string;
   const { toast } = useToast();
+  const { openPanel, setInput: setAIInput } = useAlloAI();
 
   const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [showRecentOverride, setShowRecentOverride] = useState(false);
+  const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
+  const [overrideReason, setOverrideReason] = useState("");
   const { data: campaign, isLoading } = trpc.campaigns.getById.useQuery({ id: campaignId });
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
@@ -66,6 +71,22 @@ export default function CampaignDetailPage() {
     },
     onError: () => toast("We couldn't change that audience. Mind trying again?", "error"),
   });
+  const overrideRecentPurchaseMut = trpc.campaigns.overrideRecentPurchase.useMutation({
+    onSuccess: ({ included }) => {
+      utils.campaigns.dryRun.invalidate({ id: campaignId });
+      utils.campaigns.getById.invalidate({ id: campaignId });
+      setShowRecentOverride(false);
+      setSelectedRecentIds([]);
+      setOverrideReason("");
+      toast(`${included} recent ${included === 1 ? "buyer is" : "buyers are"} back in consideration.`, "success");
+    },
+    onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
+  });
+
+  useEffect(() => {
+    if (!showRecentOverride || !dryRun?.recentPurchaseCustomers) return;
+    setSelectedRecentIds(dryRun.recentPurchaseCustomers.map((customer) => customer.id));
+  }, [showRecentOverride, dryRun?.recentPurchaseCustomers]);
 
   if (isLoading) {
     return (
@@ -302,8 +323,8 @@ export default function CampaignDetailPage() {
                     Joon protected {dryRun.exclusions.recent_purchase} recent {dryRun.exclusions.recent_purchase === 1 ? "buyer" : "buyers"} from this discount
                   </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
-                    They have already purchased inside the seven-day discount window. Sending them
-                    {dryRun.marginRisk.discountPercent}% off now could give away margin without changing their decision. Try a
+                    They have already purchased inside the seven-day discount window. Sending them {dryRun.marginRisk.discountPercent}%
+                    off now could give away margin without changing their decision. Try a
                     full-price new-product message, or choose customers whose last purchase is older.
                   </p>
                   {(dryRun.exclusionSamples.recent_purchase?.length ?? 0) > 0 && (
@@ -313,12 +334,87 @@ export default function CampaignDetailPage() {
                       ).join(", ")}
                     </p>
                   )}
-                  <Link
-                    href="/campaigns/new"
-                    className="mt-3 inline-flex rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Create a full-price campaign
-                  </Link>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAIInput(
+                          `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, audience, products, and brand voice, remove the discount, and let me review the draft before anything is sent.`
+                        );
+                        openPanel();
+                      }}
+                      className="rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Draft a full-price alternative
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRecentOverride((value) => !value)}
+                      className="rounded-lg px-3 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {showRecentOverride ? "Cancel override" : "Override Joon's decision"}
+                    </button>
+                  </div>
+                  {showRecentOverride && (
+                    <div className="mt-4 border-t border-border pt-4">
+                      <p className="text-[11px] font-medium text-foreground">
+                        Choose who to reconsider for this campaign
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {dryRun.recentPurchaseCustomers.map((customer) => {
+                          const checked = selectedRecentIds.includes(customer.id);
+                          const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                          return (
+                            <label key={customer.id} className="flex items-center gap-2 text-[11px] text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setSelectedRecentIds((current) =>
+                                    checked
+                                      ? current.filter((id) => id !== customer.id)
+                                      : [...current, customer.id]
+                                  )
+                                }
+                                className="h-4 w-4 rounded border-border accent-current"
+                              />
+                              <span className="truncate">{name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <label className="mt-4 block text-[11px] font-medium text-foreground" htmlFor="recent-purchase-override-reason">
+                        Why should Joon include them?
+                      </label>
+                      <textarea
+                        id="recent-purchase-override-reason"
+                        value={overrideReason}
+                        onChange={(event) => setOverrideReason(event.target.value)}
+                        rows={2}
+                        placeholder="For example: this is a promised festival offer for our VIP customers."
+                        className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        disabled={selectedRecentIds.length === 0 || overrideReason.trim().length < 5 || overrideRecentPurchaseMut.isPending}
+                        onClick={() =>
+                          overrideRecentPurchaseMut.mutate({
+                            id: campaignId,
+                            customerIds: selectedRecentIds,
+                            reason: overrideReason.trim(),
+                          })
+                        }
+                        className="mt-3 rounded-lg bg-secondary px-3 py-2 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {overrideRecentPurchaseMut.isPending
+                          ? "Recording override…"
+                          : `Include ${selectedRecentIds.length || "selected"} anyway`}
+                      </button>
+                      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                        Joon keeps the recent-purchase evidence, records your reason, and recalculates the control group. Consent and delivery safeguards still apply.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               {dryRun.leftAloneSamples.length > 0 && (

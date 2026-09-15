@@ -74,6 +74,12 @@ export function DecisionTracePanel({
                 customer state and delivery safeguards. No treatment or control group will be
                 created unless someone is eligible.
               </p>
+            ) : controlCount === 0 ? (
+              <p className="text-[13px] text-foreground font-sans leading-relaxed">
+                Joon found <b>{n(treatmentCount)} campaign candidates</b>. This audience is too
+                small for a useful random control group, so everyone can receive the campaign
+                and its result will remain <b>unmeasured</b>.
+              </p>
             ) : (
               <p className="text-[13px] text-foreground font-sans leading-relaxed">
               Joon chose to send a <b>{d.intent?.replace(/_/g, " ") ?? "retention"}</b> email
