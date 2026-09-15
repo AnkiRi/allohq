@@ -10,6 +10,7 @@ interface GraphqlOrder {
   id: string;
   name: string;
   createdAt: string;
+  processedAt: string;
   customer: { id: string } | null;
   currentTotalPriceSet: MoneyBag;
   currentSubtotalPriceSet: MoneyBag;
@@ -70,6 +71,7 @@ export async function syncAllOrders(
             id
             name
             createdAt
+            processedAt
             customer { id }
             currentTotalPriceSet { shopMoney { amount currencyCode } }
             currentSubtotalPriceSet { shopMoney { amount currencyCode } }
@@ -140,7 +142,10 @@ export async function syncAllOrders(
               discountCodes: order.discountCodes,
               currency: total.currencyCode,
               status: mapOrderStatus(order),
-              createdAt: new Date(order.createdAt),
+              // processedAt is the merchant's order timestamp. It preserves
+              // historical dates for imported orders, whereas createdAt can
+              // be the date Shopify's API record was created.
+              createdAt: new Date(order.processedAt),
             },
             update: {
               customerId: customer.id,
@@ -153,7 +158,7 @@ export async function syncAllOrders(
               discountCodes: order.discountCodes,
               currency: total.currencyCode,
               status: mapOrderStatus(order),
-              createdAt: new Date(order.createdAt),
+              createdAt: new Date(order.processedAt),
             },
           });
 
