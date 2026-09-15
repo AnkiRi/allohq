@@ -99,7 +99,9 @@ export function Sidebar() {
     : "U";
 
   const isActive = (href: string) => {
-    if (href === "/settings") return pathname === "/settings" || pathname.startsWith("/settings/");
+    // Settings has named child destinations in the primary nav. Match the
+    // index exactly so /settings/readiness belongs only to Setup readiness.
+    if (href === "/settings") return pathname === "/settings";
     return pathname === href || pathname.startsWith(href + "/");
   };
 

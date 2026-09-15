@@ -53,7 +53,9 @@ export default function SegmentsPage() {
 
   // Merge segment definitions with distribution data.
   const mergedSegments = (segments ?? []).map((seg: any) => {
-    const dist = (distribution ?? []).find((d: any) => d.segment === seg.name);
+    const dist = (distribution ?? []).find(
+      (d: any) => d.storeId === seg.storeId && d.segment === seg.name,
+    );
     return {
       ...seg,
       liveCount: dist?.customerCount ?? seg.customerCount,
@@ -245,7 +247,10 @@ export default function SegmentsPage() {
                           </div>
                           <div className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
                             {seg.liveCount.toLocaleString("en-IN")} ·{" "}
-                            {pct.toFixed(0)}%
+                            {pct.toFixed(0)}% · {seg.store?.storeName || seg.store?.shopDomain}
+                            {seg.isSystem
+                              ? " · live state"
+                              : ` · made ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(seg.createdAt))}`}
                           </div>
                         </div>
 

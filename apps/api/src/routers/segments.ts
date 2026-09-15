@@ -124,7 +124,7 @@ export const segmentsRouter = router({
   list: workspaceProcedure.query(async ({ ctx }) => {
     const stores = await ctx.prisma.store.findMany({
       where: { workspaceId: ctx.workspaceId },
-      select: { id: true },
+      select: { id: true, storeName: true, shopDomain: true, currency: true },
     });
     const storeIds = stores.map((s) => s.id);
 
@@ -133,7 +133,10 @@ export const segmentsRouter = router({
       orderBy: { rfmMax: "desc" },
     });
 
-    return segments;
+    return segments.map((segment) => ({
+      ...segment,
+      store: stores.find((store) => store.id === segment.storeId) ?? null,
+    }));
   }),
 
   /** Get one segment + its RESOLVED members (works for every segment kind). */
@@ -200,7 +203,7 @@ export const segmentsRouter = router({
     const storeIds = stores.map((s) => s.id);
 
     const distribution = await ctx.prisma.rfmScore.groupBy({
-      by: ["segment"],
+      by: ["storeId", "segment"],
       where: { storeId: { in: storeIds } },
       _count: { id: true },
       _sum: { totalSpent: true },
@@ -208,6 +211,7 @@ export const segmentsRouter = router({
     });
 
     return distribution.map((d) => ({
+      storeId: d.storeId,
       segment: d.segment,
       customerCount: d._count.id,
       totalRevenue: d._sum.totalSpent ?? 0,
