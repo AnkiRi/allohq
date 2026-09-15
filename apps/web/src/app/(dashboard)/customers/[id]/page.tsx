@@ -221,7 +221,9 @@ export default function CustomerDetailPage() {
 
   const rfm = customer.rfmScore;
   const ltv = customer.lifetimeValue;
-  const segment = rfm?.segment;
+  const segment = (rfm?.orderCount ?? customer.orders.length) === 0
+    ? "Subscribers"
+    : rfm?.segment;
   const ltvCta = getLtvEmptyStateCta(segment);
 
   const daysSinceLastOrder = rfm?.lastOrderAt
@@ -345,9 +347,9 @@ export default function CustomerDetailPage() {
             <div className="space-y-5">
               <div className="flex items-center gap-3">
                 <span
-                  className={`px-3 py-1.5 rounded text-[11px] font-sans font-bold border ${getSegmentBadgeColor(rfm.segment)}`}
+                  className={`px-3 py-1.5 rounded text-[11px] font-sans font-bold border ${getSegmentBadgeColor(segment ?? rfm.segment)}`}
                 >
-                  {rfm.segment}
+                  {segment ?? rfm.segment}
                 </span>
                 <span className="text-[11px] text-muted-foreground font-mono">
                   Score: {rfm.totalScore}/15
@@ -529,9 +531,9 @@ export default function CustomerDetailPage() {
               <div className="text-[12px] font-sans text-foreground">
                 Segmented as{" "}
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSegmentBadgeColor(rfm.segment)}`}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSegmentBadgeColor(segment ?? rfm.segment)}`}
                 >
-                  {rfm.segment}
+                  {segment ?? rfm.segment}
                 </span>
               </div>
               <div className="text-[11px] font-sans text-muted-foreground mt-0.5">

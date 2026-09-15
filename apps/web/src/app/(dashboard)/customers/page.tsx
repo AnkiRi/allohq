@@ -303,6 +303,9 @@ function CustomersConsole() {
               ) : (
                 data?.customers.map((customer) => {
                   const noOrders = hasNoOrders(customer);
+                  const displayedSegment = noOrders
+                    ? "Subscribers"
+                    : customer.rfmScore?.segment;
                   return (
                     <tr
                       key={customer.id}
@@ -332,7 +335,7 @@ function CustomersConsole() {
                           className="flex items-center gap-1.5"
                         >
                           <span className="inline-block font-mono text-[11px] lowercase text-muted-foreground">
-                            {customer.rfmScore?.segment ?? "·"}
+                            {displayedSegment ?? "·"}
                           </span>
                           {noOrders && (
                             <span className="font-mono text-[9px] uppercase tracking-[0.5px] text-muted-foreground border border-border rounded px-1 leading-[1.4]">
