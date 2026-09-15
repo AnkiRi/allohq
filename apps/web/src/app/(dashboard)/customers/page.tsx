@@ -13,6 +13,7 @@ import { ConsoleFrame, CommandLine, MetricReadout, formatINR } from "@/component
 
 const SEGMENTS = [
   "All",
+  "Subscribers",
   "Champions",
   "Loyal Customers",
   "Potential Loyalists",
@@ -63,7 +64,12 @@ function parseCommand(raw: string): CommandIntent {
     return { kind: "segment", segment: "Loyal Customers" };
   }
 
-  // New / first-timers → New Customers.
+  // Subscribers who have not purchased yet.
+  if (/\b(subscriber|subscribed|joined|no orders?|never purchased)\b/.test(q)) {
+    return { kind: "segment", segment: "Subscribers" };
+  }
+
+  // New / first-time buyers → New Customers.
   if (/\b(new|first[\s-]?time|just joined|recent sign)\b/.test(q)) {
     return { kind: "segment", segment: "New Customers" };
   }

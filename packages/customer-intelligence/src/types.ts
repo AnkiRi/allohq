@@ -1,5 +1,6 @@
 /** RFM segment name classification */
 export type RfmSegmentName =
+  | "Subscribers"
   | "Champions"
   | "Loyal Customers"
   | "Potential Loyalists"

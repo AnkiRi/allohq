@@ -2,6 +2,7 @@ import type { SegmentDefinition } from "../types";
 
 /** Default RFM segments used in e-commerce */
 export const DEFAULT_SEGMENTS: SegmentDefinition[] = [
+  { name: "Subscribers", slug: "subscribers", description: "Joined your email audience but have not ordered yet", rfmMin: 3, rfmMax: 3, color: "#999999" },
   { name: "Champions", slug: "champions", description: "Recent buyers, frequent, high spenders", rfmMin: 12, rfmMax: 15, color: "#111111" },
   { name: "Loyal Customers", slug: "loyal", description: "Buy regularly with good spend", rfmMin: 9, rfmMax: 11, color: "#333333" },
   { name: "Potential Loyalists", slug: "potential-loyalists", description: "Recent customers with growing frequency", rfmMin: 7, rfmMax: 9, color: "#555555" },

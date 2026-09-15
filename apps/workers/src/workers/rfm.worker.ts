@@ -75,7 +75,9 @@ export const rfmWorker = new Worker<RfmJobData>(
       const frequency = scoreQuintile(data.orderCount, frequencyValues);
       const monetary = scoreQuintile(data.totalSpent, monetaryValues);
       const totalScore = recency + frequency + monetary;
-      const segment = getSegmentName(recency, frequency, monetary);
+      // RFM describes purchase history. Someone who has never ordered cannot
+      // be "Lost" or lapsed; they are awaiting a first purchase.
+      const segment = data.orderCount === 0 ? "Subscribers" : getSegmentName(recency, frequency, monetary);
 
       // Detect segment change
       const oldSegment = existingSegmentMap.get(data.customerId);

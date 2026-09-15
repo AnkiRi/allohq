@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Tag, ShoppingBag, BarChart2, Sparkles, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { ReasoningReveal, type ReasoningStory } from "@/components/console/ReasoningReveal";
 import { formatINR } from "@/components/console";
 
@@ -29,7 +30,7 @@ function getSegmentBadgeColor(segment: string): string {
     return "bg-muted text-muted-foreground border-border";
   if (s.includes("risk"))
     return "bg-[hsl(var(--destructive)/0.14)] text-destructive border-[hsl(var(--destructive)/0.25)]";
-  if (s.includes("new") || s.includes("recent"))
+  if (s.includes("subscriber") || s.includes("new") || s.includes("recent"))
     return "bg-[hsl(var(--accent)/0.12)] text-[hsl(var(--accent))] border-[hsl(var(--accent)/0.25)]";
   return "bg-secondary text-secondary-foreground border-border";
 }
@@ -61,6 +62,18 @@ function getCustomerStory(args: {
     daysSinceLastOrder !== null
       ? `last order ${daysSinceLastOrder} days ago · ${orderCount} in all`
       : `${orderCount} orders, none recent`;
+
+  if (orderCount === 0) {
+    return {
+      lead: `${who} joined your audience`,
+      lines: [
+        { text: "joon noticed: subscribed, with no order yet" },
+        { text: "a useful introduction can help them choose a first product" },
+        { text: "downside: too early for a win-back · keep it welcoming", beat: true },
+        { text: "first-purchase opportunity · low confidence yet", arrow: true },
+      ],
+    };
+  }
 
   if (s.includes("hibernat") || s.includes("lost")) {
     return {
@@ -135,6 +148,11 @@ function getLtvEmptyStateCta(segment: string | undefined): { label: string; desc
       description: "We'll work out lifetime value once this customer places their first order.",
     };
   const s = segment.toLowerCase();
+  if (s.includes("subscriber"))
+    return {
+      label: "Draft a first-purchase email",
+      description: "There is no purchase history yet, so start with a useful introduction rather than a win-back.",
+    };
   if (s.includes("hibernat") || s.includes("lost"))
     return {
       label: "Send a Win-Back Offer",
@@ -165,6 +183,7 @@ export default function CustomerDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { data: customer, isLoading } = trpc.customers.getById.useQuery({ id });
+  const { submit: submitToJoon } = useAlloAI();
   const { data: decisionHistory } = (trpc.customers.decisionHistory as any).useQuery({
     customerId: id,
     limit: 100,
@@ -220,6 +239,7 @@ export default function CustomerDetailPage() {
   // Restraint is a recorded campaign decision, never inferred from a broad
   // lifecycle segment such as Champion or New Customer.
   const leftAlone = decisionHistory?.[0]?.decision === "deliberately_left_alone";
+  const campaignInstruction = `Draft an email campaign only for ${fullName || customer.email} (${customer.email}). Use this exact customer as the audience and let me review the draft before sending. ${customer.orders.length === 0 ? "They have not ordered yet, so make this a useful first-purchase introduction, not a win-back." : `Their current lifecycle segment is ${segment ?? "not yet classified"}; use their order history and current state to choose an appropriate message.`}`;
 
   return (
     <motion.div
@@ -287,12 +307,13 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          <Link
-            href="/campaigns/new"
+          <button
+            type="button"
+            onClick={() => submitToJoon(campaignInstruction)}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
           >
             <Mail className="w-3.5 h-3.5" /> Draft email campaign
-          </Link>
+          </button>
         </div>
       </motion.div>
 
@@ -306,12 +327,13 @@ export default function CustomerDetailPage() {
           <h2 className="section-header text-[13px]">What joon noticed</h2>
         </div>
         <ReasoningReveal stories={[customerStory]} />
-        <Link
-          href="/campaigns/new"
+        <button
+          type="button"
+          onClick={() => submitToJoon(campaignInstruction)}
           className="inline-flex items-center gap-1.5 mt-5 px-4 py-2 rounded-lg bg-foreground text-background text-[12px] font-sans hover:opacity-90 transition-opacity"
         >
           <Sparkles className="w-3.5 h-3.5" /> Draft this for them
-        </Link>
+        </button>
       </motion.div>
 
       {/* ── RFM + LTV ── */}
@@ -466,12 +488,13 @@ export default function CustomerDetailPage() {
               <p className="text-[12px] text-muted-foreground font-sans mb-4 max-w-[240px]">
                 {ltvCta.description}
               </p>
-              <Link
-                href="/campaigns/new"
+              <button
+                type="button"
+                onClick={() => submitToJoon(campaignInstruction)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
               >
                 <Send className="w-3.5 h-3.5" /> {ltvCta.label}
-              </Link>
+              </button>
             </div>
           )}
         </motion.div>
@@ -542,12 +565,13 @@ export default function CustomerDetailPage() {
               <div className="text-[12px] font-sans text-muted-foreground">
                 Nothing since. A friendly campaign could be the nudge they need.
               </div>
-              <Link
-                href="/campaigns/new"
+              <button
+                type="button"
+                onClick={() => submitToJoon(campaignInstruction)}
                 className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-sans text-[hsl(var(--accent))] hover:text-foreground transition-colors"
               >
                 <Send className="w-3 h-3" /> Create a campaign
-              </Link>
+              </button>
             </div>
           )}
         </div>
