@@ -21,6 +21,7 @@ export const SHOPIFY_WEBHOOK_TOPICS = [
   "products/delete",
   "customers/create",
   "customers/update",
+  "customers_email_marketing_consent/update",
   "customers/delete",
   "orders/create",
   "orders/updated",

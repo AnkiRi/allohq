@@ -201,6 +201,9 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         }
         break;
       }
+      case "customers_email_marketing_consent/update":
+        await updateCustomerEmailConsent(store.id, payload);
+        break;
       case "customers/delete":
         await deleteCustomer(store.id, payload);
         break;
@@ -781,6 +784,78 @@ async function upsertCustomer(
   });
 
   return { id: customer.id };
+}
+
+async function updateCustomerEmailConsent(
+  storeId: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const payload = data as {
+    customer_id?: number | string;
+    email_address?: string;
+    email_marketing_consent?: {
+      state?: string | null;
+      opt_in_level?: string | null;
+      consent_updated_at?: string | null;
+    } | null;
+  };
+  const externalId = payload.customer_id == null ? null : String(payload.customer_id);
+  const email = payload.email_address?.trim().toLowerCase();
+  const customer = await prisma.customer.findFirst({
+    where: {
+      storeId,
+      OR: [
+        ...(externalId ? [{ externalId }] : []),
+        ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  if (!customer) {
+    throw new Error(`Consent update arrived before customer ${externalId ?? email ?? "unknown"}`);
+  }
+
+  const shopifyState = String(payload.email_marketing_consent?.state ?? "unknown").toLowerCase();
+  const status =
+    shopifyState === "subscribed"
+      ? "opted_in"
+      : shopifyState === "unsubscribed"
+        ? "opted_out"
+        : "unknown";
+  const consentUpdatedAt = payload.email_marketing_consent?.consent_updated_at;
+
+  await prisma.$transaction([
+    prisma.customer.update({
+      where: { id: customer.id },
+      data: { acceptsMarketing: status === "opted_in", ...(email ? { email } : {}) },
+    }),
+    prisma.contactConsent.upsert({
+      where: { customerId_channel: { customerId: customer.id, channel: "email" } },
+      create: {
+        storeId,
+        customerId: customer.id,
+        channel: "email",
+        status,
+        source: "shopify",
+        evidence: {
+          state: shopifyState,
+          optInLevel: payload.email_marketing_consent?.opt_in_level ?? null,
+        },
+        collectedAt: consentUpdatedAt ? new Date(consentUpdatedAt) : null,
+        revokedAt: status === "opted_out" ? new Date() : null,
+      },
+      update: {
+        status,
+        source: "shopify",
+        evidence: {
+          state: shopifyState,
+          optInLevel: payload.email_marketing_consent?.opt_in_level ?? null,
+        },
+        collectedAt: consentUpdatedAt ? new Date(consentUpdatedAt) : null,
+        revokedAt: status === "opted_out" ? new Date() : null,
+      },
+    }),
+  ]);
 }
 
 async function deleteCustomer(storeId: string, data: Record<string, unknown>) {
