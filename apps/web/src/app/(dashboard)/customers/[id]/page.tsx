@@ -223,7 +223,7 @@ export default function CustomerDetailPage() {
   const rfm = customer.rfmScore;
   const ltv = customer.lifetimeValue;
   const segment = (rfm?.orderCount ?? customer.orders.length) === 0
-    ? "Subscribers"
+    ? customer.acceptsMarketing ? "Subscribers" : "Not subscribed"
     : rfm?.segment;
   const ltvCta = getLtvEmptyStateCta(segment);
 

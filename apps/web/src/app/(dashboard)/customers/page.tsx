@@ -304,7 +304,7 @@ function CustomersConsole() {
                 data?.customers.map((customer) => {
                   const noOrders = hasNoOrders(customer);
                   const displayedSegment = noOrders
-                    ? "Subscribers"
+                    ? customer.acceptsMarketing ? "Subscribers" : "Not subscribed"
                     : customer.rfmScore?.segment;
                   return (
                     <tr
