@@ -217,9 +217,9 @@ export default function CustomerDetailPage() {
     daysSinceLastOrder,
     orderCount: rfm?.orderCount ?? customer.orders.length,
   });
-  // Champions / new buyers are deliberately left alone — name that restraint.
-  const s = (segment ?? "").toLowerCase();
-  const leftAlone = s.includes("champion") || s.includes("new") || s.includes("recent");
+  // Restraint is a recorded campaign decision, never inferred from a broad
+  // lifecycle segment such as Champion or New Customer.
+  const leftAlone = decisionHistory?.[0]?.decision === "deliberately_left_alone";
 
   return (
     <motion.div

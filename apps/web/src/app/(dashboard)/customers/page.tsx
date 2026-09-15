@@ -72,13 +72,12 @@ function parseCommand(raw: string): CommandIntent {
   return { kind: "search", term: raw.trim() };
 }
 
-function isInactiveCustomer(customer: {
+function hasNoOrders(customer: {
   rfmScore?: { orderCount?: number; totalSpent?: number } | null;
   _count: { orders: number };
 }): boolean {
   const orders = customer.rfmScore?.orderCount ?? customer._count.orders;
-  const spent = customer.rfmScore?.totalSpent ?? 0;
-  return orders === 0 && spent === 0;
+  return orders === 0;
 }
 
 // RFM total-score readout color — accent for strong, muted otherwise.
@@ -297,13 +296,11 @@ function CustomersConsole() {
                 </tr>
               ) : (
                 data?.customers.map((customer) => {
-                  const inactive = isInactiveCustomer(customer);
+                  const noOrders = hasNoOrders(customer);
                   return (
                     <tr
                       key={customer.id}
-                      className={`transition-colors group relative hover:bg-background/40${
-                        inactive ? " opacity-60" : ""
-                      }`}
+                      className="group relative transition-colors hover:bg-background/40"
                     >
                       <td className="px-5 py-4">
                         <Link
@@ -331,11 +328,9 @@ function CustomersConsole() {
                           <span className="inline-block font-mono text-[11px] lowercase text-muted-foreground">
                             {customer.rfmScore?.segment ?? "·"}
                           </span>
-                          {/* Restraint, named — dormant rows are deliberately
-                              left alone, not just dimmed into the background. */}
-                          {inactive && (
+                          {noOrders && (
                             <span className="font-mono text-[9px] uppercase tracking-[0.5px] text-muted-foreground border border-border rounded px-1 leading-[1.4]">
-                              left alone
+                              no orders yet
                             </span>
                           )}
                         </Link>
