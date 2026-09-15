@@ -5,6 +5,9 @@ import { checkEventTriggers } from "../utils/event-triggers";
 import { redactAcquisitionEvidence } from "../acquisition-privacy";
 import { calculateNetOrderRevenue } from "../refund-revenue";
 import { isWebhookOlderThanInstall } from "../shopify-webhook-ordering";
+import { shopify } from "@allohq/ecommerce-integrations";
+
+const { getShopifyAdminClient } = shopify;
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
@@ -163,7 +166,10 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
 
       // --- Customers ---
       case "customers/create": {
-        const customer = await upsertCustomer(store.id, payload);
+        const customer = await upsertCustomer(
+          store.id,
+          await hydrateCustomerEmailConsent(store.id, payload),
+        );
         if (customer) {
           await checkEventTriggers(store.id, "customer_created", customer.id, eventId ?? undefined);
         }
@@ -180,7 +186,10 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
                 },
                 select: { tags: true },
               });
-        const customer = await upsertCustomer(store.id, payload);
+        const customer = await upsertCustomer(
+          store.id,
+          await hydrateCustomerEmailConsent(store.id, payload),
+        );
         const incomingTags =
           typeof customerPayload.tags === "string"
             ? customerPayload.tags
@@ -784,6 +793,53 @@ async function upsertCustomer(
   });
 
   return { id: customer.id };
+}
+
+async function hydrateCustomerEmailConsent(
+  storeId: string,
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const payload = data as {
+    id?: number | string;
+    email_marketing_consent?: { state?: string | null } | null;
+  };
+  if (payload.email_marketing_consent?.state || payload.id == null) return data;
+
+  const client = await getShopifyAdminClient(storeId);
+  const response = await client.graphql<{
+    customer: {
+      defaultEmailAddress: {
+        emailAddress: string;
+        marketingState: string;
+        marketingOptInLevel: string | null;
+        marketingUpdatedAt: string | null;
+      } | null;
+    } | null;
+  }>(`
+    query JoonCustomerConsent($id: ID!) {
+      customer(id: $id) {
+        defaultEmailAddress {
+          emailAddress
+          marketingState
+          marketingOptInLevel
+          marketingUpdatedAt
+        }
+      }
+    }
+  `, { id: `gid://shopify/Customer/${String(payload.id)}` });
+  const address = response.customer?.defaultEmailAddress;
+  if (!address) return data;
+
+  return {
+    ...data,
+    email: address.emailAddress,
+    accepts_marketing: address.marketingState.toLowerCase() === "subscribed",
+    email_marketing_consent: {
+      state: address.marketingState.toLowerCase(),
+      opt_in_level: address.marketingOptInLevel,
+      consent_updated_at: address.marketingUpdatedAt,
+    },
+  };
 }
 
 async function updateCustomerEmailConsent(
