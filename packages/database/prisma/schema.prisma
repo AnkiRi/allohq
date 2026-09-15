@@ -1524,6 +1524,7 @@ model AiChatMessage {
   role       String // "user" | "assistant"
   content    String   @db.Text
   highlights Json?
+  artifacts  Json?
   model      String?
   createdAt  DateTime @default(now())
 

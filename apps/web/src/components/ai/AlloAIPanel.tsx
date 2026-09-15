@@ -107,6 +107,26 @@ interface Message {
   campaignPreview?: CampaignPreviewData;
 }
 
+type PersistedChatMessage = {
+  id: string;
+  role: string;
+  content: string;
+  highlights: { label: string; value: string }[] | null;
+  artifacts?: { version?: number; campaignPreview?: CampaignPreviewData } | null;
+  createdAt: string;
+};
+
+function restoreChatMessage(message: PersistedChatMessage): Message {
+  return {
+    id: message.id,
+    role: message.role as "user" | "assistant",
+    content: message.content,
+    highlights: message.highlights ?? undefined,
+    campaignPreview: message.artifacts?.campaignPreview,
+    timestamp: new Date(message.createdAt),
+  };
+}
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1383,17 +1403,11 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       try {
         const chat = await (utils.ai as any).getChat.fetch({ chatId: currentChatId }) as {
           title?: string;
-          messages?: { id: string; role: string; content: string; highlights: { label: string; value: string }[] | null; createdAt: string }[];
+          messages?: PersistedChatMessage[];
         };
         if (chat?.messages && chat.messages.length > 0) {
           setCurrentChatTitlePersist(chat.title || "Chat");
-          setMessages(chat.messages.map((m) => ({
-            id: m.id,
-            role: m.role as "user" | "assistant",
-            content: m.content,
-            highlights: m.highlights ?? undefined,
-            timestamp: new Date(m.createdAt),
-          })));
+          setMessages(chat.messages.map(restoreChatMessage));
           setWelcomeBuilt(true);
         } else {
           // Chat not found or empty — clear persisted state
@@ -1703,16 +1717,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     setDynamicSuggestions([]);
 
     try {
-      const chat = await (utils.ai as any).getChat.fetch({ chatId }) as { title?: string; messages?: { id: string; role: string; content: string; highlights: { label: string; value: string }[] | null; createdAt: string }[] };
+      const chat = await (utils.ai as any).getChat.fetch({ chatId }) as { title?: string; messages?: PersistedChatMessage[] };
       if (chat?.messages) {
         setCurrentChatTitlePersist(chat.title || "Chat");
-        setMessages(chat.messages.map((m) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          highlights: m.highlights ?? undefined,
-          timestamp: new Date(m.createdAt),
-        })));
+        setMessages(chat.messages.map(restoreChatMessage));
       }
     } catch {
       toast("Failed to load chat", "error");

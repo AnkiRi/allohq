@@ -1422,6 +1422,31 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       // what was created. (The standalone ai.executeInstruction procedure — used by the
       // Command Bar — still exists for that entry point, with its own guardrails.)
 
+      // Preserve structured results independently of the prose reply. A campaign
+      // preview is a durable chat artifact, not disposable rendering state.
+      let campaignPreview: {
+        previewHtml: string;
+        subject: string;
+        campaignName: string;
+        draftCampaignId: string;
+        estimatedRecipients?: number;
+      } | undefined;
+
+      for (const tc of agentResult.toolCalls) {
+        if (tc.name === "create_campaign_with_preview") {
+          const out = tc.output as Record<string, unknown>;
+          if (out?.success && out?.contentType === "campaign_preview") {
+            campaignPreview = {
+              previewHtml: String(out.previewHtml ?? ""),
+              subject: String(out.subject ?? ""),
+              campaignName: String(out.campaignName ?? ""),
+              draftCampaignId: String(out.draftCampaignId ?? ""),
+              estimatedRecipients: typeof out.estimatedRecipients === "number" ? out.estimatedRecipients : undefined,
+            };
+          }
+        }
+      }
+
       // Record chat token usage
       await ctx.prisma.tokenUsage.create({
         data: {
@@ -1473,6 +1498,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
               role: "assistant",
               content: reply,
               highlights: highlights.length > 0 ? highlights : undefined,
+              artifacts: campaignPreview
+                ? { version: 1, campaignPreview }
+                : undefined,
               model: agentResult.model ?? "unknown",
             },
           ],
@@ -1482,32 +1510,6 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         // 8. Auto-write agent memory if something significant happened
         // ---------------------------------------------------------------
         writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(() => {});
-      }
-
-      // ---------------------------------------------------------------
-      // 9. Extract campaign preview from tool call results
-      // ---------------------------------------------------------------
-      let campaignPreview: {
-        previewHtml: string;
-        subject: string;
-        campaignName: string;
-        draftCampaignId: string;
-        estimatedRecipients?: number;
-      } | undefined;
-
-      for (const tc of agentResult.toolCalls) {
-        if (tc.name === "create_campaign_with_preview") {
-          const out = tc.output as Record<string, unknown>;
-          if (out?.success && out?.contentType === "campaign_preview") {
-            campaignPreview = {
-              previewHtml: String(out.previewHtml ?? ""),
-              subject: String(out.subject ?? ""),
-              campaignName: String(out.campaignName ?? ""),
-              draftCampaignId: String(out.draftCampaignId ?? ""),
-              estimatedRecipients: typeof out.estimatedRecipients === "number" ? out.estimatedRecipients : undefined,
-            };
-          }
-        }
       }
 
       return {
@@ -1876,6 +1878,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
               role: true,
               content: true,
               highlights: true,
+              artifacts: true,
               model: true,
               createdAt: true,
             },
