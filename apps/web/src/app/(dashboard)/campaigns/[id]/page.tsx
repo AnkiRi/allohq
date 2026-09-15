@@ -163,7 +163,7 @@ export default function CampaignDetailPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {[
           { icon: Mail, label: "TREATED", value: stats?.holdout.treatmentAssigned.toLocaleString() ?? "0" },
-          { icon: Users, label: "HELD OUT", value: stats?.holdout.controlAssigned.toLocaleString() ?? "0" },
+          { icon: Users, label: "CONTROL", value: stats?.holdout.controlAssigned.toLocaleString() ?? "0" },
           { icon: Mail, label: "OPENED", value: stats ? `${(stats.openRate * 100).toFixed(1)}%` : "0%" },
           { icon: MousePointerClick, label: "CLICKED", value: stats ? `${(stats.clickRate * 100).toFixed(1)}%` : "0%" },
           { icon: ShoppingBag, label: "ATTRIBUTED ORDERS", value: stats?.attributedOrders.toLocaleString() ?? "0" },
@@ -268,7 +268,7 @@ export default function CampaignDetailPage() {
                 {[
                   ["Requested", dryRun.requested],
                   ["Treatment estimate", dryRun.estimatedTreatment],
-                  ["Held out estimate", dryRun.estimatedControl],
+                  ["Control estimate", dryRun.estimatedControl],
                 ].map(([label, value]) => (
                   <div key={String(label)} className="rounded-lg bg-muted/50 px-4 py-3">
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
@@ -279,7 +279,11 @@ export default function CampaignDetailPage() {
               {dryRun.measurement.warning && (
                 <div className="mb-5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-warning">
-                    {dryRun.measurement.tier === "unmeasured" ? "Unmeasured small cohort" : "Directional measurement"}
+                    {dryRun.measurement.tier === "empty"
+                      ? "No campaign candidates"
+                      : dryRun.measurement.tier === "unmeasured"
+                        ? "Unmeasured small cohort"
+                        : "Directional measurement"}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">{dryRun.measurement.warning}</p>
                 </div>
@@ -292,6 +296,31 @@ export default function CampaignDetailPage() {
                   </div>
                 ))}
               </div>
+              {dryRun.exclusions.recent_purchase > 0 && dryRun.marginRisk.discountPercent > 0 && (
+                <div className="mt-5 rounded-xl border border-border bg-background/50 p-4">
+                  <div className="text-[13px] font-semibold text-foreground">
+                    Joon protected {dryRun.exclusions.recent_purchase} recent {dryRun.exclusions.recent_purchase === 1 ? "buyer" : "buyers"} from this discount
+                  </div>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
+                    They have already purchased inside the seven-day discount window. Sending them
+                    {dryRun.marginRisk.discountPercent}% off now could give away margin without changing their decision. Try a
+                    full-price new-product message, or choose customers whose last purchase is older.
+                  </p>
+                  {(dryRun.exclusionSamples.recent_purchase?.length ?? 0) > 0 && (
+                    <p className="mt-3 text-[11px] text-foreground">
+                      Examples: {(dryRun.exclusionSamples.recent_purchase ?? []).map((customer) =>
+                        [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email
+                      ).join(", ")}
+                    </p>
+                  )}
+                  <Link
+                    href="/campaigns/new"
+                    className="mt-3 inline-flex rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Create a full-price campaign
+                  </Link>
+                </div>
+              )}
               {dryRun.leftAloneSamples.length > 0 && (
                 <div className="mt-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

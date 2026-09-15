@@ -31,7 +31,12 @@ export interface AudienceResolution {
     rfmStratum: string | null;
   }>;
   exclusions: Record<AudienceExclusionReason, number>;
-  samples: Partial<Record<AudienceExclusionReason, Array<{ id: string; email: string }>>>;
+  samples: Partial<
+    Record<
+      AudienceExclusionReason,
+      Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>
+    >
+  >;
   deliberatelyLeftAlone: Array<{
     id: string;
     email: string;
@@ -168,10 +173,18 @@ export async function resolveCampaignAudience(
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
   const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
-  const exclude = (reason: AudienceExclusionReason, customer: { id: string; email: string }) => {
+  const exclude = (
+    reason: AudienceExclusionReason,
+    customer: { id: string; email: string; firstName: string | null; lastName: string | null }
+  ) => {
     exclusions[reason]++;
     if ((samples[reason]?.length ?? 0) < 3)
-      (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
+      (samples[reason] ??= []).push({
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+      });
   };
 
   for (const customer of customers) {
@@ -290,10 +303,18 @@ export async function resolveAutomationAudience(
   ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
-  const exclude = (reason: AudienceExclusionReason, customer: { id: string; email: string }) => {
+  const exclude = (
+    reason: AudienceExclusionReason,
+    customer: { id: string; email: string; firstName: string | null; lastName: string | null }
+  ) => {
     exclusions[reason]++;
     if ((samples[reason]?.length ?? 0) < 3)
-      (samples[reason] ??= []).push({ id: customer.id, email: customer.email });
+      (samples[reason] ??= []).push({
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+      });
   };
   for (const customer of customers) {
     const reason = staticAudienceExclusion({

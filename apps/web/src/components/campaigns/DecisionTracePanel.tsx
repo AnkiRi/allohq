@@ -68,8 +68,15 @@ export function DecisionTracePanel({
             <div className="text-[10px] uppercase tracking-[1px] text-muted-foreground font-sans font-bold mb-1.5">
               The decision
             </div>
-            <p className="text-[13px] text-foreground font-sans leading-relaxed">
-              joon chose to send a <b>{d.intent?.replace(/_/g, " ") ?? "retention"}</b> email
+            {treatmentCount + controlCount === 0 ? (
+              <p className="text-[13px] text-foreground font-sans leading-relaxed">
+                Joon found <b>no campaign candidates</b> after checking consent, recent purchases,
+                customer state and delivery safeguards. No treatment or control group will be
+                created unless someone is eligible.
+              </p>
+            ) : (
+              <p className="text-[13px] text-foreground font-sans leading-relaxed">
+              Joon chose to send a <b>{d.intent?.replace(/_/g, " ") ?? "retention"}</b> email
               {d.discountPercent ? (
                 <>
                   {" "}with a <b>{d.discountPercent}% offer</b>
@@ -79,7 +86,8 @@ export function DecisionTracePanel({
               <b>{n(controlCount)} in a random control group</b>
               {controlRate ? <> ({Math.round(controlRate * 100)}%)</> : null} — so its results can be
               compared with customers who did not receive this campaign.
-            </p>
+              </p>
+            )}
             {data.human && data.human.acceptedAsProposed !== null && (
               <p className="text-[12px] text-muted-foreground font-sans mt-1.5">
                 {data.human.acceptedAsProposed
