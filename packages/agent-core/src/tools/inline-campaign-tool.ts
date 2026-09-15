@@ -104,6 +104,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           shopDomain: true,
           storeLogoUrl: true,
           storeName: true,
+          currency: true,
           address: true,
           socialLinks: true,
         },
@@ -161,6 +162,8 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // exactly Archana, not the nearest broad segment.
       const rawIds = directive
         ? directive.customerIds
+        : ctx.requestConstraints?.topCustomerCount != null && ctx.resolvedTopCustomerSelection
+        ? ctx.resolvedTopCustomerSelection.customerIds
         : Array.isArray(params.customerIds)
         ? (params.customerIds as unknown[]).map(String).filter(Boolean)
         : [];
@@ -339,6 +342,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           price: p.price,
           handle: p.handle,
         })),
+        currency: store.currency ?? "USD",
         storeUrl,
       };
       let result = await generateEmail(emailRequest);

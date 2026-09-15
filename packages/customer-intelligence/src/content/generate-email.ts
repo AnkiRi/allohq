@@ -39,6 +39,8 @@ export interface GenerateEmailInput {
     price: number;
     handle?: string;
   }[];
+  /** ISO 4217 store currency used for all monetary copy and product prices. */
+  currency?: string;
   storeUrl?: string; // e.g. "https://allohq3.myshopify.com"
   context?: {
     festivity?: string;
@@ -102,7 +104,7 @@ Tailor the messaging and product selection to this audience.`);
   // Products
   sections.push(`
 AVAILABLE PRODUCTS (choose the most relevant 2-4 for this email):
-${formatProductsForPrompt(input.products, input.storeUrl)}`);
+${formatProductsForPrompt(input.products, input.storeUrl, input.currency)}`);
 
   // Context
   if (input.context) {
@@ -110,7 +112,11 @@ ${formatProductsForPrompt(input.products, input.storeUrl)}`);
     if (input.context.festivity) ctxParts.push(`Festivity/Occasion: ${input.context.festivity}`);
     if (input.context.discount) {
       const d = input.context.discount;
-      ctxParts.push(`Discount: ${d.type === "percentage" ? `${d.value}%` : `$${d.value}`} off, code: ${d.code}`);
+      const fixedValue = new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: input.currency ?? "USD",
+      }).format(d.value);
+      ctxParts.push(`Discount: ${d.type === "percentage" ? `${d.value}%` : fixedValue} off, code: ${d.code}`);
     }
     if (input.context.funnelStage) ctxParts.push(`Funnel Stage: ${input.context.funnelStage}`);
     if (ctxParts.length > 0) {

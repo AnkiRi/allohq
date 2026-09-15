@@ -77,6 +77,8 @@ export interface BrandKit {
     footer: BrandKitFooter;
     /** Brand homepage / store URL. */
     url?: string;
+    /** ISO 4217 currency inherited from the connected store. */
+    currency: string;
     radius: {
         card: number;
         button: number;
@@ -113,6 +115,7 @@ export interface BuildBrandKitExtras {
     }[];
     preferencesUrl?: string;
     unsubscribeUrl?: string;
+    currency?: string | null;
 }
 /**
  * Derive a complete BrandKit from a store's BrandProfile + BrandVisualProfile.
@@ -130,5 +133,7 @@ export interface BuildBrandKitExtras {
  */
 export declare function buildBrandKit(brandProfile?: BrandProfileSource | null, brandVisualProfile?: BrandVisualProfileSource | null, extras?: BuildBrandKitExtras): BrandKit;
 /** Indian rupee formatting — ₹ with Indian digit grouping (e.g. ₹1,299). */
+export declare function formatCurrency(amount: number, currency?: string): string;
+/** @deprecated Use formatCurrency with the connected store currency. */
 export declare function formatINR(amount: number): string;
 //# sourceMappingURL=brand-kit.d.ts.map

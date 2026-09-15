@@ -311,12 +311,13 @@ export default function CampaignDetailPage() {
               )}
               <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Audience plan</div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
                   {[
                     ["You asked for", dryRun.requestedAudienceCount ?? dryRun.requested],
-                    ["Selected", dryRun.requested],
-                    ["Not available", dryRun.audienceShortfall],
-                    ["Left alone", dryRun.requested - dryRun.eligibleBeforeHoldout],
+                    ["Found in store", dryRun.requested],
+                    ["Not in store", dryRun.audienceShortfall],
+                    ["No email consent", dryRun.noEmailConsent],
+                    ["Left alone", dryRun.otherLeftAlone],
                     ["Random control", dryRun.estimatedControl],
                     ["Would receive", dryRun.estimatedTreatment],
                   ].map(([label, value]) => (
@@ -328,9 +329,12 @@ export default function CampaignDetailPage() {
                 </div>
                 <p className="mt-3 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
                   {dryRun.requestedAudienceCount != null && dryRun.audienceShortfall > 0
-                    ? `Joon found ${dryRun.requested} customers for the requested top ${dryRun.requestedAudienceCount}; ${dryRun.audienceShortfall} more were not available in this store’s ranked audience. `
+                    ? `This store has ${dryRun.requested} of the ${dryRun.requestedAudienceCount} customers requested. `
                     : ""}
-                  Of the selected customers, {dryRun.requested - dryRun.eligibleBeforeHoldout} are left alone by a safety or customer-state decision. From the remaining {dryRun.eligibleBeforeHoldout} campaign candidates, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "forms" : "form"} the random control and {dryRun.estimatedTreatment} would receive the email.
+                  {dryRun.noEmailConsent > 0
+                    ? `${dryRun.noEmailConsent} ${dryRun.noEmailConsent === 1 ? "has" : "have"} not subscribed to email and cannot be contacted. `
+                    : ""}
+                  Joon left {dryRun.otherLeftAlone} more alone for safety or because their current state says this campaign is unnecessary. From the remaining {dryRun.eligibleBeforeHoldout} campaign candidates, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "forms" : "form"} the random control and {dryRun.estimatedTreatment} would receive the email.
                 </p>
               </div>
               {dryRun.offer.appliedDiscountPercent > 0 && (

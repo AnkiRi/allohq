@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.renderGeneratedEmail = exports.renderBlock = exports.BrandEmailLayout = exports.DEFAULT_BRAND_KIT = exports.formatINR = exports.buildBrandKit = void 0;
+exports.renderGeneratedEmail = exports.renderBlock = exports.BrandEmailLayout = exports.DEFAULT_BRAND_KIT = exports.formatINR = exports.formatCurrency = exports.buildBrandKit = void 0;
 var brand_kit_1 = require("./brand-kit");
 Object.defineProperty(exports, "buildBrandKit", { enumerable: true, get: function () { return brand_kit_1.buildBrandKit; } });
+Object.defineProperty(exports, "formatCurrency", { enumerable: true, get: function () { return brand_kit_1.formatCurrency; } });
 Object.defineProperty(exports, "formatINR", { enumerable: true, get: function () { return brand_kit_1.formatINR; } });
 Object.defineProperty(exports, "DEFAULT_BRAND_KIT", { enumerable: true, get: function () { return brand_kit_1.DEFAULT_BRAND_KIT; } });
 var BrandEmailLayout_1 = require("./BrandEmailLayout");

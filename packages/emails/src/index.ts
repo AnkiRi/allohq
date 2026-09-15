@@ -1,5 +1,6 @@
 export {
   buildBrandKit,
+  formatCurrency,
   formatINR,
   DEFAULT_BRAND_KIT,
 } from "./brand-kit";

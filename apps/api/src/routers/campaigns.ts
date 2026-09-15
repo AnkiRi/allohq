@@ -322,6 +322,11 @@ export const campaignsRouter = router({
     const currency = campaign.store.currency === "INR" ? "INR" as const : "USD" as const;
     const estimatedProviderCost =
       (audience.eligible.length - control) * emailMessagingCostForCurrency(currency);
+    const noEmailConsent = audience.exclusions.no_consent + audience.exclusions.unsubscribed;
+    const otherLeftAlone = Math.max(
+      0,
+      audience.requested - audience.eligible.length - noEmailConsent,
+    );
     return {
       providerCalled: false,
       deliveryGate: {
@@ -344,6 +349,8 @@ export const campaignsRouter = router({
       previewAssignments,
       requestedAudienceCount: proposal.requestedAudienceCount ?? null,
       audienceShortfall: Math.max(0, (proposal.requestedAudienceCount ?? audience.requested) - audience.requested),
+      noEmailConsent,
+      otherLeftAlone,
       measurement,
       estimatedProviderCost,
       estimatedProviderCostCurrency: currency,

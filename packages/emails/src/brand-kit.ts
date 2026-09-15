@@ -83,6 +83,8 @@ export interface BrandKit {
   footer: BrandKitFooter;
   /** Brand homepage / store URL. */
   url?: string;
+  /** ISO 4217 currency inherited from the connected store. */
+  currency: string;
   radius: { card: number; button: number };
   contentWidth: number;
 }
@@ -93,6 +95,7 @@ export interface BrandKit {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_BRAND_KIT: BrandKit = {
+  currency: "USD",
   colors: {
     paper: "#F6F5F2",
     surface: "#FFFFFF",
@@ -236,6 +239,7 @@ export interface BuildBrandKitExtras {
   socialLinks?: { platform: string; url: string }[];
   preferencesUrl?: string;
   unsubscribeUrl?: string;
+  currency?: string | null;
 }
 
 /** Web-safe font keywords mapped to full email-safe stacks. */
@@ -398,14 +402,22 @@ export function buildBrandKit(
     },
     footer,
     url: extras?.storeUrl ?? undefined,
+    currency: extras?.currency ?? DEFAULT_BRAND_KIT.currency,
     radius: d.radius,
     contentWidth: d.contentWidth,
   };
 }
 
 /** Indian rupee formatting — ₹ with Indian digit grouping (e.g. ₹1,299). */
+export function formatCurrency(amount: number, currency = "USD"): string {
+  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/** @deprecated Use formatCurrency with the connected store currency. */
 export function formatINR(amount: number): string {
-  return `₹${new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
-  }).format(amount)}`;
+  return formatCurrency(amount, "INR");
 }

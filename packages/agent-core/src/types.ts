@@ -21,6 +21,11 @@ export interface ToolContext {
     topCustomerCount?: number;
     discountPercent?: number;
   };
+  resolvedTopCustomerSelection?: {
+    customerIds: string[];
+    requestedCount: number;
+    totalStoreCustomers: number;
+  };
 }
 
 /** A message in the agent conversation */

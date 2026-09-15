@@ -140,13 +140,18 @@ VOICE PRIORITY: The merchant's BRAND VOICE above always wins over generic intent
 /** Product formatting for prompts */
 export function formatProductsForPrompt(
   products: { id: string; title: string; description?: string; price: number; imageUrl?: string; handle?: string }[],
-  storeUrl?: string
+  storeUrl?: string,
+  currency = "USD",
 ): string {
   if (products.length === 0) return "No products available.";
 
   return products
     .map((p, i) => {
-      const parts = [`${i + 1}. [ID: ${p.id}] "${p.title}" — $${p.price.toFixed(2)}`];
+      const formattedPrice = new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency,
+      }).format(p.price);
+      const parts = [`${i + 1}. [ID: ${p.id}] "${p.title}" — ${formattedPrice}`];
       if (p.imageUrl) parts.push(`   Image: ${p.imageUrl}`);
       if (p.handle && storeUrl) parts.push(`   URL: ${storeUrl}/products/${p.handle}`);
       if (p.description) parts.push(`   ${p.description.slice(0, 150)}`);

@@ -200,13 +200,13 @@ function ProductBlockView({ block, ctx, }) {
                                     fontSize: 15,
                                     fontWeight: 600,
                                     color: bk.colors.ink,
-                                }, children: [(0, brand_kit_1.formatINR)(product.price), product.compareAtPrice ? ((0, jsx_runtime_1.jsx)("span", { className: "bk-muted", style: {
+                                }, children: [(0, brand_kit_1.formatCurrency)(product.price, bk.currency), product.compareAtPrice ? ((0, jsx_runtime_1.jsx)("span", { className: "bk-muted", style: {
                                             fontWeight: 400,
                                             fontSize: 13,
                                             color: bk.colors.muted,
                                             textDecoration: "line-through",
                                             marginLeft: 8,
-                                        }, children: (0, brand_kit_1.formatINR)(product.compareAtPrice) })) : null] })) : null, (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(buttonHref || "#", variables), children: buttonText })] })] }) }) }));
+                                        }, children: (0, brand_kit_1.formatCurrency)(product.compareAtPrice, bk.currency) })) : null] })) : null, (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(buttonHref || "#", variables), children: buttonText })] })] }) }) }));
 }
 function ProductGridBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;
@@ -235,7 +235,7 @@ function ProductGridBlockView({ block, ctx, }) {
                             fontSize: 14,
                             fontWeight: 600,
                             color: bk.colors.ink,
-                        }, children: p.title }), showDescription && p.description ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-muted", style: { margin: "0 0 2px", fontFamily: bk.fonts.sans, fontSize: 12, color: bk.colors.muted }, children: p.description })) : null, showPrice ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-ink", style: { margin: 0, fontFamily: bk.fonts.sans, fontSize: 14, fontWeight: 600, color: bk.colors.ink }, children: (0, brand_kit_1.formatINR)(p.price) })) : null] }, p.id))) }, ri))) }));
+                        }, children: p.title }), showDescription && p.description ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-muted", style: { margin: "0 0 2px", fontFamily: bk.fonts.sans, fontSize: 12, color: bk.colors.muted }, children: p.description })) : null, showPrice ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-ink", style: { margin: 0, fontFamily: bk.fonts.sans, fontSize: 14, fontWeight: 600, color: bk.colors.ink }, children: (0, brand_kit_1.formatCurrency)(p.price, bk.currency) })) : null] }, p.id))) }, ri))) }));
 }
 function IconRowBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;

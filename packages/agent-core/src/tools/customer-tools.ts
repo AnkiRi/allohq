@@ -82,25 +82,37 @@ export const customerTools: ToolDefinition[] = [
       else if (topBy === "orders") orderBy = { rfmScore: { orderCount: "desc" } };
       else if (topBy === "rfm") orderBy = { rfmScore: { totalScore: "desc" } };
 
-      const customers = await prisma.customer.findMany({
-        where: {
-          storeId: ctx.storeId,
-          ...(query
-            ? {
-                OR: [
-                  { firstName: { contains: query, mode: "insensitive" } },
-                  { lastName: { contains: query, mode: "insensitive" } },
-                  { email: { contains: query, mode: "insensitive" } },
-                ],
-              }
-            : {}),
-        },
-        include: { rfmScore: { select: { segment: true, totalSpent: true } } },
-        ...(orderBy ? { orderBy: orderBy as never } : {}),
-        take,
-      });
+      const where = {
+        storeId: ctx.storeId,
+        ...(query
+          ? {
+              OR: [
+                { firstName: { contains: query, mode: "insensitive" as const } },
+                { lastName: { contains: query, mode: "insensitive" as const } },
+                { email: { contains: query, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      };
+      const [customers, totalStoreCustomers] = await Promise.all([
+        prisma.customer.findMany({
+          where,
+          include: { rfmScore: { select: { segment: true, totalSpent: true } } },
+          ...(orderBy ? { orderBy: orderBy as never } : {}),
+          take,
+        }),
+        prisma.customer.count({ where: { storeId: ctx.storeId } }),
+      ]);
+      if (requestedTopCount != null && !query) {
+        ctx.resolvedTopCustomerSelection = {
+          customerIds: customers.map((customer) => customer.id),
+          requestedCount: requestedTopCount,
+          totalStoreCustomers,
+        };
+      }
       return {
         count: customers.length,
+        totalStoreCustomers,
         customers: customers.map((c) => ({
           id: c.id,
           name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,

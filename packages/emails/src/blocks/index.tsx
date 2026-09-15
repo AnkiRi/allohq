@@ -15,7 +15,7 @@ import type {
   ProductData,
 } from "@allohq/email-builder";
 import type { BrandKit } from "../brand-kit";
-import { formatINR } from "../brand-kit";
+import { formatCurrency } from "../brand-kit";
 
 // ---------------------------------------------------------------------------
 // Render context — everything a block needs that isn't the brand kit.
@@ -382,7 +382,7 @@ function ProductBlockView({
                   color: bk.colors.ink,
                 }}
               >
-                {formatINR(product.price)}
+                {formatCurrency(product.price, bk.currency)}
                 {product.compareAtPrice ? (
                   <span
                     className="bk-muted"
@@ -394,7 +394,7 @@ function ProductBlockView({
                       marginLeft: 8,
                     }}
                   >
-                    {formatINR(product.compareAtPrice)}
+                    {formatCurrency(product.compareAtPrice, bk.currency)}
                   </span>
                 ) : null}
               </Text>
@@ -479,7 +479,7 @@ function ProductGridBlockView({
                   className="bk-ink"
                   style={{ margin: 0, fontFamily: bk.fonts.sans, fontSize: 14, fontWeight: 600, color: bk.colors.ink }}
                 >
-                  {formatINR(p.price)}
+                  {formatCurrency(p.price, bk.currency)}
                 </Text>
               ) : null}
             </Column>

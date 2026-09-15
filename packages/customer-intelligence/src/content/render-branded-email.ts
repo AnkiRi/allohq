@@ -28,6 +28,7 @@ export async function loadBrandKit(
   const derivedExtras: BuildBrandKitExtras = {
     storeName: store?.storeName ?? null,
     storeUrl: store?.shopDomain ? `https://${store.shopDomain}` : null,
+    currency: store?.currency ?? "USD",
     logoUrl: store?.storeLogoUrl ?? null,
     address: store?.address
       ? (() => {

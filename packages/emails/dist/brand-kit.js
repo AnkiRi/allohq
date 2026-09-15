@@ -12,12 +12,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_BRAND_KIT = void 0;
 exports.buildBrandKit = buildBrandKit;
+exports.formatCurrency = formatCurrency;
 exports.formatINR = formatINR;
 // ---------------------------------------------------------------------------
 // Defaults — a calm, premium neutral that any brand reads well against.
 // Mirrors the taste of the Vana kit without its specific green identity.
 // ---------------------------------------------------------------------------
 exports.DEFAULT_BRAND_KIT = {
+    currency: "USD",
     colors: {
         paper: "#F6F5F2",
         surface: "#FFFFFF",
@@ -240,14 +242,21 @@ function buildBrandKit(brandProfile, brandVisualProfile, extras) {
         },
         footer,
         url: extras?.storeUrl ?? undefined,
+        currency: extras?.currency ?? exports.DEFAULT_BRAND_KIT.currency,
         radius: d.radius,
         contentWidth: d.contentWidth,
     };
 }
 /** Indian rupee formatting — ₹ with Indian digit grouping (e.g. ₹1,299). */
+function formatCurrency(amount, currency = "USD") {
+    return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 2,
+    }).format(amount);
+}
+/** @deprecated Use formatCurrency with the connected store currency. */
 function formatINR(amount) {
-    return `₹${new Intl.NumberFormat("en-IN", {
-        maximumFractionDigits: 0,
-    }).format(amount)}`;
+    return formatCurrency(amount, "INR");
 }
 //# sourceMappingURL=brand-kit.js.map
