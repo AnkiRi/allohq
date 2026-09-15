@@ -801,9 +801,8 @@ async function hydrateCustomerEmailConsent(
 ): Promise<Record<string, unknown>> {
   const payload = data as {
     id?: number | string;
-    email_marketing_consent?: { state?: string | null } | null;
   };
-  if (payload.email_marketing_consent?.state || payload.id == null) return data;
+  if (payload.id == null) return data;
 
   const client = await getShopifyAdminClient(storeId);
   const response = await client.graphql<{

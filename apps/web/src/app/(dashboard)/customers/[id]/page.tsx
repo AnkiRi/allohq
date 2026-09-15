@@ -54,8 +54,9 @@ function getCustomerStory(args: {
   segment: string | undefined;
   daysSinceLastOrder: number | null;
   orderCount: number;
+  acceptsMarketing: boolean;
 }): ReasoningStory {
-  const { name, segment, daysSinceLastOrder, orderCount } = args;
+  const { name, segment, daysSinceLastOrder, orderCount, acceptsMarketing } = args;
   const who = name.trim() || "this customer";
   const s = (segment ?? "").toLowerCase();
   const seen =
@@ -67,10 +68,10 @@ function getCustomerStory(args: {
     return {
       lead: `${who} joined your audience`,
       lines: [
-        { text: "joon noticed: subscribed, with no order yet" },
-        { text: "a useful introduction can help them choose a first product" },
-        { text: "downside: too early for a win-back · keep it welcoming", beat: true },
-        { text: "first-purchase opportunity · low confidence yet", arrow: true },
+        { text: `joon noticed: ${acceptsMarketing ? "email subscribed" : "email marketing not subscribed"} · no order yet` },
+        { text: acceptsMarketing ? "a useful introduction can help them choose a first product" : "marketing email stays blocked until Shopify confirms consent" },
+        { text: acceptsMarketing ? "downside: too early for a win-back · keep it welcoming" : "consent is a safety boundary, not a campaign override", beat: true },
+        { text: acceptsMarketing ? "first-purchase opportunity · low confidence yet" : "not currently reachable by marketing email", arrow: true },
       ],
     };
   }
@@ -237,11 +238,13 @@ export default function CustomerDetailPage() {
     segment,
     daysSinceLastOrder,
     orderCount: rfm?.orderCount ?? customer.orders.length,
+    acceptsMarketing: customer.acceptsMarketing,
   });
   // Restraint is a recorded campaign decision, never inferred from a broad
   // lifecycle segment such as Champion or New Customer.
   const leftAlone = decisionHistory?.[0]?.decision === "deliberately_left_alone";
   const campaignInstruction = `Draft an email campaign only for ${fullName || customer.email} (${customer.email}). Use this exact customer as the audience and let me review the draft before sending. ${customer.orders.length === 0 ? "They have not ordered yet, so make this a useful first-purchase introduction, not a win-back." : `Their current lifecycle segment is ${segment ?? "not yet classified"}; use their order history and current state to choose an appropriate message.`}`;
+  const canDraftMarketing = customer.acceptsMarketing;
 
   return (
     <motion.div
@@ -300,6 +303,15 @@ export default function CustomerDetailPage() {
                 <span className="flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5" /> {customer.email}
                 </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                    customer.acceptsMarketing
+                      ? "border-[hsl(var(--success)/0.3)] text-[hsl(var(--success))]"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {customer.acceptsMarketing ? "email subscribed" : "marketing not subscribed"}
+                </span>
                 {customer.phone && (
                   <span className="flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5" /> {customer.phone}
@@ -312,7 +324,9 @@ export default function CustomerDetailPage() {
           <button
             type="button"
             onClick={() => submitToJoon(campaignInstruction)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+            disabled={!canDraftMarketing}
+            title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Mail className="w-3.5 h-3.5" /> Draft email campaign
           </button>
@@ -329,10 +343,12 @@ export default function CustomerDetailPage() {
           <h2 className="section-header text-[13px]">What joon noticed</h2>
         </div>
         <ReasoningReveal stories={[customerStory]} />
-        <button
-          type="button"
-          onClick={() => submitToJoon(campaignInstruction)}
-          className="inline-flex items-center gap-1.5 mt-5 px-4 py-2 rounded-lg bg-foreground text-background text-[12px] font-sans hover:opacity-90 transition-opacity"
+          <button
+            type="button"
+            onClick={() => submitToJoon(campaignInstruction)}
+            disabled={!canDraftMarketing}
+            title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+          className="inline-flex items-center gap-1.5 mt-5 px-4 py-2 rounded-lg bg-foreground text-background text-[12px] font-sans hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Sparkles className="w-3.5 h-3.5" /> Draft this for them
         </button>
@@ -493,7 +509,9 @@ export default function CustomerDetailPage() {
               <button
                 type="button"
                 onClick={() => submitToJoon(campaignInstruction)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+                disabled={!canDraftMarketing}
+                title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Send className="w-3.5 h-3.5" /> {ltvCta.label}
               </button>
@@ -570,7 +588,9 @@ export default function CustomerDetailPage() {
               <button
                 type="button"
                 onClick={() => submitToJoon(campaignInstruction)}
-                className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-sans text-[hsl(var(--accent))] hover:text-foreground transition-colors"
+                disabled={!canDraftMarketing}
+                title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+                className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-sans text-[hsl(var(--accent))] hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Send className="w-3 h-3" /> Create a campaign
               </button>
