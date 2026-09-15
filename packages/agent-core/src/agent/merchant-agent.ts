@@ -128,8 +128,14 @@ export async function runMerchantAgent(opts: {
   conversationHistory?: Array<{ role: string; content: string }>;
   storeContext?: string;
   modelHarness?: ModelHarnessConfig | unknown;
+  campaignDirective?: {
+    sourceCampaignId: string;
+    customerIds: string[];
+    forceNoDiscount: boolean;
+    actorId?: string;
+  };
 }): Promise<AgentResult> {
-  const { storeId, message, conversationHistory = [], storeContext, modelHarness } = opts;
+  const { storeId, message, conversationHistory = [], storeContext, modelHarness, campaignDirective } = opts;
 
   // Assemble context (no specific customer, just store-level)
   const ctx = await assembleContext({
@@ -152,7 +158,7 @@ export async function runMerchantAgent(opts: {
     systemPrompt,
     userMessage: message,
     tools: getMerchantTools(),
-    toolContext: { storeId },
+    toolContext: { storeId, campaignDirective },
     agentType: "retention_strategist",
     conversationHistory,
     workload: "strategy",

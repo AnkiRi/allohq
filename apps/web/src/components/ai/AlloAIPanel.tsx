@@ -61,6 +61,13 @@ type AlloAIPanelContextType = {
   focusInput: () => void;
   setInput: (text: string) => void;
   submit: (text: string) => void;
+  submitCampaignAlternative: (text: string, directive: CampaignDirective) => void;
+};
+
+type CampaignDirective = {
+  sourceCampaignId: string;
+  customerIds: string[];
+  forceNoDiscount: boolean;
 };
 
 const AlloAIPanelContext = createContext<AlloAIPanelContextType>({
@@ -68,6 +75,7 @@ const AlloAIPanelContext = createContext<AlloAIPanelContextType>({
   focusInput: () => {},
   setInput: () => {},
   submit: () => {},
+  submitCampaignAlternative: () => {},
 });
 
 export const useAlloAI = () => useContext(AlloAIPanelContext);
@@ -1145,6 +1153,7 @@ export interface AlloAIPanelHandle {
   focusInput: () => void;
   setInput: (text: string) => void;
   submit: (text: string) => void;
+  submitCampaignAlternative: (text: string, directive: CampaignDirective) => void;
 }
 
 export interface AlloAIPanelProps {
@@ -1482,6 +1491,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       if (panelState === "collapsed") setPanelState("open");
       sendMessage(text);
     },
+    submitCampaignAlternative(text: string, directive: CampaignDirective) {
+      if (panelState === "collapsed") setPanelState("open");
+      sendMessage(text, directive);
+    },
   }));
 
   // AI chat mutation
@@ -1600,7 +1613,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       );
       toast(err.message ?? "Sorry, I couldn't get through that one. Try again?", "error");
     },
-  }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[] }) => void };
+  }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[]; campaignDirective?: CampaignDirective }) => void };
 
   const handleApproveCampaign = useCallback(
     (campaignId: string) => {
@@ -1617,7 +1630,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   );
 
   const sendMessage = useCallback(
-    (text: string) => {
+    (text: string, campaignDirective?: CampaignDirective) => {
       if (!text.trim() || isProcessing || !storeId) return;
 
       const userMsg: Message = {
@@ -1648,6 +1661,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         chatId: currentChatId,
         message: text.trim(),
         history,
+        campaignDirective,
       });
     },
     [isProcessing, storeId, messages, currentChatId],
@@ -2312,6 +2326,8 @@ export function AlloAIPanelProvider({ children }: { children: React.ReactNode })
     focusInput: () => panelRef.current?.focusInput(),
     setInput: (text: string) => panelRef.current?.setInput(text),
     submit: (text: string) => panelRef.current?.submit(text),
+    submitCampaignAlternative: (text: string, directive: CampaignDirective) =>
+      panelRef.current?.submitCampaignAlternative(text, directive),
   };
 
   return (

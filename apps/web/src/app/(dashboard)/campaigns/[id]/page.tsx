@@ -14,7 +14,7 @@ export default function CampaignDetailPage() {
   const router = useRouter();
   const campaignId = params.id as string;
   const { toast } = useToast();
-  const { openPanel, setInput: setAIInput } = useAlloAI();
+  const { submitCampaignAlternative } = useAlloAI();
 
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const [showRecentOverride, setShowRecentOverride] = useState(false);
@@ -297,6 +297,37 @@ export default function CampaignDetailPage() {
                   </div>
                 ))}
               </div>
+              {dryRun.previewAssignments.length > 0 && (
+                <details className="mb-5 rounded-lg border border-border bg-background/50">
+                  <summary className="cursor-pointer px-4 py-3 text-[11px] font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    See the estimated treatment and control customers
+                  </summary>
+                  <div className="grid gap-4 border-t border-border px-4 py-3 sm:grid-cols-2">
+                    {(["TREATMENT", "CONTROL"] as const).map((arm) => {
+                      const customers = dryRun.previewAssignments.filter((customer) => customer.arm === arm);
+                      return (
+                        <div key={arm}>
+                          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                            {arm === "TREATMENT" ? "Would receive this campaign" : "Random control · no email"} · {customers.length}
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            {customers.length > 0 ? customers.map((customer) => (
+                              <div key={customer.id} className="truncate text-[11px] text-foreground">
+                                {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email}
+                              </div>
+                            )) : (
+                              <div className="text-[11px] text-muted-foreground">None for this audience size.</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
+                    Preview only. These exact assignments freeze when you approve.
+                  </p>
+                </details>
+              )}
               {dryRun.measurement.warning && (
                 <div className="mb-5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-warning">
@@ -307,6 +338,16 @@ export default function CampaignDetailPage() {
                         : "Directional measurement"}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">{dryRun.measurement.warning}</p>
+                </div>
+              )}
+              {dryRun.recentPurchaseOverrideCount > 0 && (
+                <div className="mb-5 rounded-lg border border-secondary/35 bg-secondary/5 px-4 py-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-foreground">
+                    Merchant override recorded
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    You asked Joon to reconsider {dryRun.recentPurchaseOverrideCount} recent {dryRun.recentPurchaseOverrideCount === 1 ? "buyer" : "buyers"} for this campaign. They are included in the candidate pool, while consent and delivery safeguards still apply.
+                  </p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1">
@@ -338,10 +379,14 @@ export default function CampaignDetailPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setAIInput(
-                          `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, audience, products, and brand voice, remove the discount, and let me review the draft before anything is sent.`
+                        submitCampaignAlternative(
+                          `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, products, and brand voice, and let me review the draft before anything is sent.`,
+                          {
+                            sourceCampaignId: campaignId,
+                            customerIds: dryRun.recentPurchaseCustomers.map((customer) => customer.id),
+                            forceNoDiscount: true,
+                          },
                         );
-                        openPanel();
                       }}
                       className="rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >

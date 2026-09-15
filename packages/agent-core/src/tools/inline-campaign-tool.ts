@@ -2,6 +2,12 @@ import { prisma, buildWhereFromConditions } from "@allohq/database";
 import type { ToolDefinition } from "../types";
 import { generateCode } from "./discount-tools";
 
+function containsDiscountLanguage(value: unknown): boolean {
+  return /\b(?:\d{1,2}%\s*off|discount|promo(?:tional)?\s+code|coupon|sale)\b/i.test(
+    JSON.stringify(value)
+  );
+}
+
 export const inlineCampaignTools: ToolDefinition[] = [
   {
     name: "create_campaign_with_preview",
@@ -49,8 +55,18 @@ export const inlineCampaignTools: ToolDefinition[] = [
       const intent = String(params.intent ?? "promotion");
       const segmentId = params.segmentId ? String(params.segmentId) : undefined;
       const segmentFilter = params.segmentFilter ? String(params.segmentFilter) : undefined;
-      let discountPercent = params.discountPercent ? Number(params.discountPercent) : undefined;
-      const customInstructions = params.customInstructions ? String(params.customInstructions) : undefined;
+      const directive = ctx.campaignDirective;
+      let discountPercent = directive?.forceNoDiscount
+        ? undefined
+        : params.discountPercent
+          ? Number(params.discountPercent)
+          : undefined;
+      const customInstructions = [
+        params.customInstructions ? String(params.customInstructions) : undefined,
+        directive?.forceNoDiscount
+          ? "This is a full-price email. Do not mention, imply, or generate a discount, offer code, sale, or percentage off."
+          : undefined,
+      ].filter(Boolean).join(" ") || undefined;
 
       // Guardrail (Phase 5): clamp the offer to the merchant's max-discount cap so
       // joon can't propose a deeper discount than the store allows.
@@ -85,7 +101,9 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // Resolve the audience: explicit customers (a manual segment) take
       // precedence over a named RFM segment, so "campaign for Archana" targets
       // exactly Archana, not the nearest broad segment.
-      const rawIds = Array.isArray(params.customerIds)
+      const rawIds = directive
+        ? directive.customerIds
+        : Array.isArray(params.customerIds)
         ? (params.customerIds as unknown[]).map(String).filter(Boolean)
         : [];
       let segment;
@@ -236,7 +254,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // Generate email content
       const { generateEmail } = await import("@allohq/customer-intelligence");
 
-      const result = await generateEmail({
+      const emailRequest = {
         brandProfile: brandProfile
           ? {
               brandName: brandProfile.brandName,
@@ -264,7 +282,25 @@ export const inlineCampaignTools: ToolDefinition[] = [
           handle: p.handle,
         })),
         storeUrl,
-      });
+      };
+      let result = await generateEmail(emailRequest);
+      if (directive?.forceNoDiscount && containsDiscountLanguage({
+        subject: result.subject,
+        previewText: result.previewText,
+        blocks: result.blocks,
+      })) {
+        result = await generateEmail({
+          ...emailRequest,
+          tweaks: `${emailRequest.tweaks ?? ""} HARD REQUIREMENT: Write a product or brand announcement at full price. Never use the words discount, coupon, promo code, sale, or any percentage-off language.`.trim(),
+        });
+      }
+      if (directive?.forceNoDiscount && containsDiscountLanguage({
+        subject: result.subject,
+        previewText: result.previewText,
+        blocks: result.blocks,
+      })) {
+        throw new Error("Full-price creative could not be generated without offer language");
+      }
 
       // Create the template
       const template = await prisma.emailTemplate.create({
@@ -318,9 +354,35 @@ export const inlineCampaignTools: ToolDefinition[] = [
             discountValueType: discountPercent ? "percentage" : null,
             scheduledAt: null,
             recipientCount,
+            ...(directive
+              ? {
+                  sourceCampaignId: directive.sourceCampaignId,
+                  overrideRecentPurchaseCustomerIds: directive.customerIds,
+                  includeLeftAloneCustomerIds: directive.customerIds,
+                  alternativeType: "full_price",
+                }
+              : {}),
           },
         },
       });
+
+      if (directive) {
+        await prisma.customerAudienceDecision.createMany({
+          data: directive.customerIds.map((customerId) => ({
+            storeId: ctx.storeId,
+            customerId,
+            campaignId: campaign.id,
+            contextKey: campaign.id,
+            decision: "campaign_candidate",
+            reasonCode: "merchant_full_price_alternative",
+            reasonText: "Merchant requested a full-price alternative for this customer.",
+            evidence: { sourceCampaignId: directive.sourceCampaignId },
+            merchantOverride: true,
+            overrideActorId: directive.actorId,
+            overrideReason: "Full-price alternative requested from the source campaign review.",
+          })),
+        });
+      }
 
       // Record token usage
       await prisma.generatedContent.create({

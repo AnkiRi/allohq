@@ -31,6 +31,11 @@ export function DecisionTracePanel({
   };
   if (!data) return null;
 
+  const hasFrozenAudience = data.experiment.treatmentCount + data.experiment.controlCount > 0;
+  // The dry-run card already explains a draft's estimated audience. This panel
+  // becomes useful only after approval freezes real assignments or outcomes exist.
+  if (!hasFrozenAudience && !data.stats && !data.human) return null;
+
   const d = data.decision;
   const s = data.stats;
   const frozenCount = data.experiment.treatmentCount + data.experiment.controlCount;

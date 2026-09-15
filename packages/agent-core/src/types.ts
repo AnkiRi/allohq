@@ -11,6 +11,12 @@ export interface ToolContext {
   storeId: string;
   customerId?: string;
   conversationId?: string;
+  campaignDirective?: {
+    sourceCampaignId: string;
+    customerIds: string[];
+    forceNoDiscount: boolean;
+    actorId?: string;
+  };
 }
 
 /** A message in the agent conversation */

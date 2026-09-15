@@ -250,7 +250,10 @@ export const campaignsRouter = router({
     const audience = await resolveCampaignAudience(campaign.id, new Date(), {
       enforceDeliveryPauses: false,
     });
-    const proposal = (campaign.agentProposal ?? {}) as { discountPercent?: number };
+    const proposal = (campaign.agentProposal ?? {}) as {
+      discountPercent?: number;
+      overrideRecentPurchaseCustomerIds?: unknown;
+    };
     const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
     const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
     const recentOrders =
@@ -292,6 +295,13 @@ export const campaignsRouter = router({
       family: holdout.family,
       strata: holdout.assignment.strata,
     };
+    const previewAssignments = audience.eligible.map((customer) => ({
+      id: customer.id,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      email: customer.email,
+      arm: holdout.assignment.assignments[customer.id]?.arm ?? "TREATMENT",
+    }));
     return {
       providerCalled: false,
       deliveryGate: {
@@ -311,6 +321,7 @@ export const campaignsRouter = router({
       leftAloneSamples: audience.deliberatelyLeftAlone.slice(0, 10),
       estimatedTreatment: audience.eligible.length - control,
       estimatedControl: control,
+      previewAssignments,
       measurement,
       estimatedProviderCost: (audience.eligible.length - control) * messagingCostFor("email"),
       estimatedProviderCostCurrency: "INR" as const,
@@ -318,6 +329,9 @@ export const campaignsRouter = router({
       exclusions: audience.exclusions,
       exclusionSamples: audience.samples,
       recentPurchaseCustomers: audience.recentPurchaseExcluded,
+      recentPurchaseOverrideCount: Array.isArray(proposal.overrideRecentPurchaseCustomerIds)
+        ? proposal.overrideRecentPurchaseCustomerIds.filter((value) => typeof value === "string").length
+        : 0,
       subject: campaign.template.subject,
       previewText: campaign.template.previewText,
       sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, workspaceProcedure, ownerProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
+import { resolveCampaignAudience } from "@allohq/campaign-engine";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -966,6 +967,11 @@ export const aiRouter = router({
         role: z.enum(["user", "assistant"]),
         content: z.string(),
       })).default([]),
+      campaignDirective: z.object({
+        sourceCampaignId: z.string(),
+        customerIds: z.array(z.string()).min(1).max(500),
+        forceNoDiscount: z.boolean(),
+      }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
@@ -973,6 +979,36 @@ export const aiRouter = router({
         select: { id: true, shopDomain: true, platform: true, lastSyncAt: true },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      if (input.campaignDirective) {
+        const [sourceCampaign, customerCount, sourceAudience] = await Promise.all([
+          ctx.prisma.campaign.findFirst({
+            where: {
+              id: input.campaignDirective.sourceCampaignId,
+              storeId: input.storeId,
+              workspaceId: ctx.workspaceId,
+            },
+            select: { id: true },
+          }),
+          ctx.prisma.customer.count({
+            where: {
+              id: { in: [...new Set(input.campaignDirective.customerIds)] },
+              storeId: input.storeId,
+            },
+          }),
+          resolveCampaignAudience(input.campaignDirective.sourceCampaignId, new Date(), {
+            enforceDeliveryPauses: false,
+          }),
+        ]);
+        const protectedIds = new Set(sourceAudience.recentPurchaseExcluded.map((customer) => customer.id));
+        if (
+          !sourceCampaign ||
+          customerCount !== new Set(input.campaignDirective.customerIds).size ||
+          input.campaignDirective.customerIds.some((customerId) => !protectedIds.has(customerId))
+        ) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "The source campaign audience is no longer available." });
+        }
+      }
 
       // ---------------------------------------------------------------
       // 1. Fetch comprehensive store context in parallel
@@ -1243,6 +1279,10 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
       let processedMessage = input.message;
 
+      if (input.campaignDirective?.forceNoDiscount) {
+        processedMessage += `\n\n[HARD CAMPAIGN DIRECTIVE: Create the requested campaign now with create_campaign_with_preview. The server has supplied the exact audience. This must be a full-price email: pass no discountPercent and do not mention a discount, offer code, sale, or percentage off.]`;
+      }
+
       // Prepend detected intent context if confidence is high
       if (detectedIntent.confidence >= 0.7 && detectedIntent.intent !== "general") {
         processedMessage = `${input.message}\n\n[DETECTED INTENT: ${detectedIntent.intent} with params: ${JSON.stringify(detectedIntent.extractedParams)}. Prioritize using the relevant tool to fulfill this request.]`;
@@ -1308,6 +1348,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         conversationHistory: input.history,
         storeContext: scopedStoreContext,
         modelHarness: workspaceAiSettings?.modelHarness,
+        campaignDirective: input.campaignDirective
+          ? { ...input.campaignDirective, actorId: ctx.userId }
+          : undefined,
       });
 
       // ---------------------------------------------------------------
