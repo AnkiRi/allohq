@@ -17,6 +17,10 @@ export interface ToolContext {
     forceNoDiscount: boolean;
     actorId?: string;
   };
+  requestConstraints?: {
+    topCustomerCount?: number;
+    discountPercent?: number;
+  };
 }
 
 /** A message in the agent conversation */

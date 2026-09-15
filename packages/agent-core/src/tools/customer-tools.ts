@@ -70,7 +70,11 @@ export const customerTools: ToolDefinition[] = [
       if (!ctx.storeId) return { error: "No store in context" };
       const query = String(params.query ?? "").trim();
       const topBy = String(params.topBy ?? "").trim().toLowerCase();
-      const take = Math.min(Math.max(Number(params.limit ?? 25), 1), 100);
+      const requestedTopCount = ctx.requestConstraints?.topCustomerCount;
+      const take = Math.min(
+        Math.max(Number(requestedTopCount ?? params.limit ?? 25), 1),
+        100
+      );
 
       // Ranked retrieval for "top N" requests (customers without an RFM score sort last).
       let orderBy: unknown;
@@ -90,7 +94,6 @@ export const customerTools: ToolDefinition[] = [
                 ],
               }
             : {}),
-          ...(orderBy ? { rfmScore: { isNot: null } } : {}),
         },
         include: { rfmScore: { select: { segment: true, totalSpent: true } } },
         ...(orderBy ? { orderBy: orderBy as never } : {}),

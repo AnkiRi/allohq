@@ -1,4 +1,4 @@
-import { providerEmailCostMinor } from "@allohq/pricing";
+import { providerEmailCostMinor, type Currency } from "@allohq/pricing";
 
 // Per-message provider send cost (₹), by channel. Email derives from the versioned pricing
 // configuration; the other channels remain estimates until their provider contracts are set.
@@ -12,4 +12,9 @@ export const MESSAGING_RATES_INR: Record<string, number> = {
 /** Per-message send cost in ₹ for a channel (falls back to email rate for unknown channels). */
 export function messagingCostFor(channel: string): number {
   return MESSAGING_RATES_INR[channel] ?? MESSAGING_RATES_INR.email ?? 0;
+}
+
+/** Per-email provider cost in the store currency, expressed in major units. */
+export function emailMessagingCostForCurrency(currency: Currency): number {
+  return providerEmailCostMinor(currency) / 100 / 1_000;
 }

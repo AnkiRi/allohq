@@ -1272,8 +1272,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
       // 3. Intent detection + action request detection
       // ---------------------------------------------------------------
-      const { detectIntent } = await import("@allohq/agent-core");
+      const { detectIntent, extractMerchantRequestConstraints } = await import("@allohq/agent-core");
       const detectedIntent = detectIntent(input.message);
+      const requestConstraints = extractMerchantRequestConstraints(input.message);
 
       const isActionRequest = /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design|show|preview|details|view)\b/i.test(input.message);
 
@@ -1351,6 +1352,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         campaignDirective: input.campaignDirective
           ? { ...input.campaignDirective, actorId: ctx.userId }
           : undefined,
+        requestConstraints,
       });
 
       // ---------------------------------------------------------------

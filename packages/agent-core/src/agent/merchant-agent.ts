@@ -134,8 +134,12 @@ export async function runMerchantAgent(opts: {
     forceNoDiscount: boolean;
     actorId?: string;
   };
+  requestConstraints?: {
+    topCustomerCount?: number;
+    discountPercent?: number;
+  };
 }): Promise<AgentResult> {
-  const { storeId, message, conversationHistory = [], storeContext, modelHarness, campaignDirective } = opts;
+  const { storeId, message, conversationHistory = [], storeContext, modelHarness, campaignDirective, requestConstraints } = opts;
 
   // Assemble context (no specific customer, just store-level)
   const ctx = await assembleContext({
@@ -158,7 +162,7 @@ export async function runMerchantAgent(opts: {
     systemPrompt,
     userMessage: message,
     tools: getMerchantTools(),
-    toolContext: { storeId, campaignDirective },
+    toolContext: { storeId, campaignDirective, requestConstraints },
     agentType: "retention_strategist",
     conversationHistory,
     workload: "strategy",

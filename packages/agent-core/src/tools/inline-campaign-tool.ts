@@ -51,16 +51,18 @@ export const inlineCampaignTools: ToolDefinition[] = [
       },
     },
     handler: async (params, ctx) => {
-      const campaignName = String(params.campaignName ?? "AI Campaign");
+      let campaignName = String(params.campaignName ?? "AI Campaign");
       const intent = String(params.intent ?? "promotion");
       const segmentId = params.segmentId ? String(params.segmentId) : undefined;
       const segmentFilter = params.segmentFilter ? String(params.segmentFilter) : undefined;
       const directive = ctx.campaignDirective;
+      const requestedDiscountPercent = directive?.forceNoDiscount
+        ? undefined
+        : ctx.requestConstraints?.discountPercent ??
+          (params.discountPercent ? Number(params.discountPercent) : undefined);
       let discountPercent = directive?.forceNoDiscount
         ? undefined
-        : params.discountPercent
-          ? Number(params.discountPercent)
-          : undefined;
+        : requestedDiscountPercent;
       const customInstructions = [
         params.customInstructions ? String(params.customInstructions) : undefined,
         directive?.forceNoDiscount
@@ -74,6 +76,16 @@ export const inlineCampaignTools: ToolDefinition[] = [
         const cap = await prisma.guardrail.findFirst({ where: { storeId: ctx.storeId, ruleType: "max_discount", isActive: true }, select: { ruleValue: true } });
         const maxPct = (cap?.ruleValue as { maxPercent?: number } | null)?.maxPercent;
         if (typeof maxPct === "number" && discountPercent > maxPct) discountPercent = maxPct;
+      }
+      if (
+        requestedDiscountPercent != null &&
+        discountPercent != null &&
+        requestedDiscountPercent !== discountPercent
+      ) {
+        const requestedPattern = new RegExp(`${requestedDiscountPercent}\\s*%`, "i");
+        campaignName = requestedPattern.test(campaignName)
+          ? campaignName.replace(requestedPattern, `${discountPercent}%`)
+          : `${campaignName} · ${discountPercent}% applied`;
       }
 
       // Decide the discount code at DRAFT time so the real code is baked into the
@@ -350,6 +362,10 @@ export const inlineCampaignTools: ToolDefinition[] = [
             channel: "email",
             intent,
             discountPercent: discountPercent ?? null,
+            requestedDiscountPercent: requestedDiscountPercent ?? null,
+            discountAdjustedByGuardrail:
+              requestedDiscountPercent != null && discountPercent !== requestedDiscountPercent,
+            requestedAudienceCount: ctx.requestConstraints?.topCustomerCount ?? null,
             discountCode: discountCode ?? null,
             discountValueType: discountPercent ? "percentage" : null,
             scheduledAt: null,
@@ -440,6 +456,14 @@ export const inlineCampaignTools: ToolDefinition[] = [
         templateId: template.id,
         estimatedRecipients: recipientCount,
         segment: segment?.name ?? "All customers",
+        offerAdjustment:
+          requestedDiscountPercent != null && requestedDiscountPercent !== discountPercent
+            ? {
+                requestedDiscountPercent,
+                appliedDiscountPercent: discountPercent,
+                reason: "store_discount_guardrail",
+              }
+            : undefined,
         message: `Campaign "${campaignName}" created as draft with inline preview. Target: ${segment?.name ?? "All customers"} (${recipientCount} recipients). Subject: "${result.subject}". Review the preview and approve to send.`,
       };
     },

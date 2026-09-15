@@ -7,7 +7,11 @@ import {
   campaignApprovalClaimWhere,
   campaignDispatchFailureUpdate,
 } from "../lib/campaign-approval";
-import { DEMO_STORE_DOMAIN, messagingCostFor, type PrismaClient } from "@allohq/database";
+import {
+  DEMO_STORE_DOMAIN,
+  emailMessagingCostForCurrency,
+  type PrismaClient,
+} from "@allohq/database";
 import {
   campaignApprovalChecksum,
   findBannedTerms,
@@ -252,6 +256,11 @@ export const campaignsRouter = router({
     });
     const proposal = (campaign.agentProposal ?? {}) as {
       discountPercent?: number;
+      discountCode?: string;
+      offerId?: string;
+      requestedDiscountPercent?: number;
+      discountAdjustedByGuardrail?: boolean;
+      requestedAudienceCount?: number;
       overrideRecentPurchaseCustomerIds?: unknown;
     };
     const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
@@ -302,6 +311,9 @@ export const campaignsRouter = router({
       email: customer.email,
       arm: holdout.assignment.assignments[customer.id]?.arm ?? "TREATMENT",
     }));
+    const currency = campaign.store.currency === "INR" ? "INR" as const : "USD" as const;
+    const estimatedProviderCost =
+      (audience.eligible.length - control) * emailMessagingCostForCurrency(currency);
     return {
       providerCalled: false,
       deliveryGate: {
@@ -322,9 +334,11 @@ export const campaignsRouter = router({
       estimatedTreatment: audience.eligible.length - control,
       estimatedControl: control,
       previewAssignments,
+      requestedAudienceCount: proposal.requestedAudienceCount ?? null,
+      audienceShortfall: Math.max(0, (proposal.requestedAudienceCount ?? audience.requested) - audience.requested),
       measurement,
-      estimatedProviderCost: (audience.eligible.length - control) * messagingCostFor("email"),
-      estimatedProviderCostCurrency: "INR" as const,
+      estimatedProviderCost,
+      estimatedProviderCostCurrency: currency,
       audienceFreezesOnApproval: true,
       exclusions: audience.exclusions,
       exclusionSamples: audience.samples,
@@ -337,7 +351,14 @@ export const campaignsRouter = router({
       sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,
       senderDomain: campaign.store.senderDomain,
       storePaused: Boolean(campaign.store.emailSendingPausedAt),
-      currency: campaign.store.currency ?? "USD",
+      currency,
+      offer: {
+        requestedDiscountPercent: proposal.requestedDiscountPercent ?? discountPercent,
+        appliedDiscountPercent: discountPercent,
+        adjustedByGuardrail: Boolean(proposal.discountAdjustedByGuardrail),
+        discountCode: proposal.discountCode ?? null,
+        shopifyStatus: proposal.offerId ? "created" as const : "created_on_send" as const,
+      },
       marginRisk: {
         evidenceWindowDays: 7,
         recentBuyers: recentBuyerIds.size,

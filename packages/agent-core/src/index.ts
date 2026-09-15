@@ -9,7 +9,8 @@ export { getCustomerTools, getMerchantTools, toAnthropicTools } from "./tools";
 // Utils
 export { logAgentActivity } from "./utils/activity-logger";
 export { logActivity, getRecentActivity } from "./utils/agent-activity-log";
-export { detectIntent } from "./utils/intent-detector";
+export { detectIntent, extractMerchantRequestConstraints } from "./utils/intent-detector";
+export type { MerchantRequestConstraints } from "./utils/intent-detector";
 export type { MerchantIntent, DetectedIntent } from "./utils/intent-detector";
 
 // Types

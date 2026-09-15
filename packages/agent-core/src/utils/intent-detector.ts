@@ -19,6 +19,24 @@ export interface DetectedIntent {
   extractedParams: Record<string, string>;
 }
 
+export interface MerchantRequestConstraints {
+  topCustomerCount?: number;
+  discountPercent?: number;
+}
+
+/** Recover explicit numeric constraints that tools are not allowed to reinterpret. */
+export function extractMerchantRequestConstraints(message: string): MerchantRequestConstraints {
+  const topCustomerMatch = message.match(/\btop\s+(\d{1,3})\s+customers?\b/i);
+  const requestedDiscountMatch = message.match(/\b(\d{1,3}(?:\.\d+)?)\s*%\s*(?:discount|off)?\b/i);
+  return {
+    topCustomerCount: topCustomerMatch?.[1] ? Number(topCustomerMatch[1]) : undefined,
+    discountPercent:
+      requestedDiscountMatch?.[1] && /\b(?:discount|off|offer|coupon|promo)\b/i.test(message)
+        ? Number(requestedDiscountMatch[1])
+        : undefined,
+  };
+}
+
 interface IntentPattern {
   intent: MerchantIntent;
   patterns: RegExp[];

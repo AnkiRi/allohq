@@ -31,7 +31,11 @@ export { normalizeEmail, normalizePhone } from "./identity";
 // Shared segment membership resolution (one model: manual | conditions | rfm)
 export { buildWhereFromConditions, resolveSegmentWhere } from "./segments";
 export type { SegmentCondition, SegmentConditions } from "./segments";
-export { MESSAGING_RATES_INR, messagingCostFor } from "./messaging-rates";
+export {
+  MESSAGING_RATES_INR,
+  messagingCostFor,
+  emailMessagingCostForCurrency,
+} from "./messaging-rates";
 export {
   applyEmailProviderSafetyEffects,
   deliverabilityPauseReason,

@@ -24,7 +24,7 @@ export default function CampaignDetailPage() {
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
   const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
-  const { data: dryRun, isLoading: dryRunLoading } = trpc.campaigns.dryRun.useQuery(
+  const { data: dryRun, isLoading: dryRunLoading, refetch: refetchDryRun } = trpc.campaigns.dryRun.useQuery(
     { id: campaignId },
     { enabled: campaign?.status === "draft" || campaign?.status === "scheduled" },
   );
@@ -72,9 +72,11 @@ export default function CampaignDetailPage() {
     onError: () => toast("We couldn't change that audience. Mind trying again?", "error"),
   });
   const overrideRecentPurchaseMut = trpc.campaigns.overrideRecentPurchase.useMutation({
-    onSuccess: ({ included }) => {
-      utils.campaigns.dryRun.invalidate({ id: campaignId });
-      utils.campaigns.getById.invalidate({ id: campaignId });
+    onSuccess: async ({ included }) => {
+      await Promise.all([
+        refetchDryRun(),
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+      ]);
       setShowRecentOverride(false);
       setSelectedRecentIds([]);
       setOverrideReason("");
@@ -115,6 +117,11 @@ export default function CampaignDetailPage() {
     style: "currency",
     currency: stats?.currency ?? "USD",
     maximumFractionDigits: 0,
+  }).format(value);
+  const dryRunMoney = (value: number) => new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: dryRun?.currency ?? stats?.currency ?? "USD",
+    maximumFractionDigits: 2,
   }).format(value);
 
   return (
@@ -285,18 +292,50 @@ export default function CampaignDetailPage() {
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                {[
-                  ["Requested", dryRun.requested],
-                  ["Treatment estimate", dryRun.estimatedTreatment],
-                  ["Control estimate", dryRun.estimatedControl],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-lg bg-muted/50 px-4 py-3">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
-                    <div className="text-xl font-mono font-bold mt-1">{Number(value).toLocaleString()}</div>
-                  </div>
-                ))}
+              <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Audience plan</div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {[
+                    ["You asked for", dryRun.requestedAudienceCount ?? dryRun.requested],
+                    ["Selected", dryRun.requested],
+                    ["Not available", dryRun.audienceShortfall],
+                    ["Left alone", dryRun.requested - dryRun.eligibleBeforeHoldout],
+                    ["Random control", dryRun.estimatedControl],
+                    ["Would receive", dryRun.estimatedTreatment],
+                  ].map(([label, value]) => (
+                    <div key={String(label)}>
+                      <div className="text-[10px] text-muted-foreground">{label}</div>
+                      <div className="mt-0.5 font-mono text-lg font-bold">{Number(value).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  {dryRun.requestedAudienceCount != null && dryRun.audienceShortfall > 0
+                    ? `Joon found ${dryRun.requested} customers for the requested top ${dryRun.requestedAudienceCount}; ${dryRun.audienceShortfall} more were not available in this store’s ranked audience. `
+                    : ""}
+                  Of the selected customers, {dryRun.requested - dryRun.eligibleBeforeHoldout} are left alone by a safety or customer-state decision. From the remaining {dryRun.eligibleBeforeHoldout} campaign candidates, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "forms" : "form"} the random control and {dryRun.estimatedTreatment} would receive the email.
+                </p>
               </div>
+              {dryRun.offer.appliedDiscountPercent > 0 && (
+                <div className="mb-5 rounded-lg border border-border bg-background/50 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Offer</div>
+                      <p className="mt-1 text-[13px] font-medium text-foreground">
+                        {dryRun.offer.appliedDiscountPercent}% off · code {dryRun.offer.discountCode ?? "generated at approval"}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground">
+                      {dryRun.offer.shopifyStatus === "created" ? "Created in Shopify" : "Created in Shopify when sending begins"}
+                    </span>
+                  </div>
+                  {dryRun.offer.adjustedByGuardrail && (
+                    <p className="mt-2 text-[11px] text-warning">
+                      You asked for {dryRun.offer.requestedDiscountPercent}%. Your store guardrail allows at most {dryRun.offer.appliedDiscountPercent}%, so Joon used {dryRun.offer.appliedDiscountPercent}% and kept the draft within policy.
+                    </p>
+                  )}
+                </div>
+              )}
               {dryRun.previewAssignments.length > 0 && (
                 <details className="mb-5 rounded-lg border border-border bg-background/50">
                   <summary className="cursor-pointer px-4 py-3 text-[11px] font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -522,7 +561,7 @@ export default function CampaignDetailPage() {
                     {dryRun.marginRisk.recentBuyers} currently eligible {dryRun.marginRisk.recentBuyers === 1 ? "customer has" : "customers have"} already purchased in the last 7 days.
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    They placed {dryRun.marginRisk.recentOrders} orders worth {dryRun.currency} {dryRun.marginRisk.observedRecentSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}. If equivalent baskets used this {dryRun.marginRisk.discountPercent}% offer, discount exposure would be about {dryRun.currency} {dryRun.marginRisk.illustrativeDiscountExposure.toLocaleString(undefined, { maximumFractionDigits: 2 })}.
+                    They placed {dryRun.marginRisk.recentOrders} orders worth {dryRunMoney(dryRun.marginRisk.observedRecentSubtotal)}. If equivalent baskets used this {dryRun.marginRisk.discountPercent}% offer, discount exposure would be about {dryRunMoney(dryRun.marginRisk.illustrativeDiscountExposure)}.
                   </p>
                   <p className="mt-2 text-[10px] text-muted-foreground">This is an illustration from observed orders—not a prediction that these customers will purchase again.</p>
                 </div>
