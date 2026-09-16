@@ -11,7 +11,8 @@ export const WORKSPACE_ROLES = [
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
 const APPROVAL_MUTATIONS = new Set([
-  "campaigns.schedule", "campaigns.sendNow", "campaigns.cancel",
+  "campaigns.schedule", "campaigns.sendNow", "campaigns.deliverNow",
+  "campaigns.reviseScheduled", "campaigns.cancel",
   "automations.activate", "automations.pause", "automations.resume",
   "autonomy.approveAction", "autonomy.rejectAction",
   "autonomy.bulkApprove", "autonomy.bulkReject",

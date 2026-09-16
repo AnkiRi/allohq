@@ -33,6 +33,13 @@ const redisConnection = {
 
 const emailSendQueue = new Queue("email-send", { connection: redisConnection });
 
+async function queuedCampaignJobs(campaignId: string) {
+  const jobs = await emailSendQueue.getJobs(["delayed", "waiting", "paused"], 0, 10_000);
+  return jobs.filter((job) =>
+    (job.data as { campaignId?: unknown } | null)?.campaignId === campaignId,
+  );
+}
+
 function campaignFamily(proposal: unknown): string {
   const value = (proposal ?? {}) as {
     intent?: unknown;
@@ -973,6 +980,152 @@ export const campaignsRouter = router({
       }
 
       return { status: "sending" as const };
+    }),
+
+  /** Merchant timing override: preserve the frozen audience/content and promote
+   * only this campaign's already-planned treatment deliveries. All non-timing
+   * permission, suppression, sender-domain and allowlist gates still run. */
+  deliverNow: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["scheduled", "sending"] },
+        },
+      });
+      if (!campaign?.approvedAt || !campaign.approvalChecksum) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This campaign needs approval before it can be delivered.",
+        });
+      }
+
+      const jobs = await queuedCampaignJobs(campaign.id);
+      const deliveryJobs = jobs.filter((job) => job.name === "deliver-one");
+      if (deliveryJobs.length === 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "No scheduled recipient deliveries are waiting to be sent.",
+        });
+      }
+
+      const overriddenAt = new Date();
+      for (const job of deliveryJobs) {
+        await job.updateData({
+          ...(job.data as Record<string, unknown>),
+          forceImmediate: true,
+        });
+        const state = await job.getState();
+        if (state === "delayed") await job.promote();
+      }
+
+      const finalizeJob = jobs.find((job) => job.name === "campaign-finalize");
+      if (finalizeJob) await finalizeJob.remove();
+      await emailSendQueue.add(
+        "campaign-finalize",
+        { finalize: true, campaignId: campaign.id },
+        { delay: 60_000, jobId: `finalize-${campaign.id}-override-${overriddenAt.getTime()}` },
+      );
+
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+      const dispatch = (proposal["dispatch"] ?? {}) as Record<string, any>;
+      await ctx.prisma.campaign.update({
+        where: { id: campaign.id },
+        data: {
+          status: "sending",
+          agentProposal: {
+            ...proposal,
+            dispatch: {
+              ...dispatch,
+              delivery: {
+                ...((dispatch["delivery"] ?? {}) as Record<string, unknown>),
+                merchantOverride: true,
+                overriddenAt: overriddenAt.toISOString(),
+                reason: "The merchant chose to deliver now instead of waiting for Joon's recommended time.",
+              },
+            },
+          },
+        },
+      });
+
+      return { status: "sending" as const, promoted: deliveryJobs.length };
+    }),
+
+  /** Cancel an undelivered approved campaign and open a fresh editable revision.
+   * The original frozen approval and assignment rows remain immutable for audit. */
+  reviseScheduled: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["scheduled", "sending"] },
+        },
+        include: { template: true },
+      });
+      if (!campaign?.template) throw new TRPCError({ code: "NOT_FOUND" });
+      const delivered = await ctx.prisma.messageLog.count({
+        where: { campaignId: campaign.id, sentAt: { not: null } },
+      });
+      if (delivered > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Delivery has already started, so this approved version can no longer be edited.",
+        });
+      }
+
+      const jobs = await queuedCampaignJobs(campaign.id);
+      for (const job of jobs) await job.remove();
+
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+      const cleanProposal = Object.fromEntries(
+        Object.entries(proposal).filter(([key]) => !["dispatch", "dispatchError", "offerId"].includes(key)),
+      );
+      const revised = await ctx.prisma.$transaction(async (tx) => {
+        const template = await tx.emailTemplate.create({
+          data: {
+            workspaceId: campaign.workspaceId,
+            name: `${campaign.template!.name} · revision`,
+            subject: campaign.template!.subject,
+            previewText: campaign.template!.previewText,
+            blocks: campaign.template!.blocks as any,
+            html: campaign.template!.html,
+            category: campaign.template!.category,
+          },
+        });
+        const next = await tx.campaign.create({
+          data: {
+            workspaceId: campaign.workspaceId,
+            storeId: campaign.storeId,
+            name: campaign.name,
+            templateId: template.id,
+            segmentId: campaign.segmentId,
+            status: "draft",
+            origin: campaign.origin,
+            agentProposal: cleanProposal as any,
+          },
+        });
+        await tx.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            status: "cancelled",
+            agentProposal: {
+              ...proposal,
+              dispatch: {
+                ...((proposal["dispatch"] ?? {}) as Record<string, unknown>),
+                cancelledForRevisionAt: new Date().toISOString(),
+                revisionCampaignId: next.id,
+              },
+            },
+          },
+        });
+        return next;
+      });
+
+      return { id: revised.id, templateId: revised.templateId };
     }),
 
   cancel: workspaceProcedure

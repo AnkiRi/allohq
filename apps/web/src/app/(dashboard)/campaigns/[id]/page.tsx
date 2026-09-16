@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2, ShoppingBag, TrendingUp } from "lucide-react";
+import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2, ShoppingBag, TrendingUp, CalendarClock, Pencil } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -21,7 +21,10 @@ export default function CampaignDetailPage() {
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
-  const { data: campaign, isLoading } = trpc.campaigns.getById.useQuery({ id: campaignId });
+  const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
+    { id: campaignId },
+    { refetchInterval: (query: { state: { data?: { status?: string } } }) => ["scheduled", "sending"].includes(query.state.data?.status ?? "") ? 5_000 : false },
+  );
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
   const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
@@ -49,6 +52,23 @@ export default function CampaignDetailPage() {
       toast("It's on its way.", "success");
     },
     onError: () => toast("We couldn't send that. Mind trying again?", "error"),
+  });
+  const deliverNowMut = (trpc.campaigns.deliverNow as any).useMutation({
+    onSuccess: async ({ promoted }: { promoted: number }) => {
+      await Promise.all([
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+        utils.campaigns.stats.invalidate({ id: campaignId }),
+      ]);
+      toast(`${promoted} ${promoted === 1 ? "email is" : "emails are"} being sent now.`, "success");
+    },
+    onError: (error: { message?: string }) => toast(error.message || "We couldn't start delivery now.", "error"),
+  });
+  const reviseMut = (trpc.campaigns.reviseScheduled as any).useMutation({
+    onSuccess: ({ id, templateId }: { id: string; templateId: string | null }) => {
+      toast("Scheduled delivery cancelled. Your editable revision is ready.", "info");
+      router.push(templateId ? `/templates/${templateId}/edit?campaignId=${id}` : `/campaigns/${id}`);
+    },
+    onError: (error: { message?: string }) => toast(error.message || "We couldn't open an editable revision.", "error"),
   });
   const cancelMut = trpc.campaigns.cancel.useMutation({
     onSuccess: () => {
@@ -142,6 +162,36 @@ export default function CampaignDetailPage() {
     currency: dryRunCurrency,
     maximumFractionDigits: 2,
   }).format(value);
+  const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+  const dispatch = (proposal.dispatch ?? {}) as Record<string, any>;
+  const delivery = (dispatch.delivery ?? {}) as {
+    earliestAt?: string | null;
+    latestAt?: string | null;
+    reason?: string;
+    timingSource?: "customer" | "store" | "default";
+    merchantOverride?: boolean;
+  };
+  const awaitingDelivery = campaign.status === "scheduled" || (
+    campaign.status === "sending" &&
+    (stats?.recipientCount ?? 0) === 0 &&
+    Number(dispatch.scheduled ?? campaign.recipientCount ?? 0) > 0 &&
+    !delivery.merchantOverride
+  );
+  const formatDeliveryTime = (value?: string | null) => value
+    ? new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short",
+      }).format(new Date(value))
+    : null;
+  const earliestLabel = formatDeliveryTime(delivery.earliestAt);
+  const latestLabel = formatDeliveryTime(delivery.latestAt);
+  const deliveryWindow = earliestLabel && latestLabel && earliestLabel !== latestLabel
+    ? `${earliestLabel} – ${latestLabel}`
+    : earliestLabel ?? "Waiting for the planned delivery time";
 
   return (
     <div className="space-y-6">
@@ -162,13 +212,39 @@ export default function CampaignDetailPage() {
               Sent
             </span>
           )}
-          {campaign.status === "sending" && (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning)]/10 text-warning border border-[var(--color-warning)]/25 rounded-lg text-xs font-sans font-bold">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Sending…
+          {awaitingDelivery && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-bold text-foreground">
+              <CalendarClock className="h-3.5 w-3.5" />
+              Scheduled
             </span>
           )}
-          {(campaign.status === "draft" || campaign.status === "scheduled") && (
+          {campaign.status === "sending" && !awaitingDelivery && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning)]/10 text-warning border border-[var(--color-warning)]/25 rounded-lg text-xs font-sans font-bold">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Sending now…
+            </span>
+          )}
+          {awaitingDelivery && (
+            <>
+              <button
+                onClick={() => reviseMut.mutate({ id: campaignId })}
+                disabled={reviseMut.isPending || deliverNowMut.isPending}
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
+              >
+                {reviseMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+                Edit campaign
+              </button>
+              <button
+                onClick={() => deliverNowMut.mutate({ id: campaignId })}
+                disabled={deliverNowMut.isPending || reviseMut.isPending}
+                className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-[background-color,transform] duration-150 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
+              >
+                {deliverNowMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                {deliverNowMut.isPending ? "Starting delivery…" : "Send now instead"}
+              </button>
+            </>
+          )}
+          {campaign.status === "draft" && (
             <button
               onClick={() => sendMut.mutate({ id: campaignId })}
               disabled={sendMut.isPending || dryRun?.deliveryGate?.blocked}
@@ -179,7 +255,7 @@ export default function CampaignDetailPage() {
               {sendMut.isPending ? "Sending…" : dryRun?.deliveryGate?.blocked ? "Delivery disabled" : "Send Now"}
             </button>
           )}
-          {campaign.status === "scheduled" && (
+          {campaign.status === "scheduled" && !awaitingDelivery && (
             <button
               onClick={() => cancelMut.mutate({ id: campaignId })}
               disabled={cancelMut.isPending}
@@ -205,6 +281,25 @@ export default function CampaignDetailPage() {
           )}
         </div>
       </div>
+
+      {awaitingDelivery && (
+        <section className="rounded-xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="delivery-plan-title">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+              <CalendarClock className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h2 id="delivery-plan-title" className="text-[15px] font-semibold text-foreground">Scheduled for {deliveryWindow}</h2>
+              <p className="mt-1 max-w-3xl text-[12px] leading-5 text-muted-foreground">
+                {delivery.reason ?? "Joon is waiting for the planned delivery time. The approved audience, control group and email remain frozen until delivery begins."}
+              </p>
+              <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                Edit creates a fresh draft and keeps this approved version in the audit trail. “Send now instead” overrides timing only; consent, suppression, sender-domain and recipient allowlist checks still run.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">

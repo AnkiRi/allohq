@@ -20,6 +20,8 @@ test("marketers can draft but cannot approve or send", () => {
 
 test("approvers can approve delivery but cannot edit settings", () => {
   assert.equal(canUseWorkspacePath("approver", "mutation", "campaigns.sendNow"), true);
+  assert.equal(canUseWorkspacePath("approver", "mutation", "campaigns.deliverNow"), true);
+  assert.equal(canUseWorkspacePath("approver", "mutation", "campaigns.reviseScheduled"), true);
   assert.equal(canUseWorkspacePath("approver", "mutation", "autonomy.approveAction"), true);
   assert.equal(canUseWorkspacePath("approver", "mutation", "stores.updateMetadata"), false);
 });

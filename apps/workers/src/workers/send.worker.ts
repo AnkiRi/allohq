@@ -55,6 +55,8 @@ interface SendJobData {
 }
 interface DeliverOneData {
   deliverOne: true;
+  /** Explicit merchant override. Consent, suppression and all non-timing safety gates still apply. */
+  forceImmediate?: boolean;
   campaignId: string;
   customerId: string;
   experimentId: string;
@@ -258,6 +260,14 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   let scheduledCount = 0;
   let controlCount = 0;
   let skippedCount = 0;
+  let earliestDeliveryTimestamp: number | null = null;
+  let latestDeliveryTimestamp: number | null = null;
+  let quietHoursDeferredCount = 0;
+  const timingSources: Record<DeliveryPlan["timingSource"], number> = {
+    customer: 0,
+    store: 0,
+    default: 0,
+  };
   const campaignArms = new Map(Object.entries(frozenHoldout.assignments));
   const planningGovernorConfig = await loadStoreGovernorConfig(campaign.storeId);
 
@@ -382,6 +392,11 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime()),
           isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS,
         );
+    const deliveryAt = new Date(planningNow.getTime() + deliveryDelay);
+    earliestDeliveryTimestamp = earliestDeliveryTimestamp == null || deliveryAt.getTime() < earliestDeliveryTimestamp ? deliveryAt.getTime() : earliestDeliveryTimestamp;
+    latestDeliveryTimestamp = latestDeliveryTimestamp == null || deliveryAt.getTime() > latestDeliveryTimestamp ? deliveryAt.getTime() : latestDeliveryTimestamp;
+    timingSources[timingSource] += 1;
+    if (!quietDecision.allowed) quietHoursDeferredCount += 1;
     await emailSendQueue.add(
       "deliver-one",
       {
@@ -421,11 +436,27 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     scheduledCount++;
   }
 
-  // "sending" distinguishes a fully delivered campaign from delayed work.
+  const hasDelayedDelivery = Boolean(
+    earliestDeliveryTimestamp && earliestDeliveryTimestamp > Date.now() + 1_000,
+  );
+  const dominantTimingSource = (Object.entries(timingSources) as Array<[
+    DeliveryPlan["timingSource"],
+    number,
+  ]>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "default";
+  const timingReason = quietHoursDeferredCount > 0
+    ? `${quietHoursDeferredCount} ${quietHoursDeferredCount === 1 ? "recipient is" : "recipients are"} deferred until after quiet hours.`
+    : dominantTimingSource === "customer"
+      ? "Joon chose times from each customer's previous email engagement."
+      : dominantTimingSource === "store"
+        ? "Joon chose the time when this store's customers usually engage."
+        : "There is not enough engagement history yet, so Joon used the 10:00 default send time.";
+
+  // A planned delivery is scheduled, not sending. `deliverOne` moves the campaign
+  // to sending only when a provider attempt actually begins.
   await prisma.campaign.update({
     where: { id: campaignId },
     data: {
-      status: "sending",
+      status: hasDelayedDelivery ? "scheduled" : "sending",
       sentAt: null,
       recipientCount: scheduledCount,
       agentProposal: {
@@ -439,6 +470,14 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
           control: controlCount,
           skipped: skippedCount,
           at: new Date().toISOString(),
+          delivery: {
+            earliestAt: earliestDeliveryTimestamp == null ? null : new Date(earliestDeliveryTimestamp).toISOString(),
+            latestAt: latestDeliveryTimestamp == null ? null : new Date(latestDeliveryTimestamp).toISOString(),
+            reason: timingReason,
+            timingSource: dominantTimingSource,
+            quietHoursDeferredCount,
+            merchantOverride: false,
+          },
         },
       },
     },
@@ -448,7 +487,10 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   await emailSendQueue.add(
     "campaign-finalize",
     { finalize: true, campaignId } as FinalizeData,
-    { delay: (isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS) + 60_000, jobId: `finalize-${campaignId}` },
+    {
+      delay: Math.max(0, (latestDeliveryTimestamp ?? Date.now()) - Date.now()) + 60_000,
+      jobId: `finalize-${campaignId}`,
+    },
   );
 
   console.log(`Campaign ${campaign.name} planned: ${scheduledCount} scheduled, ${controlCount} held out (CONTROL), ${skippedCount} skipped (send-less) via experiment ${experiment.id}`);
@@ -462,7 +504,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
 // state) from the inline version, plus per-customer tone slotting.
 // ---------------------------------------------------------------------------
 export async function deliverOne(data: DeliverOneData) {
-  const { campaignId, customerId, experimentId, effectiveSubject, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan } = data;
+  const { campaignId, customerId, experimentId, effectiveSubject, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan, forceImmediate = false } = data;
 
   const deliveryKey = `campaign:${campaignId}:customer:${customerId}:email:treatment`;
   // Provider and database idempotency share one stable key. Failed rows are
@@ -575,48 +617,58 @@ export async function deliverOne(data: DeliverOneData) {
   const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId, ...govConfig, timezone: plan.timezone ?? govConfig.timezone });
   if (!governorCheck.allowed) {
     if (governorCheck.rule === "quiet_hours" && governorCheck.delayUntil) {
-      const now = new Date();
-      await emailSendQueue.add("deliver-one", data, {
-        delay: Math.max(0, governorCheck.delayUntil.getTime() - now.getTime()),
-        jobId: `deliver-${campaignId}-${customerId}-quiet-${governorCheck.delayUntil.getTime()}`,
-        attempts: 5,
-        backoff: { type: "exponential", delay: 2_000 },
-        removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
-        removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
-      });
-      return { deferred: true, until: governorCheck.delayUntil };
-    }
-    const suppressionData = {
-      status: "suppressed",
-      error: `Suppressed: ${governorCheck.reason}`,
-      metadata: { suppressed: true, rule: governorCheck.rule, plan } as any,
-    } as const;
-    if (existing) {
-      await prisma.messageLog.update({
-        where: { id: existing.id },
-        data: suppressionData,
-      });
+      if (forceImmediate) {
+        console.log(`[send-worker] Merchant timing override bypassed quiet hours for campaign ${campaignId}, customer ${customerId}`);
+      } else {
+        const now = new Date();
+        await emailSendQueue.add("deliver-one", data, {
+          delay: Math.max(0, governorCheck.delayUntil.getTime() - now.getTime()),
+          jobId: `deliver-${campaignId}-${customerId}-quiet-${governorCheck.delayUntil.getTime()}`,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 2_000 },
+          removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+        });
+        return { deferred: true, until: governorCheck.delayUntil };
+      }
     } else {
-      await prisma.messageLog.create({ data: {
-        deliveryKey,
-        workspaceId: campaign.store.workspaceId,
-        storeId: campaign.storeId,
-        customerId,
-        channel: "email",
-        to: customer.email,
-        subject: effectiveSubject,
-        campaignId,
-        treatmentArm: "TREATMENT",
-        experimentId,
-        customerStateSnap: stateSnap as any,
-        discountCode: discountCode ?? null,
-        offerId,
-        messageVariantId: plan.toneKey,
-        ...suppressionData,
-      } });
+      const suppressionData = {
+        status: "suppressed",
+        error: `Suppressed: ${governorCheck.reason}`,
+        metadata: { suppressed: true, rule: governorCheck.rule, plan } as any,
+      } as const;
+      if (existing) {
+        await prisma.messageLog.update({
+          where: { id: existing.id },
+          data: suppressionData,
+        });
+      } else {
+        await prisma.messageLog.create({ data: {
+          deliveryKey,
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          customerId,
+          channel: "email",
+          to: customer.email,
+          subject: effectiveSubject,
+          campaignId,
+          treatmentArm: "TREATMENT",
+          experimentId,
+          customerStateSnap: stateSnap as any,
+          discountCode: discountCode ?? null,
+          offerId,
+          messageVariantId: plan.toneKey,
+          ...suppressionData,
+        } });
+      }
+      return { suppressed: true };
     }
-    return { suppressed: true };
   }
+
+  await prisma.campaign.updateMany({
+    where: { id: campaignId, status: { in: ["scheduled", "sending"] } },
+    data: { status: "sending" },
+  });
 
   const now = new Date();
   const variables: Record<string, string> = {
