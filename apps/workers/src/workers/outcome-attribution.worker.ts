@@ -8,7 +8,8 @@ import { buildMonthlyShadowInvoices, persistClosedCampaignLedgers } from "./caus
 const ATTRIBUTION_WINDOW_DAYS = 7;
 
 interface OutcomeAttributionJobData {
-  type?: "hourly" | "daily-summary" | "monthly-shadow-invoice";
+  type?: "hourly" | "daily-summary" | "monthly-shadow-invoice" | "order-created";
+  storeId?: string;
 }
 
 /**
@@ -34,6 +35,10 @@ export const outcomeAttributionWorker = new Worker<OutcomeAttributionJobData>(
       const ledgerVersionsCreated = await persistClosedCampaignLedgers();
       const shadowInvoicesCreated = await buildMonthlyShadowInvoices();
       return { ledgerVersionsCreated, shadowInvoicesCreated };
+    }
+
+    if (jobType === "order-created" && job.data.storeId) {
+      return attributeOrdersForStore(job.data.storeId);
     }
 
     return runHourlyAttribution();

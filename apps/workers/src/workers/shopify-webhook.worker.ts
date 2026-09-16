@@ -15,6 +15,7 @@ const shippingUpdateQueue = new Queue(QUEUE_NAMES.SHIPPING_UPDATE, { connection:
 const restockAlertQueue = new Queue(QUEUE_NAMES.RESTOCK_ALERT, { connection: redisConnection });
 const priceDropQueue = new Queue(QUEUE_NAMES.PRICE_DROP, { connection: redisConnection });
 const eventReactQueue = new Queue(QUEUE_NAMES.EVENT_REACT, { connection: redisConnection });
+const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, { connection: redisConnection });
 
 interface WebhookJobData {
   topic: string;
@@ -317,6 +318,20 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
               totalPrice: (payload as any).total_price,
             },
           });
+          // Attribute promptly after the durable order write. The hourly scan
+          // remains the recovery path; this idempotent event job makes the
+          // campaign and customer outcome visible without an unexplained hour.
+          await outcomeAttributionQueue.add(
+            "attribute-order",
+            { type: "order-created", storeId: store.id },
+            {
+              jobId: `attribute-order-${order.id}`,
+              attempts: 5,
+              backoff: { type: "exponential", delay: 2_000 },
+              removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+              removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+            },
+          );
         }
         break;
       }
