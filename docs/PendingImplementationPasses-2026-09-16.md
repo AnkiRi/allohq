@@ -6,7 +6,7 @@ This document is the single reference point for these passes. Later implementati
 
 ## Pass 0 — Creative, offer and attribution correctness
 
-Status: in progress.
+Status: code complete for the two newly identified correctness defects; production acceptance remains. `39053f8` enforces the full-price creative policy and `6fe8785` triggers prompt, idempotent attribution after an order webhook.
 
 ### Outcome
 
@@ -25,7 +25,7 @@ Make the approved campaign internally consistent from request through creative, 
 
 ## Pass 1 — Audience review and override consistency
 
-Status: in progress. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. The interaction is inconsistent across remaining exclusion reasons and does not scale to a large audience review.
+Status: in progress. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. `b620798` adds audited recent-campaign collision and redeemed-discount cooldown overrides through preview and final delivery. Searchable pagination and the unified large-audience drawer remain.
 
 ### Outcome
 
