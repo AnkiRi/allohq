@@ -790,7 +790,7 @@ export const campaignsRouter = router({
     }),
 
   sendNow: workspaceProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), timing: z.enum(["joon", "now"]).default("joon") }))
     .mutation(async ({ ctx, input }) => {
       const campaign = await ctx.prisma.campaign.findFirst({
         where: {
@@ -818,7 +818,7 @@ export const campaignsRouter = router({
         try {
           await emailSendQueue.add(
             "campaign-send",
-            { campaignId: campaign.id },
+            { campaignId: campaign.id, forceImmediate: input.timing === "now" },
             { jobId: `campaign-send-${campaign.id}` }
           );
         } catch (error) {
@@ -1033,7 +1033,7 @@ export const campaignsRouter = router({
       try {
         await emailSendQueue.add(
           "campaign-send",
-          { campaignId: input.id },
+          { campaignId: input.id, forceImmediate: input.timing === "now" },
           { jobId: `campaign-send-${input.id}` }
         );
       } catch (error) {

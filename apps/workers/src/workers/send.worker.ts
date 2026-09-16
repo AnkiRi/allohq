@@ -53,6 +53,8 @@ interface DeliveryPlan {
 }
 interface SendJobData {
   campaignId: string;
+  /** Merchant chose immediate delivery at approval instead of Joon's timing plan. */
+  forceImmediate?: boolean;
 }
 interface DeliverOneData {
   deliverOne: true;
@@ -92,7 +94,11 @@ export const sendWorker = new Worker<SendJobData | DeliverOneData | FinalizeData
     const data = job.data as SendJobData | DeliverOneData | FinalizeData;
     if ((data as DeliverOneData).deliverOne) return deliverOne(data as DeliverOneData);
     if ((data as FinalizeData).finalize) return finalizeCampaign((data as FinalizeData).campaignId, data as FinalizeData);
-    return planCampaignSend((data as SendJobData).campaignId, job);
+    return planCampaignSend(
+      (data as SendJobData).campaignId,
+      job,
+      Boolean((data as SendJobData).forceImmediate),
+    );
   },
   { connection: redisConnection }
 );
@@ -103,7 +109,11 @@ export const sendWorker = new Worker<SendJobData | DeliverOneData | FinalizeData
 // customer whether to SKIP (send-less) and their tone/channel/optimal time, and
 // fans out one delayed `deliver-one` job per customer to be sent at that time.
 // ---------------------------------------------------------------------------
-export async function planCampaignSend(campaignId: string, job?: { updateProgress: (n: number) => Promise<void> }) {
+export async function planCampaignSend(
+  campaignId: string,
+  job?: { updateProgress: (n: number) => Promise<void> },
+  forceImmediate = false,
+) {
   console.log(`Planning campaign send for ${campaignId}`);
 
   const campaign = await prisma.campaign.findUnique({
@@ -388,12 +398,14 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     // Fan out a delayed delivery job at THIS customer's optimal time.
     const planningNow = new Date();
     const quietDecision = checkQuietHours(deliveryTimezone, planningGovernorConfig.quietHours, planningNow);
-    const deliveryDelay = quietDecision.allowed
-      ? computeDelayMs(bestHour, isDemo, deliveryTimezone, planningNow)
-      : Math.min(
-          Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime()),
-          isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS,
-        );
+    const deliveryDelay = forceImmediate
+      ? 0
+      : quietDecision.allowed
+        ? computeDelayMs(bestHour, isDemo, deliveryTimezone, planningNow)
+        : Math.min(
+            Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime()),
+            isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS,
+          );
     const deliveryAt = new Date(planningNow.getTime() + deliveryDelay);
     earliestDeliveryTimestamp = earliestDeliveryTimestamp == null || deliveryAt.getTime() < earliestDeliveryTimestamp ? deliveryAt.getTime() : earliestDeliveryTimestamp;
     latestDeliveryTimestamp = latestDeliveryTimestamp == null || deliveryAt.getTime() > latestDeliveryTimestamp ? deliveryAt.getTime() : latestDeliveryTimestamp;
@@ -403,6 +415,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       "deliver-one",
       {
         deliverOne: true,
+        forceImmediate,
         campaignId,
         customerId: customer.id,
         experimentId: experiment.id,
@@ -445,14 +458,18 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
     DeliveryPlan["timingSource"],
     number,
   ]>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "default";
-  const timingReason = quietHoursDeferredCount > 0
+  const timingReason = forceImmediate
+    ? "The merchant chose immediate delivery instead of Joon's recommended timing."
+    : quietHoursDeferredCount > 0
     ? `${quietHoursDeferredCount} ${quietHoursDeferredCount === 1 ? "recipient is" : "recipients are"} deferred until after quiet hours.`
     : dominantTimingSource === "customer"
       ? "Joon chose times from each customer's previous email engagement."
       : dominantTimingSource === "store"
         ? "Joon chose the time when this store's customers usually engage."
         : "There is not enough engagement history yet, so Joon used the 10:00 default send time.";
-  const timingConsequence = quietHoursDeferredCount > 0
+  const timingConsequence = forceImmediate
+    ? "Timing was overridden; consent, suppression, sender-domain and recipient allowlist checks still ran."
+    : quietHoursDeferredCount > 0
     ? "Sending now may reach customers during quiet hours, which can reduce engagement and increase opt-outs."
     : dominantTimingSource === "customer"
       ? "Sending now may reduce opens because it ignores customers' observed engagement windows."
@@ -486,7 +503,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
             consequence: timingConsequence,
             timingSource: dominantTimingSource,
             quietHoursDeferredCount,
-            merchantOverride: false,
+            merchantOverride: forceImmediate,
           },
         },
       },

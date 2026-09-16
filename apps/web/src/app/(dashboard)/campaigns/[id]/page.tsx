@@ -23,6 +23,7 @@ export default function CampaignDetailPage() {
   const [overrideReason, setOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
   const [showTimingOverride, setShowTimingOverride] = useState(false);
+  const [showApproval, setShowApproval] = useState(false);
   const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
     { id: campaignId },
     { refetchInterval: (query: { state: { data?: { status?: string } } }) => ["scheduled", "sending"].includes(query.state.data?.status ?? "") ? 5_000 : false },
@@ -48,10 +49,16 @@ export default function CampaignDetailPage() {
   }, [templateBlocks]);
   const utils = trpc.useUtils();
   const sendMut = trpc.campaigns.sendNow.useMutation({
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
+      setShowApproval(false);
       utils.campaigns.getById.invalidate({ id: campaignId });
       utils.campaigns.stats.invalidate({ id: campaignId });
-      toast("It's on its way.", "success");
+      toast(
+        variables.timing === "now"
+          ? "Delivery approved. Joon is sending the frozen audience now."
+          : "Delivery approved. Joon is preparing the frozen audience and timing plan.",
+        "success",
+      );
     },
     onError: () => toast("We couldn't send that. Mind trying again?", "error"),
   });
@@ -195,6 +202,34 @@ export default function CampaignDetailPage() {
   const deliveryWindow = earliestLabel && latestLabel && earliestLabel !== latestLabel
     ? `${earliestLabel} – ${latestLabel}`
     : earliestLabel ?? "Waiting for the planned delivery time";
+  const exclusionCopy: Record<string, { label: string; explanation: string }> = {
+    invalid_email: { label: "Invalid email", explanation: "The stored email address cannot receive mail." },
+    no_consent: { label: "No email consent", explanation: "This customer has not subscribed to marketing email." },
+    unsubscribed: { label: "Unsubscribed", explanation: "This customer opted out of marketing email." },
+    complaint: { label: "Complaint suppression", explanation: "A previous complaint permanently blocks marketing delivery." },
+    hard_bounce: { label: "Previous hard bounce", explanation: "A previous hard bounce blocks another delivery attempt." },
+    manual_suppression: { label: "Manually suppressed", explanation: "This customer is on the store’s suppression list." },
+    already_processed: { label: "Already processed", explanation: "This campaign already created a delivery record for this customer." },
+    fatigue: { label: "Fatigue limit", explanation: "They have reached the store’s weekly or monthly email limit." },
+    collision: { label: "Recent campaign", explanation: "They received another campaign within the 48-hour spacing window." },
+    cooldown: { label: "Customer cooldown", explanation: "A redeemed offer or recent support issue is still inside its cooldown." },
+    support_state: { label: "Active support issue", explanation: "Joon avoids marketing while this customer needs support." },
+    recent_purchase: { label: "Recent purchase", explanation: "Joon is leaving this recent buyer alone for this campaign." },
+    store_paused: { label: "Store delivery paused", explanation: "Email delivery is paused for this store." },
+    global_paused: { label: "Delivery globally disabled", explanation: "Joon’s global delivery safety gate is active." },
+  };
+  const excludedCustomerRows = dryRun
+    ? Object.entries(dryRun.exclusionSamples).flatMap(([reason, customers]) =>
+        (customers ?? []).map((customer) => ({
+          ...customer,
+          reason,
+          ...(exclusionCopy[reason] ?? {
+            label: reason.replaceAll("_", " "),
+            explanation: "A current audience or delivery rule excludes this customer.",
+          }),
+        })),
+      )
+    : [];
 
   return (
     <div className="space-y-6">
@@ -261,13 +296,13 @@ export default function CampaignDetailPage() {
           )}
           {campaign.status === "draft" && (
             <button
-              onClick={() => sendMut.mutate({ id: campaignId })}
+              onClick={() => setShowApproval(true)}
               disabled={sendMut.isPending || dryRun?.deliveryGate?.blocked}
               title={dryRun?.deliveryGate?.blocked ? dryRun.deliveryGate.reason ?? "Delivery is disabled" : undefined}
               className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
               {sendMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              {sendMut.isPending ? "Sending…" : dryRun?.deliveryGate?.blocked ? "Delivery disabled" : "Send Now"}
+              {sendMut.isPending ? "Approving…" : dryRun?.deliveryGate?.blocked ? "Delivery disabled" : "Approve delivery"}
             </button>
           )}
           {campaign.status === "scheduled" && !awaitingDelivery && (
@@ -296,6 +331,52 @@ export default function CampaignDetailPage() {
           )}
         </div>
       </div>
+
+      <Dialog.Root open={showApproval} onOpenChange={setShowApproval}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl bg-card p-6 shadow-[0_18px_50px_rgba(0,0,0,0.24)] focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 motion-reduce:animate-none">
+            <Dialog.Title className="text-[16px] font-semibold text-foreground">Approve this campaign for delivery</Dialog.Title>
+            <Dialog.Description className="mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">
+              Approval freezes the email, audience and control assignment. Choose whether Joon should plan the timing or deliver immediately.
+            </Dialog.Description>
+            <div className="mt-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => sendMut.mutate({ id: campaignId, timing: "joon" })}
+                disabled={sendMut.isPending}
+                className="w-full rounded-xl border border-foreground bg-background px-4 py-4 text-left transition-[background-color,transform] duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:opacity-50"
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-semibold text-foreground">Use Joon’s timing</span>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">Recommended</span>
+                </span>
+                <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
+                  Joon will use customer engagement, store patterns and quiet hours. You will see every planned time and can still override it before delivery.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sendMut.mutate({ id: campaignId, timing: "now" })}
+                disabled={sendMut.isPending}
+                className="w-full rounded-xl border border-border bg-background px-4 py-4 text-left transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:opacity-50"
+              >
+                <span className="text-[13px] font-semibold text-foreground">Deliver immediately</span>
+                <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
+                  Overrides Joon’s timing and quiet-hours recommendation for this campaign only. Consent, suppression, sender-domain and allowlist checks still run.
+                </span>
+              </button>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <Dialog.Close asChild>
+                <button className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]">
+                  Keep editing
+                </button>
+              </Dialog.Close>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {awaitingDelivery && (
         <section className="rounded-xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="delivery-plan-title">
@@ -471,13 +552,12 @@ export default function CampaignDetailPage() {
               )}
               <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Audience plan</div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+                <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {[
                     ["You asked for", dryRun.requestedAudienceCount ?? dryRun.requested],
                     ["Found in store", dryRun.requested],
                     ["Not in store", dryRun.audienceShortfall],
-                    ["No email consent", dryRun.noEmailConsent],
-                    ["Left alone", dryRun.otherLeftAlone],
+                    ["Campaign candidates", dryRun.eligibleBeforeHoldout],
                     ["Random control", dryRun.estimatedControl],
                     ["Would receive", dryRun.estimatedTreatment],
                   ].map(([label, value]) => (
@@ -491,12 +571,42 @@ export default function CampaignDetailPage() {
                   {dryRun.requestedAudienceCount != null && dryRun.audienceShortfall > 0
                     ? `This store has ${dryRun.requested} of the ${dryRun.requestedAudienceCount} customers requested. `
                     : ""}
-                  {dryRun.noEmailConsent > 0
-                    ? `${dryRun.noEmailConsent} ${dryRun.noEmailConsent === 1 ? "has" : "have"} not subscribed to email and cannot be contacted. `
+                  {dryRun.otherLeftAlone > 0
+                    ? `${dryRun.otherLeftAlone} ${dryRun.otherLeftAlone === 1 ? "customer is" : "customers are"} not receiving this campaign for the reasons below. `
                     : ""}
-                  Joon left {dryRun.otherLeftAlone} more alone for safety or because their current state says this campaign is unnecessary. From the remaining {dryRun.eligibleBeforeHoldout} campaign candidates, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "forms" : "form"} the random control and {dryRun.estimatedTreatment} would receive the email.
+                  From {dryRun.eligibleBeforeHoldout} campaign {dryRun.eligibleBeforeHoldout === 1 ? "candidate" : "candidates"}, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "is" : "are"} randomly assigned to control and {dryRun.estimatedTreatment} would receive the email.
                 </p>
               </div>
+              {dryRun.otherLeftAlone > 0 && (
+                <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="text-[12px] font-semibold text-foreground">Not receiving this campaign</div>
+                    <div className="font-mono text-[11px] font-bold text-muted-foreground">{dryRun.otherLeftAlone}</div>
+                  </div>
+                  <div className="mt-3 divide-y divide-border">
+                    {excludedCustomerRows.map((customer) => {
+                      const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                      return (
+                        <div key={`${customer.reason}-${customer.id}`} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:gap-5">
+                          <div className="min-w-0">
+                            <div className="truncate text-[11px] font-medium text-foreground">{name}</div>
+                            {name !== customer.email && <div className="truncate text-[10px] text-muted-foreground">{customer.email}</div>}
+                          </div>
+                          <div>
+                            <div className="text-[11px] font-medium text-foreground">{customer.label}</div>
+                            <div className="mt-0.5 text-[10px] leading-4 text-muted-foreground">{customer.explanation}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {excludedCustomerRows.length < dryRun.otherLeftAlone && (
+                      <div className="pt-3 text-[10px] text-muted-foreground">
+                        Showing {excludedCustomerRows.length} examples. The frozen approval record keeps the complete counts by reason.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {dryRun.offer.appliedDiscountPercent > 0 && (
                 <div className="mb-5 rounded-lg border border-border bg-background/50 px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
