@@ -11,7 +11,18 @@ export const customersRouter = router({
     const storeIds = stores.map((store) => store.id);
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const now = new Date();
-    const [total, lifecycle, cycle, discounts, due, failed, transitions] = await Promise.all([
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const [
+      total,
+      lifecycle,
+      cycle,
+      discounts,
+      due,
+      oldestDue,
+      failed,
+      updatedLastHour,
+      transitions,
+    ] = await Promise.all([
       ctx.prisma.customerState.count({ where: { storeId: { in: storeIds } } }),
       ctx.prisma.customerState.groupBy({
         by: ["lifecycleStage"],
@@ -31,8 +42,16 @@ export const customersRouter = router({
       ctx.prisma.customerState.count({
         where: { storeId: { in: storeIds }, nextEvaluationAt: { lte: now } },
       }),
+      ctx.prisma.customerState.findFirst({
+        where: { storeId: { in: storeIds }, nextEvaluationAt: { lte: now } },
+        select: { nextEvaluationAt: true },
+        orderBy: { nextEvaluationAt: "asc" },
+      }),
       ctx.prisma.customerState.count({
         where: { storeId: { in: storeIds }, evaluationFailureCount: { gt: 0 } },
+      }),
+      ctx.prisma.customerState.count({
+        where: { storeId: { in: storeIds }, lastStateUpdate: { gte: hourAgo } },
       }),
       ctx.prisma.customerStateTransition.groupBy({
         by: ["dimension", "fromValue", "toValue"],
@@ -49,7 +68,7 @@ export const customersRouter = router({
       lifecycle: lifecycle.map((row) => ({ key: row.lifecycleStage, count: row._count._all })),
       cycle: cycle.map((row) => ({ key: row.purchaseCyclePosition, count: row._count._all })),
       discounts: discounts.map((row) => ({ key: row.discountBehavior, count: row._count._all })),
-      queue: { due, failed },
+      queue: { due, failed, oldestDueAt: oldestDue?.nextEvaluationAt ?? null, updatedLastHour },
       transitions: transitions.map((row) => ({
         dimension: row.dimension,
         fromValue: row.fromValue,

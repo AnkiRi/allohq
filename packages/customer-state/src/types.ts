@@ -66,6 +66,8 @@ export interface CustomerStateData {
     | "discount_responsive"
     | "discount_habituated"
     | "inconclusive";
+  consentState: "opted_in" | "opted_out" | "unknown";
+  deliveryHealth: "clear" | "unsubscribed" | "complaint" | "hard_bounce" | "suppressed";
   meanOrderIntervalDays: number | null;
   medianOrderIntervalDays: number | null;
   purchaseCyclePosition: "early" | "approaching" | "due" | "overdue" | "unknown";

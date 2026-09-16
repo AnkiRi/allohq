@@ -2,10 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, Search } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useAlloAI } from "@/components/ai/AlloAIPanel";
 
-const LIFECYCLE = ["champion", "loyal", "repeat", "first_buyer", "subscriber", "at_risk", "lost"];
+const LIFECYCLE = [
+  "visitor",
+  "champion",
+  "loyal",
+  "repeat",
+  "first_buyer",
+  "subscriber",
+  "at_risk",
+  "lost",
+];
 const CYCLES = ["early", "approaching", "due", "overdue", "unknown"];
 const DISCOUNTS = [
   "full_price_likely",
@@ -75,6 +85,7 @@ export default function CustomerStatesPage() {
   const [lifecycle, setLifecycle] = useState("");
   const [cycle, setCycle] = useState("");
   const [discount, setDiscount] = useState("");
+  const { submit: submitToJoon } = useAlloAI();
   const overview = trpc.customers.stateOverview.useQuery();
   const explorer = trpc.customers.stateExplorer.useQuery({
     page,
@@ -89,6 +100,14 @@ export default function CustomerStatesPage() {
     setter(value);
     setPage(1);
   };
+  const cohortDescription = [
+    lifecycle && `${words(lifecycle)} lifecycle`,
+    cycle && `${words(cycle)} purchase-cycle position`,
+    discount && `${words(discount)} discount behaviour`,
+    search && `matching “${search}”`,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6">
@@ -110,14 +129,25 @@ export default function CustomerStatesPage() {
             </p>
           </div>
           {overview.data && (
-            <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground">
-              <Clock3 className="h-4 w-4" aria-hidden="true" />
-              <span>
-                <strong className="font-medium text-foreground">
+            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border text-xs">
+              <div className="bg-card px-3 py-2">
+                <span className="block font-mono font-medium text-foreground">
                   {overview.data.queue.due.toLocaleString("en-IN")}
-                </strong>{" "}
-                due for review
-              </span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">due</span>
+              </div>
+              <div className="bg-card px-3 py-2">
+                <span className="block font-mono font-medium text-foreground">
+                  {overview.data.queue.updatedLastHour.toLocaleString("en-IN")}
+                </span>
+                <span className="text-[10px] text-muted-foreground">updated · 1h</span>
+              </div>
+              <div className="bg-card px-3 py-2">
+                <span className="block font-mono font-medium text-foreground">
+                  {overview.data.queue.failed.toLocaleString("en-IN")}
+                </span>
+                <span className="text-[10px] text-muted-foreground">retrying</span>
+              </div>
             </div>
           )}
         </div>
@@ -173,6 +203,27 @@ export default function CustomerStatesPage() {
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="border-b border-border p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-medium text-foreground">Explore profiles</h2>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Build a cohort from state, then let campaign safety and control assignment run
+                normally.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={!cohortDescription || !explorer.data?.total}
+              onClick={() =>
+                submitToJoon(
+                  `Draft an email campaign for the ${explorer.data?.total ?? 0} customers in this saved state view: ${cohortDescription}. Preserve these state filters as the requested audience, run the normal consent and safety checks, and let me review the audience and creative before sending.`
+                )
+              }
+              className="rounded-lg bg-foreground px-3 py-2 text-xs font-medium text-background disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Draft for this cohort
+            </button>
+          </div>
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
@@ -257,7 +308,8 @@ export default function CustomerStatesPage() {
                     {state.medianOrderIntervalDays
                       ? `usual cycle ${Math.round(state.medianOrderIntervalDays)} days · `
                       : ""}
-                    reorder confidence {Math.round(state.reorderConfidence * 100)}%
+                    reorder confidence {Math.round(state.reorderConfidence * 100)}% ·{" "}
+                    {words(state.consentState)} · {words(state.deliveryHealth)}
                   </p>
                 </div>
                 <div className="text-[11px] text-muted-foreground sm:text-right">

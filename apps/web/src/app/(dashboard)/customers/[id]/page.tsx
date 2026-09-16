@@ -399,12 +399,14 @@ export default function CustomerDetailPage() {
               Open state explorer
             </Link>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {[
               ["lifecycle", customer.customerState.lifecycleStage],
               ["purchase cycle", customer.customerState.purchaseCyclePosition],
               ["discount behaviour", customer.customerState.discountBehavior],
               ["intent", customer.customerState.intentState],
+              ["email consent", customer.customerState.consentState],
+              ["delivery health", customer.customerState.deliveryHealth],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-border px-3 py-3">
                 <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">

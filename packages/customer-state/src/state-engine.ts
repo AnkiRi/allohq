@@ -41,7 +41,7 @@ export async function computeFullState(
   cause: StateTransitionCause = "full_recalculation"
 ): Promise<CustomerStateData> {
   // Fetch all required data in parallel
-  const [customer, orders, rfmScore, ltv, fatigueState, channelPref, intentState] =
+  const [customer, orders, rfmScore, ltv, fatigueState, channelPref, intentState, suppression] =
     await Promise.all([
       prisma.customer.findUnique({
         where: { id: customerId },
@@ -57,6 +57,10 @@ export async function computeFullState(
       computeFatigueState(customerId, storeId),
       computeChannelPreference(customerId, storeId),
       detectIntent(customerId, storeId),
+      prisma.contactSuppression.findUnique({
+        where: { customerId_channel: { customerId, channel: "email" } },
+        select: { reason: true, expiresAt: true },
+      }),
     ]);
 
   const now = new Date();
@@ -116,6 +120,15 @@ export async function computeFullState(
     avgOrderIntervalDays,
   });
   const discountProfile = computeDiscountProfile(orders);
+  const consentState = customer?.acceptsMarketing ? "opted_in" : "opted_out";
+  const activeSuppression = suppression && (!suppression.expiresAt || suppression.expiresAt > now);
+  const deliveryHealth = !activeSuppression
+    ? "clear"
+    : suppression.reason === "complaint" || suppression.reason === "hard_bounce"
+      ? suppression.reason
+      : suppression.reason === "unsubscribe"
+        ? "unsubscribed"
+        : "suppressed";
   const nextExpectedOrderAt =
     lastOrder && medianOrderIntervalDays
       ? new Date(lastOrder.createdAt.getTime() + medianOrderIntervalDays * 86_400_000)
@@ -166,6 +179,8 @@ export async function computeFullState(
     communicationFatigue: fatigueState,
     discountSensitivity: discountProfile.sensitivity,
     discountBehavior: discountProfile.behavior,
+    consentState,
+    deliveryHealth,
     meanOrderIntervalDays: avgOrderIntervalDays,
     medianOrderIntervalDays,
     purchaseCyclePosition,
@@ -201,6 +216,8 @@ export async function computeFullState(
         communicationFatigue: stateData.communicationFatigue as any,
         discountSensitivity: stateData.discountSensitivity,
         discountBehavior: stateData.discountBehavior,
+        consentState: stateData.consentState,
+        deliveryHealth: stateData.deliveryHealth,
         meanOrderIntervalDays: stateData.meanOrderIntervalDays,
         medianOrderIntervalDays: stateData.medianOrderIntervalDays,
         purchaseCyclePosition: stateData.purchaseCyclePosition,
@@ -225,6 +242,8 @@ export async function computeFullState(
         communicationFatigue: stateData.communicationFatigue as any,
         discountSensitivity: stateData.discountSensitivity,
         discountBehavior: stateData.discountBehavior,
+        consentState: stateData.consentState,
+        deliveryHealth: stateData.deliveryHealth,
         meanOrderIntervalDays: stateData.meanOrderIntervalDays,
         medianOrderIntervalDays: stateData.medianOrderIntervalDays,
         purchaseCyclePosition: stateData.purchaseCyclePosition,
@@ -247,6 +266,8 @@ export async function computeFullState(
       ["lifecycle", previous?.lifecycleStage ?? null, next.lifecycleStage],
       ["purchase_cycle", previous?.purchaseCyclePosition ?? null, next.purchaseCyclePosition],
       ["discount_behavior", previous?.discountBehavior ?? null, next.discountBehavior],
+      ["consent", previous?.consentState ?? null, next.consentState],
+      ["delivery_health", previous?.deliveryHealth ?? null, next.deliveryHealth],
       ["intent", previous?.intentState ?? null, next.intentState],
       ["support", previous?.supportState ?? null, next.supportState],
       ["vip", previous?.vipLevel ?? null, next.vipLevel],
@@ -296,18 +317,7 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
 
     case "email_opened":
     case "email_clicked": {
-      const [channelPref, intentState] = await Promise.all([
-        computeChannelPreference(customerId, storeId),
-        detectIntent(customerId, storeId),
-      ]);
-      await prisma.customerState.update({
-        where: { customerId },
-        data: {
-          channelPreference: channelPref as any,
-          intentState,
-          lastStateUpdate: new Date(),
-        },
-      });
+      await computeFullState(customerId, storeId, type);
       break;
     }
 
@@ -315,61 +325,18 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
     case "sms_sent":
     case "whatsapp_sent":
     case "rcs_sent": {
-      const fatigue = await computeFatigueState(customerId, storeId);
-      await prisma.customerState.update({
-        where: { customerId },
-        data: {
-          communicationFatigue: fatigue as any,
-          lastStateUpdate: new Date(),
-        },
-      });
+      await computeFullState(customerId, storeId, type);
       break;
     }
 
     case "support_opened":
     case "support_resolved": {
-      const supportState = await computeSupportState(customerId, storeId);
-      const eligibility = computeCampaignEligibility(
-        LifecycleStage.REPEAT, // will be overridden by actual state
-        true,
-        supportState
-      );
-      await prisma.customerState.update({
-        where: { customerId },
-        data: {
-          supportState,
-          campaignEligibility: eligibility,
-          lastStateUpdate: new Date(),
-        },
-      });
+      await computeFullState(customerId, storeId, type);
       break;
     }
 
     case "form_submitted": {
-      // Update channel preferences based on consent from form submission
-      const consent = event.data?.["consent"] as
-        | { email?: boolean; sms?: boolean; whatsapp?: boolean }
-        | undefined;
-      if (consent) {
-        const existing = await prisma.customerState.findUnique({
-          where: { customerId },
-          select: { channelPreference: true },
-        });
-        const currentPref =
-          (existing?.channelPreference as unknown as Record<string, number>) ?? {};
-        // Boost channels the customer consented to
-        if (consent.email) currentPref["email"] = Math.min((currentPref["email"] ?? 0.5) + 0.2, 1);
-        if (consent.sms) currentPref["sms"] = Math.min((currentPref["sms"] ?? 0.3) + 0.3, 1);
-        if (consent.whatsapp)
-          currentPref["whatsapp"] = Math.min((currentPref["whatsapp"] ?? 0.3) + 0.3, 1);
-        await prisma.customerState.update({
-          where: { customerId },
-          data: {
-            channelPreference: currentPref as any,
-            lastStateUpdate: new Date(),
-          },
-        });
-      }
+      await computeFullState(customerId, storeId, type);
       break;
     }
 

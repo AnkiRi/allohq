@@ -1731,6 +1731,8 @@ model CustomerState {
   communicationFatigue    Json      @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
   discountSensitivity     Float     @default(0.5) // 0-1
   discountBehavior        String    @default("inconclusive")
+  consentState            String    @default("unknown") // opted_in, opted_out, unknown
+  deliveryHealth          String    @default("clear") // clear, unsubscribed, complaint, hard_bounce, suppressed
   meanOrderIntervalDays   Float?
   medianOrderIntervalDays Float?
   purchaseCyclePosition   String    @default("unknown")
