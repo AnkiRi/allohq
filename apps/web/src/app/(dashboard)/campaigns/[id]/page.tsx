@@ -2,7 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2, ShoppingBag, TrendingUp, CalendarClock, Pencil } from "lucide-react";
+import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2, ShoppingBag, TrendingUp, CalendarClock, Pencil, AlertTriangle } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
@@ -21,6 +22,7 @@ export default function CampaignDetailPage() {
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
+  const [showTimingOverride, setShowTimingOverride] = useState(false);
   const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
     { id: campaignId },
     { refetchInterval: (query: { state: { data?: { status?: string } } }) => ["scheduled", "sending"].includes(query.state.data?.status ?? "") ? 5_000 : false },
@@ -164,12 +166,13 @@ export default function CampaignDetailPage() {
   }).format(value);
   const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
   const dispatch = (proposal.dispatch ?? {}) as Record<string, any>;
-  const delivery = (dispatch.delivery ?? {}) as {
+  const delivery = ((campaign as any).deliveryPlan ?? dispatch.delivery ?? {}) as {
     earliestAt?: string | null;
     latestAt?: string | null;
     reason?: string;
     timingSource?: "customer" | "store" | "default";
     merchantOverride?: boolean;
+    consequence?: string;
   };
   const awaitingDelivery = campaign.status === "scheduled" || (
     campaign.status === "sending" &&
@@ -235,7 +238,7 @@ export default function CampaignDetailPage() {
                 Edit campaign
               </button>
               <button
-                onClick={() => deliverNowMut.mutate({ id: campaignId })}
+                onClick={() => setShowTimingOverride(true)}
                 disabled={deliverNowMut.isPending || reviseMut.isPending}
                 className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-[background-color,transform] duration-150 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
               >
@@ -300,6 +303,53 @@ export default function CampaignDetailPage() {
           </div>
         </section>
       )}
+
+      <Dialog.Root open={showTimingOverride} onOpenChange={setShowTimingOverride}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-card p-6 shadow-[0_18px_50px_rgba(0,0,0,0.24)] focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 motion-reduce:animate-none">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+              <div>
+                <Dialog.Title className="text-[16px] font-semibold text-foreground">Send before Joon’s recommended time?</Dialog.Title>
+                <Dialog.Description className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  The campaign is scheduled for {deliveryWindow}.
+                </Dialog.Description>
+              </div>
+            </div>
+            <div className="mt-5 space-y-3 rounded-lg bg-muted/60 px-4 py-3">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Why Joon waited</div>
+                <p className="mt-1 text-[12px] leading-5 text-foreground">{delivery.reason ?? "Joon selected this time from the available delivery policy and engagement evidence."}</p>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">What may change</div>
+                <p className="mt-1 text-[12px] leading-5 text-foreground">{delivery.consequence ?? "Sending earlier may reduce opens because it ignores the recommended engagement window."}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
+              This overrides timing only. Consent, suppression, verified-domain and recipient allowlist checks still run immediately before delivery.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <button className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]">
+                  Keep scheduled
+                </button>
+              </Dialog.Close>
+              <button
+                onClick={() => deliverNowMut.mutate({ id: campaignId }, { onSuccess: () => setShowTimingOverride(false) })}
+                disabled={deliverNowMut.isPending}
+                className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-[background-color,transform] duration-150 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
+              >
+                {deliverNowMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                {deliverNowMut.isPending ? "Starting delivery…" : "Override and send now"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">

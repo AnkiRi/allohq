@@ -450,6 +450,13 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
       : dominantTimingSource === "store"
         ? "Joon chose the time when this store's customers usually engage."
         : "There is not enough engagement history yet, so Joon used the 10:00 default send time.";
+  const timingConsequence = quietHoursDeferredCount > 0
+    ? "Sending now may reach customers during quiet hours, which can reduce engagement and increase opt-outs."
+    : dominantTimingSource === "customer"
+      ? "Sending now may reduce opens because it ignores customers' observed engagement windows."
+      : dominantTimingSource === "store"
+        ? "Sending now may reduce opens because it ignores the store's observed engagement window."
+        : "Sending now may reduce opens; this is a cautious default until Joon has enough engagement history to personalize the time.";
 
   // A planned delivery is scheduled, not sending. `deliverOne` moves the campaign
   // to sending only when a provider attempt actually begins.
@@ -474,6 +481,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
             earliestAt: earliestDeliveryTimestamp == null ? null : new Date(earliestDeliveryTimestamp).toISOString(),
             latestAt: latestDeliveryTimestamp == null ? null : new Date(latestDeliveryTimestamp).toISOString(),
             reason: timingReason,
+            consequence: timingConsequence,
             timingSource: dominantTimingSource,
             quietHoursDeferredCount,
             merchantOverride: false,

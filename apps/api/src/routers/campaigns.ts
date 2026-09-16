@@ -510,7 +510,54 @@ export const campaignsRouter = router({
       },
     });
     if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
-    return campaign;
+    const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+    const dispatch = (proposal["dispatch"] ?? {}) as Record<string, any>;
+    let deliveryPlan = dispatch["delivery"] as Record<string, unknown> | undefined;
+
+    // Campaigns planned before delivery metadata shipped still have the exact
+    // delayed BullMQ jobs. Recover only timing evidence (never recipient data)
+    // so the merchant sees why Joon is waiting instead of a generic message.
+    if (
+      !deliveryPlan?.["earliestAt"] &&
+      ["scheduled", "sending"].includes(campaign.status)
+    ) {
+      const jobs = (await queuedCampaignJobs(campaign.id)).filter((job) => job.name === "deliver-one");
+      if (jobs.length > 0) {
+        const dueTimes = jobs.map((job) => job.timestamp + Math.max(0, job.delay ?? 0));
+        const sample = jobs[0]!.data as {
+          plan?: {
+            sendHour?: number;
+            timingSource?: "customer" | "store" | "default";
+            timingConfidence?: number;
+            timezone?: string;
+          };
+        };
+        const timingSource = sample.plan?.timingSource ?? "default";
+        const sendHour = sample.plan?.sendHour ?? 10;
+        const timezone = sample.plan?.timezone ?? "UTC";
+        const reason = timingSource === "customer"
+          ? `This customer's previous opens and clicks point to around ${String(sendHour).padStart(2, "0")}:00 in ${timezone}.`
+          : timingSource === "store"
+            ? `Customers from this store usually engage around ${String(sendHour).padStart(2, "0")}:00 in ${timezone}.`
+            : `There is not enough engagement history for this customer yet, so Joon used its cautious ${String(sendHour).padStart(2, "0")}:00 default in ${timezone}.`;
+        const consequence = timingSource === "customer"
+          ? "Sending earlier may reduce opens because it ignores this customer's observed engagement window."
+          : timingSource === "store"
+            ? "Sending earlier may reduce opens because it ignores the store's observed engagement window."
+            : "Sending now may reduce opens; this is a cautious default until Joon has enough engagement history to personalize the time.";
+        deliveryPlan = {
+          earliestAt: new Date(Math.min(...dueTimes)).toISOString(),
+          latestAt: new Date(Math.max(...dueTimes)).toISOString(),
+          reason,
+          consequence,
+          timingSource,
+          timingConfidence: sample.plan?.timingConfidence ?? 0,
+          timezone,
+          merchantOverride: false,
+        };
+      }
+    }
+    return { ...campaign, deliveryPlan: deliveryPlan ?? null };
   }),
 
   /**
