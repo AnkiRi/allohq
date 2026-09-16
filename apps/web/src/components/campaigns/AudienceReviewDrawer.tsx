@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, Search, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
 
 type AudienceReason =
   | "deliberately_left_alone"
@@ -51,13 +52,21 @@ export function AudienceReviewDrawer({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [overrideReason, setOverrideReason] = useState("");
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => setPage(1), [reason, debouncedQuery]);
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+    setOverrideReason("");
+  }, [reason, debouncedQuery]);
   useEffect(() => {
     if (!visibleGroups.some((group) => group.reason === reason) && visibleGroups[0]) {
       setReason(visibleGroups[0].reason);
@@ -68,7 +77,44 @@ export function AudienceReviewDrawer({
     { id: campaignId, reason, query: debouncedQuery, page, pageSize: PAGE_SIZE },
     { enabled: open },
   );
+  const afterOverride = async (included: number) => {
+    setSelectedIds([]);
+    setOverrideReason("");
+    await Promise.all([
+      utils.campaigns.dryRun.invalidate({ id: campaignId }),
+      (utils.campaigns.audienceReview as any).invalidate(),
+      utils.campaigns.getById.invalidate({ id: campaignId }),
+    ]);
+    toast(`${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`, "success");
+  };
+  const stateOverride = trpc.campaigns.includeLeftAloneCustomers.useMutation({
+    onSuccess: ({ included }) => afterOverride(included),
+    onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
+  });
+  const recentOverride = trpc.campaigns.overrideRecentPurchase.useMutation({
+    onSuccess: ({ included }) => afterOverride(included),
+    onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
+  });
+  const fatigueOverride = trpc.campaigns.overrideFatigue.useMutation({
+    onSuccess: ({ included }) => afterOverride(included),
+    onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
+  });
+  const governorOverride = trpc.campaigns.overrideGovernorDecision.useMutation({
+    onSuccess: ({ included }) => afterOverride(included),
+    onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
+  });
   const activeGroup = visibleGroups.find((group) => group.reason === reason);
+  const overrideable = review.data?.overridePolicy && review.data.overridePolicy !== "blocked";
+  const isOverriding = stateOverride.isPending || recentOverride.isPending || fatigueOverride.isPending || governorOverride.isPending;
+  const submitOverride = () => {
+    const input = { id: campaignId, customerIds: selectedIds, reason: overrideReason.trim() };
+    if (reason === "deliberately_left_alone") stateOverride.mutate(input);
+    else if (reason === "recent_purchase") recentOverride.mutate(input);
+    else if (reason === "fatigue") fatigueOverride.mutate(input);
+    else if (reason === "collision" || reason === "cooldown") {
+      governorOverride.mutate({ ...input, reasonCode: reason });
+    }
+  };
 
   if (visibleGroups.length === 0) return null;
 
@@ -161,9 +207,22 @@ export function AudienceReviewDrawer({
                       return (
                         <article key={customer.id} className="py-4">
                           <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
+                            <div className="flex min-w-0 items-start gap-3">
+                              {overrideable && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(customer.id)}
+                                  onChange={(event) => setSelectedIds((current) => event.target.checked
+                                    ? [...new Set([...current, customer.id])]
+                                    : current.filter((id) => id !== customer.id))}
+                                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-current"
+                                  aria-label={`Select ${name} for override`}
+                                />
+                              )}
+                              <div className="min-w-0">
                               <div className="truncate text-[12px] font-semibold text-foreground">{name}</div>
                               {name !== customer.email && <div className="truncate text-[10px] text-muted-foreground">{customer.email}</div>}
+                              </div>
                             </div>
                             {customer.nextEvaluationAt && (
                               <span className="shrink-0 text-[10px] text-muted-foreground">
@@ -186,6 +245,58 @@ export function AudienceReviewDrawer({
                   </div>
                 )}
               </div>
+
+              {overrideable && (
+                <div className="border-t border-border bg-muted/30 px-5 py-4 sm:px-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-medium text-foreground">
+                      {selectedIds.length} selected for reconsideration
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIds(review.data?.customers.map((customer: any) => customer.id) ?? [])}
+                        className="text-[10px] font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Select this page
+                      </button>
+                      {selectedIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedIds([])}
+                          className="text-[10px] font-medium text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <label className="mt-3 block text-[11px] font-medium text-foreground" htmlFor="audience-review-override-reason">
+                    Why should Joon include them?
+                  </label>
+                  <textarea
+                    id="audience-review-override-reason"
+                    value={overrideReason}
+                    onChange={(event) => setOverrideReason(event.target.value)}
+                    rows={2}
+                    placeholder="For example: this is a one-off launch message requested by our team."
+                    className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="max-w-md text-[10px] leading-4 text-muted-foreground">
+                      Joon keeps the original evidence and records your reason. Consent, complaints, bounces and delivery safeguards remain mandatory.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitOverride}
+                      disabled={selectedIds.length === 0 || overrideReason.trim().length < 5 || isOverriding}
+                      className="rounded-lg bg-secondary px-3 py-2 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {isOverriding ? "Recording override…" : `Include ${selectedIds.length || "selected"} anyway`}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <footer className="flex items-center justify-between gap-4 border-t border-border px-5 py-4 sm:px-6">
                 <p className="text-[10px] text-muted-foreground">
