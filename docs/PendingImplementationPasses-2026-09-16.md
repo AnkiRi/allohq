@@ -1,16 +1,31 @@
 # Joon pending implementation passes — 2026-09-16
 
-Status: canonical backlog for the product passes intentionally deferred until the current production acceptance run is complete.
+Status: canonical backlog for the product passes being completed before the 2026-09-17 design-partner demo.
 
 This document is the single reference point for these passes. Later implementation summaries must map completed commits and remaining work back to the numbered passes below. New design decisions should update this document rather than creating another disconnected list.
 
-## Current gate
+## Pass 0 — Creative, offer and attribution correctness
 
-Complete the controlled production acceptance run first: verified sender domain, allowlisted real delivery, Resend bounce lifecycle, campaign completion state, provider-event reconciliation and the remaining single-store demo path. Do not widen production delivery beyond the allowlist as part of any pass below.
+Status: in progress.
+
+### Outcome
+
+Make the approved campaign internally consistent from request through creative, Shopify offer and attributed outcome. A full-price alternative must be incapable of carrying discount copy, metadata, codes, badges or pixels from its source campaign.
+
+### Required work
+
+- Represent `full_price` and `discount` as typed offer policy, not prompt-only prose.
+- Derive campaign name, subject, preview, body, CTA, visual treatment, planned Shopify code and approval summary from the same offer policy.
+- A requested discount must either remain exact everywhere or show the merchant the guardrail adjustment before approval.
+- Full-price creative must not reuse generated discount assets. Use clean store product imagery or generate a fresh asset under a no-offer visual policy.
+- Validate structured blocks and final rendered HTML for discount language; fail closed rather than save a contradictory draft.
+- Existing contaminated alternatives must be regenerated rather than silently reopened.
+- Complete the controlled attribution path: delivered email → open → click → Shopify order webhook → campaign/customer/Outcomes attribution. Count an order unless cancelled, under the locked billing decision.
+- Preserve the production recipient allowlist while completing these tests.
 
 ## Pass 1 — Audience review and override consistency
 
-Status: pending. The current product supports recent-purchase and state-policy overrides, but the interaction is inconsistent across exclusion reasons and does not scale to a large audience review.
+Status: in progress. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. The interaction is inconsistent across remaining exclusion reasons and does not scale to a large audience review.
 
 ### Outcome
 
@@ -27,6 +42,8 @@ Give the merchant one legible reconciliation from requested audience to delivery
 - Recalculate the audience and control allocation immediately after an override.
 - Persist the original decision, actor, timestamp, justification and final decision in the audience-decision ledger.
 - Keep the terminology fixed: subscribed audience, campaign candidate, deliberately left alone, control group, treatment group, deferred and sent.
+- Add a dynamic `Left alone by Joon` view with current state, evidence, reason, originating campaign, reconsideration condition and complete customer decision history.
+- Aggregate meaningful movements into or out of deliberate restraint so merchants are informed without receiving one notification per customer.
 
 ### Override policy
 
@@ -84,8 +101,29 @@ Make chat a durable campaign workspace rather than a transient generic assistant
 - Show preserved constraints before execution so the merchant can see what Joon understood.
 - Separate Joon’s concise decision voice from generic markdown-heavy chatbot prose.
 - Review information architecture, history, loading, retry, partial-result and failure states after the founder supplies the remaining design direction.
+- Treat offer, exact recipients, requested audience size, products, control preference and delivery intent as visible structured constraints rather than relying on transcript prose.
+- Restore or regenerate an artifact whose underlying offer policy no longer matches its saved visual assets.
 
-## Pass 4 — Conversational email creator and editable brand kit
+## Pass 4 — Overnight decisions, artifact traceability and segment lifecycle
+
+Status: pending.
+
+### Outcome
+
+Make `ready before coffee` demonstrable: every opportunity message resolves to one truthful decision and one discoverable artifact, without duplicate segments or invented impact.
+
+### Required work
+
+- Deduplicate repeated opportunity discoveries and show the last evaluation time.
+- Give every queue item a durable link to its proposal, campaign, journey or dismissed decision.
+- Distinguish `opportunity found`, `decision proposed`, `draft generated`, `approval required` and `active` in both activity and queue copy.
+- Generate the inexpensive structured proposal before approval; defer costly final creative until approval unless the merchant explicitly requests a preview.
+- Never call modeled lift measured, and do not present ₹0 estimates as meaningful upside.
+- Summarize each overnight run: customers evaluated, opportunities found, customers deliberately left alone and decisions prepared.
+- Upsert canonical system segments instead of creating duplicate `Lost`, `New customers` or `Hibernating` rows.
+- Give generated/manual segments a source, creation date and originating campaign or opportunity; define an archive policy for obsolete generated segments.
+
+## Pass 5 — Conversational email creator and editable brand kit
 
 Status: pending after the chat UX direction is settled. Earlier decision records: `JoonBillingAudiencePhaseAudit-2026-09-14.md` and `JoonBillingMoatPhaseAudit-2026-09-11.md`.
 
@@ -107,12 +145,18 @@ Add `Create your own email` beside Joon-generated work: a conversational creativ
 
 ## Sequencing
 
-1. Finish the controlled production acceptance run.
-2. Implement Pass 1 and regress audience approval, override and audit behavior.
-3. Implement Pass 2 and load-test timing preview/fan-out at representative scale.
-4. Incorporate the founder’s additional design direction into Pass 3, then implement it.
-5. Implement Pass 4 on top of the durable chat/artifact model.
-6. Run the full design-partner readiness and production-safety regression before widening delivery access.
+1. Complete Pass 0 and prove offer plus attribution correctness.
+2. Complete Pass 1 and regress audience approval, override and audit behavior.
+3. Implement Pass 4 so overnight work is truthful and demonstrable.
+4. Complete Pass 2 and load-test timing preview/fan-out at representative scale.
+5. Incorporate the founder’s additional design direction into Pass 3, then implement it.
+6. Implement Pass 5 on top of the durable chat/artifact model.
+7. Run the complete design-partner path: Shopify sync → customer state → natural-language request → audience reconciliation → override → control assignment → creative → approval → timing → provider delivery → open → click → order → attribution → outcome.
+8. Do not widen production delivery beyond the recipient allowlist during these passes.
+
+## Linked external and operational work
+
+Repository passes do not replace the external gates in `ExternalAcceptancePlan-2026-09-10.md`, `SesOperationsHandoff-2026-09-11.md` and `LaunchPlan3Sep.md`: SES sandbox and AWS event infrastructure, staging separation, restore evidence, Protected Customer Data controls, legal documents, fresh-account App Store installation and multi-workspace selection remain separately tracked.
 
 ## Completion reporting rule
 
@@ -124,4 +168,3 @@ For each pass, record:
 - production checks performed;
 - external validation still required;
 - anything explicitly deferred.
-

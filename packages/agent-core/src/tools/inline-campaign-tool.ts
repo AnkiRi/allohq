@@ -2,7 +2,9 @@ import { prisma, buildWhereFromConditions } from "@allohq/database";
 import type { ToolDefinition } from "../types";
 import { generateCode } from "./discount-tools";
 
-function containsDiscountLanguage(value: unknown): boolean {
+const FULL_PRICE_CREATIVE_POLICY_VERSION = 2;
+
+export function containsDiscountLanguage(value: unknown): boolean {
   return /\b(?:\d{1,2}%\s*off|discount|promo(?:tional)?\s+code|coupon|sale)\b/i.test(
     JSON.stringify(value)
   );
@@ -114,8 +116,8 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // A full-price alternative is one durable action attached to its source
       // campaign. Browser retries, double-clicks, and repeated chat submissions
       // must reopen that draft instead of producing overlapping campaigns.
-      if (directive) {
-        const existingAlternative = await prisma.campaign.findFirst({
+      const existingAlternative = directive
+        ? await prisma.campaign.findFirst({
           where: {
             storeId: ctx.storeId,
             agentProposal: { path: ["sourceCampaignId"], equals: directive.sourceCampaignId },
@@ -123,10 +125,24 @@ export const inlineCampaignTools: ToolDefinition[] = [
           orderBy: { createdAt: "desc" },
           include: {
             template: { select: { subject: true, previewText: true, html: true, blocks: true } },
-            segment: { select: { name: true } },
+            segment: true,
           },
-        });
-        if (existingAlternative?.template) {
+        })
+        : null;
+      if (existingAlternative?.template) {
+        const existingProposal = (existingAlternative.agentProposal ?? {}) as Record<string, unknown>;
+        const currentFullPriceCreative =
+          existingProposal.offerPolicy === "full_price" &&
+          existingProposal.creativePolicyVersion === FULL_PRICE_CREATIVE_POLICY_VERSION &&
+          existingProposal.discountPercent == null &&
+          existingProposal.discountCode == null &&
+          !containsDiscountLanguage({
+            subject: existingAlternative.template.subject,
+            previewText: existingAlternative.template.previewText,
+            blocks: existingAlternative.template.blocks,
+            html: existingAlternative.template.html,
+          });
+        if (currentFullPriceCreative) {
           const { renderBrandedEmail } = await import("@allohq/customer-intelligence");
           const existingPreviewHtml = existingAlternative.template.html ?? await renderBrandedEmail({
             storeId: store.id,
@@ -155,6 +171,11 @@ export const inlineCampaignTools: ToolDefinition[] = [
             message: `The full-price alternative already exists. I reopened “${existingAlternative.name}” instead of creating a duplicate.`,
           };
         }
+        if (existingAlternative.status !== "draft") {
+          throw new Error(
+            "The existing full-price alternative uses an older creative policy and is no longer editable. Create a fresh draft before delivery."
+          );
+        }
       }
 
       // Resolve the audience: explicit customers (a manual segment) take
@@ -168,7 +189,9 @@ export const inlineCampaignTools: ToolDefinition[] = [
         ? (params.customerIds as unknown[]).map(String).filter(Boolean)
         : [];
       let segment;
-      if (rawIds.length > 0) {
+      if (directive && existingAlternative?.segment) {
+        segment = existingAlternative.segment;
+      } else if (rawIds.length > 0) {
         const members = await prisma.customer.findMany({
           where: { id: { in: rawIds }, storeId: ctx.storeId },
           include: { rfmScore: { select: { totalSpent: true } } },
@@ -334,6 +357,11 @@ export const inlineCampaignTools: ToolDefinition[] = [
         context: discountPercent && discountCode
           ? { discount: { type: "percentage" as const, value: discountPercent, code: discountCode } }
           : undefined,
+        offerPolicy: directive?.forceNoDiscount
+          ? "full_price" as const
+          : discountPercent
+          ? "discount" as const
+          : "none" as const,
         products: products.map((p) => ({
           id: p.id,
           title: p.title,
@@ -364,18 +392,6 @@ export const inlineCampaignTools: ToolDefinition[] = [
         throw new Error("Full-price creative could not be generated without offer language");
       }
 
-      // Create the template
-      const template = await prisma.emailTemplate.create({
-        data: {
-          workspaceId: store.workspaceId,
-          name: result.subject,
-          subject: result.subject,
-          previewText: result.previewText,
-          blocks: result.blocks as any,
-          category: "ai_generated",
-        },
-      });
-
       // Render to HTML for preview — brand-styled via the store's BrandKit
       const { renderBrandedEmail } = await import("@allohq/customer-intelligence");
       const previewHtml = await renderBrandedEmail({
@@ -390,22 +406,50 @@ export const inlineCampaignTools: ToolDefinition[] = [
         },
         previewMode: true,
       });
+      if (directive?.forceNoDiscount && containsDiscountLanguage(previewHtml)) {
+        throw new Error("Full-price creative failed the final rendered-email offer check");
+      }
+
+      // Only persist after the rendered output passes the offer-policy check.
+      // Replace stale full-price creative in place so the source campaign keeps
+      // one durable alternative link instead of spawning duplicates.
+      const template = existingAlternative?.template
+        ? await prisma.emailTemplate.update({
+            where: { id: existingAlternative.templateId! },
+            data: {
+              name: result.subject,
+              subject: result.subject,
+              previewText: result.previewText,
+              blocks: result.blocks as any,
+              html: null,
+              category: "ai_generated",
+            },
+          })
+        : await prisma.emailTemplate.create({
+            data: {
+              workspaceId: store.workspaceId,
+              name: result.subject,
+              subject: result.subject,
+              previewText: result.previewText,
+              blocks: result.blocks as any,
+              category: "ai_generated",
+            },
+          });
 
       // Create the draft campaign
-      const campaign = await prisma.campaign.create({
-        data: {
-          workspaceId: store.workspaceId,
-          storeId: ctx.storeId,
-          name: campaignName,
-          templateId: template.id,
-          segmentId: segment?.id,
-          status: "draft",
-          origin: "merchant",
-          recipientCount,
-          // Freeze what joon PROPOSED (the action bundle) so a later human edit can be
-          // diffed against it at approval. Can't-backfill: once the draft is edited in
-          // place, the agent's original intent is gone otherwise.
-          agentProposal: {
+      const campaignData = {
+        workspaceId: store.workspaceId,
+        storeId: ctx.storeId,
+        name: campaignName,
+        templateId: template.id,
+        segmentId: segment?.id,
+        status: "draft" as const,
+        origin: "merchant" as const,
+        recipientCount,
+        // Freeze what joon PROPOSED (the action bundle) so a later human edit can be
+        // diffed against it at approval. Can't-backfill: once the draft is edited in
+        // place, the agent's original intent is gone otherwise.
+        agentProposal: {
             proposedAt: new Date().toISOString(),
             segmentId: segment?.id ?? null,
             segmentName: segment?.name ?? null,
@@ -418,6 +462,14 @@ export const inlineCampaignTools: ToolDefinition[] = [
             requestedAudienceCount: ctx.requestConstraints?.topCustomerCount ?? null,
             discountCode: discountCode ?? null,
             discountValueType: discountPercent ? "percentage" : null,
+            offerPolicy: directive?.forceNoDiscount
+              ? "full_price"
+              : discountPercent
+              ? "discount"
+              : "none",
+            creativePolicyVersion: directive?.forceNoDiscount
+              ? FULL_PRICE_CREATIVE_POLICY_VERSION
+              : 1,
             scheduledAt: null,
             recipientCount,
             ...(directive
@@ -428,11 +480,16 @@ export const inlineCampaignTools: ToolDefinition[] = [
                   alternativeType: "full_price",
                 }
               : {}),
-          },
         },
-      });
+      };
+      const campaign = existingAlternative
+        ? await prisma.campaign.update({
+            where: { id: existingAlternative.id },
+            data: campaignData,
+          })
+        : await prisma.campaign.create({ data: campaignData });
 
-      if (directive) {
+      if (directive && !existingAlternative) {
         await prisma.customerAudienceDecision.createMany({
           data: directive.customerIds.map((customerId) => ({
             storeId: ctx.storeId,

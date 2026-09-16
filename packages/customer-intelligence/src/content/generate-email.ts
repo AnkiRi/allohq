@@ -47,6 +47,8 @@ export interface GenerateEmailInput {
     discount?: { type: "percentage" | "fixed"; value: number; code: string };
     funnelStage?: string;
   };
+  /** Hard creative boundary. Full-price emails never generate promotional artwork. */
+  offerPolicy?: "discount" | "full_price" | "none";
   creativeIntensity?: CreativeIntensity;
   layoutTemplate?: string; // layout skeleton ID from LAYOUT_TEMPLATES
   toneOverride?: string; // "more formal" | "more casual" | "more playful" | etc
@@ -66,6 +68,13 @@ export interface GenerateEmailOutput {
   inputTokens: number;
   outputTokens: number;
   imageCosts: number;
+}
+
+export function shouldGenerateCampaignArtwork(input: {
+  creativeIntensity?: CreativeIntensity;
+  offerPolicy?: GenerateEmailInput["offerPolicy"];
+}): boolean {
+  return input.creativeIntensity !== "text_heavy" && input.offerPolicy !== "full_price";
 }
 
 function buildPrompt(input: GenerateEmailInput): string {
@@ -268,7 +277,14 @@ async function postProcessImages(
   subject: string,
 ): Promise<{ blocks: EmailBlock[]; totalCost: number }> {
   const intensity = input.creativeIntensity ?? "balanced";
-  if (intensity === "text_heavy") {
+  // Generated campaign art can contain baked-in typography that cannot be
+  // inspected from the resulting opaque URL. Full-price emails therefore use
+  // only merchant-owned product imagery already present in sanitized blocks;
+  // hero blocks keep their brand-colour background.
+  if (!shouldGenerateCampaignArtwork({
+    creativeIntensity: intensity,
+    offerPolicy: input.offerPolicy,
+  })) {
     return { blocks, totalCost: 0 };
   }
 
@@ -288,7 +304,7 @@ async function postProcessImages(
     // Generate hero banner image (only with AI providers, no stock fallback)
     if (block.type === "hero" && !block.props.bgImageSrc) {
       try {
-        const imagePrompt = `${subject}. ${input.brandProfile?.brandName ?? "Brand"} marketing hero banner.`;
+        const imagePrompt = `${subject}. ${input.brandProfile?.brandName ?? "Brand"} marketing hero banner. Image only: no words, letters, numbers, prices, offer badges, coupons, or promotional typography.`;
         const imgResult = await generateImage({
           purpose: "hero_banner",
           prompt: imagePrompt,
@@ -309,7 +325,7 @@ async function postProcessImages(
       (!block.props.src || block.props.src.includes("example.com") || block.props.src.includes("placeholder"))
     ) {
       try {
-        const imagePrompt = `${input.brandProfile?.brandName ?? "Brand"} product lifestyle image for marketing email.`;
+        const imagePrompt = `${input.brandProfile?.brandName ?? "Brand"} product lifestyle image for marketing email. Image only: no words, letters, numbers, prices, offer badges, coupons, or promotional typography.`;
         const imgResult = await generateImage({
           purpose: "product_lifestyle",
           prompt: imagePrompt,
