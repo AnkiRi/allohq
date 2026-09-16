@@ -102,6 +102,80 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  overrideFatigue: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        customerIds: z.array(z.string()).min(1).max(500),
+        reason: z.string().trim().min(5).max(240),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["draft", "scheduled"] },
+        },
+        select: { id: true, storeId: true, agentProposal: true },
+      });
+      if (!campaign) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campaign not found or its audience is already frozen",
+        });
+      }
+
+      const uniqueIds = [...new Set(input.customerIds)];
+      const currentAudience = await resolveCampaignAudience(campaign.id, new Date(), {
+        enforceDeliveryPauses: false,
+      });
+      const overrideable = new Set(currentAudience.fatigueExcluded.map((customer) => customer.id));
+      if (uniqueIds.some((customerId) => !overrideable.has(customerId))) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Only customers currently held back by the fatigue limit can be overridden here.",
+        });
+      }
+
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+      const existing = Array.isArray(proposal.overrideFatigueCustomerIds)
+        ? proposal.overrideFatigueCustomerIds.filter(
+            (customerId): customerId is string => typeof customerId === "string"
+          )
+        : [];
+      await ctx.prisma.$transaction([
+        ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            status: "draft",
+            approvedAt: null,
+            approvalChecksum: null,
+            agentProposal: {
+              ...proposal,
+              overrideFatigueCustomerIds: [...new Set([...existing, ...uniqueIds])],
+            },
+          },
+        }),
+        ctx.prisma.customerAudienceDecision.createMany({
+          data: uniqueIds.map((customerId) => ({
+            storeId: campaign.storeId,
+            customerId,
+            campaignId: campaign.id,
+            contextKey: campaign.id,
+            decision: "campaign_candidate",
+            reasonCode: "merchant_fatigue_override",
+            reasonText: "Merchant chose to send this campaign despite the fatigue limit.",
+            evidence: { originalDecision: "fatigue" },
+            merchantOverride: true,
+            overrideActorId: ctx.userId,
+            overrideReason: input.reason,
+          })),
+        }),
+      ]);
+      return { success: true, included: uniqueIds.length };
+    }),
+
   overrideRecentPurchase: workspaceProcedure
     .input(
       z.object({
@@ -269,6 +343,7 @@ export const campaignsRouter = router({
       discountAdjustedByGuardrail?: boolean;
       requestedAudienceCount?: number;
       overrideRecentPurchaseCustomerIds?: unknown;
+      overrideFatigueCustomerIds?: unknown;
     };
     const linkedAlternative = await ctx.prisma.campaign.findFirst({
       where: {
@@ -367,6 +442,10 @@ export const campaignsRouter = router({
       recentPurchaseCustomers: audience.recentPurchaseExcluded,
       recentPurchaseOverrideCount: Array.isArray(proposal.overrideRecentPurchaseCustomerIds)
         ? proposal.overrideRecentPurchaseCustomerIds.filter((value) => typeof value === "string").length
+        : 0,
+      fatigueCustomers: audience.fatigueExcluded,
+      fatigueOverrideCount: Array.isArray(proposal.overrideFatigueCustomerIds)
+        ? proposal.overrideFatigueCustomerIds.filter((value) => typeof value === "string").length
         : 0,
       linkedAlternative,
       subject: campaign.template.subject,

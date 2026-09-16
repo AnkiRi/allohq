@@ -642,7 +642,21 @@ export async function deliverOne(data: DeliverOneData) {
   // cap / quiet hours / timezone) from onboarding, not store-agnostic defaults.
   const govConfig = await loadStoreGovernorConfig(campaign.storeId);
   const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId, ...govConfig, timezone: plan.timezone ?? govConfig.timezone });
-  if (!governorCheck.allowed) {
+  const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+  const fatigueOverrideIds = Array.isArray(proposal.overrideFatigueCustomerIds)
+    ? proposal.overrideFatigueCustomerIds.filter(
+        (value): value is string => typeof value === "string"
+      )
+    : [];
+  const hasFatigueOverride =
+    governorCheck.rule?.includes("fatigue") === true &&
+    fatigueOverrideIds.includes(customerId);
+  if (hasFatigueOverride) {
+    console.log(
+      `[send-worker] Audited fatigue override applied for campaign ${campaignId}, customer ${customerId}`
+    );
+  }
+  if (!governorCheck.allowed && !hasFatigueOverride) {
     if (governorCheck.rule === "quiet_hours" && governorCheck.delayUntil) {
       if (forceImmediate) {
         console.log(`[send-worker] Merchant timing override bypassed quiet hours for campaign ${campaignId}, customer ${customerId}`);

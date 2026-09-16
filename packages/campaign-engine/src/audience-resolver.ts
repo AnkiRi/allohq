@@ -50,6 +50,12 @@ export interface AudienceResolution {
     firstName: string | null;
     lastName: string | null;
   }>;
+  fatigueExcluded: Array<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  }>;
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -143,6 +149,13 @@ export async function resolveCampaignAudience(
         )
       : []
   );
+  const fatigueOverrides = new Set(
+    Array.isArray(proposal["overrideFatigueCustomerIds"])
+      ? (proposal["overrideFatigueCustomerIds"] as unknown[]).filter(
+          (value): value is string => typeof value === "string"
+        )
+      : []
+  );
   const [customers, processed, governorConfig] = await Promise.all([
     prisma.customer.findMany({
       where,
@@ -187,6 +200,7 @@ export async function resolveCampaignAudience(
   const eligible: AudienceResolution["eligible"] = [];
   const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
   const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
+  const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
   const exclude = (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
@@ -271,7 +285,26 @@ export async function resolveCampaignAudience(
     // Quiet hours defer treatment delivery; they do not change eligibility or
     // the frozen randomized arm map.
     if (shouldExcludeGovernorDecision(decision)) {
-      exclude(governorReason(decision.rule), customer);
+      const reason = governorReason(decision.rule);
+      if (reason === "fatigue" && fatigueOverrides.has(customer.id)) {
+        eligible.push({
+          id: customer.id,
+          email: customer.email,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          rfmStratum: customer.rfmScore?.segment ?? null,
+        });
+        continue;
+      }
+      if (reason === "fatigue") {
+        fatigueExcluded.push({
+          id: customer.id,
+          email: customer.email,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+        });
+      }
+      exclude(reason, customer);
       continue;
     }
     eligible.push({
@@ -289,6 +322,7 @@ export async function resolveCampaignAudience(
     samples,
     deliberatelyLeftAlone,
     recentPurchaseExcluded,
+    fatigueExcluded,
   };
 }
 
@@ -332,6 +366,7 @@ export async function resolveAutomationAudience(
   const samples: AudienceResolution["samples"] = {};
   const eligible: AudienceResolution["eligible"] = [];
   const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
+  const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
   const exclude = (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
@@ -370,7 +405,16 @@ export async function resolveAutomationAudience(
       now,
     });
     if (shouldExcludeGovernorDecision(decision)) {
-      exclude(governorReason(decision.rule), customer);
+      const governorExclusion = governorReason(decision.rule);
+      if (governorExclusion === "fatigue") {
+        fatigueExcluded.push({
+          id: customer.id,
+          email: customer.email,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+        });
+      }
+      exclude(governorExclusion, customer);
       continue;
     }
     eligible.push({
@@ -388,5 +432,6 @@ export async function resolveAutomationAudience(
     samples,
     deliberatelyLeftAlone: [],
     recentPurchaseExcluded,
+    fatigueExcluded,
   };
 }

@@ -21,6 +21,9 @@ export default function CampaignDetailPage() {
   const [showRecentOverride, setShowRecentOverride] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState("");
+  const [showFatigueOverride, setShowFatigueOverride] = useState(false);
+  const [selectedFatigueIds, setSelectedFatigueIds] = useState<string[]>([]);
+  const [fatigueOverrideReason, setFatigueOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
   const [showTimingOverride, setShowTimingOverride] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
@@ -114,11 +117,29 @@ export default function CampaignDetailPage() {
     },
     onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
   });
+  const overrideFatigueMut = trpc.campaigns.overrideFatigue.useMutation({
+    onSuccess: async ({ included }) => {
+      await Promise.all([
+        refetchDryRun(),
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+      ]);
+      setShowFatigueOverride(false);
+      setSelectedFatigueIds([]);
+      setFatigueOverrideReason("");
+      toast(`${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`, "success");
+    },
+    onError: (error) => toast(error.message || "We couldn't record that fatigue override.", "error"),
+  });
 
   useEffect(() => {
     if (!showRecentOverride || !dryRun?.recentPurchaseCustomers) return;
     setSelectedRecentIds(dryRun.recentPurchaseCustomers.map((customer) => customer.id));
   }, [showRecentOverride, dryRun?.recentPurchaseCustomers]);
+
+  useEffect(() => {
+    if (!showFatigueOverride || !dryRun?.fatigueCustomers) return;
+    setSelectedFatigueIds(dryRun.fatigueCustomers.map((customer) => customer.id));
+  }, [showFatigueOverride, dryRun?.fatigueCustomers]);
 
   useEffect(() => {
     if (!alternativeSubmitting || dryRun?.linkedAlternative) return;
@@ -680,6 +701,16 @@ export default function CampaignDetailPage() {
                   </p>
                 </div>
               )}
+              {dryRun.fatigueOverrideCount > 0 && (
+                <div className="mb-5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-foreground">
+                    Fatigue override recorded
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    You included {dryRun.fatigueOverrideCount} {dryRun.fatigueOverrideCount === 1 ? "customer" : "customers"} despite the current email limit. Joon kept the original decision and your reason in the audit trail.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1">
                 {Object.entries(dryRun.exclusions).filter(([, count]) => count > 0).map(([reason, count]) => (
                   <div key={reason} className="flex justify-between py-2 border-b border-border text-[11px]">
@@ -799,6 +830,83 @@ export default function CampaignDetailPage() {
                       </button>
                       <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
                         Joon keeps the recent-purchase evidence, records your reason, and recalculates the control group. Consent and delivery safeguards still apply.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {dryRun.exclusions.fatigue > 0 && dryRun.fatigueCustomers.length > 0 && (
+                <div className="mt-5 rounded-xl border border-warning/30 bg-warning/5 p-4">
+                  <div className="text-[13px] font-semibold text-foreground">
+                    {dryRun.exclusions.fatigue} {dryRun.exclusions.fatigue === 1 ? "customer has" : "customers have"} reached the email limit
+                  </div>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
+                    Joon left them out because another email can increase fatigue and unsubscribe risk. You can include them for this campaign, but the original decision and your reason will remain in the audit trail.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowFatigueOverride((value) => !value)}
+                    className="mt-3 rounded-lg border border-warning/40 px-3 py-2 text-[11px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-warning/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {showFatigueOverride ? "Cancel override" : "Review fatigue override"}
+                  </button>
+                  {showFatigueOverride && (
+                    <div className="mt-4 border-t border-warning/25 pt-4">
+                      <p className="text-[11px] font-medium text-foreground">
+                        Choose customers to include despite the email limit
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {dryRun.fatigueCustomers.map((customer) => {
+                          const checked = selectedFatigueIds.includes(customer.id);
+                          const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                          return (
+                            <label key={customer.id} className="flex items-center gap-2 text-[11px] text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setSelectedFatigueIds((current) =>
+                                    checked
+                                      ? current.filter((id) => id !== customer.id)
+                                      : [...current, customer.id]
+                                  )
+                                }
+                                className="h-4 w-4 rounded border-border accent-current"
+                              />
+                              <span className="truncate">{name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <label className="mt-4 block text-[11px] font-medium text-foreground" htmlFor="fatigue-override-reason">
+                        Why should Joon send another email now?
+                      </label>
+                      <textarea
+                        id="fatigue-override-reason"
+                        value={fatigueOverrideReason}
+                        onChange={(event) => setFatigueOverrideReason(event.target.value)}
+                        rows={2}
+                        placeholder="For example: this is a controlled delivery test requested by our team."
+                        className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        disabled={selectedFatigueIds.length === 0 || fatigueOverrideReason.trim().length < 5 || overrideFatigueMut.isPending}
+                        onClick={() =>
+                          overrideFatigueMut.mutate({
+                            id: campaignId,
+                            customerIds: selectedFatigueIds,
+                            reason: fatigueOverrideReason.trim(),
+                          })
+                        }
+                        className="mt-3 rounded-lg bg-warning px-3 py-2 text-[11px] font-medium text-warning-foreground transition-[background-color,transform] duration-150 hover:bg-warning/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {overrideFatigueMut.isPending
+                          ? "Recording override…"
+                          : `Include ${selectedFatigueIds.length || "selected"} anyway`}
+                      </button>
+                      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                        Consent, unsubscribe, complaint, bounce, sender-domain and allowlist checks still run before delivery.
                       </p>
                     </div>
                   )}
