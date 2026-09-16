@@ -45,7 +45,7 @@ export default function CampaignsPage() {
         <div>
           <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">Campaigns</h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            {campaigns ? `${campaigns.filter((c: any) => c.status === "draft").length} drafts, ${campaigns.filter((c: any) => c.status === "sent").length} sent` : "Your email campaigns, start to finish"}
+            {campaigns ? `${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "draft").length} drafts, ${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "scheduled").length} scheduled, ${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "sent").length} sent` : "Your email campaigns, start to finish"}
           </p>
         </div>
         <Link
@@ -84,7 +84,8 @@ export default function CampaignsPage() {
       ) : campaigns && campaigns.length > 0 ? (
         <div className="space-y-3">
           {campaigns.map((campaign) => {
-            const statusCfg = STATUS_CONFIG[campaign.status] ?? STATUS_CONFIG["draft"]!;
+            const displayStatus = campaign.deliveryStatus ?? campaign.status;
+            const statusCfg = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG["draft"]!;
             const StatusIcon = statusCfg.icon;
             return (
               <Link

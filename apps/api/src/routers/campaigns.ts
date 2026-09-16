@@ -405,7 +405,11 @@ export const campaignsRouter = router({
       const campaigns = await ctx.prisma.campaign.findMany({
         where: {
           workspaceId: ctx.workspaceId,
-          ...(input?.status ? { status: input.status } : {}),
+          ...(input?.status === "scheduled"
+            ? { status: { in: ["scheduled", "sending"] as const } }
+            : input?.status
+              ? { status: input.status }
+              : {}),
         },
         include: {
           template: { select: { id: true, name: true, subject: true, thumbnailUrl: true } },
@@ -414,11 +418,14 @@ export const campaignsRouter = router({
         orderBy: { updatedAt: "desc" },
       });
 
-      // Batch-fetch revenue attribution for sent campaigns
+      // Batch-fetch delivery truth for every visible campaign. A campaign with
+      // planned recipients but zero provider submissions is merchant-facing
+      // "scheduled", including legacy rows persisted as `sending`.
       const sentIds = campaigns.filter((c) => c.status === "sent").map((c) => c.id);
+      const campaignIds = campaigns.map((c) => c.id);
       const revenueMap: Record<string, { revenue: number; orders: number }> = {};
       const deliveryMap: Record<string, { sent: number; opened: number; clicked: number }> = {};
-      if (sentIds.length > 0) {
+      if (campaignIds.length > 0) {
         const [attributions, sentRows, openedRows, clickedRows] = await Promise.all([
           ctx.prisma.orderAttribution.groupBy({
             by: ["campaignId"],
@@ -428,17 +435,17 @@ export const campaignsRouter = router({
           }),
           ctx.prisma.messageLog.groupBy({
             by: ["campaignId"],
-            where: { campaignId: { in: sentIds }, sentAt: { not: null } },
+            where: { campaignId: { in: campaignIds }, sentAt: { not: null } },
             _count: true,
           }),
           ctx.prisma.messageLog.groupBy({
             by: ["campaignId"],
-            where: { campaignId: { in: sentIds }, openedAt: { not: null } },
+            where: { campaignId: { in: campaignIds }, openedAt: { not: null } },
             _count: true,
           }),
           ctx.prisma.messageLog.groupBy({
             by: ["campaignId"],
-            where: { campaignId: { in: sentIds }, clickedAt: { not: null } },
+            where: { campaignId: { in: campaignIds }, clickedAt: { not: null } },
             _count: true,
           }),
         ]);
@@ -450,7 +457,7 @@ export const campaignsRouter = router({
             };
           }
         }
-        for (const id of sentIds) deliveryMap[id] = { sent: 0, opened: 0, clicked: 0 };
+        for (const id of campaignIds) deliveryMap[id] = { sent: 0, opened: 0, clicked: 0 };
         for (const row of sentRows)
           if (row.campaignId) deliveryMap[row.campaignId]!.sent = row._count;
         for (const row of openedRows)
@@ -459,9 +466,21 @@ export const campaignsRouter = router({
           if (row.campaignId) deliveryMap[row.campaignId]!.clicked = row._count;
       }
 
-      return campaigns.map((c) => ({
+      const rows = campaigns.map((c) => {
+        const proposal = (c.agentProposal ?? {}) as Record<string, any>;
+        const dispatch = (proposal["dispatch"] ?? {}) as Record<string, any>;
+        const delivery = (dispatch["delivery"] ?? {}) as Record<string, any>;
+        const sentCount = deliveryMap[c.id]?.sent ?? 0;
+        const deliveryStatus = c.status === "sending" &&
+          sentCount === 0 &&
+          Number(dispatch["scheduled"] ?? c.recipientCount) > 0 &&
+          !delivery["merchantOverride"]
+          ? "scheduled"
+          : c.status;
+        return {
         ...c,
-        recipientCount: deliveryMap[c.id]?.sent ?? c.recipientCount,
+        deliveryStatus,
+        recipientCount: sentCount || (c.status === "sent" ? c.recipientCount : 0),
         openCount: deliveryMap[c.id]?.opened ?? c.openCount,
         clickCount: deliveryMap[c.id]?.clicked ?? c.clickCount,
         openRate:
@@ -476,7 +495,9 @@ export const campaignsRouter = router({
             : 0,
         attributedRevenue: revenueMap[c.id]?.revenue ?? 0,
         attributedOrders: revenueMap[c.id]?.orders ?? 0,
-      }));
+      };
+      });
+      return input?.status ? rows.filter((row) => row.deliveryStatus === input.status) : rows;
     }),
 
   getById: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
