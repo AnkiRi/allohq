@@ -279,6 +279,71 @@ journeys into explainable decisions rather than generic AI-generated messages.
 
 Repository passes do not replace the external gates in `ExternalAcceptancePlan-2026-09-10.md`, `SesOperationsHandoff-2026-09-11.md` and `LaunchPlan3Sep.md`: SES sandbox and AWS event infrastructure, staging separation, restore evidence, Protected Customer Data controls, legal documents, fresh-account App Store installation and multi-workspace selection remain separately tracked.
 
+### External gate A — Messaging production infrastructure
+
+- Complete Amazon SES production-access review and move the production provider
+  deliberately; keep Resend available only according to the documented fallback plan.
+- Configure SES domain identity, DKIM, SPF, DMARC, custom MAIL FROM, bounce and
+  complaint handling, SNS/EventBridge destinations and provider webhooks.
+- Re-run delivery, bounce, complaint, unsubscribe, open, click and idempotency drills
+  after the provider move.
+- Keep production recipient allowlisting until the design-partner delivery sign-off.
+- Add provider-health, bounce-rate, complaint-rate, queue-depth and failed-job alerts.
+
+### External gate B — Environment and operations separation
+
+- Create a real staging environment with separate Vercel/Railway services, PostgreSQL,
+  Redis, Shopify app credentials, Clerk, AI credentials, messaging credentials and
+  encryption keys before partner testing begins to mutate production data.
+- Preserve production data isolation; never copy protected customer data into staging.
+- Confirm deploy provenance and release rollback for web, API and workers.
+- Set queue autoscaling, per-store concurrency limits, dead-letter inspection and
+  replay controls before broad delivery.
+
+### External gate C — Reliability, backups and monitoring
+
+- Preserve the verified Sentry coverage for web, API and workers and keep sensitive
+  customer fields scrubbed.
+- Keep Railway/Slack alerts for database disk, connections, service errors, restarts,
+  memory and CPU; add queue lag, oldest job and provider spend alerts.
+- Enable encrypted PostgreSQL backups and complete a timestamped restore drill.
+- Confirm Redis persistence appropriate for delayed BullMQ work.
+- Exercise the incident-response and privileged-access procedures with evidence.
+
+### External gate D — Shopify security, privacy and legal readiness
+
+- Complete Protected Customer Data Level 2 evidence: production/test separation,
+  encrypted backups, staff access controls and access logs, DLP approach and incident
+  response.
+- Publish and link the privacy policy, terms, DPA and subprocessors list.
+- Request and justify `read_all_orders` and the protected customer fields actually used.
+- Verify customer-data request, customer redaction, shop redaction, forged-HMAC rejection
+  and uninstall/reinstall behavior on disposable data.
+- Rotate development credentials before the first real design partner.
+
+### External gate E — Shopify installation and App Store readiness
+
+- Run a fresh-account App Store install with an account that has never touched Joon.
+- Verify first-installer access, second-staff pending/unassigned behavior, uninstall and
+  reinstall tenant reuse, and both website-started and Shopify-started install paths.
+- Build explicit active-workspace selection before supporting merchants with multiple
+  stores; do not rely on most-recently-linked membership ordering.
+- Complete the embedded App Bridge/session-token shell, review credentials, automated
+  checks, listing assets, support contacts and Shopify pricing/billing requirements.
+
+### External gate F — Design-partner acceptance
+
+- Reconcile real Shopify and Joon counts for products, customers, orders, consent and
+  currency after a clean sync.
+- Run one complete allowlisted campaign with treatment and non-zero control, then prove
+  delivered, opened, clicked, bounced, unsubscribed and attributed-order states.
+- Run each enabled journey with purchase-exit behavior and no random journey holdout.
+- Reconcile 5%, 6% and 8% attributed-revenue shadow invoices by hand; billing remains
+  disabled until the founder explicitly enables it.
+- Test Gmail, Outlook and Apple Mail; mobile and desktop; dark mode, blocked images,
+  long/missing names and missing recommendations.
+- Record the final acceptance run and preserve screenshots, logs and timestamps.
+
 ## Completion reporting rule
 
 For each pass, record:
