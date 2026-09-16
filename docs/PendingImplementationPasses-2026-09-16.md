@@ -143,16 +143,137 @@ Add `Create your own email` beside Joon-generated work: a conversational creativ
 - Ensure generated emails use the connected store’s products, currency, sender identity and reviewed brand assets.
 - Preserve versions and make generated assets recoverable when the conversation is reopened.
 
+## Pass 6 — Scalable customer-state intelligence and explorer
+
+Status: partially implemented. The compositional state engine, event-driven updates,
+purchase-cycle fields and `storeId + nextEvaluationAt` index exist. The scheduled
+worker currently recomputes at most 500 stale customers per store per run and does
+not drain the due queue, so the execution model and merchant-facing explorer are
+not ready for a very large store.
+
+### Outcome
+
+Make the first visible result of connecting a store an explainable customer-state
+map, and keep it current without rescanning every customer or creating one campaign
+per customer.
+
+### Required work
+
+- Keep state compositional: lifecycle/RFM, order rhythm, purchase-cycle position,
+  reorder confidence, discount behaviour, engagement, intent, fatigue, support,
+  consent/delivery health and next evaluation time remain independent dimensions.
+- Treat deliberate restraint as campaign-contextual and reversible. A customer may
+  be left alone for a discount campaign while remaining a candidate for a relevant
+  new-product or replenishment message.
+- Recompute state immediately from material events such as orders, consent changes,
+  opens, clicks, support events and relevant catalog/customer changes.
+- Replace the one-shot stale-state batch with an idempotent, cursor/lease-based due
+  queue that consumes `nextEvaluationAt` until the due backlog is drained.
+- Recompute only dirty or due customers; do not scan every customer nightly and do
+  not use an LLM per customer.
+- Record meaningful state transitions with previous state, new state, evidence,
+  effective time and next reconsideration condition.
+- Aggregate transitions into cohorts and campaign opportunities instead of creating
+  individual campaigns. Example: `2,190 high-confidence replenishment candidates`,
+  not 2,190 drafts.
+- Add queue-depth, oldest-due-age, processing-rate and failure monitoring, with
+  bounded per-store concurrency and replay-safe jobs.
+- Build a `Customer states` explorer with cohort counts, filters and paginated
+  drill-down across lifecycle, cycle position, discount behaviour, engagement,
+  fatigue and eligibility.
+- Show a concise, human state summary per customer, the evidence behind it, recent
+  transitions, campaign-specific decisions and the next reevaluation date/event.
+- Add a transition digest rather than one notification per customer: who became due,
+  overdue, replenishment-ready, deliberately left alone or eligible again.
+- Connect state cohorts to campaign creation while preserving the Pass 1 audience
+  review, control assignment and override rules.
+- Prove the scheduler with representative million-customer load data before claiming
+  million-profile readiness.
+
+### Merchant-facing story
+
+Immediately after sync, Joon should be able to show:
+
+> 1,000,000 customer histories organized into current states. 8,412 became overdue
+> today; 2,190 are high-confidence replenishment candidates; 1,340 remain eligible
+> after consent, fatigue and safety checks.
+
+This is state maintenance and cohort formation, not one AI analysis or one campaign
+per customer.
+
+## Pass 7 — Store-specific product graph and merchandising intelligence
+
+Status: foundation exists. Products, variants and collections are synchronized;
+same-basket affinity pairs, basket archetypes, reorder and customer recommendation
+jobs exist. The current affinity graph is primarily undirected same-order
+co-purchase and is not yet a merchant-visible, directional cross-sell/upsell system.
+
+### Outcome
+
+Make the second visible result of connecting a store an explainable product graph:
+what replenishes, what follows what, what belongs together, what is a premium step
+up and what the merchant has explicitly approved or blocked.
+
+### Required work
+
+- Model directional, typed relationships: `cross_sell`, `upsell`, `replenishment`,
+  `bundle/complement` and `substitute`.
+- Build the initial graph from Shopify products, variants, collections, product
+  types, tags, price bands and the store's historical orders.
+- Extend same-basket affinity with ordered purchase sequences and time lag, so a
+  pattern such as protein → creatine → BCAA is not flattened into an undirected pair.
+- Store explainable evidence: source and target, relationship type, evidence source,
+  support/sample size, confidence, baseline-adjusted lift where meaningful, median
+  lag, recency, version and a human explanation.
+- Distinguish replenishment from cross-sell and premium upsell; the same product pair
+  may have different meanings for different customers or moments.
+- Seed new stores with low-confidence category/catalog suggestions, clearly labelled
+  for review rather than presented as learned truth.
+- Add merchant controls to approve, pin, edit, add or block a relationship. Explicit
+  merchant decisions must outrank subsequent automated learning.
+- Build a visible `Product graph` surface with relationship-type filters, evidence,
+  confidence, typical timing, affected customers and campaign/journey actions.
+- Provide an accessible table/list alternative to the graph for large catalogs,
+  mobile use and keyboard/screen-reader operation.
+- Update the graph incrementally from order webhooks and periodically rebuild store
+  aggregates; resolve customer recommendations on demand or for active cohorts rather
+  than recomputing every customer nightly.
+- Feed reviewed graph relationships into cross-sell, upsell, replenishment, journey
+  and campaign creation while preserving inventory, consent and offer constraints.
+- Never require COGS or other merchant-entered financial data for this intelligence.
+
+### Merchant-facing story
+
+The first store analysis should present two connected maps:
+
+1. **Customer states:** who is buying normally, approaching their cycle, due,
+   overdue, discount-responsive, fatigued or ready for a relevant message.
+2. **Product graph:** what customers buy together, what they buy next, when they
+   replenish and which products form a credible upgrade path.
+
+These maps are the beginning of Joon intelligence. They turn later campaigns and
+journeys into explainable decisions rather than generic AI-generated messages.
+
 ## Sequencing
 
-1. Complete Pass 0 and prove offer plus attribution correctness.
-2. Complete Pass 1 and regress audience approval, override and audit behavior.
-3. Implement Pass 4 so overnight work is truthful and demonstrable.
-4. Complete Pass 2 and load-test timing preview/fan-out at representative scale.
-5. Incorporate the founder’s additional design direction into Pass 3, then implement it.
-6. Implement Pass 5 on top of the durable chat/artifact model.
-7. Run the complete design-partner path: Shopify sync → customer state → natural-language request → audience reconciliation → override → control assignment → creative → approval → timing → provider delivery → open → click → order → attribution → outcome.
-8. Do not widen production delivery beyond the recipient allowlist during these passes.
+1. Complete Pass 0 production acceptance and Pass 1's scalable audience-review UI.
+2. Complete Pass 6's scheduler before presenting the state engine as large-store ready;
+   ship its state explorer as the first visible post-sync intelligence surface.
+3. Implement Pass 7's store-specific product graph and connect reviewed relationships
+   to cohort opportunities.
+4. Implement Pass 4 so overnight work truthfully summarizes the customer and product
+   intelligence and every proposal resolves to a discoverable artifact.
+5. Complete Pass 2 and load-test timing preview/fan-out at representative scale.
+6. Incorporate the founder’s additional design direction into Pass 3, then implement it.
+7. Implement Pass 5 on top of the durable chat/artifact model and reviewed brand kit.
+8. Run one bounded product-wide UX coherence pass: terminal styling remains Joon's
+   decision/ledger voice; operational navigation and dense exploration remain quiet,
+   conventional and accessible. Do not create a fourth visual language for the new maps.
+9. Run the complete design-partner path: Shopify sync → customer-state map → product
+   graph → natural-language request → audience reconciliation → override → control
+   assignment → creative → approval → timing → provider delivery → open → click →
+   order → attribution → outcome.
+10. Do not widen production delivery beyond the recipient allowlist during these passes.
 
 ## Linked external and operational work
 
