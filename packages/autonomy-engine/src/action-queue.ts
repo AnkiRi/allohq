@@ -7,7 +7,7 @@ import { ActionStatus, type ProposedAction, type ActionResult } from "./types";
 export async function proposeAction(
   action: ProposedAction,
   urgencyScore: number,
-  confidenceScore: number,
+  confidenceScore: number
 ): Promise<ActionResult> {
   // Dedup: skip if an identical pending/approved action already exists
   const existing = await prisma.actionQueue.findFirst({
@@ -19,6 +19,18 @@ export async function proposeAction(
     },
   });
   if (existing) {
+    await prisma.actionQueue.update({
+      where: { id: existing.id },
+      data: {
+        urgencyScore,
+        confidenceScore,
+        reasoning: action.reasoning,
+        estimatedRevenue: action.estimatedRevenue ?? null,
+        payload: action.payload as any,
+        expiresAt: action.expiresAt ?? null,
+        lastEvaluatedAt: new Date(),
+      },
+    });
     return { id: existing.id, status: existing.status as ActionStatus, autoExecuted: false };
   }
 
@@ -34,6 +46,7 @@ export async function proposeAction(
       estimatedRevenue: action.estimatedRevenue ?? null,
       payload: action.payload as any,
       expiresAt: action.expiresAt ?? null,
+      lastEvaluatedAt: new Date(),
     },
   });
 
@@ -54,7 +67,7 @@ export async function listPendingActions(
     category?: string;
     limit?: number;
     offset?: number;
-  },
+  }
 ): Promise<{
   actions: Array<{
     id: string;
@@ -68,6 +81,10 @@ export async function listPendingActions(
     payload: unknown;
     expiresAt: Date | null;
     createdAt: Date;
+    lastEvaluatedAt: Date;
+    artifactId: string | null;
+    artifactType: string | null;
+    artifactStatus: string | null;
   }>;
   total: number;
 }> {
@@ -96,7 +113,7 @@ export async function listPendingActions(
 export async function approveAction(
   actionId: string,
   reviewedBy: string,
-  note?: string,
+  note?: string
 ): Promise<void> {
   await prisma.actionQueue.update({
     where: { id: actionId },
@@ -115,7 +132,7 @@ export async function approveAction(
 export async function rejectAction(
   actionId: string,
   reviewedBy: string,
-  reason: string,
+  reason: string
 ): Promise<void> {
   await prisma.actionQueue.update({
     where: { id: actionId },
@@ -163,10 +180,7 @@ export async function getActionById(actionId: string) {
 /**
  * Bulk approve multiple actions.
  */
-export async function bulkApprove(
-  actionIds: string[],
-  reviewedBy: string,
-): Promise<number> {
+export async function bulkApprove(actionIds: string[], reviewedBy: string): Promise<number> {
   const result = await prisma.actionQueue.updateMany({
     where: {
       id: { in: actionIds },
@@ -187,7 +201,7 @@ export async function bulkApprove(
 export async function bulkReject(
   actionIds: string[],
   reviewedBy: string,
-  reason: string,
+  reason: string
 ): Promise<number> {
   const result = await prisma.actionQueue.updateMany({
     where: {
@@ -208,10 +222,13 @@ export async function bulkReject(
  * Execute an approved action — creates the actual campaign/automation.
  */
 export async function executeApprovedAction(
-  actionId: string,
+  actionId: string
 ): Promise<{ executedType: string; resultId?: string }> {
   const action = await prisma.actionQueue.findUnique({ where: { id: actionId } });
-  if (!action || (action.status !== ActionStatus.APPROVED && action.status !== ActionStatus.EXECUTED)) {
+  if (
+    !action ||
+    (action.status !== ActionStatus.APPROVED && action.status !== ActionStatus.EXECUTED)
+  ) {
     throw new Error("Action not approved or not found");
   }
   if (action.status === ActionStatus.EXECUTED) {
@@ -222,7 +239,10 @@ export async function executeApprovedAction(
 
   if (action.type === "campaign_send") {
     // Get store's workspaceId
-    const store = await prisma.store.findUnique({ where: { id: action.storeId }, select: { workspaceId: true } });
+    const store = await prisma.store.findUnique({
+      where: { id: action.storeId },
+      select: { workspaceId: true },
+    });
     if (!store) throw new Error("Store not found for action");
 
     // Create a template from the payload if no templateId exists
@@ -231,12 +251,17 @@ export async function executeApprovedAction(
       const subject = (payload.subject as string) || (payload.campaignName as string) || "Campaign";
       // Build blocks from the draft's content slots if available
       const draft = payload.draft as Record<string, unknown> | undefined;
-      const contentSlots = (payload.contentSlots ?? draft?.contentSlots) as Record<string, unknown> | undefined;
+      const contentSlots = (payload.contentSlots ?? draft?.contentSlots) as
+        | Record<string, unknown>
+        | undefined;
       let blocks: unknown[] = [];
       if (contentSlots) {
         // Convert content slots into email builder blocks
         if (contentSlots.headline) {
-          blocks.push({ type: "heading", props: { text: contentSlots.headline as string, level: 1 } });
+          blocks.push({
+            type: "heading",
+            props: { text: contentSlots.headline as string, level: 1 },
+          });
         }
         if (contentSlots.bodyText) {
           blocks.push({ type: "text", props: { text: contentSlots.bodyText as string } });
@@ -244,11 +269,22 @@ export async function executeApprovedAction(
         const products = contentSlots.products as Array<Record<string, unknown>> | undefined;
         if (products?.length) {
           for (const p of products) {
-            blocks.push({ type: "product", props: { productId: p.id ?? p.productId, title: p.title, price: p.price, imageUrl: p.imageUrl } });
+            blocks.push({
+              type: "product",
+              props: {
+                productId: p.id ?? p.productId,
+                title: p.title,
+                price: p.price,
+                imageUrl: p.imageUrl,
+              },
+            });
           }
         }
         if (contentSlots.ctaText && contentSlots.ctaUrl) {
-          blocks.push({ type: "button", props: { text: contentSlots.ctaText as string, url: contentSlots.ctaUrl as string } });
+          blocks.push({
+            type: "button",
+            props: { text: contentSlots.ctaText as string, url: contentSlots.ctaUrl as string },
+          });
         }
       }
       // Also try to get blocks directly from the draft
@@ -278,7 +314,15 @@ export async function executeApprovedAction(
         origin: "joon",
       },
     });
-    await markExecuted(actionId);
+    await prisma.actionQueue.update({
+      where: { id: actionId },
+      data: {
+        status: ActionStatus.EXECUTED,
+        artifactId: campaign.id,
+        artifactType: "campaign",
+        artifactStatus: "draft",
+      },
+    });
     return { executedType: "campaign", resultId: campaign.id };
   }
 
@@ -290,7 +334,15 @@ export async function executeApprovedAction(
         data: { status: "active" },
       });
     }
-    await markExecuted(actionId);
+    await prisma.actionQueue.update({
+      where: { id: actionId },
+      data: {
+        status: ActionStatus.EXECUTED,
+        artifactId: automationId ?? null,
+        artifactType: "automation",
+        artifactStatus: automationId ? "active" : "unavailable",
+      },
+    });
     return { executedType: "automation", resultId: automationId };
   }
 

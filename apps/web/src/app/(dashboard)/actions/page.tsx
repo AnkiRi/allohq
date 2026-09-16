@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -10,11 +11,7 @@ import {
   DecisionCard,
   MetricReadout,
 } from "@/components/console";
-import type {
-  OpTagKind,
-  DecisionReasonLine,
-  DecisionPrediction,
-} from "@/components/console";
+import type { OpTagKind, DecisionReasonLine, DecisionPrediction } from "@/components/console";
 
 // ---------------------------------------------------------------------------
 // Action shape (autonomy.listActions) — surfaced in operator language.
@@ -34,6 +31,8 @@ interface Action {
   archetype?: string | null;
   targetSegment?: { count?: number | null } | null;
   prediction?: DecisionPrediction | null;
+  lastEvaluatedAt?: string | null;
+  lifecycle?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +140,8 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
       tick: "ok",
       text: (
         <>
-          drafted <b>{action.campaignName}</b>, ready for your okay
+          proposal prepared for <b>{action.campaignName}</b>; final creative is generated after
+          approval
         </>
       ),
     });
@@ -159,6 +159,12 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
       </>
     ),
   });
+  if (action.lastEvaluatedAt) {
+    lines.push({
+      tick: "step",
+      text: <>last evaluated {new Date(action.lastEvaluatedAt).toLocaleString()}</>,
+    });
+  }
 
   return lines;
 }
@@ -168,29 +174,34 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
 // ---------------------------------------------------------------------------
 
 export default function ActionsPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
   const { data, isLoading } = (trpc as any).autonomy.listActions.useQuery(
     { storeId, status: "pending", limit: 50 },
-    { enabled: !!storeId, refetchInterval: 15000 },
+    { enabled: !!storeId, refetchInterval: 15000 }
   ) as { data: { actions: Action[]; total: number } | undefined; isLoading: boolean };
 
   const utils = trpc.useUtils();
-  const invalidate = () =>
-    (utils as any).autonomy.listActions.invalidate({ storeId });
+  const invalidate = () => (utils as any).autonomy.listActions.invalidate({ storeId });
 
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
-    onSuccess: (result: { executedType?: string }) => {
+    onSuccess: (result: { executedType?: string; resultId?: string }) => {
       const msg =
         result.executedType === "campaign"
           ? "Done. Your campaign's ready in Campaigns."
           : result.executedType === "automation"
-          ? "Done. That automation is live."
-          : "Approved. joon's on it.";
+            ? "Done. That automation is live."
+            : "Approved. joon's on it.";
       toast(msg, "success");
       invalidate();
+      if (result.executedType === "campaign" && result.resultId) {
+        router.push(`/campaigns/${result.resultId}`);
+      } else if (result.executedType === "automation" && result.resultId) {
+        router.push(`/automations/${result.resultId}`);
+      }
     },
     onError: (err: { message?: string }) =>
       toast(err.message || "That didn't go through. Give it another try.", "error"),
@@ -228,13 +239,9 @@ export default function ActionsPage() {
   const bulkBusy = bulkApproveMut.isPending || bulkRejectMut.isPending;
 
   // Status line — total est. ₹ impact across the queue.
-  const totalImpact = pending.reduce(
-    (sum, a) => sum + (a.estimatedRevenue ?? 0),
-    0,
-  );
+  const totalImpact = pending.reduce((sum, a) => sum + (a.estimatedRevenue ?? 0), 0);
 
-  const handleBulkApprove = () =>
-    bulkApproveMut.mutate({ actionIds: pending.map((a) => a.id) });
+  const handleBulkApprove = () => bulkApproveMut.mutate({ actionIds: pending.map((a) => a.id) });
   const handleBulkReject = () =>
     bulkRejectMut.mutate({
       actionIds: pending.map((a) => a.id),
@@ -249,8 +256,7 @@ export default function ActionsPage() {
           Decision queue
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          What joon wants to do next, its thinking laid out, yours to approve or
-          pass.
+          What joon wants to do next, its thinking laid out, yours to approve or pass.
         </p>
       </div>
 
@@ -260,9 +266,7 @@ export default function ActionsPage() {
             the live lamp, so we don't repeat a second pulsing dot here. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
           <MetricReadout label="decisions waiting" value={pending.length} />
-          {totalImpact > 0 && (
-            <MetricReadout label="est. impact" value={totalImpact} money />
-          )}
+          {totalImpact > 0 && <MetricReadout label="est. impact" value={totalImpact} money />}
         </div>
 
         {/* Operator summary stream — the readouts above hold the numbers, so
@@ -272,9 +276,7 @@ export default function ActionsPage() {
             <StreamRow tick="step">reading the queue…</StreamRow>
           ) : pending.length > 0 ? (
             <>
-              <StreamRow tick="ok">
-                joon thought these through and held the rest back
-              </StreamRow>
+              <StreamRow tick="ok">joon thought these through and held the rest back</StreamRow>
               <StreamRow tick="step">
                 approve to put one live, pass to let it go ·{" "}
                 <span className="text-[hsl(var(--accent))]">ready</span>
@@ -342,12 +344,10 @@ export default function ActionsPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card p-6">
-          <p className="font-sans text-[14px] text-foreground">
-            Nothing waiting on you.
-          </p>
+          <p className="font-sans text-[14px] text-foreground">Nothing waiting on you.</p>
           <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-relaxed">
-            Drafts before sunrise, approvals over coffee. joon will have the
-            next decision ready when it&apos;s worth your okay.
+            Drafts before sunrise, approvals over coffee. joon will have the next decision ready
+            when it&apos;s worth your okay.
           </p>
         </div>
       )}

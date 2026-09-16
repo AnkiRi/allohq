@@ -802,26 +802,32 @@ model RfmScore {
 }
 
 model CustomerSegment {
-  id            String   @id @default(cuid())
-  storeId       String
-  name          String // Champions, Loyal Customers, Potential Loyalists, etc.
-  slug          String
-  description   String?
-  rfmMin        Int      @default(0) // min total RFM score
-  rfmMax        Int      @default(15) // max total RFM score
-  color         String   @default("#000000")
-  customerCount Int      @default(0)
-  totalRevenue  Float    @default(0)
-  conditions    Json? // custom segment rules: { operator, conditions[] }
-  customerIds   String[] @default([]) // explicit member ids when kind = "manual"
-  kind          String   @default("rfm") // "rfm" (RFM score range) | "manual" (explicit customer list)
-  isSystem      Boolean  @default(false) // system-generated vs custom
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                       String    @id @default(cuid())
+  storeId                  String
+  name                     String // Champions, Loyal Customers, Potential Loyalists, etc.
+  slug                     String
+  description              String?
+  rfmMin                   Int       @default(0) // min total RFM score
+  rfmMax                   Int       @default(15) // max total RFM score
+  color                    String    @default("#000000")
+  customerCount            Int       @default(0)
+  totalRevenue             Float     @default(0)
+  conditions               Json? // custom segment rules: { operator, conditions[] }
+  customerIds              String[]  @default([]) // explicit member ids when kind = "manual"
+  kind                     String    @default("rfm") // "rfm" (RFM score range) | "manual" (explicit customer list)
+  isSystem                 Boolean   @default(false) // system-generated vs custom
+  source                   String    @default("manual") // manual, system, opportunity, campaign
+  sourceKey                String?
+  originatingCampaignId    String?
+  originatingOpportunityId String?
+  archivedAt               DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   campaigns Campaign[]
 
   @@unique([storeId, slug])
+  @@index([storeId, source, archivedAt])
   @@map("customer_segments")
 }
 
@@ -1869,12 +1875,17 @@ model ActionQueue {
   reviewedAt       DateTime?
   reviewNote       String? // optional note from reviewer
   assignedTo       String? // team member for review
+  lastEvaluatedAt  DateTime  @default(now())
+  artifactId       String?
+  artifactType     String?
+  artifactStatus   String?
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId, status])
   @@index([storeId, urgencyScore])
   @@index([status, expiresAt])
+  @@index([storeId, lastEvaluatedAt])
   @@map("action_queue")
 }
 

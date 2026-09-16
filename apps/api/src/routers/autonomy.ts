@@ -19,14 +19,38 @@ import {
   ActionCategory,
   ActionStatus,
 } from "@allohq/autonomy-engine";
+import { generateCampaignDraft, type CampaignOpportunity } from "@allohq/campaign-engine";
+import { prisma } from "@allohq/database";
+
+async function generateApprovedCreative(actionId: string) {
+  const action = await getActionById(actionId);
+  const payload = (action?.payload ?? {}) as Record<string, unknown>;
+  if (action?.type === "campaign_send" && payload["opportunity"]) {
+    const draft = await generateCampaignDraft(payload["opportunity"] as CampaignOpportunity, {
+      routeForApproval: false,
+    });
+    await prisma.actionQueue.update({
+      where: { id: actionId },
+      data: {
+        payload: {
+          ...payload,
+          lifecycle: "draft_generated",
+          draft,
+          subject: draft.subject,
+          campaignName: draft.name,
+          htmlPreview: draft.html ?? null,
+          targetSegment: { name: draft.targetSegment, count: draft.targetCount },
+        } as any,
+      },
+    });
+  }
+}
 
 export const autonomyRouter = router({
   /** Get all autonomy configs for a store */
-  getConfig: storeProcedure
-    .input(z.object({ storeId: z.string() }))
-    .query(async ({ input }) => {
-      return getAllAutonomyConfigs(input.storeId);
-    }),
+  getConfig: storeProcedure.input(z.object({ storeId: z.string() })).query(async ({ input }) => {
+    return getAllAutonomyConfigs(input.storeId);
+  }),
 
   /** Update autonomy tier for a category */
   updateConfig: storeProcedure
@@ -36,7 +60,7 @@ export const autonomyRouter = router({
         category: z.nativeEnum(ActionCategory),
         tier: z.nativeEnum(AutonomyTier),
         confidenceThreshold: z.number().min(0).max(100).optional(),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       return setAutonomyTier(input.storeId, input.category, input.tier, {
@@ -61,7 +85,7 @@ export const autonomyRouter = router({
         category: z.string().optional(),
         limit: z.number().min(1).max(100).optional(),
         offset: z.number().min(0).optional(),
-      }),
+      })
     )
     .query(async ({ ctx, input }) => {
       // Expire stale actions first
@@ -81,27 +105,29 @@ export const autonomyRouter = router({
       // Enrich each action by unpacking the payload JSON
       const enrichedActions = result.actions.map((action) => {
         const payload = (action.payload ?? {}) as Record<string, unknown>;
-        const targetSegment =
-          (payload.targetSegment as { name: string; count: number }) ?? null;
+        const targetSegment = (payload.targetSegment as { name: string; count: number }) ?? null;
         const channel = (payload.channel as string) ?? null;
 
         // Track C: COMMIT to a predicted consequence before acting. Inputs are
         // generalizable features (cohort/channel/category/typical-rate), so the
         // same call could later be served by a cross-brand trained model.
-        const prediction = predictConsequence({
-          cohortSize: targetSegment?.count ?? 0,
-          estimatedRevenue: action.estimatedRevenue ?? 0,
-          confidenceScore: action.confidenceScore ?? 0,
-          channel,
-          category: action.category ?? action.type,
-          calibration: calibration
-            ? {
-                accuracyRatio: calibration.accuracyRatio,
-                liftPct: calibration.liftPct,
-                sampleSize: calibration.sampleSize,
-              }
-            : null,
-        });
+        const prediction =
+          action.estimatedRevenue && action.estimatedRevenue > 0
+            ? predictConsequence({
+                cohortSize: targetSegment?.count ?? 0,
+                estimatedRevenue: action.estimatedRevenue ?? 0,
+                confidenceScore: action.confidenceScore ?? 0,
+                channel,
+                category: action.category ?? action.type,
+                calibration: calibration
+                  ? {
+                      accuracyRatio: calibration.accuracyRatio,
+                      liftPct: calibration.liftPct,
+                      sampleSize: calibration.sampleSize,
+                    }
+                  : null,
+              })
+            : null;
 
         return {
           prediction,
@@ -115,6 +141,11 @@ export const autonomyRouter = router({
           estimatedRevenue: action.estimatedRevenue,
           expiresAt: action.expiresAt,
           createdAt: action.createdAt,
+          lastEvaluatedAt: action.lastEvaluatedAt,
+          lifecycle: (payload.lifecycle as string) ?? "decision_proposed",
+          artifactId: action.artifactId,
+          artifactType: action.artifactType,
+          artifactStatus: action.artifactStatus,
           // Enriched fields unpacked from payload
           htmlPreview: (payload.htmlPreview as string) ?? null,
           thumbnails: (payload.thumbnails as string[]) ?? [],
@@ -123,7 +154,8 @@ export const autonomyRouter = router({
           campaignName: (payload.campaignName as string) ?? null,
           subjectLine: (payload.subjectLine as string) ?? null,
           channel,
-          products: (payload.products as Array<{ name: string; imageUrl: string; price: number }>) ?? [],
+          products:
+            (payload.products as Array<{ name: string; imageUrl: string; price: number }>) ?? [],
         };
       });
 
@@ -144,7 +176,7 @@ export const autonomyRouter = router({
       z.object({
         actionId: z.string(),
         note: z.string().optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
@@ -153,6 +185,7 @@ export const autonomyRouter = router({
       if (ctx.isDemo) return { success: true, executedType: "demo", demo: true };
       await approveAction(input.actionId, ctx.userId, input.note);
       try {
+        await generateApprovedCreative(input.actionId);
         const result = await executeApprovedAction(input.actionId);
         return { success: true, ...result };
       } catch {
@@ -166,7 +199,7 @@ export const autonomyRouter = router({
       z.object({
         actionId: z.string(),
         reason: z.string(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       await verifyStoreScopedAccess(ctx, "actionQueue", input.actionId);
@@ -180,13 +213,18 @@ export const autonomyRouter = router({
     .input(
       z.object({
         actionIds: z.array(z.string()),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       if (ctx.isDemo) return { approved: input.actionIds.length, demo: true };
       const count = await bulkApprove(input.actionIds, ctx.userId);
       for (const id of input.actionIds) {
-        try { await executeApprovedAction(id); } catch { /* best-effort */ }
+        try {
+          await generateApprovedCreative(id);
+          await executeApprovedAction(id);
+        } catch {
+          /* best-effort */
+        }
       }
       return { approved: count };
     }),
@@ -197,7 +235,7 @@ export const autonomyRouter = router({
       z.object({
         actionIds: z.array(z.string()),
         reason: z.string().default("Cleared by merchant"),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       if (ctx.isDemo) return { rejected: input.actionIds.length, demo: true };

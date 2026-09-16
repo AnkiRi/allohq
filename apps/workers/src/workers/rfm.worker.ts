@@ -11,7 +11,9 @@ import { redisConnection, QUEUE_NAMES } from "../config";
 import { logActivity } from "@allohq/agent-core";
 
 const segmentChangeQueue = new Queue(QUEUE_NAMES.SEGMENT_CHANGE, { connection: redisConnection });
-const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, { connection: redisConnection });
+const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, {
+  connection: redisConnection,
+});
 
 interface RfmJobData {
   storeId: string;
@@ -29,9 +31,12 @@ export const rfmWorker = new Worker<RfmJobData>(
         ...s,
         storeId,
         isSystem: true,
+        source: "system",
+        sourceKey: `rfm:${s.slug}`,
       })),
       skipDuplicates: true,
     });
+    await archiveDuplicateSystemSegments(storeId);
 
     // 2. Fetch all customers with orders
     const customers = await prisma.customer.findMany({
@@ -67,7 +72,8 @@ export const rfmWorker = new Worker<RfmJobData>(
       select: { customerId: true, segment: true },
     });
     const existingSegmentMap = new Map(existingScores.map((s) => [s.customerId, s.segment]));
-    const segmentChanges: Array<{ customerId: string; fromSegment: string; toSegment: string }> = [];
+    const segmentChanges: Array<{ customerId: string; fromSegment: string; toSegment: string }> =
+      [];
 
     let rfmCalculated = 0;
     for (const data of rawData) {
@@ -77,12 +83,17 @@ export const rfmWorker = new Worker<RfmJobData>(
       const totalScore = recency + frequency + monetary;
       // RFM describes purchase history. Someone who has never ordered cannot
       // be "Lost" or lapsed; they are awaiting a first purchase.
-      const segment = data.orderCount === 0 ? "Subscribers" : getSegmentName(recency, frequency, monetary);
+      const segment =
+        data.orderCount === 0 ? "Subscribers" : getSegmentName(recency, frequency, monetary);
 
       // Detect segment change
       const oldSegment = existingSegmentMap.get(data.customerId);
       if (oldSegment && oldSegment !== segment) {
-        segmentChanges.push({ customerId: data.customerId, fromSegment: oldSegment, toSegment: segment });
+        segmentChanges.push({
+          customerId: data.customerId,
+          fromSegment: oldSegment,
+          toSegment: segment,
+        });
       }
 
       await prisma.rfmScore.upsert({
@@ -144,10 +155,7 @@ export const rfmWorker = new Worker<RfmJobData>(
     // 4. Calculate LTV
     let ltvCalculated = 0;
     for (const c of customers) {
-      const result = calculateCustomerLtv(
-        { customerId: c.id, orders: c.orders },
-        now
-      );
+      const result = calculateCustomerLtv({ customerId: c.id, orders: c.orders }, now);
       if (!result) continue;
 
       await prisma.customerLifetimeValue.upsert({
@@ -195,7 +203,9 @@ export const rfmWorker = new Worker<RfmJobData>(
       });
     }
 
-    console.log(`RFM job completed for store ${storeId}: ${rfmCalculated} RFM, ${ltvCalculated} LTV`);
+    console.log(
+      `RFM job completed for store ${storeId}: ${rfmCalculated} RFM, ${ltvCalculated} LTV`
+    );
     await logActivity({
       storeId,
       activityType: "rfm_scored",
@@ -205,12 +215,33 @@ export const rfmWorker = new Worker<RfmJobData>(
     await productSegmentsQueue.add(
       "after-rfm",
       { storeId },
-      { jobId: `product-segments-after-rfm-${storeId}-${new Date().toISOString().slice(0, 10)}` },
+      { jobId: `product-segments-after-rfm-${storeId}-${new Date().toISOString().slice(0, 10)}` }
     );
     return { rfmCalculated, ltvCalculated };
   },
   { connection: redisConnection }
 );
+
+async function archiveDuplicateSystemSegments(storeId: string) {
+  const rows = await prisma.customerSegment.findMany({
+    where: { storeId, isSystem: true, archivedAt: null },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, name: true },
+  });
+  const seen = new Set<string>();
+  const duplicateIds: string[] = [];
+  for (const row of rows) {
+    const canonicalName = row.name.trim().toLocaleLowerCase();
+    if (seen.has(canonicalName)) duplicateIds.push(row.id);
+    else seen.add(canonicalName);
+  }
+  if (duplicateIds.length > 0) {
+    await prisma.customerSegment.updateMany({
+      where: { id: { in: duplicateIds } },
+      data: { archivedAt: new Date() },
+    });
+  }
+}
 
 rfmWorker.on("completed", (job) => {
   console.log(`RFM job ${job.id} completed`);

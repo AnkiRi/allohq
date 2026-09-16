@@ -106,7 +106,7 @@ Make chat a durable campaign workspace rather than a transient generic assistant
 
 ## Pass 4 — Overnight decisions, artifact traceability and segment lifecycle
 
-Status: pending.
+Status: code complete for the unified proposal/artifact lifecycle, nightly summary and segment provenance; migration deployment and production acceptance remain. Opportunity discovery now refreshes one deduplicated structured proposal instead of claiming to create drafts repeatedly. Final brand creative is generated only after approval, execution records the linked artifact, zero-value modeled upside is suppressed, overnight runs publish one factual summary and canonical system segments are upserted/archived with source metadata.
 
 ### Outcome
 

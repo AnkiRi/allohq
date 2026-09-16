@@ -22,7 +22,15 @@ const conditionSchema = z.object({
     "acceptsMarketing",
     "purchasedProduct",
   ]),
-  op: z.enum(["equals", "notEquals", "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual", "contains"]),
+  op: z.enum([
+    "equals",
+    "notEquals",
+    "greaterThan",
+    "lessThan",
+    "greaterThanOrEqual",
+    "lessThanOrEqual",
+    "contains",
+  ]),
   value: z.union([z.string(), z.number(), z.boolean()]),
 });
 
@@ -70,7 +78,11 @@ function buildWhereFromConditions(
         break;
       case "purchasedProduct":
         clauses.push({
-          orders: { some: { items: { some: { title: { contains: String(cond.value), mode: "insensitive" } } } } },
+          orders: {
+            some: {
+              items: { some: { title: { contains: String(cond.value), mode: "insensitive" } } },
+            },
+          },
         });
         break;
     }
@@ -86,14 +98,22 @@ function buildWhereFromConditions(
 
 function buildComparison(op: string, value: any): any {
   switch (op) {
-    case "equals": return value;
-    case "notEquals": return { not: value };
-    case "greaterThan": return { gt: value };
-    case "lessThan": return { lt: value };
-    case "greaterThanOrEqual": return { gte: value };
-    case "lessThanOrEqual": return { lte: value };
-    case "contains": return { contains: value, mode: "insensitive" };
-    default: return value;
+    case "equals":
+      return value;
+    case "notEquals":
+      return { not: value };
+    case "greaterThan":
+      return { gt: value };
+    case "lessThan":
+      return { lt: value };
+    case "greaterThanOrEqual":
+      return { gte: value };
+    case "lessThanOrEqual":
+      return { lte: value };
+    case "contains":
+      return { contains: value, mode: "insensitive" };
+    default:
+      return value;
   }
 }
 
@@ -104,14 +124,22 @@ function buildComparison(op: string, value: any): any {
  * preview so the SAME query answers, builds, and displays — counts always match.
  */
 function resolveSegmentWhere(
-  segment: { customerIds?: string[] | null; conditions?: unknown; rfmMin?: number | null; rfmMax?: number | null },
-  storeIds: string[],
+  segment: {
+    customerIds?: string[] | null;
+    conditions?: unknown;
+    rfmMin?: number | null;
+    rfmMax?: number | null;
+  },
+  storeIds: string[]
 ): any {
   if (segment.customerIds && segment.customerIds.length > 0) {
     return { storeId: { in: storeIds }, id: { in: segment.customerIds } };
   }
   if (segment.conditions) {
-    return buildWhereFromConditions(segment.conditions as z.infer<typeof conditionsSchema>, storeIds);
+    return buildWhereFromConditions(
+      segment.conditions as z.infer<typeof conditionsSchema>,
+      storeIds
+    );
   }
   return {
     storeId: { in: storeIds },
@@ -129,8 +157,8 @@ export const segmentsRouter = router({
     const storeIds = stores.map((s) => s.id);
 
     const segments = await ctx.prisma.customerSegment.findMany({
-      where: { storeId: { in: storeIds } },
-      orderBy: { rfmMax: "desc" },
+      where: { storeId: { in: storeIds }, archivedAt: null },
+      orderBy: [{ source: "asc" }, { updatedAt: "desc" }],
     });
 
     return segments.map((segment) => ({
@@ -159,7 +187,11 @@ export const segmentsRouter = router({
         ctx.prisma.customer.findMany({
           where,
           take: input.membersLimit,
-          include: { rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, lastOrderAt: true } } },
+          include: {
+            rfmScore: {
+              select: { segment: true, totalSpent: true, orderCount: true, lastOrderAt: true },
+            },
+          },
           orderBy: { rfmScore: { totalSpent: "desc" } },
         }),
       ]);
@@ -187,6 +219,8 @@ export const segmentsRouter = router({
           ...s,
           storeId: input.storeId,
           isSystem: true,
+          source: "system",
+          sourceKey: `rfm:${s.slug}`,
         })),
         skipDuplicates: true,
       });
@@ -230,7 +264,10 @@ export const segmentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const slug = input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
 
       // Resolve the member count NOW via the SAME query preview uses, so the
       // created segment's count always equals the preview the user just saw.
@@ -247,6 +284,7 @@ export const segmentsRouter = router({
           kind: "conditions",
           customerCount,
           isSystem: false,
+          source: "manual",
         },
       });
 
@@ -274,7 +312,10 @@ export const segmentsRouter = router({
         });
         if (existing) {
           const where = buildWhereFromConditions(input.conditions, [existing.storeId]);
-          recount = { customerCount: await ctx.prisma.customer.count({ where }), kind: "conditions" };
+          recount = {
+            customerCount: await ctx.prisma.customer.count({ where }),
+            kind: "conditions",
+          };
         }
       }
       const segment = await ctx.prisma.customerSegment.update({
@@ -282,7 +323,10 @@ export const segmentsRouter = router({
         data: {
           ...(input.name && {
             name: input.name,
-            slug: input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+            slug: input.name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/(^-|-$)/g, ""),
           }),
           ...(input.description !== undefined && { description: input.description }),
           ...(input.conditions && { conditions: input.conditions as any }),
@@ -317,10 +361,13 @@ export const segmentsRouter = router({
         where: { storeId: segment.storeId },
         select: { triggerConfig: true },
       });
-      const autosUsing = autos.filter((a) => JSON.stringify(a.triggerConfig ?? {}).includes(input.id)).length;
+      const autosUsing = autos.filter((a) =>
+        JSON.stringify(a.triggerConfig ?? {}).includes(input.id)
+      ).length;
       if (campaignsUsing > 0 || autosUsing > 0) {
         const parts: string[] = [];
-        if (campaignsUsing) parts.push(`${campaignsUsing} campaign${campaignsUsing === 1 ? "" : "s"}`);
+        if (campaignsUsing)
+          parts.push(`${campaignsUsing} campaign${campaignsUsing === 1 ? "" : "s"}`);
         if (autosUsing) parts.push(`${autosUsing} automation${autosUsing === 1 ? "" : "s"}`);
         throw new TRPCError({
           code: "CONFLICT",

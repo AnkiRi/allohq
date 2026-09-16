@@ -1,12 +1,9 @@
 import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { logActivity } from "@allohq/agent-core";
-import { scanOpportunities } from "@allohq/campaign-engine";
 import { redisConnection, QUEUE_NAMES } from "../config";
-import { enqueueCampaignOpportunities } from "../utils/enqueue-opportunities";
 
 const journeyStepQueue = new Queue(QUEUE_NAMES.JOURNEY_STEP, { connection: redisConnection });
-const campaignFactoryQueue = new Queue(QUEUE_NAMES.CAMPAIGN_FACTORY, { connection: redisConnection });
 
 const CART_RECOVERY_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours
 const CHURN_RISK_THRESHOLD = 0.7;
@@ -53,15 +50,18 @@ export const overnightOpsWorker = new Worker<OvernightOpsJobData>(
         totalOpportunities += result.opportunities;
         totalActionsQueued += result.actionsQueued;
       } catch (err) {
-        console.error(`[overnight-ops] Error processing store ${store.id}:`, (err as Error).message);
+        console.error(
+          `[overnight-ops] Error processing store ${store.id}:`,
+          (err as Error).message
+        );
       }
     }
 
     console.log(
       `[overnight-ops] Scan complete: ${stores.length} stores, ` +
-      `${totalCartRecoveries} cart recoveries, ${totalWinBacks} win-backs, ` +
-      `${totalAbTestsConcluded} A/B tests concluded, ${totalOpportunities} opportunities, ` +
-      `${totalActionsQueued} actions queued`
+        `${totalCartRecoveries} cart recoveries, ${totalWinBacks} win-backs, ` +
+        `${totalAbTestsConcluded} A/B tests concluded, ${totalOpportunities} opportunities, ` +
+        `${totalActionsQueued} actions queued`
     );
 
     return {
@@ -73,7 +73,7 @@ export const overnightOpsWorker = new Worker<OvernightOpsJobData>(
       totalActionsQueued,
     };
   },
-  { connection: redisConnection, concurrency: 1 },
+  { connection: redisConnection, concurrency: 1 }
 );
 
 async function processStore(storeId: string) {
@@ -144,7 +144,10 @@ async function processStore(storeId: string) {
         cartRecoveries++;
       }
     } catch (err) {
-      console.error(`[overnight-ops] Cart recovery error for store ${storeId}:`, (err as Error).message);
+      console.error(
+        `[overnight-ops] Cart recovery error for store ${storeId}:`,
+        (err as Error).message
+      );
     }
   }
 
@@ -298,7 +301,10 @@ async function processStore(storeId: string) {
         }
       }
     } catch (err) {
-      console.error(`[overnight-ops] Copilot action error (${config.category}) for store ${storeId}:`, (err as Error).message);
+      console.error(
+        `[overnight-ops] Copilot action error (${config.category}) for store ${storeId}:`,
+        (err as Error).message
+      );
     }
   }
 
@@ -350,28 +356,37 @@ async function processStore(storeId: string) {
       abTestsConcluded++;
     }
   } catch (err) {
-    console.error(`[overnight-ops] A/B test evaluation error for store ${storeId}:`, (err as Error).message);
+    console.error(
+      `[overnight-ops] A/B test evaluation error for store ${storeId}:`,
+      (err as Error).message
+    );
   }
 
-  // ── 5. Scan for campaign opportunities ──────────────────────────────────
+  // ── 5. Summarize the single decision queue. Opportunity discovery is owned
+  // by opportunity-scanner so the same store is not independently scanned and
+  // drafted twice by two schedules.
   try {
-    const opps = await scanOpportunities(storeId);
-    opportunities = opps.length;
-
-    for (const opp of opps) {
-      await enqueueCampaignOpportunities(campaignFactoryQueue, [opp]);
-
-      await logActivity({
-        storeId,
-        activityType: "campaign_opportunity",
-        summary: `Identified campaign opportunity: ${opp.reasoning || opp.type}`,
-        category: opp.type,
-        actionTaken: "queued_for_review",
-        metadata: { opportunity: opp },
-      });
-    }
+    const [customersEvaluated, deliberatelyLeftAlone, decisionsPrepared] = await Promise.all([
+      prisma.customerState.count({ where: { storeId } }),
+      prisma.customerAudienceDecision.count({
+        where: {
+          storeId,
+          decision: "deliberately_left_alone",
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1_000) },
+        },
+      }),
+      prisma.actionQueue.count({ where: { storeId, status: "pending" } }),
+    ]);
+    opportunities = decisionsPrepared;
+    await logActivity({
+      storeId,
+      activityType: "overnight_summary",
+      summary: `Overnight review: ${customersEvaluated.toLocaleString()} customer states evaluated, ${deliberatelyLeftAlone.toLocaleString()} deliberately left alone, ${decisionsPrepared.toLocaleString()} decisions ready for review.`,
+      actionTaken: "summary_prepared",
+      metadata: { customersEvaluated, deliberatelyLeftAlone, decisionsPrepared },
+    });
   } catch (err) {
-    console.error(`[overnight-ops] Opportunity scan error for store ${storeId}:`, (err as Error).message);
+    console.error(`[overnight-ops] Summary error for store ${storeId}:`, (err as Error).message);
   }
 
   return { cartRecoveries, winBacks, abTestsConcluded, opportunities, actionsQueued };

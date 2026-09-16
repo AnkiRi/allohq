@@ -16,6 +16,7 @@ import type { EmailIntent } from "@allohq/customer-intelligence";
  */
 export async function generateCampaignDraft(
   opportunity: CampaignOpportunity,
+  options: { routeForApproval?: boolean } = {}
 ): Promise<CampaignDraft> {
   const { storeId, type, customerCount, productIds } = opportunity;
 
@@ -34,20 +35,29 @@ export async function generateCampaignDraft(
   const archetypeId = selectTemplate(type, opportunity.segmentName, aesthetic as any);
 
   // Load products with processed images if available
-  const products = productIds && productIds.length > 0
-    ? await prisma.product.findMany({
-        where: { id: { in: productIds } },
-        select: { id: true, title: true, price: true, compareAtPrice: true, handle: true, imageUrl: true },
-      })
-    : [];
+  const products =
+    productIds && productIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            compareAtPrice: true,
+            handle: true,
+            imageUrl: true,
+          },
+        })
+      : [];
 
   // Load processed product images (branded backgrounds, multi-size variants)
-  const processedImages = products.length > 0
-    ? await prisma.processedProductImage.findMany({
-        where: { productId: { in: products.map((p) => p.id) }, storeId },
-        select: { productId: true, brandBgUrl: true, sizes: true },
-      })
-    : [];
+  const processedImages =
+    products.length > 0
+      ? await prisma.processedProductImage.findMany({
+          where: { productId: { in: products.map((p) => p.id) }, storeId },
+          select: { productId: true, brandBgUrl: true, sizes: true },
+        })
+      : [];
   const processedImageMap = new Map(processedImages.map((pi) => [pi.productId, pi]));
 
   // Load store for domain
@@ -57,10 +67,21 @@ export async function generateCampaignDraft(
   });
 
   // Build content slots (with processed product images)
-  const contentSlots = buildContentSlots(type, opportunity, products, store, brandTokens, processedImageMap);
+  const contentSlots = buildContentSlots(
+    type,
+    opportunity,
+    products,
+    store,
+    brandTokens,
+    processedImageMap
+  );
 
   // Generate campaign name and subject
-  const { name, subject: fallbackSubject } = generateCampaignMeta(type, opportunity, store.storeName ?? "Store");
+  const { name, subject: fallbackSubject } = generateCampaignMeta(
+    type,
+    opportunity,
+    store.storeName ?? "Store"
+  );
   let subject = fallbackSubject;
   let generatedBlocks: unknown[] | undefined;
 
@@ -76,29 +97,49 @@ export async function generateCampaignDraft(
   try {
     const [brandProfile, workspace] = await Promise.all([
       prisma.brandProfile.findFirst({ where: { storeId, workspaceId: store.workspaceId } }),
-      prisma.workspace.findUnique({ where: { id: store.workspaceId }, select: { defaultModel: true, modelHarness: true } }),
+      prisma.workspace.findUnique({
+        where: { id: store.workspaceId },
+        select: { defaultModel: true, modelHarness: true },
+      }),
     ]);
     const generated = await generateEmail({
       intent: opportunityIntent(type),
-      brandProfile: brandProfile ? {
-        brandName: brandProfile.brandName,
-        brandDescription: brandProfile.brandDescription,
-        toneAttributes: brandProfile.toneAttributes as Record<string, string>,
-        vocabulary: brandProfile.vocabulary as Record<string, string[]>,
-        visualStyle: brandProfile.visualStyle as Record<string, string | string[]>,
-        sampleCopy: brandProfile.sampleCopy as string[],
-      } : undefined,
+      brandProfile: brandProfile
+        ? {
+            brandName: brandProfile.brandName,
+            brandDescription: brandProfile.brandDescription,
+            toneAttributes: brandProfile.toneAttributes as Record<string, string>,
+            vocabulary: brandProfile.vocabulary as Record<string, string[]>,
+            visualStyle: brandProfile.visualStyle as Record<string, string | string[]>,
+            sampleCopy: brandProfile.sampleCopy as string[],
+          }
+        : undefined,
       segment: { name: opportunity.segmentName ?? type, description: opportunity.reasoning },
-      products: products.map((p) => ({ id: p.id, title: p.title, description: undefined, imageUrl: p.imageUrl ?? undefined, price: p.price, handle: p.handle })),
+      products: products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: undefined,
+        imageUrl: p.imageUrl ?? undefined,
+        price: p.price,
+        handle: p.handle,
+      })),
       storeUrl: `https://${store.shopDomain}`,
       model: workspace?.defaultModel as any,
       modelHarness: workspace?.modelHarness,
     });
     subject = generated.subject;
     generatedBlocks = generated.blocks;
-    html = await renderBrandedEmail({ storeId, blocks: generated.blocks, subject, previewText: generated.previewText, previewMode: true });
+    html = await renderBrandedEmail({
+      storeId,
+      blocks: generated.blocks,
+      subject,
+      previewText: generated.previewText,
+      previewMode: true,
+    });
   } catch (err: any) {
-    console.warn(`[campaign-factory] Brand-voice generation failed; using safe fallback: ${err.message}`);
+    console.warn(
+      `[campaign-factory] Brand-voice generation failed; using safe fallback: ${err.message}`
+    );
   }
   try {
     html ??= renderMjmlTemplate(archetypeId as TemplateArchetypeId, brandTokens, contentSlots);
@@ -114,7 +155,13 @@ export async function generateCampaignDraft(
     archetypeId,
     targetSegment: opportunity.segmentName ?? type,
     targetCount: customerCount,
-    estimatedRevenue: opportunity.estimatedRevenue ?? { low: 0, mid: 0, high: 0, conversionRate: 0, avgOrderValue: 0 },
+    estimatedRevenue: opportunity.estimatedRevenue ?? {
+      low: 0,
+      mid: 0,
+      high: 0,
+      conversionRate: 0,
+      avgOrderValue: 0,
+    },
     confidenceScore,
     reasoning: opportunity.reasoning,
     html,
@@ -122,48 +169,63 @@ export async function generateCampaignDraft(
 
   // Route through autonomy engine (include HTML preview in payload)
   const category = mapOpportunityToCategory(type);
-  await routeAction({
-    storeId,
-    type: "campaign_send",
-    category,
-    reasoning: opportunity.reasoning,
-    estimatedRevenue: opportunity.estimatedRevenue?.mid,
-    payload: {
-      draft,
-      archetypeId,
-      contentSlots,
-      generatedBlocks,
-      subject,
-      customerCount,
-      name,
-      htmlPreview: html,
-      targetSegment: { name: opportunity.segmentName ?? type, count: customerCount },
-      campaignName: name,
-    },
-  });
+  if (options.routeForApproval !== false)
+    await routeAction({
+      storeId,
+      type: "campaign_send",
+      category,
+      reasoning: opportunity.reasoning,
+      estimatedRevenue: opportunity.estimatedRevenue?.mid,
+      payload: {
+        draft,
+        archetypeId,
+        contentSlots,
+        generatedBlocks,
+        subject,
+        customerCount,
+        name,
+        htmlPreview: html,
+        targetSegment: { name: opportunity.segmentName ?? type, count: customerCount },
+        campaignName: name,
+      },
+    });
 
   return draft;
 }
 
 function opportunityIntent(type: string): EmailIntent {
   switch (type) {
-    case "at_risk_winback": return "win_back";
-    case "repurchase_window": return "re_engagement";
-    case "new_arrival": return "promotion";
-    case "seasonal": return "seasonal";
-    case "vip_milestone": return "vip_reward";
-    case "re_engagement": return "re_engagement";
-    default: return "promotion";
+    case "at_risk_winback":
+      return "win_back";
+    case "repurchase_window":
+      return "re_engagement";
+    case "new_arrival":
+      return "promotion";
+    case "seasonal":
+      return "seasonal";
+    case "vip_milestone":
+      return "vip_reward";
+    case "re_engagement":
+      return "re_engagement";
+    default:
+      return "promotion";
   }
 }
 
 function buildContentSlots(
   type: string,
   opportunity: CampaignOpportunity,
-  products: { id: string; title: string; price: number; compareAtPrice: number | null; handle: string; imageUrl: string | null }[],
+  products: {
+    id: string;
+    title: string;
+    price: number;
+    compareAtPrice: number | null;
+    handle: string;
+    imageUrl: string | null;
+  }[],
   store: { shopDomain: string },
   _brandTokens: BrandDesignTokens,
-  processedImageMap?: Map<string, { productId: string; brandBgUrl: string | null; sizes: unknown }>,
+  processedImageMap?: Map<string, { productId: string; brandBgUrl: string | null; sizes: unknown }>
 ): ContentSlots {
   const productSlots = products.map((p) => {
     const processed = processedImageMap?.get(p.id);
@@ -192,7 +254,8 @@ function buildContentSlots(
       return {
         ...base,
         headline: "We miss you, {{first_name}}!",
-        bodyText: "It's been a while since your last visit. We've got something special waiting for you.",
+        bodyText:
+          "It's been a while since your last visit. We've got something special waiting for you.",
         ctaText: "Come Back & Save",
         preheaderText: "We've saved something special for you",
       };
@@ -217,7 +280,8 @@ function buildContentSlots(
       return {
         ...base,
         headline: "You're a VIP, {{first_name}}!",
-        bodyText: "Thank you for being one of our most valued customers. Here's an exclusive reward.",
+        bodyText:
+          "Thank you for being one of our most valued customers. Here's an exclusive reward.",
         ctaText: "Claim Your Reward",
         preheaderText: "A special thank you from us",
         stats: [
@@ -230,7 +294,8 @@ function buildContentSlots(
       return {
         ...base,
         headline: "Still there, {{first_name}}?",
-        bodyText: "We haven't seen you in a while and we'd love to have you back. Here's a little something to welcome you.",
+        bodyText:
+          "We haven't seen you in a while and we'd love to have you back. Here's a little something to welcome you.",
         ctaText: "Explore What's New",
         preheaderText: "It's been too long!",
       };
@@ -255,7 +320,7 @@ function buildContentSlots(
 function generateCampaignMeta(
   type: string,
   opportunity: CampaignOpportunity,
-  storeName: string,
+  storeName: string
 ): { name: string; subject: string } {
   const date = new Date().toISOString().slice(0, 10);
 
@@ -316,14 +381,23 @@ function calculateConfidence(opportunity: CampaignOpportunity): number {
 
 function mapOpportunityToCategory(type: string): ActionCategory {
   switch (type) {
-    case "at_risk_winback": return ActionCategory.WIN_BACK;
-    case "repurchase_window": return ActionCategory.REPURCHASE;
-    case "new_arrival": return ActionCategory.PROMOTIONAL;
-    case "low_stock": return ActionCategory.PROMOTIONAL;
-    case "seasonal": return ActionCategory.PROMOTIONAL;
-    case "vip_milestone": return ActionCategory.VIP;
-    case "cross_sell": return ActionCategory.CROSS_SELL;
-    case "re_engagement": return ActionCategory.WIN_BACK;
-    default: return ActionCategory.PROMOTIONAL;
+    case "at_risk_winback":
+      return ActionCategory.WIN_BACK;
+    case "repurchase_window":
+      return ActionCategory.REPURCHASE;
+    case "new_arrival":
+      return ActionCategory.PROMOTIONAL;
+    case "low_stock":
+      return ActionCategory.PROMOTIONAL;
+    case "seasonal":
+      return ActionCategory.PROMOTIONAL;
+    case "vip_milestone":
+      return ActionCategory.VIP;
+    case "cross_sell":
+      return ActionCategory.CROSS_SELL;
+    case "re_engagement":
+      return ActionCategory.WIN_BACK;
+    default:
+      return ActionCategory.PROMOTIONAL;
   }
 }
