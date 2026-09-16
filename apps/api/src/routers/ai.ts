@@ -1261,6 +1261,7 @@ export const aiRouter = router({
         latestVoiceReport,
         customerCount,
         optedInCount,
+        reviewedProductRelationships,
       ] = await Promise.all([
         // Top 10 customers BY SPEND — a labeled SAMPLE for the prompt, not a total.
         ctx.prisma.customer.findMany({
@@ -1373,6 +1374,11 @@ export const aiRouter = router({
         // Real totals — facts come from aggregate queries, NEVER a capped fetch's length.
         ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
         ctx.prisma.customer.count({ where: { storeId: input.storeId, acceptsMarketing: true } }),
+        ctx.prisma.productRelationship.findMany({
+          where: { storeId: input.storeId, status: "approved" },
+          orderBy: [{ pinned: "desc" }, { confidence: "desc" }],
+          take: 12,
+        }),
       ]);
 
       // ---------------------------------------------------------------
@@ -1506,6 +1512,9 @@ ${generateTopOpportunities()}
 
 ### Active Automations
 ${automations.length > 0 ? automations.map((a) => `- ${a.name}: ${a.status}${a.status === "active" ? " (running)" : a.status === "ready" ? " (needs activation)" : ""}`).join("\n") : "No automations created yet."}
+
+### Merchant-reviewed Product Relationships
+${reviewedProductRelationships.length > 0 ? reviewedProductRelationships.map((r) => `- ${r.relationshipType}: product ${r.sourceProductId} → ${r.targetProductId}. ${r.explanation}`).join("\n") : "No relationships approved yet; do not present catalog suggestions as learned truth."}
 
 ### Pending Actions
 - ${pendingActionCount} actions awaiting merchant approval
@@ -2104,7 +2113,16 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
     .input(
       z.object({
         storeId: z.string(),
-        type: z.enum(["logo", "logo_dark", "hero", "lifestyle", "icon", "other"]),
+        type: z.enum([
+          "logo",
+          "logo_dark",
+          "hero",
+          "lifestyle",
+          "icon",
+          "font",
+          "reference_image",
+          "other",
+        ]),
         url: z.string().url(),
         fileName: z.string(),
         mimeType: z.string().optional(),

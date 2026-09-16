@@ -14,6 +14,7 @@ export { getRecommendations, scoreAndMerge } from "./scoring/engine";
 
 // Individual strategies
 export { buildAffinityMatrix, getAffinityRecommendations } from "./strategies/affinity-matrix";
+export { buildProductGraph, learnProductRelationships } from "./product-graph";
 export { getCollaborativeRecommendations } from "./strategies/collaborative-filtering";
 export { getReorderRecommendations } from "./strategies/reorder-engine";
 export { getCrossSellRecommendations } from "./strategies/cross-sell";

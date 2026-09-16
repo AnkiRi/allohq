@@ -15,7 +15,12 @@ const shippingUpdateQueue = new Queue(QUEUE_NAMES.SHIPPING_UPDATE, { connection:
 const restockAlertQueue = new Queue(QUEUE_NAMES.RESTOCK_ALERT, { connection: redisConnection });
 const priceDropQueue = new Queue(QUEUE_NAMES.PRICE_DROP, { connection: redisConnection });
 const eventReactQueue = new Queue(QUEUE_NAMES.EVENT_REACT, { connection: redisConnection });
-const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, { connection: redisConnection });
+const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, {
+  connection: redisConnection,
+});
+const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, {
+  connection: redisConnection,
+});
 
 interface WebhookJobData {
   topic: string;
@@ -169,7 +174,7 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       case "customers/create": {
         const customer = await upsertCustomer(
           store.id,
-          await hydrateCustomerEmailConsent(store.id, payload),
+          await hydrateCustomerEmailConsent(store.id, payload)
         );
         if (customer) {
           await checkEventTriggers(store.id, "customer_created", customer.id, eventId ?? undefined);
@@ -189,7 +194,7 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
               });
         const customer = await upsertCustomer(
           store.id,
-          await hydrateCustomerEmailConsent(store.id, payload),
+          await hydrateCustomerEmailConsent(store.id, payload)
         );
         const incomingTags =
           typeof customerPayload.tags === "string"
@@ -330,7 +335,19 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
               backoff: { type: "exponential", delay: 2_000 },
               removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
               removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
-            },
+            }
+          );
+          // Refresh store-level product relationships after durable order sync.
+          // Debounce by store so a burst of webhooks becomes one aggregate rebuild.
+          await productRecommendationQueue.add(
+            "build-affinity",
+            { type: "build-affinity", storeId: store.id },
+            {
+              jobId: `product-graph:${store.id}:${Math.floor(Date.now() / 60_000)}`,
+              delay: 60_000,
+              removeOnComplete: 50,
+              removeOnFail: 100,
+            }
           );
         }
         break;
@@ -812,7 +829,7 @@ async function upsertCustomer(
 
 async function hydrateCustomerEmailConsent(
   storeId: string,
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   const payload = data as {
     id?: number | string;
@@ -829,7 +846,8 @@ async function hydrateCustomerEmailConsent(
         marketingUpdatedAt: string | null;
       } | null;
     } | null;
-  }>(`
+  }>(
+    `
     query JoonCustomerConsent($id: ID!) {
       customer(id: $id) {
         defaultEmailAddress {
@@ -840,7 +858,9 @@ async function hydrateCustomerEmailConsent(
         }
       }
     }
-  `, { id: `gid://shopify/Customer/${String(payload.id)}` });
+  `,
+    { id: `gid://shopify/Customer/${String(payload.id)}` }
+  );
   const address = response.customer?.defaultEmailAddress;
   if (!address) return data;
 

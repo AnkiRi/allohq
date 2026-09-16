@@ -11,27 +11,48 @@ export const WORKSPACE_ROLES = [
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
 const APPROVAL_MUTATIONS = new Set([
-  "campaigns.schedule", "campaigns.sendNow", "campaigns.deliverNow",
-  "campaigns.reviseScheduled", "campaigns.cancel",
-  "automations.activate", "automations.pause", "automations.resume",
-  "autonomy.approveAction", "autonomy.rejectAction",
-  "autonomy.bulkApprove", "autonomy.bulkReject",
+  "campaigns.schedule",
+  "campaigns.sendNow",
+  "campaigns.deliverNow",
+  "campaigns.reviseScheduled",
+  "campaigns.cancel",
+  "automations.activate",
+  "automations.pause",
+  "automations.resume",
+  "autonomy.approveAction",
+  "autonomy.rejectAction",
+  "autonomy.bulkApprove",
+  "autonomy.bulkReject",
 ]);
 
 const MARKETING_PREFIXES = [
-  "campaigns.", "automations.", "segments.", "templates.", "emails.",
-  "forms.", "ai.generate", "ai.regenerate", "ai.feedback",
+  "campaigns.",
+  "automations.",
+  "segments.",
+  "templates.",
+  "emails.",
+  "forms.",
+  "ai.generate",
+  "ai.regenerate",
+  "ai.feedback",
+  "productGraph.",
 ];
 
 const CONTENT_PREFIXES = [
-  "templates.", "emails.", "ai.generate", "ai.regenerate", "ai.feedback",
-  "ai.addBrandAsset", "ai.deleteBrandAsset", "ai.updateBrand",
+  "templates.",
+  "emails.",
+  "ai.generate",
+  "ai.regenerate",
+  "ai.feedback",
+  "ai.addBrandAsset",
+  "ai.deleteBrandAsset",
+  "ai.updateBrand",
 ];
 
 export function canUseWorkspacePath(
   role: string | null | undefined,
   type: "query" | "mutation" | "subscription",
-  path: string,
+  path: string
 ): boolean {
   if (role === "owner" || role === "admin") return true;
   if (!role || role === "member" || role === "pending") return false;

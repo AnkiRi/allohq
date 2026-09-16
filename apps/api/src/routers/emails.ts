@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
-import { complete, renderBrandedEmail } from "@allohq/customer-intelligence";
+import {
+  complete,
+  generateImage,
+  loadBrandKit,
+  renderBrandedEmail,
+} from "@allohq/customer-intelligence";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 
 /**
@@ -31,7 +36,7 @@ const brandKitSchema = z.any().optional();
 async function resolveBrandKit(
   ctx: { prisma: any; workspaceId: string },
   inlineKit: unknown,
-  storeId?: string,
+  storeId?: string
 ): Promise<{ brandKit: BrandKit; storeId: string }> {
   if (inlineKit && typeof inlineKit === "object") {
     return { brandKit: inlineKit as BrandKit, storeId: storeId ?? "" };
@@ -39,8 +44,11 @@ async function resolveBrandKit(
   const store = storeId
     ? await ctx.prisma.store.findFirst({ where: { id: storeId, workspaceId: ctx.workspaceId } })
     : await ctx.prisma.store.findFirst({ where: { workspaceId: ctx.workspaceId } });
-  // buildBrandKit with no profile yields a calm default — safe fallback.
-  return { brandKit: buildBrandKit(null, null), storeId: store?.id ?? "" };
+  const resolvedStoreId = store?.id ?? "";
+  return {
+    brandKit: resolvedStoreId ? await loadBrandKit(resolvedStoreId) : buildBrandKit(null, null),
+    storeId: resolvedStoreId,
+  };
 }
 
 // LLMs (esp. Claude) often wrap JSON in ```fences``` or add a trailing note, so
@@ -76,7 +84,7 @@ export const emailsRouter = router({
         variables: z.record(z.string()).optional(),
         brandKit: brandKitSchema,
         storeId: z.string().optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const { brandKit, storeId } = await resolveBrandKit(ctx, input.brandKit, input.storeId);
@@ -106,11 +114,14 @@ export const emailsRouter = router({
         subject: z.string().optional(),
         previewText: z.string().optional(),
         brandVoice: z.string().optional(),
+        storeId: z.string().optional(),
+        templateId: z.string().optional(),
+        sourceAssetIds: z.array(z.string()).max(5).optional(),
         // Lane for a chip: "subject" → only the subject; "copy"/"tone" → only
         // existing-block copy edits; "visual" → only structure (add/remove/reorder
         // + visual blocks). Omitted (free-text "tell joon") = no restriction.
         scope: z.enum(["subject", "copy", "visual", "tone"]).optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const original = input.blocks as any[];
@@ -125,10 +136,12 @@ export const emailsRouter = router({
       // unescaped newlines/quotes inside html and broke JSON.parse). We apply the
       // changes onto the existing blocks server-side.
       const SCOPE_RULE: Record<string, string> = {
-        subject: 'SCOPE: change ONLY the subject. Return just { "subject": "..." } — do NOT touch any blocks.',
+        subject:
+          'SCOPE: change ONLY the subject. Return just { "subject": "..." } — do NOT touch any blocks.',
         copy: "SCOPE: edit ONLY the copy of EXISTING blocks. Do NOT change the subject, and do NOT add, remove, or reorder blocks.",
         tone: "SCOPE: adjust ONLY the tone of EXISTING blocks' copy. Do NOT change the subject, and do NOT add, remove, or reorder blocks.",
-        visual: "SCOPE: change ONLY the visual structure — add/remove/reorder blocks and edit visual blocks (image/hero/product/product_grid). Do NOT change the subject and do NOT rewrite body copy.",
+        visual:
+          "SCOPE: change ONLY the visual structure — add/remove/reorder blocks and edit visual blocks (image/hero/product/product_grid). Do NOT change the subject and do NOT rewrite body copy.",
       };
       const system = [
         "You are joon, an expert email copywriter + designer for an Indian e-commerce brand.",
@@ -154,10 +167,10 @@ export const emailsRouter = router({
         "- MORE VISUAL / add imagery: ADD a hero, an image, or — best for a store — a product_grid",
         '  with props { "source": "trending", "columns": 3, "dynamicProductCount": 3, "showPrice": true }.',
         "  product_grid renders REAL store products at send time, so you never need an image URL. Place it with afterId.",
-        "- CHANGE LAYOUT: use \"order\" to resequence, and add/remove blocks as needed.",
+        '- CHANGE LAYOUT: use "order" to resequence, and add/remove blocks as needed.',
         "- Keep existing ids/types stable. Keep merge tags like {{first_name}} intact. ₹ prices plain numbers.",
         "- Warm, unhurried brand voice. Never hype, ALL-CAPS, or fake urgency.",
-        "- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\\". No literal line breaks inside strings.",
+        '- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\". No literal line breaks inside strings.',
         "- Return ONLY the JSON object — no prose, no markdown fences.",
         input.brandVoice ? `\nBRAND VOICE NOTES:\n${input.brandVoice}` : "",
       ].join("\n");
@@ -170,7 +183,7 @@ export const emailsRouter = router({
         JSON.stringify(
           original.map((b) => ({ id: b.id, type: b.type, props: b.props })),
           null,
-          2,
+          2
         ),
         "",
         "Return ONLY the changes object.",
@@ -182,6 +195,89 @@ export const emailsRouter = router({
         subject: input.subject,
         error,
       });
+
+      const requestsGeneratedImage =
+        (/\b(?:generate|create|make)\b[\s\S]{0,120}\b(?:image|photo|visual|scene)\b/i.test(
+          input.instruction
+        ) ||
+          /\b(?:put|place|swap|replace)\b[\s\S]{0,160}\b(?:model|hand|scene|background|product|image|photo)\b/i.test(
+            input.instruction
+          )) &&
+        (!input.scope || input.scope === "visual");
+      if (requestsGeneratedImage) {
+        try {
+          const { storeId } = await resolveBrandKit(ctx, undefined, input.storeId);
+          const sourceAssets = input.sourceAssetIds?.length
+            ? await ctx.prisma.brandAsset.findMany({
+                where: {
+                  id: { in: input.sourceAssetIds },
+                  workspaceId: ctx.workspaceId,
+                  ...(storeId ? { storeId } : {}),
+                },
+                select: { id: true, url: true, type: true },
+              })
+            : [];
+          const visual = storeId
+            ? await ctx.prisma.brandVisualProfile.findUnique({ where: { storeId } })
+            : null;
+          const generated = await generateImage({
+            purpose: "hero_banner",
+            prompt: [
+              input.instruction,
+              sourceAssets.length
+                ? `Merchant-provided visual references: ${sourceAssets.map((asset: any) => asset.url).join(", ")}. Preserve the referenced product identity and visible brand details.`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            brandStyle: visual
+              ? {
+                  aesthetic:
+                    visual.aestheticClassification ?? visual.visualTone ?? "brand-consistent",
+                  suggestedColors: [
+                    ...((visual.primaryColors as string[]) ?? []),
+                    ...((visual.accentColors as string[]) ?? []),
+                  ].slice(0, 6),
+                }
+              : undefined,
+            fallbackToStock: false,
+          });
+          await ctx.prisma.generatedImage.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              provider: generated.provider,
+              prompt: generated.prompt,
+              url: generated.url,
+              purpose: "hero_banner",
+              cost: generated.cost,
+              width: 1200,
+              height: 600,
+              templateId: input.templateId,
+              sourceAssetIds: sourceAssets.map((asset: any) => asset.id),
+            },
+          });
+          const imageBlock = {
+            id: `b-${Date.now()}-generated-image`,
+            type: "image",
+            props: {
+              src: generated.url,
+              alt: input.instruction,
+              align: "center",
+              fullWidth: true,
+            },
+          };
+          return {
+            applied: true,
+            blocks: [...original, imageBlock],
+            subject: input.subject,
+            generatedAsset: { url: generated.url, provider: generated.provider },
+          };
+        } catch (error) {
+          return fail(
+            error instanceof Error ? error.message : "Joon could not generate that image."
+          );
+        }
+      }
 
       try {
         const result = await complete({
@@ -195,12 +291,16 @@ export const emailsRouter = router({
         });
 
         const parsed = JSON.parse(extractJsonPayload(result.content));
-        const changes: Record<string, Record<string, unknown>> =
-          parsed && typeof parsed === "object" && parsed.blocks && typeof parsed.blocks === "object"
-            ? parsed.blocks
-            : {};
+        const changes: Record<string, Record<string, unknown>> = parsed &&
+        typeof parsed === "object" &&
+        parsed.blocks &&
+        typeof parsed.blocks === "object"
+          ? parsed.blocks
+          : {};
         const removeIds = new Set(
-          Array.isArray(parsed?.remove) ? parsed.remove.filter((x: unknown) => typeof x === "string") : [],
+          Array.isArray(parsed?.remove)
+            ? parsed.remove.filter((x: unknown) => typeof x === "string")
+            : []
         );
         const addList: any[] = Array.isArray(parsed?.add) ? parsed.add : [];
         const order: string[] | null = Array.isArray(parsed?.order)
@@ -231,7 +331,7 @@ export const emailsRouter = router({
           .map((b) =>
             effChanges[b.id] && typeof effChanges[b.id] === "object"
               ? { ...b, props: { ...b.props, ...effChanges[b.id] } }
-              : b,
+              : b
           );
 
         // 2. add new blocks (server assigns ids; insert after afterId or append)
@@ -258,7 +358,7 @@ export const emailsRouter = router({
         }
 
         const changedCount = Object.keys(effChanges).filter((id) =>
-          original.some((b) => b.id === id),
+          original.some((b) => b.id === id)
         ).length;
         const applied =
           changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject;
@@ -273,9 +373,7 @@ export const emailsRouter = router({
           model: result.model,
         };
       } catch (err: any) {
-        return fail(
-          err?.message ?? "joon is unavailable right now. Your email is unchanged.",
-        );
+        return fail(err?.message ?? "joon is unavailable right now. Your email is unchanged.");
       }
     }),
 });

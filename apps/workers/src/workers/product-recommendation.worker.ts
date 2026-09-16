@@ -1,7 +1,11 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
-import { buildAffinityMatrix, getRecommendations } from "@allohq/product-recommendations";
+import {
+  buildAffinityMatrix,
+  buildProductGraph,
+  getRecommendations,
+} from "@allohq/product-recommendations";
 
 interface RecommendationJobData {
   type: "build-affinity" | "compute-recommendations" | "cron";
@@ -29,18 +33,22 @@ export const productRecommendationWorker = new Worker<RecommendationJobData>(
       let totalPairs = 0;
       for (const store of stores) {
         const pairs = await buildAffinityMatrix(store.id);
+        await buildProductGraph(store.id);
         totalPairs += pairs;
       }
 
-      console.log(`[product-recommendation] Built affinity matrices for ${stores.length} stores (${totalPairs} total pairs)`);
+      console.log(
+        `[product-recommendation] Built affinity matrices for ${stores.length} stores (${totalPairs} total pairs)`
+      );
       return { stores: stores.length, totalPairs };
     }
 
     // Build affinity for a specific store
     if (type === "build-affinity" && storeId) {
       const pairs = await buildAffinityMatrix(storeId);
+      const relationships = await buildProductGraph(storeId);
       console.log(`[product-recommendation] Built ${pairs} affinity pairs for store ${storeId}`);
-      return { pairs };
+      return { pairs, relationships };
     }
 
     // Compute recommendations for a specific customer
@@ -74,14 +82,16 @@ export const productRecommendationWorker = new Worker<RecommendationJobData>(
         });
       }
 
-      console.log(`[product-recommendation] Cached ${results.length} recommendations for customer ${customerId}`);
+      console.log(
+        `[product-recommendation] Cached ${results.length} recommendations for customer ${customerId}`
+      );
       return { recommendations: results.length };
     }
 
     console.warn(`[product-recommendation] Unknown job type: ${type}`);
     return { skipped: true };
   },
-  { connection: redisConnection },
+  { connection: redisConnection }
 );
 
 productRecommendationWorker.on("completed", (job) => {

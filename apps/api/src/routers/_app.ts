@@ -25,6 +25,7 @@ import { eventsRouter } from "./events";
 import { activityRouter } from "./activity";
 import { senderDomainsRouter } from "./sender-domains";
 import { teamRouter } from "./team";
+import { productGraphRouter } from "./product-graph";
 
 /**
  * Root tRPC router
@@ -56,6 +57,7 @@ export const appRouter = router({
   activity: activityRouter,
   senderDomains: senderDomainsRouter,
   team: teamRouter,
+  productGraph: productGraphRouter,
 });
 
 export type AppRouter = typeof appRouter;

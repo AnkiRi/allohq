@@ -47,18 +47,18 @@ Give the merchant one legible reconciliation from requested audience to delivery
 
 ### Override policy
 
-| Reason | Policy |
-| --- | --- |
-| State says the campaign is unnecessary | Allowed with recorded reason |
-| Recent purchase | Allowed with recorded reason |
-| Fatigue limit | Allowed with an explicit warning |
-| 48-hour campaign collision | Allowed with an explicit warning |
-| Redeemed-discount cooldown | Allowed only with a stronger warning |
-| Active support issue | Block by default; resolve the issue first |
-| No consent or unsubscribed | Never overrideable |
-| Complaint, hard bounce or invalid email | Never overrideable |
-| Random control assignment | Never overrideable customer-by-customer |
-| Quiet hours | Timing override only |
+| Reason                                  | Policy                                    |
+| --------------------------------------- | ----------------------------------------- |
+| State says the campaign is unnecessary  | Allowed with recorded reason              |
+| Recent purchase                         | Allowed with recorded reason              |
+| Fatigue limit                           | Allowed with an explicit warning          |
+| 48-hour campaign collision              | Allowed with an explicit warning          |
+| Redeemed-discount cooldown              | Allowed only with a stronger warning      |
+| Active support issue                    | Block by default; resolve the issue first |
+| No consent or unsubscribed              | Never overrideable                        |
+| Complaint, hard bounce or invalid email | Never overrideable                        |
+| Random control assignment               | Never overrideable customer-by-customer   |
+| Quiet hours                             | Timing override only                      |
 
 ## Pass 2 — Explainable, scalable delivery timing
 
@@ -125,7 +125,7 @@ Make `ready before coffee` demonstrable: every opportunity message resolves to o
 
 ## Pass 5 — Conversational email creator and editable brand kit
 
-Status: pending after the chat UX direction is settled. Earlier decision records: `JoonBillingAudiencePhaseAudit-2026-09-14.md` and `JoonBillingMoatPhaseAudit-2026-09-11.md`.
+Status: code complete for the conversational structured-email path and editable brand-kit foundation. `Create your own email` opens the durable chat workflow; the Email Studio supports conversational copy/layout edits, generated imagery, selectable hosted merchant references, undo, structured template save and generated-asset provenance. Brand voice, colours, typography, logos, sender settings and hosted font/reference assets are merchant-editable. Production acceptance remains, and durable binary upload/storage plus pixel-faithful reference-image transformation must be validated with the chosen production asset store/image provider before claiming Photoshop-style product replacement.
 
 ### Outcome
 
@@ -210,10 +210,7 @@ per customer.
 
 ## Pass 7 — Store-specific product graph and merchandising intelligence
 
-Status: foundation exists. Products, variants and collections are synchronized;
-same-basket affinity pairs, basket archetypes, reorder and customer recommendation
-jobs exist. The current affinity graph is primarily undirected same-order
-co-purchase and is not yet a merchant-visible, directional cross-sell/upsell system.
+Status: code complete for the first directional, merchant-reviewable graph; additive migration deployment and production acceptance remain. Historical orders now yield typed same-basket, next-purchase and replenishment evidence, while catalog/product-type price bands seed explicitly low-confidence upsell suggestions. The merchant-facing Product graph supports filters, evidence, timing, approval, pinning, blocking and campaign handoff. Daily rebuilds and debounced order-webhook rebuilds preserve merchant-reviewed decisions. Existing undirected affinity remains for backwards-compatible recommendations.
 
 ### Outcome
 
@@ -257,6 +254,14 @@ The first store analysis should present two connected maps:
    overdue, discount-responsive, fatigued or ready for a relevant message.
 2. **Product graph:** what customers buy together, what they buy next, when they
    replenish and which products form a credible upgrade path.
+
+### Acceptance still required
+
+- Deploy the additive product-relationship migration and allow the first rebuild to complete on a store with historical orders.
+- Check several learned sequence, basket and replenishment relationships against source orders; catalog-only suggestions must remain visibly low-confidence.
+- Approve, pin and block relationships, rebuild again, and confirm those merchant decisions are not overwritten.
+- Create a campaign from an approved relationship and verify the two products remain durable structured constraints through chat, creative and audience review.
+- Benchmark rebuild time and database load on a representative large catalog/order history before claiming large-catalog readiness.
 
 These maps are the beginning of Joon intelligence. They turn later campaigns and
 journeys into explainable decisions rather than generic AI-generated messages.

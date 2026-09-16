@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Brain,
+  GitBranch,
   Target,
   Library,
   ShieldCheck,
@@ -49,6 +50,7 @@ const secondaryNav = [
   { name: "Automations", href: "/automations", icon: Sparkles },
   { name: "Forms", href: "/forms", icon: MousePointerClick },
   { name: "Brand Voice", href: "/intelligence/brand", icon: Brain },
+  { name: "Product graph", href: "/intelligence/products", icon: GitBranch },
   { name: "Conversations", href: "/conversations", icon: MessageSquare },
   { name: "Integrations", href: "/integrations", icon: Store },
 ] as const;
@@ -80,13 +82,13 @@ export function Sidebar() {
   const onboardingDone = !!store?.onboardingCompletedAt;
   const { data: activationData } = (trpc.stores.activationStatus as any).useQuery(
     { storeId: storeId ?? "" },
-    { enabled: !!storeId && onboardingDone, refetchInterval: 30000 },
+    { enabled: !!storeId && onboardingDone, refetchInterval: 30000 }
   ) as { data: any | undefined };
   const pendingCount = onboardingDone ? (activationData?.context?.pendingActions ?? 0) : 0;
 
   // Auto-open "More" if current page is in secondary nav
   const isSecondaryActive = secondaryNav.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/"),
+    (item) => pathname === item.href || pathname.startsWith(item.href + "/")
   );
   if (isSecondaryActive && !moreOpen) {
     // Use effect-free approach: just show it expanded
@@ -108,12 +110,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30 md:hidden"
-          onClick={close}
-        />
-      )}
+      {isOpen && <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={close} />}
 
       <aside
         className={cn(
@@ -136,10 +133,7 @@ export function Sidebar() {
           ) : (
             <>
               <h1 className="flex items-center gap-2 text-[20px] font-bold text-foreground font-sans tracking-[-0.02em]">
-                <span
-                  className="w-2 h-2 rounded-full bg-[hsl(var(--accent))]"
-                  aria-hidden="true"
-                />
+                <span className="w-2 h-2 rounded-full bg-[hsl(var(--accent))]" aria-hidden="true" />
                 joon
               </h1>
               <p className="text-[9px] text-muted-foreground font-sans tracking-[1px] uppercase mt-0.5">
@@ -173,8 +167,10 @@ export function Sidebar() {
                     {item.name}
                   </span>
                 )}
-                {"showBadge" in item && item.showBadge && pendingCount > 0 && (
-                  collapsed ? (
+                {"showBadge" in item &&
+                  item.showBadge &&
+                  pendingCount > 0 &&
+                  (collapsed ? (
                     <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-decision text-decision-foreground text-[9px] font-bold px-0.5">
                       {pendingCount}
                     </span>
@@ -182,8 +178,7 @@ export function Sidebar() {
                     <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-decision text-decision-foreground text-[10px] font-bold px-1">
                       {pendingCount}
                     </span>
-                  )
-                )}
+                  ))}
               </Link>
             );
           })}

@@ -331,6 +331,7 @@ model Store {
 
   // Sprint 8: Product Recommendations
   productAffinityPairs           ProductAffinityPair[]
+  productRelationships           ProductRelationship[]
   customerTimingProfiles         CustomerTimingProfile[]
   storeTimingProfile             StoreTimingProfile?
   customerProductRecommendations CustomerProductRecommendation[]
@@ -1518,20 +1519,24 @@ model SesWarmupState {
 // ============================================================================
 
 model GeneratedImage {
-  id          String   @id @default(cuid())
-  workspaceId String
-  provider    String // flux|dalle|unsplash
-  prompt      String
-  url         String
-  purpose     String // hero_banner|product_lifestyle|background|card
-  cost        Float    @default(0)
-  width       Int?
-  height      Int?
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  workspaceId    String
+  provider       String // flux|dalle|unsplash
+  prompt         String
+  url            String
+  purpose        String // hero_banner|product_lifestyle|background|card
+  cost           Float    @default(0)
+  width          Int?
+  height         Int?
+  templateId     String?
+  sourceAssetIds String[] @default([])
+  revisionOfId   String?
+  createdAt      DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
+  @@index([templateId])
   @@index([prompt])
   @@map("generated_images")
 }
@@ -2267,6 +2272,37 @@ model ProductAffinityPair {
   @@index([storeId, productA])
   @@index([storeId, productB])
   @@map("product_affinity_pairs")
+}
+
+/// Directional, explainable merchandising knowledge. Automated rebuilds may
+/// refresh suggested rows, but never overwrite an approved, pinned or blocked
+/// merchant decision.
+model ProductRelationship {
+  id                String   @id @default(cuid())
+  storeId           String
+  sourceProductId   String
+  targetProductId   String
+  relationshipType  String // cross_sell|upsell|replenishment|bundle|substitute
+  evidenceSource    String // order_sequence|same_basket|reorder|catalog|merchant
+  supportCount      Int      @default(0)
+  confidence        Float    @default(0)
+  lift              Float?
+  medianLagDays     Float?
+  explanation       String
+  status            String   @default("suggested") // suggested|approved|blocked
+  merchantNote      String?
+  pinned            Boolean  @default(false)
+  version           Int      @default(1)
+  evidenceUpdatedAt DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, sourceProductId, targetProductId, relationshipType])
+  @@index([storeId, relationshipType, status])
+  @@index([storeId, sourceProductId])
+  @@map("product_relationships")
 }
 
 model CustomerProductRecommendation {

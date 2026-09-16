@@ -37,16 +37,26 @@ const ADDABLE: { type: EmailBlockType; label: string }[] = [
 /** Short human label for a block in the list. */
 function blockTitle(b: EmailBlock): string {
   switch (b.type) {
-    case "hero": return b.props.heading || "Hero";
-    case "text": return (b.props.html || "").replace(/\s+/g, " ").slice(0, 42) || "Text";
-    case "button": return `Button · ${b.props.text}`;
-    case "product": return `Product · ${b.props.title || b.props.productId}`;
-    case "testimonial": return `Quote · ${b.props.author}`;
-    case "icon_row": return "Reasons row";
-    case "image": return "Image";
-    case "divider": return "Divider";
-    case "spacer": return `Spacer · ${b.props.height}px`;
-    default: return b.type;
+    case "hero":
+      return b.props.heading || "Hero";
+    case "text":
+      return (b.props.html || "").replace(/\s+/g, " ").slice(0, 42) || "Text";
+    case "button":
+      return `Button · ${b.props.text}`;
+    case "product":
+      return `Product · ${b.props.title || b.props.productId}`;
+    case "testimonial":
+      return `Quote · ${b.props.author}`;
+    case "icon_row":
+      return "Reasons row";
+    case "image":
+      return "Image";
+    case "divider":
+      return "Divider";
+    case "spacer":
+      return `Spacer · ${b.props.height}px`;
+    default:
+      return b.type;
   }
 }
 
@@ -59,6 +69,7 @@ export function EmailStudio({
   previewVariables,
   reasoning,
   templateId,
+  storeId,
 }: {
   initialBlocks: EmailBlock[];
   initialSubject: string;
@@ -72,19 +83,25 @@ export function EmailStudio({
   reasoning?: string;
   /** When editing a saved template, its id — enables the persistent "Save changes". */
   templateId?: string;
+  storeId?: string;
 }) {
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(initialBlocks);
   const [subject, setSubject] = React.useState(initialSubject);
   const [previewText] = React.useState(initialPreviewText);
-  const [selectedId, setSelectedId] = React.useState<string | null>(
-    initialBlocks[0]?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = React.useState<string | null>(initialBlocks[0]?.id ?? null);
   const [html, setHtml] = React.useState(initialHtml);
   // Mobile: toggle between editing and previewing (side-by-side only on lg+).
   const [mobileTab, setMobileTab] = React.useState<"edit" | "preview">("edit");
   const [instruction, setInstruction] = React.useState("");
   const [promptError, setPromptError] = React.useState<string | null>(null);
   const [showAdd, setShowAdd] = React.useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = React.useState<string[]>([]);
+  const { data: workspaceStores } = trpc.stores.list.useQuery(undefined, { enabled: !storeId });
+  const effectiveStoreId = storeId ?? workspaceStores?.[0]?.id;
+  const { data: creativeAssets = [] } = (trpc.ai as any).listBrandAssets.useQuery(
+    { storeId: effectiveStoreId ?? "" },
+    { enabled: !!effectiveStoreId }
+  ) as { data: Array<{ id: string; fileName: string; type: string }> };
 
   const renderMut = (trpc.emails as any).renderPreview.useMutation({
     onSuccess: (data: { html: string }) => setHtml(data.html),
@@ -107,7 +124,7 @@ export function EmailStudio({
         onSuccess: () => toast("Saved. Your changes are in.", "success"),
         onError: (e: { message?: string }) =>
           toast(e?.message || "Couldn't save — give it another go.", "error"),
-      },
+      }
     );
   };
 
@@ -130,10 +147,11 @@ export function EmailStudio({
         previewText,
         variables: previewVariables,
         brandKit,
+        storeId: effectiveStoreId,
       });
     }, 350);
     return () => clearTimeout(t);
-  }, [blocks, subject, previewText, previewVariables, brandKit]);
+  }, [blocks, subject, previewText, previewVariables, brandKit, effectiveStoreId]);
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
@@ -178,16 +196,27 @@ export function EmailStudio({
     });
   };
 
-  const applyInstruction = (
-    text: string,
-    scope?: "subject" | "copy" | "visual" | "tone",
-  ) => {
+  const applyInstruction = (text: string, scope?: "subject" | "copy" | "visual" | "tone") => {
     if (!text.trim() || promptMut.isPending) return;
     setPromptError(null);
     promptMut.mutate(
-      { instruction: text, blocks, subject, previewText, scope },
       {
-        onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; subject?: string; error?: string }) => {
+        instruction: text,
+        blocks,
+        subject,
+        previewText,
+        scope,
+        storeId: effectiveStoreId,
+        templateId,
+        sourceAssetIds: selectedAssetIds,
+      },
+      {
+        onSuccess: (data: {
+          applied: boolean;
+          blocks: EmailBlock[];
+          subject?: string;
+          error?: string;
+        }) => {
           if (data.applied) {
             setHistory((h) => [...h, { blocks, subject }]);
             setBlocks(data.blocks);
@@ -202,7 +231,7 @@ export function EmailStudio({
         },
         onError: (e: { message?: string }) =>
           setPromptError(e.message ?? "joon is unavailable right now."),
-      },
+      }
     );
   };
   const runPrompt = () => applyInstruction(instruction);
@@ -251,7 +280,9 @@ export function EmailStudio({
           onClick={() => setMobileTab("edit")}
           className={cn(
             "py-1.5 rounded-md text-[12px] font-sans font-medium transition-colors",
-            mobileTab === "edit" ? "bg-decision text-decision-foreground" : "text-muted-foreground hover:text-foreground",
+            mobileTab === "edit"
+              ? "bg-decision text-decision-foreground"
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
           Edit
@@ -261,7 +292,9 @@ export function EmailStudio({
           onClick={() => setMobileTab("preview")}
           className={cn(
             "py-1.5 rounded-md text-[12px] font-sans font-medium transition-colors",
-            mobileTab === "preview" ? "bg-decision text-decision-foreground" : "text-muted-foreground hover:text-foreground",
+            mobileTab === "preview"
+              ? "bg-decision text-decision-foreground"
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
           Preview
@@ -270,10 +303,12 @@ export function EmailStudio({
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4 flex-1 min-h-0">
         {/* LEFT — editor: prompt-edit + block list + property panel */}
-        <div className={cn(
-          "flex flex-col gap-4 min-h-0 overflow-y-auto pr-1",
-          mobileTab === "preview" && "hidden lg:flex",
-        )}>
+        <div
+          className={cn(
+            "flex flex-col gap-4 min-h-0 overflow-y-auto pr-1",
+            mobileTab === "preview" && "hidden lg:flex"
+          )}
+        >
           {/* Prompt-edit (the wedge) */}
           <section className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -286,28 +321,79 @@ export function EmailStudio({
             <div className="space-y-2 mb-2.5">
               {(
                 [
-                  ["Subject", [
-                    ["Punch up subject", "Rewrite the subject line to be more compelling and on-brand — no hype, no ALL-CAPS."],
-                    ["Shorten subject", "Make the subject line shorter and punchier while keeping its meaning."],
-                    ["A/B variant", "Rewrite the subject line as a strong alternative for an A/B test — a different angle, same intent."],
-                  ]],
-                  ["Copy", [
-                    ["Warmer", "Make the tone warmer and more personal, like a short note from the founder."],
-                    ["Funnier", "Add a light, tasteful touch of humour — warm and brand-appropriate, never cheesy."],
-                    ["Shorter", "Make the whole email shorter and tighter: cut filler, keep the core message and the CTA."],
-                    ["More urgent", "Add a gentle, honest sense of timeliness — never fake urgency or countdown pressure."],
-                    ["Match brand voice", "Rewrite the copy to match the brand's voice and guidelines exactly."],
-                  ]],
-                  ["Visual", [
-                    ["More visual", "Make it more visual: stronger hero, larger imagery, kept balanced and uncluttered."],
-                    ["Change layout", "Restructure the layout for a fresh look while keeping the message and each block's intent."],
-                    ["Swap product", "Swap the featured product for a different relevant one and update the copy to match."],
-                  ]],
-                  ["Tone", [
-                    ["More formal", "Make the tone more formal and polished, while staying warm."],
-                    ["More casual", "Make the tone more casual and conversational."],
-                    ["Regenerate", "Regenerate this email with a fresh angle on the same goal and audience, keeping the brand voice."],
-                  ]],
+                  [
+                    "Subject",
+                    [
+                      [
+                        "Punch up subject",
+                        "Rewrite the subject line to be more compelling and on-brand — no hype, no ALL-CAPS.",
+                      ],
+                      [
+                        "Shorten subject",
+                        "Make the subject line shorter and punchier while keeping its meaning.",
+                      ],
+                      [
+                        "A/B variant",
+                        "Rewrite the subject line as a strong alternative for an A/B test — a different angle, same intent.",
+                      ],
+                    ],
+                  ],
+                  [
+                    "Copy",
+                    [
+                      [
+                        "Warmer",
+                        "Make the tone warmer and more personal, like a short note from the founder.",
+                      ],
+                      [
+                        "Funnier",
+                        "Add a light, tasteful touch of humour — warm and brand-appropriate, never cheesy.",
+                      ],
+                      [
+                        "Shorter",
+                        "Make the whole email shorter and tighter: cut filler, keep the core message and the CTA.",
+                      ],
+                      [
+                        "More urgent",
+                        "Add a gentle, honest sense of timeliness — never fake urgency or countdown pressure.",
+                      ],
+                      [
+                        "Match brand voice",
+                        "Rewrite the copy to match the brand's voice and guidelines exactly.",
+                      ],
+                    ],
+                  ],
+                  [
+                    "Visual",
+                    [
+                      [
+                        "More visual",
+                        "Make it more visual: stronger hero, larger imagery, kept balanced and uncluttered.",
+                      ],
+                      [
+                        "Change layout",
+                        "Restructure the layout for a fresh look while keeping the message and each block's intent.",
+                      ],
+                      [
+                        "Swap product",
+                        "Swap the featured product for a different relevant one and update the copy to match.",
+                      ],
+                    ],
+                  ],
+                  [
+                    "Tone",
+                    [
+                      [
+                        "More formal",
+                        "Make the tone more formal and polished, while staying warm.",
+                      ],
+                      ["More casual", "Make the tone more casual and conversational."],
+                      [
+                        "Regenerate",
+                        "Regenerate this email with a fresh angle on the same goal and audience, keeping the brand voice.",
+                      ],
+                    ],
+                  ],
                 ] as [string, [string, string][]][]
               ).map(([group, chips]) => (
                 <div key={group} className="flex items-center gap-1.5 flex-wrap">
@@ -318,7 +404,12 @@ export function EmailStudio({
                     <button
                       key={label}
                       type="button"
-                      onClick={() => applyInstruction(instr, group.toLowerCase() as "subject" | "copy" | "visual" | "tone")}
+                      onClick={() =>
+                        applyInstruction(
+                          instr,
+                          group.toLowerCase() as "subject" | "copy" | "visual" | "tone"
+                        )
+                      }
                       disabled={promptMut.isPending}
                       className="px-2.5 py-1 rounded-full border border-border bg-background text-[11px] font-sans text-foreground hover:border-decision hover:text-decision disabled:opacity-50 transition-colors"
                     >
@@ -338,6 +429,37 @@ export function EmailStudio({
               placeholder="make the hero warmer · drop the discount · shorten it · swap the product…"
               className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[13px] font-sans text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-decision"
             />
+            {creativeAssets.length > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  References
+                </span>
+                {creativeAssets.map((asset) => {
+                  const selected = selectedAssetIds.includes(asset.id);
+                  return (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedAssetIds((current) =>
+                          selected
+                            ? current.filter((id) => id !== asset.id)
+                            : [...current, asset.id]
+                        )
+                      }
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[10px]",
+                        selected
+                          ? "border-decision bg-decision/10 text-decision"
+                          : "border-border text-muted-foreground"
+                      )}
+                    >
+                      {asset.fileName}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             <div className="flex items-center justify-between mt-2 gap-3">
               <div className="flex items-center gap-3">
                 <p className="text-[11px] font-mono text-muted-foreground">⌘↵ to apply</p>
@@ -367,9 +489,7 @@ export function EmailStudio({
               </button>
             </div>
             {promptError ? (
-              <p className="mt-2 text-[12px] font-sans text-warning">
-                {promptError}
-              </p>
+              <p className="mt-2 text-[12px] font-sans text-warning">{promptError}</p>
             ) : null}
           </section>
 
@@ -428,7 +548,7 @@ export function EmailStudio({
                       "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors",
                       active
                         ? "bg-decision/12 border border-decision/40"
-                        : "border border-transparent hover:bg-muted",
+                        : "border border-transparent hover:bg-muted"
                     )}
                     onClick={() => setSelectedId(b.id)}
                   >
@@ -439,13 +559,33 @@ export function EmailStudio({
                       {blockTitle(b)}
                     </span>
                     <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <IconBtn label="Move up" disabled={i === 0} onClick={(e) => { e.stopPropagation(); move(b.id, -1); }}>
+                      <IconBtn
+                        label="Move up"
+                        disabled={i === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          move(b.id, -1);
+                        }}
+                      >
                         <ArrowUp className="w-3.5 h-3.5" />
                       </IconBtn>
-                      <IconBtn label="Move down" disabled={i === blocks.length - 1} onClick={(e) => { e.stopPropagation(); move(b.id, 1); }}>
+                      <IconBtn
+                        label="Move down"
+                        disabled={i === blocks.length - 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          move(b.id, 1);
+                        }}
+                      >
                         <ArrowDown className="w-3.5 h-3.5" />
                       </IconBtn>
-                      <IconBtn label="Delete" onClick={(e) => { e.stopPropagation(); remove(b.id); }}>
+                      <IconBtn
+                        label="Delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(b.id);
+                        }}
+                      >
                         <Trash2 className="w-3.5 h-3.5" />
                       </IconBtn>
                     </span>
@@ -462,10 +602,9 @@ export function EmailStudio({
         </div>
 
         {/* RIGHT — live preview */}
-        <div className={cn(
-          "min-h-0 lg:sticky lg:top-0",
-          mobileTab === "edit" && "hidden lg:block",
-        )}>
+        <div
+          className={cn("min-h-0 lg:sticky lg:top-0", mobileTab === "edit" && "hidden lg:block")}
+        >
           <EmailPreviewFrame html={html} isLoading={renderMut.isPending} />
         </div>
       </div>

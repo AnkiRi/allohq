@@ -2,10 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, Plus, Clock, Send, Check, XCircle, Users, DollarSign, MousePointerClick, Eye, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import {
+  Mail,
+  Plus,
+  Clock,
+  Send,
+  Check,
+  XCircle,
+  Users,
+  DollarSign,
+  MousePointerClick,
+  Eye,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+  Sparkles,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
+import { useAlloAI } from "@/components/ai/AlloAIPanel";
 
 const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: string }> = {
   draft: { icon: Clock, color: "text-muted-foreground", label: "Draft" },
@@ -18,6 +34,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: 
 };
 
 export default function CampaignsPage() {
+  const { submit: submitToJoon } = useAlloAI();
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   // Cast breaks a TS2589 "excessively deep" instantiation on the tRPC list result (the
   // AppRouter type is large); matches the (trpc.X as any).useQuery pattern used elsewhere.
@@ -46,18 +63,36 @@ export default function CampaignsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">Campaigns</h1>
+          <h1 className="text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif">
+            Campaigns
+          </h1>
           <p className="text-[13px] text-muted-foreground font-sans mt-1">
-            {campaigns ? `${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "draft").length} drafts, ${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "scheduled").length} scheduled, ${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "sent").length} sent` : "Your email campaigns, start to finish"}
+            {campaigns
+              ? `${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "draft").length} drafts, ${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "scheduled").length} scheduled, ${campaigns.filter((c: any) => (c.deliveryStatus ?? c.status) === "sent").length} sent`
+              : "Your email campaigns, start to finish"}
           </p>
         </div>
-        <Link
-          href="/campaigns/new"
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New Campaign
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              submitToJoon(
+                "Create an email with me. Ask for the audience, goal, offer, products and image direction, preserve them as campaign constraints, and let me review the editable draft before delivery."
+              )
+            }
+            className="flex items-center gap-2 px-4 py-2 border border-border bg-card text-foreground rounded-lg text-xs font-sans hover:border-foreground transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Create your own email
+          </button>
+          <Link
+            href="/campaigns/new"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Campaign
+          </Link>
+        </div>
       </div>
 
       {/* Status filters */}
@@ -100,7 +135,9 @@ export default function CampaignsPage() {
                   <Mail className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-[13px] font-bold text-foreground font-sans truncate">{campaign.name}</h3>
+                  <h3 className="text-[13px] font-bold text-foreground font-sans truncate">
+                    {campaign.name}
+                  </h3>
                   <p className="text-[11px] text-muted-foreground truncate">
                     {campaign.template?.subject ?? "No subject"}
                   </p>
@@ -118,7 +155,10 @@ export default function CampaignsPage() {
                     <>
                       <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
                         <span>
-                          <span className="font-bold text-foreground">{campaign.recipientCount}</span> sent
+                          <span className="font-bold text-foreground">
+                            {campaign.recipientCount}
+                          </span>{" "}
+                          sent
                         </span>
                         <span className="flex items-center gap-0.5">
                           <Eye className="w-3 h-3" />
@@ -133,7 +173,10 @@ export default function CampaignsPage() {
                         <div className="flex items-center gap-0.5 text-[11px] font-mono text-[hsl(var(--success))]">
                           <DollarSign className="w-3 h-3" />
                           <span className="font-bold">
-                            {campaign.attributedRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            {campaign.attributedRevenue.toLocaleString("en-IN", {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            })}
                           </span>
                           <span className="text-muted-foreground ml-1">
                             ({campaign.attributedOrders} orders)
@@ -154,7 +197,11 @@ export default function CampaignsPage() {
                         // Inside the row Link — stop navigation before confirming.
                         e.preventDefault();
                         e.stopPropagation();
-                        if (window.confirm(`Delete the draft "${campaign.name}"? This can't be undone.`)) {
+                        if (
+                          window.confirm(
+                            `Delete the draft "${campaign.name}"? This can't be undone.`
+                          )
+                        ) {
                           deleteMut.mutate({ id: campaign.id });
                         }
                       }}
