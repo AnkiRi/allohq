@@ -145,11 +145,7 @@ Add `Create your own email` beside Joon-generated work: a conversational creativ
 
 ## Pass 6 — Scalable customer-state intelligence and explorer
 
-Status: partially implemented. The compositional state engine, event-driven updates,
-purchase-cycle fields and `storeId + nextEvaluationAt` index exist. The scheduled
-worker currently recomputes at most 500 stale customers per store per run and does
-not drain the due queue, so the execution model and merchant-facing explorer are
-not ready for a very large store.
+Status: code complete for the durable scheduler, transition ledger and first merchant-facing explorer; migration deployment, production acceptance and representative million-profile load proof remain. `19b25a5` replaces the fixed 500-record stale scan with leased, bounded due-queue draining and records versioned state transitions. `caedcff` adds the state explorer, profile drill-down and 24-hour movement digest. `1c80beb` adds explicit consent/delivery-health dimensions, event-driven ledger updates, queue health readouts and cohort-to-campaign handoff.
 
 ### Outcome
 
@@ -192,6 +188,14 @@ per customer.
   review, control assignment and override rules.
 - Prove the scheduler with representative million-customer load data before claiming
   million-profile readiness.
+
+### Acceptance still required
+
+- Deploy both additive migrations and let the initial production recomputation populate transition history; pre-existing profiles cannot have historical transitions reconstructed truthfully.
+- Verify a real order moves one customer through the expected cycle/lifecycle states and appears once in the 24-hour digest.
+- Verify a consent change and provider suppression update the consent/delivery-health dimensions after their worker events.
+- Run a representative million-profile queue benchmark and record drain rate, database load, oldest-due recovery and failure/retry behaviour. Do not make a million-profile readiness claim before this result exists.
+- Replace the current cohort handoff’s preserved natural-language constraints with Pass 3’s durable structured chat constraints when that pass is implemented.
 
 ### Merchant-facing story
 

@@ -2,13 +2,34 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Send, Mail, Users, MousePointerClick, XCircle, CheckCircle, Loader2, Eye, Maximize2, Minimize2, Trash2, ShoppingBag, TrendingUp, CalendarClock, Pencil, AlertTriangle } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  Mail,
+  Users,
+  MousePointerClick,
+  XCircle,
+  CheckCircle,
+  Loader2,
+  Eye,
+  Maximize2,
+  Minimize2,
+  Trash2,
+  ShoppingBag,
+  TrendingUp,
+  CalendarClock,
+  Pencil,
+  AlertTriangle,
+} from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { DecisionTracePanel } from "@/components/campaigns/DecisionTracePanel";
-import { AudienceReviewDrawer, type AudienceReviewGroup } from "@/components/campaigns/AudienceReviewDrawer";
+import {
+  AudienceReviewDrawer,
+  type AudienceReviewGroup,
+} from "@/components/campaigns/AudienceReviewDrawer";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 
 export default function CampaignDetailPage() {
@@ -25,7 +46,9 @@ export default function CampaignDetailPage() {
   const [showFatigueOverride, setShowFatigueOverride] = useState(false);
   const [selectedFatigueIds, setSelectedFatigueIds] = useState<string[]>([]);
   const [fatigueOverrideReason, setFatigueOverrideReason] = useState("");
-  const [governorOverrideType, setGovernorOverrideType] = useState<"collision" | "cooldown" | null>(null);
+  const [governorOverrideType, setGovernorOverrideType] = useState<"collision" | "cooldown" | null>(
+    null
+  );
   const [selectedGovernorIds, setSelectedGovernorIds] = useState<string[]>([]);
   const [governorOverrideReason, setGovernorOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
@@ -33,20 +56,28 @@ export default function CampaignDetailPage() {
   const [showApproval, setShowApproval] = useState(false);
   const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
     { id: campaignId },
-    { refetchInterval: (query: { state: { data?: { status?: string } } }) => ["scheduled", "sending"].includes(query.state.data?.status ?? "") ? 5_000 : false },
+    {
+      refetchInterval: (query: { state: { data?: { status?: string } } }) =>
+        ["scheduled", "sending"].includes(query.state.data?.status ?? "") ? 5_000 : false,
+    }
   );
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
   const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
-  const { data: dryRun, isLoading: dryRunLoading, refetch: refetchDryRun } = trpc.campaigns.dryRun.useQuery(
+  const {
+    data: dryRun,
+    isLoading: dryRunLoading,
+    refetch: refetchDryRun,
+  } = trpc.campaigns.dryRun.useQuery(
     { id: campaignId },
-    { enabled: campaign?.status === "draft" || campaign?.status === "scheduled" },
+    { enabled: campaign?.status === "draft" || campaign?.status === "scheduled" }
   );
 
   // Render preview from blocks if template has no pre-rendered HTML
-  const templateBlocks = campaign?.template && !campaign.template.html
-    ? ((campaign.template as any).blocks as any[] | undefined)
-    : undefined;
+  const templateBlocks =
+    campaign?.template && !campaign.template.html
+      ? ((campaign.template as any).blocks as any[] | undefined)
+      : undefined;
   const renderMut = trpc.templates.renderPreview.useMutation();
   useEffect(() => {
     if (templateBlocks && templateBlocks.length > 0 && !renderMut.data && !renderMut.isPending) {
@@ -64,7 +95,7 @@ export default function CampaignDetailPage() {
         variables.timing === "now"
           ? "Delivery approved. Joon is sending the frozen audience now."
           : "Delivery approved. Joon is preparing the frozen audience and timing plan.",
-        "success",
+        "success"
       );
     },
     onError: () => toast("We couldn't send that. Mind trying again?", "error"),
@@ -77,14 +108,18 @@ export default function CampaignDetailPage() {
       ]);
       toast(`${promoted} ${promoted === 1 ? "email is" : "emails are"} being sent now.`, "success");
     },
-    onError: (error: { message?: string }) => toast(error.message || "We couldn't start delivery now.", "error"),
+    onError: (error: { message?: string }) =>
+      toast(error.message || "We couldn't start delivery now.", "error"),
   });
   const reviseMut = (trpc.campaigns.reviseScheduled as any).useMutation({
     onSuccess: ({ id, templateId }: { id: string; templateId: string | null }) => {
       toast("Scheduled delivery cancelled. Your editable revision is ready.", "info");
-      router.push(templateId ? `/templates/${templateId}/edit?campaignId=${id}` : `/campaigns/${id}`);
+      router.push(
+        templateId ? `/templates/${templateId}/edit?campaignId=${id}` : `/campaigns/${id}`
+      );
     },
-    onError: (error: { message?: string }) => toast(error.message || "We couldn't open an editable revision.", "error"),
+    onError: (error: { message?: string }) =>
+      toast(error.message || "We couldn't open an editable revision.", "error"),
   });
   const cancelMut = trpc.campaigns.cancel.useMutation({
     onSuccess: () => {
@@ -110,37 +145,44 @@ export default function CampaignDetailPage() {
   });
   const overrideRecentPurchaseMut = trpc.campaigns.overrideRecentPurchase.useMutation({
     onSuccess: async ({ included }) => {
-      await Promise.all([
-        refetchDryRun(),
-        utils.campaigns.getById.invalidate({ id: campaignId }),
-      ]);
+      await refetchDryRun();
+      await utils.campaigns.getById.invalidate({ id: campaignId });
       setShowRecentOverride(false);
       setSelectedRecentIds([]);
       setOverrideReason("");
-      toast(`${included} recent ${included === 1 ? "buyer is" : "buyers are"} back in consideration.`, "success");
+      toast(
+        `${included} recent ${included === 1 ? "buyer is" : "buyers are"} back in consideration.`,
+        "success"
+      );
     },
     onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
   });
   const overrideFatigueMut = trpc.campaigns.overrideFatigue.useMutation({
     onSuccess: async ({ included }) => {
-      await Promise.all([
-        refetchDryRun(),
-        utils.campaigns.getById.invalidate({ id: campaignId }),
-      ]);
+      await refetchDryRun();
+      await utils.campaigns.getById.invalidate({ id: campaignId });
       setShowFatigueOverride(false);
       setSelectedFatigueIds([]);
       setFatigueOverrideReason("");
-      toast(`${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`, "success");
+      toast(
+        `${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`,
+        "success"
+      );
     },
-    onError: (error) => toast(error.message || "We couldn't record that fatigue override.", "error"),
+    onError: (error) =>
+      toast(error.message || "We couldn't record that fatigue override.", "error"),
   });
   const overrideGovernorMut = trpc.campaigns.overrideGovernorDecision.useMutation({
     onSuccess: async ({ included }) => {
-      await Promise.all([refetchDryRun(), utils.campaigns.getById.invalidate({ id: campaignId })]);
+      await refetchDryRun();
+      await utils.campaigns.getById.invalidate({ id: campaignId });
       setGovernorOverrideType(null);
       setSelectedGovernorIds([]);
       setGovernorOverrideReason("");
-      toast(`${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`, "success");
+      toast(
+        `${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`,
+        "success"
+      );
     },
     onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
   });
@@ -157,9 +199,8 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     if (!governorOverrideType || !dryRun) return;
-    const customers = governorOverrideType === "collision"
-      ? dryRun.collisionCustomers
-      : dryRun.cooldownCustomers;
+    const customers =
+      governorOverrideType === "collision" ? dryRun.collisionCustomers : dryRun.cooldownCustomers;
     setSelectedGovernorIds(customers.map((customer) => customer.id));
   }, [governorOverrideType, dryRun]);
 
@@ -189,31 +230,40 @@ export default function CampaignDetailPage() {
   }
 
   if (!campaign) {
-    return <div className="text-[13px] text-muted-foreground font-sans">We couldn't find this campaign.</div>;
+    return (
+      <div className="text-[13px] text-muted-foreground font-sans">
+        We couldn't find this campaign.
+      </div>
+    );
   }
 
-  const causal = stats?.holdout.stats as null | undefined | {
-    lift?: number;
-    ciLow?: number;
-    ciHigh?: number;
-    significant?: boolean;
-    underpowered?: boolean;
-    confidence?: number;
-    nTreatment?: number;
-    nControl?: number;
-  };
+  const causal = stats?.holdout.stats as
+    | null
+    | undefined
+    | {
+        lift?: number;
+        ciLow?: number;
+        ciHigh?: number;
+        significant?: boolean;
+        underpowered?: boolean;
+        confidence?: number;
+        nTreatment?: number;
+        nControl?: number;
+      };
   const moneyCurrency = stats?.currency === "INR" ? "INR" : "USD";
-  const money = (value: number) => new Intl.NumberFormat(moneyCurrency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency: moneyCurrency,
-    maximumFractionDigits: 0,
-  }).format(value);
+  const money = (value: number) =>
+    new Intl.NumberFormat(moneyCurrency === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency: moneyCurrency,
+      maximumFractionDigits: 0,
+    }).format(value);
   const dryRunCurrency = dryRun?.currency === "INR" ? "INR" : moneyCurrency;
-  const dryRunMoney = (value: number) => new Intl.NumberFormat(dryRunCurrency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency: dryRunCurrency,
-    maximumFractionDigits: 2,
-  }).format(value);
+  const dryRunMoney = (value: number) =>
+    new Intl.NumberFormat(dryRunCurrency === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency: dryRunCurrency,
+      maximumFractionDigits: 2,
+    }).format(value);
   const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
   const dispatch = (proposal.dispatch ?? {}) as Record<string, any>;
   const delivery = ((campaign as any).deliveryPlan ?? dispatch.delivery ?? {}) as {
@@ -224,42 +274,86 @@ export default function CampaignDetailPage() {
     merchantOverride?: boolean;
     consequence?: string;
   };
-  const awaitingDelivery = campaign.status === "scheduled" || (
-    campaign.status === "sending" &&
-    (stats?.recipientCount ?? 0) === 0 &&
-    Number(dispatch.scheduled ?? campaign.recipientCount ?? 0) > 0 &&
-    !delivery.merchantOverride
-  );
-  const formatDeliveryTime = (value?: string | null) => value
-    ? new Intl.DateTimeFormat(undefined, {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      }).format(new Date(value))
-    : null;
+  const awaitingDelivery =
+    campaign.status === "scheduled" ||
+    (campaign.status === "sending" &&
+      (stats?.recipientCount ?? 0) === 0 &&
+      Number(dispatch.scheduled ?? campaign.recipientCount ?? 0) > 0 &&
+      !delivery.merchantOverride);
+  const formatDeliveryTime = (value?: string | null) =>
+    value
+      ? new Intl.DateTimeFormat(undefined, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        }).format(new Date(value))
+      : null;
   const earliestLabel = formatDeliveryTime(delivery.earliestAt);
   const latestLabel = formatDeliveryTime(delivery.latestAt);
-  const deliveryWindow = earliestLabel && latestLabel && earliestLabel !== latestLabel
-    ? `${earliestLabel} – ${latestLabel}`
-    : earliestLabel ?? "Waiting for the planned delivery time";
+  const deliveryWindow =
+    earliestLabel && latestLabel && earliestLabel !== latestLabel
+      ? `${earliestLabel} – ${latestLabel}`
+      : (earliestLabel ?? "Waiting for the planned delivery time");
   const exclusionCopy: Record<string, { label: string; explanation: string }> = {
-    invalid_email: { label: "Invalid email", explanation: "The stored email address cannot receive mail." },
-    no_consent: { label: "No email consent", explanation: "This customer has not subscribed to marketing email." },
-    unsubscribed: { label: "Unsubscribed", explanation: "This customer opted out of marketing email." },
-    complaint: { label: "Complaint suppression", explanation: "A previous complaint permanently blocks marketing delivery." },
-    hard_bounce: { label: "Previous hard bounce", explanation: "A previous hard bounce blocks another delivery attempt." },
-    manual_suppression: { label: "Manually suppressed", explanation: "This customer is on the store’s suppression list." },
-    already_processed: { label: "Already processed", explanation: "This campaign already created a delivery record for this customer." },
-    fatigue: { label: "Fatigue limit", explanation: "They have reached the store’s weekly or monthly email limit." },
-    collision: { label: "Recent campaign", explanation: "They received another campaign within the 48-hour spacing window." },
-    cooldown: { label: "Customer cooldown", explanation: "A redeemed offer or recent support issue is still inside its cooldown." },
-    support_state: { label: "Active support issue", explanation: "Joon avoids marketing while this customer needs support." },
-    recent_purchase: { label: "Recent purchase", explanation: "Joon is leaving this recent buyer alone for this campaign." },
-    store_paused: { label: "Store delivery paused", explanation: "Email delivery is paused for this store." },
-    global_paused: { label: "Delivery globally disabled", explanation: "Joon’s global delivery safety gate is active." },
+    invalid_email: {
+      label: "Invalid email",
+      explanation: "The stored email address cannot receive mail.",
+    },
+    no_consent: {
+      label: "No email consent",
+      explanation: "This customer has not subscribed to marketing email.",
+    },
+    unsubscribed: {
+      label: "Unsubscribed",
+      explanation: "This customer opted out of marketing email.",
+    },
+    complaint: {
+      label: "Complaint suppression",
+      explanation: "A previous complaint permanently blocks marketing delivery.",
+    },
+    hard_bounce: {
+      label: "Previous hard bounce",
+      explanation: "A previous hard bounce blocks another delivery attempt.",
+    },
+    manual_suppression: {
+      label: "Manually suppressed",
+      explanation: "This customer is on the store’s suppression list.",
+    },
+    already_processed: {
+      label: "Already processed",
+      explanation: "This campaign already created a delivery record for this customer.",
+    },
+    fatigue: {
+      label: "Fatigue limit",
+      explanation: "They have reached the store’s weekly or monthly email limit.",
+    },
+    collision: {
+      label: "Recent campaign",
+      explanation: "They received another campaign within the 48-hour spacing window.",
+    },
+    cooldown: {
+      label: "Customer cooldown",
+      explanation: "A redeemed offer or recent support issue is still inside its cooldown.",
+    },
+    support_state: {
+      label: "Active support issue",
+      explanation: "Joon avoids marketing while this customer needs support.",
+    },
+    recent_purchase: {
+      label: "Recent purchase",
+      explanation: "Joon is leaving this recent buyer alone for this campaign.",
+    },
+    store_paused: {
+      label: "Store delivery paused",
+      explanation: "Email delivery is paused for this store.",
+    },
+    global_paused: {
+      label: "Delivery globally disabled",
+      explanation: "Joon’s global delivery safety gate is active.",
+    },
   };
   const excludedCustomerRows = dryRun
     ? Object.entries(dryRun.exclusionSamples).flatMap(([reason, customers]) =>
@@ -270,7 +364,7 @@ export default function CampaignDetailPage() {
             label: reason.replaceAll("_", " "),
             explanation: "A current audience or delivery rule excludes this customer.",
           }),
-        })),
+        }))
       )
     : [];
   const audienceReasonOverrideMap = new Map<string, any>(
@@ -282,7 +376,7 @@ export default function CampaignDetailPage() {
       | undefined;
     return Math.max(
       current,
-      typeof evidence?.affectedAtDecision === "number" ? evidence.affectedAtDecision : 0,
+      typeof evidence?.affectedAtDecision === "number" ? evidence.affectedAtDecision : 0
     );
   };
   const audienceReviewGroups: AudienceReviewGroup[] = dryRun
@@ -291,14 +385,16 @@ export default function CampaignDetailPage() {
           reason: "deliberately_left_alone",
           label: "State says not needed",
           count: audienceReasonCount("deliberately_left_alone", dryRun.deliberatelyLeftAlone),
-          explanation: "Joon found evidence that this campaign is unnecessary for their current customer state. This decision changes when their state or the campaign context changes.",
+          explanation:
+            "Joon found evidence that this campaign is unnecessary for their current customer state. This decision changes when their state or the campaign context changes.",
           activeOverride: audienceReasonOverrideMap.has("deliberately_left_alone"),
         },
         {
           reason: "recent_purchase",
           label: "Recent purchase",
           count: audienceReasonCount("recent_purchase", dryRun.exclusions.recent_purchase),
-          explanation: "They bought inside the protection window. Sending this offer now could discount a decision they already made.",
+          explanation:
+            "They bought inside the protection window. Sending this offer now could discount a decision they already made.",
           activeOverride: audienceReasonOverrideMap.has("recent_purchase"),
         },
         {
@@ -332,7 +428,8 @@ export default function CampaignDetailPage() {
           reason: "no_consent",
           label: "No email consent",
           count: dryRun.exclusions.no_consent,
-          explanation: "They have not explicitly subscribed to marketing email. This cannot be overridden.",
+          explanation:
+            "They have not explicitly subscribed to marketing email. This cannot be overridden.",
         },
         {
           reason: "unsubscribed",
@@ -382,7 +479,9 @@ export default function CampaignDetailPage() {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">{campaign.name}</h1>
+            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">
+              {campaign.name}
+            </h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">{campaign.template?.subject}</p>
           </div>
         </div>
@@ -424,7 +523,11 @@ export default function CampaignDetailPage() {
                 disabled={reviseMut.isPending || deliverNowMut.isPending}
                 className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
               >
-                {reviseMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+                {reviseMut.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Pencil className="h-3.5 w-3.5" />
+                )}
                 Edit campaign
               </button>
               <button
@@ -432,7 +535,11 @@ export default function CampaignDetailPage() {
                 disabled={deliverNowMut.isPending || reviseMut.isPending}
                 className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-[background-color,transform] duration-150 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
               >
-                {deliverNowMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                {deliverNowMut.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
                 {deliverNowMut.isPending ? "Starting delivery…" : "Send now instead"}
               </button>
             </>
@@ -441,11 +548,23 @@ export default function CampaignDetailPage() {
             <button
               onClick={() => setShowApproval(true)}
               disabled={sendMut.isPending || dryRun?.deliveryGate?.blocked}
-              title={dryRun?.deliveryGate?.blocked ? dryRun.deliveryGate.reason ?? "Delivery is disabled" : undefined}
+              title={
+                dryRun?.deliveryGate?.blocked
+                  ? (dryRun.deliveryGate.reason ?? "Delivery is disabled")
+                  : undefined
+              }
               className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
-              {sendMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              {sendMut.isPending ? "Approving…" : dryRun?.deliveryGate?.blocked ? "Delivery disabled" : "Approve delivery"}
+              {sendMut.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              {sendMut.isPending
+                ? "Approving…"
+                : dryRun?.deliveryGate?.blocked
+                  ? "Delivery disabled"
+                  : "Approve delivery"}
             </button>
           )}
           {campaign.status === "scheduled" && !awaitingDelivery && (
@@ -468,7 +587,11 @@ export default function CampaignDetailPage() {
               disabled={deleteMut.isPending}
               className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:border-[var(--color-urgent)] hover:text-[var(--color-urgent)] disabled:opacity-50 transition-all"
             >
-              {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              {deleteMut.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" />
+              )}
               {deleteMut.isPending ? "Deleting…" : "Delete"}
             </button>
           )}
@@ -479,9 +602,12 @@ export default function CampaignDetailPage() {
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl bg-card p-6 shadow-[0_18px_50px_rgba(0,0,0,0.24)] focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 motion-reduce:animate-none">
-            <Dialog.Title className="text-[16px] font-semibold text-foreground">Approve this campaign for delivery</Dialog.Title>
+            <Dialog.Title className="text-[16px] font-semibold text-foreground">
+              Approve this campaign for delivery
+            </Dialog.Title>
             <Dialog.Description className="mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">
-              Approval freezes the email, audience and control assignment. Choose whether Joon should plan the timing or deliver immediately.
+              Approval freezes the email, audience and control assignment. Choose whether Joon
+              should plan the timing or deliver immediately.
             </Dialog.Description>
             <div className="mt-5 space-y-3">
               <button
@@ -491,11 +617,16 @@ export default function CampaignDetailPage() {
                 className="w-full rounded-xl border border-foreground bg-background px-4 py-4 text-left transition-[background-color,transform] duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:opacity-50"
               >
                 <span className="flex items-center justify-between gap-3">
-                  <span className="text-[13px] font-semibold text-foreground">Use Joon’s timing</span>
-                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">Recommended</span>
+                  <span className="text-[13px] font-semibold text-foreground">
+                    Use Joon’s timing
+                  </span>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">
+                    Recommended
+                  </span>
                 </span>
                 <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
-                  Joon will use customer engagement, store patterns and quiet hours. You will see every planned time and can still override it before delivery.
+                  Joon will use customer engagement, store patterns and quiet hours. You will see
+                  every planned time and can still override it before delivery.
                 </span>
               </button>
               <button
@@ -504,9 +635,12 @@ export default function CampaignDetailPage() {
                 disabled={sendMut.isPending}
                 className="w-full rounded-xl border border-border bg-background px-4 py-4 text-left transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:opacity-50"
               >
-                <span className="text-[13px] font-semibold text-foreground">Deliver immediately</span>
+                <span className="text-[13px] font-semibold text-foreground">
+                  Deliver immediately
+                </span>
                 <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
-                  Overrides Joon’s timing and quiet-hours recommendation for this campaign only. Consent, suppression, sender-domain and allowlist checks still run.
+                  Overrides Joon’s timing and quiet-hours recommendation for this campaign only.
+                  Consent, suppression, sender-domain and allowlist checks still run.
                 </span>
               </button>
             </div>
@@ -522,18 +656,26 @@ export default function CampaignDetailPage() {
       </Dialog.Root>
 
       {awaitingDelivery && (
-        <section className="rounded-xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="delivery-plan-title">
+        <section
+          className="rounded-xl border border-border bg-card px-5 py-5 sm:px-6"
+          aria-labelledby="delivery-plan-title"
+        >
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
               <CalendarClock className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <h2 id="delivery-plan-title" className="text-[15px] font-semibold text-foreground">Scheduled for {deliveryWindow}</h2>
+              <h2 id="delivery-plan-title" className="text-[15px] font-semibold text-foreground">
+                Scheduled for {deliveryWindow}
+              </h2>
               <p className="mt-1 max-w-3xl text-[12px] leading-5 text-muted-foreground">
-                {delivery.reason ?? "Joon is waiting for the planned delivery time. The approved audience, control group and email remain frozen until delivery begins."}
+                {delivery.reason ??
+                  "Joon is waiting for the planned delivery time. The approved audience, control group and email remain frozen until delivery begins."}
               </p>
               <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-                Edit creates a fresh draft and keeps this approved version in the audit trail. “Send now instead” overrides timing only; consent, suppression, sender-domain and recipient allowlist checks still run.
+                Edit creates a fresh draft and keeps this approved version in the audit trail. “Send
+                now instead” overrides timing only; consent, suppression, sender-domain and
+                recipient allowlist checks still run.
               </p>
             </div>
           </div>
@@ -549,7 +691,9 @@ export default function CampaignDetailPage() {
                 <AlertTriangle className="h-4 w-4" />
               </div>
               <div>
-                <Dialog.Title className="text-[16px] font-semibold text-foreground">Send before Joon’s recommended time?</Dialog.Title>
+                <Dialog.Title className="text-[16px] font-semibold text-foreground">
+                  Send before Joon’s recommended time?
+                </Dialog.Title>
                 <Dialog.Description className="mt-1 text-[12px] leading-5 text-muted-foreground">
                   The campaign is scheduled for {deliveryWindow}.
                 </Dialog.Description>
@@ -557,16 +701,27 @@ export default function CampaignDetailPage() {
             </div>
             <div className="mt-5 space-y-3 rounded-lg bg-muted/60 px-4 py-3">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Why Joon waited</div>
-                <p className="mt-1 text-[12px] leading-5 text-foreground">{delivery.reason ?? "Joon selected this time from the available delivery policy and engagement evidence."}</p>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Why Joon waited
+                </div>
+                <p className="mt-1 text-[12px] leading-5 text-foreground">
+                  {delivery.reason ??
+                    "Joon selected this time from the available delivery policy and engagement evidence."}
+                </p>
               </div>
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">What may change</div>
-                <p className="mt-1 text-[12px] leading-5 text-foreground">{delivery.consequence ?? "Sending earlier may reduce opens because it ignores the recommended engagement window."}</p>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  What may change
+                </div>
+                <p className="mt-1 text-[12px] leading-5 text-foreground">
+                  {delivery.consequence ??
+                    "Sending earlier may reduce opens because it ignores the recommended engagement window."}
+                </p>
               </div>
             </div>
             <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
-              This overrides timing only. Consent, suppression, verified-domain and recipient allowlist checks still run immediately before delivery.
+              This overrides timing only. Consent, suppression, verified-domain and recipient
+              allowlist checks still run immediately before delivery.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <Dialog.Close asChild>
@@ -575,11 +730,20 @@ export default function CampaignDetailPage() {
                 </button>
               </Dialog.Close>
               <button
-                onClick={() => deliverNowMut.mutate({ id: campaignId }, { onSuccess: () => setShowTimingOverride(false) })}
+                onClick={() =>
+                  deliverNowMut.mutate(
+                    { id: campaignId },
+                    { onSuccess: () => setShowTimingOverride(false) }
+                  )
+                }
                 disabled={deliverNowMut.isPending}
                 className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-[background-color,transform] duration-150 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:opacity-50"
               >
-                {deliverNowMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                {deliverNowMut.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
                 {deliverNowMut.isPending ? "Starting delivery…" : "Override and send now"}
               </button>
             </div>
@@ -590,51 +754,103 @@ export default function CampaignDetailPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
         {[
-          { icon: Mail, label: "TREATED", value: stats?.holdout.treatmentAssigned.toLocaleString() ?? "0" },
-          { icon: Users, label: "CONTROL", value: stats?.holdout.controlAssigned.toLocaleString() ?? "0" },
-          { icon: Mail, label: "OPENED", value: stats ? `${(stats.openRate * 100).toFixed(1)}%` : "0%" },
-          { icon: MousePointerClick, label: "CLICKED", value: stats ? `${(stats.clickRate * 100).toFixed(1)}%` : "0%" },
+          {
+            icon: Mail,
+            label: "TREATED",
+            value: stats?.holdout.treatmentAssigned.toLocaleString() ?? "0",
+          },
+          {
+            icon: Users,
+            label: "CONTROL",
+            value: stats?.holdout.controlAssigned.toLocaleString() ?? "0",
+          },
+          {
+            icon: Mail,
+            label: "OPENED",
+            value: stats ? `${(stats.openRate * 100).toFixed(1)}%` : "0%",
+          },
+          {
+            icon: MousePointerClick,
+            label: "CLICKED",
+            value: stats ? `${(stats.clickRate * 100).toFixed(1)}%` : "0%",
+          },
           { icon: XCircle, label: "BOUNCED", value: stats?.bounceCount.toLocaleString() ?? "0" },
-          { icon: ShoppingBag, label: "ATTRIBUTED ORDERS", value: stats?.attributedOrders.toLocaleString() ?? "0" },
-          { icon: TrendingUp, label: "ATTRIBUTED REVENUE", value: money(stats?.attributedRevenue ?? 0) },
+          {
+            icon: ShoppingBag,
+            label: "ATTRIBUTED ORDERS",
+            value: stats?.attributedOrders.toLocaleString() ?? "0",
+          },
+          {
+            icon: TrendingUp,
+            label: "ATTRIBUTED REVENUE",
+            value: money(stats?.attributedRevenue ?? 0),
+          },
         ].map((kpi) => (
           <div
             key={kpi.label}
             className="border border-border rounded-xl p-5 bg-card hover:border-foreground hover:shadow-[0_0_0_1px_hsl(var(--foreground))] transition-all group"
           >
             <kpi.icon className="w-5 h-5 text-muted-foreground/50 mb-3 group-hover:text-foreground transition-colors" />
-            <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-1">{kpi.label}</div>
-            <div className="text-[28px] tabular-nums font-bold text-foreground font-mono">{kpi.value}</div>
+            <div className="text-[10px] text-muted-foreground font-sans uppercase font-bold tracking-[1px] mb-1">
+              {kpi.label}
+            </div>
+            <div className="text-[28px] tabular-nums font-bold text-foreground font-mono">
+              {kpi.value}
+            </div>
           </div>
         ))}
       </div>
 
       {stats?.holdout.experimentId && (
-        <section className="border border-border rounded-xl bg-card px-5 py-5 sm:px-6" aria-labelledby="holdout-result-title">
+        <section
+          className="border border-border rounded-xl bg-card px-5 py-5 sm:px-6"
+          aria-labelledby="holdout-result-title"
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-2xl">
-              <h2 id="holdout-result-title" className="text-[15px] font-semibold text-foreground">Incremental result versus holdout</h2>
+              <h2 id="holdout-result-title" className="text-[15px] font-semibold text-foreground">
+                Incremental result versus holdout
+              </h2>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                Attributed revenue is last-touch reporting. This result is different: it compares campaign candidates randomly assigned to treatment and control.
+                Attributed revenue is last-touch reporting. This result is different: it compares
+                campaign candidates randomly assigned to treatment and control.
               </p>
             </div>
-            <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${causal && !causal.underpowered ? "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))]" : "bg-muted text-muted-foreground"}`}>
-              {causal ? (causal.underpowered ? "DIRECTIONAL" : causal.significant ? "MEASURED" : "NO PROVEN LIFT") : "WINDOW OPEN"}
+            <span
+              className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${causal && !causal.underpowered ? "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))]" : "bg-muted text-muted-foreground"}`}
+            >
+              {causal
+                ? causal.underpowered
+                  ? "DIRECTIONAL"
+                  : causal.significant
+                    ? "MEASURED"
+                    : "NO PROVEN LIFT"
+                : "WINDOW OPEN"}
             </span>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4 border-t border-border pt-4">
             <div>
               <div className="text-[11px] text-muted-foreground">Treatment / control</div>
-              <div className="mt-1 font-mono text-[18px] font-bold">{stats.holdout.treatmentAssigned} / {stats.holdout.controlAssigned}</div>
+              <div className="mt-1 font-mono text-[18px] font-bold">
+                {stats.holdout.treatmentAssigned} / {stats.holdout.controlAssigned}
+              </div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">Revenue difference per treated customer</div>
-              <div className="mt-1 font-mono text-[18px] font-bold">{causal ? money(causal.lift ?? 0) : "Measuring…"}</div>
+              <div className="text-[11px] text-muted-foreground">
+                Revenue difference per treated customer
+              </div>
+              <div className="mt-1 font-mono text-[18px] font-bold">
+                {causal ? money(causal.lift ?? 0) : "Measuring…"}
+              </div>
             </div>
             <div>
               <div className="text-[11px] text-muted-foreground">95% confidence interval</div>
-              <div className="mt-1 font-mono text-[18px] font-bold">{causal ? `${money(causal.ciLow ?? 0)} to ${money(causal.ciHigh ?? 0)}` : "Available after 7 days"}</div>
+              <div className="mt-1 font-mono text-[18px] font-bold">
+                {causal
+                  ? `${money(causal.ciLow ?? 0)} to ${money(causal.ciHigh ?? 0)}`
+                  : "Available after 7 days"}
+              </div>
             </div>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
@@ -659,8 +875,16 @@ export default function CampaignDetailPage() {
             { label: "Template", value: campaign.template?.name },
             { label: "Segment", value: campaign.segment?.name ?? "All Subscribers" },
             { label: "Store", value: campaign.store.shopDomain },
-            { label: "Scheduled", value: campaign.scheduledAt ? new Date(campaign.scheduledAt).toLocaleString() : "\u2014" },
-            { label: "Sent At", value: campaign.sentAt ? new Date(campaign.sentAt).toLocaleString() : "\u2014" },
+            {
+              label: "Scheduled",
+              value: campaign.scheduledAt
+                ? new Date(campaign.scheduledAt).toLocaleString()
+                : "\u2014",
+            },
+            {
+              label: "Sent At",
+              value: campaign.sentAt ? new Date(campaign.sentAt).toLocaleString() : "\u2014",
+            },
           ].map((item) => (
             <div key={item.label} className="flex justify-between py-1.5 border-b border-border">
               <span className="text-[11px] text-muted-foreground font-sans">{item.label}</span>
@@ -674,9 +898,15 @@ export default function CampaignDetailPage() {
         <div className="border border-border rounded-xl p-6 bg-card">
           <div className="flex items-start justify-between gap-6 mb-5">
             <div>
-              <p className="text-[10px] uppercase tracking-[1px] font-bold text-muted-foreground">Pre-send safety check</p>
-              <h2 className="text-[16px] font-semibold font-serif mt-1">Who will actually receive this</h2>
-              <p className="text-[11px] text-muted-foreground mt-1">A dry run only. No email provider has been called.</p>
+              <p className="text-[10px] uppercase tracking-[1px] font-bold text-muted-foreground">
+                Pre-send safety check
+              </p>
+              <h2 className="text-[16px] font-semibold font-serif mt-1">
+                Who will actually receive this
+              </h2>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                A dry run only. No email provider has been called.
+              </p>
             </div>
             {dryRunLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
           </div>
@@ -688,13 +918,15 @@ export default function CampaignDetailPage() {
                     Delivery safely disabled
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {dryRun.deliveryGate.reason}. The audience below is a planning estimate;
-                    no email can leave Joon while this gate is active.
+                    {dryRun.deliveryGate.reason}. The audience below is a planning estimate; no
+                    email can leave Joon while this gate is active.
                   </p>
                 </div>
               )}
               <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Audience plan</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Audience plan
+                </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {[
                     ["You asked for", dryRun.requestedAudienceCount ?? dryRun.requested],
@@ -706,7 +938,9 @@ export default function CampaignDetailPage() {
                   ].map(([label, value]) => (
                     <div key={String(label)}>
                       <div className="text-[10px] text-muted-foreground">{label}</div>
-                      <div className="mt-0.5 font-mono text-lg font-bold">{Number(value).toLocaleString()}</div>
+                      <div className="mt-0.5 font-mono text-lg font-bold">
+                        {Number(value).toLocaleString()}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -717,37 +951,60 @@ export default function CampaignDetailPage() {
                   {dryRun.otherLeftAlone > 0
                     ? `${dryRun.otherLeftAlone} ${dryRun.otherLeftAlone === 1 ? "customer is" : "customers are"} not receiving this campaign for the reasons below. `
                     : ""}
-                  From {dryRun.eligibleBeforeHoldout} campaign {dryRun.eligibleBeforeHoldout === 1 ? "candidate" : "candidates"}, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "is" : "are"} randomly assigned to control and {dryRun.estimatedTreatment} would receive the email.
+                  From {dryRun.eligibleBeforeHoldout} campaign{" "}
+                  {dryRun.eligibleBeforeHoldout === 1 ? "candidate" : "candidates"},{" "}
+                  {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "is" : "are"} randomly
+                  assigned to control and {dryRun.estimatedTreatment} would receive the email.
                 </p>
               </div>
               {audienceReviewCount > 0 && (
                 <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="flex items-baseline justify-between gap-3">
-                    <div className="text-[12px] font-semibold text-foreground">Audience decisions to review</div>
+                    <div className="text-[12px] font-semibold text-foreground">
+                      Audience decisions to review
+                    </div>
                     <div className="flex items-center gap-3">
-                      <div className="font-mono text-[11px] font-bold text-muted-foreground">{audienceReviewCount}</div>
+                      <div className="font-mono text-[11px] font-bold text-muted-foreground">
+                        {audienceReviewCount}
+                      </div>
                       <AudienceReviewDrawer campaignId={campaignId} groups={audienceReviewGroups} />
                     </div>
                   </div>
                   <div className="mt-3 divide-y divide-border">
                     {excludedCustomerRows.map((customer) => {
-                      const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                      const name =
+                        [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                        customer.email;
                       return (
-                        <div key={`${customer.reason}-${customer.id}`} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:gap-5">
+                        <div
+                          key={`${customer.reason}-${customer.id}`}
+                          className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:gap-5"
+                        >
                           <div className="min-w-0">
-                            <div className="truncate text-[11px] font-medium text-foreground">{name}</div>
-                            {name !== customer.email && <div className="truncate text-[10px] text-muted-foreground">{customer.email}</div>}
+                            <div className="truncate text-[11px] font-medium text-foreground">
+                              {name}
+                            </div>
+                            {name !== customer.email && (
+                              <div className="truncate text-[10px] text-muted-foreground">
+                                {customer.email}
+                              </div>
+                            )}
                           </div>
                           <div>
-                            <div className="text-[11px] font-medium text-foreground">{customer.label}</div>
-                            <div className="mt-0.5 text-[10px] leading-4 text-muted-foreground">{customer.explanation}</div>
+                            <div className="text-[11px] font-medium text-foreground">
+                              {customer.label}
+                            </div>
+                            <div className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
+                              {customer.explanation}
+                            </div>
                           </div>
                         </div>
                       );
                     })}
                     {excludedCustomerRows.length < dryRun.otherLeftAlone && (
                       <div className="pt-3 text-[10px] text-muted-foreground">
-                        Showing {excludedCustomerRows.length} examples. The frozen approval record keeps the complete counts by reason.
+                        Showing {excludedCustomerRows.length} examples. The frozen approval record
+                        keeps the complete counts by reason.
                       </div>
                     )}
                   </div>
@@ -757,18 +1014,25 @@ export default function CampaignDetailPage() {
                 <div className="mb-5 rounded-lg border border-border bg-background/50 px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Offer</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                        Offer
+                      </div>
                       <p className="mt-1 text-[13px] font-medium text-foreground">
-                        {dryRun.offer.appliedDiscountPercent}% off · code {dryRun.offer.discountCode ?? "generated at approval"}
+                        {dryRun.offer.appliedDiscountPercent}% off · code{" "}
+                        {dryRun.offer.discountCode ?? "generated at approval"}
                       </p>
                     </div>
                     <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground">
-                      {dryRun.offer.shopifyStatus === "created" ? "Created in Shopify" : "Created in Shopify when sending begins"}
+                      {dryRun.offer.shopifyStatus === "created"
+                        ? "Created in Shopify"
+                        : "Created in Shopify when sending begins"}
                     </span>
                   </div>
                   {dryRun.offer.adjustedByGuardrail && (
                     <p className="mt-2 text-[11px] text-warning">
-                      You asked for {dryRun.offer.requestedDiscountPercent}%. Your store guardrail allows at most {dryRun.offer.appliedDiscountPercent}%, so Joon used {dryRun.offer.appliedDiscountPercent}% and kept the draft within policy.
+                      You asked for {dryRun.offer.requestedDiscountPercent}%. Your store guardrail
+                      allows at most {dryRun.offer.appliedDiscountPercent}%, so Joon used{" "}
+                      {dryRun.offer.appliedDiscountPercent}% and kept the draft within policy.
                     </p>
                   )}
                 </div>
@@ -780,19 +1044,33 @@ export default function CampaignDetailPage() {
                   </summary>
                   <div className="grid gap-4 border-t border-border px-4 py-3 sm:grid-cols-2">
                     {(["TREATMENT", "CONTROL"] as const).map((arm) => {
-                      const customers = dryRun.previewAssignments.filter((customer) => customer.arm === arm);
+                      const customers = dryRun.previewAssignments.filter(
+                        (customer) => customer.arm === arm
+                      );
                       return (
                         <div key={arm}>
                           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                            {arm === "TREATMENT" ? "Would receive this campaign" : "Random control · no email"} · {customers.length}
+                            {arm === "TREATMENT"
+                              ? "Would receive this campaign"
+                              : "Random control · no email"}{" "}
+                            · {customers.length}
                           </div>
                           <div className="mt-2 space-y-1">
-                            {customers.length > 0 ? customers.map((customer) => (
-                              <div key={customer.id} className="truncate text-[11px] text-foreground">
-                                {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email}
+                            {customers.length > 0 ? (
+                              customers.map((customer) => (
+                                <div
+                                  key={customer.id}
+                                  className="truncate text-[11px] text-foreground"
+                                >
+                                  {[customer.firstName, customer.lastName]
+                                    .filter(Boolean)
+                                    .join(" ") || customer.email}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-[11px] text-muted-foreground">
+                                None for this audience size.
                               </div>
-                            )) : (
-                              <div className="text-[11px] text-muted-foreground">None for this audience size.</div>
                             )}
                           </div>
                         </div>
@@ -813,7 +1091,9 @@ export default function CampaignDetailPage() {
                         ? "Unmeasured small cohort"
                         : "Directional measurement"}
                   </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{dryRun.measurement.warning}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {dryRun.measurement.warning}
+                  </p>
                 </div>
               )}
               {dryRun.recentPurchaseOverrideCount > 0 && (
@@ -822,7 +1102,10 @@ export default function CampaignDetailPage() {
                     Merchant override recorded
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                    You asked Joon to reconsider {dryRun.recentPurchaseOverrideCount} recent {dryRun.recentPurchaseOverrideCount === 1 ? "buyer" : "buyers"} for this campaign. They are included in the candidate pool, while consent and delivery safeguards still apply.
+                    You asked Joon to reconsider {dryRun.recentPurchaseOverrideCount} recent{" "}
+                    {dryRun.recentPurchaseOverrideCount === 1 ? "buyer" : "buyers"} for this
+                    campaign. They are included in the candidate pool, while consent and delivery
+                    safeguards still apply.
                   </p>
                 </div>
               )}
@@ -832,33 +1115,49 @@ export default function CampaignDetailPage() {
                     Fatigue override recorded
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                    You included {dryRun.fatigueOverrideCount} {dryRun.fatigueOverrideCount === 1 ? "customer" : "customers"} despite the current email limit. Joon kept the original decision and your reason in the audit trail.
+                    You included {dryRun.fatigueOverrideCount}{" "}
+                    {dryRun.fatigueOverrideCount === 1 ? "customer" : "customers"} despite the
+                    current email limit. Joon kept the original decision and your reason in the
+                    audit trail.
                   </p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1">
-                {Object.entries(dryRun.exclusions).filter(([, count]) => count > 0).map(([reason, count]) => (
-                  <div key={reason} className="flex justify-between py-2 border-b border-border text-[11px]">
-                    <span className="text-muted-foreground">{reason.replaceAll("_", " ")}</span>
-                    <span className="font-mono font-bold">-{count}</span>
-                  </div>
-                ))}
+                {Object.entries(dryRun.exclusions)
+                  .filter(([, count]) => count > 0)
+                  .map(([reason, count]) => (
+                    <div
+                      key={reason}
+                      className="flex justify-between py-2 border-b border-border text-[11px]"
+                    >
+                      <span className="text-muted-foreground">{reason.replaceAll("_", " ")}</span>
+                      <span className="font-mono font-bold">-{count}</span>
+                    </div>
+                  ))}
               </div>
               {dryRun.exclusions.recent_purchase > 0 && dryRun.marginRisk.discountPercent > 0 && (
                 <div className="mt-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="text-[13px] font-semibold text-foreground">
-                    Joon protected {dryRun.exclusions.recent_purchase} recent {dryRun.exclusions.recent_purchase === 1 ? "buyer" : "buyers"} from this discount
+                    Joon protected {dryRun.exclusions.recent_purchase} recent{" "}
+                    {dryRun.exclusions.recent_purchase === 1 ? "buyer" : "buyers"} from this
+                    discount
                   </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
-                    They have already purchased inside the seven-day discount window. Sending them {dryRun.marginRisk.discountPercent}%
-                    off now could give away margin without changing their decision. Try a
-                    full-price new-product message, or choose customers whose last purchase is older.
+                    They have already purchased inside the seven-day discount window. Sending them{" "}
+                    {dryRun.marginRisk.discountPercent}% off now could give away margin without
+                    changing their decision. Try a full-price new-product message, or choose
+                    customers whose last purchase is older.
                   </p>
                   {(dryRun.exclusionSamples.recent_purchase?.length ?? 0) > 0 && (
                     <p className="mt-3 text-[11px] text-foreground">
-                      Examples: {(dryRun.exclusionSamples.recent_purchase ?? []).map((customer) =>
-                        [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email
-                      ).join(", ")}
+                      Examples:{" "}
+                      {(dryRun.exclusionSamples.recent_purchase ?? [])
+                        .map(
+                          (customer) =>
+                            [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                            customer.email
+                        )
+                        .join(", ")}
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -879,15 +1178,21 @@ export default function CampaignDetailPage() {
                             `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, products, and brand voice, and let me review the draft before anything is sent.`,
                             {
                               sourceCampaignId: campaignId,
-                              customerIds: dryRun.recentPurchaseCustomers.map((customer) => customer.id),
+                              customerIds: dryRun.recentPurchaseCustomers.map(
+                                (customer) => customer.id
+                              ),
                               forceNoDiscount: true,
-                            },
+                            }
                           );
                         }}
                         className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
                       >
-                        {alternativeSubmitting && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
-                        {alternativeSubmitting ? "Creating alternative…" : "Draft a full-price alternative"}
+                        {alternativeSubmitting && (
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                        )}
+                        {alternativeSubmitting
+                          ? "Creating alternative…"
+                          : "Draft a full-price alternative"}
                       </button>
                     )}
                     <button
@@ -906,9 +1211,14 @@ export default function CampaignDetailPage() {
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
                         {dryRun.recentPurchaseCustomers.map((customer) => {
                           const checked = selectedRecentIds.includes(customer.id);
-                          const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                          const name =
+                            [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                            customer.email;
                           return (
-                            <label key={customer.id} className="flex items-center gap-2 text-[11px] text-foreground">
+                            <label
+                              key={customer.id}
+                              className="flex items-center gap-2 text-[11px] text-foreground"
+                            >
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -926,7 +1236,10 @@ export default function CampaignDetailPage() {
                           );
                         })}
                       </div>
-                      <label className="mt-4 block text-[11px] font-medium text-foreground" htmlFor="recent-purchase-override-reason">
+                      <label
+                        className="mt-4 block text-[11px] font-medium text-foreground"
+                        htmlFor="recent-purchase-override-reason"
+                      >
                         Why should Joon include them?
                       </label>
                       <textarea
@@ -939,7 +1252,11 @@ export default function CampaignDetailPage() {
                       />
                       <button
                         type="button"
-                        disabled={selectedRecentIds.length === 0 || overrideReason.trim().length < 5 || overrideRecentPurchaseMut.isPending}
+                        disabled={
+                          selectedRecentIds.length === 0 ||
+                          overrideReason.trim().length < 5 ||
+                          overrideRecentPurchaseMut.isPending
+                        }
                         onClick={() =>
                           overrideRecentPurchaseMut.mutate({
                             id: campaignId,
@@ -954,7 +1271,8 @@ export default function CampaignDetailPage() {
                           : `Include ${selectedRecentIds.length || "selected"} anyway`}
                       </button>
                       <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                        Joon keeps the recent-purchase evidence, records your reason, and recalculates the control group. Consent and delivery safeguards still apply.
+                        Joon keeps the recent-purchase evidence, records your reason, and
+                        recalculates the control group. Consent and delivery safeguards still apply.
                       </p>
                     </div>
                   )}
@@ -963,10 +1281,14 @@ export default function CampaignDetailPage() {
               {dryRun.exclusions.fatigue > 0 && dryRun.fatigueCustomers.length > 0 && (
                 <div className="mt-5 rounded-xl border border-warning/30 bg-warning/5 p-4">
                   <div className="text-[13px] font-semibold text-foreground">
-                    {dryRun.exclusions.fatigue} {dryRun.exclusions.fatigue === 1 ? "customer has" : "customers have"} reached the email limit
+                    {dryRun.exclusions.fatigue}{" "}
+                    {dryRun.exclusions.fatigue === 1 ? "customer has" : "customers have"} reached
+                    the email limit
                   </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
-                    Joon left them out because another email can increase fatigue and unsubscribe risk. You can include them for this campaign, but the original decision and your reason will remain in the audit trail.
+                    Joon left them out because another email can increase fatigue and unsubscribe
+                    risk. You can include them for this campaign, but the original decision and your
+                    reason will remain in the audit trail.
                   </p>
                   <button
                     type="button"
@@ -983,9 +1305,14 @@ export default function CampaignDetailPage() {
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
                         {dryRun.fatigueCustomers.map((customer) => {
                           const checked = selectedFatigueIds.includes(customer.id);
-                          const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                          const name =
+                            [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                            customer.email;
                           return (
-                            <label key={customer.id} className="flex items-center gap-2 text-[11px] text-foreground">
+                            <label
+                              key={customer.id}
+                              className="flex items-center gap-2 text-[11px] text-foreground"
+                            >
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -1003,7 +1330,10 @@ export default function CampaignDetailPage() {
                           );
                         })}
                       </div>
-                      <label className="mt-4 block text-[11px] font-medium text-foreground" htmlFor="fatigue-override-reason">
+                      <label
+                        className="mt-4 block text-[11px] font-medium text-foreground"
+                        htmlFor="fatigue-override-reason"
+                      >
                         Why should Joon send another email now?
                       </label>
                       <textarea
@@ -1016,7 +1346,11 @@ export default function CampaignDetailPage() {
                       />
                       <button
                         type="button"
-                        disabled={selectedFatigueIds.length === 0 || fatigueOverrideReason.trim().length < 5 || overrideFatigueMut.isPending}
+                        disabled={
+                          selectedFatigueIds.length === 0 ||
+                          fatigueOverrideReason.trim().length < 5 ||
+                          overrideFatigueMut.isPending
+                        }
                         onClick={() =>
                           overrideFatigueMut.mutate({
                             id: campaignId,
@@ -1031,30 +1365,36 @@ export default function CampaignDetailPage() {
                           : `Include ${selectedFatigueIds.length || "selected"} anyway`}
                       </button>
                       <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                        Consent, unsubscribe, complaint, bounce, sender-domain and allowlist checks still run before delivery.
+                        Consent, unsubscribe, complaint, bounce, sender-domain and allowlist checks
+                        still run before delivery.
                       </p>
                     </div>
                   )}
                 </div>
               )}
               {(["collision", "cooldown"] as const).map((reasonCode) => {
-                const customers = reasonCode === "collision"
-                  ? dryRun.collisionCustomers
-                  : dryRun.cooldownCustomers;
+                const customers =
+                  reasonCode === "collision" ? dryRun.collisionCustomers : dryRun.cooldownCustomers;
                 const count = dryRun.exclusions[reasonCode];
                 if (!count || customers.length === 0) return null;
                 const isOpen = governorOverrideType === reasonCode;
-                const title = reasonCode === "collision"
-                  ? `${count} ${count === 1 ? "customer received" : "customers received"} another campaign recently`
-                  : `${count} ${count === 1 ? "customer is" : "customers are"} inside the redeemed-discount cooldown`;
-                const consequence = reasonCode === "collision"
-                  ? "Another campaign this soon may feel repetitive and lower engagement."
-                  : "Another offer this soon may train customers to wait for discounts and give away margin.";
+                const title =
+                  reasonCode === "collision"
+                    ? `${count} ${count === 1 ? "customer received" : "customers received"} another campaign recently`
+                    : `${count} ${count === 1 ? "customer is" : "customers are"} inside the redeemed-discount cooldown`;
+                const consequence =
+                  reasonCode === "collision"
+                    ? "Another campaign this soon may feel repetitive and lower engagement."
+                    : "Another offer this soon may train customers to wait for discounts and give away margin.";
                 return (
-                  <div key={reasonCode} className="mt-5 rounded-xl border border-warning/30 bg-warning/5 p-4">
+                  <div
+                    key={reasonCode}
+                    className="mt-5 rounded-xl border border-warning/30 bg-warning/5 p-4"
+                  >
                     <div className="text-[13px] font-semibold text-foreground">{title}</div>
                     <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
-                      {consequence} You can include them, but Joon will preserve its original decision and your reason.
+                      {consequence} You can include them, but Joon will preserve its original
+                      decision and your reason.
                     </p>
                     <button
                       type="button"
@@ -1068,15 +1408,24 @@ export default function CampaignDetailPage() {
                         <div className="grid gap-2 sm:grid-cols-2">
                           {customers.slice(0, 25).map((customer) => {
                             const checked = selectedGovernorIds.includes(customer.id);
-                            const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                            const name =
+                              [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                              customer.email;
                             return (
-                              <label key={customer.id} className="flex items-center gap-2 text-[11px] text-foreground">
+                              <label
+                                key={customer.id}
+                                className="flex items-center gap-2 text-[11px] text-foreground"
+                              >
                                 <input
                                   type="checkbox"
                                   checked={checked}
-                                  onChange={() => setSelectedGovernorIds((current) => checked
-                                    ? current.filter((id) => id !== customer.id)
-                                    : [...current, customer.id])}
+                                  onChange={() =>
+                                    setSelectedGovernorIds((current) =>
+                                      checked
+                                        ? current.filter((id) => id !== customer.id)
+                                        : [...current, customer.id]
+                                    )
+                                  }
                                   className="h-4 w-4 rounded border-border accent-current"
                                 />
                                 <span className="truncate">{name}</span>
@@ -1086,10 +1435,14 @@ export default function CampaignDetailPage() {
                         </div>
                         {customers.length > 25 && (
                           <p className="mt-2 text-[10px] text-muted-foreground">
-                            Showing 25 of {customers.length}. All are selected; clear individual names here or use the grouped audience review after this test.
+                            Showing 25 of {customers.length}. All are selected; clear individual
+                            names here or use the grouped audience review after this test.
                           </p>
                         )}
-                        <label className="mt-4 block text-[11px] font-medium text-foreground" htmlFor={`${reasonCode}-override-reason`}>
+                        <label
+                          className="mt-4 block text-[11px] font-medium text-foreground"
+                          htmlFor={`${reasonCode}-override-reason`}
+                        >
                           Why should Joon include them now?
                         </label>
                         <textarea
@@ -1102,19 +1455,28 @@ export default function CampaignDetailPage() {
                         />
                         <button
                           type="button"
-                          disabled={selectedGovernorIds.length === 0 || governorOverrideReason.trim().length < 5 || overrideGovernorMut.isPending}
-                          onClick={() => overrideGovernorMut.mutate({
-                            id: campaignId,
-                            reasonCode,
-                            customerIds: selectedGovernorIds,
-                            reason: governorOverrideReason.trim(),
-                          })}
+                          disabled={
+                            selectedGovernorIds.length === 0 ||
+                            governorOverrideReason.trim().length < 5 ||
+                            overrideGovernorMut.isPending
+                          }
+                          onClick={() =>
+                            overrideGovernorMut.mutate({
+                              id: campaignId,
+                              reasonCode,
+                              customerIds: selectedGovernorIds,
+                              reason: governorOverrideReason.trim(),
+                            })
+                          }
                           className="mt-3 rounded-lg bg-warning px-3 py-2 text-[11px] font-medium text-warning-foreground transition-[background-color,transform] duration-150 hover:bg-warning/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          {overrideGovernorMut.isPending ? "Recording override…" : `Include ${selectedGovernorIds.length} anyway`}
+                          {overrideGovernorMut.isPending
+                            ? "Recording override…"
+                            : `Include ${selectedGovernorIds.length} anyway`}
                         </button>
                         <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                          Consent, unsubscribe, complaint, bounce, sender-domain and allowlist checks remain mandatory.
+                          Consent, unsubscribe, complaint, bounce, sender-domain and allowlist
+                          checks remain mandatory.
                         </p>
                       </div>
                     )}
@@ -1142,7 +1504,10 @@ export default function CampaignDetailPage() {
                   </div>
                   <div className="mt-3 divide-y divide-border">
                     {dryRun.leftAloneSamples.map((customer) => (
-                      <div key={customer.id} className="flex items-center justify-between gap-4 py-3">
+                      <div
+                        key={customer.id}
+                        className="flex items-center justify-between gap-4 py-3"
+                      >
                         <div className="min-w-0">
                           <p className="truncate text-[12px] font-medium text-foreground">
                             {[customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
@@ -1156,7 +1521,10 @@ export default function CampaignDetailPage() {
                           type="button"
                           disabled={includeLeftAloneMut.isPending}
                           onClick={() =>
-                            includeLeftAloneMut.mutate({ id: campaignId, customerIds: [customer.id] })
+                            includeLeftAloneMut.mutate({
+                              id: campaignId,
+                              customerIds: [customer.id],
+                            })
                           }
                           className="shrink-0 rounded-lg border border-border px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
@@ -1170,20 +1538,35 @@ export default function CampaignDetailPage() {
               <div className="mt-4 pt-4 border-t border-border flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Sender</span>
                 <span className="font-medium">
-                  {dryRun.sender ?? "Sending address not configured"} · {dryRun.senderDomain?.status ?? "domain not configured"}
+                  {dryRun.sender ?? "Sending address not configured"} ·{" "}
+                  {dryRun.senderDomain?.status ?? "domain not configured"}
                 </span>
               </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">The eligible customer set and complete treatment/control assignment freeze when you approve. Consent, suppression, pauses and delivery limits are checked again immediately before every email.</p>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                The eligible customer set and complete treatment/control assignment freeze when you
+                approve. Consent, suppression, pauses and delivery limits are checked again
+                immediately before every email.
+              </p>
               {dryRun.marginRisk.discountPercent > 0 && dryRun.marginRisk.recentBuyers > 0 && (
                 <div className="mt-4 rounded-xl border border-warning/30 bg-warning/5 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-warning">Margin worth reviewing</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-warning">
+                    Margin worth reviewing
+                  </div>
                   <p className="mt-1 text-[13px] font-medium">
-                    {dryRun.marginRisk.recentBuyers} currently eligible {dryRun.marginRisk.recentBuyers === 1 ? "customer has" : "customers have"} already purchased in the last 7 days.
+                    {dryRun.marginRisk.recentBuyers} currently eligible{" "}
+                    {dryRun.marginRisk.recentBuyers === 1 ? "customer has" : "customers have"}{" "}
+                    already purchased in the last 7 days.
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    They placed {dryRun.marginRisk.recentOrders} orders worth {dryRunMoney(dryRun.marginRisk.observedRecentSubtotal)}. If equivalent baskets used this {dryRun.marginRisk.discountPercent}% offer, discount exposure would be about {dryRunMoney(dryRun.marginRisk.illustrativeDiscountExposure)}.
+                    They placed {dryRun.marginRisk.recentOrders} orders worth{" "}
+                    {dryRunMoney(dryRun.marginRisk.observedRecentSubtotal)}. If equivalent baskets
+                    used this {dryRun.marginRisk.discountPercent}% offer, discount exposure would be
+                    about {dryRunMoney(dryRun.marginRisk.illustrativeDiscountExposure)}.
                   </p>
-                  <p className="mt-2 text-[10px] text-muted-foreground">This is an illustration from observed orders—not a prediction that these customers will purchase again.</p>
+                  <p className="mt-2 text-[10px] text-muted-foreground">
+                    This is an illustration from observed orders—not a prediction that these
+                    customers will purchase again.
+                  </p>
                 </div>
               )}
             </>
@@ -1218,7 +1601,11 @@ export default function CampaignDetailPage() {
                 onClick={() => setPreviewExpanded((v) => !v)}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-sans text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
               >
-                {previewExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                {previewExpanded ? (
+                  <Minimize2 className="w-3 h-3" />
+                ) : (
+                  <Maximize2 className="w-3 h-3" />
+                )}
                 {previewExpanded ? "Collapse" : "Full Preview"}
               </button>
             )}
@@ -1233,8 +1620,11 @@ export default function CampaignDetailPage() {
           </div>
         </div>
         <div className="flex justify-center bg-muted/50 p-6">
-          {(campaign.template?.html || renderMut.data?.html) ? (
-            <div className="border border-border rounded-lg overflow-hidden bg-card shadow-sm" style={{ width: 620 }}>
+          {campaign.template?.html || renderMut.data?.html ? (
+            <div
+              className="border border-border rounded-lg overflow-hidden bg-card shadow-sm"
+              style={{ width: 620 }}
+            >
               <iframe
                 srcDoc={campaign.template?.html ?? renderMut.data?.html}
                 className={`w-full transition-all duration-300 ${previewExpanded ? "h-[1200px]" : "h-[700px]"}`}
@@ -1246,7 +1636,9 @@ export default function CampaignDetailPage() {
           ) : renderMut.isPending ? (
             <div className="flex items-center justify-center py-16 w-full">
               <Loader2 className="w-4 h-4 text-muted-foreground animate-spin mr-2" />
-              <span className="text-[11px] font-sans text-muted-foreground">Putting the preview together…</span>
+              <span className="text-[11px] font-sans text-muted-foreground">
+                Putting the preview together…
+              </span>
             </div>
           ) : campaign.templateId ? (
             <Link
@@ -1254,8 +1646,12 @@ export default function CampaignDetailPage() {
               className="block p-8 bg-card rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center w-full max-w-md"
             >
               <Eye className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground">{campaign.template?.name ?? "Email Template"}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Open it to take a look or make changes</p>
+              <p className="text-[11px] text-muted-foreground">
+                {campaign.template?.name ?? "Email Template"}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Open it to take a look or make changes
+              </p>
             </Link>
           ) : (
             <div className="p-8 text-center w-full">

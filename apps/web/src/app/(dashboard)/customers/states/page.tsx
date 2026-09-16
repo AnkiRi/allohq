@@ -24,6 +24,46 @@ const DISCOUNTS = [
   "inconclusive",
 ];
 
+type StateOverview = {
+  total: number;
+  lifecycle: Array<{ key: string; count: number }>;
+  cycle: Array<{ key: string; count: number }>;
+  discounts: Array<{ key: string; count: number }>;
+  queue: {
+    due: number;
+    failed: number;
+    oldestDueAt: Date | string | null;
+    updatedLastHour: number;
+  };
+  transitions: Array<{
+    dimension: string;
+    fromValue: string | null;
+    toValue: string;
+    count: number;
+    lastOccurredAt: Date | string | null;
+  }>;
+};
+
+type ExplorerState = {
+  id: string;
+  lifecycleStage: string;
+  purchaseCyclePosition: string;
+  discountBehavior: string;
+  consentState: string;
+  deliveryHealth: string;
+  medianOrderIntervalDays: number | null;
+  reorderConfidence: number;
+  nextEvaluationAt: Date | string | null;
+  customer: { id: string; firstName: string | null; lastName: string | null; email: string };
+};
+
+type StateExplorer = {
+  states: ExplorerState[];
+  total: number;
+  page: number;
+  pages: number;
+};
+
 function words(value: string | null | undefined) {
   return value ? value.replaceAll("_", " ") : "unknown";
 }
@@ -86,15 +126,18 @@ export default function CustomerStatesPage() {
   const [cycle, setCycle] = useState("");
   const [discount, setDiscount] = useState("");
   const { submit: submitToJoon } = useAlloAI();
-  const overview = trpc.customers.stateOverview.useQuery();
-  const explorer = trpc.customers.stateExplorer.useQuery({
+  const overview = (trpc.customers.stateOverview as any).useQuery() as {
+    data?: StateOverview;
+    isLoading: boolean;
+  };
+  const explorer = (trpc.customers.stateExplorer as any).useQuery({
     page,
     limit: 25,
     search: search || undefined,
     lifecycle: lifecycle || undefined,
     cycle: cycle || undefined,
     discount: discount || undefined,
-  });
+  }) as { data?: StateExplorer; isLoading: boolean };
 
   const setFilter = (setter: (value: string) => void, value: string) => {
     setter(value);
