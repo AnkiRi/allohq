@@ -62,7 +62,7 @@ Give the merchant one legible reconciliation from requested audience to delivery
 
 ## Pass 2 — Explainable, scalable delivery timing
 
-Status: pending. Per-customer hour planning exists, but the recommendation is calculated after approval, uses one database-backed lookup and delayed job per recipient, ignores the computed best day and caps delays at twelve hours.
+Status: code complete; additive migration deployment, production acceptance and representative 100,000-recipient load proof remain. The implementation persists customer/store timing profiles, previews broad delivery cohorts before approval, groups recipients into bounded queue chunks and removes the twelve-hour truncation. Campaign day remains merchant-controlled; Joon uses best-day evidence as context rather than silently moving an approved campaign to another day.
 
 ### Outcome
 

@@ -6,13 +6,24 @@ import {
   requireVerifiedSenderDomain,
   withSesDeliveryAttempt,
 } from "@allohq/database";
-import { renderBrandedEmail, loadBrandKit, getOptimalSendTime, planCustomerDelivery } from "@allohq/customer-intelligence";
+import {
+  renderBrandedEmail,
+  loadBrandKit,
+  getTimingProfiles,
+  planCustomerDelivery,
+  DELIVERY_WINDOWS,
+  type DeliveryWindow,
+} from "@allohq/customer-intelligence";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import { sendEmail, selectedEmailProvider, sesSafeTag, engagementRank } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
-import { checkAllRules, checkQuietHours, loadStoreGovernorConfig, nextLocalHour } from "@allohq/communication-governor";
+import {
+  checkAllRules,
+  checkQuietHours,
+  loadStoreGovernorConfig,
+} from "@allohq/communication-governor";
 import {
   learnFromResults,
   assignVariant as abAssignVariant,
@@ -29,19 +40,20 @@ import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
 import { nextSesWarmupDelay, nextSesWarmupResume } from "../utils/ses-warmup-defer";
 import { campaignDeliveryCompletion } from "../utils/campaign-delivery-completion";
+import { deliveryWindowDelay } from "../utils/delivery-window";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
 // jobs and a finalize job (North Star #1: each customer sent at their own time).
 const emailSendQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, { connection: redisConnection });
 
-const MAX_SEND_DELAY_MS = 12 * 60 * 60 * 1000; // cap real per-customer scheduling at 12h (matches journeys)
 const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (seconds, not hours)
 
 // Per-customer decision bundle carried from the planner to the delayed delivery job.
 interface DeliveryPlan {
   channel: "email"; // v1 has no channel selection or channel-learning claim
   sendHour: number;
+  deliveryWindow: DeliveryWindow;
   toneKey: string;
   greeting: string;
   emoji: string;
@@ -72,32 +84,43 @@ interface DeliverOneData {
   stateSnap: unknown;
   plan: DeliveryPlan;
 }
+interface DeliverChunkData {
+  deliverChunk: true;
+  campaignId: string;
+  deliveries: DeliverOneData[];
+}
 interface FinalizeData {
   finalize: true;
   campaignId: string;
   attempt?: number;
 }
 
-/** Milliseconds to a zoned wall-clock hour, safe across UTC-offset changes. */
-function computeDelayMs(bestHour: number, isDemo: boolean, timezone = "UTC", now = new Date()): number {
-  try {
-    const currentHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hour12: false }).format(now)) % 24;
-    if (currentHour === bestHour) return 0;
-  } catch { /* nextLocalHour falls back safely to UTC */ }
-  const real = Math.max(0, nextLocalHour(now, bestHour, timezone).getTime() - now.getTime());
-  return Math.min(real, isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS);
+async function deliverChunk(data: DeliverChunkData) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(10, data.deliveries.length) }, async () => {
+    while (cursor < data.deliveries.length) {
+      const delivery = data.deliveries[cursor++];
+      if (delivery) await deliverOne(delivery);
+    }
+  });
+  await Promise.all(workers);
+  return { delivered: data.deliveries.length };
 }
 
-export const sendWorker = new Worker<SendJobData | DeliverOneData | FinalizeData>(
+export const sendWorker = new Worker<
+  SendJobData | DeliverOneData | DeliverChunkData | FinalizeData
+>(
   QUEUE_NAMES.EMAIL_SEND,
   async (job) => {
-    const data = job.data as SendJobData | DeliverOneData | FinalizeData;
+    const data = job.data as SendJobData | DeliverOneData | DeliverChunkData | FinalizeData;
     if ((data as DeliverOneData).deliverOne) return deliverOne(data as DeliverOneData);
-    if ((data as FinalizeData).finalize) return finalizeCampaign((data as FinalizeData).campaignId, data as FinalizeData);
+    if ((data as DeliverChunkData).deliverChunk) return deliverChunk(data as DeliverChunkData);
+    if ((data as FinalizeData).finalize)
+      return finalizeCampaign((data as FinalizeData).campaignId, data as FinalizeData);
     return planCampaignSend(
       (data as SendJobData).campaignId,
       job,
-      Boolean((data as SendJobData).forceImmediate),
+      Boolean((data as SendJobData).forceImmediate)
     );
   },
   { connection: redisConnection }
@@ -106,13 +129,13 @@ export const sendWorker = new Worker<SendJobData | DeliverOneData | FinalizeData
 // ---------------------------------------------------------------------------
 // PLANNER — resolves recipients, keeps the causal spine (holdout arm assignment,
 // CONTROL/withheld rows, decision-time state snapshot) INTACT, decides per
-// customer whether to SKIP (send-less) and their tone/channel/optimal time, and
-// fans out one delayed `deliver-one` job per customer to be sent at that time.
+// customer whether to SKIP (send-less), then groups treatment recipients into
+// bounded delivery-window chunks rather than creating one queue job per person.
 // ---------------------------------------------------------------------------
 export async function planCampaignSend(
   campaignId: string,
   job?: { updateProgress: (n: number) => Promise<void> },
-  forceImmediate = false,
+  forceImmediate = false
 ) {
   console.log(`Planning campaign send for ${campaignId}`);
 
@@ -124,7 +147,7 @@ export async function planCampaignSend(
   if (!campaign.template) throw new Error(`Campaign ${campaignId} has no template`);
   if (campaign.store.emailSendingPausedAt) {
     throw new Error(
-      `Campaign blocked: store email delivery is paused (${campaign.store.emailSendingPauseReason ?? "manual or safety pause"})`,
+      `Campaign blocked: store email delivery is paused (${campaign.store.emailSendingPauseReason ?? "manual or safety pause"})`
     );
   }
 
@@ -140,16 +163,22 @@ export async function planCampaignSend(
       blocks: campaign.template.blocks,
       html: campaign.template.html,
     },
-    segment: campaign.segment ? {
-      id: campaign.segment.id,
-      kind: campaign.segment.kind,
-      customerIds: campaign.segment.customerIds,
-      conditions: campaign.segment.conditions,
-      name: campaign.segment.name,
-    } : null,
+    segment: campaign.segment
+      ? {
+          id: campaign.segment.id,
+          kind: campaign.segment.kind,
+          customerIds: campaign.segment.customerIds,
+          conditions: campaign.segment.conditions,
+          name: campaign.segment.name,
+        }
+      : null,
     agentProposal: campaign.agentProposal,
   });
-  if (!campaign.approvedAt || !campaign.approvalChecksum || campaign.approvalChecksum !== currentChecksum) {
+  if (
+    !campaign.approvedAt ||
+    !campaign.approvalChecksum ||
+    campaign.approvalChecksum !== currentChecksum
+  ) {
     await prisma.campaign.update({
       where: { id: campaign.id },
       data: { status: "draft", approvalChecksum: null, approvedAt: null },
@@ -166,11 +195,19 @@ export async function planCampaignSend(
   const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
   const approvedAudience = campaignAudienceSnapshot(proposal);
   if (!approvedAudience) {
-    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "draft", approvalChecksum: null, approvedAt: null } });
-    throw new Error("Campaign audience was not frozen at approval; merchant re-approval is required");
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: "draft", approvalChecksum: null, approvedAt: null },
+    });
+    throw new Error(
+      "Campaign audience was not frozen at approval; merchant re-approval is required"
+    );
   }
   const approvedIds = new Set(approvedAudience.customerIds);
-  const audience = { ...currentAudience, eligible: currentAudience.eligible.filter((customer) => approvedIds.has(customer.id)) };
+  const audience = {
+    ...currentAudience,
+    eligible: currentAudience.eligible.filter((customer) => approvedIds.has(customer.id)),
+  };
   const customers = await prisma.customer.findMany({
     where: { id: { in: audience.eligible.map((customer) => customer.id) } },
     select: {
@@ -179,41 +216,79 @@ export async function planCampaignSend(
       firstName: true,
       lastName: true,
       rfmScore: {
-        select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true, recency: true, frequency: true, monetary: true, totalScore: true },
+        select: {
+          segment: true,
+          totalSpent: true,
+          orderCount: true,
+          avgOrderValue: true,
+          lastOrderAt: true,
+          recency: true,
+          frequency: true,
+          monetary: true,
+          totalScore: true,
+        },
       },
-      lifetimeValue: { select: { historicalLtv: true, predictedLtv: true, churnProbability: true } },
+      lifetimeValue: {
+        select: { historicalLtv: true, predictedLtv: true, churnProbability: true },
+      },
     },
   });
   if (selectedEmailProvider() === "ses") {
     const rankedAt = new Date();
-    const clicks = await prisma.messageLog.groupBy({ by: ["customerId"], where: { customerId: { in: customers.map((customer) => customer.id) }, clickedAt: { not: null } }, _max: { clickedAt: true } });
+    const clicks = await prisma.messageLog.groupBy({
+      by: ["customerId"],
+      where: {
+        customerId: { in: customers.map((customer) => customer.id) },
+        clickedAt: { not: null },
+      },
+      _max: { clickedAt: true },
+    });
     const latestClick = new Map(clicks.map((row) => [row.customerId, row._max.clickedAt]));
-    const signal = (customer: typeof customers[number]) => {
+    const signal = (customer: (typeof customers)[number]) => {
       const click = latestClick.get(customer.id);
       const purchase = customer.rfmScore?.lastOrderAt;
       return click && (!purchase || click > purchase) ? click : purchase;
     };
-    customers.sort((a, b) => engagementRank({ clickedOrBoughtAt: signal(a) }, rankedAt) - engagementRank({ clickedOrBoughtAt: signal(b) }, rankedAt));
+    customers.sort(
+      (a, b) =>
+        engagementRank({ clickedOrBoughtAt: signal(a) }, rankedAt) -
+        engagementRank({ clickedOrBoughtAt: signal(b) }, rankedAt)
+    );
   }
 
   const activeSubjectTest = await getActiveTestForStore(campaign.storeId, "subject_line");
-  console.log(`Audience resolved for ${campaign.name}: ${audience.requested} requested, ${customers.length} eligible`, audience.exclusions);
+  console.log(
+    `Audience resolved for ${campaign.name}: ${audience.requested} requested, ${customers.length} eligible`,
+    audience.exclusions
+  );
 
   // Causal-data moat: get (or create) the holdout experiment for this cohort.
   // Every campaign is a fresh randomized trial. Reusing a segment-level seed
   // would leave the same customer permanently held out across campaigns.
   const frozenHoldout = approvedAudience.holdout;
-  if (!frozenHoldout || Object.keys(frozenHoldout.assignments).length !== approvedAudience.customerIds.length) {
-    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "draft", approvalChecksum: null, approvedAt: null } });
-    throw new Error("Campaign holdout map was not frozen at approval; merchant re-approval is required");
+  if (
+    !frozenHoldout ||
+    Object.keys(frozenHoldout.assignments).length !== approvedAudience.customerIds.length
+  ) {
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: "draft", approvalChecksum: null, approvedAt: null },
+    });
+    throw new Error(
+      "Campaign holdout map was not frozen at approval; merchant re-approval is required"
+    );
   }
-  const experiment = await prisma.experiment.findFirst({ where: { id: frozenHoldout.experimentId, storeId: campaign.storeId } });
+  const experiment = await prisma.experiment.findFirst({
+    where: { id: frozenHoldout.experimentId, storeId: campaign.storeId },
+  });
   if (!experiment) throw new Error("Frozen campaign experiment no longer exists");
 
   // North Star #2 — make the offer real before any recipient is planned. A
   // campaign must never mention a code that Shopify rejected.
-  const discountPercent: number | null = typeof proposal["discountPercent"] === "number" ? proposal["discountPercent"] : null;
-  const discountCode: string | null = typeof proposal["discountCode"] === "string" ? proposal["discountCode"] : null;
+  const discountPercent: number | null =
+    typeof proposal["discountPercent"] === "number" ? proposal["discountPercent"] : null;
+  const discountCode: string | null =
+    typeof proposal["discountCode"] === "string" ? proposal["discountCode"] : null;
   if (discountPercent != null) {
     const cap = await prisma.guardrail.findFirst({
       where: { storeId: campaign.storeId, ruleType: "max_discount", isActive: true },
@@ -226,7 +301,9 @@ export async function planCampaignSend(
         where: { id: campaignId },
         data: { status: "draft", approvalChecksum: null, approvedAt: null },
       });
-      throw new Error(`Campaign blocked: ${discountPercent}% exceeds the current ${maximum}% discount guardrail`);
+      throw new Error(
+        `Campaign blocked: ${discountPercent}% exceeds the current ${maximum}% discount guardrail`
+      );
     }
   }
   let offerId: string | null = typeof proposal["offerId"] === "string" ? proposal["offerId"] : null;
@@ -235,10 +312,22 @@ export async function planCampaignSend(
       const client = await getShopifyAdminClient(campaign.storeId);
       const endsAt = new Date();
       endsAt.setDate(endsAt.getDate() + 30);
-      const res = await createDiscount(client, { code: discountCode, valueType: "percentage", value: discountPercent ?? 10, title: `Joon: ${campaign.name}`, oncePerCustomer: true, endsAt });
+      const res = await createDiscount(client, {
+        code: discountCode,
+        valueType: "percentage",
+        value: discountPercent ?? 10,
+        title: `Joon: ${campaign.name}`,
+        oncePerCustomer: true,
+        endsAt,
+      });
       offerId = String(res.priceRule.id);
-      await prisma.campaign.update({ where: { id: campaignId }, data: { agentProposal: { ...proposal, offerId } } });
-      console.log(`[send-worker] Created Shopify discount ${discountCode} (priceRule ${offerId}) for campaign ${campaignId}`);
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { agentProposal: { ...proposal, offerId } },
+      });
+      console.log(
+        `[send-worker] Created Shopify discount ${discountCode} (priceRule ${offerId}) for campaign ${campaignId}`
+      );
     } catch (err: any) {
       const message = err?.message ?? String(err);
       await prisma.campaign.update({
@@ -255,9 +344,7 @@ export async function planCampaignSend(
           },
         },
       });
-      throw new Error(
-        `Campaign blocked: Shopify could not create ${discountCode}: ${message}`,
-      );
+      throw new Error(`Campaign blocked: Shopify could not create ${discountCode}: ${message}`);
     }
   }
   const hasDiscount = !!discountCode;
@@ -266,7 +353,7 @@ export async function planCampaignSend(
   const processedCustomerIds = new Set(
     (await prisma.messageLog.findMany({ where: { campaignId }, select: { customerId: true } }))
       .map((m) => m.customerId)
-      .filter((id): id is string => !!id),
+      .filter((id): id is string => !!id)
   );
 
   let scheduledCount = 0;
@@ -282,6 +369,11 @@ export async function planCampaignSend(
   };
   const campaignArms = new Map(Object.entries(frozenHoldout.assignments));
   const planningGovernorConfig = await loadStoreGovernorConfig(campaign.storeId);
+  const timingProfiles = await getTimingProfiles(
+    campaign.storeId,
+    customers.map((customer) => customer.id)
+  );
+  const plannedDeliveries = new Map<number, DeliverOneData[]>();
 
   for (const customer of customers) {
     if (processedCustomerIds.has(customer.id)) continue;
@@ -293,7 +385,14 @@ export async function planCampaignSend(
     const stateSnap = {
       capturedAt: new Date().toISOString(),
       segment: rfm?.segment ?? null,
-      rfm: rfm ? { recency: rfm.recency, frequency: rfm.frequency, monetary: rfm.monetary, totalScore: rfm.totalScore } : null,
+      rfm: rfm
+        ? {
+            recency: rfm.recency,
+            frequency: rfm.frequency,
+            monetary: rfm.monetary,
+            totalScore: rfm.totalScore,
+          }
+        : null,
       totalSpent: rfm?.totalSpent ?? null,
       orderCount: rfm?.orderCount ?? null,
       avgOrderValue: rfm?.avgOrderValue ?? null,
@@ -308,7 +407,9 @@ export async function planCampaignSend(
     const arm = campaignArms.get(customer.id) ?? "TREATMENT";
 
     // --- Per-customer plan (North Star #1) ---
-    const recencyDays = rfm?.lastOrderAt ? Math.floor((Date.now() - rfm.lastOrderAt.getTime()) / 86400000) : null;
+    const recencyDays = rfm?.lastOrderAt
+      ? Math.floor((Date.now() - rfm.lastOrderAt.getTime()) / 86400000)
+      : null;
     const decision = planCustomerDelivery({
       segment: rfm?.segment ?? null,
       totalSpent: rfm?.totalSpent ?? null,
@@ -319,17 +420,17 @@ export async function planCampaignSend(
       hasDiscount,
     });
     const selectedChannel = "email" as const;
-    let bestHour = 10;
+    const timing = timingProfiles.get(customer.id);
+    const deliveryWindow = timing?.window ?? "morning";
+    let bestHour = DELIVERY_WINDOWS[deliveryWindow].startHour;
     let timingSource: DeliveryPlan["timingSource"] = "default";
     let timingConfidence = 0;
     let deliveryTimezone = campaign.store.timezone ?? "UTC";
-    try {
-      const timing = await getOptimalSendTime(customer.id, campaign.storeId);
-      bestHour = timing.bestHour;
+    if (timing) {
       timingSource = timing.source;
       timingConfidence = timing.confidence;
       deliveryTimezone = timing.timezone;
-    } catch { /* fall back to 10:00 */ }
+    }
 
     // SKIP (send-less): record the decision as a "skipped" row with treatmentArm
     // NULL so it is excluded from EVERY lift reader (they all filter treatmentArm
@@ -353,8 +454,23 @@ export async function planCampaignSend(
           discountCode: discountCode ?? null,
           offerId,
           messageVariantId: decision.toneKey,
-          messageFeatures: { channel: selectedChannel, messageType: "campaign", hasDiscount, discountPercent, segment: rfm?.segment ?? null, decision: "skip", skipReason: decision.skipReason },
-          metadata: { skipped: true, skipReason: decision.skipReason, reasoning: decision.reasoning, selectedChannel, bestHour, toneKey: decision.toneKey },
+          messageFeatures: {
+            channel: selectedChannel,
+            messageType: "campaign",
+            hasDiscount,
+            discountPercent,
+            segment: rfm?.segment ?? null,
+            decision: "skip",
+            skipReason: decision.skipReason,
+          },
+          metadata: {
+            skipped: true,
+            skipReason: decision.skipReason,
+            reasoning: decision.reasoning,
+            selectedChannel,
+            bestHour,
+            toneKey: decision.toneKey,
+          },
         },
       });
       continue;
@@ -391,91 +507,126 @@ export async function planCampaignSend(
     if (activeSubjectTest) {
       abVariant = abAssignVariant(activeSubjectTest.id, customer.id, activeSubjectTest.splitRatio);
       abTestId = activeSubjectTest.id;
-      const variantData = abVariant === "a" ? (activeSubjectTest.variantA as Record<string, unknown>) : (activeSubjectTest.variantB as Record<string, unknown>);
-      if (variantData && typeof variantData["value"] === "string") effectiveSubject = variantData["value"];
+      const variantData =
+        abVariant === "a"
+          ? (activeSubjectTest.variantA as Record<string, unknown>)
+          : (activeSubjectTest.variantB as Record<string, unknown>);
+      if (variantData && typeof variantData["value"] === "string")
+        effectiveSubject = variantData["value"];
     }
 
-    // Fan out a delayed delivery job at THIS customer's optimal time.
+    // Assign this recipient to an explainable broad delivery-window cohort.
     const planningNow = new Date();
-    const quietDecision = checkQuietHours(deliveryTimezone, planningGovernorConfig.quietHours, planningNow);
+    const quietDecision = checkQuietHours(
+      deliveryTimezone,
+      planningGovernorConfig.quietHours,
+      planningNow
+    );
     const deliveryDelay = forceImmediate
       ? 0
       : quietDecision.allowed
-        ? computeDelayMs(bestHour, isDemo, deliveryTimezone, planningNow)
-        : Math.min(
-            Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime()),
-            isDemo ? DEMO_MAX_DELAY_MS : MAX_SEND_DELAY_MS,
-          );
+        ? deliveryWindowDelay({
+            customerId: customer.id,
+            window: deliveryWindow,
+            timezone: deliveryTimezone,
+            now: planningNow,
+            isDemo,
+          })
+        : isDemo
+          ? DEMO_MAX_DELAY_MS
+          : Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime());
     const deliveryAt = new Date(planningNow.getTime() + deliveryDelay);
-    earliestDeliveryTimestamp = earliestDeliveryTimestamp == null || deliveryAt.getTime() < earliestDeliveryTimestamp ? deliveryAt.getTime() : earliestDeliveryTimestamp;
-    latestDeliveryTimestamp = latestDeliveryTimestamp == null || deliveryAt.getTime() > latestDeliveryTimestamp ? deliveryAt.getTime() : latestDeliveryTimestamp;
+    earliestDeliveryTimestamp =
+      earliestDeliveryTimestamp == null || deliveryAt.getTime() < earliestDeliveryTimestamp
+        ? deliveryAt.getTime()
+        : earliestDeliveryTimestamp;
+    latestDeliveryTimestamp =
+      latestDeliveryTimestamp == null || deliveryAt.getTime() > latestDeliveryTimestamp
+        ? deliveryAt.getTime()
+        : latestDeliveryTimestamp;
     timingSources[timingSource] += 1;
     if (!quietDecision.allowed) quietHoursDeferredCount += 1;
-    await emailSendQueue.add(
-      "deliver-one",
-      {
-        deliverOne: true,
-        forceImmediate,
-        campaignId,
-        customerId: customer.id,
-        experimentId: experiment.id,
-        effectiveSubject,
-        abTestId,
-        abVariant,
-        discountCode: discountCode ?? null,
-        offerId,
-        discountPercent,
-        stateSnap,
-        plan: {
-          channel: selectedChannel,
-          sendHour: bestHour,
-          toneKey: decision.toneKey,
-          greeting: decision.greeting,
-          emoji: decision.emoji,
-          signoff: decision.signoff,
-          reasoning: decision.reasoning,
-          timingSource,
-          timingConfidence,
-          timezone: deliveryTimezone,
-        },
-      } as DeliverOneData,
-      {
-        delay: deliveryDelay,
-        jobId: `deliver-${campaignId}-${customer.id}`,
-        attempts: 5,
-        backoff: { type: "exponential", delay: 2_000 },
-        removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
-        removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+    const deliveryData = {
+      deliverOne: true,
+      forceImmediate,
+      campaignId,
+      customerId: customer.id,
+      experimentId: experiment.id,
+      effectiveSubject,
+      abTestId,
+      abVariant,
+      discountCode: discountCode ?? null,
+      offerId,
+      discountPercent,
+      stateSnap,
+      plan: {
+        channel: selectedChannel,
+        sendHour: bestHour,
+        deliveryWindow,
+        toneKey: decision.toneKey,
+        greeting: decision.greeting,
+        emoji: decision.emoji,
+        signoff: decision.signoff,
+        reasoning: decision.reasoning,
+        timingSource,
+        timingConfidence,
+        timezone: deliveryTimezone,
       },
-    );
+    } as DeliverOneData;
+    const deliveryBucket = Math.floor(deliveryAt.getTime() / (15 * 60 * 1000)) * 15 * 60 * 1000;
+    const bucket = plannedDeliveries.get(deliveryBucket) ?? [];
+    bucket.push(deliveryData);
+    plannedDeliveries.set(deliveryBucket, bucket);
     scheduledCount++;
   }
 
+  let chunkIndex = 0;
+  for (const [deliveryTimestamp, deliveries] of plannedDeliveries) {
+    for (let index = 0; index < deliveries.length; index += 100) {
+      await emailSendQueue.add(
+        "deliver-chunk",
+        {
+          deliverChunk: true,
+          campaignId,
+          deliveries: deliveries.slice(index, index + 100),
+        } as DeliverChunkData,
+        {
+          delay: Math.max(0, deliveryTimestamp - Date.now()),
+          jobId: `deliver-chunk-${campaignId}-${chunkIndex++}`,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 2_000 },
+          removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+        }
+      );
+    }
+  }
+
   const hasDelayedDelivery = Boolean(
-    earliestDeliveryTimestamp && earliestDeliveryTimestamp > Date.now() + 1_000,
+    earliestDeliveryTimestamp && earliestDeliveryTimestamp > Date.now() + 1_000
   );
-  const dominantTimingSource = (Object.entries(timingSources) as Array<[
-    DeliveryPlan["timingSource"],
-    number,
-  ]>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "default";
+  const dominantTimingSource =
+    (Object.entries(timingSources) as Array<[DeliveryPlan["timingSource"], number]>).sort(
+      (left, right) => right[1] - left[1]
+    )[0]?.[0] ?? "default";
   const timingReason = forceImmediate
     ? "The merchant chose immediate delivery instead of Joon's recommended timing."
     : quietHoursDeferredCount > 0
-    ? `${quietHoursDeferredCount} ${quietHoursDeferredCount === 1 ? "recipient is" : "recipients are"} deferred until after quiet hours.`
-    : dominantTimingSource === "customer"
-      ? "Joon chose times from each customer's previous email engagement."
-      : dominantTimingSource === "store"
-        ? "Joon chose the time when this store's customers usually engage."
-        : "There is not enough engagement history yet, so Joon used the 10:00 default send time.";
+      ? `${quietHoursDeferredCount} ${quietHoursDeferredCount === 1 ? "recipient is" : "recipients are"} deferred until after quiet hours.`
+      : dominantTimingSource === "customer"
+        ? "Joon chose times from each customer's previous email engagement."
+        : dominantTimingSource === "store"
+          ? "Joon chose the time when this store's customers usually engage."
+          : "There is not enough engagement history yet, so Joon used the 10:00 default send time.";
   const timingConsequence = forceImmediate
     ? "Timing was overridden; consent, suppression, sender-domain and recipient allowlist checks still ran."
     : quietHoursDeferredCount > 0
-    ? "Sending now may reach customers during quiet hours, which can reduce engagement and increase opt-outs."
-    : dominantTimingSource === "customer"
-      ? "Sending now may reduce opens because it ignores customers' observed engagement windows."
-      : dominantTimingSource === "store"
-        ? "Sending now may reduce opens because it ignores the store's observed engagement window."
-        : "Sending now may reduce opens; this is a cautious default until Joon has enough engagement history to personalize the time.";
+      ? "Sending now may reach customers during quiet hours, which can reduce engagement and increase opt-outs."
+      : dominantTimingSource === "customer"
+        ? "Sending now may reduce opens because it ignores customers' observed engagement windows."
+        : dominantTimingSource === "store"
+          ? "Sending now may reduce opens because it ignores the store's observed engagement window."
+          : "Sending now may reduce opens; this is a cautious default until Joon has enough engagement history to personalize the time.";
 
   // A planned delivery is scheduled, not sending. `deliverOne` moves the campaign
   // to sending only when a provider attempt actually begins.
@@ -497,8 +648,14 @@ export async function planCampaignSend(
           skipped: skippedCount,
           at: new Date().toISOString(),
           delivery: {
-            earliestAt: earliestDeliveryTimestamp == null ? null : new Date(earliestDeliveryTimestamp).toISOString(),
-            latestAt: latestDeliveryTimestamp == null ? null : new Date(latestDeliveryTimestamp).toISOString(),
+            earliestAt:
+              earliestDeliveryTimestamp == null
+                ? null
+                : new Date(earliestDeliveryTimestamp).toISOString(),
+            latestAt:
+              latestDeliveryTimestamp == null
+                ? null
+                : new Date(latestDeliveryTimestamp).toISOString(),
             reason: timingReason,
             consequence: timingConsequence,
             timingSource: dominantTimingSource,
@@ -517,10 +674,12 @@ export async function planCampaignSend(
     {
       delay: Math.max(0, (latestDeliveryTimestamp ?? Date.now()) - Date.now()) + 60_000,
       jobId: `finalize-${campaignId}`,
-    },
+    }
   );
 
-  console.log(`Campaign ${campaign.name} planned: ${scheduledCount} scheduled, ${controlCount} held out (CONTROL), ${skippedCount} skipped (send-less) via experiment ${experiment.id}`);
+  console.log(
+    `Campaign ${campaign.name} planned: ${scheduledCount} scheduled, ${controlCount} held out (CONTROL), ${skippedCount} skipped (send-less) via experiment ${experiment.id}`
+  );
   await job?.updateProgress(100);
   return { scheduled: scheduledCount, control: controlCount, skipped: skippedCount };
 }
@@ -531,7 +690,20 @@ export async function planCampaignSend(
 // state) from the inline version, plus per-customer tone slotting.
 // ---------------------------------------------------------------------------
 export async function deliverOne(data: DeliverOneData) {
-  const { campaignId, customerId, experimentId, effectiveSubject, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan, forceImmediate = false } = data;
+  const {
+    campaignId,
+    customerId,
+    experimentId,
+    effectiveSubject,
+    abTestId,
+    abVariant,
+    discountCode,
+    offerId,
+    discountPercent,
+    stateSnap,
+    plan,
+    forceImmediate = false,
+  } = data;
 
   const deliveryKey = `campaign:${campaignId}:customer:${customerId}:email:treatment`;
   // Provider and database idempotency share one stable key. Failed rows are
@@ -540,10 +712,7 @@ export async function deliverOne(data: DeliverOneData) {
     where: { deliveryKey },
     select: { id: true, status: true },
   });
-  if (
-    existing &&
-    !["failed", "queued"].includes(existing.status)
-  ) {
+  if (existing && !["failed", "queued"].includes(existing.status)) {
     return { skipped: true, reason: "already_delivered" };
   }
 
@@ -567,16 +736,22 @@ export async function deliverOne(data: DeliverOneData) {
       blocks: campaign.template.blocks,
       html: campaign.template.html,
     },
-    segment: campaign.segment ? {
-      id: campaign.segment.id,
-      kind: campaign.segment.kind,
-      customerIds: campaign.segment.customerIds,
-      conditions: campaign.segment.conditions,
-      name: campaign.segment.name,
-    } : null,
+    segment: campaign.segment
+      ? {
+          id: campaign.segment.id,
+          kind: campaign.segment.kind,
+          customerIds: campaign.segment.customerIds,
+          conditions: campaign.segment.conditions,
+          name: campaign.segment.name,
+        }
+      : null,
     agentProposal: campaign.agentProposal,
   });
-  if (!campaign.approvedAt || !campaign.approvalChecksum || campaign.approvalChecksum !== deliveryChecksum) {
+  if (
+    !campaign.approvedAt ||
+    !campaign.approvalChecksum ||
+    campaign.approvalChecksum !== deliveryChecksum
+  ) {
     await prisma.campaign.update({
       where: { id: campaign.id },
       data: { status: "draft", approvalChecksum: null, approvedAt: null },
@@ -587,8 +762,19 @@ export async function deliverOne(data: DeliverOneData) {
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
     select: {
-      id: true, email: true, firstName: true, lastName: true,
-      rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true } },
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      rfmScore: {
+        select: {
+          segment: true,
+          totalSpent: true,
+          orderCount: true,
+          avgOrderValue: true,
+          lastOrderAt: true,
+        },
+      },
       lifetimeValue: { select: { historicalLtv: true, churnProbability: true } },
     },
   });
@@ -641,7 +827,15 @@ export async function deliverOne(data: DeliverOneData) {
   // Governor check AT SEND TIME — now honoring the merchant's OWN limits (weekly
   // cap / quiet hours / timezone) from onboarding, not store-agnostic defaults.
   const govConfig = await loadStoreGovernorConfig(campaign.storeId);
-  const governorCheck = await checkAllRules({ customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId, ...govConfig, timezone: plan.timezone ?? govConfig.timezone });
+  const governorCheck = await checkAllRules({
+    customerId,
+    storeId: campaign.storeId,
+    channel: "email",
+    messageType: "campaign",
+    campaignId,
+    ...govConfig,
+    timezone: plan.timezone ?? govConfig.timezone,
+  });
   const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
   const fatigueOverrideIds = Array.isArray(proposal.overrideFatigueCustomerIds)
     ? proposal.overrideFatigueCustomerIds.filter(
@@ -649,13 +843,16 @@ export async function deliverOne(data: DeliverOneData) {
       )
     : [];
   const hasFatigueOverride =
-    governorCheck.rule?.includes("fatigue") === true &&
-    fatigueOverrideIds.includes(customerId);
+    governorCheck.rule?.includes("fatigue") === true && fatigueOverrideIds.includes(customerId);
   const collisionOverrideIds = Array.isArray(proposal.overrideCollisionCustomerIds)
-    ? proposal.overrideCollisionCustomerIds.filter((value): value is string => typeof value === "string")
+    ? proposal.overrideCollisionCustomerIds.filter(
+        (value): value is string => typeof value === "string"
+      )
     : [];
   const cooldownOverrideIds = Array.isArray(proposal.overrideCooldownCustomerIds)
-    ? proposal.overrideCooldownCustomerIds.filter((value): value is string => typeof value === "string")
+    ? proposal.overrideCooldownCustomerIds.filter(
+        (value): value is string => typeof value === "string"
+      )
     : [];
   const hasCollisionOverride =
     governorCheck.rule?.includes("collision") === true && collisionOverrideIds.includes(customerId);
@@ -670,7 +867,9 @@ export async function deliverOne(data: DeliverOneData) {
   if (!governorCheck.allowed && !hasGovernorOverride) {
     if (governorCheck.rule === "quiet_hours" && governorCheck.delayUntil) {
       if (forceImmediate) {
-        console.log(`[send-worker] Merchant timing override bypassed quiet hours for campaign ${campaignId}, customer ${customerId}`);
+        console.log(
+          `[send-worker] Merchant timing override bypassed quiet hours for campaign ${campaignId}, customer ${customerId}`
+        );
       } else {
         const now = new Date();
         await emailSendQueue.add("deliver-one", data, {
@@ -695,23 +894,25 @@ export async function deliverOne(data: DeliverOneData) {
           data: suppressionData,
         });
       } else {
-        await prisma.messageLog.create({ data: {
-          deliveryKey,
-          workspaceId: campaign.store.workspaceId,
-          storeId: campaign.storeId,
-          customerId,
-          channel: "email",
-          to: customer.email,
-          subject: effectiveSubject,
-          campaignId,
-          treatmentArm: "TREATMENT",
-          experimentId,
-          customerStateSnap: stateSnap as any,
-          discountCode: discountCode ?? null,
-          offerId,
-          messageVariantId: plan.toneKey,
-          ...suppressionData,
-        } });
+        await prisma.messageLog.create({
+          data: {
+            deliveryKey,
+            workspaceId: campaign.store.workspaceId,
+            storeId: campaign.storeId,
+            customerId,
+            channel: "email",
+            to: customer.email,
+            subject: effectiveSubject,
+            campaignId,
+            treatmentArm: "TREATMENT",
+            experimentId,
+            customerStateSnap: stateSnap as any,
+            discountCode: discountCode ?? null,
+            offerId,
+            messageVariantId: plan.toneKey,
+            ...suppressionData,
+          },
+        });
       }
       return { suppressed: true };
     }
@@ -733,7 +934,11 @@ export async function deliverOne(data: DeliverOneData) {
     ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
     avg_order_value: `$${(customer.rfmScore?.avgOrderValue ?? 0).toFixed(2)}`,
     last_order_date: customer.rfmScore?.lastOrderAt
-      ? customer.rfmScore.lastOrderAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      ? customer.rfmScore.lastOrderAt.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
       : "N/A",
     days_since_purchase: customer.rfmScore?.lastOrderAt
       ? String(Math.floor((now.getTime() - customer.rfmScore.lastOrderAt.getTime()) / 86400000))
@@ -772,27 +977,29 @@ export async function deliverOne(data: DeliverOneData) {
           } as any,
         },
       })
-    : await prisma.messageLog.create({ data: {
-      deliveryKey,
-      workspaceId: campaign.store.workspaceId,
-      storeId: campaign.storeId,
-      customerId,
-      channel: "email",
-      to: customer.email,
-      subject: effectiveSubject,
-      templateId: campaign.templateId,
-      campaignId,
-      status: "queued",
-      treatmentArm: "TREATMENT",
-      experimentId,
-      customerStateSnap: stateSnap as any,
-      messageFeatures,
-      discountCode: discountCode ?? null,
-      offerId,
-      messageVariantId: plan.toneKey,
-      sendCost: messagingCostFor("email"),
-      metadata: { plan, ...(abTestId ? { abTestId, abVariant } : {}) } as any,
-    } });
+    : await prisma.messageLog.create({
+        data: {
+          deliveryKey,
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          customerId,
+          channel: "email",
+          to: customer.email,
+          subject: effectiveSubject,
+          templateId: campaign.templateId,
+          campaignId,
+          status: "queued",
+          treatmentArm: "TREATMENT",
+          experimentId,
+          customerStateSnap: stateSnap as any,
+          messageFeatures,
+          discountCode: discountCode ?? null,
+          offerId,
+          messageVariantId: plan.toneKey,
+          sendCost: messagingCostFor("email"),
+          metadata: { plan, ...(abTestId ? { abTestId, abVariant } : {}) } as any,
+        },
+      });
 
   // Blocks + products + brand kit for rendering.
   const blocks = campaign.template.blocks as unknown as EmailBlock[];
@@ -805,24 +1012,56 @@ export async function deliverOne(data: DeliverOneData) {
   if (productIds.length > 0) {
     const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
     for (const p of products) {
-      productsMap[p.id] = { id: p.id, title: p.title, description: p.description ?? undefined, imageUrl: p.imageUrl ?? undefined, price: p.price, compareAtPrice: p.compareAtPrice ?? undefined, handle: p.handle };
+      productsMap[p.id] = {
+        id: p.id,
+        title: p.title,
+        description: p.description ?? undefined,
+        imageUrl: p.imageUrl ?? undefined,
+        price: p.price,
+        compareAtPrice: p.compareAtPrice ?? undefined,
+        handle: p.handle,
+      };
     }
   }
   const hasDynamicProducts = blocks.some(
-    (b) => (b.type === "product" && b.props.source && b.props.source !== "manual") || (b.type === "product_grid" && b.props.source && b.props.source !== "manual"),
+    (b) =>
+      (b.type === "product" && b.props.source && b.props.source !== "manual") ||
+      (b.type === "product_grid" && b.props.source && b.props.source !== "manual")
   );
-  const maxDynamicCount = blocks.reduce((max, b) => (b.type === "product_grid" && b.props.dynamicProductCount ? Math.max(max, b.props.dynamicProductCount) : max), hasDynamicProducts ? 4 : 0);
+  const maxDynamicCount = blocks.reduce(
+    (max, b) =>
+      b.type === "product_grid" && b.props.dynamicProductCount
+        ? Math.max(max, b.props.dynamicProductCount)
+        : max,
+    hasDynamicProducts ? 4 : 0
+  );
 
   let dynamicProducts: ProductData[] | undefined;
   if (hasDynamicProducts && maxDynamicCount > 0) {
     try {
-      const recs = await getRecommendations({ storeId: campaign.storeId, customerId, limit: maxDynamicCount });
+      const recs = await getRecommendations({
+        storeId: campaign.storeId,
+        customerId,
+        limit: maxDynamicCount,
+      });
       if (recs.length > 0) {
-        const resolved = await resolveProducts(campaign.storeId, recs.map((r) => r.productId));
-        dynamicProducts = resolved.map((r) => ({ id: r.productId, title: r.title, price: r.price, compareAtPrice: r.compareAtPrice, imageUrl: r.imageUrl, handle: r.handle }));
+        const resolved = await resolveProducts(
+          campaign.storeId,
+          recs.map((r) => r.productId)
+        );
+        dynamicProducts = resolved.map((r) => ({
+          id: r.productId,
+          title: r.title,
+          price: r.price,
+          compareAtPrice: r.compareAtPrice,
+          imageUrl: r.imageUrl,
+          handle: r.handle,
+        }));
       }
     } catch (err: any) {
-      console.warn(`[send-worker] Dynamic product resolution failed for ${customerId}: ${err.message}`);
+      console.warn(
+        `[send-worker] Dynamic product resolution failed for ${customerId}: ${err.message}`
+      );
     }
   }
 
@@ -847,71 +1086,164 @@ export async function deliverOne(data: DeliverOneData) {
     products: productsMap,
     dynamicProducts,
     previewMode: false,
-    tracking: { utmSource: "allo", utmMedium: "email", utmCampaign: campaignId, utmContent: messageLog.id, storeDomain: campaign.store.shopDomain },
+    tracking: {
+      utmSource: "allo",
+      utmMedium: "email",
+      utmCampaign: campaignId,
+      utmContent: messageLog.id,
+      storeDomain: campaign.store.shopDomain,
+    },
   });
 
   // Demo/sandbox safety: the seeded demo store NEVER hits a real provider.
-  const usingSes = selectedEmailProvider() === "ses" && campaign.store?.shopDomain !== DEMO_STORE_DOMAIN;
-  const capacity = campaign.store?.shopDomain === DEMO_STORE_DOMAIN || usingSes
-    ? null
-    : await acquireEmailCapacity(campaign.storeId, campaign.store.installedAt);
+  const usingSes =
+    selectedEmailProvider() === "ses" && campaign.store?.shopDomain !== DEMO_STORE_DOMAIN;
+  const capacity =
+    campaign.store?.shopDomain === DEMO_STORE_DOMAIN || usingSes
+      ? null
+      : await acquireEmailCapacity(campaign.storeId, campaign.store.installedAt);
   if (capacity && !capacity.allowed) {
-    await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${capacity.reason}` } });
+    await prisma.messageLog.update({
+      where: { id: messageLog.id },
+      data: { status: "queued", error: `Deferred: ${capacity.reason}` },
+    });
     if (selectedEmailProvider() === "ses" && capacity.reason === "daily_cap") {
       const nextDay = nextSesWarmupResume();
-      await emailSendQueue.add("deliver-one", { deliverOne: true, campaignId, customerId, experimentId, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan }, { jobId: `${deliveryKey}-warmup-${nextDay.toISOString().slice(0, 10)}`, delay: nextSesWarmupDelay() });
+      await emailSendQueue.add(
+        "deliver-one",
+        {
+          deliverOne: true,
+          campaignId,
+          customerId,
+          experimentId,
+          abTestId,
+          abVariant,
+          discountCode,
+          offerId,
+          discountPercent,
+          stateSnap,
+          plan,
+        },
+        {
+          jobId: `${deliveryKey}-warmup-${nextDay.toISOString().slice(0, 10)}`,
+          delay: nextSesWarmupDelay(),
+        }
+      );
       return { sent: false, deferred: true };
     }
     throw new Error(`Email capacity unavailable: ${capacity.reason}`);
   }
   let result;
   try {
-    result = campaign.store?.shopDomain === DEMO_STORE_DOMAIN
-      ? ({ status: "sent", externalId: `demo-${messageLog.id}`, provider: "demo" } as any)
-      : await withSesDeliveryAttempt(prisma, {
-          enabled: usingSes,
-          deliveryKey,
-          storeId: campaign.storeId,
-          providerTag: sesSafeTag(deliveryKey),
-          acquireSubmissionLease: usingSes ? async () => {
-            const lease = await acquireEmailCapacity(campaign.storeId, campaign.store.installedAt);
-            if (!lease.allowed) {
-              await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "queued", error: `Deferred: ${lease.reason}` } });
-              if (lease.reason === "daily_cap") {
-                const nextDay = nextSesWarmupResume();
-                await emailSendQueue.add("deliver-one", { deliverOne: true, campaignId, customerId, experimentId, abTestId, abVariant, discountCode, offerId, discountPercent, stateSnap, plan }, { jobId: `${deliveryKey}-warmup-${nextDay.toISOString().slice(0, 10)}`, delay: nextSesWarmupDelay() });
-              }
-              throw new Error(`Email capacity unavailable: ${lease.reason}`);
-            }
-            return lease;
-          } : undefined,
-        }, () => sendEmail({
-          channel: "email",
-          to: customer.email,
-          subject: effectiveSubject,
-          html,
-          from: fromAddress,
-          replyTo: brandSender?.replyToEmail ?? undefined,
-          headers: { "List-Unsubscribe": `<${variables.unsubscribe_url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
-          idempotencyKey: deliveryKey,
-          storeId: campaign.storeId,
-          campaignId,
-          emailStream: "broadcast",
-        }));
+    result =
+      campaign.store?.shopDomain === DEMO_STORE_DOMAIN
+        ? ({ status: "sent", externalId: `demo-${messageLog.id}`, provider: "demo" } as any)
+        : await withSesDeliveryAttempt(
+            prisma,
+            {
+              enabled: usingSes,
+              deliveryKey,
+              storeId: campaign.storeId,
+              providerTag: sesSafeTag(deliveryKey),
+              acquireSubmissionLease: usingSes
+                ? async () => {
+                    const lease = await acquireEmailCapacity(
+                      campaign.storeId,
+                      campaign.store.installedAt
+                    );
+                    if (!lease.allowed) {
+                      await prisma.messageLog.update({
+                        where: { id: messageLog.id },
+                        data: { status: "queued", error: `Deferred: ${lease.reason}` },
+                      });
+                      if (lease.reason === "daily_cap") {
+                        const nextDay = nextSesWarmupResume();
+                        await emailSendQueue.add(
+                          "deliver-one",
+                          {
+                            deliverOne: true,
+                            campaignId,
+                            customerId,
+                            experimentId,
+                            abTestId,
+                            abVariant,
+                            discountCode,
+                            offerId,
+                            discountPercent,
+                            stateSnap,
+                            plan,
+                          },
+                          {
+                            jobId: `${deliveryKey}-warmup-${nextDay.toISOString().slice(0, 10)}`,
+                            delay: nextSesWarmupDelay(),
+                          }
+                        );
+                      }
+                      throw new Error(`Email capacity unavailable: ${lease.reason}`);
+                    }
+                    return lease;
+                  }
+                : undefined,
+            },
+            () =>
+              sendEmail({
+                channel: "email",
+                to: customer.email,
+                subject: effectiveSubject,
+                html,
+                from: fromAddress,
+                replyTo: brandSender?.replyToEmail ?? undefined,
+                headers: {
+                  "List-Unsubscribe": `<${variables.unsubscribe_url}>`,
+                  "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                },
+                idempotencyKey: deliveryKey,
+                storeId: campaign.storeId,
+                campaignId,
+                emailStream: "broadcast",
+              })
+          );
   } finally {
     await capacity?.release();
   }
 
   if (result.status === "sent") {
-    await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "sent", externalId: result.externalId, provider: result.provider ?? "resend", sentAt: new Date() } });
+    await prisma.messageLog.update({
+      where: { id: messageLog.id },
+      data: {
+        status: "sent",
+        externalId: result.externalId,
+        provider: result.provider ?? "resend",
+        sentAt: new Date(),
+      },
+    });
     if (abTestId && abVariant) {
-      try { await recordConversion(abTestId, abVariant, "sent"); } catch (err: any) { console.warn(`[send-worker] A/B test recording failed: ${err.message}`); }
+      try {
+        await recordConversion(abTestId, abVariant, "sent");
+      } catch (err: any) {
+        console.warn(`[send-worker] A/B test recording failed: ${err.message}`);
+      }
     }
-    await prisma.customerFatigueLog.create({ data: { customerId, storeId: campaign.storeId, channel: "email", messageType: "campaign", campaignId } });
-    await customerStateQueue.add("email-sent", { type: "email_sent", customerId, storeId: campaign.storeId });
+    await prisma.customerFatigueLog.create({
+      data: {
+        customerId,
+        storeId: campaign.storeId,
+        channel: "email",
+        messageType: "campaign",
+        campaignId,
+      },
+    });
+    await customerStateQueue.add("email-sent", {
+      type: "email_sent",
+      customerId,
+      storeId: campaign.storeId,
+    });
     return { sent: true };
   }
-  await prisma.messageLog.update({ where: { id: messageLog.id }, data: { status: "failed", provider: result.provider ?? "resend", error: result.error } });
+  await prisma.messageLog.update({
+    where: { id: messageLog.id },
+    data: { status: "failed", provider: result.provider ?? "resend", error: result.error },
+  });
   console.error(`  [SEND] Failed for customer ${customer.id}: ${result.error}`);
   throw providerJobFailure(result);
 }
@@ -921,11 +1253,13 @@ export async function deliverOne(data: DeliverOneData) {
 // ---------------------------------------------------------------------------
 async function finalizeCampaign(campaignId: string, data: FinalizeData) {
   const attempt = data.attempt ?? 0;
-  const pendingJobs = (await emailSendQueue.getJobs(["delayed", "waiting", "active"], 0, 10_000))
-    .filter((candidate) =>
-      candidate.name === "deliver-one" &&
-      (candidate.data as { campaignId?: unknown } | null)?.campaignId === campaignId,
-    );
+  const pendingJobs = (
+    await emailSendQueue.getJobs(["delayed", "waiting", "active"], 0, 10_000)
+  ).filter(
+    (candidate) =>
+      (candidate.name === "deliver-one" || candidate.name === "deliver-chunk") &&
+      (candidate.data as { campaignId?: unknown } | null)?.campaignId === campaignId
+  );
   if (pendingJobs.length > 0) {
     await emailSendQueue.add(
       "campaign-finalize",
@@ -934,7 +1268,7 @@ async function finalizeCampaign(campaignId: string, data: FinalizeData) {
         delay: 60_000,
         jobId: `finalize-${campaignId}-check-${attempt + 1}`,
         removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
-      },
+      }
     );
     return { finalized: false, pending: pendingJobs.length };
   }
@@ -953,14 +1287,17 @@ async function finalizeCampaign(campaignId: string, data: FinalizeData) {
   const dispatch = (proposal["dispatch"] ?? {}) as Record<string, any>;
   const logged = Object.values(counts).reduce((sum, count) => sum + count, 0);
   const planned = Number(dispatch["scheduled"] ?? logged);
-  const { accepted, failed, suppressed, completed, status } = campaignDeliveryCompletion(planned, counts);
+  const { accepted, failed, suppressed, completed, status } = campaignDeliveryCompletion(
+    planned,
+    counts
+  );
 
   // Do not manufacture completion while logs are still catching up with jobs.
   if (completed < planned) {
     await emailSendQueue.add(
       "campaign-finalize",
       { finalize: true, campaignId, attempt: attempt + 1 } as FinalizeData,
-      { delay: 60_000, jobId: `finalize-${campaignId}-logs-${attempt + 1}` },
+      { delay: 60_000, jobId: `finalize-${campaignId}-logs-${attempt + 1}` }
     );
     return { finalized: false, pendingLogs: planned - completed };
   }

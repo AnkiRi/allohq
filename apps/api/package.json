@@ -17,6 +17,7 @@
     "@allohq/autonomy-engine": "workspace:*",
     "@allohq/campaign-engine": "workspace:*",
     "@allohq/conversation-engine": "workspace:*",
+    "@allohq/communication-governor": "workspace:*",
     "@allohq/creative-engine": "workspace:*",
     "@allohq/customer-intelligence": "workspace:*",
     "@allohq/customer-state": "workspace:*",

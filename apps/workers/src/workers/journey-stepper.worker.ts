@@ -1,10 +1,13 @@
 import { Worker, Queue } from "bullmq";
+import { prisma, getMarketingDeliveryPermission, withSesDeliveryAttempt } from "@allohq/database";
 import {
-  prisma,
-  getMarketingDeliveryPermission,
-  withSesDeliveryAttempt,
-} from "@allohq/database";
-import { sendEmail, sendSms, sendWhatsApp, sendRcs, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
+  sendEmail,
+  sendSms,
+  sendWhatsApp,
+  sendRcs,
+  selectedEmailProvider,
+  sesSafeTag,
+} from "@allohq/messaging";
 import type { Channel } from "@allohq/messaging";
 import { renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailBlock } from "@allohq/email-builder";
@@ -14,18 +17,16 @@ import {
   personaliseContent,
 } from "@allohq/journey-orchestrator";
 import type { WorkflowNode, JourneyStepInput } from "@allohq/journey-orchestrator";
-import { getOptimalSendTime } from "@allohq/customer-intelligence";
+import { DELIVERY_WINDOWS, getTimingProfiles, localHour } from "@allohq/customer-intelligence";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { isV1ReleaseMode } from "@allohq/release-gate";
 import { acquireEmailCapacity } from "../utils/email-capacity";
 import { nextSesWarmupDelay } from "../utils/ses-warmup-defer";
+import { deliveryWindowDelay } from "../utils/delivery-window";
 
 // Time-sensitive automation categories that should not be delayed
 const TIME_SENSITIVE_CATEGORIES = ["cart_recovery", "abandoned_cart", "shipping_updates"];
-
-// Max send-time delay: 12 hours in ms
-const MAX_SEND_TIME_DELAY_MS = 12 * 60 * 60 * 1000;
 
 interface JourneyStepJobData {
   journeyId: string;
@@ -94,7 +95,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
           stepIndex: stepIndex + 1,
           nodes,
         },
-        { delay: delayMs },
+        { delay: delayMs }
       );
 
       console.log(`Journey ${journeyId} waiting ${duration} ${unit}`);
@@ -102,12 +103,20 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
     }
 
     // Handle condition, silence_check, channel_select — auto-advance
-    if (node.type === "condition" || node.type === "silence_check" || node.type === "channel_select") {
+    if (
+      node.type === "condition" ||
+      node.type === "silence_check" ||
+      node.type === "channel_select"
+    ) {
       if (stepIndex + 1 < nodes.length) {
-        await journeyStepQueue.add(
-          `journey-step-${journeyId}-${stepIndex + 1}`,
-          { journeyId, customerId, storeId, automationId, stepIndex: stepIndex + 1, nodes },
-        );
+        await journeyStepQueue.add(`journey-step-${journeyId}-${stepIndex + 1}`, {
+          journeyId,
+          customerId,
+          storeId,
+          automationId,
+          stepIndex: stepIndex + 1,
+          nodes,
+        });
       }
       return { status: "advanced" };
     }
@@ -129,26 +138,25 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
 
       if (!isTimeSensitive) {
         try {
-          const sendTime = await getOptimalSendTime(customerId, storeId);
-          let currentHour = new Date().getUTCHours();
-          try { currentHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: sendTime.timezone, hour: "numeric", hour12: false }).format(new Date())) % 24; } catch { /* UTC fallback */ }
-          const bestHours = sendTime.topHours.map((h) => h.hour);
+          const timing = (await getTimingProfiles(storeId, [customerId])).get(customerId);
+          const window = timing?.window ?? "morning";
+          const timezone = timing?.timezone ?? "UTC";
+          const definition = DELIVERY_WINDOWS[window];
+          const currentHour = localHour(new Date(), timezone);
+          const isInWindow =
+            currentHour >= definition.startHour && currentHour < definition.endHour;
 
-          // Check if current hour is within the customer's optimal window (+/- 1 hour)
-          const isInWindow = bestHours.some(
-            (h) => Math.abs(currentHour - h) <= 1 || Math.abs(currentHour - h) >= 23,
-          );
-
-          if (!isInWindow && sendTime.confidence >= 0.3) {
-            // Calculate delay to next optimal hour
-            const nextBestHour = bestHours[0] ?? 10;
-            let hoursUntilOptimal = nextBestHour - currentHour;
-            if (hoursUntilOptimal <= 0) hoursUntilOptimal += 24;
-
-            const delayMs = Math.min(hoursUntilOptimal * 60 * 60 * 1000, MAX_SEND_TIME_DELAY_MS);
+          if (!isInWindow) {
+            const delayMs = deliveryWindowDelay({
+              customerId,
+              window,
+              timezone,
+              now: new Date(),
+              isDemo: false,
+            });
 
             console.log(
-              `Journey ${journeyId}: delaying send by ${hoursUntilOptimal}h for optimal send time (current=${currentHour}, optimal=${nextBestHour}, confidence=${sendTime.confidence})`,
+              `Journey ${journeyId}: delaying send for the ${window} window in ${timezone} (source=${timing?.source ?? "default"})`
             );
 
             await journeyStepQueue.add(
@@ -157,10 +165,10 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
                 ...job.data,
                 sendTimeOptimized: true,
               },
-              { delay: delayMs },
+              { delay: delayMs }
             );
 
-            return { status: "delayed_for_send_time", delay: delayMs, optimalHour: nextBestHour };
+            return { status: "delayed_for_send_time", delay: delayMs, window, timezone };
           }
         } catch (err: any) {
           // Non-critical: if send-time optimization fails, proceed with immediate send
@@ -189,10 +197,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
         select: { workspaceId: true, installedAt: true },
       });
       const workspaceId = storeRecord?.workspaceId ?? storeId;
-      const permission = await getMarketingDeliveryPermission(
-        customerId,
-        channel,
-      );
+      const permission = await getMarketingDeliveryPermission(customerId, channel);
       if (!permission.allowed) {
         await prisma.messageLog.create({
           data: {
@@ -203,9 +208,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
             to: channel === "email" ? customer.email : (customer.phone ?? ""),
             automationId,
             status: "suppressed",
-            error: `Contact permission: ${
-              permission.reason ?? "permission_denied"
-            }`,
+            error: `Contact permission: ${permission.reason ?? "permission_denied"}`,
             metadata: {
               source: "journey",
               journeyId,
@@ -222,39 +225,47 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
       }
 
       try {
-        let sendResult: { status: string; externalId?: string; provider?: string; error?: string } = { status: "sent" };
+        let sendResult: { status: string; externalId?: string; provider?: string; error?: string } =
+          { status: "sent" };
 
         if (channel === "email") {
           if (!storeRecord) return { status: "error", reason: "Store not found" };
           const usingSes = selectedEmailProvider() === "ses";
-          const capacity = usingSes ? null : await acquireEmailCapacity(storeId, storeRecord.installedAt);
+          const capacity = usingSes
+            ? null
+            : await acquireEmailCapacity(storeId, storeRecord.installedAt);
           if (capacity && !capacity.allowed) {
             return { status: "deferred", reason: capacity.reason };
           }
           try {
-          sendResult = await sendJourneyEmail(
-            customer,
-            node,
-            context,
-            storeId,
-            customerId,
-            automationId,
-            journeyId,
-            usingSes ? async () => {
-              const lease = await acquireEmailCapacity(storeId, storeRecord.installedAt);
-              if (!lease.allowed) {
-                if (lease.reason === "daily_cap") await journeyStepQueue.add("ses-warmup-deferred", job.data, { jobId: `${job.id}-warmup`, delay: nextSesWarmupDelay() });
-                throw new Error(`Email capacity unavailable: ${lease.reason}`);
-              }
-              return lease;
-            } : undefined,
-          );
-          } finally { await capacity?.release(); }
+            sendResult = await sendJourneyEmail(
+              customer,
+              node,
+              context,
+              storeId,
+              customerId,
+              automationId,
+              journeyId,
+              usingSes
+                ? async () => {
+                    const lease = await acquireEmailCapacity(storeId, storeRecord.installedAt);
+                    if (!lease.allowed) {
+                      if (lease.reason === "daily_cap")
+                        await journeyStepQueue.add("ses-warmup-deferred", job.data, {
+                          jobId: `${job.id}-warmup`,
+                          delay: nextSesWarmupDelay(),
+                        });
+                      throw new Error(`Email capacity unavailable: ${lease.reason}`);
+                    }
+                    return lease;
+                  }
+                : undefined
+            );
+          } finally {
+            await capacity?.release();
+          }
         } else {
-          const body = personaliseContent(
-            (node.config["body"] as string) ?? "",
-            context,
-          );
+          const body = personaliseContent((node.config["body"] as string) ?? "", context);
           const to = customer.phone;
           if (!to) {
             console.warn(`No ${channel} contact for customer ${customerId}`);
@@ -275,7 +286,10 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
             status: sendResult.status === "sent" ? "sent" : "failed",
             externalId: sendResult.externalId,
             provider: sendResult.provider,
-            deliveryKey: channel === "email" ? `journey-${journeyId ?? automationId ?? "none"}-${customerId}-${node.id}` : undefined,
+            deliveryKey:
+              channel === "email"
+                ? `journey-${journeyId ?? automationId ?? "none"}-${customerId}-${node.id}`
+                : undefined,
             sentAt: sendResult.status === "sent" ? new Date() : undefined,
             error: sendResult.error,
             metadata: { source: "journey", journeyId } as any,
@@ -286,7 +300,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
           console.error(
             `Journey ${journeyId} failed to send ${channel}: ${
               sendResult.error ?? "provider failure"
-            }`,
+            }`
           );
           return {
             status: "delivery_failed",
@@ -336,13 +350,17 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
           await journeyStepQueue.add(
             `journey-step-${journeyId}-${stepIndex + 1}`,
             { journeyId, customerId, storeId, automationId, stepIndex: stepIndex + 1, nodes },
-            { delay: delayMs },
+            { delay: delayMs }
           );
         } else {
-          await journeyStepQueue.add(
-            `journey-step-${journeyId}-${stepIndex + 1}`,
-            { journeyId, customerId, storeId, automationId, stepIndex: stepIndex + 1, nodes },
-          );
+          await journeyStepQueue.add(`journey-step-${journeyId}-${stepIndex + 1}`, {
+            journeyId,
+            customerId,
+            storeId,
+            automationId,
+            stepIndex: stepIndex + 1,
+            nodes,
+          });
         }
       }
 
@@ -351,7 +369,7 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
 
     return { status: "no_action" };
   },
-  { connection: redisConnection },
+  { connection: redisConnection }
 );
 
 journeyStepperWorker.on("completed", (job) => {
@@ -366,10 +384,14 @@ journeyStepperWorker.on("failed", (job, err) => {
 
 function computeDelay(duration: number, unit: string): number {
   switch (unit) {
-    case "minutes": return duration * 60 * 1000;
-    case "hours": return duration * 60 * 60 * 1000;
-    case "days": return duration * 24 * 60 * 60 * 1000;
-    default: return duration * 60 * 60 * 1000;
+    case "minutes":
+      return duration * 60 * 1000;
+    case "hours":
+      return duration * 60 * 60 * 1000;
+    case "days":
+      return duration * 24 * 60 * 60 * 1000;
+    default:
+      return duration * 60 * 60 * 1000;
   }
 }
 
@@ -381,13 +403,13 @@ async function sendJourneyEmail(
   customerId: string,
   automationId?: string,
   journeyId?: string,
-  acquireSubmissionLease?: () => Promise<{ release(): Promise<void> }>,
+  acquireSubmissionLease?: () => Promise<{ release(): Promise<void> }>
 ): Promise<{ status: string; externalId?: string; provider?: string; error?: string }> {
   const templateId = node.config["templateId"] as string | undefined;
   let html: string;
   let subject = personaliseContent(
     (node.config["subject"] as string) ?? "A message for you",
-    context,
+    context
   );
 
   // Brand styling is applied automatically by renderBrandedEmail (loads the
@@ -421,27 +443,38 @@ async function sendJourneyEmail(
   const unsubscribeUrl = getUnsubscribeUrl(customerId);
 
   const deliveryKey = `journey-${journeyId ?? automationId ?? "none"}-${customerId}-${node.id}`;
-  return withSesDeliveryAttempt(prisma, { enabled: selectedEmailProvider() === "ses", deliveryKey, storeId, providerTag: sesSafeTag(deliveryKey), acquireSubmissionLease }, () => sendEmail({
-    channel: "email",
-    to: customer.email,
-    subject,
-    html,
-    storeId,
-    automationId: automationId ?? undefined,
-    emailStream: "triggered",
-    idempotencyKey: deliveryKey,
-    headers: {
-      "List-Unsubscribe": `<${unsubscribeUrl}>`,
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  return withSesDeliveryAttempt(
+    prisma,
+    {
+      enabled: selectedEmailProvider() === "ses",
+      deliveryKey,
+      storeId,
+      providerTag: sesSafeTag(deliveryKey),
+      acquireSubmissionLease,
     },
-  }));
+    () =>
+      sendEmail({
+        channel: "email",
+        to: customer.email,
+        subject,
+        html,
+        storeId,
+        automationId: automationId ?? undefined,
+        emailStream: "triggered",
+        idempotencyKey: deliveryKey,
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+      })
+  );
 }
 
 async function sendByChannel(
   channel: Channel,
   to: string,
   body: string,
-  _node: WorkflowNode,
+  _node: WorkflowNode
 ): Promise<{ status: string; externalId?: string; provider?: string; error?: string }> {
   switch (channel) {
     case "sms":

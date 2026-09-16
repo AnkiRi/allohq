@@ -25,6 +25,12 @@ import {
   getOrCreateExperiment,
   holdoutRateFor,
 } from "@allohq/customer-state";
+import { DELIVERY_WINDOWS, getTimingProfiles, localHour } from "@allohq/customer-intelligence";
+import {
+  checkQuietHours,
+  loadStoreGovernorConfig,
+  nextLocalHour,
+} from "@allohq/communication-governor";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -36,8 +42,8 @@ const emailSendQueue = new Queue("email-send", { connection: redisConnection });
 
 async function queuedCampaignJobs(campaignId: string) {
   const jobs = await emailSendQueue.getJobs(["delayed", "waiting", "paused"], 0, 10_000);
-  return jobs.filter((job) =>
-    (job.data as { campaignId?: unknown } | null)?.campaignId === campaignId,
+  return jobs.filter(
+    (job) => (job.data as { campaignId?: unknown } | null)?.campaignId === campaignId
   );
 }
 
@@ -103,6 +109,100 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  timingPreview: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: { id: true, storeId: true },
+      });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+      const audience = await resolveCampaignAudience(campaign.id);
+      const customerIds = audience.eligible.map((customer) => customer.id);
+      const profiles = await getTimingProfiles(campaign.storeId, customerIds);
+      const governor = await loadStoreGovernorConfig(campaign.storeId);
+      const now = new Date();
+      const cohorts = new Map<
+        string,
+        {
+          window: "morning" | "afternoon" | "evening";
+          timezone: string;
+          source: "customer" | "store" | "default";
+          confidence: number;
+          count: number;
+          earliestAt: Date;
+          latestAt: Date;
+        }
+      >();
+      let quietHoursDeferred = 0;
+      const bestDayEvidence: Record<string, number> = {};
+      for (const profile of profiles.values()) {
+        const definition = DELIVERY_WINDOWS[profile.window];
+        const hour = localHour(now, profile.timezone);
+        const start =
+          hour >= definition.startHour && hour < definition.endHour
+            ? now
+            : nextLocalHour(now, definition.startHour, profile.timezone);
+        const end = new Date(
+          start.getTime() + (definition.endHour - definition.startHour) * 60 * 60 * 1000
+        );
+        const quiet = checkQuietHours(profile.timezone, governor.quietHours, now);
+        if (!quiet.allowed) quietHoursDeferred++;
+        if (profile.bestDayOfWeek != null) {
+          const day = String(profile.bestDayOfWeek);
+          bestDayEvidence[day] = (bestDayEvidence[day] ?? 0) + 1;
+        }
+        const key = `${profile.timezone}:${profile.window}:${profile.source}`;
+        const current = cohorts.get(key);
+        if (current) {
+          current.count++;
+          current.confidence += profile.confidence;
+          if (start < current.earliestAt) current.earliestAt = start;
+          if (end > current.latestAt) current.latestAt = end;
+        } else {
+          cohorts.set(key, {
+            window: profile.window,
+            timezone: profile.timezone,
+            source: profile.source,
+            confidence: profile.confidence,
+            count: 1,
+            earliestAt: start,
+            latestAt: end,
+          });
+        }
+      }
+      const rows = [...cohorts.values()]
+        .map((cohort) => ({ ...cohort, confidence: cohort.confidence / cohort.count }))
+        .sort((left, right) => right.count - left.count);
+      return {
+        recipients: customerIds.length,
+        cohortCount: rows.length,
+        timezoneCount: new Set(rows.map((row) => row.timezone)).size,
+        quietHoursDeferred,
+        dayPolicy:
+          "The merchant controls the campaign day; Joon uses engagement evidence to choose the delivery window on that day.",
+        bestDayEvidence,
+        earliestAt: rows.length
+          ? new Date(Math.min(...rows.map((row) => row.earliestAt.getTime())))
+          : null,
+        latestAt: rows.length
+          ? new Date(Math.max(...rows.map((row) => row.latestAt.getTime())))
+          : null,
+        evidence: {
+          customer: rows
+            .filter((row) => row.source === "customer")
+            .reduce((sum, row) => sum + row.count, 0),
+          store: rows
+            .filter((row) => row.source === "store")
+            .reduce((sum, row) => sum + row.count, 0),
+          default: rows
+            .filter((row) => row.source === "default")
+            .reduce((sum, row) => sum + row.count, 0),
+        },
+        cohorts: rows.slice(0, 100),
+      };
+    }),
+
   setAudienceReasonOverride: workspaceProcedure
     .input(
       z.object({
@@ -139,15 +239,16 @@ export const campaignsRouter = router({
         const audience = await resolveCampaignAudience(campaign.id, new Date(), {
           enforceDeliveryPauses: false,
         });
-        affected = input.reasonCode === "deliberately_left_alone"
-          ? audience.deliberatelyLeftAlone.length
-          : input.reasonCode === "recent_purchase"
-            ? audience.recentPurchaseExcluded.length
-            : input.reasonCode === "fatigue"
-              ? audience.fatigueExcluded.length
-              : input.reasonCode === "collision"
-                ? audience.collisionExcluded.length
-                : audience.cooldownExcluded.length;
+        affected =
+          input.reasonCode === "deliberately_left_alone"
+            ? audience.deliberatelyLeftAlone.length
+            : input.reasonCode === "recent_purchase"
+              ? audience.recentPurchaseExcluded.length
+              : input.reasonCode === "fatigue"
+                ? audience.fatigueExcluded.length
+                : input.reasonCode === "collision"
+                  ? audience.collisionExcluded.length
+                  : audience.cooldownExcluded.length;
         if (affected === 0) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -221,9 +322,10 @@ export const campaignsRouter = router({
       const audience = await resolveCampaignAudience(campaign.id, new Date(), {
         enforceDeliveryPauses: false,
       });
-      const base = input.reason === "deliberately_left_alone"
-        ? audience.deliberatelyLeftAlone
-        : audience.excludedCustomers[input.reason] ?? [];
+      const base =
+        input.reason === "deliberately_left_alone"
+          ? audience.deliberatelyLeftAlone
+          : (audience.excludedCustomers[input.reason] ?? []);
       const needle = input.query.toLocaleLowerCase();
       const filtered = needle
         ? base.filter((customer) =>
@@ -269,9 +371,9 @@ export const campaignsRouter = router({
         cooldown: "strong_warning",
         deliberately_left_alone: "allowed",
       } as const;
-      const activeGroupOverride = campaign.audienceOverridePolicies.find(
-        (policy) => policy.reasonCode === input.reason
-      ) ?? null;
+      const activeGroupOverride =
+        campaign.audienceOverridePolicies.find((policy) => policy.reasonCode === input.reason) ??
+        null;
       const reconsideration = {
         recent_purchase: "After the recent-purchase protection window ends",
         fatigue: "When the weekly or monthly email limit resets",
@@ -339,15 +441,19 @@ export const campaignsRouter = router({
         select: { id: true, storeId: true, agentProposal: true },
       });
       if (!campaign) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found or its audience is already frozen" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campaign not found or its audience is already frozen",
+        });
       }
 
       const currentAudience = await resolveCampaignAudience(campaign.id, new Date(), {
         enforceDeliveryPauses: false,
       });
-      const candidates = input.reasonCode === "collision"
-        ? currentAudience.collisionExcluded
-        : currentAudience.cooldownExcluded;
+      const candidates =
+        input.reasonCode === "collision"
+          ? currentAudience.collisionExcluded
+          : currentAudience.cooldownExcluded;
       const overrideable = new Set(candidates.map((customer) => customer.id));
       const uniqueIds = [...new Set(input.customerIds)];
       if (uniqueIds.some((customerId) => !overrideable.has(customerId))) {
@@ -358,11 +464,14 @@ export const campaignsRouter = router({
       }
 
       const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
-      const field = input.reasonCode === "collision"
-        ? "overrideCollisionCustomerIds"
-        : "overrideCooldownCustomerIds";
+      const field =
+        input.reasonCode === "collision"
+          ? "overrideCollisionCustomerIds"
+          : "overrideCooldownCustomerIds";
       const existing = Array.isArray(proposal[field])
-        ? (proposal[field] as unknown[]).filter((value): value is string => typeof value === "string")
+        ? (proposal[field] as unknown[]).filter(
+            (value): value is string => typeof value === "string"
+          )
         : [];
       await ctx.prisma.$transaction([
         ctx.prisma.campaign.update({
@@ -371,7 +480,10 @@ export const campaignsRouter = router({
             status: "draft",
             approvedAt: null,
             approvalChecksum: null,
-            agentProposal: { ...proposal, [field]: [...new Set([...existing, ...uniqueIds])] } as any,
+            agentProposal: {
+              ...proposal,
+              [field]: [...new Set([...existing, ...uniqueIds])],
+            } as any,
           },
         }),
         ctx.prisma.customerAudienceDecision.createMany({
@@ -382,9 +494,10 @@ export const campaignsRouter = router({
             contextKey: campaign.id,
             decision: "campaign_candidate",
             reasonCode: `merchant_${input.reasonCode}_override`,
-            reasonText: input.reasonCode === "collision"
-              ? "Merchant chose to send despite a recent campaign."
-              : "Merchant chose to send despite a redeemed-discount cooldown.",
+            reasonText:
+              input.reasonCode === "collision"
+                ? "Merchant chose to send despite a recent campaign."
+                : "Merchant chose to send despite a redeemed-discount cooldown.",
             evidence: { originalDecision: input.reasonCode },
             merchantOverride: true,
             overrideActorId: ctx.userId,
@@ -427,7 +540,8 @@ export const campaignsRouter = router({
       if (uniqueIds.some((customerId) => !overrideable.has(customerId))) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Only customers currently held back by the fatigue limit can be overridden here.",
+          message:
+            "Only customers currently held back by the fatigue limit can be overridden here.",
         });
       }
 
@@ -509,7 +623,8 @@ export const campaignsRouter = router({
       if (uniqueIds.some((customerId) => !overrideable.has(customerId))) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Only customers currently protected by the recent-purchase rule can be overridden here.",
+          message:
+            "Only customers currently protected by the recent-purchase rule can be overridden here.",
         });
       }
       const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
@@ -600,7 +715,8 @@ export const campaignsRouter = router({
       if (input.customerIds.some((customerId) => !overrideable.has(customerId))) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Only customers Joon is currently leaving alone by decision can be reconsidered here.",
+          message:
+            "Only customers Joon is currently leaving alone by decision can be reconsidered here.",
         });
       }
       const auditRows = input.reason
@@ -611,7 +727,8 @@ export const campaignsRouter = router({
             contextKey: campaign.id,
             decision: "campaign_candidate",
             reasonCode: "merchant_state_policy_override",
-            reasonText: "Merchant chose to include this customer despite Joon's state-based decision.",
+            reasonText:
+              "Merchant chose to include this customer despite Joon's state-based decision.",
             evidence: { originalDecision: "deliberately_left_alone" },
             merchantOverride: true,
             overrideActorId: ctx.userId,
@@ -735,13 +852,13 @@ export const campaignsRouter = router({
       email: customer.email,
       arm: holdout.assignment.assignments[customer.id]?.arm ?? "TREATMENT",
     }));
-    const currency = campaign.store.currency === "INR" ? "INR" as const : "USD" as const;
+    const currency = campaign.store.currency === "INR" ? ("INR" as const) : ("USD" as const);
     const estimatedProviderCost =
       (audience.eligible.length - control) * emailMessagingCostForCurrency(currency);
     const noEmailConsent = audience.exclusions.no_consent + audience.exclusions.unsubscribed;
     const otherLeftAlone = Math.max(
       0,
-      audience.requested - audience.eligible.length - noEmailConsent,
+      audience.requested - audience.eligible.length - noEmailConsent
     );
     return {
       providerCalled: false,
@@ -764,7 +881,10 @@ export const campaignsRouter = router({
       estimatedControl: control,
       previewAssignments,
       requestedAudienceCount: proposal.requestedAudienceCount ?? null,
-      audienceShortfall: Math.max(0, (proposal.requestedAudienceCount ?? audience.requested) - audience.requested),
+      audienceShortfall: Math.max(
+        0,
+        (proposal.requestedAudienceCount ?? audience.requested) - audience.requested
+      ),
       noEmailConsent,
       otherLeftAlone,
       measurement,
@@ -775,7 +895,8 @@ export const campaignsRouter = router({
       exclusionSamples: audience.samples,
       recentPurchaseCustomers: audience.recentPurchaseExcluded,
       recentPurchaseOverrideCount: Array.isArray(proposal.overrideRecentPurchaseCustomerIds)
-        ? proposal.overrideRecentPurchaseCustomerIds.filter((value) => typeof value === "string").length
+        ? proposal.overrideRecentPurchaseCustomerIds.filter((value) => typeof value === "string")
+            .length
         : 0,
       fatigueCustomers: audience.fatigueExcluded,
       fatigueOverrideCount: Array.isArray(proposal.overrideFatigueCustomerIds)
@@ -802,7 +923,7 @@ export const campaignsRouter = router({
         appliedDiscountPercent: discountPercent,
         adjustedByGuardrail: Boolean(proposal.discountAdjustedByGuardrail),
         discountCode: proposal.discountCode ?? null,
-        shopifyStatus: proposal.offerId ? "created" as const : "created_on_send" as const,
+        shopifyStatus: proposal.offerId ? ("created" as const) : ("created_on_send" as const),
       },
       marginRisk: {
         evidenceWindowDays: 7,
@@ -819,7 +940,17 @@ export const campaignsRouter = router({
     .input(
       z
         .object({
-          status: z.enum(["draft", "scheduled", "sending", "partially_sent", "failed", "sent", "cancelled"]).optional(),
+          status: z
+            .enum([
+              "draft",
+              "scheduled",
+              "sending",
+              "partially_sent",
+              "failed",
+              "sent",
+              "cancelled",
+            ])
+            .optional(),
         })
         .optional()
     )
@@ -893,31 +1024,32 @@ export const campaignsRouter = router({
         const dispatch = (proposal["dispatch"] ?? {}) as Record<string, any>;
         const delivery = (dispatch["delivery"] ?? {}) as Record<string, any>;
         const sentCount = deliveryMap[c.id]?.sent ?? 0;
-        const deliveryStatus = c.status === "sending" &&
+        const deliveryStatus =
+          c.status === "sending" &&
           sentCount === 0 &&
           Number(dispatch["scheduled"] ?? c.recipientCount) > 0 &&
           !delivery["merchantOverride"]
-          ? "scheduled"
-          : c.status;
+            ? "scheduled"
+            : c.status;
         return {
-        ...c,
-        deliveryStatus,
-        recipientCount: sentCount || (c.status === "sent" ? c.recipientCount : 0),
-        openCount: deliveryMap[c.id]?.opened ?? c.openCount,
-        clickCount: deliveryMap[c.id]?.clicked ?? c.clickCount,
-        openRate:
-          (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
-            ? (deliveryMap[c.id]?.opened ?? c.openCount) /
-              (deliveryMap[c.id]?.sent ?? c.recipientCount)
-            : 0,
-        clickRate:
-          (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
-            ? (deliveryMap[c.id]?.clicked ?? c.clickCount) /
-              (deliveryMap[c.id]?.sent ?? c.recipientCount)
-            : 0,
-        attributedRevenue: revenueMap[c.id]?.revenue ?? 0,
-        attributedOrders: revenueMap[c.id]?.orders ?? 0,
-      };
+          ...c,
+          deliveryStatus,
+          recipientCount: sentCount || (c.status === "sent" ? c.recipientCount : 0),
+          openCount: deliveryMap[c.id]?.opened ?? c.openCount,
+          clickCount: deliveryMap[c.id]?.clicked ?? c.clickCount,
+          openRate:
+            (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
+              ? (deliveryMap[c.id]?.opened ?? c.openCount) /
+                (deliveryMap[c.id]?.sent ?? c.recipientCount)
+              : 0,
+          clickRate:
+            (deliveryMap[c.id]?.sent ?? c.recipientCount) > 0
+              ? (deliveryMap[c.id]?.clicked ?? c.clickCount) /
+                (deliveryMap[c.id]?.sent ?? c.recipientCount)
+              : 0,
+          attributedRevenue: revenueMap[c.id]?.revenue ?? 0,
+          attributedOrders: revenueMap[c.id]?.orders ?? 0,
+        };
       });
       return input?.status ? rows.filter((row) => row.deliveryStatus === input.status) : rows;
     }),
@@ -939,14 +1071,17 @@ export const campaignsRouter = router({
     // Campaigns planned before delivery metadata shipped still have the exact
     // delayed BullMQ jobs. Recover only timing evidence (never recipient data)
     // so the merchant sees why Joon is waiting instead of a generic message.
-    if (
-      !deliveryPlan?.["earliestAt"] &&
-      ["scheduled", "sending"].includes(campaign.status)
-    ) {
-      const jobs = (await queuedCampaignJobs(campaign.id)).filter((job) => job.name === "deliver-one");
+    if (!deliveryPlan?.["earliestAt"] && ["scheduled", "sending"].includes(campaign.status)) {
+      const jobs = (await queuedCampaignJobs(campaign.id)).filter(
+        (job) => job.name === "deliver-one" || job.name === "deliver-chunk"
+      );
       if (jobs.length > 0) {
         const dueTimes = jobs.map((job) => job.timestamp + Math.max(0, job.delay ?? 0));
-        const sample = jobs[0]!.data as {
+        const firstData = jobs[0]!.data as {
+          deliveries?: Array<{ plan?: Record<string, unknown> }>;
+          plan?: Record<string, unknown>;
+        };
+        const sample = (firstData.deliveries?.[0] ?? firstData) as {
           plan?: {
             sendHour?: number;
             timingSource?: "customer" | "store" | "default";
@@ -957,16 +1092,18 @@ export const campaignsRouter = router({
         const timingSource = sample.plan?.timingSource ?? "default";
         const sendHour = sample.plan?.sendHour ?? 10;
         const timezone = sample.plan?.timezone ?? "UTC";
-        const reason = timingSource === "customer"
-          ? `This customer's previous opens and clicks point to around ${String(sendHour).padStart(2, "0")}:00 in ${timezone}.`
-          : timingSource === "store"
-            ? `Customers from this store usually engage around ${String(sendHour).padStart(2, "0")}:00 in ${timezone}.`
-            : `There is not enough engagement history for this customer yet, so Joon used its cautious ${String(sendHour).padStart(2, "0")}:00 default in ${timezone}.`;
-        const consequence = timingSource === "customer"
-          ? "Sending earlier may reduce opens because it ignores this customer's observed engagement window."
-          : timingSource === "store"
-            ? "Sending earlier may reduce opens because it ignores the store's observed engagement window."
-            : "Sending now may reduce opens; this is a cautious default until Joon has enough engagement history to personalize the time.";
+        const reason =
+          timingSource === "customer"
+            ? `This customer's previous opens and clicks point to around ${String(sendHour).padStart(2, "0")}:00 in ${timezone}.`
+            : timingSource === "store"
+              ? `Customers from this store usually engage around ${String(sendHour).padStart(2, "0")}:00 in ${timezone}.`
+              : `There is not enough engagement history for this customer yet, so Joon used its cautious ${String(sendHour).padStart(2, "0")}:00 default in ${timezone}.`;
+        const consequence =
+          timingSource === "customer"
+            ? "Sending earlier may reduce opens because it ignores this customer's observed engagement window."
+            : timingSource === "store"
+              ? "Sending earlier may reduce opens because it ignores the store's observed engagement window."
+              : "Sending now may reduce opens; this is a cautious default until Joon has enough engagement history to personalize the time.";
         deliveryPlan = {
           earliestAt: new Date(Math.min(...dueTimes)).toISOString(),
           latestAt: new Date(Math.max(...dueTimes)).toISOString(),
@@ -1493,7 +1630,9 @@ export const campaignsRouter = router({
       }
 
       const jobs = await queuedCampaignJobs(campaign.id);
-      const deliveryJobs = jobs.filter((job) => job.name === "deliver-one");
+      const deliveryJobs = jobs.filter(
+        (job) => job.name === "deliver-one" || job.name === "deliver-chunk"
+      );
       if (deliveryJobs.length === 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -1502,11 +1641,23 @@ export const campaignsRouter = router({
       }
 
       const overriddenAt = new Date();
+      let promotedRecipients = 0;
       for (const job of deliveryJobs) {
-        await job.updateData({
-          ...(job.data as Record<string, unknown>),
-          forceImmediate: true,
-        });
+        const data = job.data as Record<string, unknown> & {
+          deliveries?: Array<Record<string, unknown>>;
+        };
+        promotedRecipients += data.deliveries?.length ?? 1;
+        await job.updateData(
+          data.deliveries
+            ? {
+                ...data,
+                deliveries: data.deliveries.map((delivery) => ({
+                  ...delivery,
+                  forceImmediate: true,
+                })),
+              }
+            : { ...data, forceImmediate: true }
+        );
         const state = await job.getState();
         if (state === "delayed") await job.promote();
       }
@@ -1516,7 +1667,7 @@ export const campaignsRouter = router({
       await emailSendQueue.add(
         "campaign-finalize",
         { finalize: true, campaignId: campaign.id },
-        { delay: 60_000, jobId: `finalize-${campaign.id}-override-${overriddenAt.getTime()}` },
+        { delay: 60_000, jobId: `finalize-${campaign.id}-override-${overriddenAt.getTime()}` }
       );
 
       const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
@@ -1533,14 +1684,15 @@ export const campaignsRouter = router({
                 ...((dispatch["delivery"] ?? {}) as Record<string, unknown>),
                 merchantOverride: true,
                 overriddenAt: overriddenAt.toISOString(),
-                reason: "The merchant chose to deliver now instead of waiting for Joon's recommended time.",
+                reason:
+                  "The merchant chose to deliver now instead of waiting for Joon's recommended time.",
               },
             },
           },
         },
       });
 
-      return { status: "sending" as const, promoted: deliveryJobs.length };
+      return { status: "sending" as const, promoted: promotedRecipients };
     }),
 
   /** Cancel an undelivered approved campaign and open a fresh editable revision.
@@ -1563,7 +1715,8 @@ export const campaignsRouter = router({
       if (delivered > 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Delivery has already started, so this approved version can no longer be edited.",
+          message:
+            "Delivery has already started, so this approved version can no longer be edited.",
         });
       }
 
@@ -1572,7 +1725,9 @@ export const campaignsRouter = router({
 
       const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
       const cleanProposal = Object.fromEntries(
-        Object.entries(proposal).filter(([key]) => !["dispatch", "dispatchError", "offerId"].includes(key)),
+        Object.entries(proposal).filter(
+          ([key]) => !["dispatch", "dispatchError", "offerId"].includes(key)
+        )
       );
       const revised = await ctx.prisma.$transaction(async (tx) => {
         const template = await tx.emailTemplate.create({

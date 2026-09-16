@@ -51,6 +51,9 @@ importers:
       '@allohq/campaign-engine':
         specifier: workspace:*
         version: link:../../packages/campaign-engine
+      '@allohq/communication-governor':
+        specifier: workspace:*
+        version: link:../../packages/communication-governor
       '@allohq/conversation-engine':
         specifier: workspace:*
         version: link:../../packages/conversation-engine
@@ -310,7 +313,7 @@ importers:
         version: 10.4.24(postcss@8.5.18)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@1.21.7)
+        version: 9.39.2(jiti@2.6.1)
       postcss:
         specifier: ^8.5.18
         version: 8.5.18
@@ -1012,7 +1015,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       eslint:
         specifier: ^9.18.0
-        version: 9.39.2(jiti@2.6.1)
+        version: 9.39.2(jiti@1.21.7)
       react:
         specifier: ^19.0.0
         version: 19.2.4

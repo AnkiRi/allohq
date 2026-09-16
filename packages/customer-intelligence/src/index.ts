@@ -55,7 +55,12 @@ export type { StoreData, BrandVoiceResult } from "./brand";
 
 // AI Content Generation
 export { generateEmail } from "./content";
-export type { GenerateEmailInput, GenerateEmailOutput, CreativeIntensity, BrandSettings } from "./content";
+export type {
+  GenerateEmailInput,
+  GenerateEmailOutput,
+  CreativeIntensity,
+  BrandSettings,
+} from "./content";
 export { renderBrandedEmail, loadBrandKit } from "./content";
 export type { RenderBrandedEmailInput } from "./content";
 export { generateWhatsApp } from "./content";
@@ -74,7 +79,13 @@ export type { Festivity, FunnelStage, EmailIntent, IntentContext } from "./conte
 
 // Program Planner
 export { recommendPrograms, activateProgram, generateWorkflow } from "./programs";
-export type { StoreAnalysis, ProgramRecommendation, ActivateProgramInput, GenerateWorkflowInput, GenerateWorkflowOutput } from "./programs";
+export type {
+  StoreAnalysis,
+  ProgramRecommendation,
+  ActivateProgramInput,
+  GenerateWorkflowInput,
+  GenerateWorkflowOutput,
+} from "./programs";
 
 // Image Generation
 export { generateImage } from "./images";
@@ -93,12 +104,24 @@ export { predictChurn } from "./churn-model";
 export type { ChurnModelInput, ChurnPrediction } from "./churn-model";
 
 // Send Time Optimization
-export { getOptimalSendTime } from "./send-time-optimizer";
-export type { SendTimeResult } from "./send-time-optimizer";
+export {
+  getOptimalSendTime,
+  getTimingProfiles,
+  rebuildSendTimeProfiles,
+  deliveryWindowForHour,
+  DELIVERY_WINDOWS,
+  localHour,
+} from "./send-time-optimizer";
+export type { SendTimeResult, TimingProfileResult, DeliveryWindow } from "./send-time-optimizer";
 
 // Per-customer campaign delivery plan (skip / tone) — North Star #1
 export { planCustomerDelivery } from "./campaign-delivery-plan";
 export type { CustomerDeliverySignals, DeliveryDecision, ToneKey } from "./campaign-delivery-plan";
 
 export { hardChecks, judgeContent, evalContent, blocksToText } from "./eval/content-quality";
-export type { EvalContent, BrandContext, JudgeVerdict, ContentEvalResult } from "./eval/content-quality";
+export type {
+  EvalContent,
+  BrandContext,
+  JudgeVerdict,
+  ContentEvalResult,
+} from "./eval/content-quality";

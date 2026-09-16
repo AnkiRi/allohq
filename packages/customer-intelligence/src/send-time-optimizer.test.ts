@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { localHour, resolveDeliveryTimezone } from "./send-time-optimizer";
+import { deliveryWindowForHour, localHour, resolveDeliveryTimezone } from "./send-time-optimizer";
 
 test("engagement hours are interpreted in the merchant timezone", () => {
   const instant = new Date("2026-09-03T04:30:00.000Z");
@@ -14,7 +14,16 @@ test("invalid timezones fail closed to UTC", () => {
 });
 
 test("delivery timezone prioritizes customer state, then store, then UTC", () => {
-  assert.equal(resolveDeliveryTimezone({ timezone: "America/New_York" }, "Asia/Kolkata"), "America/New_York");
+  assert.equal(
+    resolveDeliveryTimezone({ timezone: "America/New_York" }, "Asia/Kolkata"),
+    "America/New_York"
+  );
   assert.equal(resolveDeliveryTimezone({}, "Asia/Kolkata"), "Asia/Kolkata");
   assert.equal(resolveDeliveryTimezone({}, null), "UTC");
+});
+
+test("exact engagement hours collapse into explainable broad windows", () => {
+  assert.equal(deliveryWindowForHour(9), "morning");
+  assert.equal(deliveryWindowForHour(14), "afternoon");
+  assert.equal(deliveryWindowForHour(19), "evening");
 });

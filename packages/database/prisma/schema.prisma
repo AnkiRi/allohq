@@ -331,6 +331,8 @@ model Store {
 
   // Sprint 8: Product Recommendations
   productAffinityPairs           ProductAffinityPair[]
+  customerTimingProfiles         CustomerTimingProfile[]
+  storeTimingProfile             StoreTimingProfile?
   customerProductRecommendations CustomerProductRecommendation[]
 
   // Sprint 9: Proactive Outreach
@@ -538,6 +540,7 @@ model Customer {
   segmentHistory                 CustomerSegmentHistory[]
   customerState                  CustomerState?
   stateTransitions               CustomerStateTransition[]
+  timingProfile                  CustomerTimingProfile?
   customerJourneys               CustomerJourney[]
   formSubmissions                FormSubmission[]
   formIncentiveGrants            FormIncentiveGrant[]
@@ -1787,6 +1790,47 @@ model CustomerStateTransition {
   @@index([storeId, dimension, toValue, occurredAt])
   @@index([customerId, occurredAt])
   @@map("customer_state_transitions")
+}
+
+/// Precomputed broad delivery-window evidence. Campaign approval reads these
+/// rows in one batch instead of querying engagement history per recipient.
+model CustomerTimingProfile {
+  id             String   @id @default(cuid())
+  storeId        String
+  customerId     String   @unique
+  timezone       String
+  window         String // morning, afternoon, evening
+  bestDayOfWeek  Int?
+  evidenceCount  Int      @default(0)
+  confidence     Float    @default(0)
+  hourlyEvidence Json     @default("[]")
+  dayEvidence    Json     @default("[]")
+  computedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, window, timezone])
+  @@map("customer_timing_profiles")
+}
+
+model StoreTimingProfile {
+  id             String   @id @default(cuid())
+  storeId        String   @unique
+  timezone       String
+  window         String
+  bestDayOfWeek  Int?
+  evidenceCount  Int      @default(0)
+  confidence     Float    @default(0)
+  hourlyEvidence Json     @default("[]")
+  dayEvidence    Json     @default("[]")
+  computedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("store_timing_profiles")
 }
 
 // ============================================================================

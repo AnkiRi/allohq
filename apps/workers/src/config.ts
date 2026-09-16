@@ -25,6 +25,7 @@ export const QUEUE_NAMES = {
   ABANDONED_CART_CHECK: "abandoned-cart-check",
   SEGMENT_CHANGE: "segment-change",
   CUSTOMER_STATE: "customer-state",
+  TIMING_PROFILE: "timing-profile",
   GUARDRAIL_CHECK: "guardrail-check",
   BRAND_KIT: "brand-kit",
   PRODUCT_IMAGE: "product-image",

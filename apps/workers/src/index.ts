@@ -9,7 +9,10 @@ import { Queue } from "bullmq";
 import { redisConnection, QUEUE_NAMES } from "./config";
 import { isScheduleAllowed, isV1ReleaseMode } from "@allohq/release-gate";
 import { assertDataEncryptionConfigured } from "@allohq/database";
-import { assertEmailDeliveryConfigured, assertUnsubscribeSigningConfigured } from "@allohq/messaging";
+import {
+  assertEmailDeliveryConfigured,
+  assertUnsubscribeSigningConfigured,
+} from "@allohq/messaging";
 import { startCriticalDeadLetterCapture } from "./dead-letter";
 import { flushObservability, initObservability, monitorWorkerFailures } from "./observability";
 
@@ -26,17 +29,9 @@ resolver.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const agent = new Agent({
   connect: {
-    lookup: (
-      hostname: string,
-      options: { all?: boolean },
-      cb: (...args: any[]) => void
-    ) => {
+    lookup: (hostname: string, options: { all?: boolean }, cb: (...args: any[]) => void) => {
       // Use system DNS for localhost and private hostnames
-      if (
-        hostname === "localhost" ||
-        hostname === "127.0.0.1" ||
-        hostname.endsWith(".local")
-      ) {
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local")) {
         dns.lookup(hostname, options as any, cb as any);
         return;
       }
@@ -44,7 +39,10 @@ const agent = new Agent({
       resolver.resolve4(hostname, (err, addresses) => {
         if (err) return cb(err);
         if (options?.all) {
-          cb(null, addresses.map((addr) => ({ address: addr, family: 4 })));
+          cb(
+            null,
+            addresses.map((addr) => ({ address: addr, family: 4 }))
+          );
         } else {
           cb(null, addresses[0], 4);
         }
@@ -71,6 +69,7 @@ import { conversationProcessWorker } from "./workers/conversation-process.worker
 import { abandonedCartWorker } from "./workers/abandoned-cart.worker";
 import { segmentChangeWorker } from "./workers/segment-change.worker";
 import { customerStateUpdaterWorker } from "./workers/customer-state-updater.worker";
+import { timingProfileWorker } from "./workers/timing-profile.worker";
 import { guardrailValidatorWorker } from "./workers/guardrail-validator.worker";
 import { brandKitExtractorWorker } from "./workers/brand-kit-extractor.worker";
 import { productImageProcessorWorker } from "./workers/product-image-processor.worker";
@@ -122,7 +121,7 @@ import Redis from "ioredis";
       maxRetriesPerRequest: 1,
     });
     // Kill idle connections from previous workers (idle > 30 seconds, not the current one)
-    const clients = await cleanupRedis.client("LIST") as string;
+    const clients = (await cleanupRedis.client("LIST")) as string;
     let cleaned = 0;
     for (const line of clients.split("\n")) {
       const idleMatch = line.match(/idle=(\d+)/);
@@ -133,7 +132,9 @@ import Redis from "ioredis";
           try {
             await cleanupRedis.client("KILL", "ID", idStr[1]!);
             cleaned++;
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
       }
     }
@@ -150,20 +151,54 @@ console.log("Starting AlloHQ workers...");
 const sesEventWorker = startSesEventWorker();
 const criticalDeadLetterCapture = startCriticalDeadLetterCapture();
 const stopWorkerFailureMonitoring = monitorWorkerFailures([
-  syncWorker, rfmWorker, sendWorker, shopifyWebhookWorker, brandAnalysisWorker,
-  automationGeneratorWorker, agentPipelineWorker, automationRunnerWorker,
-  triggerListenerWorker, embeddingWorker, agentObserveWorker, conversationProcessWorker,
-  abandonedCartWorker, segmentChangeWorker, customerStateUpdaterWorker,
-  guardrailValidatorWorker, brandKitExtractorWorker, productImageProcessorWorker,
-  creativeGeneratorWorker, opportunityScannerWorker, campaignFactoryWorker,
-  productCycleAnalyzerWorker, briefingGeneratorWorker, baselineCaptureWorker,
-  weeklyReportWorker, journeyStepperWorker, abTestEvaluatorWorker, revenueForecastWorker,
-  productRecommendationWorker, shippingUpdateWorker, restockAlertWorker, priceDropWorker,
-  repurchaseReminderWorker, inventoryMonitorWorker, storeActivationWorker,
-  outcomeAttributionWorker, churnInterventionWorker, benchmarkAggregatorWorker,
-  customerVoiceWorker, memoryWriterWorker, dailyRevenueEmailWorker, overnightOpsWorker,
-  eventReactorWorker, browseAbandonmentWorker, copyLearnerWorker, basketAnalysisWorker,
-  productSegmentsWorker, privacyRetentionWorker,
+  syncWorker,
+  rfmWorker,
+  sendWorker,
+  shopifyWebhookWorker,
+  brandAnalysisWorker,
+  automationGeneratorWorker,
+  agentPipelineWorker,
+  automationRunnerWorker,
+  triggerListenerWorker,
+  embeddingWorker,
+  agentObserveWorker,
+  conversationProcessWorker,
+  abandonedCartWorker,
+  segmentChangeWorker,
+  customerStateUpdaterWorker,
+  guardrailValidatorWorker,
+  brandKitExtractorWorker,
+  productImageProcessorWorker,
+  creativeGeneratorWorker,
+  opportunityScannerWorker,
+  campaignFactoryWorker,
+  productCycleAnalyzerWorker,
+  briefingGeneratorWorker,
+  baselineCaptureWorker,
+  weeklyReportWorker,
+  journeyStepperWorker,
+  abTestEvaluatorWorker,
+  revenueForecastWorker,
+  productRecommendationWorker,
+  shippingUpdateWorker,
+  restockAlertWorker,
+  priceDropWorker,
+  repurchaseReminderWorker,
+  inventoryMonitorWorker,
+  storeActivationWorker,
+  outcomeAttributionWorker,
+  churnInterventionWorker,
+  benchmarkAggregatorWorker,
+  customerVoiceWorker,
+  memoryWriterWorker,
+  dailyRevenueEmailWorker,
+  overnightOpsWorker,
+  eventReactorWorker,
+  browseAbandonmentWorker,
+  copyLearnerWorker,
+  basketAnalysisWorker,
+  productSegmentsWorker,
+  privacyRetentionWorker,
   ...(sesEventWorker ? [sesEventWorker] : []),
 ]);
 console.log(`  - sync worker: ${syncWorker.name}`);
@@ -181,6 +216,7 @@ console.log(`  - conversation-process worker: ${conversationProcessWorker.name}`
 console.log(`  - abandoned-cart worker: ${abandonedCartWorker.name}`);
 console.log(`  - segment-change worker: ${segmentChangeWorker.name}`);
 console.log(`  - customer-state-updater worker: ${customerStateUpdaterWorker.name}`);
+console.log(`  - timing-profile worker: ${timingProfileWorker.name}`);
 console.log(`  - guardrail-validator worker: ${guardrailValidatorWorker.name}`);
 console.log(`  - brand-kit-extractor worker: ${brandKitExtractorWorker.name}`);
 console.log(`  - product-image-processor worker: ${productImageProcessorWorker.name}`);
@@ -239,7 +275,7 @@ function gatedSchedule(
   queue: Queue,
   id: string,
   repeat: Parameters<Queue["upsertJobScheduler"]>[1],
-  job: Parameters<Queue["upsertJobScheduler"]>[2],
+  job: Parameters<Queue["upsertJobScheduler"]>[2]
 ): Promise<unknown> {
   if (isScheduleAllowed(id)) return queue.upsertJobScheduler(id, repeat, job);
   return queue.removeJobScheduler(id).then((removed) => {
@@ -250,7 +286,8 @@ function gatedSchedule(
 
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
-gatedSchedule(triggerCheckQueue,
+gatedSchedule(
+  triggerCheckQueue,
   "trigger-check-schedule",
   { every: 5 * 60 * 1000 },
   { name: "trigger-check", data: { type: "cron" } }
@@ -260,7 +297,8 @@ gatedSchedule(triggerCheckQueue,
 
 // Schedule agent observation checks (every 6 hours)
 const agentObserveQueue = new Queue(QUEUE_NAMES.AGENT_OBSERVE, { connection: redisConnection });
-gatedSchedule(agentObserveQueue,
+gatedSchedule(
+  agentObserveQueue,
   "agent-observe-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "agent-observe", data: { type: "cron" } }
@@ -269,8 +307,11 @@ gatedSchedule(agentObserveQueue,
 });
 
 // Schedule abandoned cart checks (every 5 minutes)
-const abandonedCartQueue = new Queue(QUEUE_NAMES.ABANDONED_CART_CHECK, { connection: redisConnection });
-gatedSchedule(abandonedCartQueue,
+const abandonedCartQueue = new Queue(QUEUE_NAMES.ABANDONED_CART_CHECK, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  abandonedCartQueue,
   "abandoned-cart-check-schedule",
   { every: 5 * 60 * 1000 },
   { name: "abandoned-cart-check", data: { type: "cron" } }
@@ -279,8 +320,11 @@ gatedSchedule(abandonedCartQueue,
 });
 
 // Schedule opportunity scanning (every 2 hours)
-const opportunityScanQueue = new Queue(QUEUE_NAMES.OPPORTUNITY_SCAN, { connection: redisConnection });
-gatedSchedule(opportunityScanQueue,
+const opportunityScanQueue = new Queue(QUEUE_NAMES.OPPORTUNITY_SCAN, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  opportunityScanQueue,
   "opportunity-scan-schedule",
   { every: 2 * 60 * 60 * 1000 },
   { name: "opportunity-scan", data: { type: "cron" } }
@@ -290,7 +334,8 @@ gatedSchedule(opportunityScanQueue,
 
 // Schedule product cycle analysis (daily)
 const productCyclesQueue = new Queue(QUEUE_NAMES.PRODUCT_CYCLES, { connection: redisConnection });
-gatedSchedule(productCyclesQueue,
+gatedSchedule(
+  productCyclesQueue,
   "product-cycles-schedule",
   { pattern: "0 3 * * *", tz: BRIEFING_TZ },
   { name: "product-cycles", data: { type: "cron" } }
@@ -300,7 +345,8 @@ gatedSchedule(productCyclesQueue,
 
 // Schedule daily briefings (every 24 hours)
 const briefingQueue = new Queue(QUEUE_NAMES.MERCHANT_BRIEFING, { connection: redisConnection });
-gatedSchedule(briefingQueue,
+gatedSchedule(
+  briefingQueue,
   "daily-briefing-schedule",
   { pattern: "30 5 * * *", tz: BRIEFING_TZ },
   { name: "daily-briefing", data: { type: "cron" } }
@@ -310,7 +356,8 @@ gatedSchedule(briefingQueue,
 
 // Schedule weekly reports (every 7 days)
 const weeklyReportQueue = new Queue(QUEUE_NAMES.WEEKLY_REPORT, { connection: redisConnection });
-gatedSchedule(weeklyReportQueue,
+gatedSchedule(
+  weeklyReportQueue,
   "weekly-report-schedule",
   { pattern: "0 6 * * 1", tz: BRIEFING_TZ },
   { name: "weekly-report", data: { type: "cron" } }
@@ -320,7 +367,8 @@ gatedSchedule(weeklyReportQueue,
 
 // Schedule A/B test evaluation (every 6 hours)
 const abTestQueue = new Queue(QUEUE_NAMES.AB_TEST, { connection: redisConnection });
-gatedSchedule(abTestQueue,
+gatedSchedule(
+  abTestQueue,
   "ab-test-evaluation-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "ab-test-evaluation", data: { type: "cron" } }
@@ -329,8 +377,11 @@ gatedSchedule(abTestQueue,
 });
 
 // Schedule revenue forecast (daily)
-const revenueForecastQueue = new Queue(QUEUE_NAMES.REVENUE_FORECAST, { connection: redisConnection });
-gatedSchedule(revenueForecastQueue,
+const revenueForecastQueue = new Queue(QUEUE_NAMES.REVENUE_FORECAST, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  revenueForecastQueue,
   "revenue-forecast-schedule",
   { pattern: "0 4 * * *", tz: BRIEFING_TZ },
   { name: "revenue-forecast", data: { type: "cron" } }
@@ -339,8 +390,11 @@ gatedSchedule(revenueForecastQueue,
 });
 
 // Schedule product recommendation affinity build (daily)
-const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, { connection: redisConnection });
-gatedSchedule(productRecommendationQueue,
+const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  productRecommendationQueue,
   "product-recommendation-affinity-schedule",
   { pattern: "30 3 * * *", tz: BRIEFING_TZ },
   { name: "build-affinity", data: { type: "cron" } }
@@ -349,8 +403,11 @@ gatedSchedule(productRecommendationQueue,
 });
 
 // Schedule repurchase reminders (every 6 hours)
-const repurchaseReminderQueue = new Queue(QUEUE_NAMES.REPURCHASE_REMINDER, { connection: redisConnection });
-gatedSchedule(repurchaseReminderQueue,
+const repurchaseReminderQueue = new Queue(QUEUE_NAMES.REPURCHASE_REMINDER, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  repurchaseReminderQueue,
   "repurchase-reminder-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "repurchase-reminder", data: { type: "cron" } }
@@ -359,8 +416,11 @@ gatedSchedule(repurchaseReminderQueue,
 });
 
 // Schedule inventory monitor (every 2 hours)
-const inventoryMonitorQueue = new Queue(QUEUE_NAMES.INVENTORY_MONITOR, { connection: redisConnection });
-gatedSchedule(inventoryMonitorQueue,
+const inventoryMonitorQueue = new Queue(QUEUE_NAMES.INVENTORY_MONITOR, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  inventoryMonitorQueue,
   "inventory-monitor-schedule",
   { every: 2 * 60 * 60 * 1000 },
   { name: "inventory-monitor", data: { type: "cron" } }
@@ -369,8 +429,11 @@ gatedSchedule(inventoryMonitorQueue,
 });
 
 // Schedule outcome attribution (hourly)
-const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, { connection: redisConnection });
-gatedSchedule(outcomeAttributionQueue,
+const outcomeAttributionQueue = new Queue(QUEUE_NAMES.OUTCOME_ATTRIBUTION, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  outcomeAttributionQueue,
   "outcome-attribution-schedule",
   { every: 60 * 60 * 1000 },
   { name: "outcome-attribution", data: { type: "hourly" } }
@@ -379,7 +442,8 @@ gatedSchedule(outcomeAttributionQueue,
 });
 
 // Schedule daily revenue summary (every 24 hours)
-gatedSchedule(outcomeAttributionQueue,
+gatedSchedule(
+  outcomeAttributionQueue,
   "daily-revenue-summary-schedule",
   { pattern: "0 6 * * *", tz: BRIEFING_TZ },
   { name: "daily-revenue-summary", data: { type: "daily-summary" } }
@@ -388,7 +452,8 @@ gatedSchedule(outcomeAttributionQueue,
 });
 
 // Early-access shadow invoices only: no Shopify Billing API calls are made.
-gatedSchedule(outcomeAttributionQueue,
+gatedSchedule(
+  outcomeAttributionQueue,
   "monthly-shadow-invoice-schedule",
   { pattern: "15 2 1 * *", tz: BRIEFING_TZ },
   { name: "monthly-shadow-invoice", data: { type: "monthly-shadow-invoice" } }
@@ -397,8 +462,11 @@ gatedSchedule(outcomeAttributionQueue,
 });
 
 // Schedule churn intervention scan (every 6 hours — increased from daily for faster detection)
-const churnInterventionQueue = new Queue(QUEUE_NAMES.CHURN_INTERVENTION, { connection: redisConnection });
-gatedSchedule(churnInterventionQueue,
+const churnInterventionQueue = new Queue(QUEUE_NAMES.CHURN_INTERVENTION, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  churnInterventionQueue,
   "churn-intervention-schedule",
   { every: 6 * 60 * 60 * 1000 },
   { name: "churn-intervention", data: { type: "cron" } }
@@ -408,7 +476,8 @@ gatedSchedule(churnInterventionQueue,
 
 // Schedule benchmark aggregation (weekly)
 const benchmarkQueue = new Queue(QUEUE_NAMES.BENCHMARK_AGGREGATE, { connection: redisConnection });
-gatedSchedule(benchmarkQueue,
+gatedSchedule(
+  benchmarkQueue,
   "benchmark-aggregate-schedule",
   { pattern: "0 23 * * 0", tz: BRIEFING_TZ },
   { name: "benchmark-aggregate", data: { type: "weekly" } }
@@ -418,7 +487,8 @@ gatedSchedule(benchmarkQueue,
 
 // Schedule customer voice synthesis (weekly — every Monday)
 const customerVoiceQueue = new Queue(QUEUE_NAMES.CUSTOMER_VOICE, { connection: redisConnection });
-gatedSchedule(customerVoiceQueue,
+gatedSchedule(
+  customerVoiceQueue,
   "customer-voice-schedule",
   { pattern: "0 4 * * 1", tz: BRIEFING_TZ },
   { name: "customer-voice", data: { type: "weekly" } }
@@ -427,8 +497,11 @@ gatedSchedule(customerVoiceQueue,
 });
 
 // Schedule daily revenue email (daily at ~8am — runs every 24 hours)
-const dailyRevenueEmailQueue = new Queue(QUEUE_NAMES.DAILY_REVENUE_EMAIL, { connection: redisConnection });
-gatedSchedule(dailyRevenueEmailQueue,
+const dailyRevenueEmailQueue = new Queue(QUEUE_NAMES.DAILY_REVENUE_EMAIL, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  dailyRevenueEmailQueue,
   "daily-revenue-email-schedule",
   { pattern: "0 7 * * *", tz: BRIEFING_TZ },
   { name: "daily-revenue-email", data: { type: "cron" } }
@@ -437,8 +510,11 @@ gatedSchedule(dailyRevenueEmailQueue,
 });
 
 // Schedule customer state decay (daily — recomputes stale lifecycle stages)
-const customerStateDecayQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
-gatedSchedule(customerStateDecayQueue,
+const customerStateDecayQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  customerStateDecayQueue,
   "state-decay-schedule",
   { pattern: "30 2 * * *", tz: BRIEFING_TZ },
   { name: "state-decay", data: { type: "state_decay", customerId: "", storeId: "" } }
@@ -446,9 +522,23 @@ gatedSchedule(customerStateDecayQueue,
   console.error("Failed to set up state decay schedule:", err.message);
 });
 
+// Rebuild explainable customer/store delivery windows before the daily state run.
+const timingProfileQueue = new Queue(QUEUE_NAMES.TIMING_PROFILE, { connection: redisConnection });
+gatedSchedule(
+  timingProfileQueue,
+  "send-time-optimization-schedule",
+  { pattern: "0 2 * * *", tz: BRIEFING_TZ },
+  { name: "timing-profile-rebuild", data: { type: "all_stores" } }
+).catch((err) => {
+  console.error("Failed to set up timing-profile schedule:", err.message);
+});
+
 // Minimize privacy-request payloads and expire webhook deduplication records.
-const privacyRetentionQueue = new Queue(QUEUE_NAMES.PRIVACY_RETENTION, { connection: redisConnection });
-gatedSchedule(privacyRetentionQueue,
+const privacyRetentionQueue = new Queue(QUEUE_NAMES.PRIVACY_RETENTION, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  privacyRetentionQueue,
   "privacy-retention-schedule",
   { pattern: "0 3 * * *", tz: BRIEFING_TZ },
   { name: "privacy-retention", data: { type: "daily" } }
@@ -458,7 +548,8 @@ gatedSchedule(privacyRetentionQueue,
 
 // Schedule overnight ops (every 2 hours)
 const overnightOpsQueue = new Queue(QUEUE_NAMES.OVERNIGHT_OPS, { connection: redisConnection });
-gatedSchedule(overnightOpsQueue,
+gatedSchedule(
+  overnightOpsQueue,
   "overnight-ops-schedule",
   { every: 2 * 60 * 60 * 1000 },
   { name: "overnight-scan", data: { type: "cron" } }
@@ -467,8 +558,11 @@ gatedSchedule(overnightOpsQueue,
 });
 
 // Schedule browse abandonment scan (every 30 minutes)
-const browseAbandonmentQueue = new Queue(QUEUE_NAMES.BROWSE_ABANDONMENT, { connection: redisConnection });
-gatedSchedule(browseAbandonmentQueue,
+const browseAbandonmentQueue = new Queue(QUEUE_NAMES.BROWSE_ABANDONMENT, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  browseAbandonmentQueue,
   "browse-abandonment-schedule",
   { every: 30 * 60 * 1000 },
   { name: "browse-abandonment", data: { type: "cron" } }
@@ -478,7 +572,8 @@ gatedSchedule(browseAbandonmentQueue,
 
 // Schedule copy learner (weekly)
 const copyLearnerQueue = new Queue(QUEUE_NAMES.COPY_LEARNER, { connection: redisConnection });
-gatedSchedule(copyLearnerQueue,
+gatedSchedule(
+  copyLearnerQueue,
   "copy-learner-schedule",
   { pattern: "0 22 * * 0", tz: BRIEFING_TZ },
   { name: "copy-learner", data: { type: "weekly" } }
@@ -488,7 +583,8 @@ gatedSchedule(copyLearnerQueue,
 
 // Schedule basket analysis (daily)
 const basketAnalysisQueue = new Queue(QUEUE_NAMES.BASKET_ANALYSIS, { connection: redisConnection });
-gatedSchedule(basketAnalysisQueue,
+gatedSchedule(
+  basketAnalysisQueue,
   "basket-analysis-schedule",
   { pattern: "15 3 * * *", tz: BRIEFING_TZ },
   { name: "basket-analysis", data: { type: "cron" } }
@@ -497,8 +593,11 @@ gatedSchedule(basketAnalysisQueue,
 });
 
 // Schedule product segments analysis (daily)
-const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, { connection: redisConnection });
-gatedSchedule(productSegmentsQueue,
+const productSegmentsQueue = new Queue(QUEUE_NAMES.PRODUCT_SEGMENTS, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  productSegmentsQueue,
   "product-segments-schedule",
   { pattern: "45 3 * * *", tz: BRIEFING_TZ },
   { name: "product-segments", data: { type: "cron" } }
@@ -509,7 +608,7 @@ gatedSchedule(productSegmentsQueue,
 console.log(
   isV1ReleaseMode()
     ? "[v1-gate] v1 release boundary ACTIVE — email-only, no autopilot/proactive schedules"
-    : "[v1-gate] v1 release boundary DISABLED (V1_RELEASE_MODE=false)",
+    : "[v1-gate] v1 release boundary DISABLED (V1_RELEASE_MODE=false)"
 );
 
 // Graceful shutdown with timeout — if workers don't close in 5s, force exit.

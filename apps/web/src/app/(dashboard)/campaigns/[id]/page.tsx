@@ -72,6 +72,29 @@ export default function CampaignDetailPage() {
     { id: campaignId },
     { enabled: campaign?.status === "draft" || campaign?.status === "scheduled" }
   );
+  const { data: timingPreview, isLoading: timingPreviewLoading } = (
+    trpc.campaigns.timingPreview as any
+  ).useQuery({ id: campaignId }, { enabled: campaign?.status === "draft" }) as {
+    data?: {
+      recipients: number;
+      cohortCount: number;
+      timezoneCount: number;
+      quietHoursDeferred: number;
+      dayPolicy: string;
+      bestDayEvidence: Record<string, number>;
+      earliestAt: string | null;
+      latestAt: string | null;
+      evidence: { customer: number; store: number; default: number };
+      cohorts: Array<{
+        window: "morning" | "afternoon" | "evening";
+        timezone: string;
+        source: "customer" | "store" | "default";
+        confidence: number;
+        count: number;
+      }>;
+    };
+    isLoading: boolean;
+  };
 
   // Render preview from blocks if template has no pre-rendered HTML
   const templateBlocks =
@@ -530,6 +553,30 @@ export default function CampaignDetailPage() {
                 )}
                 Edit campaign
               </button>
+              {timingPreview && timingPreview.cohorts.length > 0 && (
+                <details className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-[11px]">
+                  <summary className="cursor-pointer font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    Inspect delivery cohorts
+                  </summary>
+                  <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+                    {timingPreview.cohorts.map((cohort) => (
+                      <div
+                        key={`${cohort.timezone}:${cohort.window}:${cohort.source}`}
+                        className="flex items-center justify-between gap-4 border-t border-border pt-2 first:border-0 first:pt-0"
+                      >
+                        <span className="text-foreground">
+                          {cohort.window} · {cohort.timezone}
+                          <span className="ml-1 text-muted-foreground">({cohort.source})</span>
+                        </span>
+                        <span className="shrink-0 font-mono text-muted-foreground">
+                          {cohort.count.toLocaleString("en-IN")} ·{" "}
+                          {Math.round(cohort.confidence * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
               <button
                 onClick={() => setShowTimingOverride(true)}
                 disabled={deliverNowMut.isPending || reviseMut.isPending}
@@ -625,9 +672,45 @@ export default function CampaignDetailPage() {
                   </span>
                 </span>
                 <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
-                  Joon will use customer engagement, store patterns and quiet hours. You will see
-                  every planned time and can still override it before delivery.
+                  {timingPreviewLoading
+                    ? "Building the delivery-window preview…"
+                    : timingPreview
+                      ? `${timingPreview.recipients.toLocaleString("en-IN")} recipients · ${timingPreview.cohortCount} delivery cohorts · ${timingPreview.timezoneCount} ${timingPreview.timezoneCount === 1 ? "timezone" : "timezones"}.`
+                      : "Joon will use customer engagement, store patterns and quiet hours."}
                 </span>
+                {timingPreview && (
+                  <span className="mt-3 block rounded-lg border border-border bg-card px-3 py-2 text-[10px] leading-4 text-muted-foreground">
+                    Expected window: {formatDeliveryTime(timingPreview.earliestAt)}–
+                    {formatDeliveryTime(timingPreview.latestAt)}
+                    {timingPreview.quietHoursDeferred > 0
+                      ? ` · ${timingPreview.quietHoursDeferred.toLocaleString("en-IN")} deferred past quiet hours`
+                      : " · no quiet-hours deferrals"}
+                    . Campaign day remains under your control; Joon optimizes the broad window, not
+                    an artificial exact minute.
+                  </span>
+                )}
+                {timingPreview && (
+                  <span className="mt-2 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border">
+                    <span className="bg-card px-2 py-2 text-center">
+                      <strong className="block font-mono text-[11px] text-foreground">
+                        {timingPreview.evidence.customer.toLocaleString("en-IN")}
+                      </strong>
+                      <span className="text-[9px] text-muted-foreground">customer evidence</span>
+                    </span>
+                    <span className="bg-card px-2 py-2 text-center">
+                      <strong className="block font-mono text-[11px] text-foreground">
+                        {timingPreview.evidence.store.toLocaleString("en-IN")}
+                      </strong>
+                      <span className="text-[9px] text-muted-foreground">store pattern</span>
+                    </span>
+                    <span className="bg-card px-2 py-2 text-center">
+                      <strong className="block font-mono text-[11px] text-foreground">
+                        {timingPreview.evidence.default.toLocaleString("en-IN")}
+                      </strong>
+                      <span className="text-[9px] text-muted-foreground">clear default</span>
+                    </span>
+                  </span>
+                )}
               </button>
               <button
                 type="button"
