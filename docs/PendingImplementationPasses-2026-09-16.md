@@ -84,7 +84,7 @@ Replace false timestamp precision with a small number of explainable delivery co
 
 ## Pass 3 — Chat UX and durable campaign collaboration
 
-Status: pending design input from the founder. Do not begin visual implementation until those inputs are added here.
+Status: code complete for durable campaign artifacts and structured campaign constraints; production UX acceptance remains. Reopened chats hydrate the linked campaign's current state, preserve the preview and controls, and show the audience, offer, control and delivery constraints Joon understood. Explicit top-N, discount, full-price, no-control and delivery-intent instructions are parsed and persisted rather than left only in transcript prose. Customer and source-campaign actions retain their structured context.
 
 ### Outcome
 

@@ -14,14 +14,91 @@ const brandAnalysisQueue = new Queue("brand-analysis", { connection: redisConnec
 
 /** Common words to skip when searching for customer names in messages */
 const STOP_WORDS = new Set([
-  "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her", "was", "one",
-  "our", "out", "day", "get", "has", "him", "his", "how", "its", "may", "new", "now", "old",
-  "see", "way", "who", "did", "let", "say", "she", "too", "use", "what", "why", "how",
-  "show", "tell", "find", "give", "last", "make", "want", "with", "from", "they", "been",
-  "have", "this", "that", "will", "your", "about", "which", "their", "there", "these",
-  "create", "build", "send", "campaign", "automation", "email", "segment", "customer",
-  "customers", "template", "analyze", "analysis", "report", "data", "store", "order",
-  "orders", "revenue", "spent", "days", "month", "week", "year", "risk", "high", "low",
+  "the",
+  "and",
+  "for",
+  "are",
+  "but",
+  "not",
+  "you",
+  "all",
+  "can",
+  "had",
+  "her",
+  "was",
+  "one",
+  "our",
+  "out",
+  "day",
+  "get",
+  "has",
+  "him",
+  "his",
+  "how",
+  "its",
+  "may",
+  "new",
+  "now",
+  "old",
+  "see",
+  "way",
+  "who",
+  "did",
+  "let",
+  "say",
+  "she",
+  "too",
+  "use",
+  "what",
+  "why",
+  "how",
+  "show",
+  "tell",
+  "find",
+  "give",
+  "last",
+  "make",
+  "want",
+  "with",
+  "from",
+  "they",
+  "been",
+  "have",
+  "this",
+  "that",
+  "will",
+  "your",
+  "about",
+  "which",
+  "their",
+  "there",
+  "these",
+  "create",
+  "build",
+  "send",
+  "campaign",
+  "automation",
+  "email",
+  "segment",
+  "customer",
+  "customers",
+  "template",
+  "analyze",
+  "analysis",
+  "report",
+  "data",
+  "store",
+  "order",
+  "orders",
+  "revenue",
+  "spent",
+  "days",
+  "month",
+  "week",
+  "year",
+  "risk",
+  "high",
+  "low",
 ]);
 
 const aiModelIdSchema = z.enum([
@@ -77,7 +154,7 @@ async function writeMemoryIfSignificant(
   storeId: string,
   reply: string,
   toolCalls: string[],
-  actionResult: { intent: string; success: boolean; summary: string } | null,
+  actionResult: { intent: string; success: boolean; summary: string } | null
 ): Promise<void> {
   try {
     const memories: { memoryType: string; content: string; importance: number }[] = [];
@@ -113,7 +190,10 @@ async function writeMemoryIfSignificant(
 
     // Detect merchant preferences from the conversation
     const lowerReply = reply.toLowerCase();
-    if (lowerReply.includes("prefer") && (lowerReply.includes("email") || lowerReply.includes("sms"))) {
+    if (
+      lowerReply.includes("prefer") &&
+      (lowerReply.includes("email") || lowerReply.includes("sms"))
+    ) {
       const channel = lowerReply.includes("email") ? "email" : "sms";
       memories.push({
         memoryType: "merchant_preference",
@@ -134,11 +214,15 @@ async function writeMemoryIfSignificant(
     }
 
     // Detect customer insights from analysis tool calls
-    if (toolCalls.includes("get_churn_risk_report") || toolCalls.includes("get_dashboard_metrics")) {
+    if (
+      toolCalls.includes("get_churn_risk_report") ||
+      toolCalls.includes("get_dashboard_metrics")
+    ) {
       if (lowerReply.includes("churn") || lowerReply.includes("at risk")) {
         memories.push({
           memoryType: "customer_insight",
-          content: `Reviewed churn risk analysis on ${new Date().toISOString().split("T")[0]}. ${reply.match(/(\d+)\s*(?:customers?\s+(?:at risk|churning|hibernating))/i)?.[0] ?? ""}`.trim(),
+          content:
+            `Reviewed churn risk analysis on ${new Date().toISOString().split("T")[0]}. ${reply.match(/(\d+)\s*(?:customers?\s+(?:at risk|churning|hibernating))/i)?.[0] ?? ""}`.trim(),
           importance: 0.5,
         });
       }
@@ -180,31 +264,78 @@ export const aiRouter = router({
       "gpt-4o": { in: 2.5, out: 10 },
       "gpt-4o-mini": { in: 0.15, out: 0.6 },
     };
-    const usd = (rows: { model: string; _sum: { inputTokens: number | null; outputTokens: number | null } }[]) =>
+    const usd = (
+      rows: { model: string; _sum: { inputTokens: number | null; outputTokens: number | null } }[]
+    ) =>
       rows.reduce((s, r) => {
         const rate = RATES[r.model] ?? { in: 3, out: 15 };
-        return s + ((r._sum.inputTokens ?? 0) * rate.in + (r._sum.outputTokens ?? 0) * rate.out) / 1_000_000;
+        return (
+          s +
+          ((r._sum.inputTokens ?? 0) * rate.in + (r._sum.outputTokens ?? 0) * rate.out) / 1_000_000
+        );
       }, 0);
 
-    const stores = await ctx.prisma.store.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true } });
+    const stores = await ctx.prisma.store.findMany({
+      where: { workspaceId: ctx.workspaceId },
+      select: { id: true },
+    });
     const storeIds = stores.map((s) => s.id);
 
     const [today, week, byModel, recentErrors, msgToday, msgWeek] = await Promise.all([
-      ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfDay } }, _sum: { inputTokens: true, outputTokens: true } }),
-      ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } }, _sum: { inputTokens: true, outputTokens: true } }),
-      ctx.prisma.tokenUsage.groupBy({ by: ["model"], where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } }, _sum: { inputTokens: true, outputTokens: true }, _count: { id: true } }),
-      ctx.prisma.agentAction.findMany({ where: { storeId: { in: storeIds }, status: "failed" }, orderBy: { createdAt: "desc" }, take: 20, select: { actionType: true, error: true, createdAt: true } }),
+      ctx.prisma.tokenUsage.groupBy({
+        by: ["model"],
+        where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfDay } },
+        _sum: { inputTokens: true, outputTokens: true },
+      }),
+      ctx.prisma.tokenUsage.groupBy({
+        by: ["model"],
+        where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } },
+        _sum: { inputTokens: true, outputTokens: true },
+      }),
+      ctx.prisma.tokenUsage.groupBy({
+        by: ["model"],
+        where: { workspaceId: ctx.workspaceId, createdAt: { gte: startOfWeek } },
+        _sum: { inputTokens: true, outputTokens: true },
+        _count: { id: true },
+      }),
+      ctx.prisma.agentAction.findMany({
+        where: { storeId: { in: storeIds }, status: "failed" },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { actionType: true, error: true, createdAt: true },
+      }),
       // Messaging (provider send) cost — per-brand P&L alongside inference.
-      ctx.prisma.messageLog.groupBy({ by: ["channel"], where: { workspaceId: ctx.workspaceId, sendCost: { not: null }, createdAt: { gte: startOfDay } }, _sum: { sendCost: true }, _count: { id: true } }),
-      ctx.prisma.messageLog.groupBy({ by: ["channel"], where: { workspaceId: ctx.workspaceId, sendCost: { not: null }, createdAt: { gte: startOfWeek } }, _sum: { sendCost: true }, _count: { id: true } }),
+      ctx.prisma.messageLog.groupBy({
+        by: ["channel"],
+        where: {
+          workspaceId: ctx.workspaceId,
+          sendCost: { not: null },
+          createdAt: { gte: startOfDay },
+        },
+        _sum: { sendCost: true },
+        _count: { id: true },
+      }),
+      ctx.prisma.messageLog.groupBy({
+        by: ["channel"],
+        where: {
+          workspaceId: ctx.workspaceId,
+          sendCost: { not: null },
+          createdAt: { gte: startOfWeek },
+        },
+        _sum: { sendCost: true },
+        _count: { id: true },
+      }),
     ]);
-    const msgInr = (rows: { _sum: { sendCost: unknown } }[]) => rows.reduce((s, r) => s + Number(r._sum.sendCost ?? 0), 0);
+    const msgInr = (rows: { _sum: { sendCost: unknown } }[]) =>
+      rows.reduce((s, r) => s + Number(r._sum.sendCost ?? 0), 0);
 
     const todayUsd = usd(today);
     const threshold = Number(process.env["LLM_DAILY_SPEND_ALERT_USD"] ?? "25");
     const exceeded = todayUsd > threshold;
     if (exceeded) {
-      console.warn(`[LLM spend alert] today $${todayUsd.toFixed(2)} exceeds threshold $${threshold} (workspace ${ctx.workspaceId})`);
+      console.warn(
+        `[LLM spend alert] today $${todayUsd.toFixed(2)} exceeds threshold $${threshold} (workspace ${ctx.workspaceId})`
+      );
     }
 
     return {
@@ -225,7 +356,11 @@ export const aiRouter = router({
         todayInr: Math.round(msgInr(msgToday) * 100) / 100,
         weekInr: Math.round(msgInr(msgWeek) * 100) / 100,
         byChannel: msgWeek
-          .map((r) => ({ channel: r.channel, messages: r._count.id, inr: Math.round(Number(r._sum.sendCost ?? 0) * 100) / 100 }))
+          .map((r) => ({
+            channel: r.channel,
+            messages: r._count.id,
+            inr: Math.round(Number(r._sum.sendCost ?? 0) * 100) / 100,
+          }))
           .sort((a, b) => b.inr - a.inr),
       },
     };
@@ -237,16 +372,36 @@ export const aiRouter = router({
     .query(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
-        select: { id: true, shopDomain: true, platform: true, lastSyncAt: true, _count: { select: { customers: true } } },
+        select: {
+          id: true,
+          shopDomain: true,
+          platform: true,
+          lastSyncAt: true,
+          _count: { select: { customers: true } },
+        },
       });
 
       if (!store) {
         return {
           store: null,
-          metrics: { totalCustomers: 0, revenueThisMonth: 0, revenueLastMonth: 0, revenueTrend: 0, totalAutomations: 0, activeAutomations: 0 },
+          metrics: {
+            totalCustomers: 0,
+            revenueThisMonth: 0,
+            revenueLastMonth: 0,
+            revenueTrend: 0,
+            totalAutomations: 0,
+            activeAutomations: 0,
+          },
           segmentAlerts: { atRiskCount: 0, championsCount: 0, newCustomersCount: 0, lostCount: 0 },
           churnAlert: { highRiskCount: 0, avgChurnProbability: 0 },
-          storeState: { hasStore: false, hasSyncedData: false, hasBrandProfile: false, hasAutomations: false, hasActiveAutomations: false, hasCampaigns: false },
+          storeState: {
+            hasStore: false,
+            hasSyncedData: false,
+            hasBrandProfile: false,
+            hasAutomations: false,
+            hasActiveAutomations: false,
+            hasCampaigns: false,
+          },
           topAutomation: null,
           recoveryOpportunities: {
             abandonedCarts: { count: 0, totalValue: 0 },
@@ -284,7 +439,10 @@ export const aiRouter = router({
         }),
         // Revenue last month
         ctx.prisma.order.aggregate({
-          where: { storeId: input.storeId, createdAt: { gte: startOfLastMonth, lt: startOfThisMonth } },
+          where: {
+            storeId: input.storeId,
+            createdAt: { gte: startOfLastMonth, lt: startOfThisMonth },
+          },
           _sum: { totalPrice: true },
         }),
         // Segment counts from RFM scores
@@ -345,7 +503,9 @@ export const aiRouter = router({
           where: {
             storeId: input.storeId,
             status: "pending",
-            type: { in: ["cart_recovery", "price_drop_alert", "restock_alert", "repurchase_reminder"] },
+            type: {
+              in: ["cart_recovery", "price_drop_alert", "restock_alert", "repurchase_reminder"],
+            },
           },
           _count: true,
           _sum: { estimatedRevenue: true },
@@ -354,16 +514,21 @@ export const aiRouter = router({
 
       const thisMonth = revenueThisMonth._sum.totalPrice ?? 0;
       const lastMonth = revenueLastMonth._sum.totalPrice ?? 0;
-      const revenueTrend = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : 0;
+      const revenueTrend =
+        lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : 0;
 
       const segmentMap = Object.fromEntries(segmentCounts.map((s) => [s.segment, s._count]));
 
       // Build recovery opportunity summary for AI context
       const recoveryMap = Object.fromEntries(
-        recoveryActions.map((r) => [r.type, { count: r._count, estimatedRevenue: r._sum.estimatedRevenue ?? 0 }]),
+        recoveryActions.map((r) => [
+          r.type,
+          { count: r._count, estimatedRevenue: r._sum.estimatedRevenue ?? 0 },
+        ])
       );
-      const totalRecoveryRevenue = recoveryActions.reduce((sum, r) => sum + (r._sum.estimatedRevenue ?? 0), 0)
-        + (abandonedCartValue._sum.totalPrice ?? 0);
+      const totalRecoveryRevenue =
+        recoveryActions.reduce((sum, r) => sum + (r._sum.estimatedRevenue ?? 0), 0) +
+        (abandonedCartValue._sum.totalPrice ?? 0);
 
       return {
         store: { domain: store.shopDomain, lastSyncAt: store.lastSyncAt?.toISOString() ?? null },
@@ -394,16 +559,24 @@ export const aiRouter = router({
           hasCampaigns: campaigns > 0,
         },
         topAutomation: topAutomation
-          ? { name: topAutomation.name, status: topAutomation.status, category: topAutomation.category ?? "" }
+          ? {
+              name: topAutomation.name,
+              status: topAutomation.status,
+              category: topAutomation.category ?? "",
+            }
           : null,
         recoveryOpportunities: {
-          abandonedCarts: { count: abandonedCartCount, totalValue: abandonedCartValue._sum.totalPrice ?? 0 },
+          abandonedCarts: {
+            count: abandonedCartCount,
+            totalValue: abandonedCartValue._sum.totalPrice ?? 0,
+          },
           cartRecovery: recoveryMap["cart_recovery"] ?? { count: 0, estimatedRevenue: 0 },
           priceDrop: recoveryMap["price_drop_alert"] ?? { count: 0, estimatedRevenue: 0 },
           restock: recoveryMap["restock_alert"] ?? { count: 0, estimatedRevenue: 0 },
           repurchase: recoveryMap["repurchase_reminder"] ?? { count: 0, estimatedRevenue: 0 },
           totalEstimatedRevenue: totalRecoveryRevenue,
-          totalOpportunities: recoveryActions.reduce((sum, r) => sum + r._count, 0) + abandonedCartCount,
+          totalOpportunities:
+            recoveryActions.reduce((sum, r) => sum + r._count, 0) + abandonedCartCount,
         },
       };
     }),
@@ -450,8 +623,9 @@ export const aiRouter = router({
       const modelHarness = normalizeModelHarness(workspace?.modelHarness);
       if (input.model) {
         modelHarness.defaultRoute.primary = input.model;
-        modelHarness.defaultRoute.fallbacks =
-          modelHarness.defaultRoute.fallbacks.filter((id) => id !== input.model);
+        modelHarness.defaultRoute.fallbacks = modelHarness.defaultRoute.fallbacks.filter(
+          (id) => id !== input.model
+        );
       }
 
       await ctx.prisma.workspace.update({
@@ -465,53 +639,47 @@ export const aiRouter = router({
     }),
 
   /** Save the complete workspace model harness. Owner-only because it affects cost and behavior. */
-  setModelHarness: ownerProcedure
-    .input(modelHarnessSchema)
-    .mutation(async ({ ctx, input }) => {
-      const {
-        normalizeModelHarness,
-        describeHarness,
-      } = await import("@allohq/customer-intelligence");
-      const harness = normalizeModelHarness(input);
+  setModelHarness: ownerProcedure.input(modelHarnessSchema).mutation(async ({ ctx, input }) => {
+    const { normalizeModelHarness, describeHarness } =
+      await import("@allohq/customer-intelligence");
+    const harness = normalizeModelHarness(input);
 
-      await ctx.prisma.workspace.update({
-        where: { id: ctx.workspaceId },
-        data: {
-          modelHarness: harness as any,
-          // Keep the legacy field synchronized for workers that have not yet
-          // migrated to workload-aware routing.
-          defaultModel: harness.defaultRoute.primary,
-        },
-      });
+    await ctx.prisma.workspace.update({
+      where: { id: ctx.workspaceId },
+      data: {
+        modelHarness: harness as any,
+        // Keep the legacy field synchronized for workers that have not yet
+        // migrated to workload-aware routing.
+        defaultModel: harness.defaultRoute.primary,
+      },
+    });
 
-      return {
-        success: true,
-        harness,
-        resolvedRoutes: describeHarness(harness),
-      };
-    }),
+    return {
+      success: true,
+      harness,
+      resolvedRoutes: describeHarness(harness),
+    };
+  }),
 
   /** Resolve every route without calling a provider; used by the settings preview. */
-  previewModelHarness: ownerProcedure
-    .input(modelHarnessSchema)
-    .query(async ({ input }) => {
-      const {
-        normalizeModelHarness,
-        describeHarness,
-      } = await import("@allohq/customer-intelligence");
-      const harness = normalizeModelHarness(input);
-      return {
-        harness,
-        resolvedRoutes: describeHarness(harness),
-      };
-    }),
+  previewModelHarness: ownerProcedure.input(modelHarnessSchema).query(async ({ input }) => {
+    const { normalizeModelHarness, describeHarness } =
+      await import("@allohq/customer-intelligence");
+    const harness = normalizeModelHarness(input);
+    return {
+      harness,
+      resolvedRoutes: describeHarness(harness),
+    };
+  }),
 
   /** Explain the reasoning behind an AI recommendation, metric, or action */
   explain: workspaceProcedure
-    .input(z.object({
-      context: z.string().min(1).max(500),
-      storeId: z.string(),
-    }))
+    .input(
+      z.object({
+        context: z.string().min(1).max(500),
+        storeId: z.string(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
@@ -523,35 +691,39 @@ export const aiRouter = router({
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const [segments, revenueAgg, customerCount, brandProfile, workspaceAiSettings] = await Promise.all([
-        ctx.prisma.rfmScore.groupBy({
-          by: ["segment"],
-          where: { customer: { storeId: input.storeId } },
-          _count: true,
-          _sum: { totalSpent: true },
-        }),
-        ctx.prisma.order.aggregate({
-          where: { storeId: input.storeId, createdAt: { gte: startOfMonth } },
-          _sum: { totalPrice: true },
-          _count: true,
-        }),
-        ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
-        ctx.prisma.brandProfile.findFirst({
-          where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
-          select: { brandName: true },
-        }),
-        ctx.prisma.workspace.findUnique({
-          where: { id: ctx.workspaceId },
-          select: { modelHarness: true },
-        }),
-      ]);
+      const [segments, revenueAgg, customerCount, brandProfile, workspaceAiSettings] =
+        await Promise.all([
+          ctx.prisma.rfmScore.groupBy({
+            by: ["segment"],
+            where: { customer: { storeId: input.storeId } },
+            _count: true,
+            _sum: { totalSpent: true },
+          }),
+          ctx.prisma.order.aggregate({
+            where: { storeId: input.storeId, createdAt: { gte: startOfMonth } },
+            _sum: { totalPrice: true },
+            _count: true,
+          }),
+          ctx.prisma.customer.count({ where: { storeId: input.storeId } }),
+          ctx.prisma.brandProfile.findFirst({
+            where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
+            select: { brandName: true },
+          }),
+          ctx.prisma.workspace.findUnique({
+            where: { id: ctx.workspaceId },
+            select: { modelHarness: true },
+          }),
+        ]);
 
       const monthRevenue = revenueAgg._sum.totalPrice ?? 0;
       const monthOrders = revenueAgg._count;
       const avgOrderValue = monthOrders > 0 ? monthRevenue / monthOrders : 0;
 
       const segmentSummary = segments
-        .map((s) => `${s.segment}: ${s._count} customers, $${Math.round(s._sum.totalSpent ?? 0).toLocaleString()} spent`)
+        .map(
+          (s) =>
+            `${s.segment}: ${s._count} customers, $${Math.round(s._sum.totalSpent ?? 0).toLocaleString()} spent`
+        )
         .join("; ");
 
       const storeData = `Store: ${brandProfile?.brandName ?? store.shopDomain}. ${customerCount} customers. Month revenue: $${monthRevenue.toFixed(0)}. ${monthOrders} orders. AOV: $${avgOrderValue.toFixed(0)}. Segments: ${segmentSummary}`;
@@ -606,7 +778,9 @@ export const aiRouter = router({
                 code: z.string(),
               })
               .optional(),
-            funnelStage: z.enum(["awareness", "consideration", "purchase", "retention", "advocacy"]).optional(),
+            funnelStage: z
+              .enum(["awareness", "consideration", "purchase", "retention", "advocacy"])
+              .optional(),
           })
           .optional(),
       })
@@ -644,17 +818,25 @@ export const aiRouter = router({
       const { generateEmail } = await import("@allohq/customer-intelligence");
 
       // Build brand settings for header/footer injection
-      const brandSettingsForEmail = brandProfile ? {
-        logoUrl: store.storeLogoUrl,
-        logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
-        headerBgColor: brandProfile.headerBgColor,
-        footerText: brandProfile.footerText,
-        showSocialLinks: brandProfile.showSocialLinks,
-        showAddress: brandProfile.showAddress,
-        storeName: store.storeName ?? brandProfile.brandName,
-        address: store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string } | null,
-        socialLinks: store.socialLinks as Record<string, string> | null,
-      } : undefined;
+      const brandSettingsForEmail = brandProfile
+        ? {
+            logoUrl: store.storeLogoUrl,
+            logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+            headerBgColor: brandProfile.headerBgColor,
+            footerText: brandProfile.footerText,
+            showSocialLinks: brandProfile.showSocialLinks,
+            showAddress: brandProfile.showAddress,
+            storeName: store.storeName ?? brandProfile.brandName,
+            address: store.address as {
+              address1?: string;
+              city?: string;
+              province?: string;
+              zip?: string;
+              country?: string;
+            } | null,
+            socialLinks: store.socialLinks as Record<string, string> | null,
+          }
+        : undefined;
 
       const result = await generateEmail({
         brandProfile: brandProfile
@@ -673,8 +855,13 @@ export const aiRouter = router({
         modelHarness: workspaceAiSettings?.modelHarness,
         // Demo cost cap: never generate AI images on the public demo (most
         // expensive op) — text_heavy short-circuits image generation.
-        creativeIntensity: ctx.isDemo ? "text_heavy" : ((brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ?? "balanced"),
-        segment: segment ? { name: segment.name, description: segment.description ?? "" } : undefined,
+        creativeIntensity: ctx.isDemo
+          ? "text_heavy"
+          : ((brandProfile?.creativeIntensity as "text_heavy" | "balanced" | "visual_heavy") ??
+            "balanced"),
+        segment: segment
+          ? { name: segment.name, description: segment.description ?? "" }
+          : undefined,
         products: products.map((p) => ({
           id: p.id,
           title: p.title,
@@ -724,7 +911,12 @@ export const aiRouter = router({
         },
       });
 
-      return { template, reasoning: result.reasoning, selectedProductIds: result.selectedProductIds, model: result.model };
+      return {
+        template,
+        reasoning: result.reasoning,
+        selectedProductIds: result.selectedProductIds,
+        model: result.model,
+      };
     }),
 
   /** Regenerate email with full override support (model, intensity, tone, layout, feedback) */
@@ -767,7 +959,8 @@ export const aiRouter = router({
         }),
       ]);
 
-      if (input.templateId && !template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      if (input.templateId && !template)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
       const storeUrl = `https://${store.shopDomain}`;
@@ -784,21 +977,33 @@ export const aiRouter = router({
       if (input.feedback) tweakParts.push(input.feedback);
       const currentBlocks = template?.blocks ?? input.blocks;
       if (currentBlocks) {
-        tweakParts.push(`Here is the current email structure (JSON blocks): ${JSON.stringify(currentBlocks).slice(0, 2000)}`);
-        tweakParts.push("Improve upon this existing email based on the feedback above. Keep what works, change what's requested.");
+        tweakParts.push(
+          `Here is the current email structure (JSON blocks): ${JSON.stringify(currentBlocks).slice(0, 2000)}`
+        );
+        tweakParts.push(
+          "Improve upon this existing email based on the feedback above. Keep what works, change what's requested."
+        );
       }
 
-      const brandSettingsForEmail = brandProfile ? {
-        logoUrl: store.storeLogoUrl,
-        logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
-        headerBgColor: brandProfile.headerBgColor,
-        footerText: brandProfile.footerText,
-        showSocialLinks: brandProfile.showSocialLinks,
-        showAddress: brandProfile.showAddress,
-        storeName: store.storeName ?? brandProfile.brandName,
-        address: store.address as { address1?: string; city?: string; province?: string; zip?: string; country?: string } | null,
-        socialLinks: store.socialLinks as Record<string, string> | null,
-      } : undefined;
+      const brandSettingsForEmail = brandProfile
+        ? {
+            logoUrl: store.storeLogoUrl,
+            logoPosition: (brandProfile.logoPosition as "left" | "center" | "right") ?? "center",
+            headerBgColor: brandProfile.headerBgColor,
+            footerText: brandProfile.footerText,
+            showSocialLinks: brandProfile.showSocialLinks,
+            showAddress: brandProfile.showAddress,
+            storeName: store.storeName ?? brandProfile.brandName,
+            address: store.address as {
+              address1?: string;
+              city?: string;
+              province?: string;
+              zip?: string;
+              country?: string;
+            } | null,
+            socialLinks: store.socialLinks as Record<string, string> | null,
+          }
+        : undefined;
 
       const { generateEmail } = await import("@allohq/customer-intelligence");
 
@@ -817,7 +1022,9 @@ export const aiRouter = router({
         intent: (existing?.intent as any) ?? "promotion",
         model: input.model,
         modelHarness: workspaceAiSettings?.modelHarness,
-        creativeIntensity: ctx.isDemo ? "text_heavy" : (input.creativeIntensity ?? (brandProfile?.creativeIntensity as any) ?? "balanced"),
+        creativeIntensity: ctx.isDemo
+          ? "text_heavy"
+          : (input.creativeIntensity ?? (brandProfile?.creativeIntensity as any) ?? "balanced"),
         layoutTemplate: input.layoutTemplate,
         toneOverride: input.toneOverride,
         tweaks: tweakParts.join("\n"),
@@ -941,15 +1148,21 @@ export const aiRouter = router({
 
   /** Update creative intensity preference */
   updateCreativeIntensity: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      creativeIntensity: z.enum(["text_heavy", "balanced", "visual_heavy"]),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        creativeIntensity: z.enum(["text_heavy", "balanced", "visual_heavy"]),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const profile = await ctx.prisma.brandProfile.findFirst({
         where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
       });
-      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Brand profile not found. Run brand analysis first." });
+      if (!profile)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Brand profile not found. Run brand analysis first.",
+        });
 
       return ctx.prisma.brandProfile.update({
         where: { id: profile.id },
@@ -959,20 +1172,28 @@ export const aiRouter = router({
 
   /** AI chat — real conversational AI with full store context */
   chat: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      message: z.string().min(1).max(2000),
-      chatId: z.string().optional(),
-      history: z.array(z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      })).default([]),
-      campaignDirective: z.object({
-        sourceCampaignId: z.string(),
-        customerIds: z.array(z.string()).min(1).max(500),
-        forceNoDiscount: z.boolean(),
-      }).optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        message: z.string().min(1).max(2000),
+        chatId: z.string().optional(),
+        history: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string(),
+            })
+          )
+          .default([]),
+        campaignDirective: z
+          .object({
+            sourceCampaignId: z.string(),
+            customerIds: z.array(z.string()).min(1).max(500),
+            forceNoDiscount: z.boolean(),
+          })
+          .optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
@@ -1000,13 +1221,18 @@ export const aiRouter = router({
             enforceDeliveryPauses: false,
           }),
         ]);
-        const protectedIds = new Set(sourceAudience.recentPurchaseExcluded.map((customer) => customer.id));
+        const protectedIds = new Set(
+          sourceAudience.recentPurchaseExcluded.map((customer) => customer.id)
+        );
         if (
           !sourceCampaign ||
           customerCount !== new Set(input.campaignDirective.customerIds).size ||
           input.campaignDirective.customerIds.some((customerId) => !protectedIds.has(customerId))
         ) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "The source campaign audience is no longer available." });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "The source campaign audience is no longer available.",
+          });
         }
       }
 
@@ -1040,7 +1266,9 @@ export const aiRouter = router({
         ctx.prisma.customer.findMany({
           where: { storeId: input.storeId, rfmScore: { isNot: null } },
           include: {
-            rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, lastOrderAt: true } },
+            rfmScore: {
+              select: { segment: true, totalSpent: true, orderCount: true, lastOrderAt: true },
+            },
           },
           orderBy: { rfmScore: { totalSpent: "desc" } },
           take: 10,
@@ -1059,7 +1287,14 @@ export const aiRouter = router({
         // All campaigns
         ctx.prisma.campaign.findMany({
           where: { workspaceId: ctx.workspaceId },
-          select: { name: true, status: true, recipientCount: true, openCount: true, clickCount: true, sentAt: true },
+          select: {
+            name: true,
+            status: true,
+            recipientCount: true,
+            openCount: true,
+            clickCount: true,
+            sentAt: true,
+          },
           orderBy: { updatedAt: "desc" },
           take: 20,
         }),
@@ -1086,9 +1321,26 @@ export const aiRouter = router({
                 ]),
               },
               include: {
-                rfmScore: { select: { segment: true, totalSpent: true, orderCount: true, avgOrderValue: true, lastOrderAt: true, recency: true, frequency: true, monetary: true } },
-                lifetimeValue: { select: { historicalLtv: true, predictedLtv: true, churnProbability: true } },
-                orders: { select: { orderNumber: true, totalPrice: true, status: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 5 },
+                rfmScore: {
+                  select: {
+                    segment: true,
+                    totalSpent: true,
+                    orderCount: true,
+                    avgOrderValue: true,
+                    lastOrderAt: true,
+                    recency: true,
+                    frequency: true,
+                    monetary: true,
+                  },
+                },
+                lifetimeValue: {
+                  select: { historicalLtv: true, predictedLtv: true, churnProbability: true },
+                },
+                orders: {
+                  select: { orderNumber: true, totalPrice: true, status: true, createdAt: true },
+                  orderBy: { createdAt: "desc" },
+                  take: 5,
+                },
               },
               take: 10,
             })
@@ -1108,10 +1360,7 @@ export const aiRouter = router({
         ctx.prisma.agentMemory.findMany({
           where: {
             storeId: input.storeId,
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: new Date() } },
-            ],
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
           orderBy: { importance: "desc" },
           take: 10,
@@ -1132,10 +1381,16 @@ export const aiRouter = router({
       const totalCustomers = customerCount;
 
       // Helper: get segment insight text
-      function getSegmentInsight(s: { name: string; customerCount: number; totalRevenue: number }): string {
+      function getSegmentInsight(s: {
+        name: string;
+        customerCount: number;
+        totalRevenue: number;
+      }): string {
         const n = s.name.toLowerCase();
-        if (n.includes("hibernat") || n === "lost") return "WIN-BACK OPPORTUNITY — highest recovery potential";
-        if (n.includes("at risk") || n.includes("can't lose")) return "URGENT — intervene before they churn";
+        if (n.includes("hibernat") || n === "lost")
+          return "WIN-BACK OPPORTUNITY — highest recovery potential";
+        if (n.includes("at risk") || n.includes("can't lose"))
+          return "URGENT — intervene before they churn";
         if (n.includes("champion")) return "VIP — reward and retain";
         if (n.includes("loyal")) return "NURTURE — grow to Champion";
         if (n.includes("new")) return "ONBOARD — convert to repeat buyer";
@@ -1149,32 +1404,47 @@ export const aiRouter = router({
         let idx = 1;
 
         // Check for hibernating/at-risk customers
-        const hibernating = segments.find((s) => s.name.toLowerCase().includes("hibernat") || s.name === "Lost");
+        const hibernating = segments.find(
+          (s) => s.name.toLowerCase().includes("hibernat") || s.name === "Lost"
+        );
         if (hibernating && hibernating.customerCount > 0) {
-          opportunities.push(`${idx++}. WIN-BACK: ${hibernating.customerCount} ${hibernating.name} customers, ~$${Math.round(hibernating.totalRevenue).toLocaleString()} past revenue at risk. Best action: create win-back campaign with 10-15% discount.`);
+          opportunities.push(
+            `${idx++}. WIN-BACK: ${hibernating.customerCount} ${hibernating.name} customers, ~$${Math.round(hibernating.totalRevenue).toLocaleString()} past revenue at risk. Best action: create win-back campaign with 10-15% discount.`
+          );
         }
 
-        const atRisk = segments.find((s) => s.name.toLowerCase().includes("at risk") || s.name.toLowerCase().includes("can't lose"));
+        const atRisk = segments.find(
+          (s) =>
+            s.name.toLowerCase().includes("at risk") || s.name.toLowerCase().includes("can't lose")
+        );
         if (atRisk && atRisk.customerCount > 0) {
-          opportunities.push(`${idx++}. RETENTION: ${atRisk.customerCount} ${atRisk.name} customers showing churn signals. Best action: personal check-in or loyalty reward.`);
+          opportunities.push(
+            `${idx++}. RETENTION: ${atRisk.customerCount} ${atRisk.name} customers showing churn signals. Best action: personal check-in or loyalty reward.`
+          );
         }
 
         // Check for 0% opt-in (from REAL counts, not the sampled top customers)
         const optInRate = customerCount > 0 ? Math.round((optedInCount / customerCount) * 100) : 0;
         if (optInRate < 5) {
-          opportunities.push(`${idx++}. LEAD CAPTURE: Marketing opt-in rate is ${optInRate}% — CRITICAL. Cannot send campaigns until customers opt in. Set up a popup form with incentive.`);
+          opportunities.push(
+            `${idx++}. LEAD CAPTURE: Marketing opt-in rate is ${optInRate}% — CRITICAL. Cannot send campaigns until customers opt in. Set up a popup form with incentive.`
+          );
         }
 
         // Automations ready but not active
         const readyAutomations = automations.filter((a) => a.status === "ready");
         if (readyAutomations.length > 0) {
-          opportunities.push(`${idx++}. ACTIVATE: ${readyAutomations.length} automation(s) ready to go live: ${readyAutomations.map((a) => a.name).join(", ")}`);
+          opportunities.push(
+            `${idx++}. ACTIVATE: ${readyAutomations.length} automation(s) ready to go live: ${readyAutomations.map((a) => a.name).join(", ")}`
+          );
         }
 
         // Champions who could be rewarded
         const champions = segments.find((s) => s.name === "Champions");
         if (champions && champions.customerCount > 0) {
-          opportunities.push(`${idx++}. VIP REWARD: ${champions.customerCount} Champions generating $${Math.round(champions.totalRevenue).toLocaleString()} — consider exclusive offers to deepen loyalty.`);
+          opportunities.push(
+            `${idx++}. VIP REWARD: ${champions.customerCount} Champions generating $${Math.round(champions.totalRevenue).toLocaleString()} — consider exclusive offers to deepen loyalty.`
+          );
         }
 
         return opportunities.join("\n") || "No urgent opportunities detected.";
@@ -1183,29 +1453,39 @@ export const aiRouter = router({
       const topCustomersList = topCustomers
         .map((c) => {
           const rfm = c.rfmScore;
-          const daysSinceOrder = rfm?.lastOrderAt ? Math.round((Date.now() - new Date(rfm.lastOrderAt).getTime()) / (86400000)) : -1;
+          const daysSinceOrder = rfm?.lastOrderAt
+            ? Math.round((Date.now() - new Date(rfm.lastOrderAt).getTime()) / 86400000)
+            : -1;
           return `- ${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email}): $${rfm?.totalSpent?.toFixed(0) ?? "0"}, ${rfm?.orderCount ?? 0} orders, last order ${daysSinceOrder >= 0 ? daysSinceOrder + " days ago" : "Never"}`;
         })
         .join("\n");
 
-      const searchResults = searchedCustomers.length > 0
-        ? `\n### Search Results (customers matching "${searchTerms.join(", ")}")\n` +
-          searchedCustomers.map((c) => {
-            const rfm = c.rfmScore;
-            const ltv = c.lifetimeValue;
-            const orders = c.orders.map((o) => `  Order #${o.orderNumber}: $${o.totalPrice} (${o.status}) on ${o.createdAt.toISOString().split("T")[0]}`).join("\n");
-            return `CUSTOMER: ${c.firstName ?? ""} ${c.lastName ?? ""}\n  Email: ${c.email}\n  Segment: ${rfm?.segment ?? "Unknown"}\n  Spent: $${rfm?.totalSpent?.toFixed(0) ?? "0"} | Orders: ${rfm?.orderCount ?? 0} | AOV: $${rfm?.avgOrderValue?.toFixed(0) ?? "0"}\n  Last Order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"}\n  Churn Probability: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"}\n  Recent Orders:\n${orders || "  None"}`;
-          }).join("\n\n")
-        : "";
+      const searchResults =
+        searchedCustomers.length > 0
+          ? `\n### Search Results (customers matching "${searchTerms.join(", ")}")\n` +
+            searchedCustomers
+              .map((c) => {
+                const rfm = c.rfmScore;
+                const ltv = c.lifetimeValue;
+                const orders = c.orders
+                  .map(
+                    (o) =>
+                      `  Order #${o.orderNumber}: $${o.totalPrice} (${o.status}) on ${o.createdAt.toISOString().split("T")[0]}`
+                  )
+                  .join("\n");
+                return `CUSTOMER: ${c.firstName ?? ""} ${c.lastName ?? ""}\n  Email: ${c.email}\n  Segment: ${rfm?.segment ?? "Unknown"}\n  Spent: $${rfm?.totalSpent?.toFixed(0) ?? "0"} | Orders: ${rfm?.orderCount ?? 0} | AOV: $${rfm?.avgOrderValue?.toFixed(0) ?? "0"}\n  Last Order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"}\n  Churn Probability: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"}\n  Recent Orders:\n${orders || "  None"}`;
+              })
+              .join("\n\n")
+          : "";
 
       // Pending actions count
       const pendingActionCount = await ctx.prisma.actionQueue.count({
         where: { storeId: input.storeId, status: "pending" },
       });
 
-      const monthRevenue = (revenueThisMonth._sum.totalPrice ?? 0);
+      const monthRevenue = revenueThisMonth._sum.totalPrice ?? 0;
       const monthOrders = revenueThisMonth._count;
-      const avgOrderValue = monthOrders > 0 ? (monthRevenue / monthOrders) : 0;
+      const avgOrderValue = monthOrders > 0 ? monthRevenue / monthOrders : 0;
 
       const optInRate = customerCount > 0 ? Math.round((optedInCount / customerCount) * 100) : 0;
 
@@ -1231,34 +1511,64 @@ ${automations.length > 0 ? automations.map((a) => `- ${a.name}: ${a.status}${a.s
 - ${pendingActionCount} actions awaiting merchant approval
 
 ### Recent Campaigns
-${campaigns.length > 0 ? campaigns.map((c) => {
-  const openRate = c.recipientCount > 0 ? Math.round((c.openCount / c.recipientCount) * 100) : 0;
-  const clickRate = c.recipientCount > 0 ? Math.round((c.clickCount / c.recipientCount) * 100) : 0;
-  return `- ${c.name} (${c.status}): ${openRate}% open, ${clickRate}% click, ${c.recipientCount} recipients`;
-}).join("\n") : "No campaigns created yet."}
+${
+  campaigns.length > 0
+    ? campaigns
+        .map((c) => {
+          const openRate =
+            c.recipientCount > 0 ? Math.round((c.openCount / c.recipientCount) * 100) : 0;
+          const clickRate =
+            c.recipientCount > 0 ? Math.round((c.clickCount / c.recipientCount) * 100) : 0;
+          return `- ${c.name} (${c.status}): ${openRate}% open, ${clickRate}% click, ${c.recipientCount} recipients`;
+        })
+        .join("\n")
+    : "No campaigns created yet."
+}
 
 ### Top Customers (a SAMPLE — the 10 highest spenders of ${totalCustomers.toLocaleString()} total; ask to see more)
 ${topCustomersList || "No customer data yet."}
 ${searchResults}
-${recentObservations.length > 0 ? `
+${
+  recentObservations.length > 0
+    ? `
 ### PROACTIVE ALERTS (address these when relevant)
-${recentObservations.map((o) => {
-  const action = o.suggestedAction as Record<string, unknown> | null;
-  return `- [${o.severity.toUpperCase()}] ${o.summary}${action?.message ? ` → Suggested: ${action.message}` : ""}`;
-}).join("\n")}` : ""}
-${agentMemories.length > 0 ? `
+${recentObservations
+  .map((o) => {
+    const action = o.suggestedAction as Record<string, unknown> | null;
+    return `- [${o.severity.toUpperCase()}] ${o.summary}${action?.message ? ` → Suggested: ${action.message}` : ""}`;
+  })
+  .join("\n")}`
+    : ""
+}
+${
+  agentMemories.length > 0
+    ? `
 ### Your Memory (past observations about this store)
-${agentMemories.map((m) => `- [${m.memoryType}] ${m.content}`).join("\n")}` : ""}
-${latestVoiceReport ? (() => {
-  const themes = latestVoiceReport.themes as Array<{ theme: string; count: number; sentiment: number }>;
-  const insights = latestVoiceReport.actionableInsights as Array<{ insight: string; priority: string; relatedTheme: string }>;
-  return `
+${agentMemories.map((m) => `- [${m.memoryType}] ${m.content}`).join("\n")}`
+    : ""
+}
+${
+  latestVoiceReport
+    ? (() => {
+        const themes = latestVoiceReport.themes as Array<{
+          theme: string;
+          count: number;
+          sentiment: number;
+        }>;
+        const insights = latestVoiceReport.actionableInsights as Array<{
+          insight: string;
+          priority: string;
+          relatedTheme: string;
+        }>;
+        return `
 ### Recent Customer Feedback Themes (week of ${latestVoiceReport.weekOf.toISOString().split("T")[0]})
 ${themes.map((t) => `- "${t.theme}": mentioned ${t.count} times (sentiment: ${t.sentiment > 0 ? "+" : ""}${t.sentiment.toFixed(1)})`).join("\n")}
 ${insights.length > 0 ? `\nActionable Insights:\n${insights.map((i) => `- [${i.priority.toUpperCase()}] ${i.insight} (re: ${i.relatedTheme})`).join("\n")}` : ""}
 ${latestVoiceReport.summary ? `\nCustomer Voice Summary: ${latestVoiceReport.summary}` : ""}
 NOTE: Use this customer feedback data to inform recommendations. For example, if customers complain about slow shipping, avoid promoting fast shipping claims.`;
-})() : ""}
+      })()
+    : ""
+}
 `.trim();
 
       // ---------------------------------------------------------------
@@ -1272,11 +1582,15 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
       // 3. Intent detection + action request detection
       // ---------------------------------------------------------------
-      const { detectIntent, extractMerchantRequestConstraints } = await import("@allohq/agent-core");
+      const { detectIntent, extractMerchantRequestConstraints } =
+        await import("@allohq/agent-core");
       const detectedIntent = detectIntent(input.message);
       const requestConstraints = extractMerchantRequestConstraints(input.message);
 
-      const isActionRequest = /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design|show|preview|details|view)\b/i.test(input.message);
+      const isActionRequest =
+        /\b(create|send|draft|generate|set up|launch|activate|build|make|start|approve|write|design|show|preview|details|view)\b/i.test(
+          input.message
+        );
 
       let processedMessage = input.message;
 
@@ -1292,20 +1606,26 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       }
 
       // Add tool hints based on detected intent
-      if (detectedIntent.intent === "create_flash_sale" || detectedIntent.intent === "create_campaign") {
+      if (
+        detectedIntent.intent === "create_flash_sale" ||
+        detectedIntent.intent === "create_campaign"
+      ) {
         const discount = detectedIntent.extractedParams.discountPercent ?? "15";
         const seg = detectedIntent.extractedParams.segment;
         const bestTarget = seg
           ? segments.find((s) => s.name.toLowerCase().includes(seg.toLowerCase()))
-          : segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
+          : (segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
             segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
-            segments.find((s) => s.customerCount > 0);
+            segments.find((s) => s.customerCount > 0));
         if (bestTarget) {
           processedMessage += `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. Target: ${bestTarget.name} (${bestTarget.customerCount} customers). Discount: ${discount}%. This gives the merchant an inline email preview they can approve directly.]`;
         }
       }
 
-      if (detectedIntent.intent === "analytics_query" || detectedIntent.intent === "revenue_question") {
+      if (
+        detectedIntent.intent === "analytics_query" ||
+        detectedIntent.intent === "revenue_question"
+      ) {
         const timeframe = detectedIntent.extractedParams.timeframe;
         processedMessage += `\n\n[TOOL HINT: Use explain_revenue_change for revenue analysis, automation_performance_report for automation comparison, or customer_focus_analysis for retention priorities.${timeframe ? ` Timeframe mentioned: "${timeframe}".` : ""}]`;
       }
@@ -1320,13 +1640,21 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       }
 
       // Add "what if" simulation hint
-      if (/\b(what if|what would|what happens|hypothetical|simulate|scenario|if i|if we)\b/i.test(input.message)) {
+      if (
+        /\b(what if|what would|what happens|hypothetical|simulate|scenario|if i|if we)\b/i.test(
+          input.message
+        )
+      ) {
         processedMessage += `\n\n[TOOL HINT: This is a "what if" question. Call simulate_scenario immediately to model the impact. Extract the scenario description, target metric, and percentage change from the merchant's question. Present results as a markdown before/after table.]`;
       }
 
       // Add campaign-specific tool hints (fallback if intent detector didn't catch it)
-      if (detectedIntent.intent === "general" && /\b(campaign|promotional|email|win-?back|re-?engage)\b/i.test(input.message)) {
-        const bestTarget = segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
+      if (
+        detectedIntent.intent === "general" &&
+        /\b(campaign|promotional|email|win-?back|re-?engage)\b/i.test(input.message)
+      ) {
+        const bestTarget =
+          segments.find((s) => s.name.toLowerCase().includes("hibernat")) ??
           segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
           segments.find((s) => s.customerCount > 0);
         if (bestTarget) {
@@ -1365,9 +1693,14 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       for (const tc of agentResult.toolCalls) {
         const out = tc.output as Record<string, unknown>;
         if (tc.name === "get_dashboard_metrics" && out) {
-          if (out.totalRevenue) highlights.push({ label: "Revenue", value: `$${Number(out.totalRevenue).toLocaleString()}` });
+          if (out.totalRevenue)
+            highlights.push({
+              label: "Revenue",
+              value: `$${Number(out.totalRevenue).toLocaleString()}`,
+            });
           if (out.orderCount) highlights.push({ label: "Orders", value: String(out.orderCount) });
-          if (out.totalCustomers) highlights.push({ label: "Customers", value: String(out.totalCustomers) });
+          if (out.totalCustomers)
+            highlights.push({ label: "Customers", value: String(out.totalCustomers) });
         }
         if (tc.name === "get_churn_risk_report" && Array.isArray(out)) {
           highlights.push({ label: "At Risk", value: `${out.length} customers` });
@@ -1379,13 +1712,27 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         }
         if (tc.name === "simulate_scenario" && out) {
           const unit = String(out.unit ?? "");
-          highlights.push({ label: "Current", value: `${unit}${Number(out.currentValue).toLocaleString()}` });
-          highlights.push({ label: "Projected", value: `${unit}${Number(out.projectedValue).toLocaleString()}` });
-          if (out.changePercent) highlights.push({ label: "Impact", value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%` });
+          highlights.push({
+            label: "Current",
+            value: `${unit}${Number(out.currentValue).toLocaleString()}`,
+          });
+          highlights.push({
+            label: "Projected",
+            value: `${unit}${Number(out.projectedValue).toLocaleString()}`,
+          });
+          if (out.changePercent)
+            highlights.push({
+              label: "Impact",
+              value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%`,
+            });
         }
         if (tc.name === "explain_revenue_change" && out) {
           highlights.push({ label: "Trend", value: String(out.trend ?? "flat") });
-          if (out.changePercent) highlights.push({ label: "Change", value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%` });
+          if (out.changePercent)
+            highlights.push({
+              label: "Change",
+              value: `${Number(out.changePercent) > 0 ? "+" : ""}${out.changePercent}%`,
+            });
         }
         if (tc.name === "customer_focus_analysis" && out) {
           const customers = (out as Record<string, unknown>).customers;
@@ -1406,10 +1753,14 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       let suggestedFollowUps: string[] = [];
 
       // Try to extract agent-generated follow-ups from response
-      const followUpMatch = reply.match(/\[FOLLOW_UPS?:\s*"([^"]+)"(?:,\s*"([^"]+)")?(?:,\s*"([^"]+)")?\]/i);
+      const followUpMatch = reply.match(
+        /\[FOLLOW_UPS?:\s*"([^"]+)"(?:,\s*"([^"]+)")?(?:,\s*"([^"]+)")?\]/i
+      );
 
       if (followUpMatch) {
-        suggestedFollowUps = [followUpMatch[1], followUpMatch[2], followUpMatch[3]].filter((x): x is string => !!x);
+        suggestedFollowUps = [followUpMatch[1], followUpMatch[2], followUpMatch[3]].filter(
+          (x): x is string => !!x
+        );
         // Remove the tag from the displayed response
         reply = reply.replace(/\[FOLLOW_UPS?:.*?\]/gi, "").trim();
       } else {
@@ -1424,7 +1775,11 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           suggestedFollowUps.push("Adjust the target segment");
           suggestedFollowUps.push("Change the discount amount");
           suggestedFollowUps.push("Preview the email");
-        } else if (lowerReply.includes("hibernating") || lowerReply.includes("at risk") || lowerReply.includes("churn")) {
+        } else if (
+          lowerReply.includes("hibernating") ||
+          lowerReply.includes("at risk") ||
+          lowerReply.includes("churn")
+        ) {
           suggestedFollowUps.push("Create a win-back campaign for them");
           suggestedFollowUps.push("Show me their purchase history");
           suggestedFollowUps.push("What products did they buy?");
@@ -1467,13 +1822,26 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
       // Preserve structured results independently of the prose reply. A campaign
       // preview is a durable chat artifact, not disposable rendering state.
-      let campaignPreview: {
-        previewHtml: string;
-        subject: string;
-        campaignName: string;
-        draftCampaignId: string;
-        estimatedRecipients?: number;
-      } | undefined;
+      let campaignPreview:
+        | {
+            previewHtml: string;
+            subject: string;
+            campaignName: string;
+            draftCampaignId: string;
+            estimatedRecipients?: number;
+            constraints?: {
+              audience?: string;
+              requestedAudienceCount?: number | null;
+              selectedAudienceCount?: number | null;
+              offer?: string;
+              requestedDiscountPercent?: number | null;
+              appliedDiscountPercent?: number | null;
+              controlPreference?: string;
+              deliveryIntent?: string;
+              sourceCampaignId?: string | null;
+            };
+          }
+        | undefined;
 
       for (const tc of agentResult.toolCalls) {
         if (tc.name === "create_campaign_with_preview") {
@@ -1484,7 +1852,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
               subject: String(out.subject ?? ""),
               campaignName: String(out.campaignName ?? ""),
               draftCampaignId: String(out.draftCampaignId ?? ""),
-              estimatedRecipients: typeof out.estimatedRecipients === "number" ? out.estimatedRecipients : undefined,
+              estimatedRecipients:
+                typeof out.estimatedRecipients === "number" ? out.estimatedRecipients : undefined,
+              constraints:
+                out.constraints && typeof out.constraints === "object"
+                  ? (out.constraints as NonNullable<typeof campaignPreview>["constraints"])
+                  : undefined,
             };
           }
         }
@@ -1522,10 +1895,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           chatId = chat.id;
         } else {
           // Touch the updatedAt timestamp
-          await ctx.prisma.aiChat.update({
-            where: { id: chatId },
-            data: { updatedAt: new Date() },
-          }).catch(() => {});
+          await ctx.prisma.aiChat
+            .update({
+              where: { id: chatId },
+              data: { updatedAt: new Date() },
+            })
+            .catch(() => {});
         }
 
         // Save user message and assistant reply
@@ -1541,9 +1916,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
               role: "assistant",
               content: reply,
               highlights: highlights.length > 0 ? highlights : undefined,
-              artifacts: campaignPreview
-                ? { version: 1, campaignPreview }
-                : undefined,
+              artifacts: campaignPreview ? { version: 1, campaignPreview } : undefined,
               model: agentResult.model ?? "unknown",
             },
           ],
@@ -1552,7 +1925,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         // ---------------------------------------------------------------
         // 8. Auto-write agent memory if something significant happened
         // ---------------------------------------------------------------
-        writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(() => {});
+        writeMemoryIfSignificant(ctx.prisma, input.storeId, reply, toolNames, actionResult).catch(
+          () => {}
+        );
       }
 
       return {
@@ -1593,20 +1968,26 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Update brand settings (logo position, header bg, footer, toggles) */
   updateBrandSettings: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      logoPosition: z.enum(["left", "center", "right"]).optional(),
-      headerBgColor: z.string().optional().nullable(),
-      footerText: z.string().optional().nullable(),
-      showSocialLinks: z.boolean().optional(),
-      showAddress: z.boolean().optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        logoPosition: z.enum(["left", "center", "right"]).optional(),
+        headerBgColor: z.string().optional().nullable(),
+        footerText: z.string().optional().nullable(),
+        showSocialLinks: z.boolean().optional(),
+        showAddress: z.boolean().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const { storeId, ...data } = input;
       const profile = await ctx.prisma.brandProfile.findFirst({
         where: { storeId, workspaceId: ctx.workspaceId },
       });
-      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Brand profile not found. Run brand analysis first." });
+      if (!profile)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Brand profile not found. Run brand analysis first.",
+        });
 
       return ctx.prisma.brandProfile.update({
         where: { id: profile.id },
@@ -1616,26 +1997,34 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Update brand voice (tone, vocabulary, banned words) */
   updateBrandVoice: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      toneAttributes: z.record(z.string()).optional(),
-      vocabulary: z.object({
-        preferredWords: z.array(z.string()).optional(),
-        ctaPatterns: z.array(z.string()).optional(),
-        brandTerms: z.array(z.string()).optional(),
-        bannedWords: z.array(z.string()).optional(),
-      }).optional(),
-      brandDocument: z.string().optional(),
-      sendingFrequency: z.string().optional(),
-      fromName: z.string().optional(),
-      fromEmail: z.string().optional(),
-      replyToEmail: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        toneAttributes: z.record(z.string()).optional(),
+        vocabulary: z
+          .object({
+            preferredWords: z.array(z.string()).optional(),
+            ctaPatterns: z.array(z.string()).optional(),
+            brandTerms: z.array(z.string()).optional(),
+            bannedWords: z.array(z.string()).optional(),
+          })
+          .optional(),
+        brandDocument: z.string().optional(),
+        sendingFrequency: z.string().optional(),
+        fromName: z.string().optional(),
+        fromEmail: z.string().optional(),
+        replyToEmail: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const profile = await ctx.prisma.brandProfile.findFirst({
         where: { storeId: input.storeId, workspaceId: ctx.workspaceId },
       });
-      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Brand profile not found. Run brand analysis first." });
+      if (!profile)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Brand profile not found. Run brand analysis first.",
+        });
 
       const updateData: Record<string, unknown> = {};
       if (input.brandDocument !== undefined) {
@@ -1669,13 +2058,15 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Update brand visual profile (aesthetic, colors, typography) */
   updateBrandVisualProfile: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      aestheticClassification: z.string().optional(),
-      brandDesignTokens: z.any().optional(),
-      fontFamily: z.string().optional().nullable(),
-      bodyFontFamily: z.string().optional().nullable(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        aestheticClassification: z.string().optional(),
+        brandDesignTokens: z.any().optional(),
+        fontFamily: z.string().optional().nullable(),
+        bodyFontFamily: z.string().optional().nullable(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const { storeId, ...data } = input;
       return ctx.prisma.brandVisualProfile.upsert({
@@ -1691,10 +2082,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** List brand assets for a store */
   listBrandAssets: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      type: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        type: z.string().optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       return ctx.prisma.brandAsset.findMany({
         where: {
@@ -1708,15 +2101,17 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Add a brand asset (URL-based for MVP) */
   addBrandAsset: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      type: z.enum(["logo", "logo_dark", "hero", "lifestyle", "icon", "other"]),
-      url: z.string().url(),
-      fileName: z.string(),
-      mimeType: z.string().optional(),
-      width: z.number().int().optional(),
-      height: z.number().int().optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        type: z.enum(["logo", "logo_dark", "hero", "lifestyle", "icon", "other"]),
+        url: z.string().url(),
+        fileName: z.string(),
+        mimeType: z.string().optional(),
+        width: z.number().int().optional(),
+        height: z.number().int().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.brandAsset.create({
         data: {
@@ -1748,11 +2143,13 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** List recent chats */
   listChats: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      limit: z.number().min(1).max(50).default(20),
-      cursor: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const chats = await ctx.prisma.aiChat.findMany({
         where: {
@@ -1812,7 +2209,46 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         },
       });
       if (!chat) throw new TRPCError({ code: "NOT_FOUND", message: "Chat not found" });
-      return chat;
+      const campaignIds = chat.messages
+        .map((message) => {
+          const artifact = message.artifacts as {
+            campaignPreview?: { draftCampaignId?: string };
+          } | null;
+          return artifact?.campaignPreview?.draftCampaignId;
+        })
+        .filter((id): id is string => Boolean(id));
+      const campaigns = campaignIds.length
+        ? await ctx.prisma.campaign.findMany({
+            where: { id: { in: campaignIds }, workspaceId: ctx.workspaceId },
+            select: { id: true, status: true, updatedAt: true },
+          })
+        : [];
+      const byId = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+      return {
+        ...chat,
+        messages: chat.messages.map((message) => {
+          const artifact = message.artifacts as {
+            version?: number;
+            campaignPreview?: Record<string, unknown> & { draftCampaignId?: string };
+          } | null;
+          const campaign = artifact?.campaignPreview?.draftCampaignId
+            ? byId.get(artifact.campaignPreview.draftCampaignId)
+            : undefined;
+          return artifact?.campaignPreview
+            ? {
+                ...message,
+                artifacts: {
+                  ...artifact,
+                  campaignPreview: {
+                    ...artifact.campaignPreview,
+                    status: campaign?.status ?? "unavailable",
+                    artifactUpdatedAt: campaign?.updatedAt ?? null,
+                  },
+                },
+              }
+            : message;
+        }),
+      };
     }),
 
   /** Rename a chat */
@@ -1858,10 +2294,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** List recent agent actions (for AgentCanvas timeline) */
   listAgentActions: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      limit: z.number().min(1).max(100).default(30),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        limit: z.number().min(1).max(100).default(30),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const actions = await ctx.prisma.agentAction.findMany({
         where: { storeId: input.storeId },
@@ -1882,10 +2320,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** List agent observations (proactive alerts) */
   listObservations: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      unacknowledgedOnly: z.boolean().default(false),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        unacknowledgedOnly: z.boolean().default(false),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const observations = await ctx.prisma.agentObservation.findMany({
         where: {
@@ -1921,15 +2361,19 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** List active customer conversations (for ConversationManager) */
   listConversations: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      status: z.enum(["active", "waiting", "resolved", "escalated"]).optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        status: z.enum(["active", "waiting", "resolved", "escalated"]).optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const conversations = await ctx.prisma.conversation.findMany({
         where: {
           storeId: input.storeId,
-          ...(input.status ? { status: input.status as any } : { status: { not: "resolved" as any } }),
+          ...(input.status
+            ? { status: input.status as any }
+            : { status: { not: "resolved" as any } }),
         },
         orderBy: { updatedAt: "desc" },
         take: 50,
@@ -2001,10 +2445,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Claim a conversation for human handling */
   claimConversation: workspaceProcedure
-    .input(z.object({
-      conversationId: z.string(),
-      agentName: z.string().default("Merchant"),
-    }))
+    .input(
+      z.object({
+        conversationId: z.string(),
+        agentName: z.string().default("Merchant"),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       await ctx.prisma.conversation.update({
         where: { id: input.conversationId },
@@ -2026,10 +2472,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Send a reply to a customer conversation (merchant → customer) */
   sendConversationReply: workspaceProcedure
-    .input(z.object({
-      conversationId: z.string(),
-      message: z.string().min(1),
-    }))
+    .input(
+      z.object({
+        conversationId: z.string(),
+        message: z.string().min(1),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const conversation = await ctx.prisma.conversation.findFirst({
         where: { id: input.conversationId },
@@ -2050,7 +2498,10 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       });
 
       // Send via the appropriate channel
-      if (conversation.customer?.phone && (conversation.channel === "sms" || conversation.channel === "whatsapp")) {
+      if (
+        conversation.customer?.phone &&
+        (conversation.channel === "sms" || conversation.channel === "whatsapp")
+      ) {
         const { sendSms, sendWhatsApp } = await import("@allohq/messaging");
         const phone = conversation.customer.phone;
 
@@ -2079,7 +2530,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         await onConversationResolved(
           conversation.storeId,
           conversation.customerId,
-          input.conversationId,
+          input.conversationId
         );
       } else {
         // No customer linked — just mark resolved
@@ -2106,7 +2557,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
       const context = await buildConversationContext(
         conversation.storeId,
         conversation.customerId,
-        input.conversationId,
+        input.conversationId
       );
 
       return { ...context, aiBrief: conversation.aiBrief };
@@ -2118,14 +2569,21 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Save an agent memory for a store */
   saveMemory: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      memoryType: z.enum(["campaign_outcome", "merchant_preference", "store_pattern", "customer_insight"]),
-      content: z.string(),
-      importance: z.number().min(0).max(1).optional(),
-      metadata: z.record(z.unknown()).optional(),
-      expiresAt: z.string().datetime().optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        memoryType: z.enum([
+          "campaign_outcome",
+          "merchant_preference",
+          "store_pattern",
+          "customer_insight",
+        ]),
+        content: z.string(),
+        importance: z.number().min(0).max(1).optional(),
+        metadata: z.record(z.unknown()).optional(),
+        expiresAt: z.string().datetime().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
@@ -2149,11 +2607,13 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
   /** Get agent memories for a store, sorted by importance */
   getMemories: workspaceProcedure
-    .input(z.object({
-      storeId: z.string(),
-      type: z.string().optional(),
-      limit: z.number().default(20),
-    }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        type: z.string().optional(),
+        limit: z.number().default(20),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
@@ -2165,10 +2625,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         where: {
           storeId: input.storeId,
           ...(input.type ? { memoryType: input.type } : {}),
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } },
-          ],
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         orderBy: { importance: "desc" },
         take: input.limit,

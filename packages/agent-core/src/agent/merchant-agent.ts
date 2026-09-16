@@ -137,9 +137,20 @@ export async function runMerchantAgent(opts: {
   requestConstraints?: {
     topCustomerCount?: number;
     discountPercent?: number;
+    noDiscount?: boolean;
+    noControl?: boolean;
+    deliveryIntent?: "immediate" | "joon_timing" | "scheduled";
   };
 }): Promise<AgentResult> {
-  const { storeId, message, conversationHistory = [], storeContext, modelHarness, campaignDirective, requestConstraints } = opts;
+  const {
+    storeId,
+    message,
+    conversationHistory = [],
+    storeContext,
+    modelHarness,
+    campaignDirective,
+    requestConstraints,
+  } = opts;
 
   // Assemble context (no specific customer, just store-level)
   const ctx = await assembleContext({
@@ -154,9 +165,10 @@ export async function runMerchantAgent(opts: {
     contextStr += "\n\n## Store Data\n" + storeContext;
   }
 
-  const systemPrompt = MERCHANT_SYSTEM_PROMPT
-    .replace("{{storeName}}", ctx.store.name ?? ctx.store.domain)
-    .replace("{{context}}", contextStr);
+  const systemPrompt = MERCHANT_SYSTEM_PROMPT.replace(
+    "{{storeName}}",
+    ctx.store.name ?? ctx.store.domain
+  ).replace("{{context}}", contextStr);
 
   return runAgent({
     systemPrompt,

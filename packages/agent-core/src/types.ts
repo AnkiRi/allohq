@@ -20,6 +20,9 @@ export interface ToolContext {
   requestConstraints?: {
     topCustomerCount?: number;
     discountPercent?: number;
+    noDiscount?: boolean;
+    noControl?: boolean;
+    deliveryIntent?: "immediate" | "joon_timing" | "scheduled";
   };
   resolvedTopCustomerSelection?: {
     customerIds: string[];

@@ -22,6 +22,9 @@ export interface DetectedIntent {
 export interface MerchantRequestConstraints {
   topCustomerCount?: number;
   discountPercent?: number;
+  noDiscount?: boolean;
+  noControl?: boolean;
+  deliveryIntent?: "immediate" | "joon_timing" | "scheduled";
 }
 
 /** Recover explicit numeric constraints that tools are not allowed to reinterpret. */
@@ -34,6 +37,18 @@ export function extractMerchantRequestConstraints(message: string): MerchantRequ
       requestedDiscountMatch?.[1] && /\b(?:discount|off|offer|coupon|promo)\b/i.test(message)
         ? Number(requestedDiscountMatch[1])
         : undefined,
+    noDiscount:
+      /\b(?:no|without)\s+(?:a\s+)?(?:discount|coupon|code|offer)\b|\bfull[- ]price\b/i.test(
+        message
+      ) || undefined,
+    noControl: /\b(?:no|without)\s+(?:a\s+)?(?:control|holdout)\b/i.test(message) || undefined,
+    deliveryIntent: /\bsend\b.{0,40}\bnow\b|\bdeliver\s+immediately\b/i.test(message)
+      ? "immediate"
+      : /\bjoon(?:'s|’s)?\s+timing\b|\bbest\s+time\b/i.test(message)
+        ? "joon_timing"
+        : /\bschedul(?:e|ed|ing)\b/i.test(message)
+          ? "scheduled"
+          : undefined,
   };
 }
 
@@ -138,15 +153,27 @@ const INTENT_PATTERNS: IntentPattern[] = [
 // Param extraction patterns
 const PARAM_EXTRACTORS: { key: string; pattern: RegExp }[] = [
   // Segment names
-  { key: "segment", pattern: /\b(champions?|vips?|at[\s-]risk|hibernat(?:ing|ed)?|loyal(?:ists?)?|new\s+customers?|lost|can'?t\s+lose)\b/i },
+  {
+    key: "segment",
+    pattern:
+      /\b(champions?|vips?|at[\s-]risk|hibernat(?:ing|ed)?|loyal(?:ists?)?|new\s+customers?|lost|can'?t\s+lose)\b/i,
+  },
   // Discount percentages
   { key: "discountPercent", pattern: /(\d{1,2})%\s*(?:off|discount)?/i },
   // Product mentions
   { key: "product", pattern: /(?:for|on|about)\s+(?:the\s+)?["']?([^"',.\n]{3,30})["']?/i },
   // Timeframes
-  { key: "timeframe", pattern: /\b(today|yesterday|this\s+week|last\s+week|this\s+month|last\s+month|past\s+\d+\s+days?|last\s+\d+\s+days?|\d+\s+days?\s+ago)\b/i },
+  {
+    key: "timeframe",
+    pattern:
+      /\b(today|yesterday|this\s+week|last\s+week|this\s+month|last\s+month|past\s+\d+\s+days?|last\s+\d+\s+days?|\d+\s+days?\s+ago)\b/i,
+  },
   // Campaign/email intent types
-  { key: "emailIntent", pattern: /\b(welcome|win[\s-]?back|cart[\s-]?recovery|post[\s-]?purchase|seasonal|promotion|re[\s-]?engagement|vip[\s-]?reward|browse[\s-]?abandonment|announcement)\b/i },
+  {
+    key: "emailIntent",
+    pattern:
+      /\b(welcome|win[\s-]?back|cart[\s-]?recovery|post[\s-]?purchase|seasonal|promotion|re[\s-]?engagement|vip[\s-]?reward|browse[\s-]?abandonment|announcement)\b/i,
+  },
 ];
 
 /**

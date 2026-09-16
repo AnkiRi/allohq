@@ -100,6 +100,15 @@ interface CampaignPreviewData {
   campaignName: string;
   draftCampaignId: string;
   estimatedRecipients?: number;
+  status?: string;
+  constraints?: {
+    audience?: string;
+    requestedAudienceCount?: number | null;
+    selectedAudienceCount?: number | null;
+    offer?: string;
+    controlPreference?: string;
+    deliveryIntent?: string;
+  };
 }
 
 interface Message {
@@ -135,13 +144,16 @@ function restoreChatMessage(message: PersistedChatMessage): Message {
   };
 }
 
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 function timeAgo(date: Date): string {
@@ -237,15 +249,27 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
   // Context-aware suggestions
   if (pageContext === "dashboard") {
     if (insights.segmentAlerts.atRiskCount > 0) {
-      pills.push({ label: `${insights.segmentAlerts.atRiskCount} customers at churn risk`, instruction: "Show me at-risk customers and create a win-back campaign" });
+      pills.push({
+        label: `${insights.segmentAlerts.atRiskCount} customers at churn risk`,
+        instruction: "Show me at-risk customers and create a win-back campaign",
+      });
     }
     if (!insights.storeState.hasCampaigns) {
-      pills.push({ label: "It's been quiet. Let's reach out", instruction: "Create a promotional email campaign" });
+      pills.push({
+        label: "It's been quiet. Let's reach out",
+        instruction: "Create a promotional email campaign",
+      });
     }
     if (insights.segmentAlerts.championsCount > 0) {
-      pills.push({ label: `Reward ${insights.segmentAlerts.championsCount} VIP customers`, instruction: "Create a VIP reward campaign for champion customers" });
+      pills.push({
+        label: `Reward ${insights.segmentAlerts.championsCount} VIP customers`,
+        instruction: "Create a VIP reward campaign for champion customers",
+      });
     }
-    pills.push({ label: "How did last week go?", instruction: "Analyze my store performance from the last 7 days" });
+    pills.push({
+      label: "How did last week go?",
+      instruction: "Analyze my store performance from the last 7 days",
+    });
     // Recovery opportunity pills
     if (insights.recoveryOpportunities && insights.recoveryOpportunities.abandonedCarts.count > 0) {
       pills.push({
@@ -254,25 +278,49 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
       });
     }
   } else if (pageContext === "customers") {
-    pills.push({ label: "Who's at risk of slipping away?", instruction: "Show me customers who are at risk of churning" });
-    pills.push({ label: "Find your top spenders", instruction: "Find customers who spent over ₹200 in the last 90 days" });
+    pills.push({
+      label: "Who's at risk of slipping away?",
+      instruction: "Show me customers who are at risk of churning",
+    });
+    pills.push({
+      label: "Find your top spenders",
+      instruction: "Find customers who spent over ₹200 in the last 90 days",
+    });
   } else if (pageContext === "campaigns" || pageContext === "templates") {
     pills.push({ label: "Help me create a campaign", instruction: "Create a new email campaign" });
-    pills.push({ label: "Draft an email template", instruction: "Create a promotional email template" });
+    pills.push({
+      label: "Draft an email template",
+      instruction: "Create a promotional email template",
+    });
   } else if (pageContext === "automations") {
-    pills.push({ label: "Turn on what I'd recommend", instruction: "Show me all recommended automations and activate them" });
+    pills.push({
+      label: "Turn on what I'd recommend",
+      instruction: "Show me all recommended automations and activate them",
+    });
   } else if (pageContext === "analytics") {
-    pills.push({ label: "How's this month vs last?", instruction: "Compare this month's performance to last month" });
-    pills.push({ label: "Where's revenue coming from?", instruction: "Show me a breakdown of revenue by channel" });
+    pills.push({
+      label: "How's this month vs last?",
+      instruction: "Compare this month's performance to last month",
+    });
+    pills.push({
+      label: "Where's revenue coming from?",
+      instruction: "Show me a breakdown of revenue by channel",
+    });
   } else if (pageContext === "segments") {
-    pills.push({ label: "How have segments shifted?", instruction: "Show me how customer segments have shifted recently" });
+    pills.push({
+      label: "How have segments shifted?",
+      instruction: "Show me how customer segments have shifted recently",
+    });
   }
 
   if (!insights.storeState.hasBrandProfile) {
     pills.push({ label: "Learn my brand voice", instruction: "Analyze my brand voice" });
   }
 
-  pills.push({ label: "Look back over the last 30 days", instruction: "Analyze my customer data from the last 30 days" });
+  pills.push({
+    label: "Look back over the last 30 days",
+    instruction: "Analyze my customer data from the last 30 days",
+  });
 
   return pills.slice(0, 4);
 }
@@ -289,7 +337,8 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-no-store",
       role: "assistant",
-      content: "Hi, I'm joon. Connect your Shopify store from the dashboard and I'll get to work. I'll be right here once you're set up.",
+      content:
+        "Hi, I'm joon. Connect your Shopify store from the dashboard and I'll get to work. I'll be right here once you're set up.",
       timestamp: now,
     });
     return messages;
@@ -299,7 +348,8 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-syncing",
       role: "assistant",
-      content: "Your store is connected. I'm pulling in your data now. This usually takes a minute or two, and you'll see progress here as I get going.",
+      content:
+        "Your store is connected. I'm pulling in your data now. This usually takes a minute or two, and you'll see progress here as I get going.",
       timestamp: now,
     });
     return messages;
@@ -309,7 +359,8 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     messages.push({
       id: "welcome-activating",
       role: "assistant",
-      content: "Your data is in. I'm setting things up now, building your first automations and looking for opportunities. You can follow along above.",
+      content:
+        "Your data is in. I'm setting things up now, building your first automations and looking for opportunities. You can follow along above.",
       timestamp: now,
     });
     return messages;
@@ -326,8 +377,11 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
   // Revenue & orders
   if (insights.metrics.revenueThisMonth > 0) {
     const trend = insights.metrics.revenueTrend;
-    const trendText = trend > 0 ? `up ${trend}%` : trend < 0 ? `down ${Math.abs(trend)}%` : "steady";
-    parts.push(`Revenue (last 30 days): ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs prior 30 days)`);
+    const trendText =
+      trend > 0 ? `up ${trend}%` : trend < 0 ? `down ${Math.abs(trend)}%` : "steady";
+    parts.push(
+      `Revenue (last 30 days): ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs prior 30 days)`
+    );
   }
 
   // Customers
@@ -342,7 +396,9 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
 
   // Automations
   if (insights.metrics.totalAutomations > 0) {
-    parts.push(`${insights.metrics.activeAutomations} of ${insights.metrics.totalAutomations} automations active`);
+    parts.push(
+      `${insights.metrics.activeAutomations} of ${insights.metrics.totalAutomations} automations active`
+    );
   }
 
   // Recovery opportunities
@@ -350,20 +406,28 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     const ro = insights.recoveryOpportunities;
     const opportunityParts: string[] = [];
     if (ro.abandonedCarts.count > 0) {
-      opportunityParts.push(`${ro.abandonedCarts.count} abandoned cart${ro.abandonedCarts.count > 1 ? "s" : ""} worth ${formatCurrency(ro.abandonedCarts.totalValue)}`);
+      opportunityParts.push(
+        `${ro.abandonedCarts.count} abandoned cart${ro.abandonedCarts.count > 1 ? "s" : ""} worth ${formatCurrency(ro.abandonedCarts.totalValue)}`
+      );
     }
     if (ro.priceDrop.count > 0) {
-      opportunityParts.push(`${ro.priceDrop.count} price drop alert${ro.priceDrop.count > 1 ? "s" : ""}`);
+      opportunityParts.push(
+        `${ro.priceDrop.count} price drop alert${ro.priceDrop.count > 1 ? "s" : ""}`
+      );
     }
     if (ro.restock.count > 0) {
       opportunityParts.push(`${ro.restock.count} restock alert${ro.restock.count > 1 ? "s" : ""}`);
     }
     if (ro.repurchase.count > 0) {
-      opportunityParts.push(`${ro.repurchase.count} repurchase reminder${ro.repurchase.count > 1 ? "s" : ""}`);
+      opportunityParts.push(
+        `${ro.repurchase.count} repurchase reminder${ro.repurchase.count > 1 ? "s" : ""}`
+      );
     }
     if (opportunityParts.length > 0) {
       parts.push("");
-      parts.push(`**Revenue to recover:** I'm seeing ${opportunityParts.join(", ")}. Want me to reach out for you?`);
+      parts.push(
+        `**Revenue to recover:** I'm seeing ${opportunityParts.join(", ")}. Want me to reach out for you?`
+      );
     }
   }
 
@@ -444,23 +508,31 @@ function InsightCardView({ card }: { card: InsightCard }) {
 // Recovery Opportunity Cards — proactive revenue recovery surface
 // ---------------------------------------------------------------------------
 
-type RecoveryCardType = "cart_recovery" | "price_drop_alert" | "restock_alert" | "repurchase_reminder";
+type RecoveryCardType =
+  | "cart_recovery"
+  | "price_drop_alert"
+  | "restock_alert"
+  | "repurchase_reminder";
 
-const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
-  icon: typeof ShoppingCart;
-  label: string;
-  accentColor: string;
-  accentBg: string;
-  accentBorder: string;
-  description: (count: number) => string;
-}> = {
+const RECOVERY_CARD_CONFIG: Record<
+  RecoveryCardType,
+  {
+    icon: typeof ShoppingCart;
+    label: string;
+    accentColor: string;
+    accentBg: string;
+    accentBorder: string;
+    description: (count: number) => string;
+  }
+> = {
   cart_recovery: {
     icon: ShoppingCart,
     label: "Abandoned carts",
     accentColor: "text-decision",
     accentBg: "bg-decision/10",
     accentBorder: "border-decision/20",
-    description: (count) => `${count} cart${count !== 1 ? "s" : ""} left behind. I've drafted recovery emails, ready when you are.`,
+    description: (count) =>
+      `${count} cart${count !== 1 ? "s" : ""} left behind. I've drafted recovery emails, ready when you are.`,
   },
   price_drop_alert: {
     icon: TrendingDown,
@@ -468,7 +540,8 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-measure",
     accentBg: "bg-measure/10",
     accentBorder: "border-measure/20",
-    description: (count) => `${count} product${count !== 1 ? "s" : ""} dropped in price. Let's tell the customers who were watching.`,
+    description: (count) =>
+      `${count} product${count !== 1 ? "s" : ""} dropped in price. Let's tell the customers who were watching.`,
   },
   restock_alert: {
     icon: Package,
@@ -476,7 +549,8 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-outcome",
     accentBg: "bg-outcome/10",
     accentBorder: "border-outcome/20",
-    description: (count) => `${count} product${count !== 1 ? "s" : ""} back in stock. Let's let waiting customers know.`,
+    description: (count) =>
+      `${count} product${count !== 1 ? "s" : ""} back in stock. Let's let waiting customers know.`,
   },
   repurchase_reminder: {
     icon: RefreshCw,
@@ -484,7 +558,8 @@ const RECOVERY_CARD_CONFIG: Record<RecoveryCardType, {
     accentColor: "text-muted-foreground",
     accentBg: "bg-muted",
     accentBorder: "border-border",
-    description: (count) => `${count} customer${count !== 1 ? "s" : ""} due for a refill, a gentle nudge could bring them back.`,
+    description: (count) =>
+      `${count} customer${count !== 1 ? "s" : ""} due for a refill, a gentle nudge could bring them back.`,
   },
 };
 
@@ -499,19 +574,21 @@ function RecoveryOpportunityCards({
 }) {
   const { data, isLoading } = (trpc.dashboard as any).recoveryOpportunities.useQuery(
     { storeId },
-    { enabled: !!storeId, refetchInterval: 30_000 },
+    { enabled: !!storeId, refetchInterval: 30_000 }
   ) as {
-    data: {
-      abandonedCarts: { count: number; totalValue: number };
-      opportunities: {
-        id: string;
-        type: string;
-        estimatedRevenue: number | null;
-        createdAt: string;
-        payload: unknown;
-        reasoning: string;
-      }[];
-    } | undefined;
+    data:
+      | {
+          abandonedCarts: { count: number; totalValue: number };
+          opportunities: {
+            id: string;
+            type: string;
+            estimatedRevenue: number | null;
+            createdAt: string;
+            payload: unknown;
+            reasoning: string;
+          }[];
+        }
+      | undefined;
     isLoading: boolean;
   };
 
@@ -524,7 +601,10 @@ function RecoveryOpportunityCards({
   if (isLoading || !data) return null;
 
   // Group opportunities by type
-  const grouped = new Map<RecoveryCardType, { ids: string[]; count: number; totalRevenue: number }>();
+  const grouped = new Map<
+    RecoveryCardType,
+    { ids: string[]; count: number; totalRevenue: number }
+  >();
 
   // Add abandoned carts as cart_recovery if they exist
   if (data.abandonedCarts.count > 0) {
@@ -573,22 +653,25 @@ function RecoveryOpportunityCards({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8, transition: { duration: 0.2 } }}
               transition={{ delay: i * 0.08, duration: 0.35, ease: "easeOut" }}
-              className={cn(
-                "rounded-xl border p-3",
-                config.accentBg,
-                config.accentBorder,
-              )}
+              className={cn("rounded-xl border p-3", config.accentBg, config.accentBorder)}
             >
               <div className="flex items-start gap-2.5">
-                <div className={cn(
-                  "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
-                  config.accentBg,
-                )}>
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
+                    config.accentBg
+                  )}
+                >
                   <Icon className={cn("w-3.5 h-3.5", config.accentColor)} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <div className={cn("font-sans text-[10px] uppercase tracking-wider", config.accentColor)}>
+                    <div
+                      className={cn(
+                        "font-sans text-[10px] uppercase tracking-wider",
+                        config.accentColor
+                      )}
+                    >
                       {config.label}
                     </div>
                     {info.totalRevenue > 0 && (
@@ -613,7 +696,7 @@ function RecoveryOpportunityCards({
                           "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-sans font-medium transition-all",
                           approvingType === type
                             ? "bg-muted text-muted-foreground"
-                            : "bg-decision text-primary-foreground hover:bg-decision/90",
+                            : "bg-decision text-primary-foreground hover:bg-decision/90"
                         )}
                       >
                         {approvingType === type ? (
@@ -674,9 +757,7 @@ function AgentActivityIndicator() {
     setStepIdx(idx);
 
     // Mark previous steps as completed
-    const completed = stepTimings
-      .map((t, i) => (elapsed >= t ? i : -1))
-      .filter((i) => i >= 0);
+    const completed = stepTimings.map((t, i) => (elapsed >= t ? i : -1)).filter((i) => i >= 0);
     setCompletedSteps(completed);
   }, [elapsed]);
 
@@ -699,9 +780,7 @@ function AgentActivityIndicator() {
           <span>Thinking</span>
           <span className="console-live-caret inline-block w-[2px] h-[1em] align-[-0.1em] bg-[hsl(var(--accent))]" />
           <span className="text-[10px] font-mono text-muted-foreground/40">{elapsed}s</span>
-          <ChevronDown
-            className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`}
-          />
+          <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
 
         {expanded && (
@@ -750,8 +829,17 @@ function AgentActivityIndicator() {
   );
 }
 
-function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign }: { message: Message; onNavigate?: (href: string) => void; onApproveCampaign?: (campaignId: string) => void; onEditCampaign?: (campaignId: string) => void }) {
-
+function MessageBubble({
+  message,
+  onNavigate,
+  onApproveCampaign,
+  onEditCampaign,
+}: {
+  message: Message;
+  onNavigate?: (href: string) => void;
+  onApproveCampaign?: (campaignId: string) => void;
+  onEditCampaign?: (campaignId: string) => void;
+}) {
   if (message.isLoading) {
     return <AgentActivityIndicator />;
   }
@@ -823,9 +911,7 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
                   {children}
                 </h3>
               ),
-              p: ({ children }) => (
-                <p className="mb-2 last:mb-0">{children}</p>
-              ),
+              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
               strong: ({ children }) => (
                 <strong className="font-semibold text-foreground">{children}</strong>
               ),
@@ -835,26 +921,20 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
               ol: ({ children }) => (
                 <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>
               ),
-              li: ({ children }) => (
-                <li className="text-[13px]">{children}</li>
-              ),
+              li: ({ children }) => <li className="text-[13px]">{children}</li>,
               table: ({ children }) => (
                 <div className="overflow-x-auto my-2.5 rounded-lg border border-border">
                   <table className="w-full text-[12px] font-mono">{children}</table>
                 </div>
               ),
-              thead: ({ children }) => (
-                <thead className="bg-muted/60">{children}</thead>
-              ),
+              thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
               th: ({ children }) => (
                 <th className="px-3 py-2 text-left font-semibold text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
                   {children}
                 </th>
               ),
               td: ({ children }) => (
-                <td className="px-3 py-2 text-foreground border-b border-border/50">
-                  {children}
-                </td>
+                <td className="px-3 py-2 text-foreground border-b border-border/50">{children}</td>
               ),
               tr: ({ children }) => (
                 <tr className="hover:bg-muted/30 transition-colors">{children}</tr>
@@ -890,6 +970,8 @@ function MessageBubble({ message, onNavigate, onApproveCampaign, onEditCampaign 
             campaignName={message.campaignPreview.campaignName}
             draftCampaignId={message.campaignPreview.draftCampaignId}
             estimatedRecipients={message.campaignPreview.estimatedRecipients}
+            status={message.campaignPreview.status}
+            constraints={message.campaignPreview.constraints}
             onApprove={(id) => onApproveCampaign?.(id)}
             onEdit={(id) => onEditCampaign?.(id)}
           />
@@ -940,11 +1022,15 @@ function ActivationChecklistRow({ step }: { step: ChecklistStep }) {
   return (
     <StreamRow tick={tick}>
       <span className="inline-flex items-center gap-2 flex-wrap">
-        <span className={cn(
-          step.status === "done" ? "text-foreground" :
-          step.status === "generating" ? "text-[hsl(var(--accent))]" :
-          "text-muted-foreground"
-        )}>
+        <span
+          className={cn(
+            step.status === "done"
+              ? "text-foreground"
+              : step.status === "generating"
+                ? "text-[hsl(var(--accent))]"
+                : "text-muted-foreground"
+          )}
+        >
           {step.label}
           {step.status === "generating" && <span className="animate-pulse">…</span>}
         </span>
@@ -992,7 +1078,9 @@ function ActivationProgressPanel({ activation }: { activation: ActivationData })
             {complete ? "All set" : "Setting things up for you"}
           </div>
           <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-            <span>{doneCount} of {total} done</span>
+            <span>
+              {doneCount} of {total} done
+            </span>
             {!complete && (
               <>
                 <span className="text-muted-foreground/40">·</span>
@@ -1087,13 +1175,19 @@ function CompletionSummary({
                 </div>
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => onAction(`Approve the ${item.name.replace(" Automation", "")} automation`)}
+                    onClick={() =>
+                      onAction(`Approve the ${item.name.replace(" Automation", "")} automation`)
+                    }
                     className="px-2.5 py-1 rounded-lg bg-outcome text-white text-[10px] font-sans font-medium hover:opacity-90 transition-opacity"
                   >
                     Approve
                   </button>
                   <button
-                    onClick={() => onAction(`Show me details about the ${item.name.replace(" Automation", "")} automation`)}
+                    onClick={() =>
+                      onAction(
+                        `Show me details about the ${item.name.replace(" Automation", "")} automation`
+                      )
+                    }
                     className="px-2.5 py-1 rounded-lg border border-border text-[10px] font-sans text-foreground hover:bg-muted transition-colors"
                   >
                     Preview
@@ -1108,7 +1202,8 @@ function CompletionSummary({
       {/* Pending actions note */}
       {pendingActions > 0 && (
         <div className="text-[11px] font-sans text-muted-foreground">
-          {pendingActions} action{pendingActions > 1 ? "s are" : " is"} waiting in your queue for a look.
+          {pendingActions} action{pendingActions > 1 ? "s are" : " is"} waiting in your queue for a
+          look.
         </div>
       )}
 
@@ -1161,7 +1256,10 @@ export interface AlloAIPanelProps {
   embedded?: boolean;
 }
 
-export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(function AlloAIPanel({ embedded }, ref) {
+export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(function AlloAIPanel(
+  { embedded },
+  ref
+) {
   const { toast } = useToast();
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -1267,25 +1365,30 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   // Fetch real insights
   const { data: insights } = (trpc.ai as any).panelInsights.useQuery(
     { storeId },
-    { enabled: !!storeId, refetchInterval: 60_000 },
+    { enabled: !!storeId, refetchInterval: 60_000 }
   ) as { data: PanelInsights | undefined };
 
   // Fetch latest briefing for dashboard greeting
   const { data: latestBriefing } = (trpc as any).briefings.latest.useQuery(
     { storeId },
-    { enabled: !!storeId },
+    { enabled: !!storeId }
   ) as { data: any | undefined };
 
   // Fetch contextual page greeting for non-dashboard pages
   const { data: pageContextData } = (trpc as any).briefings.pageContext.useQuery(
     { storeId, page: pageContext },
-    { enabled: !!storeId && !isDashboard && !!insights?.storeState.hasSyncedData, staleTime: 60_000 },
-  ) as { data: { greeting: string; suggestions: { label: string; message: string }[] } | undefined };
+    {
+      enabled: !!storeId && !isDashboard && !!insights?.storeState.hasSyncedData,
+      staleTime: 60_000,
+    }
+  ) as {
+    data: { greeting: string; suggestions: { label: string; message: string }[] } | undefined;
+  };
 
   // Fetch agent status for status indicator (Fix 5D)
   const { data: agentStatus } = (trpc.stores as any).agentStatus.useQuery(
     { storeId },
-    { enabled: !!storeId, refetchInterval: 5000 },
+    { enabled: !!storeId, refetchInterval: 5000 }
   ) as { data: { isWorking: boolean; activeJobs: string[]; pendingActions: number } | undefined };
 
   // Activation state — shows progress panel instead of chat during activation
@@ -1311,16 +1414,18 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         if (d.isRecentlyActivated) return 5000;
         return false;
       },
-    },
+    }
   ) as { data: ActivationData | undefined };
 
   // Broader activation detection:
   // "in progress" = onboarding done but activation not done, OR automations still generating
   const isActivationInProgress = !!(
-    activationData &&
-    (activationData.isActivating || // worker hasn't finished
-     (activationData.overallProgress < 100) || // progress < 100%
-     (activationData.automationProgress && activationData.automationProgress.generating > 0)) // automations still generating
+    (
+      activationData &&
+      (activationData.isActivating || // worker hasn't finished
+        activationData.overallProgress < 100 || // progress < 100%
+        (activationData.automationProgress && activationData.automationProgress.generating > 0))
+    ) // automations still generating
   );
   // "just completed" = recently activated AND all automations done generating
   const activationJustCompleted = !!(
@@ -1329,19 +1434,34 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     !isActivationInProgress
   );
   // Show activation view when: in progress, or just completed (until dismissed)
-  const showActivationView = !activationDismissed && activationData && (isActivationInProgress || activationJustCompleted);
+  const showActivationView =
+    !activationDismissed && activationData && (isActivationInProgress || activationJustCompleted);
 
   // Fetch smart suggested actions (Fix 7)
   const { data: smartSuggestions } = (trpc as any).briefings.suggestedActions.useQuery(
     { storeId },
-    { enabled: !!storeId && !!insights?.storeState.hasSyncedData, staleTime: 30_000 },
+    { enabled: !!storeId && !!insights?.storeState.hasSyncedData, staleTime: 30_000 }
   ) as { data: Array<{ label: string; message: string; priority: number }> | undefined };
 
   // Chat history
   const { data: chatHistory, refetch: refetchHistory } = (trpc.ai as any).listChats.useQuery(
     { storeId, limit: 30 },
-    { enabled: !!storeId, staleTime: 30_000 },
-  ) as { data: { chats: { id: string; title: string; updatedAt: string; messageCount: number; lastMessage: string }[]; nextCursor?: string } | undefined; refetch: () => void };
+    { enabled: !!storeId, staleTime: 30_000 }
+  ) as {
+    data:
+      | {
+          chats: {
+            id: string;
+            title: string;
+            updatedAt: string;
+            messageCount: number;
+            lastMessage: string;
+          }[];
+          nextCursor?: string;
+        }
+      | undefined;
+    refetch: () => void;
+  };
 
   const deleteChatMut = (trpc.ai as any).deleteChat.useMutation({
     onSuccess: () => refetchHistory(),
@@ -1349,7 +1469,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
 
   const renameChatMut = (trpc.ai as any).renameChat.useMutation({
     onSuccess: () => refetchHistory(),
-  }) as { mutateAsync: (input: { chatId: string; title: string }) => Promise<{ success: boolean }>; isPending: boolean };
+  }) as {
+    mutateAsync: (input: { chatId: string; title: string }) => Promise<{ success: boolean }>;
+    isPending: boolean;
+  };
 
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -1389,18 +1512,29 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         setMessages(buildBriefingMessage(insights, latestBriefing));
       } else if (pageContextData) {
         // Contextual greeting for non-dashboard pages
-        setMessages([{
-          id: "welcome-context",
-          role: "assistant",
-          content: pageContextData.greeting,
-          timestamp: new Date(),
-        }]);
+        setMessages([
+          {
+            id: "welcome-context",
+            role: "assistant",
+            content: pageContextData.greeting,
+            timestamp: new Date(),
+          },
+        ]);
       } else {
         setMessages(buildBriefingMessage(insights, latestBriefing));
       }
       setWelcomeBuilt(true);
     }
-  }, [insights, welcomeBuilt, storeId, latestBriefing, pageContext, isDashboard, pageContextData, currentChatId]);
+  }, [
+    insights,
+    welcomeBuilt,
+    storeId,
+    latestBriefing,
+    pageContext,
+    isDashboard,
+    pageContextData,
+    currentChatId,
+  ]);
 
   // Restore persisted chat on mount (soft navigation — sessionStorage survives)
   const restoredRef = useRef(false);
@@ -1410,7 +1544,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
 
     (async () => {
       try {
-        const chat = await (utils.ai as any).getChat.fetch({ chatId: currentChatId }) as {
+        const chat = (await (utils.ai as any).getChat.fetch({ chatId: currentChatId })) as {
           title?: string;
           messages?: PersistedChatMessage[];
         };
@@ -1537,22 +1671,33 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
 
       const actionLinks: { label: string; href: string }[] = [];
       if (data.action?.created.automationId) {
-        actionLinks.push({ label: "View Automation", href: `/automations/${data.action.created.automationId}` });
+        actionLinks.push({
+          label: "View Automation",
+          href: `/automations/${data.action.created.automationId}`,
+        });
       }
       if (data.action?.created.campaignId) {
         actionLinks.push({ label: "View Campaign", href: "/campaigns" });
       }
       if (data.action?.created.templateIds?.length && !data.action?.created.automationId) {
-        actionLinks.push({ label: "View Template", href: `/templates/${data.action.created.templateIds[0]}/edit` });
+        actionLinks.push({
+          label: "View Template",
+          href: `/templates/${data.action.created.templateIds[0]}/edit`,
+        });
       }
       if (data.action?.created.segmentId) {
         actionLinks.push({ label: "View Segment", href: "/segments" });
       }
 
       // Also extract action links from tool call names when agent used tools directly
-      if (data.toolCalls?.includes("get_automation_details") || data.toolCalls?.includes("modify_automation")) {
+      if (
+        data.toolCalls?.includes("get_automation_details") ||
+        data.toolCalls?.includes("modify_automation")
+      ) {
         // Extract automation ID from reply if present (agent often includes it)
-        const autoIdMatch = data.reply.match(/automations?\/([a-z0-9-]+)/i) ?? data.reply.match(/automationId["\s:]+([a-z0-9-]+)/i);
+        const autoIdMatch =
+          data.reply.match(/automations?\/([a-z0-9-]+)/i) ??
+          data.reply.match(/automationId["\s:]+([a-z0-9-]+)/i);
         if (autoIdMatch) {
           actionLinks.push({ label: "View Automation", href: `/automations/${autoIdMatch[1]}` });
         } else if (!actionLinks.some((l) => l.href.startsWith("/automations"))) {
@@ -1565,7 +1710,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         const stats: { label: string; value: string }[] = [];
         if (data.action.created.automationId) stats.push({ label: "Automation", value: "Created" });
         if (data.action.created.campaignId) stats.push({ label: "Campaign", value: "Created" });
-        if (data.action.created.templateIds?.length) stats.push({ label: "Templates", value: `${data.action.created.templateIds.length}` });
+        if (data.action.created.templateIds?.length)
+          stats.push({ label: "Templates", value: `${data.action.created.templateIds.length}` });
         if (data.action.created.segmentId) stats.push({ label: "Segment", value: "Created" });
         if (stats.length > 0) {
           insightCard = {
@@ -1590,8 +1736,8 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 toolCalls: data.toolCalls?.length ? data.toolCalls : undefined,
                 campaignPreview: data.campaignPreview ?? undefined,
               }
-            : m,
-        ),
+            : m
+        )
       );
 
       if (data.action?.success) {
@@ -1606,27 +1752,36 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             ? {
                 ...m,
                 isLoading: false,
-                content: err.message ?? "Sorry, something went wrong on my end. Mind trying that again?",
+                content:
+                  err.message ?? "Sorry, something went wrong on my end. Mind trying that again?",
               }
-            : m,
-        ),
+            : m
+        )
       );
       toast(err.message ?? "Sorry, I couldn't get through that one. Try again?", "error");
     },
-  }) as { mutate: (input: { storeId: string; message: string; chatId?: string; history: { role: "user" | "assistant"; content: string }[]; campaignDirective?: CampaignDirective }) => void };
+  }) as {
+    mutate: (input: {
+      storeId: string;
+      message: string;
+      chatId?: string;
+      history: { role: "user" | "assistant"; content: string }[];
+      campaignDirective?: CampaignDirective;
+    }) => void;
+  };
 
   const handleApproveCampaign = useCallback(
     (campaignId: string) => {
       router.push(`/campaigns/${campaignId}`);
     },
-    [router],
+    [router]
   );
 
   const handleEditCampaign = useCallback(
     (campaignId: string) => {
       router.push(`/campaigns/${campaignId}`);
     },
-    [router],
+    [router]
   );
 
   const sendMessage = useCallback(
@@ -1664,17 +1819,20 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         campaignDirective,
       });
     },
-    [isProcessing, storeId, messages, currentChatId],
+    [isProcessing, storeId, messages, currentChatId]
   );
 
   const handleSubmit = useCallback(() => {
     sendMessage(input);
   }, [input, sendMessage]);
 
-  const handleNavigate = useCallback((href: string) => {
-    if (!embedded && !isDashboard) setPanelState("collapsed");
-    router.push(href);
-  }, [router, isDashboard, embedded]);
+  const handleNavigate = useCallback(
+    (href: string) => {
+      if (!embedded && !isDashboard) setPanelState("collapsed");
+      router.push(href);
+    },
+    [router, isDashboard, embedded]
+  );
 
   const handlePillClick = (pill: Pill) => {
     if (pill.href && !pill.instruction) {
@@ -1695,12 +1853,14 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     setWelcomeBuilt(false);
     if (insights) {
       if (!isDashboard && pageContextData) {
-        setMessages([{
-          id: "welcome-context",
-          role: "assistant",
-          content: pageContextData.greeting,
-          timestamp: new Date(),
-        }]);
+        setMessages([
+          {
+            id: "welcome-context",
+            role: "assistant",
+            content: pageContextData.greeting,
+            timestamp: new Date(),
+          },
+        ]);
       } else {
         setMessages(buildBriefingMessage(insights, latestBriefing));
       }
@@ -1711,31 +1871,44 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [insights, latestBriefing, isDashboard, pageContextData]);
 
-  const loadChat = useCallback(async (chatId: string) => {
-    setShowChatSwitcher(false);
-    setCurrentChatId(chatId);
-    setDynamicSuggestions([]);
+  const loadChat = useCallback(
+    async (chatId: string) => {
+      setShowChatSwitcher(false);
+      setCurrentChatId(chatId);
+      setDynamicSuggestions([]);
 
-    try {
-      const chat = await (utils.ai as any).getChat.fetch({ chatId }) as { title?: string; messages?: PersistedChatMessage[] };
-      if (chat?.messages) {
-        setCurrentChatTitlePersist(chat.title || "Chat");
-        setMessages(chat.messages.map(restoreChatMessage));
+      try {
+        const chat = (await (utils.ai as any).getChat.fetch({ chatId })) as {
+          title?: string;
+          messages?: PersistedChatMessage[];
+        };
+        if (chat?.messages) {
+          setCurrentChatTitlePersist(chat.title || "Chat");
+          setMessages(chat.messages.map(restoreChatMessage));
+        }
+      } catch {
+        toast("Failed to load chat", "error");
       }
-    } catch {
-      toast("Failed to load chat", "error");
-    }
-  }, [utils, toast]);
+    },
+    [utils, toast]
+  );
 
   const dataReady = !!insights?.storeState.hasSyncedData;
   // Use smart suggestions (Fix 7), then page context, then fallback to dynamic
-  const smartPills: Pill[] = (smartSuggestions && isDashboard)
-    ? smartSuggestions.map((s) => ({ label: s.label, instruction: s.message }))
-    : [];
-  const contextSuggestions: Pill[] = (!isDashboard && pageContextData?.suggestions)
-    ? pageContextData.suggestions.map((s) => ({ label: s.label, instruction: s.message }))
-    : [];
-  const suggestions = smartPills.length > 0 ? smartPills : contextSuggestions.length > 0 ? contextSuggestions : getDynamicSuggestions(insights, pageContext);
+  const smartPills: Pill[] =
+    smartSuggestions && isDashboard
+      ? smartSuggestions.map((s) => ({ label: s.label, instruction: s.message }))
+      : [];
+  const contextSuggestions: Pill[] =
+    !isDashboard && pageContextData?.suggestions
+      ? pageContextData.suggestions.map((s) => ({ label: s.label, instruction: s.message }))
+      : [];
+  const suggestions =
+    smartPills.length > 0
+      ? smartPills
+      : contextSuggestions.length > 0
+        ? contextSuggestions
+        : getDynamicSuggestions(insights, pageContext);
   const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : null;
   const placeholder = useRotatingPlaceholder(dataReady && !isProcessing);
 
@@ -1756,47 +1929,51 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   };
 
   // Drag-to-resize handler
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    if (panelState !== "open") return;
-    e.preventDefault();
-    setIsResizing(true);
-    const startX = e.clientX;
-    const startWidth = panelWidth;
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      if (panelState !== "open") return;
+      e.preventDefault();
+      setIsResizing(true);
+      const startX = e.clientX;
+      const startWidth = panelWidth;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      // Panel is on the right, so dragging left = wider
-      const delta = startX - moveEvent.clientX;
-      const newWidth = Math.min(Math.max(startWidth + delta, 320), 800);
-      setPanelWidth(newWidth);
-    };
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        // Panel is on the right, so dragging left = wider
+        const delta = startX - moveEvent.clientX;
+        const newWidth = Math.min(Math.max(startWidth + delta, 320), 800);
+        setPanelWidth(newWidth);
+      };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
+      const handleMouseUp = () => {
+        setIsResizing(false);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
 
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  }, [panelState, panelWidth]);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [panelState, panelWidth]
+  );
 
   return (
     <>
       {/* Fullscreen backdrop */}
       {effectiveState === "fullscreen" && !embedded && (
-        <div
-          className="fixed inset-0 bg-black/40 z-[59] backdrop-blur-sm"
-          onClick={goFullscreen}
-        />
+        <div className="fixed inset-0 bg-black/40 z-[59] backdrop-blur-sm" onClick={goFullscreen} />
       )}
 
       {/* Main panel */}
       <aside
-        style={!embedded && effectiveState === "open" && !isMobile ? { width: `${panelWidth}px` } : undefined}
+        style={
+          !embedded && effectiveState === "open" && !isMobile
+            ? { width: `${panelWidth}px` }
+            : undefined
+        }
         className={cn(
           "flex flex-col relative",
           !isResizing && "transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
@@ -1807,18 +1984,18 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   // Phone: any open-ish state is a full overlay below the header — never a dock.
                   effectiveState === "collapsed"
                     ? "w-0 border-l-0 overflow-hidden"
-                    : "fixed inset-x-0 top-14 bottom-0 z-50 w-full ai-panel-bg border-0 shadow-2xl",
+                    : "fixed inset-x-0 top-14 bottom-0 z-50 w-full ai-panel-bg border-0 shadow-2xl"
                 )
               : cn(
-                "border-l",
-                effectiveState === "open" && "flex-shrink-0 ai-panel-bg border-border",
-                effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
-                effectiveState === "expanded" &&
-                  "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
-                effectiveState === "fullscreen" &&
-                  "fixed inset-4 z-[60] rounded-2xl ai-panel-bg border-border shadow-2xl",
-              ),
-          isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]",
+                  "border-l",
+                  effectiveState === "open" && "flex-shrink-0 ai-panel-bg border-border",
+                  effectiveState === "collapsed" && "w-0 border-l-0 overflow-hidden",
+                  effectiveState === "expanded" &&
+                    "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
+                  effectiveState === "fullscreen" &&
+                    "fixed inset-4 z-[60] rounded-2xl ai-panel-bg border-border shadow-2xl"
+                ),
+          isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]"
         )}
       >
         {/* Resize handle — only in open (docked) mode */}
@@ -1876,7 +2053,11 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             <button
               onClick={toggleExpand}
               className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title={effectiveState === "expanded" || effectiveState === "fullscreen" ? "Collapse panel" : "Expand panel"}
+              title={
+                effectiveState === "expanded" || effectiveState === "fullscreen"
+                  ? "Collapse panel"
+                  : "Expand panel"
+              }
             >
               {effectiveState === "expanded" || effectiveState === "fullscreen" ? (
                 <Minimize2 className="w-3.5 h-3.5" />
@@ -1912,10 +2093,15 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
             <div
               className={cn(
                 "w-2 h-2 rounded-full flex-shrink-0",
-                isProcessing ? "bg-[var(--color-warning)] animate-pulse" :
-                isActivationInProgress ? "bg-[var(--color-warning)] animate-pulse" :
-                agentStatus?.isWorking ? "bg-[var(--color-warning)] animate-pulse" :
-                storeId ? "bg-outcome" : "bg-muted-foreground",
+                isProcessing
+                  ? "bg-[var(--color-warning)] animate-pulse"
+                  : isActivationInProgress
+                    ? "bg-[var(--color-warning)] animate-pulse"
+                    : agentStatus?.isWorking
+                      ? "bg-[var(--color-warning)] animate-pulse"
+                      : storeId
+                        ? "bg-outcome"
+                        : "bg-muted-foreground"
               )}
             />
             {editingHeaderTitle && currentChatId ? (
@@ -1925,7 +2111,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   onChange={(e) => setHeaderTitleDraft(e.target.value)}
                   onKeyDown={async (e) => {
                     if (e.key === "Enter" && headerTitleDraft.trim()) {
-                      await renameChatMut.mutateAsync({ chatId: currentChatId, title: headerTitleDraft.trim() });
+                      await renameChatMut.mutateAsync({
+                        chatId: currentChatId,
+                        title: headerTitleDraft.trim(),
+                      });
                       setCurrentChatTitlePersist(headerTitleDraft.trim());
                       setEditingHeaderTitle(false);
                     }
@@ -1933,7 +2122,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   }}
                   onBlur={async () => {
                     if (headerTitleDraft.trim() && headerTitleDraft.trim() !== currentChatTitle) {
-                      await renameChatMut.mutateAsync({ chatId: currentChatId, title: headerTitleDraft.trim() });
+                      await renameChatMut.mutateAsync({
+                        chatId: currentChatId,
+                        title: headerTitleDraft.trim(),
+                      });
                       setCurrentChatTitlePersist(headerTitleDraft.trim());
                     }
                     setEditingHeaderTitle(false);
@@ -1949,32 +2141,42 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   "flex-1 text-left flex items-center gap-2 min-w-0 px-2.5 py-1.5 rounded-lg border transition-all",
                   showChatSwitcher
                     ? "border-foreground/20 bg-muted"
-                    : "border-transparent hover:border-foreground/10 hover:bg-muted/50",
+                    : "border-transparent hover:border-foreground/10 hover:bg-muted/50"
                 )}
               >
                 <MessageSquare className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="text-[12px] truncate">
                     {currentChatTitle ? (
-                      <span className="font-serif font-bold text-foreground">{currentChatTitle}</span>
+                      <span className="font-serif font-bold text-foreground">
+                        {currentChatTitle}
+                      </span>
                     ) : (
-                      <span className="font-mono font-semibold text-foreground">joon · operator</span>
+                      <span className="font-mono font-semibold text-foreground">
+                        joon · operator
+                      </span>
                     )}
                   </div>
                   {storeId && (
                     <div className="text-[10px] font-sans text-muted-foreground truncate">
-                      {isProcessing ? "On it..." :
-                       isActivationInProgress ? "Setting things up..." :
-                       agentStatus?.isWorking ? `Working on ${agentStatus.activeJobs.length} thing${agentStatus.activeJobs.length > 1 ? "s" : ""}...` :
-                       agentStatus?.pendingActions ? `${agentStatus.pendingActions} thing${agentStatus.pendingActions > 1 ? "s" : ""} waiting for you` :
-                       "Here and watching over things"}
+                      {isProcessing
+                        ? "On it..."
+                        : isActivationInProgress
+                          ? "Setting things up..."
+                          : agentStatus?.isWorking
+                            ? `Working on ${agentStatus.activeJobs.length} thing${agentStatus.activeJobs.length > 1 ? "s" : ""}...`
+                            : agentStatus?.pendingActions
+                              ? `${agentStatus.pendingActions} thing${agentStatus.pendingActions > 1 ? "s" : ""} waiting for you`
+                              : "Here and watching over things"}
                     </div>
                   )}
                 </div>
-                <ChevronDown className={cn(
-                  "w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0",
-                  showChatSwitcher && "rotate-180",
-                )} />
+                <ChevronDown
+                  className={cn(
+                    "w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0",
+                    showChatSwitcher && "rotate-180"
+                  )}
+                />
               </button>
             )}
             {currentChatId && currentChatTitle && !editingHeaderTitle && (
@@ -2015,14 +2217,18 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 </div>
               </div>
               <button
-                onClick={() => { startNewChat(); }}
+                onClick={() => {
+                  startNewChat();
+                }}
                 className={cn(
                   "flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-muted transition-colors border-b border-border/50",
-                  !currentChatId && "bg-muted",
+                  !currentChatId && "bg-muted"
                 )}
               >
                 <Plus className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="text-[12px] font-sans font-medium text-foreground">New conversation</span>
+                <span className="text-[12px] font-sans font-medium text-foreground">
+                  New conversation
+                </span>
               </button>
               <div className="flex-1 overflow-y-auto">
                 {(() => {
@@ -2036,7 +2242,9 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       <div className="text-center py-6">
                         <MessageSquare className="w-4 h-4 text-muted-foreground/30 mx-auto mb-1.5" />
                         <p className="text-[11px] text-muted-foreground font-sans">
-                          {chatSearch.trim() ? "Nothing matches that yet" : "No conversations yet. Say hi to get started"}
+                          {chatSearch.trim()
+                            ? "Nothing matches that yet"
+                            : "No conversations yet. Say hi to get started"}
                         </p>
                       </div>
                     );
@@ -2047,9 +2255,11 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                       key={chat.id}
                       className={cn(
                         "group flex items-start gap-2.5 px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors",
-                        currentChatId === chat.id && "bg-muted border-l-2 border-foreground",
+                        currentChatId === chat.id && "bg-muted border-l-2 border-foreground"
                       )}
-                      onClick={() => { if (editingChatId !== chat.id) loadChat(chat.id); }}
+                      onClick={() => {
+                        if (editingChatId !== chat.id) loadChat(chat.id);
+                      }}
                     >
                       <div className="flex-1 min-w-0">
                         {editingChatId === chat.id ? (
@@ -2058,16 +2268,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                             onChange={(e) => setEditingTitle(e.target.value)}
                             onKeyDown={async (e) => {
                               if (e.key === "Enter" && editingTitle.trim()) {
-                                await renameChatMut.mutateAsync({ chatId: chat.id, title: editingTitle.trim() });
-                                if (currentChatId === chat.id) setCurrentChatTitlePersist(editingTitle.trim());
+                                await renameChatMut.mutateAsync({
+                                  chatId: chat.id,
+                                  title: editingTitle.trim(),
+                                });
+                                if (currentChatId === chat.id)
+                                  setCurrentChatTitlePersist(editingTitle.trim());
                                 setEditingChatId(null);
                               }
                               if (e.key === "Escape") setEditingChatId(null);
                             }}
                             onBlur={async () => {
                               if (editingTitle.trim() && editingTitle.trim() !== chat.title) {
-                                await renameChatMut.mutateAsync({ chatId: chat.id, title: editingTitle.trim() });
-                                if (currentChatId === chat.id) setCurrentChatTitlePersist(editingTitle.trim());
+                                await renameChatMut.mutateAsync({
+                                  chatId: chat.id,
+                                  title: editingTitle.trim(),
+                                });
+                                if (currentChatId === chat.id)
+                                  setCurrentChatTitlePersist(editingTitle.trim());
                               }
                               setEditingChatId(null);
                             }}
@@ -2163,7 +2381,10 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 <RecoveryOpportunityCards
                   storeId={storeId}
                   onApproveAll={(type, actionIds) => {
-                    toast(`On it. Sending ${actionIds.length} ${type.replace(/_/g, " ")} message${actionIds.length > 1 ? "s" : ""}.`, "success");
+                    toast(
+                      `On it. Sending ${actionIds.length} ${type.replace(/_/g, " ")} message${actionIds.length > 1 ? "s" : ""}.`,
+                      "success"
+                    );
                   }}
                   onReview={(type) => {
                     const filterMap: Record<string, string> = {
@@ -2183,7 +2404,12 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.03, duration: 0.3 }}
                 >
-                  <MessageBubble message={msg} onNavigate={handleNavigate} onApproveCampaign={handleApproveCampaign} onEditCampaign={handleEditCampaign} />
+                  <MessageBubble
+                    message={msg}
+                    onNavigate={handleNavigate}
+                    onApproveCampaign={handleApproveCampaign}
+                    onEditCampaign={handleEditCampaign}
+                  />
                 </motion.div>
               ))}
 
@@ -2238,7 +2464,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                 className={cn(
                   "group flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 transition-colors",
                   "border-border focus-within:border-[hsl(var(--accent))] hover:border-muted-foreground/40 focus-within:hover:border-[hsl(var(--accent))]",
-                  (isProcessing || !storeId || !dataReady) && "opacity-60",
+                  (isProcessing || !storeId || !dataReady) && "opacity-60"
                 )}
                 onClick={() => inputRef.current?.focus()}
               >
@@ -2252,7 +2478,13 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) handleSubmit();
                   }}
-                  placeholder={!storeId ? "Connect a store and we'll get started" : !dataReady ? "Getting your store ready" : placeholder}
+                  placeholder={
+                    !storeId
+                      ? "Connect a store and we'll get started"
+                      : !dataReady
+                        ? "Getting your store ready"
+                        : placeholder
+                  }
                   disabled={isProcessing || !storeId || !dataReady}
                   aria-label="Tell joon what you want, in your own words"
                   className="flex-1 min-w-0 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground caret-[hsl(var(--accent))] disabled:cursor-not-allowed"
@@ -2332,9 +2564,7 @@ export function AlloAIPanelProvider({ children }: { children: React.ReactNode })
 
   return (
     <AlloAIPanelContext.Provider value={value}>
-      <PanelRefContext.Provider value={panelRef}>
-        {children}
-      </PanelRefContext.Provider>
+      <PanelRefContext.Provider value={panelRef}>{children}</PanelRefContext.Provider>
     </AlloAIPanelContext.Provider>
   );
 }

@@ -27,15 +27,18 @@ export const inlineCampaignTools: ToolDefinition[] = [
       },
       segmentId: {
         type: "string",
-        description: "Id of an EXISTING segment to target (e.g. one create_segment just returned). Use this to run a campaign for a segment already built in this conversation — do NOT rebuild it. Takes precedence over segmentFilter.",
+        description:
+          "Id of an EXISTING segment to target (e.g. one create_segment just returned). Use this to run a campaign for a segment already built in this conversation — do NOT rebuild it. Takes precedence over segmentFilter.",
       },
       segmentFilter: {
         type: "string",
-        description: "Target RFM segment name (e.g. 'Hibernating', 'Champions'). Use ONLY for broad segment targeting — not for named or specific customers.",
+        description:
+          "Target RFM segment name (e.g. 'Hibernating', 'Champions'). Use ONLY for broad segment targeting — not for named or specific customers.",
       },
       customerIds: {
         type: "array",
-        description: "Exact customer ids (from find_customers) to target EXACTLY these people (e.g. a single customer). Takes precedence over segmentFilter.",
+        description:
+          "Exact customer ids (from find_customers) to target EXACTLY these people (e.g. a single customer). Takes precedence over segmentFilter.",
         items: { type: "string" },
       },
       discountPercent: {
@@ -58,24 +61,31 @@ export const inlineCampaignTools: ToolDefinition[] = [
       const segmentId = params.segmentId ? String(params.segmentId) : undefined;
       const segmentFilter = params.segmentFilter ? String(params.segmentFilter) : undefined;
       const directive = ctx.campaignDirective;
-      const requestedDiscountPercent = directive?.forceNoDiscount
+      const forceNoDiscount = Boolean(
+        directive?.forceNoDiscount || ctx.requestConstraints?.noDiscount
+      );
+      const requestedDiscountPercent = forceNoDiscount
         ? undefined
-        : ctx.requestConstraints?.discountPercent ??
-          (params.discountPercent ? Number(params.discountPercent) : undefined);
-      let discountPercent = directive?.forceNoDiscount
-        ? undefined
-        : requestedDiscountPercent;
-      const customInstructions = [
-        params.customInstructions ? String(params.customInstructions) : undefined,
-        directive?.forceNoDiscount
-          ? "This is a full-price email. Do not mention, imply, or generate a discount, offer code, sale, or percentage off."
-          : undefined,
-      ].filter(Boolean).join(" ") || undefined;
+        : (ctx.requestConstraints?.discountPercent ??
+          (params.discountPercent ? Number(params.discountPercent) : undefined));
+      let discountPercent = forceNoDiscount ? undefined : requestedDiscountPercent;
+      const customInstructions =
+        [
+          params.customInstructions ? String(params.customInstructions) : undefined,
+          forceNoDiscount
+            ? "This is a full-price email. Do not mention, imply, or generate a discount, offer code, sale, or percentage off."
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined;
 
       // Guardrail (Phase 5): clamp the offer to the merchant's max-discount cap so
       // joon can't propose a deeper discount than the store allows.
       if (discountPercent != null) {
-        const cap = await prisma.guardrail.findFirst({ where: { storeId: ctx.storeId, ruleType: "max_discount", isActive: true }, select: { ruleValue: true } });
+        const cap = await prisma.guardrail.findFirst({
+          where: { storeId: ctx.storeId, ruleType: "max_discount", isActive: true },
+          select: { ruleValue: true },
+        });
         const maxPct = (cap?.ruleValue as { maxPercent?: number } | null)?.maxPercent;
         if (typeof maxPct === "number" && discountPercent > maxPct) discountPercent = maxPct;
       }
@@ -118,19 +128,22 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // must reopen that draft instead of producing overlapping campaigns.
       const existingAlternative = directive
         ? await prisma.campaign.findFirst({
-          where: {
-            storeId: ctx.storeId,
-            agentProposal: { path: ["sourceCampaignId"], equals: directive.sourceCampaignId },
-          },
-          orderBy: { createdAt: "desc" },
-          include: {
-            template: { select: { subject: true, previewText: true, html: true, blocks: true } },
-            segment: true,
-          },
-        })
+            where: {
+              storeId: ctx.storeId,
+              agentProposal: { path: ["sourceCampaignId"], equals: directive.sourceCampaignId },
+            },
+            orderBy: { createdAt: "desc" },
+            include: {
+              template: { select: { subject: true, previewText: true, html: true, blocks: true } },
+              segment: true,
+            },
+          })
         : null;
       if (existingAlternative?.template) {
-        const existingProposal = (existingAlternative.agentProposal ?? {}) as Record<string, unknown>;
+        const existingProposal = (existingAlternative.agentProposal ?? {}) as Record<
+          string,
+          unknown
+        >;
         const currentFullPriceCreative =
           existingProposal.offerPolicy === "full_price" &&
           existingProposal.creativePolicyVersion === FULL_PRICE_CREATIVE_POLICY_VERSION &&
@@ -144,18 +157,20 @@ export const inlineCampaignTools: ToolDefinition[] = [
           });
         if (currentFullPriceCreative) {
           const { renderBrandedEmail } = await import("@allohq/customer-intelligence");
-          const existingPreviewHtml = existingAlternative.template.html ?? await renderBrandedEmail({
-            storeId: store.id,
-            blocks: existingAlternative.template.blocks as any[],
-            subject: existingAlternative.template.subject,
-            previewText: existingAlternative.template.previewText ?? undefined,
-            variables: {
-              firstName: "Customer",
-              storeName: store.storeName ?? store.shopDomain,
-              storeUrl: `https://${store.shopDomain}`,
-            },
-            previewMode: true,
-          });
+          const existingPreviewHtml =
+            existingAlternative.template.html ??
+            (await renderBrandedEmail({
+              storeId: store.id,
+              blocks: existingAlternative.template.blocks as any[],
+              subject: existingAlternative.template.subject,
+              previewText: existingAlternative.template.previewText ?? undefined,
+              variables: {
+                firstName: "Customer",
+                storeName: store.storeName ?? store.shopDomain,
+                storeUrl: `https://${store.shopDomain}`,
+              },
+              previewMode: true,
+            }));
           return {
             success: true,
             contentType: "campaign_preview",
@@ -184,10 +199,10 @@ export const inlineCampaignTools: ToolDefinition[] = [
       const rawIds = directive
         ? directive.customerIds
         : ctx.requestConstraints?.topCustomerCount != null && ctx.resolvedTopCustomerSelection
-        ? ctx.resolvedTopCustomerSelection.customerIds
-        : Array.isArray(params.customerIds)
-        ? (params.customerIds as unknown[]).map(String).filter(Boolean)
-        : [];
+          ? ctx.resolvedTopCustomerSelection.customerIds
+          : Array.isArray(params.customerIds)
+            ? (params.customerIds as unknown[]).map(String).filter(Boolean)
+            : [];
       let segment;
       if (directive && existingAlternative?.segment) {
         segment = existingAlternative.segment;
@@ -197,10 +212,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           include: { rfmScore: { select: { totalSpent: true } } },
         });
         const memberIds = members.map((m) => m.id);
-        const totalRevenue = members.reduce(
-          (s, m) => s + (m.rfmScore?.totalSpent ?? 0),
-          0,
-        );
+        const totalRevenue = members.reduce((s, m) => s + (m.rfmScore?.totalSpent ?? 0), 0);
         const slug = `${campaignName} selected`
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
@@ -242,14 +254,30 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // count equals what actually gets sent (no "1,243 previewed / 987 sent" gap).
       let recipientCount = 0;
       if (segment) {
-        const seg = segment as { kind?: string; customerIds?: string[]; conditions?: unknown; name: string };
+        const seg = segment as {
+          kind?: string;
+          customerIds?: string[];
+          conditions?: unknown;
+          name: string;
+        };
         let recipientWhere: Record<string, unknown>;
         if (seg.kind === "manual") {
-          recipientWhere = { storeId: ctx.storeId, id: { in: seg.customerIds ?? [] }, acceptsMarketing: true };
+          recipientWhere = {
+            storeId: ctx.storeId,
+            id: { in: seg.customerIds ?? [] },
+            acceptsMarketing: true,
+          };
         } else if (seg.kind === "conditions" && seg.conditions) {
-          recipientWhere = { ...buildWhereFromConditions(seg.conditions as any, [ctx.storeId]), acceptsMarketing: true };
+          recipientWhere = {
+            ...buildWhereFromConditions(seg.conditions as any, [ctx.storeId]),
+            acceptsMarketing: true,
+          };
         } else {
-          recipientWhere = { storeId: ctx.storeId, rfmScore: { segment: seg.name }, acceptsMarketing: true };
+          recipientWhere = {
+            storeId: ctx.storeId,
+            rfmScore: { segment: seg.name },
+            acceptsMarketing: true,
+          };
         }
         recipientCount = await prisma.customer.count({ where: recipientWhere });
       }
@@ -302,11 +330,18 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // Build tweaks/description for the email generator
       const tweakParts: string[] = [];
       if (customInstructions) tweakParts.push(customInstructions);
-      if (discountPercent) tweakParts.push(`Include a ${discountPercent}% discount offer prominently.`);
-      if (intent === "flash_sale") tweakParts.push("This is a flash sale — create urgency with limited time messaging.");
-      if (intent === "announcement") tweakParts.push("This is an announcement — focus on news, not selling.");
-      if (intent === "vip_reward") tweakParts.push("This is for VIP customers — make them feel special and exclusive.");
-      if (intent === "win_back") tweakParts.push("This is a win-back campaign — acknowledge their absence, offer an incentive to return.");
+      if (discountPercent)
+        tweakParts.push(`Include a ${discountPercent}% discount offer prominently.`);
+      if (intent === "flash_sale")
+        tweakParts.push("This is a flash sale — create urgency with limited time messaging.");
+      if (intent === "announcement")
+        tweakParts.push("This is an announcement — focus on news, not selling.");
+      if (intent === "vip_reward")
+        tweakParts.push("This is for VIP customers — make them feel special and exclusive.");
+      if (intent === "win_back")
+        tweakParts.push(
+          "This is a win-back campaign — acknowledge their absence, offer an incentive to return."
+        );
 
       const storeUrl = `https://${store.shopDomain}`;
 
@@ -354,14 +389,21 @@ export const inlineCampaignTools: ToolDefinition[] = [
         creativeIntensity: (brandProfile?.creativeIntensity as any) ?? "balanced",
         tweaks: tweakParts.length > 0 ? tweakParts.join(" ") : undefined,
         // Bake the REAL code into the copy (the send worker makes it redeemable).
-        context: discountPercent && discountCode
-          ? { discount: { type: "percentage" as const, value: discountPercent, code: discountCode } }
-          : undefined,
-        offerPolicy: directive?.forceNoDiscount
-          ? "full_price" as const
+        context:
+          discountPercent && discountCode
+            ? {
+                discount: {
+                  type: "percentage" as const,
+                  value: discountPercent,
+                  code: discountCode,
+                },
+              }
+            : undefined,
+        offerPolicy: forceNoDiscount
+          ? ("full_price" as const)
           : discountPercent
-          ? "discount" as const
-          : "none" as const,
+            ? ("discount" as const)
+            : ("none" as const),
         products: products.map((p) => ({
           id: p.id,
           title: p.title,
@@ -374,21 +416,28 @@ export const inlineCampaignTools: ToolDefinition[] = [
         storeUrl,
       };
       let result = await generateEmail(emailRequest);
-      if (directive?.forceNoDiscount && containsDiscountLanguage({
-        subject: result.subject,
-        previewText: result.previewText,
-        blocks: result.blocks,
-      })) {
+      if (
+        forceNoDiscount &&
+        containsDiscountLanguage({
+          subject: result.subject,
+          previewText: result.previewText,
+          blocks: result.blocks,
+        })
+      ) {
         result = await generateEmail({
           ...emailRequest,
-          tweaks: `${emailRequest.tweaks ?? ""} HARD REQUIREMENT: Write a product or brand announcement at full price. Never use the words discount, coupon, promo code, sale, or any percentage-off language.`.trim(),
+          tweaks:
+            `${emailRequest.tweaks ?? ""} HARD REQUIREMENT: Write a product or brand announcement at full price. Never use the words discount, coupon, promo code, sale, or any percentage-off language.`.trim(),
         });
       }
-      if (directive?.forceNoDiscount && containsDiscountLanguage({
-        subject: result.subject,
-        previewText: result.previewText,
-        blocks: result.blocks,
-      })) {
+      if (
+        forceNoDiscount &&
+        containsDiscountLanguage({
+          subject: result.subject,
+          previewText: result.previewText,
+          blocks: result.blocks,
+        })
+      ) {
         throw new Error("Full-price creative could not be generated without offer language");
       }
 
@@ -406,7 +455,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
         },
         previewMode: true,
       });
-      if (directive?.forceNoDiscount && containsDiscountLanguage(previewHtml)) {
+      if (forceNoDiscount && containsDiscountLanguage(previewHtml)) {
         throw new Error("Full-price creative failed the final rendered-email offer check");
       }
 
@@ -450,36 +499,32 @@ export const inlineCampaignTools: ToolDefinition[] = [
         // diffed against it at approval. Can't-backfill: once the draft is edited in
         // place, the agent's original intent is gone otherwise.
         agentProposal: {
-            proposedAt: new Date().toISOString(),
-            segmentId: segment?.id ?? null,
-            segmentName: segment?.name ?? null,
-            channel: "email",
-            intent,
-            discountPercent: discountPercent ?? null,
-            requestedDiscountPercent: requestedDiscountPercent ?? null,
-            discountAdjustedByGuardrail:
-              requestedDiscountPercent != null && discountPercent !== requestedDiscountPercent,
-            requestedAudienceCount: ctx.requestConstraints?.topCustomerCount ?? null,
-            discountCode: discountCode ?? null,
-            discountValueType: discountPercent ? "percentage" : null,
-            offerPolicy: directive?.forceNoDiscount
-              ? "full_price"
-              : discountPercent
-              ? "discount"
-              : "none",
-            creativePolicyVersion: directive?.forceNoDiscount
-              ? FULL_PRICE_CREATIVE_POLICY_VERSION
-              : 1,
-            scheduledAt: null,
-            recipientCount,
-            ...(directive
-              ? {
-                  sourceCampaignId: directive.sourceCampaignId,
-                  overrideRecentPurchaseCustomerIds: directive.customerIds,
-                  includeLeftAloneCustomerIds: directive.customerIds,
-                  alternativeType: "full_price",
-                }
-              : {}),
+          proposedAt: new Date().toISOString(),
+          segmentId: segment?.id ?? null,
+          segmentName: segment?.name ?? null,
+          channel: "email",
+          intent,
+          discountPercent: discountPercent ?? null,
+          requestedDiscountPercent: requestedDiscountPercent ?? null,
+          discountAdjustedByGuardrail:
+            requestedDiscountPercent != null && discountPercent !== requestedDiscountPercent,
+          requestedAudienceCount: ctx.requestConstraints?.topCustomerCount ?? null,
+          requestedNoControl: ctx.requestConstraints?.noControl ?? false,
+          requestedDeliveryIntent: ctx.requestConstraints?.deliveryIntent ?? null,
+          discountCode: discountCode ?? null,
+          discountValueType: discountPercent ? "percentage" : null,
+          offerPolicy: forceNoDiscount ? "full_price" : discountPercent ? "discount" : "none",
+          creativePolicyVersion: forceNoDiscount ? FULL_PRICE_CREATIVE_POLICY_VERSION : 1,
+          scheduledAt: null,
+          recipientCount,
+          ...(directive
+            ? {
+                sourceCampaignId: directive.sourceCampaignId,
+                overrideRecentPurchaseCustomerIds: directive.customerIds,
+                includeLeftAloneCustomerIds: directive.customerIds,
+                alternativeType: "full_price",
+              }
+            : {}),
         },
       };
       const campaign = existingAlternative
@@ -563,6 +608,19 @@ export const inlineCampaignTools: ToolDefinition[] = [
         templateId: template.id,
         estimatedRecipients: recipientCount,
         segment: segment?.name ?? "All customers",
+        constraints: {
+          audience: segment?.name ?? "All customers",
+          requestedAudienceCount: ctx.requestConstraints?.topCustomerCount ?? null,
+          selectedAudienceCount: recipientCount,
+          offer: discountPercent ? `${discountPercent}% discount` : "Full price",
+          requestedDiscountPercent: requestedDiscountPercent ?? null,
+          appliedDiscountPercent: discountPercent ?? null,
+          controlPreference: ctx.requestConstraints?.noControl
+            ? "No control requested · measurement policy shown at review"
+            : "Standard campaign control",
+          deliveryIntent: ctx.requestConstraints?.deliveryIntent ?? "Review before delivery",
+          sourceCampaignId: directive?.sourceCampaignId ?? null,
+        },
         offerAdjustment:
           requestedDiscountPercent != null && requestedDiscountPercent !== discountPercent
             ? {
