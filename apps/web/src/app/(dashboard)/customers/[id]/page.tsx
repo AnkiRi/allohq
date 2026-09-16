@@ -42,6 +42,10 @@ function getRfmBarColor(score: number): string {
   return "bg-destructive";
 }
 
+function stateWords(value: string | null | undefined): string {
+  return value ? value.replaceAll("_", " ") : "unknown";
+}
+
 // (getAiInsight removed — the per-customer worldview now flows through the
 // shared ReasoningReveal story below.)
 
@@ -68,10 +72,26 @@ function getCustomerStory(args: {
     return {
       lead: `${who} joined your audience`,
       lines: [
-        { text: `joon noticed: ${acceptsMarketing ? "email subscribed" : "email marketing not subscribed"} · no order yet` },
-        { text: acceptsMarketing ? "a useful introduction can help them choose a first product" : "marketing email stays blocked until Shopify confirms consent" },
-        { text: acceptsMarketing ? "downside: too early for a win-back · keep it welcoming" : "consent is a safety boundary, not a campaign override", beat: true },
-        { text: acceptsMarketing ? "first-purchase opportunity · low confidence yet" : "not currently reachable by marketing email", arrow: true },
+        {
+          text: `joon noticed: ${acceptsMarketing ? "email subscribed" : "email marketing not subscribed"} · no order yet`,
+        },
+        {
+          text: acceptsMarketing
+            ? "a useful introduction can help them choose a first product"
+            : "marketing email stays blocked until Shopify confirms consent",
+        },
+        {
+          text: acceptsMarketing
+            ? "downside: too early for a win-back · keep it welcoming"
+            : "consent is a safety boundary, not a campaign override",
+          beat: true,
+        },
+        {
+          text: acceptsMarketing
+            ? "first-purchase opportunity · low confidence yet"
+            : "not currently reachable by marketing email",
+          arrow: true,
+        },
       ],
     };
   }
@@ -152,7 +172,8 @@ function getLtvEmptyStateCta(segment: string | undefined): { label: string; desc
   if (s.includes("subscriber"))
     return {
       label: "Draft a first-purchase email",
-      description: "There is no purchase history yet, so start with a useful introduction rather than a win-back.",
+      description:
+        "There is no purchase history yet, so start with a useful introduction rather than a win-back.",
     };
   if (s.includes("hibernat") || s.includes("lost"))
     return {
@@ -222,9 +243,12 @@ export default function CustomerDetailPage() {
 
   const rfm = customer.rfmScore;
   const ltv = customer.lifetimeValue;
-  const segment = (rfm?.orderCount ?? customer.orders.length) === 0
-    ? customer.acceptsMarketing ? "Subscribers" : "Not subscribed"
-    : rfm?.segment;
+  const segment =
+    (rfm?.orderCount ?? customer.orders.length) === 0
+      ? customer.acceptsMarketing
+        ? "Subscribers"
+        : "Not subscribed"
+      : rfm?.segment;
   const ltvCta = getLtvEmptyStateCta(segment);
 
   const daysSinceLastOrder = rfm?.lastOrderAt
@@ -325,7 +349,9 @@ export default function CustomerDetailPage() {
             type="button"
             onClick={() => submitToJoon(campaignInstruction)}
             disabled={!canDraftMarketing}
-            title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+            title={
+              canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"
+            }
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Mail className="w-3.5 h-3.5" /> Draft email campaign
@@ -343,16 +369,85 @@ export default function CustomerDetailPage() {
           <h2 className="section-header text-[13px]">What joon noticed</h2>
         </div>
         <ReasoningReveal stories={[customerStory]} />
-          <button
-            type="button"
-            onClick={() => submitToJoon(campaignInstruction)}
-            disabled={!canDraftMarketing}
-            title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+        <button
+          type="button"
+          onClick={() => submitToJoon(campaignInstruction)}
+          disabled={!canDraftMarketing}
+          title={
+            canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"
+          }
           className="inline-flex items-center gap-1.5 mt-5 px-4 py-2 rounded-lg bg-foreground text-background text-[12px] font-sans hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Sparkles className="w-3.5 h-3.5" /> Draft this for them
         </button>
       </motion.div>
+
+      {customer.customerState && (
+        <motion.section variants={itemVariants} className="glass-card-static rounded-xl p-6">
+          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+            <div>
+              <h2 className="section-header text-[13px]">Current customer state</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                Independent signals, not one permanent label. Campaign context still decides whether
+                this customer is a candidate.
+              </p>
+            </div>
+            <Link
+              href="/customers/states"
+              className="text-[11px] text-[hsl(var(--accent))] hover:text-foreground"
+            >
+              Open state explorer
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["lifecycle", customer.customerState.lifecycleStage],
+              ["purchase cycle", customer.customerState.purchaseCyclePosition],
+              ["discount behaviour", customer.customerState.discountBehavior],
+              ["intent", customer.customerState.intentState],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-border px-3 py-3">
+                <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+                  {label}
+                </p>
+                <p className="mt-1 text-[12px] font-medium capitalize text-foreground">
+                  {stateWords(value)}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-4 border-t border-border pt-4 text-[12px] sm:grid-cols-3">
+            <div>
+              <span className="block text-muted-foreground">Usual order rhythm</span>
+              <span className="mt-1 block text-foreground">
+                {customer.customerState.medianOrderIntervalDays
+                  ? `${Math.round(customer.customerState.medianOrderIntervalDays)} day median · ${Math.round(customer.customerState.reorderConfidence * 100)}% confidence`
+                  : "Not enough repeat history yet"}
+              </span>
+            </div>
+            <div>
+              <span className="block text-muted-foreground">Re-evaluate</span>
+              <span className="mt-1 block text-foreground">
+                {customer.customerState.nextEvaluationAt
+                  ? new Date(customer.customerState.nextEvaluationAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "When new evidence arrives"}
+              </span>
+            </div>
+            <div>
+              <span className="block text-muted-foreground">Recent movement</span>
+              <span className="mt-1 block text-foreground">
+                {customer.stateTransitions[0]
+                  ? `${stateWords(customer.stateTransitions[0].dimension)}: ${stateWords(customer.stateTransitions[0].fromValue)} → ${stateWords(customer.stateTransitions[0].toValue)}`
+                  : "No recorded transition yet"}
+              </span>
+            </div>
+          </div>
+        </motion.section>
+      )}
 
       {/* ── RFM + LTV ── */}
       <div className="grid grid-cols-2 gap-6">
@@ -510,7 +605,11 @@ export default function CustomerDetailPage() {
                 type="button"
                 onClick={() => submitToJoon(campaignInstruction)}
                 disabled={!canDraftMarketing}
-                title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+                title={
+                  canDraftMarketing
+                    ? undefined
+                    : "Shopify has not confirmed email marketing consent"
+                }
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-[12px] font-sans text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Send className="w-3.5 h-3.5" /> {ltvCta.label}
@@ -589,7 +688,11 @@ export default function CustomerDetailPage() {
                 type="button"
                 onClick={() => submitToJoon(campaignInstruction)}
                 disabled={!canDraftMarketing}
-                title={canDraftMarketing ? undefined : "Shopify has not confirmed email marketing consent"}
+                title={
+                  canDraftMarketing
+                    ? undefined
+                    : "Shopify has not confirmed email marketing consent"
+                }
                 className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-sans text-[hsl(var(--accent))] hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Send className="w-3 h-3" /> Create a campaign

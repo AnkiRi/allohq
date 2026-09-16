@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Users, ChevronLeft, ChevronRight, PauseCircle } from "lucide-react";
+import { Users, ChevronLeft, ChevronRight, PauseCircle, ScanSearch } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { ConsoleFrame, CommandLine, MetricReadout, formatINR } from "@/components/console";
 
@@ -163,13 +163,22 @@ function CustomersConsole() {
           <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
             Who
           </h1>
-          <Link
-            href="/customers/left-alone"
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[12px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <PauseCircle className="h-4 w-4" aria-hidden="true" />
-            Left alone by Joon
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/customers/states"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[12px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ScanSearch className="h-4 w-4" aria-hidden="true" />
+              Customer states
+            </Link>
+            <Link
+              href="/customers/left-alone"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[12px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <PauseCircle className="h-4 w-4" aria-hidden="true" />
+              Left alone
+            </Link>
+          </div>
         </div>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
           Everyone who&apos;s shopped with you, and where they stand. Ask joon to pull up the cohort
@@ -304,7 +313,9 @@ function CustomersConsole() {
                 data?.customers.map((customer) => {
                   const noOrders = hasNoOrders(customer);
                   const displayedSegment = noOrders
-                    ? customer.acceptsMarketing ? "Subscribers" : "Not subscribed"
+                    ? customer.acceptsMarketing
+                      ? "Subscribers"
+                      : "Not subscribed"
                     : customer.rfmScore?.segment;
                   return (
                     <tr
