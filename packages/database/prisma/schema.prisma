@@ -303,11 +303,12 @@ model Store {
   abandonedCheckouts AbandonedCheckout[]
 
   // Sprint 1: Customer State + Autonomy
-  customerStates      CustomerState[]
-  autonomyConfigs     AutonomyConfig[]
-  actionQueue         ActionQueue[]
-  guardrails          Guardrail[]
-  customerFatigueLogs CustomerFatigueLog[]
+  customerStates           CustomerState[]
+  customerStateTransitions CustomerStateTransition[]
+  autonomyConfigs          AutonomyConfig[]
+  actionQueue              ActionQueue[]
+  guardrails               Guardrail[]
+  customerFatigueLogs      CustomerFatigueLog[]
 
   // Sprint 3A: Creative Engine
   brandVisualProfile      BrandVisualProfile?
@@ -536,6 +537,7 @@ model Customer {
   abandonedCheckouts             AbandonedCheckout[]
   segmentHistory                 CustomerSegmentHistory[]
   customerState                  CustomerState?
+  stateTransitions               CustomerStateTransition[]
   customerJourneys               CustomerJourney[]
   formSubmissions                FormSubmission[]
   formIncentiveGrants            FormIncentiveGrant[]
@@ -1735,6 +1737,10 @@ model CustomerState {
   reorderConfidence       Float     @default(0)
   nextExpectedOrderAt     DateTime?
   nextEvaluationAt        DateTime?
+  evaluationClaimId       String?
+  evaluationClaimedAt     DateTime?
+  evaluationFailureCount  Int       @default(0)
+  stateVersion            Int       @default(0)
   stateEvidence           Json      @default("{}")
   supportState            String    @default("clear") // clear, open_issue, recent_complaint, escalated
   trustScore              Float     @default(0.5) // 0-1
@@ -1751,7 +1757,34 @@ model CustomerState {
   @@index([storeId, churnRisk])
   @@index([storeId, vipLevel])
   @@index([storeId, nextEvaluationAt])
+  @@index([storeId, evaluationClaimedAt])
   @@map("customer_states")
+}
+
+/// Immutable history of meaningful customer-state changes. Current state stays
+/// materialized in CustomerState; this ledger powers explanations and digests.
+model CustomerStateTransition {
+  id               String    @id @default(cuid())
+  storeId          String
+  customerId       String
+  dimension        String
+  fromValue        String?
+  toValue          String
+  fromVersion      Int
+  toVersion        Int
+  cause            String
+  evidence         Json      @default("{}")
+  nextEvaluationAt DateTime?
+  occurredAt       DateTime  @default(now())
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, dimension, toVersion])
+  @@index([storeId, occurredAt])
+  @@index([storeId, dimension, toValue, occurredAt])
+  @@index([customerId, occurredAt])
+  @@map("customer_state_transitions")
 }
 
 // ============================================================================

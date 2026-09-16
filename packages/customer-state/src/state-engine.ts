@@ -6,6 +6,30 @@ import { computeChannelPreference } from "./channel-preference";
 import { computeFatigueState } from "./fatigue-tracker";
 import { detectIntent } from "./intent-detector";
 import { computeChurnRiskEstimate } from "./churn-prediction";
+import { randomUUID } from "node:crypto";
+
+export type StateTransitionCause =
+  | "initial_sync"
+  | "scheduled_evaluation"
+  | StateUpdateEvent["type"];
+
+const DAY_MS = 86_400_000;
+
+export function nextCycleEvaluationAt(input: {
+  lastOrderAt: Date | null;
+  medianOrderIntervalDays: number | null;
+  now: Date;
+}): Date {
+  const { lastOrderAt, medianOrderIntervalDays, now } = input;
+  if (!lastOrderAt || !medianOrderIntervalDays || medianOrderIntervalDays <= 0) {
+    return new Date(now.getTime() + 7 * DAY_MS);
+  }
+  const boundaries = [0.75, 0.95, 1.2]
+    .map((ratio) => new Date(lastOrderAt.getTime() + medianOrderIntervalDays * ratio * DAY_MS))
+    .filter((date) => date > now)
+    .sort((a, b) => a.getTime() - b.getTime());
+  return boundaries[0] ?? new Date(now.getTime() + 7 * DAY_MS);
+}
 
 /**
  * Compute full customer state from all available data sources.
@@ -13,7 +37,8 @@ import { computeChurnRiskEstimate } from "./churn-prediction";
  */
 export async function computeFullState(
   customerId: string,
-  storeId: string
+  storeId: string,
+  cause: StateTransitionCause = "full_recalculation"
 ): Promise<CustomerStateData> {
   // Fetch all required data in parallel
   const [customer, orders, rfmScore, ltv, fatigueState, channelPref, intentState] =
@@ -109,10 +134,11 @@ export async function computeFullState(
           : cycleRatio <= 1.2
             ? "due"
             : "overdue";
-  const nextEvaluationAt =
-    nextExpectedOrderAt && nextExpectedOrderAt > now
-      ? nextExpectedOrderAt
-      : new Date(now.getTime() + 86_400_000);
+  const nextEvaluationAt = nextCycleEvaluationAt({
+    lastOrderAt: lastOrder?.createdAt ?? null,
+    medianOrderIntervalDays,
+    now,
+  });
   const vipLevel = computeVipLevel(orderCount, ltv?.historicalLtv ?? 0);
   const trustScore = computeTrustScore(lifecycleStage, orderCount, churnRisk);
 
@@ -160,59 +186,98 @@ export async function computeFullState(
     lastStateUpdate: now,
   };
 
-  // Upsert into database
-  await prisma.customerState.upsert({
-    where: { customerId },
-    create: {
-      customerId,
-      storeId,
-      lifecycleStage: stateData.lifecycleStage,
-      churnRisk: stateData.churnRisk,
-      intentState: stateData.intentState,
-      channelPreference: stateData.channelPreference as any,
-      optimalSendWindow: stateData.optimalSendWindow as any,
-      communicationFatigue: stateData.communicationFatigue as any,
-      discountSensitivity: stateData.discountSensitivity,
-      discountBehavior: stateData.discountBehavior,
-      meanOrderIntervalDays: stateData.meanOrderIntervalDays,
-      medianOrderIntervalDays: stateData.medianOrderIntervalDays,
-      purchaseCyclePosition: stateData.purchaseCyclePosition,
-      reorderConfidence: stateData.reorderConfidence,
-      nextExpectedOrderAt: stateData.nextExpectedOrderAt,
-      nextEvaluationAt: stateData.nextEvaluationAt,
-      stateEvidence: stateData.stateEvidence as any,
-      supportState: stateData.supportState,
-      trustScore: stateData.trustScore,
-      vipLevel: stateData.vipLevel,
-      campaignEligibility: stateData.campaignEligibility,
-      lastStateUpdate: stateData.lastStateUpdate,
-    },
-    update: {
-      lifecycleStage: stateData.lifecycleStage,
-      churnRisk: stateData.churnRisk,
-      churnRiskUpdatedAt: now,
-      intentState: stateData.intentState,
-      channelPreference: stateData.channelPreference as any,
-      optimalSendWindow: stateData.optimalSendWindow as any,
-      communicationFatigue: stateData.communicationFatigue as any,
-      discountSensitivity: stateData.discountSensitivity,
-      discountBehavior: stateData.discountBehavior,
-      meanOrderIntervalDays: stateData.meanOrderIntervalDays,
-      medianOrderIntervalDays: stateData.medianOrderIntervalDays,
-      purchaseCyclePosition: stateData.purchaseCyclePosition,
-      reorderConfidence: stateData.reorderConfidence,
-      nextExpectedOrderAt: stateData.nextExpectedOrderAt,
-      nextEvaluationAt: stateData.nextEvaluationAt,
-      stateEvidence: stateData.stateEvidence as any,
-      supportState: stateData.supportState,
-      trustScore: stateData.trustScore,
-      vipLevel: stateData.vipLevel,
-      campaignEligibility: stateData.campaignEligibility,
-      lastStateUpdate: stateData.lastStateUpdate,
-    },
+  const saved = await prisma.$transaction(async (tx) => {
+    const previous = await tx.customerState.findUnique({ where: { customerId } });
+    const next = await tx.customerState.upsert({
+      where: { customerId },
+      create: {
+        customerId,
+        storeId,
+        lifecycleStage: stateData.lifecycleStage,
+        churnRisk: stateData.churnRisk,
+        intentState: stateData.intentState,
+        channelPreference: stateData.channelPreference as any,
+        optimalSendWindow: stateData.optimalSendWindow as any,
+        communicationFatigue: stateData.communicationFatigue as any,
+        discountSensitivity: stateData.discountSensitivity,
+        discountBehavior: stateData.discountBehavior,
+        meanOrderIntervalDays: stateData.meanOrderIntervalDays,
+        medianOrderIntervalDays: stateData.medianOrderIntervalDays,
+        purchaseCyclePosition: stateData.purchaseCyclePosition,
+        reorderConfidence: stateData.reorderConfidence,
+        nextExpectedOrderAt: stateData.nextExpectedOrderAt,
+        nextEvaluationAt: stateData.nextEvaluationAt,
+        stateEvidence: stateData.stateEvidence as any,
+        supportState: stateData.supportState,
+        trustScore: stateData.trustScore,
+        vipLevel: stateData.vipLevel,
+        campaignEligibility: stateData.campaignEligibility,
+        lastStateUpdate: stateData.lastStateUpdate,
+        stateVersion: 1,
+      },
+      update: {
+        lifecycleStage: stateData.lifecycleStage,
+        churnRisk: stateData.churnRisk,
+        churnRiskUpdatedAt: now,
+        intentState: stateData.intentState,
+        channelPreference: stateData.channelPreference as any,
+        optimalSendWindow: stateData.optimalSendWindow as any,
+        communicationFatigue: stateData.communicationFatigue as any,
+        discountSensitivity: stateData.discountSensitivity,
+        discountBehavior: stateData.discountBehavior,
+        meanOrderIntervalDays: stateData.meanOrderIntervalDays,
+        medianOrderIntervalDays: stateData.medianOrderIntervalDays,
+        purchaseCyclePosition: stateData.purchaseCyclePosition,
+        reorderConfidence: stateData.reorderConfidence,
+        nextExpectedOrderAt: stateData.nextExpectedOrderAt,
+        nextEvaluationAt: stateData.nextEvaluationAt,
+        stateEvidence: stateData.stateEvidence as any,
+        supportState: stateData.supportState,
+        trustScore: stateData.trustScore,
+        vipLevel: stateData.vipLevel,
+        campaignEligibility: stateData.campaignEligibility,
+        lastStateUpdate: stateData.lastStateUpdate,
+        evaluationClaimId: null,
+        evaluationClaimedAt: null,
+        evaluationFailureCount: 0,
+        stateVersion: { increment: 1 },
+      },
+    });
+    const dimensions = [
+      ["lifecycle", previous?.lifecycleStage ?? null, next.lifecycleStage],
+      ["purchase_cycle", previous?.purchaseCyclePosition ?? null, next.purchaseCyclePosition],
+      ["discount_behavior", previous?.discountBehavior ?? null, next.discountBehavior],
+      ["intent", previous?.intentState ?? null, next.intentState],
+      ["support", previous?.supportState ?? null, next.supportState],
+      ["vip", previous?.vipLevel ?? null, next.vipLevel],
+    ] as const;
+    const transitions = dimensions
+      .filter(([, fromValue, toValue]) => fromValue !== toValue)
+      .map(([dimension, fromValue, toValue]) => ({
+        storeId,
+        customerId,
+        dimension,
+        fromValue,
+        toValue,
+        fromVersion: previous?.stateVersion ?? 0,
+        toVersion: next.stateVersion,
+        cause: previous ? cause : "initial_sync",
+        evidence: {
+          orderCount,
+          medianOrderIntervalDays,
+          daysSinceLastOrder: daysSinceLastOrder === null ? null : Math.round(daysSinceLastOrder),
+          reorderConfidence,
+        },
+        nextEvaluationAt,
+        occurredAt: now,
+      }));
+    if (transitions.length > 0) {
+      await tx.customerStateTransition.createMany({ data: transitions, skipDuplicates: true });
+    }
+    return next;
   });
 
-  return stateData;
+  return { ...stateData, lastStateUpdate: saved.lastStateUpdate };
 }
 
 /**
@@ -225,7 +290,7 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
   switch (type) {
     case "order_created": {
       // Full recalculation — order affects lifecycle, churn, VIP, discount sensitivity
-      await computeFullState(customerId, storeId);
+      await computeFullState(customerId, storeId, type);
       break;
     }
 
@@ -310,7 +375,7 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
 
     case "segment_changed":
     case "full_recalculation": {
-      await computeFullState(customerId, storeId);
+      await computeFullState(customerId, storeId, type);
       break;
     }
   }
@@ -322,41 +387,138 @@ export async function updateStateOnEvent(event: StateUpdateEvent): Promise<void>
  * This catches customers drifting from CHAMPION → AT_RISK → LOST without
  * any triggering event (the absence of activity IS the signal).
  */
-export async function decayStaleStates(storeId: string): Promise<number> {
-  const staleThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+export interface StateEvaluationDrainResult {
+  claimed: number;
+  updated: number;
+  failed: number;
+  batches: number;
+  hasMore: boolean;
+  oldestDueAt: Date | null;
+}
 
-  // Find states that haven't been updated in 7+ days AND are in active stages
-  // (no need to recompute LOST customers — they're already at terminal state)
-  const staleStates = await prisma.customerState.findMany({
+async function claimDueStates(storeId: string, now: Date, batchSize: number) {
+  const staleClaimBefore = new Date(now.getTime() - 30 * 60 * 1000);
+  const claimId = randomUUID();
+  const candidates = await prisma.customerState.findMany({
     where: {
       storeId,
-      lastStateUpdate: { lt: staleThreshold },
-      lifecycleStage: {
-        in: [
-          LifecycleStage.CHAMPION,
-          LifecycleStage.LOYAL,
-          LifecycleStage.REPEAT,
-          LifecycleStage.FIRST_BUYER,
-          LifecycleStage.SUBSCRIBER,
-          LifecycleStage.AT_RISK,
-        ],
-      },
+      nextEvaluationAt: { lte: now },
+      OR: [{ evaluationClaimedAt: null }, { evaluationClaimedAt: { lt: staleClaimBefore } }],
     },
-    select: { customerId: true },
-    take: 500, // batch to avoid overwhelming the system
+    select: { id: true },
+    orderBy: [{ nextEvaluationAt: "asc" }, { id: "asc" }],
+    take: batchSize,
   });
+  if (candidates.length === 0) return [];
+  const ids = candidates.map((state) => state.id);
+  await prisma.customerState.updateMany({
+    where: {
+      id: { in: ids },
+      OR: [{ evaluationClaimedAt: null }, { evaluationClaimedAt: { lt: staleClaimBefore } }],
+    },
+    data: { evaluationClaimId: claimId, evaluationClaimedAt: now },
+  });
+  return prisma.customerState.findMany({
+    where: { storeId, evaluationClaimId: claimId },
+    select: {
+      id: true,
+      customerId: true,
+      evaluationClaimId: true,
+      evaluationFailureCount: true,
+      nextEvaluationAt: true,
+    },
+    orderBy: [{ nextEvaluationAt: "asc" }, { id: "asc" }],
+  });
+}
 
-  let updated = 0;
-  for (const { customerId } of staleStates) {
-    try {
-      await computeFullState(customerId, storeId);
-      updated++;
-    } catch (err) {
-      console.warn(`[state-decay] Failed to recompute state for ${customerId}:`, err);
+async function runWithConcurrency<T>(
+  values: T[],
+  concurrency: number,
+  task: (value: T) => Promise<void>
+) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const value = values[cursor++];
+      if (value !== undefined) await task(value);
     }
+  });
+  await Promise.all(workers);
+}
+
+export async function drainDueStateEvaluations(
+  storeId: string,
+  options: { now?: Date; batchSize?: number; maxBatches?: number; concurrency?: number } = {}
+): Promise<StateEvaluationDrainResult> {
+  const now = options.now ?? new Date();
+  const batchSize = Math.min(1_000, Math.max(25, options.batchSize ?? 250));
+  const maxBatches = Math.min(100, Math.max(1, options.maxBatches ?? 8));
+  const concurrency = Math.min(25, Math.max(1, options.concurrency ?? 10));
+  let claimed = 0;
+  let updated = 0;
+  let failed = 0;
+  let batches = 0;
+
+  while (batches < maxBatches) {
+    const states = await claimDueStates(storeId, now, batchSize);
+    if (states.length === 0) break;
+    claimed += states.length;
+    batches++;
+    await runWithConcurrency(states, concurrency, async (state) => {
+      try {
+        await computeFullState(state.customerId, storeId, "scheduled_evaluation");
+        updated++;
+      } catch (error) {
+        failed++;
+        const failureCount = state.evaluationFailureCount + 1;
+        const retryHours = Math.min(24, 2 ** Math.min(failureCount, 4));
+        await prisma.customerState.updateMany({
+          where: { id: state.id, evaluationClaimId: state.evaluationClaimId },
+          data: {
+            evaluationClaimId: null,
+            evaluationClaimedAt: null,
+            evaluationFailureCount: { increment: 1 },
+            nextEvaluationAt: new Date(now.getTime() + retryHours * 60 * 60 * 1000),
+          },
+        });
+        console.warn(`[state-evaluation] Failed customer state recomputation`, {
+          storeId,
+          customerId: state.customerId,
+          error: error instanceof Error ? error.message : "unknown_error",
+        });
+      }
+    });
+    if (states.length < batchSize) break;
   }
 
-  return updated;
+  const [nextDue, remaining] = await Promise.all([
+    prisma.customerState.findFirst({
+      where: { storeId, nextEvaluationAt: { lte: now } },
+      select: { nextEvaluationAt: true },
+      orderBy: { nextEvaluationAt: "asc" },
+    }),
+    prisma.customerState.count({
+      where: {
+        storeId,
+        nextEvaluationAt: { lte: now },
+        evaluationClaimedAt: null,
+      },
+    }),
+  ]);
+  return {
+    claimed,
+    updated,
+    failed,
+    batches,
+    hasMore: remaining > 0,
+    oldestDueAt: nextDue?.nextEvaluationAt ?? null,
+  };
+}
+
+/** Compatibility wrapper for callers still using the previous daily-decay name. */
+export async function decayStaleStates(storeId: string): Promise<number> {
+  const result = await drainDueStateEvaluations(storeId, { maxBatches: 8 });
+  return result.updated;
 }
 
 export function computeDiscountProfile(

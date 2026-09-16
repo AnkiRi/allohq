@@ -1,9 +1,4 @@
-export {
-  LifecycleStage,
-  IntentState,
-  SupportState,
-  VipLevel,
-} from "./types";
+export { LifecycleStage, IntentState, SupportState, VipLevel } from "./types";
 
 export type {
   ChannelPreference,
@@ -20,7 +15,14 @@ export { detectIntent } from "./intent-detector";
 export { computeChannelPreference } from "./channel-preference";
 export { computeFatigueState, isOverFatigueLimit } from "./fatigue-tracker";
 export { predictReorderTiming } from "./reorder-predictor";
-export { computeFullState, updateStateOnEvent, decayStaleStates } from "./state-engine";
+export {
+  computeFullState,
+  updateStateOnEvent,
+  decayStaleStates,
+  drainDueStateEvaluations,
+  nextCycleEvaluationAt,
+} from "./state-engine";
+export type { StateEvaluationDrainResult, StateTransitionCause } from "./state-engine";
 export { computeChurnRiskEstimate, computeChurnProbability } from "./churn-prediction";
 export type { ChurnSignals } from "./churn-prediction";
 export { estimateChurnRisk } from "./churn-risk";
@@ -40,9 +42,16 @@ export {
   estimateStratifiedCausedRevenue,
 } from "./experiments";
 export type {
-  Arm, CohortDefinition, MeasurementTier, CampaignMeasurementPolicy,
-  CampaignEvidenceSummary, HoldoutRateDecision, StratifiedCustomer,
-  FrozenStratifiedAssignment, StratifiedAssignmentResult, StratifiedOutcome,
+  Arm,
+  CohortDefinition,
+  MeasurementTier,
+  CampaignMeasurementPolicy,
+  CampaignEvidenceSummary,
+  HoldoutRateDecision,
+  StratifiedCustomer,
+  FrozenStratifiedAssignment,
+  StratifiedAssignmentResult,
+  StratifiedOutcome,
 } from "./experiments";
 export { upliftReadiness } from "./uplift-readiness";
 export type { UpliftTrainingExample, UpliftReadinessTier } from "./uplift-readiness";
