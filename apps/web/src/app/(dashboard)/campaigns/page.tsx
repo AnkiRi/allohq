@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, Plus, Clock, Send, Check, XCircle, Users, DollarSign, MousePointerClick, Eye, Trash2, Loader2 } from "lucide-react";
+import { Mail, Plus, Clock, Send, Check, XCircle, Users, DollarSign, MousePointerClick, Eye, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
@@ -11,6 +11,8 @@ const STATUS_CONFIG: Record<string, { icon: typeof Check; color: string; label: 
   draft: { icon: Clock, color: "text-muted-foreground", label: "Draft" },
   scheduled: { icon: Clock, color: "text-warning", label: "Scheduled" },
   sending: { icon: Send, color: "text-warning", label: "Sending" },
+  partially_sent: { icon: AlertTriangle, color: "text-warning", label: "Partially sent" },
+  failed: { icon: XCircle, color: "text-[var(--color-urgent)]", label: "Failed" },
   sent: { icon: Check, color: "text-outcome", label: "Sent" },
   cancelled: { icon: XCircle, color: "text-[var(--color-urgent)]", label: "Cancelled" },
 };
@@ -36,6 +38,7 @@ export default function CampaignsPage() {
     { value: undefined, label: "All" },
     { value: "draft", label: "Drafts" },
     { value: "scheduled", label: "Scheduled" },
+    { value: "partially_sent", label: "Needs attention" },
     { value: "sent", label: "Sent" },
   ];
 

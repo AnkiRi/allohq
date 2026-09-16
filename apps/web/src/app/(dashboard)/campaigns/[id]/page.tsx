@@ -215,6 +215,18 @@ export default function CampaignDetailPage() {
               Sent
             </span>
           )}
+          {campaign.status === "partially_sent" && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-bold text-warning">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Partially sent
+            </span>
+          )}
+          {campaign.status === "failed" && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-[var(--color-urgent)]/30 bg-[var(--color-urgent)]/10 px-3 py-1.5 text-xs font-bold text-[var(--color-urgent)]">
+              <XCircle className="h-3.5 w-3.5" />
+              Delivery failed
+            </span>
+          )}
           {awaitingDelivery && (
             <span className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-bold text-foreground">
               <CalendarClock className="h-3.5 w-3.5" />
@@ -352,12 +364,13 @@ export default function CampaignDetailPage() {
       </Dialog.Root>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
         {[
           { icon: Mail, label: "TREATED", value: stats?.holdout.treatmentAssigned.toLocaleString() ?? "0" },
           { icon: Users, label: "CONTROL", value: stats?.holdout.controlAssigned.toLocaleString() ?? "0" },
           { icon: Mail, label: "OPENED", value: stats ? `${(stats.openRate * 100).toFixed(1)}%` : "0%" },
           { icon: MousePointerClick, label: "CLICKED", value: stats ? `${(stats.clickRate * 100).toFixed(1)}%` : "0%" },
+          { icon: XCircle, label: "BOUNCED", value: stats?.bounceCount.toLocaleString() ?? "0" },
           { icon: ShoppingBag, label: "ATTRIBUTED ORDERS", value: stats?.attributedOrders.toLocaleString() ?? "0" },
           { icon: TrendingUp, label: "ATTRIBUTED REVENUE", value: money(stats?.attributedRevenue ?? 0) },
         ].map((kpi) => (

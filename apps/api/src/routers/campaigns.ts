@@ -397,7 +397,7 @@ export const campaignsRouter = router({
     .input(
       z
         .object({
-          status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled"]).optional(),
+          status: z.enum(["draft", "scheduled", "sending", "partially_sent", "failed", "sent", "cancelled"]).optional(),
         })
         .optional()
     )
@@ -1275,7 +1275,7 @@ export const campaignsRouter = router({
     }),
 
   stats: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const [campaign, attribution, arms, deliveredCount, openedCount, clickedCount] =
+    const [campaign, attribution, arms, deliveredCount, openedCount, clickedCount, bouncedCount] =
       await Promise.all([
         ctx.prisma.campaign.findFirst({
           where: { id: input.id, workspaceId: ctx.workspaceId },
@@ -1311,6 +1311,9 @@ export const campaignsRouter = router({
         ctx.prisma.messageLog.count({
           where: { campaignId: input.id, clickedAt: { not: null } },
         }),
+        ctx.prisma.messageLog.count({
+          where: { campaignId: input.id, status: "bounced" },
+        }),
       ]);
     if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -1337,6 +1340,7 @@ export const campaignsRouter = router({
       clickCount: clickedCount,
       openRate: deliveredCount > 0 ? openedCount / deliveredCount : 0,
       clickRate: deliveredCount > 0 ? clickedCount / deliveredCount : 0,
+      bounceCount: bouncedCount,
       attributedRevenue: Math.round(attributedRevenue * 100) / 100,
       attributedOrders,
       currency: campaign.store.currency ?? "USD",

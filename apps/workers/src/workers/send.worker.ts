@@ -28,6 +28,7 @@ import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { acquireEmailCapacity } from "../utils/email-capacity";
 import { providerJobFailure } from "../utils/provider-job-failure";
 import { nextSesWarmupDelay, nextSesWarmupResume } from "../utils/ses-warmup-defer";
+import { campaignDeliveryCompletion } from "../utils/campaign-delivery-completion";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
@@ -72,6 +73,7 @@ interface DeliverOneData {
 interface FinalizeData {
   finalize: true;
   campaignId: string;
+  attempt?: number;
 }
 
 /** Milliseconds to a zoned wall-clock hour, safe across UTC-offset changes. */
@@ -89,7 +91,7 @@ export const sendWorker = new Worker<SendJobData | DeliverOneData | FinalizeData
   async (job) => {
     const data = job.data as SendJobData | DeliverOneData | FinalizeData;
     if ((data as DeliverOneData).deliverOne) return deliverOne(data as DeliverOneData);
-    if ((data as FinalizeData).finalize) return finalizeCampaign((data as FinalizeData).campaignId, job);
+    if ((data as FinalizeData).finalize) return finalizeCampaign((data as FinalizeData).campaignId, data as FinalizeData);
     return planCampaignSend((data as SendJobData).campaignId, job);
   },
   { connection: redisConnection }
@@ -494,7 +496,7 @@ export async function planCampaignSend(campaignId: string, job?: { updateProgres
   // Finalize (performance learning) after the last delivery window elapses.
   await emailSendQueue.add(
     "campaign-finalize",
-    { finalize: true, campaignId } as FinalizeData,
+    { finalize: true, campaignId, attempt: 0 } as FinalizeData,
     {
       delay: Math.max(0, (latestDeliveryTimestamp ?? Date.now()) - Date.now()) + 60_000,
       jobId: `finalize-${campaignId}`,
@@ -875,17 +877,80 @@ export async function deliverOne(data: DeliverOneData) {
 // ---------------------------------------------------------------------------
 // FINALIZE — close the performance-learning loop once deliveries have elapsed.
 // ---------------------------------------------------------------------------
-async function finalizeCampaign(campaignId: string, _job: unknown) {
+async function finalizeCampaign(campaignId: string, data: FinalizeData) {
+  const attempt = data.attempt ?? 0;
+  const pendingJobs = (await emailSendQueue.getJobs(["delayed", "waiting", "active"], 0, 10_000))
+    .filter((candidate) =>
+      candidate.name === "deliver-one" &&
+      (candidate.data as { campaignId?: unknown } | null)?.campaignId === campaignId,
+    );
+  if (pendingJobs.length > 0) {
+    await emailSendQueue.add(
+      "campaign-finalize",
+      { finalize: true, campaignId, attempt: attempt + 1 } as FinalizeData,
+      {
+        delay: 60_000,
+        jobId: `finalize-${campaignId}-check-${attempt + 1}`,
+        removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+      },
+    );
+    return { finalized: false, pending: pendingJobs.length };
+  }
+
+  const [campaign, statusRows] = await Promise.all([
+    prisma.campaign.findUnique({ where: { id: campaignId }, select: { agentProposal: true } }),
+    prisma.messageLog.groupBy({
+      by: ["status"],
+      where: { campaignId, treatmentArm: "TREATMENT" },
+      _count: true,
+    }),
+  ]);
+  if (!campaign) return { finalized: false, reason: "campaign_gone" };
+  const counts = Object.fromEntries(statusRows.map((row) => [row.status, row._count]));
+  const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
+  const dispatch = (proposal["dispatch"] ?? {}) as Record<string, any>;
+  const logged = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const planned = Number(dispatch["scheduled"] ?? logged);
+  const { accepted, failed, suppressed, completed, status } = campaignDeliveryCompletion(planned, counts);
+
+  // Do not manufacture completion while logs are still catching up with jobs.
+  if (completed < planned) {
+    await emailSendQueue.add(
+      "campaign-finalize",
+      { finalize: true, campaignId, attempt: attempt + 1 } as FinalizeData,
+      { delay: 60_000, jobId: `finalize-${campaignId}-logs-${attempt + 1}` },
+    );
+    return { finalized: false, pendingLogs: planned - completed };
+  }
+
+  if (!status) return { finalized: false, pendingLogs: planned - completed };
+  const completedAt = new Date();
   await prisma.campaign.update({
     where: { id: campaignId },
-    data: { status: "sent", sentAt: new Date() },
+    data: {
+      status,
+      sentAt: accepted > 0 ? completedAt : null,
+      agentProposal: {
+        ...proposal,
+        dispatch: {
+          ...dispatch,
+          completion: {
+            planned,
+            accepted,
+            failed,
+            suppressed,
+            completedAt: completedAt.toISOString(),
+          },
+        },
+      },
+    },
   });
   try {
     await learnFromResults(campaignId);
   } catch (err: any) {
     console.warn(`[send-worker] Performance learning failed for ${campaignId}: ${err.message}`);
   }
-  return { finalized: true };
+  return { finalized: true, status, planned, accepted, failed, suppressed };
 }
 
 sendWorker.on("completed", (job) => {
