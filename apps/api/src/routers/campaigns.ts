@@ -102,6 +102,81 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  overrideGovernorDecision: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        reasonCode: z.enum(["collision", "cooldown"]),
+        customerIds: z.array(z.string()).min(1).max(500),
+        reason: z.string().trim().min(5).max(240),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["draft", "scheduled"] },
+        },
+        select: { id: true, storeId: true, agentProposal: true },
+      });
+      if (!campaign) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found or its audience is already frozen" });
+      }
+
+      const currentAudience = await resolveCampaignAudience(campaign.id, new Date(), {
+        enforceDeliveryPauses: false,
+      });
+      const candidates = input.reasonCode === "collision"
+        ? currentAudience.collisionExcluded
+        : currentAudience.cooldownExcluded;
+      const overrideable = new Set(candidates.map((customer) => customer.id));
+      const uniqueIds = [...new Set(input.customerIds)];
+      if (uniqueIds.some((customerId) => !overrideable.has(customerId))) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Only customers currently held back by ${input.reasonCode === "collision" ? "a recent campaign" : "the redeemed-discount cooldown"} can be overridden here.`,
+        });
+      }
+
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+      const field = input.reasonCode === "collision"
+        ? "overrideCollisionCustomerIds"
+        : "overrideCooldownCustomerIds";
+      const existing = Array.isArray(proposal[field])
+        ? (proposal[field] as unknown[]).filter((value): value is string => typeof value === "string")
+        : [];
+      await ctx.prisma.$transaction([
+        ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            status: "draft",
+            approvedAt: null,
+            approvalChecksum: null,
+            agentProposal: { ...proposal, [field]: [...new Set([...existing, ...uniqueIds])] } as any,
+          },
+        }),
+        ctx.prisma.customerAudienceDecision.createMany({
+          data: uniqueIds.map((customerId) => ({
+            storeId: campaign.storeId,
+            customerId,
+            campaignId: campaign.id,
+            contextKey: campaign.id,
+            decision: "campaign_candidate",
+            reasonCode: `merchant_${input.reasonCode}_override`,
+            reasonText: input.reasonCode === "collision"
+              ? "Merchant chose to send despite a recent campaign."
+              : "Merchant chose to send despite a redeemed-discount cooldown.",
+            evidence: { originalDecision: input.reasonCode },
+            merchantOverride: true,
+            overrideActorId: ctx.userId,
+            overrideReason: input.reason,
+          })),
+        }),
+      ]);
+      return { success: true, included: uniqueIds.length, reasonCode: input.reasonCode };
+    }),
+
   overrideFatigue: workspaceProcedure
     .input(
       z.object({
@@ -344,6 +419,8 @@ export const campaignsRouter = router({
       requestedAudienceCount?: number;
       overrideRecentPurchaseCustomerIds?: unknown;
       overrideFatigueCustomerIds?: unknown;
+      overrideCollisionCustomerIds?: unknown;
+      overrideCooldownCustomerIds?: unknown;
     };
     const linkedAlternative = await ctx.prisma.campaign.findFirst({
       where: {
@@ -446,6 +523,14 @@ export const campaignsRouter = router({
       fatigueCustomers: audience.fatigueExcluded,
       fatigueOverrideCount: Array.isArray(proposal.overrideFatigueCustomerIds)
         ? proposal.overrideFatigueCustomerIds.filter((value) => typeof value === "string").length
+        : 0,
+      collisionCustomers: audience.collisionExcluded,
+      collisionOverrideCount: Array.isArray(proposal.overrideCollisionCustomerIds)
+        ? proposal.overrideCollisionCustomerIds.filter((value) => typeof value === "string").length
+        : 0,
+      cooldownCustomers: audience.cooldownExcluded,
+      cooldownOverrideCount: Array.isArray(proposal.overrideCooldownCustomerIds)
+        ? proposal.overrideCooldownCustomerIds.filter((value) => typeof value === "string").length
         : 0,
       linkedAlternative,
       subject: campaign.template.subject,

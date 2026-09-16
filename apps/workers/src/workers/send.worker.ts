@@ -651,12 +651,23 @@ export async function deliverOne(data: DeliverOneData) {
   const hasFatigueOverride =
     governorCheck.rule?.includes("fatigue") === true &&
     fatigueOverrideIds.includes(customerId);
-  if (hasFatigueOverride) {
+  const collisionOverrideIds = Array.isArray(proposal.overrideCollisionCustomerIds)
+    ? proposal.overrideCollisionCustomerIds.filter((value): value is string => typeof value === "string")
+    : [];
+  const cooldownOverrideIds = Array.isArray(proposal.overrideCooldownCustomerIds)
+    ? proposal.overrideCooldownCustomerIds.filter((value): value is string => typeof value === "string")
+    : [];
+  const hasCollisionOverride =
+    governorCheck.rule?.includes("collision") === true && collisionOverrideIds.includes(customerId);
+  const hasCooldownOverride =
+    governorCheck.rule?.includes("cooldown") === true && cooldownOverrideIds.includes(customerId);
+  const hasGovernorOverride = hasFatigueOverride || hasCollisionOverride || hasCooldownOverride;
+  if (hasGovernorOverride) {
     console.log(
-      `[send-worker] Audited fatigue override applied for campaign ${campaignId}, customer ${customerId}`
+      `[send-worker] Audited governor override applied for campaign ${campaignId}, customer ${customerId}, rule ${governorCheck.rule}`
     );
   }
-  if (!governorCheck.allowed && !hasFatigueOverride) {
+  if (!governorCheck.allowed && !hasGovernorOverride) {
     if (governorCheck.rule === "quiet_hours" && governorCheck.delayUntil) {
       if (forceImmediate) {
         console.log(`[send-worker] Merchant timing override bypassed quiet hours for campaign ${campaignId}, customer ${customerId}`);

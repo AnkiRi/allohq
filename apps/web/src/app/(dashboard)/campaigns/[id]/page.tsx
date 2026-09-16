@@ -24,6 +24,9 @@ export default function CampaignDetailPage() {
   const [showFatigueOverride, setShowFatigueOverride] = useState(false);
   const [selectedFatigueIds, setSelectedFatigueIds] = useState<string[]>([]);
   const [fatigueOverrideReason, setFatigueOverrideReason] = useState("");
+  const [governorOverrideType, setGovernorOverrideType] = useState<"collision" | "cooldown" | null>(null);
+  const [selectedGovernorIds, setSelectedGovernorIds] = useState<string[]>([]);
+  const [governorOverrideReason, setGovernorOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
   const [showTimingOverride, setShowTimingOverride] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
@@ -130,6 +133,16 @@ export default function CampaignDetailPage() {
     },
     onError: (error) => toast(error.message || "We couldn't record that fatigue override.", "error"),
   });
+  const overrideGovernorMut = trpc.campaigns.overrideGovernorDecision.useMutation({
+    onSuccess: async ({ included }) => {
+      await Promise.all([refetchDryRun(), utils.campaigns.getById.invalidate({ id: campaignId })]);
+      setGovernorOverrideType(null);
+      setSelectedGovernorIds([]);
+      setGovernorOverrideReason("");
+      toast(`${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`, "success");
+    },
+    onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
+  });
 
   useEffect(() => {
     if (!showRecentOverride || !dryRun?.recentPurchaseCustomers) return;
@@ -140,6 +153,14 @@ export default function CampaignDetailPage() {
     if (!showFatigueOverride || !dryRun?.fatigueCustomers) return;
     setSelectedFatigueIds(dryRun.fatigueCustomers.map((customer) => customer.id));
   }, [showFatigueOverride, dryRun?.fatigueCustomers]);
+
+  useEffect(() => {
+    if (!governorOverrideType || !dryRun) return;
+    const customers = governorOverrideType === "collision"
+      ? dryRun.collisionCustomers
+      : dryRun.cooldownCustomers;
+    setSelectedGovernorIds(customers.map((customer) => customer.id));
+  }, [governorOverrideType, dryRun]);
 
   useEffect(() => {
     if (!alternativeSubmitting || dryRun?.linkedAlternative) return;
@@ -912,6 +933,90 @@ export default function CampaignDetailPage() {
                   )}
                 </div>
               )}
+              {(["collision", "cooldown"] as const).map((reasonCode) => {
+                const customers = reasonCode === "collision"
+                  ? dryRun.collisionCustomers
+                  : dryRun.cooldownCustomers;
+                const count = dryRun.exclusions[reasonCode];
+                if (!count || customers.length === 0) return null;
+                const isOpen = governorOverrideType === reasonCode;
+                const title = reasonCode === "collision"
+                  ? `${count} ${count === 1 ? "customer received" : "customers received"} another campaign recently`
+                  : `${count} ${count === 1 ? "customer is" : "customers are"} inside the redeemed-discount cooldown`;
+                const consequence = reasonCode === "collision"
+                  ? "Another campaign this soon may feel repetitive and lower engagement."
+                  : "Another offer this soon may train customers to wait for discounts and give away margin.";
+                return (
+                  <div key={reasonCode} className="mt-5 rounded-xl border border-warning/30 bg-warning/5 p-4">
+                    <div className="text-[13px] font-semibold text-foreground">{title}</div>
+                    <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
+                      {consequence} You can include them, but Joon will preserve its original decision and your reason.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setGovernorOverrideType(isOpen ? null : reasonCode)}
+                      className="mt-3 rounded-lg border border-warning/40 px-3 py-2 text-[11px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-warning/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {isOpen ? "Cancel override" : "Review override"}
+                    </button>
+                    {isOpen && (
+                      <div className="mt-4 border-t border-warning/25 pt-4">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {customers.slice(0, 25).map((customer) => {
+                            const checked = selectedGovernorIds.includes(customer.id);
+                            const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                            return (
+                              <label key={customer.id} className="flex items-center gap-2 text-[11px] text-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => setSelectedGovernorIds((current) => checked
+                                    ? current.filter((id) => id !== customer.id)
+                                    : [...current, customer.id])}
+                                  className="h-4 w-4 rounded border-border accent-current"
+                                />
+                                <span className="truncate">{name}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {customers.length > 25 && (
+                          <p className="mt-2 text-[10px] text-muted-foreground">
+                            Showing 25 of {customers.length}. All are selected; clear individual names here or use the grouped audience review after this test.
+                          </p>
+                        )}
+                        <label className="mt-4 block text-[11px] font-medium text-foreground" htmlFor={`${reasonCode}-override-reason`}>
+                          Why should Joon include them now?
+                        </label>
+                        <textarea
+                          id={`${reasonCode}-override-reason`}
+                          value={governorOverrideReason}
+                          onChange={(event) => setGovernorOverrideReason(event.target.value)}
+                          rows={2}
+                          placeholder="For example: this is a one-off launch message requested by our team."
+                          className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                        <button
+                          type="button"
+                          disabled={selectedGovernorIds.length === 0 || governorOverrideReason.trim().length < 5 || overrideGovernorMut.isPending}
+                          onClick={() => overrideGovernorMut.mutate({
+                            id: campaignId,
+                            reasonCode,
+                            customerIds: selectedGovernorIds,
+                            reason: governorOverrideReason.trim(),
+                          })}
+                          className="mt-3 rounded-lg bg-warning px-3 py-2 text-[11px] font-medium text-warning-foreground transition-[background-color,transform] duration-150 hover:bg-warning/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {overrideGovernorMut.isPending ? "Recording override…" : `Include ${selectedGovernorIds.length} anyway`}
+                        </button>
+                        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                          Consent, unsubscribe, complaint, bounce, sender-domain and allowlist checks remain mandatory.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {dryRun.leftAloneSamples.length > 0 && (
                 <div className="mt-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

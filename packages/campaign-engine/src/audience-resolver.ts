@@ -56,6 +56,8 @@ export interface AudienceResolution {
     firstName: string | null;
     lastName: string | null;
   }>;
+  collisionExcluded: AudienceResolution["fatigueExcluded"];
+  cooldownExcluded: AudienceResolution["fatigueExcluded"];
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -156,6 +158,20 @@ export async function resolveCampaignAudience(
         )
       : []
   );
+  const collisionOverrides = new Set(
+    Array.isArray(proposal["overrideCollisionCustomerIds"])
+      ? (proposal["overrideCollisionCustomerIds"] as unknown[]).filter(
+          (value): value is string => typeof value === "string"
+        )
+      : []
+  );
+  const cooldownOverrides = new Set(
+    Array.isArray(proposal["overrideCooldownCustomerIds"])
+      ? (proposal["overrideCooldownCustomerIds"] as unknown[]).filter(
+          (value): value is string => typeof value === "string"
+        )
+      : []
+  );
   const [customers, processed, governorConfig] = await Promise.all([
     prisma.customer.findMany({
       where,
@@ -201,6 +217,8 @@ export async function resolveCampaignAudience(
   const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
   const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
   const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
+  const collisionExcluded: AudienceResolution["collisionExcluded"] = [];
+  const cooldownExcluded: AudienceResolution["cooldownExcluded"] = [];
   const exclude = (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
@@ -286,7 +304,11 @@ export async function resolveCampaignAudience(
     // the frozen randomized arm map.
     if (shouldExcludeGovernorDecision(decision)) {
       const reason = governorReason(decision.rule);
-      if (reason === "fatigue" && fatigueOverrides.has(customer.id)) {
+      const overridden =
+        (reason === "fatigue" && fatigueOverrides.has(customer.id)) ||
+        (reason === "collision" && collisionOverrides.has(customer.id)) ||
+        (reason === "cooldown" && cooldownOverrides.has(customer.id));
+      if (overridden) {
         eligible.push({
           id: customer.id,
           email: customer.email,
@@ -304,6 +326,8 @@ export async function resolveCampaignAudience(
           lastName: customer.lastName,
         });
       }
+      if (reason === "collision") collisionExcluded.push(customer);
+      if (reason === "cooldown") cooldownExcluded.push(customer);
       exclude(reason, customer);
       continue;
     }
@@ -323,6 +347,8 @@ export async function resolveCampaignAudience(
     deliberatelyLeftAlone,
     recentPurchaseExcluded,
     fatigueExcluded,
+    collisionExcluded,
+    cooldownExcluded,
   };
 }
 
@@ -367,6 +393,8 @@ export async function resolveAutomationAudience(
   const eligible: AudienceResolution["eligible"] = [];
   const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
   const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
+  const collisionExcluded: AudienceResolution["collisionExcluded"] = [];
+  const cooldownExcluded: AudienceResolution["cooldownExcluded"] = [];
   const exclude = (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
@@ -414,6 +442,8 @@ export async function resolveAutomationAudience(
           lastName: customer.lastName,
         });
       }
+      if (governorExclusion === "collision") collisionExcluded.push(customer);
+      if (governorExclusion === "cooldown") cooldownExcluded.push(customer);
       exclude(governorExclusion, customer);
       continue;
     }
@@ -433,5 +463,7 @@ export async function resolveAutomationAudience(
     deliberatelyLeftAlone: [],
     recentPurchaseExcluded,
     fatigueExcluded,
+    collisionExcluded,
+    cooldownExcluded,
   };
 }
