@@ -37,6 +37,12 @@ export interface AudienceResolution {
       Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>
     >
   >;
+  excludedCustomers: Partial<
+    Record<
+      AudienceExclusionReason,
+      Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>
+    >
+  >;
   deliberatelyLeftAlone: Array<{
     id: string;
     email: string;
@@ -213,6 +219,7 @@ export async function resolveCampaignAudience(
     AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
   ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
+  const excludedCustomers: AudienceResolution["excludedCustomers"] = {};
   const eligible: AudienceResolution["eligible"] = [];
   const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
   const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
@@ -224,6 +231,12 @@ export async function resolveCampaignAudience(
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
   ) => {
     exclusions[reason]++;
+    (excludedCustomers[reason] ??= []).push({
+      id: customer.id,
+      email: customer.email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+    });
     if ((samples[reason]?.length ?? 0) < 3)
       (samples[reason] ??= []).push({
         id: customer.id,
@@ -344,6 +357,7 @@ export async function resolveCampaignAudience(
     eligible,
     exclusions,
     samples,
+    excludedCustomers,
     deliberatelyLeftAlone,
     recentPurchaseExcluded,
     fatigueExcluded,
@@ -390,6 +404,7 @@ export async function resolveAutomationAudience(
     AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
   ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
+  const excludedCustomers: AudienceResolution["excludedCustomers"] = {};
   const eligible: AudienceResolution["eligible"] = [];
   const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
   const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
@@ -400,6 +415,12 @@ export async function resolveAutomationAudience(
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
   ) => {
     exclusions[reason]++;
+    (excludedCustomers[reason] ??= []).push({
+      id: customer.id,
+      email: customer.email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+    });
     if ((samples[reason]?.length ?? 0) < 3)
       (samples[reason] ??= []).push({
         id: customer.id,
@@ -460,6 +481,7 @@ export async function resolveAutomationAudience(
     eligible,
     exclusions,
     samples,
+    excludedCustomers,
     deliberatelyLeftAlone: [],
     recentPurchaseExcluded,
     fatigueExcluded,

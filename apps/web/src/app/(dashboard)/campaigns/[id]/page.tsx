@@ -8,6 +8,7 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { DecisionTracePanel } from "@/components/campaigns/DecisionTracePanel";
+import { AudienceReviewDrawer, type AudienceReviewGroup } from "@/components/campaigns/AudienceReviewDrawer";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 
 export default function CampaignDetailPage() {
@@ -271,6 +272,88 @@ export default function CampaignDetailPage() {
           }),
         })),
       )
+    : [];
+  const audienceReviewGroups: AudienceReviewGroup[] = dryRun
+    ? [
+        {
+          reason: "deliberately_left_alone",
+          label: "State says not needed",
+          count: dryRun.deliberatelyLeftAlone,
+          explanation: "Joon found evidence that this campaign is unnecessary for their current customer state. This decision changes when their state or the campaign context changes.",
+        },
+        {
+          reason: "recent_purchase",
+          label: "Recent purchase",
+          count: dryRun.exclusions.recent_purchase,
+          explanation: "They bought inside the protection window. Sending this offer now could discount a decision they already made.",
+        },
+        {
+          reason: "fatigue",
+          label: "Fatigue limit",
+          count: dryRun.exclusions.fatigue,
+          explanation: "They have already reached the store's current email limit.",
+        },
+        {
+          reason: "collision",
+          label: "Recent campaign",
+          count: dryRun.exclusions.collision,
+          explanation: "They received another campaign inside the spacing window.",
+        },
+        {
+          reason: "cooldown",
+          label: "Offer cooldown",
+          count: dryRun.exclusions.cooldown,
+          explanation: "They recently redeemed an offer and remain inside the discount cooldown.",
+        },
+        {
+          reason: "support_state",
+          label: "Active support issue",
+          count: dryRun.exclusions.support_state,
+          explanation: "Marketing is paused while this customer needs help.",
+        },
+        {
+          reason: "no_consent",
+          label: "No email consent",
+          count: dryRun.exclusions.no_consent,
+          explanation: "They have not explicitly subscribed to marketing email. This cannot be overridden.",
+        },
+        {
+          reason: "unsubscribed",
+          label: "Unsubscribed",
+          count: dryRun.exclusions.unsubscribed,
+          explanation: "They opted out of marketing email. This cannot be overridden.",
+        },
+        {
+          reason: "complaint",
+          label: "Complaint suppression",
+          count: dryRun.exclusions.complaint,
+          explanation: "A prior complaint blocks marketing delivery. This cannot be overridden.",
+        },
+        {
+          reason: "hard_bounce",
+          label: "Hard bounce",
+          count: dryRun.exclusions.hard_bounce,
+          explanation: "The address previously hard-bounced. Another delivery attempt is blocked.",
+        },
+        {
+          reason: "invalid_email",
+          label: "Invalid email",
+          count: dryRun.exclusions.invalid_email,
+          explanation: "The synchronized email address is not deliverable.",
+        },
+        {
+          reason: "manual_suppression",
+          label: "Manually suppressed",
+          count: dryRun.exclusions.manual_suppression,
+          explanation: "An authorized user placed this customer on the suppression list.",
+        },
+        {
+          reason: "already_processed",
+          label: "Already processed",
+          count: dryRun.exclusions.already_processed,
+          explanation: "This frozen campaign version has already processed this customer.",
+        },
+      ]
     : [];
 
   return (
@@ -623,7 +706,10 @@ export default function CampaignDetailPage() {
                 <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="text-[12px] font-semibold text-foreground">Not receiving this campaign</div>
-                    <div className="font-mono text-[11px] font-bold text-muted-foreground">{dryRun.otherLeftAlone}</div>
+                    <div className="flex items-center gap-3">
+                      <div className="font-mono text-[11px] font-bold text-muted-foreground">{dryRun.otherLeftAlone}</div>
+                      <AudienceReviewDrawer campaignId={campaignId} groups={audienceReviewGroups} />
+                    </div>
                   </div>
                   <div className="mt-3 divide-y divide-border">
                     {excludedCustomerRows.map((customer) => {

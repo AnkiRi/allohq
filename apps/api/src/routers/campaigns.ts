@@ -13,6 +13,7 @@ import {
   type PrismaClient,
 } from "@allohq/database";
 import {
+  AUDIENCE_EXCLUSION_REASONS,
   campaignApprovalChecksum,
   findBannedTerms,
   resolveCampaignAudience,
@@ -102,6 +103,121 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  audienceReview: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        reason: z.enum([...AUDIENCE_EXCLUSION_REASONS, "deliberately_left_alone"]),
+        query: z.string().trim().max(120).default(""),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(10).max(50).default(25),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: { id: true, storeId: true },
+      });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+
+      const audience = await resolveCampaignAudience(campaign.id, new Date(), {
+        enforceDeliveryPauses: false,
+      });
+      const base = input.reason === "deliberately_left_alone"
+        ? audience.deliberatelyLeftAlone
+        : audience.excludedCustomers[input.reason] ?? [];
+      const needle = input.query.toLocaleLowerCase();
+      const filtered = needle
+        ? base.filter((customer) =>
+            [customer.firstName, customer.lastName, customer.email]
+              .filter(Boolean)
+              .join(" ")
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        : base;
+      const total = filtered.length;
+      const pageCount = Math.max(1, Math.ceil(total / input.pageSize));
+      const page = Math.min(input.page, pageCount);
+      const pageRows = filtered.slice((page - 1) * input.pageSize, page * input.pageSize);
+      const details = pageRows.length
+        ? await ctx.prisma.customer.findMany({
+            where: { storeId: campaign.storeId, id: { in: pageRows.map((row) => row.id) } },
+            select: {
+              id: true,
+              rfmScore: { select: { segment: true } },
+              customerState: {
+                select: {
+                  lifecycleStage: true,
+                  purchaseCyclePosition: true,
+                  discountBehavior: true,
+                  medianOrderIntervalDays: true,
+                  nextExpectedOrderAt: true,
+                  nextEvaluationAt: true,
+                  stateEvidence: true,
+                },
+              },
+            },
+          })
+        : [];
+      const detailById = new Map(details.map((row) => [row.id, row]));
+      const decisionById = new Map(
+        audience.deliberatelyLeftAlone.map((row) => [row.id, row.decision])
+      );
+      const overridePolicy = {
+        recent_purchase: "allowed",
+        fatigue: "warning",
+        collision: "warning",
+        cooldown: "strong_warning",
+        deliberately_left_alone: "allowed",
+      } as const;
+      const reconsideration = {
+        recent_purchase: "After the recent-purchase protection window ends",
+        fatigue: "When the weekly or monthly email limit resets",
+        collision: "After the campaign-spacing window ends",
+        cooldown: "After the redeemed-discount cooldown ends",
+        support_state: "After the active support issue is resolved",
+        no_consent: "When the customer explicitly subscribes to marketing email",
+        unsubscribed: "Only after the customer explicitly subscribes again",
+        complaint: "Not automatically; complaint suppression remains mandatory",
+        hard_bounce: "Not automatically; a valid deliverable address is required",
+        invalid_email: "After a valid email address is synchronized",
+        manual_suppression: "After an authorized user removes the suppression",
+        already_processed: "Never for this frozen campaign version",
+        deliberately_left_alone: "When the customer state or campaign context changes",
+      } as const;
+
+      return {
+        reason: input.reason,
+        total,
+        page,
+        pageSize: input.pageSize,
+        pageCount,
+        overridePolicy: overridePolicy[input.reason as keyof typeof overridePolicy] ?? "blocked",
+        reconsideration:
+          reconsideration[input.reason as keyof typeof reconsideration] ??
+          "When the underlying delivery condition changes",
+        customers: pageRows.map((row) => {
+          const detail = detailById.get(row.id);
+          const state = detail?.customerState;
+          const decision = decisionById.get(row.id);
+          return {
+            id: row.id,
+            email: row.email,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            lifecycle: state?.lifecycleStage ?? detail?.rfmScore?.segment ?? null,
+            purchaseCyclePosition: state?.purchaseCyclePosition ?? null,
+            discountBehavior: state?.discountBehavior ?? null,
+            medianOrderIntervalDays: state?.medianOrderIntervalDays ?? null,
+            nextExpectedOrderAt: state?.nextExpectedOrderAt ?? null,
+            nextEvaluationAt: state?.nextEvaluationAt ?? null,
+            evidence: decision?.reasonText ?? null,
+          };
+        }),
+      };
+    }),
+
   overrideGovernorDecision: workspaceProcedure
     .input(
       z.object({
@@ -342,7 +458,8 @@ export const campaignsRouter = router({
     .input(
       z.object({
         id: z.string(),
-        customerIds: z.array(z.string()).min(1).max(100),
+        customerIds: z.array(z.string()).min(1).max(500),
+        reason: z.string().trim().min(5).max(240).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -374,12 +491,46 @@ export const campaignsRouter = router({
           )
         : [];
       const includeLeftAloneCustomerIds = [...new Set([...existing, ...input.customerIds])];
-      return ctx.prisma.campaign.update({
-        where: { id: campaign.id },
-        data: {
-          agentProposal: { ...proposal, includeLeftAloneCustomerIds },
-        },
+      const currentAudience = await resolveCampaignAudience(campaign.id, new Date(), {
+        enforceDeliveryPauses: false,
       });
+      const overrideable = new Set(currentAudience.deliberatelyLeftAlone.map((row) => row.id));
+      if (input.customerIds.some((customerId) => !overrideable.has(customerId))) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Only customers Joon is currently leaving alone by decision can be reconsidered here.",
+        });
+      }
+      const auditRows = input.reason
+        ? input.customerIds.map((customerId) => ({
+            storeId: campaign.storeId,
+            customerId,
+            campaignId: campaign.id,
+            contextKey: campaign.id,
+            decision: "campaign_candidate",
+            reasonCode: "merchant_state_policy_override",
+            reasonText: "Merchant chose to include this customer despite Joon's state-based decision.",
+            evidence: { originalDecision: "deliberately_left_alone" },
+            merchantOverride: true,
+            overrideActorId: ctx.userId,
+            overrideReason: input.reason,
+          }))
+        : [];
+      await ctx.prisma.$transaction([
+        ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            status: "draft",
+            approvedAt: null,
+            approvalChecksum: null,
+            agentProposal: { ...proposal, includeLeftAloneCustomerIds },
+          },
+        }),
+        ...(auditRows.length
+          ? [ctx.prisma.customerAudienceDecision.createMany({ data: auditRows })]
+          : []),
+      ]);
+      return { success: true, included: input.customerIds.length };
     }),
 
   dryRun: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
