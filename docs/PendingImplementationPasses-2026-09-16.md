@@ -4,6 +4,19 @@ Status: canonical backlog for the product passes being completed before the 2026
 
 This document is the single reference point for these passes. Later implementation summaries must map completed commits and remaining work back to the numbered passes below. New design decisions should update this document rather than creating another disconnected list.
 
+## Implementation map
+
+| Pass | Code status | Commits | What remains outside code |
+| --- | --- | --- | --- |
+| 0 — Creative, offer and attribution correctness | Complete | `39053f8`, `6fe8785` | Production attribution/creative acceptance under the recipient allowlist |
+| 1 — Audience review and override consistency | Complete | `f4620ac`, `b620798`, `5ce98e1`, `4465908`, `ee5486a` | Deploy migration and complete production UX acceptance |
+| 2 — Explainable, scalable delivery timing | Complete | `ba5265c` | Deploy migration; production acceptance; representative 100k-recipient load proof |
+| 3 — Chat UX and durable campaign collaboration | Complete | `1d82a1b` | Production UX acceptance across reopen/edit/schedule/send states |
+| 4 — Overnight decisions, traceability and segment lifecycle | Complete | `3e76e0c` | Deploy migration and validate one real overnight proposal→approval→artifact cycle |
+| 5 — Conversational email creator and editable brand kit | Complete within the available provider boundary | `2e93e90` | Production creative acceptance; choose/validate durable binary storage and true reference-image editing before claiming pixel-faithful swaps |
+| 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
+| 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
+
 ## Pass 0 — Creative, offer and attribution correctness
 
 Status: code complete for the two newly identified correctness defects; production acceptance remains. `39053f8` enforces the full-price creative policy and `6fe8785` triggers prompt, idempotent attribution after an order webhook.
@@ -125,7 +138,7 @@ Make `ready before coffee` demonstrable: every opportunity message resolves to o
 
 ## Pass 5 — Conversational email creator and editable brand kit
 
-Status: code complete for the conversational structured-email path and editable brand-kit foundation. `Create your own email` opens the durable chat workflow; the Email Studio supports conversational copy/layout edits, generated imagery, selectable hosted merchant references, undo, structured template save and generated-asset provenance. Brand voice, colours, typography, logos, sender settings and hosted font/reference assets are merchant-editable. Production acceptance remains, and durable binary upload/storage plus pixel-faithful reference-image transformation must be validated with the chosen production asset store/image provider before claiming Photoshop-style product replacement.
+Status: code complete in `2e93e90` for the conversational structured-email path and editable brand-kit foundation. `Create your own email` opens the durable chat workflow; the Email Studio supports conversational copy/layout edits, generated imagery, selectable hosted merchant references, undo, structured template save and generated-asset provenance. Brand voice, colours, typography, logos, sender settings and hosted font/reference assets are merchant-editable. Production acceptance remains, and durable binary upload/storage plus pixel-faithful reference-image transformation must be validated with the chosen production asset store/image provider before claiming Photoshop-style product replacement.
 
 ### Outcome
 
@@ -210,7 +223,7 @@ per customer.
 
 ## Pass 7 — Store-specific product graph and merchandising intelligence
 
-Status: code complete for the first directional, merchant-reviewable graph; additive migration deployment and production acceptance remain. Historical orders now yield typed same-basket, next-purchase and replenishment evidence, while catalog/product-type price bands seed explicitly low-confidence upsell suggestions. The merchant-facing Product graph supports filters, evidence, timing, approval, pinning, blocking and campaign handoff. Daily rebuilds and debounced order-webhook rebuilds preserve merchant-reviewed decisions. Existing undirected affinity remains for backwards-compatible recommendations.
+Status: code complete in `2e93e90` for the first directional, merchant-reviewable graph; additive migration deployment and production acceptance remain. Historical orders now yield typed same-basket, next-purchase and replenishment evidence, while catalog/product-type price bands seed explicitly low-confidence upsell suggestions. The merchant-facing Product graph supports filters, evidence, timing, approval, pinning, blocking and campaign handoff. Daily rebuilds and debounced order-webhook rebuilds preserve merchant-reviewed decisions. Existing undirected affinity remains for backwards-compatible recommendations.
 
 ### Outcome
 
