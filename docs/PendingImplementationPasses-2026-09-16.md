@@ -25,7 +25,7 @@ Make the approved campaign internally consistent from request through creative, 
 
 ## Pass 1 — Audience review and override consistency
 
-Status: in progress. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. `b620798` adds audited recent-campaign collision and redeemed-discount cooldown overrides through preview and final delivery. `5ce98e1` adds the unified reason-grouped audience drawer, bounded API pages, name/email search, customer-state evidence and reconsideration timing. Selection and audited overrides still use the existing reason-specific controls; moving select-one/page/all into the unified drawer and adding transition-digest notifications remain.
+Status: in progress. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. `b620798` adds audited recent-campaign collision and redeemed-discount cooldown overrides through preview and final delivery. `5ce98e1` adds the unified reason-grouped audience drawer, bounded API pages, name/email search, customer-state evidence and reconsideration timing. `4465908` adds select-one/select-page and reason-required audited overrides inside that drawer while keeping consent, complaint, bounce and other hard prohibitions blocked. A scalable whole-reason override record and transition-digest notifications remain; do not serialize very large customer-ID lists into campaign JSON merely to implement `select all`.
 
 ### Outcome
 
