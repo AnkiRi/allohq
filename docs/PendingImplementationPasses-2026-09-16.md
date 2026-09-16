@@ -25,7 +25,7 @@ Make the approved campaign internally consistent from request through creative, 
 
 ## Pass 1 — Audience review and override consistency
 
-Status: in progress. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. `b620798` adds audited recent-campaign collision and redeemed-discount cooldown overrides through preview and final delivery. `5ce98e1` adds the unified reason-grouped audience drawer, bounded API pages, name/email search, customer-state evidence and reconsideration timing. `4465908` adds select-one/select-page and reason-required audited overrides inside that drawer while keeping consent, complaint, bounce and other hard prohibitions blocked. A scalable whole-reason override record and transition-digest notifications remain; do not serialize very large customer-ID lists into campaign JSON merely to implement `select all`.
+Status: code complete; additive migration deployment and production UX acceptance remain. Recent-purchase, state-policy and fatigue overrides exist; fatigue override shipped in `f4620ac`. `b620798` adds audited recent-campaign collision and redeemed-discount cooldown overrides through preview and final delivery. `5ce98e1` adds the unified reason-grouped audience drawer, bounded API pages, name/email search, customer-state evidence and reconsideration timing. `4465908` adds select-one/select-page and reason-required audited overrides inside that drawer while keeping consent, complaint, bounce and other hard prohibitions blocked. `ee5486a` adds the compact campaign/reason override policy for `select all`, applies it during audience resolution, supports removal before approval and avoids serializing large customer-ID lists into campaign JSON. State-transition digests are owned by Pass 6 and will surface through this audience UI after the ledger exists.
 
 ### Outcome
 
@@ -43,7 +43,7 @@ Give the merchant one legible reconciliation from requested audience to delivery
 - Persist the original decision, actor, timestamp, justification and final decision in the audience-decision ledger.
 - Keep the terminology fixed: subscribed audience, campaign candidate, deliberately left alone, control group, treatment group, deferred and sent.
 - Add a dynamic `Left alone by Joon` view with current state, evidence, reason, originating campaign, reconsideration condition and complete customer decision history.
-- Aggregate meaningful movements into or out of deliberate restraint so merchants are informed without receiving one notification per customer.
+- Surface the aggregate state-transition digest produced by Pass 6; do not infer movements from campaign previews.
 
 ### Override policy
 
@@ -173,6 +173,9 @@ per customer.
   not use an LLM per customer.
 - Record meaningful state transitions with previous state, new state, evidence,
   effective time and next reconsideration condition.
+- Produce aggregate movement digests for the Pass 1 audience UI so merchants are
+  informed when meaningful cohorts enter or leave deliberate restraint without
+  receiving one notification per customer.
 - Aggregate transitions into cohorts and campaign opportunities instead of creating
   individual campaigns. Example: `2,190 high-confidence replenishment candidates`,
   not 2,190 drafts.
