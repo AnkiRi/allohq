@@ -26,6 +26,7 @@ export interface AudienceReviewGroup {
   label: string;
   count: number;
   explanation: string;
+  activeOverride?: boolean;
 }
 
 const PAGE_SIZE = 25;
@@ -103,9 +104,27 @@ export function AudienceReviewDrawer({
     onSuccess: ({ included }) => afterOverride(included),
     onError: (error) => toast(error.message || "We couldn't record that override.", "error"),
   });
+  const groupOverride = trpc.campaigns.setAudienceReasonOverride.useMutation({
+    onSuccess: async ({ enabled, affected }) => {
+      setSelectedIds([]);
+      setOverrideReason("");
+      await Promise.all([
+        utils.campaigns.dryRun.invalidate({ id: campaignId }),
+        (utils.campaigns.audienceReview as any).invalidate(),
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+      ]);
+      toast(
+        enabled
+          ? `Whole-group override recorded for ${affected.toLocaleString()} current customers.`
+          : "Whole-group override removed. Joon will apply the audience rule again.",
+        "success",
+      );
+    },
+    onError: (error) => toast(error.message || "We couldn't change that override.", "error"),
+  });
   const activeGroup = visibleGroups.find((group) => group.reason === reason);
   const overrideable = review.data?.overridePolicy && review.data.overridePolicy !== "blocked";
-  const isOverriding = stateOverride.isPending || recentOverride.isPending || fatigueOverride.isPending || governorOverride.isPending;
+  const isOverriding = stateOverride.isPending || recentOverride.isPending || fatigueOverride.isPending || governorOverride.isPending || groupOverride.isPending;
   const submitOverride = () => {
     const input = { id: campaignId, customerIds: selectedIds, reason: overrideReason.trim() };
     if (reason === "deliberately_left_alone") stateOverride.mutate(input);
@@ -248,6 +267,11 @@ export function AudienceReviewDrawer({
 
               {overrideable && (
                 <div className="border-t border-border bg-muted/30 px-5 py-4 sm:px-6">
+                  {activeGroup?.activeOverride && (
+                    <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-[11px] leading-5 text-foreground">
+                      Everyone currently held back for this reason is being reconsidered. New customers matching the same reason will also be included until this campaign is approved or the override is removed.
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] font-medium text-foreground">
                       {selectedIds.length} selected for reconsideration
@@ -286,14 +310,33 @@ export function AudienceReviewDrawer({
                     <p className="max-w-md text-[10px] leading-4 text-muted-foreground">
                       Joon keeps the original evidence and records your reason. Consent, complaints, bounces and delivery safeguards remain mandatory.
                     </p>
-                    <button
-                      type="button"
-                      onClick={submitOverride}
-                      disabled={selectedIds.length === 0 || overrideReason.trim().length < 5 || isOverriding}
-                      className="rounded-lg bg-secondary px-3 py-2 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {isOverriding ? "Recording override…" : `Include ${selectedIds.length || "selected"} anyway`}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={submitOverride}
+                        disabled={selectedIds.length === 0 || overrideReason.trim().length < 5 || isOverriding}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {isOverriding ? "Recording override…" : `Include ${selectedIds.length || "selected"} anyway`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => groupOverride.mutate({
+                          id: campaignId,
+                          reasonCode: reason as "deliberately_left_alone" | "recent_purchase" | "fatigue" | "collision" | "cooldown",
+                          enabled: !activeGroup?.activeOverride,
+                          reason: overrideReason.trim(),
+                        })}
+                        disabled={overrideReason.trim().length < 5 || isOverriding}
+                        className="rounded-lg bg-secondary px-3 py-2 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {groupOverride.isPending
+                          ? "Saving group policy…"
+                          : activeGroup?.activeOverride
+                            ? "Remove whole-group override"
+                            : `Include all ${activeGroup?.count.toLocaleString() ?? "current"}`}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

@@ -363,16 +363,17 @@ model Store {
   productSegments             ProductSegment[]
   senderDomain                SenderDomain?
   migrationAssistanceRequests MigrationAssistanceRequest[]
-  sesDeliveryAttempts        SesDeliveryAttempt[]
-  sesWarmupState             SesWarmupState?
+  sesDeliveryAttempts         SesDeliveryAttempt[]
+  sesWarmupState              SesWarmupState?
 
   // Basket Intelligence
   basketArchetypes BasketArchetype[]
 
   // Causal-data moat: holdout experiments
-  experiments         Experiment[]
-  contactConsents     ContactConsent[]
-  contactSuppressions ContactSuppression[]
+  experiments                      Experiment[]
+  contactConsents                  ContactConsent[]
+  contactSuppressions              ContactSuppression[]
+  campaignAudienceOverridePolicies CampaignAudienceOverridePolicy[]
 
   @@unique([workspaceId, shopDomain])
   @@map("stores")
@@ -652,21 +653,21 @@ model Identity {
 }
 
 model Order {
-  id          String   @id @default(cuid())
-  storeId     String
-  customerId  String
-  externalId  String // Shopify order ID
-  orderNumber String
-  totalPrice  Float
-  subtotal    Float
-  tax         Float
-  shipping    Float
+  id             String   @id @default(cuid())
+  storeId        String
+  customerId     String
+  externalId     String // Shopify order ID
+  orderNumber    String
+  totalPrice     Float
+  subtotal       Float
+  tax            Float
+  shipping       Float
   totalDiscounts Float    @default(0)
-  discountCodes String[]  @default([])
-  currency    String   @default("USD")
-  status      String // pending, paid, fulfilled, cancelled
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  discountCodes  String[] @default([])
+  currency       String   @default("USD")
+  status         String // pending, paid, fulfilled, cancelled
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   store               Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer            Customer                  @relation(fields: [customerId], references: [id])
@@ -928,12 +929,13 @@ model Campaign {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  store                  Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  template               EmailTemplate?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  segment                CustomerSegment?        @relation(fields: [segmentId], references: [id])
-  measurementAssignments MeasurementAssignment[]
-  causedRevenueLedgers   CausedRevenueLedger[]
+  workspace                Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  store                    Store                            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  template                 EmailTemplate?                   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  segment                  CustomerSegment?                 @relation(fields: [segmentId], references: [id])
+  measurementAssignments   MeasurementAssignment[]
+  causedRevenueLedgers     CausedRevenueLedger[]
+  audienceOverridePolicies CampaignAudienceOverridePolicy[]
 
   @@index([workspaceId])
   @@index([storeId])
@@ -941,25 +943,49 @@ model Campaign {
   @@map("campaigns")
 }
 
+/// Compact, campaign-scoped merchant instruction that overrides one current
+/// audience-decision reason without serializing every affected customer ID.
+/// The exact approved audience remains frozen separately at campaign approval.
+model CampaignAudienceOverridePolicy {
+  id            String   @id @default(cuid())
+  campaignId    String
+  storeId       String
+  reasonCode    String
+  mode          String   @default("all_current")
+  justification String
+  actorId       String
+  evidence      Json     @default("{}")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, reasonCode])
+  @@index([storeId, active])
+  @@map("campaign_audience_override_policies")
+}
+
 /// Immutable, merchant-auditable record of why a customer was considered,
 /// deliberately left alone, assigned to control/treatment, deferred or sent.
 model CustomerAudienceDecision {
-  id                 String   @id @default(cuid())
-  storeId            String
-  customerId         String
-  campaignId         String?
-  automationId       String?
-  contextKey         String
-  decision           String
-  reasonCode         String?
-  reasonText         String?
-  evidence           Json     @default("{}")
-  reconsiderAt       DateTime?
-  reconsiderOn       String?
-  merchantOverride   Boolean  @default(false)
-  overrideActorId    String?
-  overrideReason     String?
-  createdAt          DateTime @default(now())
+  id               String    @id @default(cuid())
+  storeId          String
+  customerId       String
+  campaignId       String?
+  automationId     String?
+  contextKey       String
+  decision         String
+  reasonCode       String?
+  reasonText       String?
+  evidence         Json      @default("{}")
+  reconsiderAt     DateTime?
+  reconsiderOn     String?
+  merchantOverride Boolean   @default(false)
+  overrideActorId  String?
+  overrideReason   String?
+  createdAt        DateTime  @default(now())
 
   @@index([storeId, createdAt])
   @@index([customerId, createdAt])
@@ -1366,29 +1392,29 @@ model AgentPipelineRun {
 // ============================================================================
 
 model MessageLog {
-  id           String    @id @default(cuid())
-  deliveryKey  String?   @unique // stable provider/idempotency key for one logical delivery
-  workspaceId  String
-  storeId      String
-  customerId   String? // link to customer for attribution
-  channel      String // email|sms|whatsapp|rcs
-  to           String // email address or phone number
-  subject      String? // email only
-  templateId   String? // reference to the template used
-  campaignId   String? // if sent via campaign
-  automationId String? // if sent via automation
-  externalId   String? // provider message ID (Resend ID, Twilio SID)
-  provider     String? // twilio|gupshup|resend — which provider sent this message
-  status       String    @default("queued") // queued|sent|delivered|opened|clicked|bounced|failed
-  error        String?
-  metadata     Json      @default("{}")
-  sentAt       DateTime?
-  deliveredAt  DateTime?
-  openedAt     DateTime?
-  clickedAt    DateTime?
+  id              String    @id @default(cuid())
+  deliveryKey     String?   @unique // stable provider/idempotency key for one logical delivery
+  workspaceId     String
+  storeId         String
+  customerId      String? // link to customer for attribution
+  channel         String // email|sms|whatsapp|rcs
+  to              String // email address or phone number
+  subject         String? // email only
+  templateId      String? // reference to the template used
+  campaignId      String? // if sent via campaign
+  automationId    String? // if sent via automation
+  externalId      String? // provider message ID (Resend ID, Twilio SID)
+  provider        String? // twilio|gupshup|resend — which provider sent this message
+  status          String    @default("queued") // queued|sent|delivered|opened|clicked|bounced|failed
+  error           String?
+  metadata        Json      @default("{}")
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
   providerEventAt DateTime? // monotonic provider-event watermark
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Outcome tracking — for ML training data (Sprint 12+)
   outcome           String? // opened, clicked, purchased, unsubscribed, ignored
@@ -1691,32 +1717,32 @@ model RetentionOutcome {
 // ============================================================================
 
 model CustomerState {
-  id                   String   @id @default(cuid())
-  customerId           String   @unique
-  storeId              String
-  lifecycleStage       String // visitor, subscriber, first_buyer, repeat, loyal, champion, at_risk, lost
-  churnRisk            Float    @default(0) // 0-1 probability
-  churnRiskUpdatedAt   DateTime @default(now())
-  intentState          String   @default("inactive") // browsing, considering, ready_to_buy, needs_help, inactive
-  channelPreference    Json     @default("{}") // { email: 0.7, whatsapp: 0.9, sms: 0.3, rcs: 0.0 }
-  optimalSendWindow    Json     @default("{}") // { timezone: "Asia/Kolkata", bestHours: [10, 14, 19] }
-  communicationFatigue Json     @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
-  discountSensitivity  Float    @default(0.5) // 0-1
-  discountBehavior     String   @default("inconclusive")
+  id                      String    @id @default(cuid())
+  customerId              String    @unique
+  storeId                 String
+  lifecycleStage          String // visitor, subscriber, first_buyer, repeat, loyal, champion, at_risk, lost
+  churnRisk               Float     @default(0) // 0-1 probability
+  churnRiskUpdatedAt      DateTime  @default(now())
+  intentState             String    @default("inactive") // browsing, considering, ready_to_buy, needs_help, inactive
+  channelPreference       Json      @default("{}") // { email: 0.7, whatsapp: 0.9, sms: 0.3, rcs: 0.0 }
+  optimalSendWindow       Json      @default("{}") // { timezone: "Asia/Kolkata", bestHours: [10, 14, 19] }
+  communicationFatigue    Json      @default("{}") // { email: { lastSent, countThisWeek }, whatsapp: {...} }
+  discountSensitivity     Float     @default(0.5) // 0-1
+  discountBehavior        String    @default("inconclusive")
   meanOrderIntervalDays   Float?
   medianOrderIntervalDays Float?
-  purchaseCyclePosition  String @default("unknown")
-  reorderConfidence       Float @default(0)
+  purchaseCyclePosition   String    @default("unknown")
+  reorderConfidence       Float     @default(0)
   nextExpectedOrderAt     DateTime?
   nextEvaluationAt        DateTime?
-  stateEvidence           Json  @default("{}")
-  supportState         String   @default("clear") // clear, open_issue, recent_complaint, escalated
-  trustScore           Float    @default(0.5) // 0-1
-  vipLevel             String   @default("standard") // standard, silver, gold, platinum
-  campaignEligibility  Json     @default("[]") // list of eligible campaign types
-  lastStateUpdate      DateTime @default(now())
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  stateEvidence           Json      @default("{}")
+  supportState            String    @default("clear") // clear, open_issue, recent_complaint, escalated
+  trustScore              Float     @default(0.5) // 0-1
+  vipLevel                String    @default("standard") // standard, silver, gold, platinum
+  campaignEligibility     Json      @default("[]") // list of eligible campaign types
+  lastStateUpdate         DateTime  @default(now())
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)

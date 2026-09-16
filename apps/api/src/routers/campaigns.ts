@@ -103,6 +103,97 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  setAudienceReasonOverride: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        reasonCode: z.enum([
+          "deliberately_left_alone",
+          "recent_purchase",
+          "fatigue",
+          "collision",
+          "cooldown",
+        ]),
+        enabled: z.boolean(),
+        reason: z.string().trim().min(5).max(240),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["draft", "scheduled"] },
+        },
+        select: { id: true, storeId: true },
+      });
+      if (!campaign) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campaign not found or its audience is already frozen",
+        });
+      }
+
+      let affected = 0;
+      if (input.enabled) {
+        const audience = await resolveCampaignAudience(campaign.id, new Date(), {
+          enforceDeliveryPauses: false,
+        });
+        affected = input.reasonCode === "deliberately_left_alone"
+          ? audience.deliberatelyLeftAlone.length
+          : input.reasonCode === "recent_purchase"
+            ? audience.recentPurchaseExcluded.length
+            : input.reasonCode === "fatigue"
+              ? audience.fatigueExcluded.length
+              : input.reasonCode === "collision"
+                ? audience.collisionExcluded.length
+                : audience.cooldownExcluded.length;
+        if (affected === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No customers are currently held back for this reason.",
+          });
+        }
+      }
+
+      await ctx.prisma.$transaction([
+        ctx.prisma.campaignAudienceOverridePolicy.upsert({
+          where: {
+            campaignId_reasonCode: {
+              campaignId: campaign.id,
+              reasonCode: input.reasonCode,
+            },
+          },
+          create: {
+            campaignId: campaign.id,
+            storeId: campaign.storeId,
+            reasonCode: input.reasonCode,
+            justification: input.reason,
+            actorId: ctx.userId,
+            active: input.enabled,
+            evidence: {
+              affectedAtDecision: affected,
+              capturedAt: new Date().toISOString(),
+            },
+          },
+          update: {
+            justification: input.reason,
+            actorId: ctx.userId,
+            active: input.enabled,
+            evidence: {
+              affectedAtDecision: affected,
+              capturedAt: new Date().toISOString(),
+            },
+          },
+        }),
+        ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: { status: "draft", approvedAt: null, approvalChecksum: null },
+        }),
+      ]);
+      return { success: true, enabled: input.enabled, affected };
+    }),
+
   audienceReview: workspaceProcedure
     .input(
       z.object({
@@ -116,7 +207,14 @@ export const campaignsRouter = router({
     .query(async ({ ctx, input }) => {
       const campaign = await ctx.prisma.campaign.findFirst({
         where: { id: input.id, workspaceId: ctx.workspaceId },
-        select: { id: true, storeId: true },
+        select: {
+          id: true,
+          storeId: true,
+          audienceOverridePolicies: {
+            where: { active: true, mode: "all_current" },
+            select: { reasonCode: true, justification: true, actorId: true, updatedAt: true },
+          },
+        },
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
 
@@ -171,6 +269,9 @@ export const campaignsRouter = router({
         cooldown: "strong_warning",
         deliberately_left_alone: "allowed",
       } as const;
+      const activeGroupOverride = campaign.audienceOverridePolicies.find(
+        (policy) => policy.reasonCode === input.reason
+      ) ?? null;
       const reconsideration = {
         recent_purchase: "After the recent-purchase protection window ends",
         fatigue: "When the weekly or monthly email limit resets",
@@ -194,6 +295,7 @@ export const campaignsRouter = router({
         pageSize: input.pageSize,
         pageCount,
         overridePolicy: overridePolicy[input.reason as keyof typeof overridePolicy] ?? "blocked",
+        activeGroupOverride,
         reconsideration:
           reconsideration[input.reason as keyof typeof reconsideration] ??
           "When the underlying delivery condition changes",
@@ -538,6 +640,10 @@ export const campaignsRouter = router({
       where: { id: input.id, workspaceId: ctx.workspaceId },
       include: {
         template: { select: { subject: true, previewText: true } },
+        audienceOverridePolicies: {
+          where: { active: true, mode: "all_current" },
+          select: { reasonCode: true, justification: true, updatedAt: true, evidence: true },
+        },
         store: {
           select: {
             storeEmail: true,
@@ -683,6 +789,7 @@ export const campaignsRouter = router({
       cooldownOverrideCount: Array.isArray(proposal.overrideCooldownCustomerIds)
         ? proposal.overrideCooldownCustomerIds.filter((value) => typeof value === "string").length
         : 0,
+      audienceReasonOverrides: campaign.audienceOverridePolicies,
       linkedAlternative,
       subject: campaign.template.subject,
       previewText: campaign.template.previewText,

@@ -133,6 +133,10 @@ export async function resolveCampaignAudience(
     include: {
       segment: true,
       store: { select: { id: true, emailSendingPausedAt: true, timezone: true } },
+      audienceOverridePolicies: {
+        where: { active: true, mode: "all_current" },
+        select: { reasonCode: true },
+      },
     },
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
@@ -177,6 +181,9 @@ export async function resolveCampaignAudience(
           (value): value is string => typeof value === "string"
         )
       : []
+  );
+  const groupOverrides = new Set(
+    campaign.audienceOverridePolicies.map((policy) => policy.reasonCode)
   );
   const [customers, processed, governorConfig] = await Promise.all([
     prisma.customer.findMany({
@@ -269,6 +276,7 @@ export async function resolveCampaignAudience(
       continue;
     }
     if (
+      !groupOverrides.has("recent_purchase") &&
       !recentPurchaseOverrides.has(customer.id) &&
       isRecentPurchase({
         lastOrderAt: customer.orders[0]?.createdAt,
@@ -290,7 +298,8 @@ export async function resolveCampaignAudience(
     const candidateDecision = evaluateCampaignCandidate({
       state: customer.customerState,
       hasDiscount,
-      merchantIncluded: merchantIncluded.has(customer.id),
+      merchantIncluded:
+        groupOverrides.has("deliberately_left_alone") || merchantIncluded.has(customer.id),
     });
     if (!candidateDecision.candidate) {
       deliberatelyLeftAlone.push({
@@ -318,6 +327,7 @@ export async function resolveCampaignAudience(
     if (shouldExcludeGovernorDecision(decision)) {
       const reason = governorReason(decision.rule);
       const overridden =
+        groupOverrides.has(reason) ||
         (reason === "fatigue" && fatigueOverrides.has(customer.id)) ||
         (reason === "collision" && collisionOverrides.has(customer.id)) ||
         (reason === "cooldown" && cooldownOverrides.has(customer.id));

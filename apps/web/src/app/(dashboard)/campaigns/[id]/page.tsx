@@ -273,37 +273,54 @@ export default function CampaignDetailPage() {
         })),
       )
     : [];
+  const audienceReasonOverrideMap = new Map<string, any>(
+    (dryRun?.audienceReasonOverrides ?? []).map((policy: any) => [policy.reasonCode, policy])
+  );
+  const audienceReasonCount = (reason: string, current: number) => {
+    const evidence = audienceReasonOverrideMap.get(reason)?.evidence as
+      | { affectedAtDecision?: unknown }
+      | undefined;
+    return Math.max(
+      current,
+      typeof evidence?.affectedAtDecision === "number" ? evidence.affectedAtDecision : 0,
+    );
+  };
   const audienceReviewGroups: AudienceReviewGroup[] = dryRun
     ? [
         {
           reason: "deliberately_left_alone",
           label: "State says not needed",
-          count: dryRun.deliberatelyLeftAlone,
+          count: audienceReasonCount("deliberately_left_alone", dryRun.deliberatelyLeftAlone),
           explanation: "Joon found evidence that this campaign is unnecessary for their current customer state. This decision changes when their state or the campaign context changes.",
+          activeOverride: audienceReasonOverrideMap.has("deliberately_left_alone"),
         },
         {
           reason: "recent_purchase",
           label: "Recent purchase",
-          count: dryRun.exclusions.recent_purchase,
+          count: audienceReasonCount("recent_purchase", dryRun.exclusions.recent_purchase),
           explanation: "They bought inside the protection window. Sending this offer now could discount a decision they already made.",
+          activeOverride: audienceReasonOverrideMap.has("recent_purchase"),
         },
         {
           reason: "fatigue",
           label: "Fatigue limit",
-          count: dryRun.exclusions.fatigue,
+          count: audienceReasonCount("fatigue", dryRun.exclusions.fatigue),
           explanation: "They have already reached the store's current email limit.",
+          activeOverride: audienceReasonOverrideMap.has("fatigue"),
         },
         {
           reason: "collision",
           label: "Recent campaign",
-          count: dryRun.exclusions.collision,
+          count: audienceReasonCount("collision", dryRun.exclusions.collision),
           explanation: "They received another campaign inside the spacing window.",
+          activeOverride: audienceReasonOverrideMap.has("collision"),
         },
         {
           reason: "cooldown",
           label: "Offer cooldown",
-          count: dryRun.exclusions.cooldown,
+          count: audienceReasonCount("cooldown", dryRun.exclusions.cooldown),
           explanation: "They recently redeemed an offer and remain inside the discount cooldown.",
+          activeOverride: audienceReasonOverrideMap.has("cooldown"),
         },
         {
           reason: "support_state",
@@ -355,6 +372,7 @@ export default function CampaignDetailPage() {
         },
       ]
     : [];
+  const audienceReviewCount = audienceReviewGroups.reduce((sum, group) => sum + group.count, 0);
 
   return (
     <div className="space-y-6">
@@ -702,12 +720,12 @@ export default function CampaignDetailPage() {
                   From {dryRun.eligibleBeforeHoldout} campaign {dryRun.eligibleBeforeHoldout === 1 ? "candidate" : "candidates"}, {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "is" : "are"} randomly assigned to control and {dryRun.estimatedTreatment} would receive the email.
                 </p>
               </div>
-              {dryRun.otherLeftAlone > 0 && (
+              {audienceReviewCount > 0 && (
                 <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="flex items-baseline justify-between gap-3">
-                    <div className="text-[12px] font-semibold text-foreground">Not receiving this campaign</div>
+                    <div className="text-[12px] font-semibold text-foreground">Audience decisions to review</div>
                     <div className="flex items-center gap-3">
-                      <div className="font-mono text-[11px] font-bold text-muted-foreground">{dryRun.otherLeftAlone}</div>
+                      <div className="font-mono text-[11px] font-bold text-muted-foreground">{audienceReviewCount}</div>
                       <AudienceReviewDrawer campaignId={campaignId} groups={audienceReviewGroups} />
                     </div>
                   </div>
