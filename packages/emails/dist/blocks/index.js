@@ -84,14 +84,14 @@ function HeroBlockView({ block, ctx, }) {
                     letterSpacing: "-0.01em",
                     color: bgImageSrc ? bk.colors.onPrimary : bk.colors.ink,
                     textAlign: ta,
-                }, children: interpolate(heading, variables) }), subtext ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-body", style: {
+                }, children: stripHtml(interpolate(heading, variables)) }), subtext ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-body", style: {
                     margin: "14px 0 0",
                     fontFamily: bk.fonts.sans,
                     fontSize: 16,
                     lineHeight: "26px",
                     color: bgImageSrc ? bk.colors.onPrimaryMuted : bk.colors.body,
                     textAlign: ta,
-                }, children: interpolate(subtext, variables) })) : null, buttonText && buttonHref ? ((0, jsx_runtime_1.jsx)("div", { style: { marginTop: 24, textAlign: ta }, children: (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(buttonHref, variables), children: interpolate(buttonText, variables) }) })) : null] }));
+                }, children: stripHtml(interpolate(subtext, variables)) })) : null, buttonText && buttonHref ? ((0, jsx_runtime_1.jsx)("div", { style: { marginTop: 24, textAlign: ta }, children: (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(buttonHref, variables), children: stripHtml(interpolate(buttonText, variables)) }) })) : null] }));
 }
 function PrimaryButton({ bk, href, children, }) {
     return ((0, jsx_runtime_1.jsx)(components_1.Button, { href: href, style: {
@@ -134,7 +134,7 @@ function ImageBlockView({ block, ctx, }) {
 function ButtonBlockView({ block, ctx, }) {
     const { brandKit: bk, variables } = ctx;
     const ta = alignToText(block.props.align ?? "left");
-    return ((0, jsx_runtime_1.jsx)(components_1.Section, { className: "bk-pad", style: { padding: "24px 36px 0", textAlign: ta }, children: (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(block.props.href || "#", variables), children: interpolate(block.props.text, variables) }) }));
+    return ((0, jsx_runtime_1.jsx)(components_1.Section, { className: "bk-pad", style: { padding: "24px 36px 0", textAlign: ta }, children: (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(block.props.href || "#", variables), children: stripHtml(interpolate(block.props.text, variables)) }) }));
 }
 function DividerBlockView({ ctx }) {
     const { brandKit: bk } = ctx;
@@ -144,8 +144,8 @@ function DividerBlockView({ ctx }) {
                 margin: 0,
             } }) }));
 }
-function SpacerBlockView({ block, }) {
-    return (0, jsx_runtime_1.jsx)(components_1.Section, { style: { height: block.props.height, lineHeight: `${block.props.height}px` }, children: "\u00A0" });
+function SpacerBlockView({ block }) {
+    return ((0, jsx_runtime_1.jsx)(components_1.Section, { style: { height: block.props.height, lineHeight: `${block.props.height}px` }, children: "\u00A0" }));
 }
 function resolveProduct(block, ctx) {
     const { source, productId } = block.props;
@@ -167,6 +167,20 @@ function resolveProduct(block, ctx) {
         };
     }
     return undefined;
+}
+function productDescriptionText(value) {
+    return value
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(/<\/p>/gi, " ")
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 function ProductBlockView({ block, ctx, }) {
     const { brandKit: bk, variables } = ctx;
@@ -194,7 +208,7 @@ function ProductBlockView({ block, ctx, }) {
                                     fontSize: 14,
                                     lineHeight: "21px",
                                     color: bk.colors.body,
-                                }, children: product.description })) : null, showPrice ? ((0, jsx_runtime_1.jsxs)(components_1.Text, { className: "bk-ink", style: {
+                                }, children: productDescriptionText(product.description) })) : null, showPrice ? ((0, jsx_runtime_1.jsxs)(components_1.Text, { className: "bk-ink", style: {
                                     margin: "0 0 12px",
                                     fontFamily: bk.fonts.sans,
                                     fontSize: 15,
@@ -206,7 +220,7 @@ function ProductBlockView({ block, ctx, }) {
                                             color: bk.colors.muted,
                                             textDecoration: "line-through",
                                             marginLeft: 8,
-                                        }, children: (0, brand_kit_1.formatCurrency)(product.compareAtPrice, bk.currency) })) : null] })) : null, (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(buttonHref || "#", variables), children: buttonText })] })] }) }) }));
+                                        }, children: (0, brand_kit_1.formatCurrency)(product.compareAtPrice, bk.currency) })) : null] })) : null, (0, jsx_runtime_1.jsx)(PrimaryButton, { bk: bk, href: interpolate(buttonHref || "#", variables), children: stripHtml(buttonText) })] })] }) }) }));
 }
 function ProductGridBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;
@@ -235,7 +249,18 @@ function ProductGridBlockView({ block, ctx, }) {
                             fontSize: 14,
                             fontWeight: 600,
                             color: bk.colors.ink,
-                        }, children: p.title }), showDescription && p.description ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-muted", style: { margin: "0 0 2px", fontFamily: bk.fonts.sans, fontSize: 12, color: bk.colors.muted }, children: p.description })) : null, showPrice ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-ink", style: { margin: 0, fontFamily: bk.fonts.sans, fontSize: 14, fontWeight: 600, color: bk.colors.ink }, children: (0, brand_kit_1.formatCurrency)(p.price, bk.currency) })) : null] }, p.id))) }, ri))) }));
+                        }, children: p.title }), showDescription && p.description ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-muted", style: {
+                            margin: "0 0 2px",
+                            fontFamily: bk.fonts.sans,
+                            fontSize: 12,
+                            color: bk.colors.muted,
+                        }, children: productDescriptionText(p.description) })) : null, showPrice ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-ink", style: {
+                            margin: 0,
+                            fontFamily: bk.fonts.sans,
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: bk.colors.ink,
+                        }, children: (0, brand_kit_1.formatCurrency)(p.price, bk.currency) })) : null] }, p.id))) }, ri))) }));
 }
 function IconRowBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;
@@ -246,7 +271,13 @@ function IconRowBlockView({ block, ctx, }) {
                             fontWeight: 600,
                             color: bk.colors.ink,
                             textAlign: "center",
-                        }, children: item.label }), item.description ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-muted", style: { margin: "4px 0 0", fontFamily: bk.fonts.sans, fontSize: 12, color: bk.colors.muted, textAlign: "center" }, children: item.description })) : null] }, i))) }) }));
+                        }, children: item.label }), item.description ? ((0, jsx_runtime_1.jsx)(components_1.Text, { className: "bk-muted", style: {
+                            margin: "4px 0 0",
+                            fontFamily: bk.fonts.sans,
+                            fontSize: 12,
+                            color: bk.colors.muted,
+                            textAlign: "center",
+                        }, children: item.description })) : null] }, i))) }) }));
 }
 function TestimonialBlockView({ block, ctx, }) {
     const { brandKit: bk, variables } = ctx;
@@ -256,14 +287,25 @@ function TestimonialBlockView({ block, ctx, }) {
                         backgroundColor: bk.colors.accent,
                         borderRadius: bk.radius.card,
                         padding: "22px 24px",
-                    }, children: [stars ? ((0, jsx_runtime_1.jsx)(components_1.Text, { style: { margin: "0 0 8px", fontSize: 15, letterSpacing: "2px", color: bk.colors.primary }, children: stars })) : null, (0, jsx_runtime_1.jsxs)(components_1.Text, { className: "bk-body", style: {
+                    }, children: [stars ? ((0, jsx_runtime_1.jsx)(components_1.Text, { style: {
+                                margin: "0 0 8px",
+                                fontSize: 15,
+                                letterSpacing: "2px",
+                                color: bk.colors.primary,
+                            }, children: stars })) : null, (0, jsx_runtime_1.jsxs)(components_1.Text, { className: "bk-body", style: {
                                 margin: "0 0 12px",
                                 fontFamily: bk.fonts.serif,
                                 fontSize: 17,
                                 lineHeight: "26px",
                                 fontStyle: "italic",
                                 color: bk.colors.ink,
-                            }, children: ["\u201C", interpolate(quote, variables), "\u201D"] }), (0, jsx_runtime_1.jsxs)(components_1.Text, { className: "bk-muted", style: { margin: 0, fontFamily: bk.fonts.sans, fontSize: 13, fontWeight: 600, color: bk.colors.muted }, children: ["— ", author] })] }) }) }) }));
+                            }, children: ["\u201C", stripHtml(interpolate(quote, variables)), "\u201D"] }), (0, jsx_runtime_1.jsxs)(components_1.Text, { className: "bk-muted", style: {
+                                margin: 0,
+                                fontFamily: bk.fonts.sans,
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: bk.colors.muted,
+                            }, children: ["— ", author] })] }) }) }) }));
 }
 function CountdownBlockView({ block, ctx, }) {
     const { brandKit: bk, variables } = ctx;
@@ -284,7 +326,7 @@ function CountdownBlockView({ block, ctx, }) {
                                 textTransform: "uppercase",
                                 color: bk.colors.onPrimaryMuted,
                                 textAlign: "center",
-                            }, children: interpolate(block.props.label, variables) }), (0, jsx_runtime_1.jsx)(components_1.Text, { style: {
+                            }, children: stripHtml(interpolate(block.props.label, variables)) }), (0, jsx_runtime_1.jsx)(components_1.Text, { style: {
                                 margin: 0,
                                 fontFamily: bk.fonts.serif,
                                 fontSize: 26,
@@ -297,7 +339,13 @@ function SocialBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;
     if (block.props.links.length === 0)
         return null;
-    return ((0, jsx_runtime_1.jsx)(components_1.Section, { className: "bk-pad", style: { padding: "20px 36px 0", textAlign: "center" }, children: (0, jsx_runtime_1.jsx)(components_1.Text, { style: { margin: 0, fontFamily: bk.fonts.sans, fontSize: 13, color: bk.colors.muted, textAlign: "center" }, children: block.props.links.map((l, i) => ((0, jsx_runtime_1.jsxs)(React.Fragment, { children: [i > 0 ? "  ·  " : "", (0, jsx_runtime_1.jsx)(components_1.Link, { href: l.url, style: { color: bk.colors.secondary }, children: l.platform })] }, l.platform))) }) }));
+    return ((0, jsx_runtime_1.jsx)(components_1.Section, { className: "bk-pad", style: { padding: "20px 36px 0", textAlign: "center" }, children: (0, jsx_runtime_1.jsx)(components_1.Text, { style: {
+                margin: 0,
+                fontFamily: bk.fonts.sans,
+                fontSize: 13,
+                color: bk.colors.muted,
+                textAlign: "center",
+            }, children: block.props.links.map((l, i) => ((0, jsx_runtime_1.jsxs)(React.Fragment, { children: [i > 0 ? "  ·  " : "", (0, jsx_runtime_1.jsx)(components_1.Link, { href: l.url, style: { color: bk.colors.secondary }, children: l.platform })] }, l.platform))) }) }));
 }
 /**
  * `header` and `footer` content blocks from the content model are intentionally
