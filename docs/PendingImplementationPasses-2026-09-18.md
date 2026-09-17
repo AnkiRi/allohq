@@ -1,6 +1,7 @@
-# Joon pending implementation passes — 2026-09-17
+# Joon pending implementation passes — 2026-09-18
 
-Status: canonical backlog for the product passes being completed before the 2026-09-17 design-partner demo.
+Status: canonical implementation and external-readiness backlog after the 2026-09-17
+design-partner demo. Audited and extended on 2026-09-18.
 
 This document is the single reference point for these passes. Later implementation summaries must map completed commits and remaining work back to the numbered passes below. New design decisions should update this document rather than creating another disconnected list.
 
@@ -19,6 +20,7 @@ This document is the single reference point for these passes. Later implementati
 | 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
 | 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
+| 11 — Product-wide UX simplification | Phase 11A complete; 11B–11H planned | `782b5aa` | Complete the route-by-route migration, authenticated responsive acceptance and merchant usability testing without removing any product capability |
 
 ## Decisions locked after the design-partner demo
 
@@ -48,6 +50,7 @@ This document is the single reference point for these passes. Later implementati
 | `ee1986e` | Passes 1, 6, 8 and 10 | Campaign-only audited discount override; offer/creative percentage reconciliation; audience select/deselect-page controls; SES open/click state triggers; HealthifyMe scale contract | Production offer override acceptance; bulk removal of already-recorded individual audience overrides; synthetic scale proof |
 | `b78f1ce` | Passes 0 and journey policy | Journey preflight and UI now expose zero random controls; refund events no longer reduce attributed revenue; cancellations continue to remove attribution | Production cancellation acceptance; revise stale older acceptance documents |
 | `538413b` | Passes 6, 8 and 10 | Order create/update/cancellation refresh the affected customer's order projection, RFM summary and LTV before state recomputation | Production verification on a new order/cancellation; scalable store-relative RFM threshold design |
+| `782b5aa` | Pass 11A | Established the Quiet Control Room design system, landing-derived themes, task-based application navigation, responsive shell, contextual top bar and durable `DESIGN.md`; removed obsolete design prototypes without removing product routes | Route-body migration in 11B–11H; authenticated light/mobile/dense-page acceptance |
 
 ## Post-demo acceptance findings — 2026-09-17
 
@@ -601,7 +604,8 @@ will buy without a discount.
 9. Implement Pass 9 before widening delivery beyond controlled recipients. A verified
    domain is not automatically a warmed domain, and elapsed calendar time is not healthy
    sending evidence.
-10. Run one bounded product-wide UX coherence pass: terminal styling remains Joon's
+10. Execute Pass 11 in bounded route groups. Preserve every capability while moving each
+   surface toward summary → workspace → receipt. Terminal styling remains Joon's
    decision/ledger voice; operational navigation and dense exploration remain quiet,
    conventional and accessible. Do not create a fourth visual language for the new maps.
 11. Run the complete design-partner path: Shopify sync → customer-state map → product
@@ -768,7 +772,248 @@ Support two deliberately staged operating envelopes:
   failure-recovery time.
 - Run a synthetic sharded benchmark before accepting real mobile-app customer data.
 
-## Consolidated remaining-work register — audited 2026-09-17
+## Pass 11 — Product-wide UX simplification without capability loss
+
+Status: Phase 11A completed in `782b5aa`; Phases 11B–11H remain. This programme is a
+representation and interaction redesign, not a product-scope reduction. The current build is
+the product truth. Mockups and reference images may suggest hierarchy, density and interaction
+patterns, but they must never silently delete, rename inaccurately or invent capabilities.
+
+### Locked experience principle
+
+Joon should feel smooth as butter on the surface while carrying space-shuttle complexity
+underneath. A merchant should understand the next useful action without learning Joon's
+internal architecture. Expert detail, evidence and controls remain available at the moment
+they matter.
+
+The landing page is the visual authority. The authenticated product uses its paper, ink and
+emerald palette in light mode and near-black/amber counterpart in dark mode. Amber means a
+merchant decision is required; blue means measurement; green means a healthy outcome; red
+means failure or material risk. Terminal or receipt styling belongs to decisions, evidence,
+activity and immutable audit records. Ordinary navigation, forms, editors and exploration use
+quiet contemporary application UI.
+
+Every major object should resolve into three responsibilities:
+
+1. **Summary** — what changed, what matters and what needs the merchant now.
+2. **Workspace** — the primary task, with complexity revealed progressively and in context.
+3. **Receipt** — what Joon knew, proposed, suppressed, measured, approved, sent or changed.
+
+### Phase 11A — Foundation, shell and design contract — complete
+
+Commit: `782b5aa`
+
+Completed:
+
+- established the durable Quiet Control Room system in root `DESIGN.md` and
+  `.impeccable/design.json`;
+- replaced feature-taxonomy navigation with task groups: Focus, Engage, Learn and Create;
+- retained direct access to every existing product route and system utility;
+- rebuilt the responsive application shell, mobile drawer, collapsed navigation and contextual
+  top bar;
+- derived application themes from the live landing page rather than from the exploratory
+  mockup palette;
+- retained customer monitoring, last-agent activity, attributed-revenue readout, demo restart,
+  global search, notifications and workspace identity in compact form;
+- standardized application canvas, surfaces, borders, focus, reduced motion, selection,
+  scrollbars and semantic color tokens;
+- removed obsolete design-option and prototype routes, not product functionality;
+- passed TypeScript, production build, mechanical design detection and independent finish
+  review.
+
+Not claimed by this phase: it does not yet restructure every route body. Existing page-level
+content and behavior remain intact until the relevant phase below migrates them.
+
+### Phase 11B — Today, Ask Joon and global orientation
+
+Outcome: the merchant can open Joon and understand in seconds what changed overnight, what
+needs approval and what Joon is watching, without competing terminal, dashboard and chatbot
+voices.
+
+Required work:
+
+- turn Today into one calm briefing: material changes, decisions requiring action, active work
+  and recent outcomes;
+- keep Ask Joon as a fast command surface connected to the durable conversation, while making
+  generated artifacts discoverable outside chat;
+- give the AI panel a clear relationship to the current page, selected customers/campaign and
+  stored conversation history;
+- consolidate duplicated agent activity and campaign-opportunity messages;
+- define notification behavior for state changes, newly suppressed cohorts, prepared drafts,
+  delivery issues and completed evidence windows;
+- preserve setup/readiness warnings without allowing them to dominate established workspaces;
+- cover loading, empty, partial, stale, retry and failure states.
+
+Acceptance:
+
+- the merchant can identify the most important pending action in under five seconds;
+- no live result is visually confused with an estimate, illustrative figure or pending action;
+- reopening a chat preserves linked campaign cards, context, constraints and destination IDs;
+- no feature is available only through prose in a generic chatbot response.
+
+### Phase 11C — Decisions and Activity as master-detail workspaces
+
+Outcome: decisions are reviewable work; activity is the durable audit ledger. They no longer
+read as two unrelated streams of cards and terminal rows.
+
+Required work:
+
+- build a searchable, filterable decision queue with compact list/master-detail behavior;
+- show audience, offer, timing, evidence, consequence, confidence, expiry and artifact link in
+  the selected decision;
+- keep approve/pass/override consequences adjacent to the action;
+- group repeated background events and deduplicate recurring opportunities without erasing
+  their history;
+- separate needs-you, approved/executed, passed/expired and system-run views;
+- preserve original proposal, merchant action, generated artifact and later outcome as one
+  traceable chain;
+- make timestamps, freshness and next reevaluation visible.
+
+Acceptance:
+
+- approving a proposal always resolves to the exact created or activated artifact;
+- the same material opportunity is not presented as a fresh decision every background cycle;
+- collapsed activity groups disclose every underlying event when inspected;
+- keyboard and mobile workflows can complete approve/pass/review without hidden actions.
+
+### Phase 11D — Customers, states, segments and deliberate restraint
+
+Outcome: customer intelligence becomes visible and explainable without forcing merchants to
+understand state-engine internals or render enormous audiences.
+
+Required work:
+
+- unify customer list, state explorer, dynamic segments and `Left alone by Joon` under a clear
+  Customers information architecture;
+- use the fixed vocabulary: subscribed audience, campaign candidate, deliberately left alone,
+  control group, treatment group, deferred and sent;
+- show independent state dimensions rather than inventing hundreds of compound labels;
+- make customer profiles summary-first, with current state, relevant evidence and recommended
+  next action before historical detail;
+- make state-transition history, campaign history and order evidence inspectable without
+  repeating the same facts in multiple cards;
+- provide grouped, searchable, paginated views for deliberately-left-alone customers, with
+  reason, evidence, reconsideration event/date and safe merchant override;
+- show material cohort movements and notifications, not one notification per customer;
+- ensure products/orders appear as contextual read-only evidence rather than duplicated
+  ecommerce administration.
+
+Acceptance:
+
+- Maya, Rohan and Ujjawal-style cases explain the right action from canonical evidence;
+- state changes move customers suppressed ↔ candidate automatically and visibly;
+- list, profile, state, RFM and order projections agree after an order or cancellation;
+- million-profile stores do not require full-table rendering or one LLM call per customer.
+
+### Phase 11E — Campaign creation, audience, creative, timing and approval
+
+Outcome: one coherent campaign workspace replaces the current long sequence of repeated
+sections while retaining every control, explanation, override and audit record.
+
+Required work:
+
+- organize campaign detail into stable modes such as Overview, Message, Audience, Delivery,
+  Results and Receipt;
+- lead with one reconciled audience equation: requested → unavailable → deliberately left
+  alone → candidates → control → treatment/deferred;
+- remove duplicate audience/suppression explanations while preserving grouped reasons,
+  customer inspection and override controls;
+- retain safe select/deselect-one, page and all behavior and distinguish non-overrideable
+  consent/delivery prohibitions;
+- keep discount override, full-price alternative, Shopify-code lifecycle and offer/creative
+  consistency visible in the appropriate mode;
+- make the conversational creator and full editor two views of the same durable artifact;
+- show products, generated-image provenance and brand constraints inside the editor;
+- show Joon's delivery windows as explainable cohorts before approval, with immediate delivery
+  as an explicit timing override;
+- keep live attribution, control evidence and immutable approval receipt distinct.
+
+Acceptance:
+
+- every audience count reconciles at all times and after every override;
+- no-discount/full-price instructions remain consistent across subject, preview, body, image,
+  code, approval and delivery;
+- alternative campaigns are idempotent and permanently linked to the source campaign;
+- 100,000-recipient audiences use grouped inspectors and bounded cohort jobs;
+- the mobile route keeps the core review and approval path usable without horizontal scroll.
+
+### Phase 11F — Automations, journeys and programme control
+
+Outcome: merchants can understand what is active, what is a draft, what is paused and what
+happens next without reading workflow-engine internals.
+
+Required work:
+
+- separate active, draft/recommended, paused and template views;
+- show trigger, waits, conditions, purchase exits, suppression, quiet hours and next scheduled
+  work in merchant language;
+- remove random-holdout concepts from journeys everywhere; all eligible customers receive
+  journey steps;
+- keep workflow editing available through progressive disclosure rather than presenting every
+  node and rule at once;
+- show recent entrants, exits, failures, recovered revenue and operational health with honest
+  attribution labels;
+- connect overnight recommendations to the exact automation draft created after approval.
+
+Acceptance:
+
+- a merchant can state who enters, who exits and what the next email does from the overview;
+- purchase exit and eligibility behavior reconcile with the underlying execution record;
+- activation, pause, edit and version-history consequences are explicit.
+
+### Phase 11G — Results, analytics and evidence language
+
+Outcome: Results becomes trustworthy. Live attributed revenue, pooled control evidence,
+billing preview, forecast calibration and illustrative education cannot be mistaken for one
+another.
+
+Required work:
+
+- create explicit Overview, Attribution, Control evidence, Forecasts, Costs and Method views;
+- label evidence strength and suppress lift estimates for no-control or underpowered cohorts;
+- reconcile campaign and journey attribution to underlying orders and currency;
+- make billing preview visibly equal to the locked attributed-revenue rule, never lift;
+- define every numerator, denominator, window and confidence label;
+- place representative/illustrative education in a separate, unmistakable context;
+- connect result rows to campaign, audience, decision and order receipts.
+
+Acceptance:
+
+- a one-person/no-control campaign never displays invented lift or confidence intervals;
+- the ₹730-style attributed order appears once, under the correct campaign and billing window;
+- measured, directional, learning, estimated and illustrative states are distinguishable
+  without relying on color alone;
+- calculations reconcile by hand from linked evidence.
+
+### Phase 11H — Content system, setup, settings and release hardening
+
+Outcome: the remaining product feels like one system and the redesign is safe to ship to
+design partners across devices and real operational states.
+
+Required work:
+
+- consolidate email library, brand voice, product graph and forms into a clear Brand & Content
+  working area without deleting their dedicated routes;
+- restructure Settings into Setup, General, Sending, Notifications, Team, Integrations,
+  Billing and Advanced, keeping provider/model controls appropriately advanced;
+- align onboarding and readiness with the same language and visual system;
+- preserve sender-domain, warm-up, consent, delivery, access and billing detail while making
+  the required next step unmistakable;
+- complete authenticated light/dark desktop, approximately 390px mobile and tablet inspection
+  on representative dense routes with the AI panel open and closed;
+- audit keyboard order, focus, contrast, screen-reader labels, reduced motion, long names,
+  large numbers, i18n expansion, empty/error/loading states and performance;
+- run merchant task testing rather than aesthetic preference testing.
+
+Acceptance:
+
+- every existing route and consequential control is accounted for in the new information
+  architecture;
+- no destructive or sending action loses scope, warning, reason or receipt;
+- representative founder tasks complete with fewer navigation and comprehension errors;
+- production screenshots and acceptance evidence cover both themes and required device sizes.
+
+## Consolidated remaining-work register — audited 2026-09-18
 
 This register reconciles the current conversation with the repository documents. It is not a
 claim that every unchecked line in an older plan is still current. Where an older document
@@ -786,7 +1031,7 @@ corrected rather than implemented literally.
 | Overnight decisions | Defect observed in production | Deduplicate opportunities, fix lifecycle copy, add material-change notifications and link every approved proposal to its artifact. |
 | Billing ledger policy | Code reconciled; deployment acceptance pending | An order counts unless cancelled. Cancellation removes attribution and fee basis; refunds and fulfilment do not independently alter v1 attributed revenue because external OMS/WMS data may be incomplete. Billing remains disabled. |
 | Legacy causal/billing paths | Audit required | Prove no production invoice path still uses caused-revenue, postage or obsolete comparison logic; retain causal data only for learning/proof. Billing remains disabled until reconciled. |
-| Product-wide UX coherence | Deferred design pass | Use terminal/receipt styling for Joon decisions and ledgers; keep navigation, setup and dense exploration quiet and conventional. Include chat history, errors, retries, loading and artifact lifecycle. |
+| Product-wide UX coherence | Pass 11A complete; 11B–11H planned | Apply the Quiet Control Room system route by route. Preserve every capability; simplify through task-based hierarchy, progressive disclosure and summary/workspace/receipt anatomy. |
 | Read-only commerce evidence | Product decision required | Do not recreate Shopify order/product administration. Add lightweight searchable order and product evidence/drill-down only where it explains customer state, attribution, opportunities or the product graph. |
 | Landing narrative accuracy | Copy audit required | Clarify Rohan's full-price percentages and Ankita's chronology/evidence; do not say every field comes from order history when open/click timing is also used. Keep composites explicitly illustrative and keep public competitor references/testimonials removed. |
 | Active workspace | Deferred but mandatory | Replace most-recently-linked workspace selection with an explicit active-workspace model and switcher before multi-store merchants. |
