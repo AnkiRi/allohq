@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-17T18:49:42Z",
+  "title": "Design System: Joon Authenticated Application",
+  "extensions": {
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#f8faf8", "tonalRamp": ["#17221a", "#2c3b30", "#4b5b50", "#718077", "#9da8a0", "#cbd2cd", "#e7ebe8", "#f8faf8"] },
+      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#ffffff", "tonalRamp": ["#1c1c1c", "#363636", "#555555", "#777777", "#9b9b9b", "#c1c1c1", "#e4e4e4", "#ffffff"] },
+      "surface-subtle": { "role": "neutral", "displayName": "Subtle Surface", "canonical": "#eef2ee", "tonalRamp": ["#172018", "#2c382e", "#4a554c", "#6f7a71", "#9aa39c", "#c5cbc6", "#e2e6e3", "#f4f6f4"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#0c120e", "tonalRamp": ["#0c120e", "#263029", "#424d46", "#626e66", "#87918b", "#afb7b2", "#d9dedb", "#f3f6f4"] },
+      "muted-ink": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#4a554d", "tonalRamp": ["#142019", "#2b382f", "#4a554d", "#69766d", "#8d9991", "#b4bdb7", "#dce1dd", "#f2f5f3"] },
+      "emerald": { "role": "primary", "displayName": "Joon Emerald", "canonical": "#0b7a4e", "tonalRamp": ["#052819", "#06452c", "#08623f", "#0b7a4e", "#159966", "#48ba8d", "#91d9ba", "#d9f2e7"] },
+      "amber-action": { "role": "secondary", "displayName": "Action Amber", "canonical": "#d89a21", "tonalRamp": ["#2d1d03", "#533706", "#7b530b", "#a87313", "#d89a21", "#e9b952", "#f4d991", "#fcf2d7"] },
+      "blue-measurement": { "role": "secondary", "displayName": "Measurement Blue", "canonical": "#2457d6", "tonalRamp": ["#081739", "#0d2866", "#143b95", "#1c4dc0", "#376be1", "#7298ed", "#afc4f5", "#e5ecfc"] },
+      "green-outcome": { "role": "tertiary", "displayName": "Outcome Green", "canonical": "#0c7252", "tonalRamp": ["#05251b", "#074230", "#096047", "#0c7252", "#17936c", "#4db58d", "#94d6bc", "#dcf1e8"] },
+      "red-failure": { "role": "tertiary", "displayName": "Failure Red", "canonical": "#c8362c", "tonalRamp": ["#360b08", "#61130e", "#8f211a", "#b92e25", "#d94f45", "#e9867f", "#f3b9b5", "#fae7e5"] },
+      "nav": { "role": "neutral", "displayName": "Navigation Black-Green", "canonical": "#0b1711", "tonalRamp": ["#0b1711", "#243129", "#404e45", "#607067", "#86938b", "#afb8b2", "#d9dedb", "#f2f5f3"] },
+      "nav-ink": { "role": "neutral", "displayName": "Navigation Ink", "canonical": "#f2f6f3", "tonalRamp": ["#17221a", "#2d3a31", "#4c5a51", "#728078", "#9da8a1", "#c7cec9", "#e3e8e4", "#f5f8f6"] },
+      "dark-paper": { "role": "neutral", "displayName": "Dark Paper", "canonical": "#0a0c10", "tonalRamp": ["#0a0c10", "#23262b", "#404349", "#61646a", "#878a90", "#afb2b7", "#dadcdf", "#f3f4f5"] },
+      "dark-surface": { "role": "neutral", "displayName": "Dark Surface", "canonical": "#0e1116", "tonalRamp": ["#0e1116", "#282b31", "#45484e", "#65686e", "#8a8d93", "#b2b5ba", "#dddfe2", "#f4f5f6"] },
+      "dark-ink": { "role": "neutral", "displayName": "Dark Ink", "canonical": "#e6e8eb", "tonalRamp": ["#15171a", "#303236", "#4e5055", "#717378", "#989a9f", "#c0c2c6", "#e0e2e5", "#f4f5f6"] },
+      "dark-amber": { "role": "primary", "displayName": "Dark Theme Amber", "canonical": "#ffb000", "tonalRamp": ["#342100", "#603c00", "#8d5900", "#bd7900", "#e99d00", "#ffc342", "#ffdc8c", "#fff1d1"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Compact page and section orientation." },
+      "body": { "displayName": "Body", "purpose": "Operational prose, controls and task content." },
+      "label": { "displayName": "Label", "purpose": "Navigation, status and compact metadata." },
+      "data": { "displayName": "Data", "purpose": "Measurements, identifiers and receipt evidence only." }
+    },
+    "shadows": [
+      { "name": "ambient-card", "value": "0 1px 2px rgba(12, 18, 14, 0.04), 0 10px 28px -24px rgba(12, 18, 14, 0.32)", "purpose": "Resting light-theme cards and contained work surfaces." },
+      { "name": "ambient-card-hover", "value": "0 1px 2px rgba(12, 18, 14, 0.05), 0 14px 34px -24px rgba(12, 18, 14, 0.38)", "purpose": "Interactive card hover without vertical movement." },
+      { "name": "dark-card", "value": "0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px -24px rgba(0, 0, 0, 0.9)", "purpose": "Dark-theme tonal surface separation." }
+    ],
+    "motion": [
+      { "name": "press", "value": "transform 100ms ease", "purpose": "Brief 0.97 scale feedback for enabled buttons and links." },
+      { "name": "state", "value": "color 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease", "purpose": "Default control and navigation state change." },
+      { "name": "shell", "value": "width 200ms ease, transform 200ms ease", "purpose": "Sidebar collapse and mobile drawer movement." },
+      { "name": "reduced-motion", "value": "0.01ms", "purpose": "Static-composition fallback under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "mobile-reference", "value": "390px" },
+      { "name": "md", "value": "768px" },
+      { "name": "content-max", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Action Button",
+      "kind": "button",
+      "refersTo": "button-action",
+      "description": "Use when a decision, approval or intervention needs the merchant now.",
+      "html": "<button class=\"ds-btn-action\">Approve send</button>",
+      "css": ".ds-btn-action { height: 36px; padding: 9px 14px; border: 1px solid transparent; border-radius: 8px; background: var(--app-action, #d89a21); color: var(--app-action-ink, #17120a); font: 600 12px/1.25 var(--font-inter, system-ui, sans-serif); transition: filter 150ms ease, transform 100ms ease, box-shadow 150ms ease; cursor: pointer; } .ds-btn-action:hover { filter: brightness(0.95); } .ds-btn-action:focus-visible { outline: 2px solid var(--focus, #2457d6); outline-offset: 2px; } .ds-btn-action:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Leading non-decision action in the current theme.",
+      "html": "<button class=\"ds-btn-primary\">Create campaign</button>",
+      "css": ".ds-btn-primary { height: 36px; padding: 9px 14px; border: 1px solid transparent; border-radius: 8px; background: var(--app-accent, #0b7a4e); color: var(--app-accent-ink, #f8faf8); font: 600 12px/1.25 var(--font-inter, system-ui, sans-serif); transition: filter 150ms ease, transform 100ms ease, box-shadow 150ms ease; cursor: pointer; } .ds-btn-primary:hover { filter: brightness(1.06); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus, #2457d6); outline-offset: 2px; } .ds-btn-primary:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet alternative or reversible action.",
+      "html": "<button class=\"ds-btn-secondary\">Review details</button>",
+      "css": ".ds-btn-secondary { height: 36px; padding: 9px 14px; border: 1px solid var(--app-line, rgba(12,18,14,.11)); border-radius: 8px; background: var(--app-surface, #fff); color: var(--app-ink, #0c120e); font: 600 12px/1.25 var(--font-inter, system-ui, sans-serif); transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease; cursor: pointer; } .ds-btn-secondary:hover { background: var(--app-surface-subtle, #eef2ee); border-color: var(--app-line-strong, rgba(12,18,14,.17)); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--focus, #2457d6); outline-offset: 2px; } .ds-btn-secondary:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Compact operational input with an explicit focus state.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Campaign name</span><input class=\"ds-input\" value=\"Win-back for quiet customers\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; color: var(--app-ink, #0c120e); font-family: var(--font-inter, system-ui, sans-serif); } .ds-field-label { font-size: 12px; font-weight: 600; } .ds-input { height: 36px; padding: 9px 12px; border: 1px solid var(--app-line, rgba(12,18,14,.11)); border-radius: 8px; background: var(--app-surface, #fff); color: var(--app-ink, #0c120e); font: 400 14px/1.3 var(--font-inter, system-ui, sans-serif); caret-color: var(--app-accent, #0b7a4e); } .ds-input:hover { border-color: var(--app-line-strong, rgba(12,18,14,.17)); } .ds-input:focus-visible { outline: 2px solid var(--focus, #2457d6); outline-offset: 2px; }"
+    },
+    {
+      "name": "Task Navigation Item",
+      "kind": "nav",
+      "description": "Sidebar item with a filled active state and a stable task label.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Focus\"><span class=\"ds-nav-group\">Focus</span><a class=\"ds-nav-item ds-nav-active\" href=\"#\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z\" fill=\"currentColor\"/></svg><span>Today</span></a><a class=\"ds-nav-item\" href=\"#\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 11l3 3L22 4l-1.4-1.4L12 11.2 10.4 9.6 9 11ZM2 7h5V5H2v2Zm0 6h5v-2H2v2Zm0 6h5v-2H2v2Zm7 0h13v-2H9v2Z\" fill=\"currentColor\"/></svg><span>Decisions</span><b>3</b></a></nav>",
+      "css": ".ds-nav { width: 236px; padding: 16px 10px; border-radius: 12px; background: var(--app-nav, #0b1711); color: var(--app-nav-ink, #f2f6f3); font-family: var(--font-inter, system-ui, sans-serif); } .ds-nav-group { display: block; margin: 0 12px 6px; color: var(--app-nav-muted, rgba(242,246,243,.62)); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; } .ds-nav-item { display: flex; min-height: 36px; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: var(--app-nav-muted, rgba(242,246,243,.62)); font-size: 13px; text-decoration: none; transition: background-color 150ms ease, color 150ms ease; } .ds-nav-item svg { width: 17px; height: 17px; flex: none; } .ds-nav-item b { margin-left: auto; min-width: 19px; padding: 2px 6px; border-radius: 999px; background: var(--app-action, #d89a21); color: var(--app-action-ink, #17120a); font-size: 10px; text-align: center; } .ds-nav-item:hover { background: var(--app-nav-hover, rgba(255,255,255,.07)); color: var(--app-nav-ink, #f2f6f3); } .ds-nav-item:focus-visible { outline: 2px solid var(--focus, #2457d6); outline-offset: 2px; } .ds-nav-active { background: var(--app-nav-active, #0b7a4e); color: var(--app-nav-active-ink, #fff); font-weight: 600; }"
+    },
+    {
+      "name": "Operational Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A quiet container for summary or workspace content.",
+      "html": "<section class=\"ds-card\"><div><p class=\"ds-card-kicker\">Needs your decision</p><h3>Approve the exact send</h3></div><p>Audience, offer, schedule and holdout stay frozen after approval.</p><span class=\"ds-chip\">3 checks passed</span></section>",
+      "css": ".ds-card { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--app-line, rgba(12,18,14,.11)); border-radius: 14px; background: var(--app-surface, #fff); color: var(--app-ink, #0c120e); box-shadow: 0 1px 2px rgba(12,18,14,.04), 0 10px 28px -24px rgba(12,18,14,.32); font-family: var(--font-inter, system-ui, sans-serif); transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-card:hover { border-color: var(--app-line-strong, rgba(12,18,14,.17)); box-shadow: 0 1px 2px rgba(12,18,14,.05), 0 14px 34px -24px rgba(12,18,14,.38); } .ds-card h3, .ds-card p { margin: 0; } .ds-card h3 { margin-top: 3px; font: 600 16px/1.25 var(--font-space-grotesk, system-ui, sans-serif); letter-spacing: -.01em; } .ds-card > p { color: var(--app-muted, #4a554d); font-size: 14px; line-height: 1.5; } .ds-card-kicker { color: var(--app-action, #d89a21); font-size: 11px; font-weight: 600; } .ds-chip { justify-self: start; padding: 4px 8px; border-radius: 999px; background: rgba(12,114,82,.1); color: #0c7252; font-size: 11px; font-weight: 600; }"
+    },
+    {
+      "name": "Decision Receipt",
+      "kind": "custom",
+      "description": "An evidence-only receipt for immutable approval and measurement facts.",
+      "html": "<section class=\"ds-receipt\"><header><span>Decision receipt</span><strong>Approved</strong></header><dl><div><dt>Version</dt><dd>cmp_02H9 · v4</dd></div><div><dt>Audience</dt><dd>1,248 eligible</dd></div><div><dt>Control</dt><dd>125 held out</dd></div><div><dt>Approved</dt><dd>18 Sep 2026 · 14:32 IST</dd></div></dl></section>",
+      "css": ".ds-receipt { overflow: hidden; border: 1px solid var(--app-line-strong, rgba(12,18,14,.17)); border-radius: 12px; background: var(--app-surface, #fff); color: var(--app-ink, #0c120e); font-family: var(--font-inter, system-ui, sans-serif); } .ds-receipt header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--app-line, rgba(12,18,14,.11)); } .ds-receipt header span { font-size: 13px; font-weight: 600; } .ds-receipt header strong { padding: 4px 8px; border-radius: 999px; background: rgba(12,114,82,.1); color: #0c7252; font-size: 11px; } .ds-receipt dl { margin: 0; } .ds-receipt dl div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--app-line, rgba(12,18,14,.11)); } .ds-receipt dl div:last-child { border-bottom: 0; } .ds-receipt dt { color: var(--app-muted, #4a554d); font-size: 12px; } .ds-receipt dd { margin: 0; color: var(--app-ink, #0c120e); font: 500 12px/1.45 var(--font-jetbrains, ui-monospace, monospace); font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Control Room",
+    "overview": "Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The landing page is the visual authority, while the authenticated application lowers the volume for sustained use. Pale paper, dense ink and restrained emerald establish the brand without competing with the task.\n\nThe system simplifies representation, never capability. Task-based navigation replaces feature taxonomy; progressive disclosure keeps explanation near the moment it matters; and pages move through a consistent anatomy of summary, workspace and receipt. The default surface is approachable operational software. Terminal language is reserved for evidence and decision receipts, where provenance and immutability are the point.",
+    "keyCharacteristics": [
+      "Quiet, information-dense operational surfaces with obvious next actions.",
+      "Task-based navigation grouped as Focus, Engage, Learn and Create.",
+      "Semantic color with stable meaning: amber/action, blue/measurement, green/outcome and red/failure.",
+      "Sans-serif language for operation; monospaced type only for data, measurements and receipts.",
+      "Two deliberate themes: paper and emerald in light mode; near-black and amber in dark mode."
+    ],
+    "rules": [
+      { "name": "The Stable Meaning Rule", "body": "Amber asks for action, blue measures, green reports an outcome and red reports failure. Never swap these roles to create visual variety.", "section": "colors" },
+      { "name": "The Quiet Emerald Rule", "body": "Emerald establishes identity and healthy continuity. Use it sparingly enough that an amber request still reads as the page's immediate action.", "section": "colors" },
+      { "name": "The Theme Pair Rule", "body": "Light mode is paper, ink and emerald; dark mode is near-black, pale ink and amber. Dark mode is a designed counterpart, not an inverted light palette.", "section": "colors" },
+      { "name": "The Operation Before Instrumentation Rule", "body": "Use sans-serif type for navigation, instructions, actions and prose. Use mono only when the content is data, measurement, an identifier or a decision receipt.", "section": "typography" },
+      { "name": "The Sentence Case Rule", "body": "Founder-facing titles and controls use sentence case. Uppercase is a compact structural annotation, never the default voice.", "section": "typography" },
+      { "name": "The Structure Carries Depth Rule", "body": "Start with tone, spacing and border. Add shadow only when a surface must separate from its immediate context.", "section": "elevation" },
+      { "name": "The No Hover Lift Rule", "body": "Operational cards remain spatially stable. Hover changes border or tone, not geometry.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do preserve every feature and route while simplifying how work is grouped and revealed.",
+      "Do organize pages around summary, workspace and receipt responsibilities.",
+      "Do make approval, suppression, holdouts, evidence strength and silence visually legible.",
+      "Do keep semantic color meanings stable in both themes and reinforce them with text or iconography.",
+      "Do keep the primary task, state, action and essential evidence usable at approximately 390px wide.",
+      "Do respect reduced motion and maintain WCAG 2.2 AA contrast and keyboard focus."
+    ],
+    "donts": [
+      "Don't expose the internal feature taxonomy when a merchant task is the clearer label.",
+      "Don't use amber as generic decoration, blue as success, green as pending action or red as routine emphasis.",
+      "Don't spread terminal styling or monospaced prose across ordinary navigation, forms, cards or explanations.",
+      "Don't hide consequential scope, audience, suppression, schedule or measurement details behind decorative minimalism.",
+      "Don't add gradients, glass effects, glow or ornamental motion to compensate for weak hierarchy.",
+      "Don't let merchant-facing emails, storefront forms or brand assets inherit the Joon application theme."
+    ]
+  }
+}

@@ -763,3 +763,4 @@ export default async function V2Page({
 
   return <V2Landing showBanner initialPal={initialPal} />;
 }
+

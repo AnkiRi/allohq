@@ -14,7 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ShopifyBootstrapBoundary>
     <CommandPaletteProvider>
     <MobileSidebarProvider>
-      <div className="flex h-screen canvas-noise relative">
+      <div className="app-shell flex h-screen canvas-noise relative">
         <Suspense fallback={null}>
           <RouteProgress />
         </Suspense>
@@ -27,8 +27,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex-1 flex flex-col overflow-hidden">
             <TopBar />
             <div className="flex flex-1 overflow-hidden">
-              <main className="app-workspace flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
-                <div className="min-h-full flex flex-col">
+              <main className="app-workspace flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-5 md:px-7 md:pt-6">
+                <div className="app-content min-h-full flex flex-col">
                   <div className="flex-1">
                     <OnboardingGate>{children}</OnboardingGate>
                   </div>

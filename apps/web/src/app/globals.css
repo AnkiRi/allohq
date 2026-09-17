@@ -474,3 +474,202 @@ button,
 a {
   transition: transform 0.1s ease, opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
+
+/* ---------------------------------------------------------------------
+   Joon application system
+
+   The landing page supplies the brand world: pale paper, near-black ink and
+   emerald restraint. The product shell uses those colours more quietly so
+   dense operational work remains effortless to scan. Amber belongs to an
+   action that needs the merchant; blue belongs to measurement; green belongs
+   to healthy outcomes. Complexity remains available through hierarchy rather
+   than being removed from the product.
+   --------------------------------------------------------------------- */
+:root,
+html[data-theme="light"] {
+  --background: 120 17% 98%;
+  --foreground: 135 20% 6%;
+  --card: 0 0% 100%;
+  --card-foreground: 135 20% 6%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 135 20% 6%;
+  --muted: 120 10% 94%;
+  --muted-foreground: 130 8% 32%;
+  --secondary: 120 10% 94%;
+  --secondary-foreground: 135 20% 8%;
+  --border: 125 10% 87%;
+  --input: 125 10% 84%;
+  --primary: 157 84% 26%;
+  --primary-foreground: 120 17% 98%;
+  --accent: 157 84% 26%;
+  --accent-foreground: 120 17% 98%;
+  --ring: 157 84% 26%;
+  --radius: 0.75rem;
+
+  --app-paper: #f8faf8;
+  --app-surface: #ffffff;
+  --app-surface-subtle: #eef2ee;
+  --app-ink: #0c120e;
+  --app-muted: #4a554d;
+  --app-line: rgba(12, 18, 14, 0.11);
+  --app-line-strong: rgba(12, 18, 14, 0.17);
+  --app-accent: #0b7a4e;
+  --app-accent-ink: #f8faf8;
+  --app-accent-soft: rgba(11, 122, 78, 0.09);
+  --app-accent-line: rgba(11, 122, 78, 0.3);
+  --app-action: #d89a21;
+  --app-action-ink: #17120a;
+  --app-nav: #0b1711;
+  --app-nav-ink: #f2f6f3;
+  --app-nav-muted: rgba(242, 246, 243, 0.62);
+  --app-nav-hover: rgba(255, 255, 255, 0.07);
+  --app-nav-active: #0b7a4e;
+  --app-nav-active-ink: #ffffff;
+  --sidebar: 148 35% 7%;
+  --nav-hover: 120 10% 94%;
+  --glass-bg: #ffffff;
+  --glass-bg-hover: #ffffff;
+  --glass-border: rgba(12, 18, 14, 0.11);
+  --glass-blur: 0px;
+  --glass-shadow: 0 1px 2px rgba(12, 18, 14, 0.04), 0 10px 28px -24px rgba(12, 18, 14, 0.32);
+  --glass-shadow-hover: 0 1px 2px rgba(12, 18, 14, 0.05), 0 14px 34px -24px rgba(12, 18, 14, 0.38);
+}
+
+html[data-theme="drenched"] {
+  --background: 216 23% 5%;
+  --foreground: 210 10% 91%;
+  --card: 216 22% 8%;
+  --card-foreground: 210 10% 91%;
+  --popover: 216 22% 8%;
+  --popover-foreground: 210 10% 91%;
+  --muted: 216 17% 13%;
+  --muted-foreground: 213 7% 64%;
+  --secondary: 216 17% 13%;
+  --secondary-foreground: 210 10% 91%;
+  --border: 214 14% 18%;
+  --input: 214 14% 21%;
+  --primary: 41 100% 50%;
+  --primary-foreground: 216 23% 5%;
+  --accent: 41 100% 50%;
+  --accent-foreground: 216 23% 5%;
+  --ring: 41 100% 50%;
+
+  --app-paper: #0a0c10;
+  --app-surface: #0e1116;
+  --app-surface-subtle: #15191f;
+  --app-ink: #e6e8eb;
+  --app-muted: #9aa0a8;
+  --app-line: rgba(255, 255, 255, 0.09);
+  --app-line-strong: rgba(255, 255, 255, 0.15);
+  --app-accent: #ffb000;
+  --app-accent-ink: #0a0c10;
+  --app-accent-soft: rgba(255, 176, 0, 0.12);
+  --app-accent-line: rgba(255, 176, 0, 0.32);
+  --app-action: #ffb000;
+  --app-action-ink: #0a0c10;
+  --app-nav: #07090c;
+  --app-nav-ink: #e6e8eb;
+  --app-nav-muted: rgba(230, 232, 235, 0.6);
+  --app-nav-hover: rgba(255, 255, 255, 0.07);
+  --app-nav-active: #ffb000;
+  --app-nav-active-ink: #0a0c10;
+  --sidebar: 216 23% 3%;
+  --nav-hover: 216 17% 13%;
+  --glass-bg: #0e1116;
+  --glass-bg-hover: #11151b;
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-blur: 0px;
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px -24px rgba(0, 0, 0, 0.9);
+  --glass-shadow-hover: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -24px rgba(0, 0, 0, 1);
+}
+
+html[data-theme="drenched"] :is(.bg-card, .bg-popover, .glass-card, .glass-card-static, .aurora-card, .ai-panel-bg) {
+  --foreground: 210 10% 91%;
+  --background: 216 23% 5%;
+  --card: 216 22% 8%;
+  --card-foreground: 210 10% 91%;
+  --popover: 216 22% 8%;
+  --popover-foreground: 210 10% 91%;
+  --secondary: 216 17% 13%;
+  --secondary-foreground: 210 10% 91%;
+  --muted: 216 17% 13%;
+  --muted-foreground: 213 7% 64%;
+  --border: 214 14% 18%;
+  --input: 214 14% 21%;
+}
+
+.app-shell {
+  background: var(--app-paper);
+}
+
+.app-sidebar {
+  background: var(--app-nav);
+  border-color: rgba(255, 255, 255, 0.09);
+  color: var(--app-nav-ink);
+}
+
+.app-topbar {
+  background: color-mix(in srgb, var(--app-paper) 94%, transparent);
+  border-color: var(--app-line);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.app-workspace {
+  background: var(--app-paper);
+  scrollbar-gutter: stable;
+}
+
+.app-content {
+  width: min(100%, 1440px);
+  margin-inline: auto;
+}
+
+.app-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--app-muted) 32%, transparent); border: 3px solid transparent; border-radius: 999px; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--app-muted) 48%, transparent); border: 3px solid transparent; background-clip: padding-box; }
+
+.glass-card,
+.glass-card-static,
+.aurora-card {
+  border-color: var(--app-line);
+  border-radius: 14px;
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-card:hover {
+  transform: none;
+  border-color: var(--app-line-strong);
+}
+
+main :is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+main table {
+  font-variant-numeric: tabular-nums;
+}
+
+main :is(input, textarea, select) {
+  caret-color: var(--app-accent);
+}
+
+@media (max-width: 767px) {
+  .app-content { width: 100%; }
+  .app-topbar { min-height: 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

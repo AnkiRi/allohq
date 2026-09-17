@@ -1,5 +1,5 @@
 import { prisma } from "@allohq/database";
-import { V2Landing } from "../v2/page";
+import { V2Landing } from "../v2/V2Landing";
 import {
   MAX_COMPARABLE_SUBSCRIBERS,
   MIN_SUBSCRIBERS,

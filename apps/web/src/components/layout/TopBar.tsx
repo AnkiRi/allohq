@@ -1,46 +1,38 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, ChevronRight, DollarSign, Menu, Search } from "lucide-react";
-import Link from "next/link";
+import { Bell, IndianRupee, Menu, RotateCcw, Search, Sparkles } from "lucide-react";
 import { useMobileSidebar } from "./MobileSidebarContext";
 import { PulseDot } from "@/components/ui/PulseDot";
-import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
 import { trpc } from "@/lib/trpc";
 import { useDemo } from "@/lib/useDemo";
 
-const routeLabels: Record<string, string> = {
-  "/dashboard": "Home",
-  "/customers": "Customers",
-  "/segments": "Segments",
-  "/intelligence": "Intelligence",
-  "/intelligence/brand": "Brand Voice",
-  "/intelligence/cohorts": "Cohort Analysis",
-  "/intelligence/rfm": "RFM Scoring",
-  "/templates": "Templates",
-  "/campaigns": "Campaigns",
-  "/automations": "Automations",
-  "/analytics": "Analytics",
-  "/integrations": "Integrations",
-  "/integrations/shopify": "Shopify",
-  "/settings": "Settings",
-  "/settings/readiness": "Setup readiness",
+const routeMeta: Record<string, { title: string; description: string }> = {
+  "/dashboard": { title: "Today", description: "What changed, what needs you, and what Joon is doing next." },
+  "/actions": { title: "Decisions", description: "Review the work Joon prepared before anything goes live." },
+  "/activity": { title: "Activity", description: "A complete record of decisions, changes, sends, and outcomes." },
+  "/customers": { title: "Customers", description: "See each customer’s current state and why it changed." },
+  "/campaigns": { title: "Campaigns", description: "Create, approve, deliver, and measure every campaign." },
+  "/automations": { title: "Automations", description: "Triggered journeys that wait for the right moment." },
+  "/conversations": { title: "Inbox", description: "Customer conversations that need attention." },
+  "/outcomes": { title: "Results", description: "Attributed orders and control-backed evidence, clearly separated." },
+  "/analytics": { title: "Analytics", description: "Understand engagement, revenue, cost, and delivery health." },
+  "/segments": { title: "Segments", description: "Saved audiences, dynamic states, and their provenance." },
+  "/templates": { title: "Email library", description: "Reusable emails and brand-safe starting points." },
+  "/forms": { title: "Forms", description: "Grow a permissioned audience across your storefront." },
+  "/intelligence/brand": { title: "Brand voice", description: "The language and guardrails Joon writes with." },
+  "/intelligence/products": { title: "Product graph", description: "How products relate across purchases, categories, and collections." },
+  "/integrations": { title: "Integrations", description: "Connected systems and the data Joon can use." },
+  "/settings/readiness": { title: "Setup", description: "Everything required for safe, reliable delivery." },
+  "/settings": { title: "Settings", description: "Workspace, sending, access, billing, and advanced controls." },
 };
 
-function getBreadcrumb(pathname: string): string[] {
-  if (routeLabels[pathname]) {
-    const segments = pathname.split("/").filter(Boolean);
-    if (segments.length > 1) {
-      const parent = "/" + segments[0];
-      if (routeLabels[parent]) {
-        return [routeLabels[parent], routeLabels[pathname]];
-      }
-    }
-    return [routeLabels[pathname]];
-  }
-  const segments = pathname.split("/").filter(Boolean);
-  return segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+function resolveMeta(pathname: string) {
+  const exact = routeMeta[pathname];
+  if (exact) return exact;
+  const base = Object.keys(routeMeta).filter((path) => path !== "/dashboard" && pathname.startsWith(`${path}/`)).sort((a, b) => b.length - a.length)[0];
+  return (base ? routeMeta[base] : undefined) ?? { title: "Joon", description: "Your retention workspace." };
 }
 
 export function TopBar() {
@@ -48,170 +40,47 @@ export function TopBar() {
   const demo = useDemo();
   const pathname = usePathname();
   const commandPalette = useCommandPalette();
-  const isDashboard = pathname === "/dashboard";
-
-  const breadcrumb = getBreadcrumb(pathname);
-
-  // Data queries
-  const { data: stores } = trpc.stores.list.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-  });
+  const meta = resolveMeta(pathname);
+  const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
   const store = stores?.[0];
   const onboardingDone = !!store?.onboardingCompletedAt;
-
-  const { data: stats } = trpc.dashboard.stats.useQuery(undefined, {
-    enabled: onboardingDone,
-    refetchInterval: 60000,
-  });
-
+  const { data: stats } = trpc.dashboard.stats.useQuery(undefined, { enabled: onboardingDone, refetchInterval: 60000 });
   const storeId = store?.id ?? "";
-  const totalCustomers = stats?.totalCustomers ?? 0;
-
-  // ROI data — real AI-attributed revenue
   const { data: roiData } = (trpc.analytics.roi as any).useQuery(
     { storeId, days: 30 },
     { enabled: !!storeId && onboardingDone },
   ) as { data: { aiAttributedRevenue: number } | undefined };
-  const aiRevenue = roiData?.aiAttributedRevenue ?? 0;
-
-  // Latest agent activity timestamp
   const { data: latestAgentRun } = (trpc.automations.latestAgentRun as any).useQuery(
     { storeId },
     { enabled: !!storeId && onboardingDone },
   ) as { data: { createdAt: string | Date } | null | undefined };
-
-  const lastActivityText = (() => {
+  const aiRevenue = roiData?.aiAttributedRevenue ?? 0;
+  const lastActivity = (() => {
     if (!latestAgentRun?.createdAt) return null;
-    const diff = Date.now() - new Date(latestAgentRun.createdAt).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Active just now";
-    if (mins < 60) return `Active ${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `Active ${hours}h ago`;
-    return `Active ${Math.floor(hours / 24)}d ago`;
+    const minutes = Math.floor((Date.now() - new Date(latestAgentRun.createdAt).getTime()) / 60000);
+    if (minutes < 1) return "active just now";
+    if (minutes < 60) return `active ${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return hours < 24 ? `active ${hours}h ago` : `active ${Math.floor(hours / 24)}d ago`;
   })();
 
   return (
-    <header className="flex items-center justify-between px-3 sm:px-4 md:px-6 py-3">
-      <div className="flex items-center gap-3">
-        {/* Hamburger — visible on mobile only */}
-        <button
-          onClick={toggle}
-          className="p-1.5 rounded-lg hover:bg-nav-hover transition-colors md:hidden"
-        >
-          <Menu className="w-5 h-5 text-foreground" />
-        </button>
-
-        {/* Dashboard: back arrow + breadcrumb only */}
-        {isDashboard ? (
-          <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-            </Link>
-            <span className="text-[11px] font-sans tracking-[0.5px] uppercase text-muted-foreground">
-              Home
-            </span>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-1">
-              <Link
-                href="/dashboard"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-              </Link>
-              {breadcrumb.map((label, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
-                  <span className="text-[11px] font-sans tracking-[0.5px] uppercase text-muted-foreground">
-                    {label}
-                  </span>
-                </span>
-              ))}
-            </div>
-          </>
-        )}
+    <header className="app-topbar flex min-h-[68px] items-center justify-between gap-4 border-b px-4 md:px-7">
+      <div className="flex min-w-0 items-center gap-3">
+        <button onClick={toggle} className="-ml-1 rounded-lg p-2 hover:bg-muted md:hidden" aria-label="Open navigation"><Menu className="h-5 w-5" /></button>
+        <div className="min-w-0">
+          <h1 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">{meta.title}</h1>
+          <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{meta.description}</p>
+        </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        {/* Demo marker + relaunch (P5). This shows only in the logged-out Vana
-            demo (useDemo = signed-out + flag). Relaunch resets in-session state to
-            a clean demo — nothing is persisted to reset, given the write-floor. */}
-        {demo && (
-          <span className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted border border-border text-[10.5px] font-mono text-muted-foreground">
-            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))]" />
-            Demo · Vana Naturals · sample data
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  sessionStorage.clear();
-                } catch {
-                  /* ignore */
-                }
-                window.location.assign("/dashboard");
-              }}
-              className="text-[hsl(var(--accent))] hover:underline"
-              title="Restart the demo from a clean state"
-            >
-              restart
-            </button>
-          </span>
-        )}
-
-        {/* Agent Status Pill */}
-        {onboardingDone && (
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/[0.08] border border-primary/15">
-            <PulseDot color="bg-primary" />
-            <span className="text-[11px] font-sans text-primary/85">
-              joon is watching over {totalCustomers.toLocaleString("en-IN")} customers
-            </span>
-            {lastActivityText && (
-              <span className="text-[10px] font-sans text-primary/60">
-                {lastActivityText}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Revenue Counter */}
-        {aiRevenue > 0 && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border" style={{ backgroundColor: "color-mix(in srgb, var(--color-warning) 10%, transparent)", borderColor: "color-mix(in srgb, var(--color-warning) 22%, transparent)" }}>
-            <DollarSign className="w-3.5 h-3.5" style={{ color: "var(--color-warning)" }} />
-            <AnimatedCounter
-              value={Math.round(aiRevenue)}
-              prefix="₹"
-              className="text-[12px] font-mono font-bold tabular-nums"
-              style={{ color: "var(--color-warning)" }}
-              duration={0.8}
-            />
-            <span className="text-[10px] font-sans" style={{ color: "color-mix(in srgb, var(--color-warning) 70%, transparent)" }}>AI revenue · 30d</span>
-          </div>
-        )}
-
-        {/* Command Palette Trigger */}
-        <button
-          onClick={commandPalette.open}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-nav-hover transition-colors"
-        >
-          <Search className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-[11px] text-muted-foreground hidden sm:inline">Search...</span>
-          <kbd className="text-[10px] font-mono text-muted-foreground bg-card px-1.5 py-0.5 rounded border border-border hidden sm:inline">
-            ⌘K
-          </kbd>
+      <div className="flex shrink-0 items-center gap-2">
+        {demo && <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] text-muted-foreground lg:flex"><Sparkles className="h-3 w-3 text-[var(--app-accent)]" /> Vana sample workspace <button type="button" onClick={() => { try { sessionStorage.clear(); } catch {} window.location.assign("/dashboard"); }} className="ml-1 inline-flex items-center gap-1 text-[var(--app-accent)] hover:underline" title="Restart the demo from a clean state"><RotateCcw className="h-3 w-3" /> restart</button></span>}
+        {onboardingDone && <div className="hidden items-center gap-2 rounded-full bg-[var(--app-accent-soft)] px-2.5 py-1.5 text-[10.5px] text-[var(--app-accent)] md:flex" title={lastActivity ?? "Joon is watching this workspace"}><PulseDot color="bg-[var(--app-accent)]" />Watching {(stats?.totalCustomers ?? 0).toLocaleString("en-IN")} customers{lastActivity && <span className="hidden opacity-65 xl:inline">· {lastActivity}</span>}</div>}
+        {aiRevenue > 0 && <div className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5 text-[10.5px] text-foreground xl:flex" title="Revenue attributed to Joon emails in the last 30 days"><IndianRupee className="h-3 w-3 text-[var(--app-accent)]" /><span className="font-mono font-semibold tabular-nums">{Math.round(aiRevenue).toLocaleString("en-IN")}</span><span className="text-muted-foreground">· 30d</span></div>}
+        <button onClick={commandPalette.open} className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-muted-foreground hover:border-[var(--app-accent-line)] hover:text-foreground sm:min-w-[164px]" aria-label="Search and open commands">
+          <Search className="h-4 w-4" /><span className="hidden flex-1 text-left text-[12px] sm:inline">Search or jump to</span><kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[9px] sm:inline">⌘K</kbd>
         </button>
-
-        {/* Theme moved to Settings → Appearance (not floating in the nav). */}
-
-        {/* Bell */}
-        <button className="relative p-2 rounded-lg hover:bg-nav-hover transition-colors">
-          <Bell className="w-4 h-4 text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-outcome" />
-        </button>
+        <button className="relative rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Notifications"><Bell className="h-[18px] w-[18px]" /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[var(--app-action)]" /></button>
       </div>
     </header>
   );
