@@ -786,12 +786,13 @@ underneath. A merchant should understand the next useful action without learning
 internal architecture. Expert detail, evidence and controls remain available at the moment
 they matter.
 
-The landing page is the visual authority. The authenticated product uses its paper, ink and
-emerald palette in light mode and near-black/amber counterpart in dark mode. Amber means a
-merchant decision is required; blue means measurement; green means a healthy outcome; red
-means failure or material risk. Terminal or receipt styling belongs to decisions, evidence,
-activity and immutable audit records. Ordinary navigation, forms, editors and exploration use
-quiet contemporary application UI.
+The supplied `des/` product screenshots are the authenticated application's visual authority;
+the landing remains the authority for public marketing surfaces. The application uses a warm
+neutral canvas, paper panels, navy navigation and restrained yellow actions. Green is reserved
+for genuinely healthy/status signals; blue means measurement and red means failure or material
+risk. Terminal or receipt styling belongs to decisions, evidence, activity and immutable audit
+records. Ordinary navigation, forms, editors and exploration use quiet contemporary
+application UI.
 
 Every major object should resolve into three responsibilities:
 
@@ -811,8 +812,8 @@ Completed:
 - retained direct access to every existing product route and system utility;
 - rebuilt the responsive application shell, mobile drawer, collapsed navigation and contextual
   top bar;
-- derived application themes from the live landing page rather than from the exploratory
-  mockup palette;
+- corrected the application palette against the supplied `des/` screenshots: warm neutral
+  canvas, paper panels, navy navigation and yellow actions, with green restricted to health;
 - retained customer monitoring, last-agent activity, attributed-revenue readout, demo restart,
   global search, notifications and workspace identity in compact form;
 - standardized application canvas, surfaces, borders, focus, reduced motion, selection,

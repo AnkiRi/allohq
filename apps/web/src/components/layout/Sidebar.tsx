@@ -37,7 +37,7 @@ const groups: { label: string; items: NavItem[] }[] = [
 
 const utilityItems: NavItem[] = [
   { name: "Setup", href: "/settings/readiness", icon: ShieldCheck },
-  { name: "Integrations", href: "/integrations", icon: Store },
+  { name: "Store & integrations", href: "/integrations", icon: Store },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
