@@ -65,15 +65,14 @@ export function TopBar() {
   })();
 
   return (
-    <header className="app-topbar flex min-h-[68px] items-center justify-between gap-4 border-b px-4 md:px-7">
+    <header className="app-topbar flex min-h-[62px] items-center justify-between gap-4 border-b px-4 md:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <button onClick={toggle} className="-ml-1 rounded-lg p-2 hover:bg-muted md:hidden" aria-label="Open navigation"><Menu className="h-5 w-5" /></button>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2.5">
-            <h1 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">{meta.title}</h1>
+            <span className="truncate text-[14px] font-medium tracking-[-0.01em] text-foreground">{meta.title}</span>
             {store?.shopDomain && <><span className="h-4 w-px bg-border" aria-hidden="true" /><span className="hidden max-w-[220px] truncate text-[12px] text-muted-foreground sm:block">{store.shopDomain.replace(/\.myshopify\.com$/i, "")}</span></>}
           </div>
-          <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{meta.description}</p>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">

@@ -2,17 +2,21 @@
 name: Joon Authenticated Application
 description: A quiet, evidence-led operating system for retention work.
 colors:
-  paper: "#f3f1eb"
-  surface: "#fffdf9"
-  surface-subtle: "#eeece5"
-  ink: "#171714"
-  muted-ink: "#65656f"
-  action-yellow: "#ffd45b"
-  blue-measurement: "#2457d6"
-  green-outcome: "#0c7252"
-  red-failure: "#c8362c"
-  nav: "#17245a"
-  nav-ink: "#fffdf9"
+  paper: "#F4F2EC"
+  surface: "#FFFDF8"
+  surface-subtle: "#ECE9E1"
+  ink: "#171717"
+  muted-ink: "#666861"
+  action-yellow: "#F2C84C"
+  action-amber: "#C99116"
+  blue-measurement: "#2D4F9E"
+  blue-measurement-soft: "#E9EFFF"
+  green-outcome: "#157858"
+  green-outcome-soft: "#E5F4EE"
+  red-failure: "#B95849"
+  red-failure-soft: "#FAE8E4"
+  nav: "#17204D"
+  nav-ink: "#FFFDF8"
   dark-paper: "#0a0c10"
   dark-surface: "#0e1116"
   dark-ink: "#e6e8eb"
@@ -51,6 +55,7 @@ spacing:
   lg: "16px"
   xl: "20px"
   2xl: "28px"
+  3xl: "32px"
 components:
   button-action:
     backgroundColor: "{colors.action-yellow}"
@@ -91,16 +96,16 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Quiet Control Room"**
+**Creative North Star: "Scan → work → prove"**
 
-Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The authenticated-product screenshots in `des/` are the visual authority for this system. Warm canvas, paper surfaces, dense ink, a navy navigation rail and decisive yellow actions establish the application world without competing with the task.
+Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The interactive reference at `.codex/visualizations/2026/07/12/019f5521-af3b-7c73-8974-bece1b177f01/joon-app-redesign.html` is the visual and interaction authority. Warm canvas, ivory work surfaces, dense ink, a navy navigation rail and decisive yellow actions establish the application world without competing with the task.
 
 The system simplifies representation, never capability. Task-based navigation replaces feature taxonomy; progressive disclosure keeps explanation near the moment it matters; and pages move through a consistent anatomy of summary, workspace and receipt. The default surface is approachable operational software. Terminal language is reserved for evidence and decision receipts, where provenance and immutability are the point.
 
 **Key Characteristics:**
 
 - Quiet, information-dense operational surfaces with obvious next actions.
-- Task-based navigation grouped as Focus, Engage, Learn and Create.
+- Direct task navigation: Today, Decisions, Customers, Campaigns, Automations, Results, Activity, Inbox and Brand & content.
 - Semantic color with stable meaning: yellow/action, blue/measurement, green/healthy status and red/failure.
 - Sans-serif language for operation; monospaced type only for data, measurements and receipts.
 - Two deliberate themes: warm paper, navy and yellow in light mode; near-black and amber in dark mode.
@@ -167,13 +172,13 @@ The palette is restrained enough for long work sessions and explicit enough that
 
 ## Layout
 
-The authenticated shell is a fixed-height control room: persistent navigation at the left, a compact contextual top bar and one independently scrolling workspace. Expanded navigation is 236px wide and may collapse to 68px; the top bar is 68px on desktop and 60px on compact screens. The content column is centered and capped at 1440px, with workspace padding that grows from 12px on narrow screens to 28px on desktop.
+The authenticated shell is a fixed-height control room: persistent navigation at the left, a compact contextual top bar and one independently scrolling workspace. Expanded navigation is 204px wide and may collapse to 68px; the top bar is 62px on desktop and 60px on compact screens. The content column is centered and capped at 1280px, with workspace padding that grows from 16px on narrow screens to 32px on desktop.
 
-Navigation reflects merchant tasks rather than the internal product model. Focus contains the immediate day, decisions and activity; Engage contains customer-facing work; Learn contains results and analysis; Create contains reusable inputs. Setup, Store & integrations and Settings remain utilities. Store identity remains visible in the top bar so the operator always knows which merchant context is active. On mobile, navigation becomes an off-canvas drawer with a dismissible scrim.
+Navigation reflects merchant tasks rather than the internal product model. Setup status and Settings remain utilities; Store & integrations remains reachable through Settings. Ask Joon is a compact control layer, not the system of record. Store identity remains visible in the top bar so the operator always knows which merchant context is active. On mobile, navigation becomes an off-canvas drawer with a dismissible scrim.
 
 Pages follow a summary / workspace / receipt anatomy. The summary answers what changed and what needs attention. The workspace contains the active task and reveals complexity in context. The receipt records what was decided, approved, sent, suppressed or measured. Not every page needs three visible panels, but its information should map cleanly to those responsibilities.
 
-Spacing uses a 4px base with an 8–28px operational range. Prefer fewer, stronger groups over nested cards. Tables and repeated rows remain compact; decision moments receive more breathing room. At approximately 390px, the primary task, state, action and essential evidence remain available without horizontal scrolling.
+Spacing uses a 4px base with an 8–32px operational range. Prefer fewer, stronger groups over nested cards. Tables and repeated rows remain compact; decision moments receive more breathing room. At approximately 390px, the primary task, state, action and essential evidence remain available without horizontal scrolling.
 
 ## Elevation & Depth
 
@@ -230,7 +235,7 @@ Components should feel compact, certain and native to sustained work. State chan
 
 ### Navigation
 
-The sidebar is a navy, stable rail with 13px task labels, 17px line icons and uppercase 10px group annotations. Active items use a warm-paper field with dark ink and set `aria-current="page"`; yellow remains available for action badges rather than active navigation. The utility label is **Store & integrations**. Collapsed navigation preserves labels through hover and keyboard-focus tooltips. The top bar names the current task, gives it one plain-language description and keeps the active store identity visible; global search and workspace health remain secondary.
+The sidebar is a 204px navy rail with 14px task labels and 16px line icons. It presents the direct task IA without category headings. Active items use a warm-paper field with dark ink and set `aria-current="page"`; yellow remains available for action badges rather than active navigation. Setup status, Settings and Ask Joon are utilities; Store & integrations is reached through the More tools disclosure or Settings. The compact top bar names the current task and keeps the active store identity visible; global search and workspace health remain secondary.
 
 ### Decision and evidence receipts
 

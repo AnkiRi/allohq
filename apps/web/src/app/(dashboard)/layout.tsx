@@ -19,15 +19,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <RouteProgress />
         </Suspense>
 
-        {/* Sidebar — needs overflow-visible for collapsed tooltips */}
-        <Sidebar />
-
-        {/* Main content — provider wraps TopBar + content so TopBar can open the AI panel */}
+        {/* Ask Joon is a control layer shared by the shell, including the sidebar dock. */}
         <AlloAIPanelProvider>
+          <Sidebar />
           <div className="flex-1 flex flex-col overflow-hidden">
             <TopBar />
             <div className="flex flex-1 overflow-hidden">
-              <main className="app-workspace flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-5 md:px-7 md:pt-6">
+              <main className="app-workspace flex-1 overflow-y-auto px-4 pb-8 pt-5 sm:px-6 md:px-8 md:pt-7">
                 <div className="app-content min-h-full flex flex-col">
                   <div className="flex-1">
                     <OnboardingGate>{children}</OnboardingGate>

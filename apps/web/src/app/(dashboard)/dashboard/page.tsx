@@ -732,7 +732,7 @@ export default function DashboardPage() {
 
   // --- State 3: Operator console ---
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="mx-auto flex w-full max-w-6xl flex-col">
       {!demo && launchReadiness && !launchReadiness.readyForAllowlistTest && (
         <Link
           href="/settings/readiness"
@@ -746,28 +746,16 @@ export default function DashboardPage() {
         </Link>
       )}
       {/* The ask: heading + command line read as one prompt unit */}
-      <div className="space-y-4">
+      <div className="order-1 space-y-5">
         {/* Heading — prose, no motion */}
         <div>
-          <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
-            {greeting}, {firstName}
-          </h1>
-          <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            Tell joon what you want done. It scans, reasons, and queues the work
-            for your okay.
-          </p>
+          <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.15em] text-[var(--attention)]">Today · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</p>
+          <h1 className="app-page-title">{pendingActions.length > 0 ? `${pendingActions.length} ${pendingActions.length === 1 ? "decision needs" : "decisions need"} you.` : `${greeting}, ${firstName}.`}</h1>
+          <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">{pendingActions.length > 0 ? "One brief, the highest-impact work, then back to your day." : "Joon is watching the store. Ask a question or review what changed."}</p>
         </div>
 
         {/* 1. Command line */}
-        <CommandLine
-          placeholder={[
-            "Tell joon what you want: e.g. win back my lapsed buyers before Diwali",
-            "Who's slipping away?",
-            "Draft a Diwali win-back for me",
-            "Look after my best customers",
-          ]}
-          onSubmit={handleCommand}
-        />
+        <details className="app-surface group p-3"><summary className="cursor-pointer list-none px-1 text-[13px] font-medium text-foreground">Ask Joon anything <span className="float-right text-muted-foreground group-open:rotate-45">＋</span></summary><div className="mt-3"><CommandLine placeholder={["Tell Joon what you want done", "Who's slipping away?", "Draft a Diwali win-back for me", "Look after my best customers"]} onSubmit={handleCommand} /></div></details>
       </div>
 
       {/* Demo: staged reasoning for the typed goal, then the actual drafted
@@ -821,7 +809,7 @@ export default function DashboardPage() {
 
       {/* The response: console + decisions, given room to breathe */}
       {/* 2 + 3. Reasoning stream + status line, in the console frame */}
-      <ConsoleFrame title="joon · operator" className="mt-8">
+      <ConsoleFrame title="overnight brief" className="order-3 mt-8">
         {/* Status line — mono readouts; the live lamp rides the first readout */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
           <MetricReadout label="customers" value={totalCustomers} live />
@@ -855,11 +843,11 @@ export default function DashboardPage() {
       </ConsoleFrame>
 
       {/* 4. Pending decisions */}
-      <div className="mt-8">
-        <h2 className="font-mono text-[12px] text-muted-foreground mb-3 lowercase tracking-tight">
-          decisions waiting on you
+      <div className="order-2 mt-8">
+        <div className="mb-3 flex items-end justify-between"><div><h2 className="app-section-title">
+          Highest-impact decisions
           {pendingActions.length > 0 ? ` · ${pendingActions.length}` : ""}
-        </h2>
+        </h2><p className="mt-1 text-[13px] text-muted-foreground">Sorted by expected value and urgency.</p></div><Link href="/actions" className="text-[13px] font-medium text-[var(--attention)]">View all →</Link></div>
 
         {pendingActions.length > 0 ? (
           <div className="space-y-3">

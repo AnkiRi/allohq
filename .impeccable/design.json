@@ -1,20 +1,21 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-17T19:06:00Z",
+  "generatedAt": "2026-09-18T01:20:00+05:30",
   "title": "Design System: Joon Authenticated Application",
   "extensions": {
     "colorMeta": {
-      "paper": { "role": "neutral", "displayName": "Warm Canvas", "canonical": "#f3f1eb", "tonalRamp": ["#211f1a", "#3b3932", "#57554d", "#77746c", "#9b9890", "#c2bfb7", "#dfdcd5", "#f3f1eb"] },
-      "surface": { "role": "neutral", "displayName": "Warm Paper", "canonical": "#fffdf9", "tonalRamp": ["#211f1b", "#3b3934", "#595650", "#7a7770", "#9e9b94", "#c5c2bc", "#e7e4de", "#fffdf9"] },
-      "surface-subtle": { "role": "neutral", "displayName": "Subtle Surface", "canonical": "#eeece5", "tonalRamp": ["#211f1a", "#3a3832", "#56544d", "#75736b", "#99968f", "#bfbbb5", "#dcd9d2", "#eeece5"] },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#171714", "tonalRamp": ["#171714", "#30302c", "#4c4c47", "#6c6c66", "#91918a", "#b8b8b1", "#deded9", "#f5f5f1"] },
-      "muted-ink": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#65656f", "tonalRamp": ["#1b1b21", "#34343d", "#50505a", "#6f6f7a", "#93939e", "#b9b9c2", "#dedee4", "#f4f4f6"] },
-      "action-yellow": { "role": "primary", "displayName": "Action Yellow", "canonical": "#ffd45b", "tonalRamp": ["#332500", "#604600", "#8e6900", "#bd8f0b", "#e8b72b", "#ffd45b", "#ffe49a", "#fff4d7"] },
-      "blue-measurement": { "role": "secondary", "displayName": "Measurement Blue", "canonical": "#2457d6", "tonalRamp": ["#081739", "#0d2866", "#143b95", "#1c4dc0", "#376be1", "#7298ed", "#afc4f5", "#e5ecfc"] },
-      "green-outcome": { "role": "tertiary", "displayName": "Outcome Green", "canonical": "#0c7252", "tonalRamp": ["#05251b", "#074230", "#096047", "#0c7252", "#17936c", "#4db58d", "#94d6bc", "#dcf1e8"] },
-      "red-failure": { "role": "tertiary", "displayName": "Failure Red", "canonical": "#c8362c", "tonalRamp": ["#360b08", "#61130e", "#8f211a", "#b92e25", "#d94f45", "#e9867f", "#f3b9b5", "#fae7e5"] },
-      "nav": { "role": "neutral", "displayName": "Sidebar Navy", "canonical": "#17245a", "tonalRamp": ["#0a1230", "#17245a", "#263878", "#3f5295", "#6676b0", "#95a0ca", "#c8cee5", "#eef0f8"] },
-      "nav-ink": { "role": "neutral", "displayName": "Navigation Ink", "canonical": "#fffdf9", "tonalRamp": ["#211f1b", "#3b3934", "#595650", "#7a7770", "#9e9b94", "#c5c2bc", "#e7e4de", "#fffdf9"] },
+      "paper": { "role": "neutral", "displayName": "Warm Canvas", "canonical": "#F4F2EC", "tonalRamp": ["#211f1a", "#3b3932", "#57554d", "#77746c", "#9b9890", "#c2bfb7", "#dfdcd5", "#F4F2EC"] },
+      "surface": { "role": "neutral", "displayName": "Warm Paper", "canonical": "#FFFDF8", "tonalRamp": ["#211f1b", "#3b3934", "#595650", "#7a7770", "#9e9b94", "#c5c2bc", "#e7e4de", "#FFFDF8"] },
+      "surface-subtle": { "role": "neutral", "displayName": "Subtle Surface", "canonical": "#ECE9E1", "tonalRamp": ["#211f1a", "#3a3832", "#56544d", "#75736b", "#99968f", "#bfbbb5", "#dcd9d2", "#ECE9E1"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#171717", "tonalRamp": ["#171717", "#30302c", "#4c4c47", "#6c6c66", "#91918a", "#b8b8b1", "#deded9", "#f5f5f1"] },
+      "muted-ink": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#666861", "tonalRamp": ["#1b1b21", "#34343d", "#50505a", "#6f6f7a", "#93939e", "#b9b9c2", "#dedee4", "#f4f4f6"] },
+      "action-yellow": { "role": "primary", "displayName": "Attention Yellow", "canonical": "#F2C84C", "tonalRamp": ["#332500", "#604600", "#8e6900", "#C99116", "#e8b72b", "#F2C84C", "#FFF0B8", "#fff8df"] },
+      "action-amber": { "role": "secondary", "displayName": "Attention Amber", "canonical": "#C99116", "tonalRamp": ["#332500", "#604600", "#8e6900", "#C99116", "#e8b72b", "#F2C84C", "#FFF0B8", "#fff8df"] },
+      "blue-measurement": { "role": "secondary", "displayName": "Evidence Blue", "canonical": "#2D4F9E", "tonalRamp": ["#081739", "#0d2866", "#1b3775", "#2D4F9E", "#5676bb", "#8ea7d8", "#c3d0ea", "#E9EFFF"] },
+      "green-outcome": { "role": "tertiary", "displayName": "Success Green", "canonical": "#157858", "tonalRamp": ["#05251b", "#074230", "#0d6047", "#157858", "#319576", "#68b69b", "#a9d7c7", "#E5F4EE"] },
+      "red-failure": { "role": "tertiary", "displayName": "Risk Red", "canonical": "#B95849", "tonalRamp": ["#360b08", "#61130e", "#8f2d23", "#B95849", "#d47a6d", "#e6a69d", "#f1cbc5", "#FAE8E4"] },
+      "nav": { "role": "neutral", "displayName": "Sidebar Navy", "canonical": "#17204D", "tonalRamp": ["#0a1230", "#17204D", "#263878", "#3f5295", "#6676b0", "#95a0ca", "#c8cee5", "#eef0f8"] },
+      "nav-ink": { "role": "neutral", "displayName": "Navigation Ink", "canonical": "#FFFDF8", "tonalRamp": ["#211f1b", "#3b3934", "#595650", "#7a7770", "#9e9b94", "#c5c2bc", "#e7e4de", "#FFFDF8"] },
       "dark-paper": { "role": "neutral", "displayName": "Dark Paper", "canonical": "#0a0c10", "tonalRamp": ["#0a0c10", "#23262b", "#404349", "#61646a", "#878a90", "#afb2b7", "#dadcdf", "#f3f4f5"] },
       "dark-surface": { "role": "neutral", "displayName": "Dark Surface", "canonical": "#0e1116", "tonalRamp": ["#0e1116", "#282b31", "#45484e", "#65686e", "#8a8d93", "#b2b5ba", "#dddfe2", "#f4f5f6"] },
       "dark-ink": { "role": "neutral", "displayName": "Dark Ink", "canonical": "#e6e8eb", "tonalRamp": ["#15171a", "#303236", "#4e5055", "#717378", "#989a9f", "#c0c2c6", "#e0e2e5", "#f4f5f6"] },
@@ -40,7 +41,7 @@
     "breakpoints": [
       { "name": "mobile-reference", "value": "390px" },
       { "name": "md", "value": "768px" },
-      { "name": "content-max", "value": "1440px" }
+      { "name": "content-max", "value": "1280px" }
     ]
   },
   "components": [
@@ -100,11 +101,11 @@
     }
   ],
   "narrative": {
-    "northStar": "The Quiet Control Room",
-    "overview": "Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The authenticated-product screenshots in `des/` are the visual authority for this system. Warm canvas, paper surfaces, dense ink, a navy navigation rail and decisive yellow actions establish the application world without competing with the task.\n\nThe system simplifies representation, never capability. Task-based navigation replaces feature taxonomy; progressive disclosure keeps explanation near the moment it matters; and pages move through a consistent anatomy of summary, workspace and receipt. The default surface is approachable operational software. Terminal language is reserved for evidence and decision receipts, where provenance and immutability are the point.",
+    "northStar": "Scan → work → prove",
+    "overview": "Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The interactive Joon application redesign reference is the visual and interaction authority. Warm canvas, ivory surfaces, dense ink, a navy navigation rail and decisive yellow actions establish the application world without competing with the task.\n\nThe system simplifies representation, never capability. Pages follow scan → work → prove: a concise summary, one principal workspace, then evidence in drawers, inspectors and receipts. Terminal language is reserved for evidence and decision receipts.",
     "keyCharacteristics": [
       "Quiet, information-dense operational surfaces with obvious next actions.",
-      "Task-based navigation grouped as Focus, Engage, Learn and Create.",
+      "Direct task navigation with Setup status, Settings and Ask Joon as utilities.",
       "Semantic color with stable meaning: yellow/action, blue/measurement, green/healthy status and red/failure.",
       "Sans-serif language for operation; monospaced type only for data, measurements and receipts.",
       "Two deliberate themes: warm paper, navy and yellow in light mode; near-black and amber in dark mode."

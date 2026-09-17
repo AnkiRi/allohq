@@ -487,18 +487,35 @@ a {
    --------------------------------------------------------------------- */
 :root,
 html[data-theme="light"] {
-  --background: 43 21% 94%;
-  --foreground: 60 6% 8%;
+  --ink: #171717;
+  --text-muted: #666861;
+  --border-color: #D8D4CA;
+  --background-color: #F4F2EC;
+  --surface: #FFFDF8;
+  --surface-soft: #ECE9E1;
+  --sidebar-color: #17204D;
+  --attention: #C99116;
+  --attention-strong: #F2C84C;
+  --attention-soft: #FFF0B8;
+  --evidence: #2D4F9E;
+  --evidence-soft: #E9EFFF;
+  --success-color: #157858;
+  --success-soft: #E5F4EE;
+  --risk: #B95849;
+  --risk-soft: #FAE8E4;
+
+  --background: 43 22% 94%;
+  --foreground: 0 0% 9%;
   --card: 40 100% 99%;
-  --card-foreground: 60 6% 8%;
+  --card-foreground: 0 0% 9%;
   --popover: 40 100% 99%;
-  --popover-foreground: 60 6% 8%;
-  --muted: 42 17% 91%;
-  --muted-foreground: 240 5% 38%;
-  --secondary: 42 17% 91%;
-  --secondary-foreground: 60 6% 8%;
-  --border: 39 16% 84%;
-  --input: 39 16% 81%;
+  --popover-foreground: 0 0% 9%;
+  --muted: 43 14% 91%;
+  --muted-foreground: 72 3% 39%;
+  --secondary: 43 14% 91%;
+  --secondary-foreground: 0 0% 9%;
+  --border: 43 15% 82%;
+  --input: 43 15% 82%;
   --primary: 43 100% 68%;
   --primary-foreground: 60 6% 8%;
   --accent: 43 100% 68%;
@@ -506,20 +523,20 @@ html[data-theme="light"] {
   --ring: 228 57% 26%;
   --radius: 0.75rem;
 
-  --app-paper: #f3f1eb;
-  --app-surface: #fffdf9;
-  --app-surface-subtle: #eeece5;
-  --app-ink: #171714;
-  --app-muted: #65656f;
-  --app-line: rgba(23, 23, 20, 0.13);
-  --app-line-strong: rgba(23, 23, 20, 0.21);
-  --app-accent: #ffd45b;
-  --app-accent-ink: #171714;
-  --app-accent-soft: rgba(255, 212, 91, 0.24);
-  --app-accent-line: rgba(199, 140, 0, 0.38);
-  --app-action: #ffd45b;
-  --app-action-ink: #17120a;
-  --app-nav: #17245a;
+  --app-paper: var(--background-color);
+  --app-surface: var(--surface);
+  --app-surface-subtle: var(--surface-soft);
+  --app-ink: var(--ink);
+  --app-muted: var(--text-muted);
+  --app-line: var(--border-color);
+  --app-line-strong: #c5c0b5;
+  --app-accent: var(--attention-strong);
+  --app-accent-ink: var(--ink);
+  --app-accent-soft: var(--attention-soft);
+  --app-accent-line: var(--attention);
+  --app-action: var(--attention-strong);
+  --app-action-ink: var(--ink);
+  --app-nav: var(--sidebar-color);
   --app-nav-ink: #fffdf9;
   --app-nav-muted: rgba(237, 239, 252, 0.76);
   --app-nav-hover: rgba(255, 255, 255, 0.07);
@@ -609,7 +626,7 @@ html[data-theme="drenched"] :is(.bg-card, .bg-popover, .glass-card, .glass-card-
 }
 
 .app-topbar {
-  background: color-mix(in srgb, var(--app-paper) 94%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-color: var(--app-line);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -621,8 +638,29 @@ html[data-theme="drenched"] :is(.bg-card, .bg-popover, .glass-card, .glass-card-
 }
 
 .app-content {
-  width: min(100%, 1440px);
+  width: min(100%, 1280px);
   margin-inline: auto;
+}
+
+.app-page-title {
+  font-size: clamp(1.75rem, 2.4vw, 2rem);
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.app-section-title { font-size: 1.25rem; line-height: 1.25; font-weight: 500; letter-spacing: -0.02em; }
+.app-surface { border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface); }
+.app-tab-bed { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-soft); }
+.app-tab { min-height: 34px; border-radius: 7px; padding: 0 13px; font-size: 13px; color: var(--text-muted); }
+.app-tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(23,23,23,.08); }
+.app-attention-button { border: 1px solid var(--attention); background: var(--attention-strong); color: var(--ink); border-radius: 9px; }
+.app-meta { font-size: 12px; color: var(--text-muted); }
+
+@media (max-width: 767px) {
+  .app-workspace { padding-inline: 16px !important; }
+  .app-page-title { font-size: 27px; }
 }
 
 .app-sidebar-scroll {

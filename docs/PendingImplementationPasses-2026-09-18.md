@@ -1170,3 +1170,28 @@ For each pass, record:
 - production checks performed;
 - external validation still required;
 - anything explicitly deferred.
+# UI refactor authority and sequence — 18 September 2026
+
+The interactive reference at `/Users/ujjawalasthana/.codex/visualizations/2026/07/12/019f5521-af3b-7c73-8974-bece1b177f01/joon-app-redesign.html` supersedes earlier static UI explorations as the visual and interaction source of truth. It does not supersede Joon's business logic, routes, data or safety behavior.
+
+The implementation principle is **scan → work → prove**:
+
+1. Scan: one page headline, current state, no more than four headline metrics and one obvious primary action.
+2. Work: task-specific tabs and one principal workspace.
+3. Prove: drawers, inspectors and receipts hold reasoning, evidence, history and safeguards.
+
+## UI Phase 1 — implemented in this pass
+
+- Central light-theme tokens now match the interactive reference exactly.
+- The shell uses the direct merchant task IA: Today, Decisions, Customers, Campaigns, Automations, Results, Activity, Inbox and Brand & content.
+- Setup status, Settings and Ask Joon are utilities; store identity remains in the top bar.
+- Reusable page-header, surface and metric-strip primitives were added.
+- Today was recomposed around the daily decision brief and highest-impact work while retaining the real command, reasoning and approval behavior.
+- Campaign list was rebuilt as an operational workspace with a four-metric scan layer, local status tabs and a quiet row-based list.
+- Campaign detail gained local Overview, Audience, Creative and Evidence navigation while retaining every approval, audience, override, timing, preview and delivery action.
+- Campaign builder was moved into a focused, wider staged workspace without changing its creation or send behavior.
+- Mobile remains an off-canvas navigation model; desktop uses a 204px rail and 62px top bar.
+
+## UI Phase 2 — pending after Phase 1 approval
+
+Apply the approved primitives and disclosure model to Decisions, Customers, Automations, Results, Activity, Inbox, Brand & content, Setup and Settings. Existing URLs and nested detail pages remain valid throughout the migration.

@@ -101,32 +101,32 @@ export default function NewCampaignPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-5xl space-y-7">
       <div className="flex items-center gap-4">
         <Link href="/campaigns" className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
-        <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">New campaign</h1>
+        <div><p className="mb-1 font-mono text-[12px] uppercase tracking-[0.15em] text-[var(--attention)]">Focused builder</p><h1 className="app-page-title">New campaign</h1></div>
       </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-2">
+      <div className="app-tab-bed max-w-full overflow-x-auto">
         {steps.map((s, i) => (
           <div key={s.key} className="flex items-center gap-2">
             <button
               onClick={() => i <= currentIdx && setStep(s.key)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-all ${
+              className={`app-tab flex items-center gap-2 whitespace-nowrap ${
                 s.key === step
-                  ? "bg-secondary text-secondary-foreground"
+                  ? "bg-[var(--surface)] text-foreground shadow-sm"
                   : i < currentIdx
-                    ? "bg-muted text-foreground"
-                    : "bg-card border border-border text-muted-foreground"
+                    ? "text-foreground"
+                    : "text-muted-foreground"
               }`}
             >
               {i < currentIdx && <Check className="w-3 h-3" />}
               {s.label}
             </button>
-            {i < steps.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground/50" />}
+            {i < steps.length - 1 && <ArrowRight className="w-3 h-3 shrink-0 text-muted-foreground/50" />}
           </div>
         ))}
       </div>
@@ -152,7 +152,7 @@ export default function NewCampaignPage() {
       )}
 
       {/* Step content */}
-      <div className="border border-border rounded-xl bg-card p-6">
+      <div className="app-surface min-h-[420px] p-5 sm:p-7">
         {step === "details" && (
           <div className="space-y-4">
             <h2 className="text-[13px] font-bold text-foreground font-serif">Campaign Details</h2>

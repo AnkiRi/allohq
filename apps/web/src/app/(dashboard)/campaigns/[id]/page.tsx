@@ -477,19 +477,19 @@ export default function CampaignDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/campaigns" className="p-2 rounded-lg hover:bg-muted transition-colors">
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-[18px] tracking-[-0.5px] font-semibold text-foreground font-serif">
+            <h1 className="app-page-title max-w-3xl">
               {campaign.name}
             </h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">{campaign.template?.subject}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {campaign.status === "sent" && (
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))] border border-[hsl(var(--success)/0.25)] rounded-lg text-xs font-sans font-bold">
               <CheckCircle className="w-3.5 h-3.5" />
@@ -625,6 +625,13 @@ export default function CampaignDetailPage() {
           )}
         </div>
       </div>
+
+      <nav className="app-tab-bed sticky top-0 z-20 max-w-full overflow-x-auto" aria-label="Campaign sections">
+        <a className="app-tab inline-flex items-center" href="#overview">Overview</a>
+        {(campaign.status === "draft" || campaign.status === "scheduled") && <a className="app-tab inline-flex items-center" href="#audience">Audience</a>}
+        <a className="app-tab inline-flex items-center" href="#evidence">Evidence</a>
+        <a className="app-tab inline-flex items-center" href="#creative">Creative</a>
+      </nav>
 
       <Dialog.Root open={showApproval} onOpenChange={setShowApproval}>
         <Dialog.Portal>
@@ -914,12 +921,12 @@ export default function CampaignDetailPage() {
       )}
 
       {/* Campaign details */}
-      <div className="border border-border rounded-xl p-6 bg-card">
+      <div className="app-surface scroll-mt-24 p-5 sm:p-6" id="overview">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-px h-6 bg-secondary" />
           <h2 className="text-[13px] font-bold text-foreground font-serif">Details</h2>
         </div>
-        <div className="grid grid-cols-3 gap-x-8 gap-y-2">
+        <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { label: "Status", value: campaign.status.toUpperCase() },
             { label: "Template", value: campaign.template?.name },
@@ -945,7 +952,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {(campaign.status === "draft" || campaign.status === "scheduled") && (
-        <div className="border border-border rounded-xl p-6 bg-card">
+        <div className="app-surface scroll-mt-24 p-5 sm:p-6" id="audience">
           <div className="flex items-start justify-between gap-6 mb-5">
             <div>
               <p className="text-[10px] uppercase tracking-[1px] font-bold text-muted-foreground">
@@ -1651,21 +1658,13 @@ export default function CampaignDetailPage() {
       )}
 
       {/* How joon decided — the moat, made legible */}
-      <DecisionTracePanel
+      <div id="evidence" className="scroll-mt-24"><DecisionTracePanel
         campaignId={campaignId}
-        preview={
-          dryRun
-            ? {
-                treatmentCount: dryRun.estimatedTreatment,
-                controlCount: dryRun.estimatedControl,
-                controlRate: dryRun.measurement.holdoutRate,
-              }
-            : undefined
-        }
-      />
+        preview={dryRun ? { treatmentCount: dryRun.estimatedTreatment, controlCount: dryRun.estimatedControl, controlRate: dryRun.measurement.holdoutRate } : undefined}
+      /></div>
 
       {/* Email preview — full width */}
-      <div className="border border-border rounded-xl bg-card overflow-hidden">
+      <div className="app-surface scroll-mt-24 overflow-hidden" id="creative">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-px h-6 bg-secondary" />
