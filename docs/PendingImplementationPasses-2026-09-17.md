@@ -1,4 +1,4 @@
-# Joon pending implementation passes — 2026-09-16
+# Joon pending implementation passes — 2026-09-17
 
 Status: canonical backlog for the product passes being completed before the 2026-09-17 design-partner demo.
 
@@ -16,6 +16,7 @@ This document is the single reference point for these passes. Later implementati
 | 5 — Conversational email creator and editable brand kit | Complete within the available provider boundary | `2e93e90` | Production creative acceptance; choose/validate durable binary storage and true reference-image editing before claiming pixel-faithful swaps |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
+| 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
 
 ## Pass 0 — Creative, offer and attribution correctness
 
@@ -279,6 +280,170 @@ The first store analysis should present two connected maps:
 These maps are the beginning of Joon intelligence. They turn later campaigns and
 journeys into explainable decisions rather than generic AI-generated messages.
 
+## Pass 8 — Campaign-specific customer decision context
+
+Status: planned as the next implementation phase. The exact-customer targeting and
+consent consistency correction in `d758862` is necessary plumbing, but it is not the
+finished intelligence model described here.
+
+### Why this pass exists
+
+The merchant agent currently starts with broad store context, then receives a shallow
+record when it looks up a named customer. Audience resolution applies additional rules
+later, but the agent composing or explaining the campaign does not consistently see the
+customer's complete decision context. This can produce brittle mappings such as
+`Lost → discount` or `Subscriber → welcome`, even when the customer's history, purchase
+rhythm, offer behaviour or the merchant's requested campaign says otherwise.
+
+Joon must not treat lifecycle labels as instructions. A label is one input. The decision
+must combine the merchant's request, the customer's current state, historical evidence,
+campaign relevance and delivery constraints.
+
+Hard binary rules remain only for genuine safety boundaries:
+
+- no consent or unsubscribed → do not send;
+- complaint, hard bounce or invalid address → do not send;
+- active support escalation → block by default until resolved.
+
+Lifecycle, purchase cycle, discount behaviour, fatigue, engagement and product affinity
+are evidence for a contextual recommendation. They are not universal `if X, then Y`
+creative rules.
+
+### Current architecture context
+
+Joon has two true LLM agents:
+
+1. the merchant-facing retention strategist used in the workspace;
+2. the customer-facing assistant used for customer conversations.
+
+The background system also contains specialized workers for customer state, RFM,
+opportunities, product relationships, timing, attribution, journeys and delivery. Those
+workers compute facts and execute bounded workflows; they are not separate reasoning
+agents. Pass 8 makes their evidence available coherently to the merchant agent at the
+moment it makes a campaign decision.
+
+### Outcome
+
+Give the merchant agent a structured, campaign-specific customer decision context for
+one named customer or a bounded audience. The agent should explain why the requested
+message is or is not appropriate, choose products and offer treatment from evidence,
+and pass a durable recommendation into the normal audience review. The deterministic
+audience and delivery layers still enforce consent and safety.
+
+The intended flow is:
+
+```text
+Customer facts and history
+        ↓
+Customer-state and product-intelligence engines
+        ↓
+Campaign-specific decision context
+        ↓
+Merchant-agent recommendation
+        ↓
+Deterministic consent and safety checks
+        ↓
+Candidate / deliberately left alone / control / treatment
+```
+
+### Required decision context
+
+For each customer under consideration, expose the dimensions relevant to the current
+request rather than dumping an entire database record into the model:
+
+- canonical identity and current email consent/delivery health;
+- lifecycle and RFM, with a merchant-facing label that does not misclassify a
+  zero-order subscriber as lost;
+- order count, value and recent order history;
+- products, variants, collections and categories purchased;
+- discounted versus full-price order evidence;
+- mean and median reorder interval, days since last order, expected next-order date,
+  purchase-cycle position and reorder confidence;
+- product affinities and reviewed product-graph relationships relevant to the request;
+- opens, clicks and meaningful engagement evidence;
+- recent campaigns, treatment/control assignments and outcomes;
+- previous `deliberately left alone` decisions and their reconsideration conditions;
+- fatigue, recent-contact, quiet-hours and timing evidence;
+- support state and other active safety concerns;
+- the merchant's exact requested audience, products, occasion, offer and exclusions;
+- confidence, missing evidence and the reason for the recommendation.
+
+### Required work
+
+- Add a typed `get_customer_decision_context` capability for one customer and a bounded
+  batch/cohort variant for campaign planning.
+- Compose it from the canonical customer, CustomerState, order/discount evidence,
+  engagement, audience-decision ledger, product graph, timing profile, consent and
+  delivery-health records.
+- Keep deterministic safety checks outside the LLM and run them again at approval and
+  delivery.
+- Prevent a broad RFM segment from replacing a named or exact customer selection.
+- Treat the merchant's explicit constraints—no discount, exact discount, new products,
+  full-price alternative, no control—as durable inputs that contextual reasoning cannot
+  silently discard.
+- Rank and summarize evidence so a 100,000-customer campaign does not place 100,000 full
+  profiles into an LLM prompt. Resolve state deterministically, form explainable cohorts,
+  and ask the model to reason over cohort summaries plus representative evidence.
+- Produce a decision per cohort with counts, evidence, confidence, suggested treatment
+  and reconsideration trigger; preserve customer-level membership for audit and delivery.
+- Feed the recommendation into Pass 1's audience equation and review drawer using the
+  fixed vocabulary: campaign candidate, deliberately left alone, control and treatment.
+- Show the merchant the relevant evidence in human language, not internal scores alone.
+- Record which context version and evidence supported the decision so a reopened campaign
+  remains explainable after customer state changes.
+
+### Required reasoning examples
+
+For the current Ujjawal request, Joon should reason approximately like this:
+
+> Ujjawal is subscribed and has no orders yet. He is not a lost customer and does not
+> need a win-back. Because you requested new products without a discount, a useful
+> first-purchase introduction is appropriate. He has no purchase history for personalized
+> product selection, so Joon will use the store's strongest new arrivals.
+
+For Maya:
+
+> Maya has placed 10 orders, all at full price, and is still inside her normal purchase
+> cycle. She is eligible for a new-product announcement, but Joon recommends excluding
+> her from the 30% offer and sending her a separate full-price version.
+
+For Rohan:
+
+> Rohan previously bought regularly, but is now overdue relative to his own normal cycle.
+> Bring him back into campaign candidacy. Start with a relevant full-price reminder;
+> introduce a discount only if that does not work.
+
+These examples are reasoning shapes, not hard-coded personas or rules. Real copy must use
+the store's observed evidence, acknowledge uncertainty and avoid claiming that a customer
+will buy without a discount.
+
+### Scale and UI behaviour
+
+- One named customer: load and explain the complete relevant decision context.
+- Small explicit audience: evaluate each customer, then summarize common and exceptional
+  decisions.
+- Large campaign: compute customer state and policy deterministically, aggregate customers
+  into explainable cohorts, and reason over those cohorts rather than running one LLM call
+  per customer.
+- The campaign page should lead with the audience reconciliation and let the merchant drill
+  into evidence, exceptions and overrides without rendering the full audience at once.
+
+### Acceptance criteria
+
+- A zero-order opted-in customer is described as a subscriber/first-purchase opportunity,
+  never as lost or requiring a discount solely because of RFM 3/15.
+- A no-discount instruction remains no-discount through reasoning, creative, approval and
+  delivery.
+- A historically full-price buyer inside their normal cycle can remain eligible for a
+  relevant new-product message while being deliberately left alone for a discount offer.
+- An overdue repeat buyer re-enters campaign candidacy when their state changes, with the
+  transition and evidence visible.
+- Named-customer, small-audience and large-cohort tests all preserve exact membership and
+  reconcile to the audience equation.
+- The explanation cites stored evidence, identifies missing evidence and never invents
+  purchase, consent, engagement or product-affinity facts.
+- Load testing proves the cohort path does not invoke an LLM once per customer.
+
 ## Sequencing
 
 1. Complete Pass 0 production acceptance and Pass 1's scalable audience-review UI.
@@ -291,14 +456,17 @@ journeys into explainable decisions rather than generic AI-generated messages.
 5. Complete Pass 2 and load-test timing preview/fan-out at representative scale.
 6. Incorporate the founder’s additional design direction into Pass 3, then implement it.
 7. Implement Pass 5 on top of the durable chat/artifact model and reviewed brand kit.
-8. Run one bounded product-wide UX coherence pass: terminal styling remains Joon's
+8. Implement Pass 8 so the merchant agent reasons from the customer-state and product
+   intelligence already produced by Passes 6 and 7 rather than from a shallow lookup or
+   lifecycle label.
+9. Run one bounded product-wide UX coherence pass: terminal styling remains Joon's
    decision/ledger voice; operational navigation and dense exploration remain quiet,
    conventional and accessible. Do not create a fourth visual language for the new maps.
-9. Run the complete design-partner path: Shopify sync → customer-state map → product
+10. Run the complete design-partner path: Shopify sync → customer-state map → product
    graph → natural-language request → audience reconciliation → override → control
    assignment → creative → approval → timing → provider delivery → open → click →
    order → attribution → outcome.
-10. Do not widen production delivery beyond the recipient allowlist during these passes.
+11. Do not widen production delivery beyond the recipient allowlist during these passes.
 
 ## Linked external and operational work
 
