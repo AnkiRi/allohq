@@ -52,6 +52,9 @@ export default function CampaignDetailPage() {
   const [selectedGovernorIds, setSelectedGovernorIds] = useState<string[]>([]);
   const [governorOverrideReason, setGovernorOverrideReason] = useState("");
   const [alternativeSubmitting, setAlternativeSubmitting] = useState(false);
+  const [showOfferOverride, setShowOfferOverride] = useState(false);
+  const [offerOverridePercent, setOfferOverridePercent] = useState("");
+  const [offerOverrideReason, setOfferOverrideReason] = useState("");
   const [showTimingOverride, setShowTimingOverride] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
   const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
@@ -139,6 +142,27 @@ export default function CampaignDetailPage() {
       );
     },
     onError: () => toast("We couldn't send that. Mind trying again?", "error"),
+  });
+  const overrideDiscountMut = (trpc.campaigns.overrideDiscount as any).useMutation({
+    onSuccess: async ({ changed, discountPercent }: { changed: boolean; discountPercent: number }) => {
+      setShowOfferOverride(false);
+      setOfferOverrideReason("");
+      setOfferOverridePercent("");
+      renderMut.reset();
+      await Promise.all([
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+        utils.campaigns.dryRun.invalidate({ id: campaignId }),
+        utils.campaigns.timingPreview.invalidate({ id: campaignId }),
+      ]);
+      toast(
+        changed
+          ? `Offer updated to ${discountPercent}%. Approval and creative were refreshed.`
+          : `The offer is already ${discountPercent}%.`,
+        "success"
+      );
+    },
+    onError: (error: { message?: string }) =>
+      toast(error.message || "We couldn't update that offer.", "error"),
   });
   const deliverNowMut = (trpc.campaigns.deliverNow as any).useMutation({
     onSuccess: async ({ promoted }: { promoted: number }) => {
@@ -1032,11 +1056,28 @@ export default function CampaignDetailPage() {
                         {dryRun.offer.discountCode ?? "generated at approval"}
                       </p>
                     </div>
-                    <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground">
-                      {dryRun.offer.shopifyStatus === "created"
-                        ? "Created in Shopify"
-                        : "Created in Shopify when sending begins"}
-                    </span>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground">
+                        {dryRun.offer.shopifyStatus === "created"
+                          ? "Created in Shopify"
+                          : "Created in Shopify when sending begins"}
+                      </span>
+                      {campaign?.status === "draft" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOfferOverridePercent(
+                              String(dryRun.offer.appliedDiscountPercent)
+                            );
+                            setShowOfferOverride((value) => !value);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[10px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Pencil className="h-3 w-3" aria-hidden="true" />
+                          {showOfferOverride ? "Keep current offer" : "Change for this campaign"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {dryRun.offer.adjustedByGuardrail && (
                     <p className="mt-2 text-[11px] text-warning">
@@ -1044,6 +1085,60 @@ export default function CampaignDetailPage() {
                       allows at most {dryRun.offer.appliedDiscountPercent}%, so Joon used{" "}
                       {dryRun.offer.appliedDiscountPercent}% and kept the draft within policy.
                     </p>
+                  )}
+                  {showOfferOverride && (
+                    <div className="mt-3 border-t border-border pt-3">
+                      <p className="max-w-2xl text-[11px] leading-5 text-muted-foreground">
+                        This is a campaign-only merchant override. It does not change your store
+                        guardrail. Joon will record the change, update the percentage throughout
+                        this draft and require approval again.
+                      </p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:items-end">
+                        <label className="text-[10px] font-medium text-foreground">
+                          Discount
+                          <span className="relative mt-1 block">
+                            <input
+                              type="number"
+                              min={1}
+                              max={90}
+                              value={offerOverridePercent}
+                              onChange={(event) => setOfferOverridePercent(event.target.value)}
+                              className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-7 text-[12px] tabular-nums text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">%</span>
+                          </span>
+                        </label>
+                        <label className="text-[10px] font-medium text-foreground">
+                          Why are you changing Joon&apos;s offer?
+                          <input
+                            value={offerOverrideReason}
+                            onChange={(event) => setOfferOverrideReason(event.target.value)}
+                            placeholder="For example: the festival campaign is approved at 30%."
+                            className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-[12px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={
+                            overrideDiscountMut.isPending ||
+                            offerOverrideReason.trim().length < 5 ||
+                            !Number.isInteger(Number(offerOverridePercent)) ||
+                            Number(offerOverridePercent) < 1 ||
+                            Number(offerOverridePercent) > 90
+                          }
+                          onClick={() =>
+                            overrideDiscountMut.mutate({
+                              id: campaignId,
+                              discountPercent: Number(offerOverridePercent),
+                              reason: offerOverrideReason.trim(),
+                            })
+                          }
+                          className="h-10 rounded-lg bg-secondary px-3 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {overrideDiscountMut.isPending ? "Updating offer…" : "Apply override"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

@@ -18,6 +18,28 @@ This document is the single reference point for these passes. Later implementati
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
 | 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
 | 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
+| 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
+
+## Decisions locked after the design-partner demo
+
+- The HealthifyMe conversation was successful and the team is likely to onboard as a design
+  partner. Start with the smaller Shopify store of roughly 100,000 customers; do not use the
+  prospective 45-million-customer mobile app as an excuse to skip the bounded Shopify proof.
+- Journeys have no random holdout. Every customer who remains eligible under consent,
+  suppression, timing and purchase-exit rules receives the journey step.
+- Cancelled orders are removed from attributed revenue and therefore from any future fee.
+  Refunds are not independently deducted under the current locked rule; reconcile the worker
+  to this rule before billing is enabled.
+- Customer state is hybrid: event-triggered when orders, opens, clicks, consent, support or
+  relevant storefront events arrive, plus scheduled reevaluation at `nextEvaluationAt` for
+  time-based transitions such as becoming due or overdue. Neither a nightly million-row scan
+  nor waiting only for events is sufficient.
+- A merchant may override a campaign's discount for that campaign only. The override must be
+  explicit, reasoned and audited, update all creative/offer surfaces consistently, invalidate
+  prior approval and leave the store-wide guardrail unchanged.
+- Audience review must support select/deselect page, select/deselect all where safe, and bulk
+  removal of merchant overrides. Consent, unsubscribe, complaint, hard bounce and invalid
+  address remain non-overrideable.
 
 ## Post-demo acceptance findings — 2026-09-17
 
@@ -684,6 +706,54 @@ actor, reason, scope, expiry and an audit event.
 - The UI reconciles cap, used, remaining, deferred and terminal delivery counts.
 - Load proof covers a representative large audience with bounded cohort/chunk jobs.
 - Production evidence is collected under the allowlist before any broader partner ramp.
+
+## Pass 10 — High-scale commerce ingestion and state evaluation
+
+Status: newly required after the 2026-09-17 HealthifyMe discussion. This is not a request to
+put 45 million customer rows through the current Shopify-worker path unchanged.
+
+### Outcome
+
+Support two deliberately staged operating envelopes:
+
+1. prove the existing Shopify product at approximately 100,000 customers with bounded sync,
+   state scheduling, audience planning and delivery;
+2. build a separate enterprise/mobile-app ingestion contract that can eventually support
+   approximately 45 million customer identities without per-customer LLM calls, full nightly
+   scans or one queue job per profile.
+
+### Required architecture
+
+- Define source contracts for customer identity, consent, orders, catalog, product views,
+  carts, checkout, app events and campaign/provider events. Preserve source event IDs and
+  idempotency keys.
+- Use append-only normalized events plus materialized customer/product features; do not make
+  the operational UI query raw event history for every decision.
+- Partition ingestion and state work by tenant and stable customer shard. Support resumable
+  backfills, watermarks, late events, replay and dead-letter quarantine.
+- Recompute only affected state dimensions on events. Persist `nextEvaluationAt` in an indexed
+  scheduler for time-based transitions and drain due rows in bounded, leased batches.
+- Aggregate large audiences into deterministic, explainable cohorts before any model call.
+  LLM use belongs at cohort/creative/strategy level, never once per customer.
+- Maintain a state-version and policy-version on decisions so a 45-million-profile backfill can
+  run alongside live events without mixing incompatible results.
+- Separate online freshness requirements from batch analytics. Orders, consent, complaints and
+  hard bounces are safety-critical; open/click/intent and product-affinity updates may tolerate
+  bounded asynchronous delay.
+- Design deletion, export, retention, encryption, tenant isolation, observability and cost
+  budgets for the enterprise path before importing protected data.
+
+### Scale gates
+
+- 100,000-customer Shopify sync resumes after interruption with no duplicate customers,
+  orders, consent rows or state jobs.
+- State scheduler demonstrates bounded database connections and queue depth while due profiles
+  are drained; new safety events remain timely during a backfill.
+- Audience planning and override review never fetch or render the complete audience.
+- Produce a capacity model before the 45-million import: daily event rate, backfill duration,
+  storage growth, state-update throughput, queue partitions, database/index strategy and
+  failure-recovery time.
+- Run a synthetic sharded benchmark before accepting real mobile-app customer data.
 
 ## Consolidated remaining-work register — audited 2026-09-17
 

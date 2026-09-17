@@ -1,28 +1,59 @@
 import { prisma, applyEmailProviderSafetyEffects } from "@allohq/database";
 import { pollSesEventQueue, type NormalizedSesEvent } from "@allohq/messaging";
 import { EventEmitter } from "node:events";
+import { Queue } from "bullmq";
+import { QUEUE_NAMES, redisConnection } from "../config";
 
 const RECEIPT_RETENTION_DAYS = 30;
 const RECEIPT_CLEANUP_BATCH = 1_000;
 export const SES_SEND_RECONCILABLE_STATES = ["submitting", "ambiguous", "manual_review"] as const;
+let customerStateQueue: Queue | null = null;
+
+function stateQueue() {
+  customerStateQueue ??= new Queue(QUEUE_NAMES.CUSTOMER_STATE, {
+    connection: redisConnection,
+  });
+  return customerStateQueue;
+}
 
 async function persist(event: NormalizedSesEvent, _raw: string) {
   const db = prisma as any;
-  await db.$transaction(async (tx: any) => {
+  const result = await db.$transaction(async (tx: any) => {
     // Retain only normalized operational fields; raw SNS payloads can contain
     // recipient addresses and are intentionally excluded from persistence.
     const inserted = await tx.sesEventReceipt.createMany({ data: [{ eventId: event.eventId, messageId: event.messageId, eventType: event.kind, payload: { kind: event.kind, occurredAt: event.occurredAt.toISOString(), deliveryTag: event.deliveryTag ?? null, permanent: event.permanent ?? null } }], skipDuplicates: true });
-    if (!inserted.count) return;
+    if (!inserted.count) return { inserted: false, customerId: null, storeId: null };
     if (event.deliveryTag && event.kind === "send") {
       await tx.sesDeliveryAttempt.updateMany({ where: { providerTag: event.deliveryTag, state: { in: [...SES_SEND_RECONCILABLE_STATES] } }, data: { state: "accepted", externalId: event.messageId, reconciledAt: event.occurredAt } });
       const attempt = await tx.sesDeliveryAttempt.findUnique({ where: { providerTag: event.deliveryTag } });
       if (attempt) await tx.messageLog.updateMany({ where: { deliveryKey: attempt.deliveryKey, OR: [{ providerEventAt: null }, { providerEventAt: { lte: event.occurredAt } }] }, data: { status: "sent", provider: "ses", externalId: event.messageId, sentAt: event.occurredAt, providerEventAt: event.occurredAt, error: null } });
     }
-    const log = await tx.messageLog.findFirst({ where: { externalId: event.messageId }, select: { id: true, status: true, providerEventAt: true } });
+    const log = await tx.messageLog.findFirst({ where: { externalId: event.messageId }, select: { id: true, status: true, providerEventAt: true, customerId: true, storeId: true } });
     const rank: Record<string, number> = { queued: 0, sent: 1, delivered: 2, opened: 3, clicked: 4, bounced: 5, failed: 5 };
     const next = event.kind === "delivery" ? "delivered" : event.kind === "open" ? "opened" : event.kind === "click" ? "clicked" : event.kind === "bounce" || event.kind === "complaint" ? "bounced" : event.kind === "reject" || event.kind === "rendering_failure" ? "failed" : null;
     if (log && next && (!log.providerEventAt || event.occurredAt >= log.providerEventAt) && (rank[next] ?? 0) >= (rank[log.status] ?? 0)) await tx.messageLog.update({ where: { id: log.id }, data: { ...(event.kind === "delivery" ? { status: next, deliveredAt: event.occurredAt } : event.kind === "open" ? { status: next, openedAt: event.occurredAt } : event.kind === "click" ? { status: next, clickedAt: event.occurredAt } : event.kind === "bounce" ? { status: next, error: event.permanent ? "permanent bounce" : "transient bounce" } : event.kind === "complaint" ? { status: next, error: "spam_complaint" } : { status: next, error: `SES ${event.kind}` }), providerEventAt: event.occurredAt } });
+    return {
+      inserted: true,
+      customerId: log?.customerId ?? null,
+      storeId: log?.storeId ?? null,
+    };
   });
+  if (
+    result.inserted &&
+    result.customerId &&
+    result.storeId &&
+    (event.kind === "open" || event.kind === "click")
+  ) {
+    await stateQueue().add(
+      event.kind === "open" ? "email-opened" : "email-clicked",
+      {
+        type: event.kind === "open" ? "email_opened" : "email_clicked",
+        customerId: result.customerId,
+        storeId: result.storeId,
+      },
+      { jobId: `ses-state-${event.eventId}` }
+    );
+  }
   if (event.kind === "complaint" || (event.kind === "bounce" && event.permanent) || event.kind === "reject" || event.kind === "rendering_failure") {
     const log = await prisma.messageLog.findFirst({ where: { externalId: event.messageId }, select: { id: true } });
     if (log) await applyEmailProviderSafetyEffects(prisma, { messageLogId: log.id, event: event.kind === "complaint" ? "complaint" : event.kind === "bounce" ? "permanent_bounce" : "failure", provider: "ses", occurredAt: event.occurredAt });

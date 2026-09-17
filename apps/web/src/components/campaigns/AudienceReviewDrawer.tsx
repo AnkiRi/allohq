@@ -132,6 +132,10 @@ export function AudienceReviewDrawer({
   });
   const activeGroup = visibleGroups.find((group) => group.reason === reason);
   const overrideable = review.data?.overridePolicy && review.data.overridePolicy !== "blocked";
+  const pageCustomerIds =
+    review.data?.customers.map((customer: { id: string }) => customer.id) ?? [];
+  const wholePageSelected =
+    pageCustomerIds.length > 0 && pageCustomerIds.every((id: string) => selectedIds.includes(id));
   const isOverriding =
     stateOverride.isPending ||
     recentOverride.isPending ||
@@ -324,13 +328,15 @@ export function AudienceReviewDrawer({
                       <button
                         type="button"
                         onClick={() =>
-                          setSelectedIds(
-                            review.data?.customers.map((customer: any) => customer.id) ?? []
+                          setSelectedIds((current) =>
+                            wholePageSelected
+                              ? current.filter((id) => !pageCustomerIds.includes(id))
+                              : [...new Set([...current, ...pageCustomerIds])]
                           )
                         }
                         className="text-[10px] font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        Select this page
+                        {wholePageSelected ? "Deselect this page" : "Select this page"}
                       </button>
                       {selectedIds.length > 0 && (
                         <button
@@ -338,7 +344,7 @@ export function AudienceReviewDrawer({
                           onClick={() => setSelectedIds([])}
                           className="text-[10px] font-medium text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          Clear
+                          Deselect all
                         </button>
                       )}
                     </div>

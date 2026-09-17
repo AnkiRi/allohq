@@ -61,6 +61,26 @@ function campaignFamily(proposal: unknown): string {
   return `${intent}:${discounted ? "discount" : "full_price"}`;
 }
 
+function replaceDiscountPercent(value: unknown, fromPercent: number, toPercent: number): unknown {
+  if (typeof value === "string") {
+    return value
+      .replace(new RegExp(`\\b${fromPercent}\\s*%`, "g"), `${toPercent}%`)
+      .replace(new RegExp(`\\b${fromPercent}\\s+percent\\b`, "gi"), `${toPercent}%`);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceDiscountPercent(item, fromPercent, toPercent));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        replaceDiscountPercent(item, fromPercent, toPercent),
+      ])
+    );
+  }
+  return value;
+}
+
 function planCampaignHoldout(
   storeId: string,
   assignmentSeed: string,
@@ -109,6 +129,96 @@ async function campaignEvidence(prisma: PrismaClient, storeId: string, family: s
 }
 
 export const campaignsRouter = router({
+  overrideDiscount: workspaceProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        discountPercent: z.number().int().min(1).max(90),
+        reason: z.string().trim().min(5).max(240),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: {
+          id: input.id,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["draft", "scheduled"] },
+        },
+        include: { template: true },
+      });
+      if (!campaign?.template) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campaign not found, already sent, or missing its email creative.",
+        });
+      }
+      const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
+      const currentPercent = Number(proposal.discountPercent ?? 0);
+      if (!Number.isFinite(currentPercent) || currentPercent <= 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This campaign does not currently contain a percentage discount.",
+        });
+      }
+      if (currentPercent === input.discountPercent) {
+        return { changed: false, discountPercent: currentPercent };
+      }
+
+      const subject = replaceDiscountPercent(
+        campaign.template.subject,
+        currentPercent,
+        input.discountPercent
+      ) as string;
+      const previewText = campaign.template.previewText
+        ? (replaceDiscountPercent(
+            campaign.template.previewText,
+            currentPercent,
+            input.discountPercent
+          ) as string)
+        : null;
+      const blocks = replaceDiscountPercent(
+        campaign.template.blocks,
+        currentPercent,
+        input.discountPercent
+      );
+      const name = replaceDiscountPercent(
+        campaign.name,
+        currentPercent,
+        input.discountPercent
+      ) as string;
+      const changedAt = new Date().toISOString();
+
+      await ctx.prisma.$transaction([
+        ctx.prisma.emailTemplate.update({
+          where: { id: campaign.template.id },
+          data: { subject, previewText, blocks: blocks as any, html: null },
+        }),
+        ctx.prisma.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            name,
+            status: "draft",
+            approvedAt: null,
+            approvalChecksum: null,
+            agentProposal: {
+              ...proposal,
+              discountPercent: input.discountPercent,
+              discountAdjustedByGuardrail: false,
+              merchantOfferOverride: {
+                fromPercent: currentPercent,
+                toPercent: input.discountPercent,
+                reason: input.reason,
+                actorId: ctx.userId,
+                changedAt,
+              },
+            } as any,
+          },
+        }),
+      ]);
+
+      return { changed: true, discountPercent: input.discountPercent };
+    }),
+
   timingPreview: workspaceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
