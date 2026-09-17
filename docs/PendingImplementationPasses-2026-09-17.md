@@ -41,6 +41,14 @@ This document is the single reference point for these passes. Later implementati
   removal of merchant overrides. Consent, unsubscribe, complaint, hard bounce and invalid
   address remain non-overrideable.
 
+## Post-demo implementation ledger
+
+| Commit | Pass mapping | Completed in code | Still to verify or build |
+| --- | --- | --- | --- |
+| `ee1986e` | Passes 1, 6, 8 and 10 | Campaign-only audited discount override; offer/creative percentage reconciliation; audience select/deselect-page controls; SES open/click state triggers; HealthifyMe scale contract | Production offer override acceptance; bulk removal of already-recorded individual audience overrides; synthetic scale proof |
+| `b78f1ce` | Passes 0 and journey policy | Journey preflight and UI now expose zero random controls; refund events no longer reduce attributed revenue; cancellations continue to remove attribution | Production cancellation acceptance; revise stale older acceptance documents |
+| `538413b` | Passes 6, 8 and 10 | Order create/update/cancellation refresh the affected customer's order projection, RFM summary and LTV before state recomputation | Production verification on a new order/cancellation; scalable store-relative RFM threshold design |
+
 ## Post-demo acceptance findings — 2026-09-17
 
 These findings came from the successful allowlisted production path for
