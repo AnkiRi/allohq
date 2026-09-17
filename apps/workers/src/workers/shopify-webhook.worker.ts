@@ -659,6 +659,7 @@ async function upsertProduct(
     vendor: string | null;
     product_type: string | null;
     status: string;
+    created_at?: string;
     image: { src: string } | null;
     variants: Array<{
       id: number;
@@ -684,6 +685,7 @@ async function upsertProduct(
       imageUrl: p.image?.src ?? null,
       price: p.variants?.[0] ? parseFloat(p.variants[0].price) : 0,
       status: p.status,
+      externalCreatedAt: p.created_at ? new Date(p.created_at) : new Date(),
     },
     update: {
       title: p.title,
@@ -694,6 +696,7 @@ async function upsertProduct(
       imageUrl: p.image?.src ?? null,
       price: p.variants?.[0] ? parseFloat(p.variants[0].price) : 0,
       status: p.status,
+      ...(p.created_at ? { externalCreatedAt: new Date(p.created_at) } : {}),
     },
   });
 

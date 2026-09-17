@@ -255,7 +255,11 @@ export async function executeApprovedAction(
         | Record<string, unknown>
         | undefined;
       let blocks: unknown[] = [];
-      if (contentSlots) {
+      const generatedBlocks = payload.generatedBlocks;
+      if (Array.isArray(generatedBlocks) && generatedBlocks.length > 0) {
+        blocks = generatedBlocks;
+      }
+      if (blocks.length === 0 && contentSlots) {
         // Convert content slots into email builder blocks
         if (contentSlots.headline) {
           blocks.push({
@@ -297,7 +301,10 @@ export async function executeApprovedAction(
           name: (payload.campaignName as string) || "AI Campaign",
           subject,
           blocks: (blocks.length > 0 ? blocks : []) as any,
-          html: (payload.htmlPreview as string) || (draft?.html as string) || null,
+          html:
+            blocks.length > 0
+              ? null
+              : (payload.htmlPreview as string) || (draft?.html as string) || null,
           category: "ai_generated",
         },
       });

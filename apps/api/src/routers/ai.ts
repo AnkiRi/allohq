@@ -1603,10 +1603,6 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
 
       let processedMessage = input.message;
 
-      if (input.campaignDirective?.forceNoDiscount) {
-        processedMessage += `\n\n[HARD CAMPAIGN DIRECTIVE: Create the requested campaign now with create_campaign_with_preview. The server has supplied the exact audience. This must be a full-price email: pass no discountPercent and do not mention a discount, offer code, sale, or percentage off.]`;
-      }
-
       // Prepend detected intent context if confidence is high
       if (detectedIntent.confidence >= 0.7 && detectedIntent.intent !== "general") {
         processedMessage = `${input.message}\n\n[DETECTED INTENT: ${detectedIntent.intent} with params: ${JSON.stringify(detectedIntent.extractedParams)}. Prioritize using the relevant tool to fulfill this request.]`;
@@ -1669,6 +1665,12 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         if (bestTarget) {
           processedMessage += `\n\n[TOOL HINT: Recommended target: ${bestTarget.name} (${bestTarget.customerCount} customers, highest impact). Channel: email. Discount: 15%. Call create_campaign_with_preview for inline preview or generate_campaign_template with these parameters.]`;
         }
+      }
+
+      // Apply server-owned campaign directives LAST. Intent enrichment above may
+      // replace the working message, but it must never erase a safety/offer policy.
+      if (input.campaignDirective?.forceNoDiscount) {
+        processedMessage += `\n\n[HARD CAMPAIGN DIRECTIVE: Create the requested campaign now with create_campaign_with_preview. The server has supplied the exact audience. This must be a full-price email: pass no discountPercent and do not mention or generate a discount, offer code, sale, coupon, promotion code, or percentage off. Return the structured campaign preview.]`;
       }
 
       // ---------------------------------------------------------------

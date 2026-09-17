@@ -19,6 +19,9 @@ const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: red
 const brandKitQueue = new Queue(QUEUE_NAMES.BRAND_KIT, { connection: redisConnection });
 const brandAnalysisQueue = new Queue(QUEUE_NAMES.BRAND_ANALYSIS, { connection: redisConnection });
 const baselineQueue = new Queue(QUEUE_NAMES.BASELINE, { connection: redisConnection });
+const productRecommendationQueue = new Queue(QUEUE_NAMES.PRODUCT_RECOMMENDATION, {
+  connection: redisConnection,
+});
 
 interface SyncJobData {
   storeId: string;
@@ -194,6 +197,18 @@ export const syncWorker = new Worker<SyncJobData>(
     // 6. Trigger RFM + LTV calculation (background data enrichment)
     await rfmQueue.add("rfm-after-sync", { storeId });
     console.log(`RFM calculation enqueued for store ${storeId}`);
+
+    // Product relationships are part of the first intelligence pass, not a
+    // manual afterthought. Rebuild once products and orders are durable.
+    await productRecommendationQueue.add(
+      "build-affinity",
+      { type: "build-affinity", storeId },
+      {
+        jobId: `product-graph-after-sync-${storeId}-${Date.now()}`,
+        removeOnComplete: 50,
+      }
+    );
+    console.log(`Product graph rebuild enqueued for store ${storeId}`);
 
     // 7. Queue product image processing for all synced products
     const allProducts = await prisma.product.findMany({

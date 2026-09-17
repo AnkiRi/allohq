@@ -24,7 +24,9 @@ export async function scanOpportunities(storeId: string): Promise<CampaignOpport
   // Sort by urgency descending
   opportunities.sort((a, b) => b.urgency - a.urgency);
 
-  console.log(`[opportunity-scanner] Found ${opportunities.length} opportunities for store ${storeId}`);
+  console.log(
+    `[opportunity-scanner] Found ${opportunities.length} opportunities for store ${storeId}`
+  );
   return opportunities;
 }
 
@@ -32,10 +34,7 @@ async function scanAtRiskCustomers(storeId: string, results: CampaignOpportunity
   const atRiskStates = await prisma.customerState.findMany({
     where: {
       storeId,
-      OR: [
-        { lifecycleStage: "at_risk" },
-        { churnRisk: { gt: 0.6 } },
-      ],
+      OR: [{ lifecycleStage: "at_risk" }, { churnRisk: { gt: 0.6 } }],
     },
     select: { customerId: true, churnRisk: true },
   });
@@ -43,7 +42,8 @@ async function scanAtRiskCustomers(storeId: string, results: CampaignOpportunity
   if (atRiskStates.length === 0) return;
 
   const customerIds = atRiskStates.map((s) => s.customerId);
-  const avgChurnRisk = atRiskStates.reduce((sum, s) => sum + (s.churnRisk ?? 0.7), 0) / atRiskStates.length;
+  const avgChurnRisk =
+    atRiskStates.reduce((sum, s) => sum + (s.churnRisk ?? 0.7), 0) / atRiskStates.length;
 
   const estimate = await estimateRevenue(storeId, customerIds.length, "at_risk_winback");
 
@@ -59,7 +59,10 @@ async function scanAtRiskCustomers(storeId: string, results: CampaignOpportunity
   });
 }
 
-async function scanRepurchaseWindows(storeId: string, results: CampaignOpportunity[]): Promise<void> {
+async function scanRepurchaseWindows(
+  storeId: string,
+  results: CampaignOpportunity[]
+): Promise<void> {
   const cycles = await prisma.productRepurchaseCycle.findMany({
     where: { storeId, confidence: { gt: 0.3 }, sampleSize: { gte: 3 } },
     select: { productId: true, medianDays: true },
@@ -111,7 +114,7 @@ async function scanNewArrivals(storeId: string, results: CampaignOpportunity[]):
     where: {
       storeId,
       status: "active",
-      createdAt: { gte: sevenDaysAgo },
+      externalCreatedAt: { gte: sevenDaysAgo },
     },
     select: { id: true, title: true },
   });
@@ -310,7 +313,9 @@ async function scanCrossSell(storeId: string, results: CampaignOpportunity[]): P
   });
 
   const boughtBSet = new Set(boughtB.map((b) => b.order.customerId));
-  const crossSellIds = [...new Set(boughtA.map((a) => a.order.customerId).filter((id) => !boughtBSet.has(id)))];
+  const crossSellIds = [
+    ...new Set(boughtA.map((a) => a.order.customerId).filter((id) => !boughtBSet.has(id))),
+  ];
 
   if (crossSellIds.length < 3) return;
 

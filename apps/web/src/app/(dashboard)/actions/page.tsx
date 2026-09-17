@@ -33,6 +33,7 @@ interface Action {
   prediction?: DecisionPrediction | null;
   lastEvaluatedAt?: string | null;
   lifecycle?: string | null;
+  createdAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +164,12 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
     lines.push({
       tick: "step",
       text: <>last evaluated {new Date(action.lastEvaluatedAt).toLocaleString()}</>,
+    });
+  }
+  if (action.createdAt) {
+    lines.push({
+      tick: "step",
+      text: <>prepared {new Date(action.createdAt).toLocaleString()}</>,
     });
   }
 

@@ -11,6 +11,7 @@ interface GraphqlProduct {
   productType: string;
   category: { id: string; fullName: string } | null;
   status: string;
+  createdAt: string;
   images: { nodes: Array<{ url: string }> };
   variants: {
     nodes: Array<{
@@ -41,7 +42,7 @@ export async function syncAllProducts(
   shopDomain: string,
   accessToken: string,
   storeId: string,
-  prisma: PrismaClient,
+  prisma: PrismaClient
 ): Promise<ShopifySyncResult> {
   const client = new ShopifyClient(shopDomain, accessToken);
   let imported = 0;
@@ -54,7 +55,8 @@ export async function syncAllProducts(
         nodes: GraphqlProduct[];
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
       };
-    } = await client.graphql(`
+    } = await client.graphql(
+      `
       query JoonProducts($after: String) {
         products(first: 50, after: $after) {
           nodes {
@@ -66,6 +68,7 @@ export async function syncAllProducts(
             productType
             category { id fullName }
             status
+            createdAt
             images(first: 1) { nodes { url } }
             variants(first: 250) {
               nodes {
@@ -82,7 +85,9 @@ export async function syncAllProducts(
           pageInfo { hasNextPage endCursor }
         }
       }
-    `, { after: cursor });
+    `,
+      { after: cursor }
+    );
 
     const products = response.products.nodes;
     const concurrency = 10;
@@ -114,6 +119,7 @@ export async function syncAllProducts(
                 ? Number(firstVariant.compareAtPrice)
                 : null,
               status: product.status.toLowerCase(),
+              externalCreatedAt: new Date(product.createdAt),
             },
             update: {
               title: product.title,
@@ -129,6 +135,7 @@ export async function syncAllProducts(
                 ? Number(firstVariant.compareAtPrice)
                 : null,
               status: product.status.toLowerCase(),
+              externalCreatedAt: new Date(product.createdAt),
             },
           });
 
@@ -157,28 +164,24 @@ export async function syncAllProducts(
                   inventory: variant.inventoryQuantity ?? 0,
                   imageUrl: variant.image?.url ?? null,
                 },
-              }),
-            ),
+              })
+            )
           );
           imported++;
-        }),
+        })
       );
       results.forEach((result, index) => {
         if (result.status === "rejected") {
           errors.push(
             `Product ${chunk[index]?.id}: ${
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason)
-            }`,
+              result.reason instanceof Error ? result.reason.message : String(result.reason)
+            }`
           );
         }
       });
     }
 
-    cursor = response.products.pageInfo.hasNextPage
-      ? response.products.pageInfo.endCursor
-      : null;
+    cursor = response.products.pageInfo.hasNextPage ? response.products.pageInfo.endCursor : null;
   } while (cursor);
 
   return { imported, errors };

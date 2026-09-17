@@ -28,6 +28,23 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Shopify product descriptions are HTML. Email product cards need readable
+ * plain text, not escaped merchant markup such as literal <b> tags. */
+function stripHtml(str: string): string {
+  return str
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Format price as $XX.XX */
 function formatPrice(price: number): string {
   return `$${price.toFixed(2)}`;
@@ -64,9 +81,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
     case "image": {
       const { src, alt = "", width, href, align = "center" } = block.props;
       if (!src) return ""; // Skip broken/empty images
-      const hrefAttr = href
-        ? ` href="${escapeHtml(interpolate(href, variables))}"`
-        : "";
+      const hrefAttr = href ? ` href="${escapeHtml(interpolate(href, variables))}"` : "";
       return `
         <mj-section padding="0">
           <mj-column>
@@ -162,10 +177,10 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
 
       const descHtml =
         showDescription && product.description
-          ? `<p style="font-size: 14px; color: #666; margin: 0 0 12px; line-height: 1.5;">${escapeHtml(product.description)}</p>`
+          ? `<p style="font-size: 14px; color: #666; margin: 0 0 12px; line-height: 1.5;">${escapeHtml(stripHtml(product.description))}</p>`
           : "";
 
-      const textColumnWidth = showImage && product.imageUrl ? '60%' : '100%';
+      const textColumnWidth = showImage && product.imageUrl ? "60%" : "100%";
 
       return `
         <mj-section padding="16px 24px">
@@ -208,8 +223,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
         for (const dp of options.dynamicProducts) {
           if (!products?.[dp.id]) {
             if (!options.products)
-              (options as { products: Record<string, ProductData> }).products =
-                {};
+              (options as { products: Record<string, ProductData> }).products = {};
             options.products![dp.id] = dp;
           }
         }
@@ -256,9 +270,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
         .map((colBlocks, i) => {
           const width = columnWidths?.[i] ?? defaultWidth;
           // Since MJML doesn't allow mj-section inside mj-column, render inner content directly
-          const innerContent = colBlocks
-            .map((b) => renderBlockInnerMjml(b, options))
-            .join("");
+          const innerContent = colBlocks.map((b) => renderBlockInnerMjml(b, options)).join("");
           return `
             <mj-column width="${width}%">
               ${innerContent}
@@ -292,12 +304,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
     }
 
     case "header": {
-      const {
-        logoSrc,
-        logoAlt = "",
-        bgColor = "#FFFFFF",
-        align = "center",
-      } = block.props;
+      const { logoSrc, logoAlt = "", bgColor = "#FFFFFF", align = "center" } = block.props;
       return `
         <mj-section background-color="${bgColor}" padding="24px">
           <mj-column>
@@ -370,18 +377,12 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
     }
 
     case "countdown": {
-      const {
-        endDate,
-        label,
-        bgColor = "#FF0000",
-        textColor = "#FFFFFF",
-      } = block.props;
+      const { endDate, label, bgColor = "#FF0000", textColor = "#FFFFFF" } = block.props;
       const end = new Date(endDate);
       const now = new Date();
       const diffMs = Math.max(0, end.getTime() - now.getTime());
       const days = Math.ceil(diffMs / 86400000);
-      const displayText =
-        days > 0 ? `${days} day${days !== 1 ? "s" : ""} left` : "Ending soon!";
+      const displayText = days > 0 ? `${days} day${days !== 1 ? "s" : ""} left` : "Ending soon!";
 
       return `
         <mj-section background-color="${bgColor}" padding="20px 24px">
@@ -399,8 +400,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
     case "testimonial": {
       const { quote, author, rating, avatarUrl } = block.props;
       const stars = rating
-        ? "&#9733;".repeat(Math.min(rating, 5)) +
-          "&#9734;".repeat(Math.max(0, 5 - rating))
+        ? "&#9733;".repeat(Math.min(rating, 5)) + "&#9734;".repeat(Math.max(0, 5 - rating))
         : "";
 
       const avatarHtml = avatarUrl
@@ -433,10 +433,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
  * Render a block's inner content (without wrapping mj-section) for use inside mj-column.
  * Used for nested blocks inside columns.
  */
-function renderBlockInnerMjml(
-  block: EmailBlock,
-  options: RenderOptions
-): string {
+function renderBlockInnerMjml(block: EmailBlock, options: RenderOptions): string {
   const { variables } = options;
 
   switch (block.type) {
@@ -455,9 +452,7 @@ function renderBlockInnerMjml(
     case "image": {
       const { src, alt = "", width, href, align = "center" } = block.props;
       if (!src) return ""; // Skip broken/empty images
-      const hrefAttr = href
-        ? ` href="${escapeHtml(interpolate(href, variables))}"`
-        : "";
+      const hrefAttr = href ? ` href="${escapeHtml(interpolate(href, variables))}"` : "";
       return `<mj-image src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${width ? ` width="${width}px"` : ""} align="${align}"${hrefAttr} padding="8px 0" />`;
     }
 
@@ -501,11 +496,7 @@ function injectUtmParams(html: string, options: RenderOptions): string {
 
   return html.replace(/href="([^"]+)"/g, (_match, url: string) => {
     // Skip unsubscribe, mailto, anchor-only links
-    if (
-      url.startsWith("mailto:") ||
-      url.startsWith("#") ||
-      url.includes("unsubscribe")
-    ) {
+    if (url.startsWith("mailto:") || url.startsWith("#") || url.includes("unsubscribe")) {
       return `href="${url}"`;
     }
     // Skip non-http links
@@ -521,9 +512,7 @@ function injectUtmParams(html: string, options: RenderOptions): string {
       `utm_source=${encodeURIComponent(tracking.utmSource)}`,
       `utm_medium=${encodeURIComponent(tracking.utmMedium)}`,
       `utm_campaign=${encodeURIComponent(tracking.utmCampaign)}`,
-      ...(tracking.utmContent
-        ? [`utm_content=${encodeURIComponent(tracking.utmContent)}`]
-        : []),
+      ...(tracking.utmContent ? [`utm_content=${encodeURIComponent(tracking.utmContent)}`] : []),
     ].join("&");
     return `href="${url}${separator}${params}"`;
   });
@@ -534,17 +523,11 @@ function injectUtmParams(html: string, options: RenderOptions): string {
 // ============================================================================
 
 /** Render an array of email blocks to a complete HTML email string via MJML */
-export function renderToHtml(
-  blocks: EmailBlock[],
-  options: RenderOptions
-): string {
+export function renderToHtml(blocks: EmailBlock[], options: RenderOptions): string {
   let finalBlocks = [...blocks];
 
   // Auto-inject header if brandSettings has a logo but blocks don't start with header
-  if (
-    options.brandSettings?.logoUrl &&
-    finalBlocks[0]?.type !== "header"
-  ) {
+  if (options.brandSettings?.logoUrl && finalBlocks[0]?.type !== "header") {
     const headerBlock: HeaderBlock = {
       id: "auto-header",
       type: "header",
@@ -558,10 +541,7 @@ export function renderToHtml(
   }
 
   // Auto-inject footer if brandSettings exist but blocks don't end with footer
-  if (
-    options.brandSettings &&
-    finalBlocks[finalBlocks.length - 1]?.type !== "footer"
-  ) {
+  if (options.brandSettings && finalBlocks[finalBlocks.length - 1]?.type !== "footer") {
     const bs = options.brandSettings;
     const footerParts: string[] = [];
     if (bs.showAddress !== false && bs.address)
@@ -570,8 +550,7 @@ export function renderToHtml(
       footerParts.push(bs.socialLinks.map((l) => l.platform).join(" · "));
     }
     if (bs.footerText) footerParts.push(bs.footerText);
-    if (footerParts.length === 0 && bs.storeName)
-      footerParts.push(bs.storeName);
+    if (footerParts.length === 0 && bs.storeName) footerParts.push(bs.storeName);
 
     const footerBlock: FooterBlock = {
       id: "auto-footer",
@@ -585,9 +564,7 @@ export function renderToHtml(
   }
 
   // Build block MJML markup
-  const blockMjml = finalBlocks
-    .map((block) => renderBlockToMjml(block, options))
-    .join("\n");
+  const blockMjml = finalBlocks.map((block) => renderBlockToMjml(block, options)).join("\n");
 
   // Compose full MJML document
   const mjmlString = `
@@ -635,9 +612,7 @@ export function renderToHtml(
  * This export exists so email-builder exposes the type and concept,
  * keeping it as the single "email rendering" API surface.
  */
-export function renderFromArchetype(
-  _options: ArchetypeRenderOptions
-): string | null {
+export function renderFromArchetype(_options: ArchetypeRenderOptions): string | null {
   // Consumers should use @allohq/creative-engine.renderMjmlTemplate() directly.
   // This stub exists to maintain the API surface in email-builder.
   return null;

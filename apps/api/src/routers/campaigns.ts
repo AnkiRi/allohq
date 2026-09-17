@@ -856,10 +856,10 @@ export const campaignsRouter = router({
     const estimatedProviderCost =
       (audience.eligible.length - control) * emailMessagingCostForCurrency(currency);
     const noEmailConsent = audience.exclusions.no_consent + audience.exclusions.unsubscribed;
-    const otherLeftAlone = Math.max(
-      0,
-      audience.requested - audience.eligible.length - noEmailConsent
-    );
+    // One accounting equation must reconcile everywhere in the UI:
+    // found = not receiving + campaign candidates. Consent failures are still
+    // found in the store; they are mandatory exclusions, not vanished people.
+    const otherLeftAlone = Math.max(0, audience.requested - audience.eligible.length);
     return {
       providerCalled: false,
       deliveryGate: {

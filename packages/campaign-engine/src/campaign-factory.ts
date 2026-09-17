@@ -123,6 +123,9 @@ export async function generateCampaignDraft(
         price: p.price,
         handle: p.handle,
       })),
+      offerPolicy: "none",
+      tweaks:
+        "Use the observed opportunity and featured products. Do not invent a discount, sale, coupon, offer code, or percentage off unless the merchant explicitly approved one.",
       storeUrl: `https://${store.shopDomain}`,
       model: workspace?.defaultModel as any,
       modelHarness: workspace?.modelHarness,
@@ -134,6 +137,19 @@ export async function generateCampaignDraft(
       blocks: generated.blocks,
       subject,
       previewText: generated.previewText,
+      products: Object.fromEntries(
+        products.map((product) => [
+          product.id,
+          {
+            id: product.id,
+            title: product.title,
+            imageUrl: product.imageUrl ?? undefined,
+            price: product.price,
+            compareAtPrice: product.compareAtPrice ?? undefined,
+            url: `https://${store.shopDomain}/products/${product.handle}`,
+          },
+        ])
+      ),
       previewMode: true,
     });
   } catch (err: any) {
@@ -181,6 +197,7 @@ export async function generateCampaignDraft(
         archetypeId,
         contentSlots,
         generatedBlocks,
+        productIds: products.map((product) => product.id),
         subject,
         customerCount,
         name,

@@ -320,76 +320,6 @@ export default function CampaignDetailPage() {
     earliestLabel && latestLabel && earliestLabel !== latestLabel
       ? `${earliestLabel} – ${latestLabel}`
       : (earliestLabel ?? "Waiting for the planned delivery time");
-  const exclusionCopy: Record<string, { label: string; explanation: string }> = {
-    invalid_email: {
-      label: "Invalid email",
-      explanation: "The stored email address cannot receive mail.",
-    },
-    no_consent: {
-      label: "No email consent",
-      explanation: "This customer has not subscribed to marketing email.",
-    },
-    unsubscribed: {
-      label: "Unsubscribed",
-      explanation: "This customer opted out of marketing email.",
-    },
-    complaint: {
-      label: "Complaint suppression",
-      explanation: "A previous complaint permanently blocks marketing delivery.",
-    },
-    hard_bounce: {
-      label: "Previous hard bounce",
-      explanation: "A previous hard bounce blocks another delivery attempt.",
-    },
-    manual_suppression: {
-      label: "Manually suppressed",
-      explanation: "This customer is on the store’s suppression list.",
-    },
-    already_processed: {
-      label: "Already processed",
-      explanation: "This campaign already created a delivery record for this customer.",
-    },
-    fatigue: {
-      label: "Fatigue limit",
-      explanation: "They have reached the store’s weekly or monthly email limit.",
-    },
-    collision: {
-      label: "Recent campaign",
-      explanation: "They received another campaign within the 48-hour spacing window.",
-    },
-    cooldown: {
-      label: "Customer cooldown",
-      explanation: "A redeemed offer or recent support issue is still inside its cooldown.",
-    },
-    support_state: {
-      label: "Active support issue",
-      explanation: "Joon avoids marketing while this customer needs support.",
-    },
-    recent_purchase: {
-      label: "Recent purchase",
-      explanation: "Joon is leaving this recent buyer alone for this campaign.",
-    },
-    store_paused: {
-      label: "Store delivery paused",
-      explanation: "Email delivery is paused for this store.",
-    },
-    global_paused: {
-      label: "Delivery globally disabled",
-      explanation: "Joon’s global delivery safety gate is active.",
-    },
-  };
-  const excludedCustomerRows = dryRun
-    ? Object.entries(dryRun.exclusionSamples).flatMap(([reason, customers]) =>
-        (customers ?? []).map((customer) => ({
-          ...customer,
-          reason,
-          ...(exclusionCopy[reason] ?? {
-            label: reason.replaceAll("_", " "),
-            explanation: "A current audience or delivery rule excludes this customer.",
-          }),
-        }))
-      )
-    : [];
   const audienceReasonOverrideMap = new Map<string, any>(
     (dryRun?.audienceReasonOverrides ?? []).map((policy: any) => [policy.reasonCode, policy])
   );
@@ -673,42 +603,26 @@ export default function CampaignDetailPage() {
                 </span>
                 <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
                   {timingPreviewLoading
-                    ? "Building the delivery-window preview…"
+                    ? "Working out the delivery window…"
                     : timingPreview
-                      ? `${timingPreview.recipients.toLocaleString("en-IN")} recipients · ${timingPreview.cohortCount} delivery cohorts · ${timingPreview.timezoneCount} ${timingPreview.timezoneCount === 1 ? "timezone" : "timezones"}.`
+                      ? `Deliver ${formatDeliveryTime(timingPreview.earliestAt)}–${formatDeliveryTime(timingPreview.latestAt)}.`
                       : "Joon will use customer engagement, store patterns and quiet hours."}
                 </span>
                 {timingPreview && (
-                  <span className="mt-3 block rounded-lg border border-border bg-card px-3 py-2 text-[10px] leading-4 text-muted-foreground">
-                    Expected window: {formatDeliveryTime(timingPreview.earliestAt)}–
-                    {formatDeliveryTime(timingPreview.latestAt)}
+                  <span className="mt-2 block text-[10px] leading-4 text-muted-foreground">
+                    {timingPreview.recipients.toLocaleString("en-IN")} recipients ·{" "}
+                    {timingPreview.timezoneCount}{" "}
+                    {timingPreview.timezoneCount === 1 ? "timezone" : "timezones"} ·{" "}
+                    {timingPreview.cohortCount} delivery{" "}
+                    {timingPreview.cohortCount === 1 ? "group" : "groups"}.{" "}
+                    {timingPreview.evidence.customer > 0
+                      ? "Based on customer engagement history"
+                      : timingPreview.evidence.store > 0
+                        ? "Based on your store’s engagement history"
+                        : "Using the default morning window"}
                     {timingPreview.quietHoursDeferred > 0
-                      ? ` · ${timingPreview.quietHoursDeferred.toLocaleString("en-IN")} deferred past quiet hours`
-                      : " · no quiet-hours deferrals"}
-                    . Campaign day remains under your control; Joon optimizes the broad window, not
-                    an artificial exact minute.
-                  </span>
-                )}
-                {timingPreview && (
-                  <span className="mt-2 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border">
-                    <span className="bg-card px-2 py-2 text-center">
-                      <strong className="block font-mono text-[11px] text-foreground">
-                        {timingPreview.evidence.customer.toLocaleString("en-IN")}
-                      </strong>
-                      <span className="text-[9px] text-muted-foreground">customer evidence</span>
-                    </span>
-                    <span className="bg-card px-2 py-2 text-center">
-                      <strong className="block font-mono text-[11px] text-foreground">
-                        {timingPreview.evidence.store.toLocaleString("en-IN")}
-                      </strong>
-                      <span className="text-[9px] text-muted-foreground">store pattern</span>
-                    </span>
-                    <span className="bg-card px-2 py-2 text-center">
-                      <strong className="block font-mono text-[11px] text-foreground">
-                        {timingPreview.evidence.default.toLocaleString("en-IN")}
-                      </strong>
-                      <span className="text-[9px] text-muted-foreground">clear default</span>
-                    </span>
+                      ? `; ${timingPreview.quietHoursDeferred.toLocaleString("en-IN")} will wait until quiet hours end.`
+                      : "."}
                   </span>
                 )}
               </button>
@@ -1054,42 +968,26 @@ export default function CampaignDetailPage() {
                     </div>
                   </div>
                   <div className="mt-3 divide-y divide-border">
-                    {excludedCustomerRows.map((customer) => {
-                      const name =
-                        [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
-                        customer.email;
-                      return (
+                    {audienceReviewGroups
+                      .filter((group) => group.count > 0)
+                      .map((group) => (
                         <div
-                          key={`${customer.reason}-${customer.id}`}
-                          className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:gap-5"
+                          key={group.reason}
+                          className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2.5 first:pt-0 last:pb-0"
                         >
-                          <div className="min-w-0">
-                            <div className="truncate text-[11px] font-medium text-foreground">
-                              {name}
-                            </div>
-                            {name !== customer.email && (
-                              <div className="truncate text-[10px] text-muted-foreground">
-                                {customer.email}
-                              </div>
-                            )}
-                          </div>
                           <div>
                             <div className="text-[11px] font-medium text-foreground">
-                              {customer.label}
+                              {group.label}
                             </div>
                             <div className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
-                              {customer.explanation}
+                              {group.explanation}
                             </div>
                           </div>
+                          <div className="font-mono text-[11px] font-bold tabular-nums text-foreground">
+                            {group.count.toLocaleString("en-IN")}
+                          </div>
                         </div>
-                      );
-                    })}
-                    {excludedCustomerRows.length < dryRun.otherLeftAlone && (
-                      <div className="pt-3 text-[10px] text-muted-foreground">
-                        Showing {excludedCustomerRows.length} examples. The frozen approval record
-                        keeps the complete counts by reason.
-                      </div>
-                    )}
+                      ))}
                   </div>
                 </div>
               )}
@@ -1205,25 +1103,10 @@ export default function CampaignDetailPage() {
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-x-8 gap-y-1">
-                {Object.entries(dryRun.exclusions)
-                  .filter(([, count]) => count > 0)
-                  .map(([reason, count]) => (
-                    <div
-                      key={reason}
-                      className="flex justify-between py-2 border-b border-border text-[11px]"
-                    >
-                      <span className="text-muted-foreground">{reason.replaceAll("_", " ")}</span>
-                      <span className="font-mono font-bold">-{count}</span>
-                    </div>
-                  ))}
-              </div>
               {dryRun.exclusions.recent_purchase > 0 && dryRun.marginRisk.discountPercent > 0 && (
                 <div className="mt-5 rounded-xl border border-border bg-background/50 p-4">
                   <div className="text-[13px] font-semibold text-foreground">
-                    Joon protected {dryRun.exclusions.recent_purchase} recent{" "}
-                    {dryRun.exclusions.recent_purchase === 1 ? "buyer" : "buyers"} from this
-                    discount
+                    Suggested next step: use a full-price message
                   </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
                     They have already purchased inside the seven-day discount window. Sending them{" "}
@@ -1231,18 +1114,6 @@ export default function CampaignDetailPage() {
                     changing their decision. Try a full-price new-product message, or choose
                     customers whose last purchase is older.
                   </p>
-                  {(dryRun.exclusionSamples.recent_purchase?.length ?? 0) > 0 && (
-                    <p className="mt-3 text-[11px] text-foreground">
-                      Examples:{" "}
-                      {(dryRun.exclusionSamples.recent_purchase ?? [])
-                        .map(
-                          (customer) =>
-                            [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
-                            customer.email
-                        )
-                        .join(", ")}
-                    </p>
-                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {dryRun.linkedAlternative ? (
                       <Link
@@ -1364,9 +1235,7 @@ export default function CampaignDetailPage() {
               {dryRun.exclusions.fatigue > 0 && dryRun.fatigueCustomers.length > 0 && (
                 <div className="mt-5 rounded-xl border border-warning/30 bg-warning/5 p-4">
                   <div className="text-[13px] font-semibold text-foreground">
-                    {dryRun.exclusions.fatigue}{" "}
-                    {dryRun.exclusions.fatigue === 1 ? "customer has" : "customers have"} reached
-                    the email limit
+                    Review an email-limit override
                   </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
                     Joon left them out because another email can increase fatigue and unsubscribe
@@ -1463,8 +1332,8 @@ export default function CampaignDetailPage() {
                 const isOpen = governorOverrideType === reasonCode;
                 const title =
                   reasonCode === "collision"
-                    ? `${count} ${count === 1 ? "customer received" : "customers received"} another campaign recently`
-                    : `${count} ${count === 1 ? "customer is" : "customers are"} inside the redeemed-discount cooldown`;
+                    ? "Review a recent-campaign override"
+                    : "Review an offer-cooldown override";
                 const consequence =
                   reasonCode === "collision"
                     ? "Another campaign this soon may feel repetitive and lower engagement."
