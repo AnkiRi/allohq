@@ -18,6 +18,109 @@ This document is the single reference point for these passes. Later implementati
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
 | 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
 
+## Post-demo acceptance findings — 2026-09-17
+
+These findings came from the successful allowlisted production path for
+`uast23@gmail.com`: exact-customer campaign → full-price new-product creative → provider
+delivery → open → click → Shopify order `#1052` → one attributed order and ₹730 attributed
+revenue. The delivery path is proven. The items below are explicitly deferred until after
+the design-partner demo and must not be mistaken for unverified speculation.
+
+### A. Customer projections disagree after a real order
+
+Observed on the same customer page after order `#1052`:
+
+- the order and ₹730 value appear in the timeline and recent-orders table;
+- `Current customer state` correctly moved `subscriber → first buyer`;
+- the top-level story still says `no order yet` and recommends a first-purchase message;
+- RFM still shows `Subscribers`, recency `1/5`, frequency `0`, monetary `₹0`, zero orders
+  and zero spend;
+- the customer list still shows zero orders for this customer after refresh.
+
+This indicates that canonical order ingestion, attribution, CustomerState, RFM and list
+projections are not refreshing atomically or from the same source. Do not solve this by
+adding UI delays. Required correction:
+
+- define the canonical order-derived customer projection;
+- make the order webhook enqueue/recompute RFM, list aggregates, customer story and LTV
+  idempotently after the order transaction commits;
+- show `updating` only while a durable recomputation job is genuinely pending;
+- prevent a page from combining fresh order/state facts with stale zero-order copy;
+- verify one order updates the profile, list, state explorer and campaign attribution once,
+  with consistent order count, spend, segment and currency.
+
+Map this work to Pass 6 (state/event processing) and Pass 8 (decision context). Until it is
+fixed, the merchant agent must prefer canonical order evidence over a stale RFM label.
+
+### B. Outcomes mixes live, unmeasurable and illustrative numbers
+
+The current Outcomes page is not coherent enough for a merchant-facing proof story:
+
+- a one-person treatment with zero control is shown as `+₹438 lift/customer` with a
+  single-point `₹438…₹438` confidence interval, although incremental lift cannot be
+  estimated from that campaign;
+- live campaign rows, representative 90-day treatment/control figures and demo copy sit
+  together without a strong boundary;
+- the representative panel claims ₹8,28,000 incremental revenue while the live billing
+  preview shows ₹0, despite the tested campaign already showing ₹730 attributed revenue;
+- `AI revenue ₹1,430`, USD model cost and `26.35x ROI` are presented beside the illustrative
+  ₹8,28,000 lift, leaving the numerator, denominator and live/illustrative status unclear;
+- copy such as `send where lift is proven`, `sends Joon would skip` and confidence intervals
+  overstates what tiny/no-control campaigns can establish;
+- forecast rows mix opportunity decisions and order events without a clear artifact,
+  measurement window or actual-outcome definition.
+
+Required correction after the demo:
+
+- separate **Live attributed outcomes**, **Pooled control measurement**, **Billing preview**,
+  **Forecast calibration** and **Illustrative explanation** into visibly distinct surfaces;
+- never calculate or display lift, a confidence interval or a send/skip conclusion when no
+  valid control exists;
+- label small/no-control campaigns `attributed outcome only · not incrementality measured`;
+- reconcile live attributed revenue with the billing-preview ledger and explain any window,
+  cancellation or readiness exclusion;
+- remove representative figures from operational totals and never call them live;
+- define AI unit economics from one consistent observable revenue base and currency;
+- ensure billing remains 5% of non-cancelled Joon-attributed revenue, while holdouts remain
+  pooled proof/learning rather than the invoice basis.
+
+Map this work to Pass 0 (attribution correctness), the locked billing model and the bounded
+product-wide UX coherence pass.
+
+### C. Overnight proposals, notifications and artifact copy need reconciliation
+
+Observed after the same production order and overnight evaluations:
+
+- chat repeatedly reports `Found/Prepared campaign decision` activity without making clear
+  whether it is a new proposal, a reevaluation or an update to an existing proposal;
+- chat says `Drafted VIP Recognition … awaiting your review`, while the decision queue says
+  only a proposal was prepared and final creative will be generated after approval;
+- `New Arrival` opportunities can appear to recur across evaluations even when the underlying
+  catalog event is the same;
+- prepared and last-evaluated timestamps can differ substantially without explaining the
+  proposal lifecycle;
+- the queue has useful timestamps and confidence, but the merchant lacks one compact place
+  to see what is new, materially changed, already reviewed or merely reevaluated.
+
+Required correction after the demo:
+
+- use a stable opportunity fingerprint for store + opportunity type + evidence window/catalog
+  cohort, and update one proposal rather than creating another visible decision;
+- emit a chat/activity notification only when a proposal is first created, materially
+  changes, expires or becomes actionable—not on every scan;
+- use truthful lifecycle copy everywhere: `opportunity found` → `proposal prepared` →
+  `approved` → `creative drafted` → `scheduled/active`;
+- never say `drafted` before an actual linked campaign/template artifact exists;
+- expose `first prepared`, `last evaluated`, material changes and linked artifact in the
+  queue detail;
+- add a compact notification/inbox bar or digest for new and changed Joon decisions, with
+  unread state and deep links, rather than repeating prose in chat;
+- verify repeated scans of the same new-arrival evidence leave one queue item and one
+  notification unless the evidence materially changes.
+
+Map this work to Pass 4 (overnight decisions, traceability and segment lifecycle) and Pass 3
+(durable chat UX).
+
 ## Pass 0 — Creative, offer and attribution correctness
 
 Status: code complete for the two newly identified correctness defects; production acceptance remains. `39053f8` enforces the full-price creative policy and `6fe8785` triggers prompt, idempotent attribution after an order webhook.
