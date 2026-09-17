@@ -46,7 +46,8 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
   async (job) => {
     // This is the legacy adaptive-channel journey engine. Merchant-approved
     // email journeys execute through automation-runner, where activation
-    // checksums, holdouts and delivery idempotency are enforced.
+    // checksums, eligibility and delivery idempotency are enforced. Journeys
+    // intentionally have no random control assignment.
     if (isV1ReleaseMode()) {
       console.log(`[journey-stepper] Ignoring legacy journey job ${job.id} in email v1`);
       return { status: "blocked_by_v1_boundary" };

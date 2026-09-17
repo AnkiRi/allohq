@@ -40,14 +40,15 @@ export const automationsRouter = router({
       });
       if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
       const audience = await resolveAutomationAudience(automation.id);
-      const control = Math.floor(audience.eligible.length * 0.15);
       return {
         providerCalled: false,
         scope: "current_sendable_store_pool" as const,
         requested: audience.requested,
         eligibleBeforeHoldout: audience.eligible.length,
-        estimatedTreatment: audience.eligible.length - control,
-        estimatedControl: control,
+        // Journeys are operational flows, not randomized campaign experiments.
+        // Every customer who remains eligible receives the journey step.
+        estimatedTreatment: audience.eligible.length,
+        estimatedControl: 0,
         exclusions: audience.exclusions,
         exclusionSamples: audience.samples,
         sender: automation.store.brandProfiles[0]?.fromEmail ?? null,

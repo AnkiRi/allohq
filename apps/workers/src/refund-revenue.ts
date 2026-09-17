@@ -1,30 +1,18 @@
-type RefundTransaction = {
-  amount?: string | number;
-  kind?: string;
-  status?: string;
-};
-
 export type ShopifyOrderRevenuePayload = {
   total_price?: string | number;
-  refunds?: Array<{ transactions?: RefundTransaction[] }>;
+  refunds?: unknown;
 };
 
-/** Shopify sends the cumulative refund history on orders/updated. */
-export function calculateNetOrderRevenue(
+/**
+ * Count the order total unless the order is cancelled. Cancellation is handled
+ * by the webhook worker before this function runs. Refund and fulfilment data
+ * may be incomplete when a merchant uses an external OMS/WMS, so neither
+ * changes attributed revenue under the locked v1 rule.
+ */
+export function calculateCountedOrderRevenue(
   payload: ShopifyOrderRevenuePayload,
   fallbackTotal: number,
 ): number {
   const gross = Number(payload.total_price ?? fallbackTotal);
-  const refunded = (payload.refunds ?? [])
-    .flatMap((refund) => refund.transactions ?? [])
-    .filter(
-      (transaction) =>
-        transaction.kind === "refund" &&
-        transaction.status?.toLowerCase() !== "failure",
-    )
-    .reduce((sum, transaction) => {
-      const amount = Number(transaction.amount ?? 0);
-      return sum + (Number.isFinite(amount) ? amount : 0);
-    }, 0);
-  return Math.max(0, (Number.isFinite(gross) ? gross : fallbackTotal) - refunded);
+  return Math.max(0, Number.isFinite(gross) ? gross : fallbackTotal);
 }

@@ -192,14 +192,17 @@ export default function AutomationDetailPage() {
             </div>
             <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">No email sent</span>
           </div>
-          <div className="mt-4 grid grid-cols-4 gap-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
               ["Store customers", preflight.requested],
               ["Currently eligible", preflight.eligibleBeforeHoldout],
-              ["Estimated treatment", preflight.estimatedTreatment],
-              ["Estimated control", preflight.estimatedControl],
+              ["Would receive when triggered", preflight.estimatedTreatment],
             ].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-muted p-3"><div className="text-lg font-semibold">{value}</div><div className="text-[10px] text-muted-foreground">{label}</div></div>)}
           </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Journeys have no random control group. Every customer who triggers the journey and
+            still passes consent, suppression, timing and purchase-exit checks receives it.
+          </p>
           <div className="mt-3 text-[11px] text-muted-foreground">
             Sender: {preflight.sender ?? "Not configured"} · Domain: {preflight.senderDomain?.status ?? "not configured"}
           </div>

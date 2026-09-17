@@ -771,7 +771,7 @@ corrected rather than implemented literally.
 | Customer projection consistency | Defect observed in production | Recompute customer/RFM/list/story projections idempotently after orders and expose one freshness contract. |
 | Outcomes and proof | Defect observed in production | Separate live attribution, pooled control evidence, billing preview, forecast calibration and illustrative education; remove fake precision for no-control cohorts. |
 | Overnight decisions | Defect observed in production | Deduplicate opportunities, fix lifecycle copy, add material-change notifications and link every approved proposal to its artifact. |
-| Billing ledger policy | Decision/code conflict | The locked decision says an order counts unless cancelled, but the worker currently reduces attributed revenue for refunds. Resolve explicitly before billing is enabled and update code, tests and acceptance documents together. |
+| Billing ledger policy | Code reconciled; deployment acceptance pending | An order counts unless cancelled. Cancellation removes attribution and fee basis; refunds and fulfilment do not independently alter v1 attributed revenue because external OMS/WMS data may be incomplete. Billing remains disabled. |
 | Legacy causal/billing paths | Audit required | Prove no production invoice path still uses caused-revenue, postage or obsolete comparison logic; retain causal data only for learning/proof. Billing remains disabled until reconciled. |
 | Product-wide UX coherence | Deferred design pass | Use terminal/receipt styling for Joon decisions and ledgers; keep navigation, setup and dense exploration quiet and conventional. Include chat history, errors, retries, loading and artifact lifecycle. |
 | Read-only commerce evidence | Product decision required | Do not recreate Shopify order/product administration. Add lightweight searchable order and product evidence/drill-down only where it explains customer state, attribution, opportunities or the product graph. |
@@ -781,8 +781,8 @@ corrected rather than implemented literally.
 ### Acceptance/document conflicts to correct
 
 - Later locked behavior is **no random journey holdout**; journeys reach every eligible
-  customer and use purchase-exit/suppression rules. Older acceptance documents that still
-  require journey controls must be revised.
+  customer and use purchase-exit/suppression rules. Runtime and preflight now agree; older
+  acceptance documents that still require journey controls must be revised.
 - Billing is **5% of non-cancelled Joon-attributed revenue** in early shadow mode, with 6% and
   8% computed for learning; holdout lift is proof/learning, not the invoice. Any older “gap is
   the only billed number” requirement is obsolete.

@@ -3,7 +3,7 @@ import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { checkEventTriggers } from "../utils/event-triggers";
 import { redactAcquisitionEvidence } from "../acquisition-privacy";
-import { calculateNetOrderRevenue } from "../refund-revenue";
+import { calculateCountedOrderRevenue } from "../refund-revenue";
 import { isWebhookOlderThanInstall } from "../shopify-webhook-ordering";
 import { shopify } from "@allohq/ecommerce-integrations";
 
@@ -378,23 +378,23 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
             }),
           ]);
         } else if (order) {
-          const netRevenue = calculateNetOrderRevenue(payload, order.totalPrice);
+          const countedRevenue = calculateCountedOrderRevenue(payload, order.totalPrice);
           await prisma.$transaction([
             prisma.formSubmission.updateMany({
               where: { attributedOrderId: order.id },
-              data: { attributedRevenue: netRevenue },
+              data: { attributedRevenue: countedRevenue },
             }),
             prisma.formExperimentExposure.updateMany({
               where: { orderId: order.id },
-              data: { revenue: netRevenue },
+              data: { revenue: countedRevenue },
             }),
             prisma.experimentOrderOutcome.updateMany({
               where: { orderId: order.id },
-              data: { revenue: netRevenue },
+              data: { revenue: countedRevenue },
             }),
             prisma.measurementOrderOutcome.updateMany({
               where: { orderId: order.id },
-              data: { netRevenue },
+              data: { netRevenue: countedRevenue },
             }),
           ]);
         }
