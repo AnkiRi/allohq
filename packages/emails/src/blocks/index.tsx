@@ -10,10 +10,7 @@ import {
   Section,
   Text,
 } from "@react-email/components";
-import type {
-  EmailBlock,
-  ProductData,
-} from "@allohq/email-builder";
+import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import type { BrandKit } from "../brand-kit";
 import { formatCurrency } from "../brand-kit";
 
@@ -39,9 +36,7 @@ export interface BlockRenderContext {
 
 /** Interpolate merge tags like {{first_name}}. */
 function interpolate(text: string, variables: Record<string, string>): string {
-  return text.replace(/\{\{(\w[\w.]*)\}\}/g, (_m, key: string) =>
-    variables[key] ?? `{{${key}}}`,
-  );
+  return text.replace(/\{\{(\w[\w.]*)\}\}/g, (_m, key: string) => variables[key] ?? `{{${key}}}`);
 }
 
 /** Strip HTML tags down to plain text (AI sometimes emits <p>...</p>). */
@@ -103,7 +98,7 @@ function HeroBlockView({
           textAlign: ta,
         }}
       >
-        {interpolate(heading, variables)}
+        {stripHtml(interpolate(heading, variables))}
       </Heading>
       {subtext ? (
         <Text
@@ -117,13 +112,13 @@ function HeroBlockView({
             textAlign: ta,
           }}
         >
-          {interpolate(subtext, variables)}
+          {stripHtml(interpolate(subtext, variables))}
         </Text>
       ) : null}
       {buttonText && buttonHref ? (
         <div style={{ marginTop: 24, textAlign: ta }}>
           <PrimaryButton bk={bk} href={interpolate(buttonHref, variables)}>
-            {interpolate(buttonText, variables)}
+            {stripHtml(interpolate(buttonText, variables))}
           </PrimaryButton>
         </div>
       ) : null}
@@ -234,7 +229,7 @@ function ButtonBlockView({
   return (
     <Section className="bk-pad" style={{ padding: "24px 36px 0", textAlign: ta }}>
       <PrimaryButton bk={bk} href={interpolate(block.props.href || "#", variables)}>
-        {interpolate(block.props.text, variables)}
+        {stripHtml(interpolate(block.props.text, variables))}
       </PrimaryButton>
     </Section>
   );
@@ -256,17 +251,17 @@ function DividerBlockView({ ctx }: { ctx: BlockRenderContext }) {
   );
 }
 
-function SpacerBlockView({
-  block,
-}: {
-  block: Extract<EmailBlock, { type: "spacer" }>;
-}) {
-  return <Section style={{ height: block.props.height, lineHeight: `${block.props.height}px` }}>&nbsp;</Section>;
+function SpacerBlockView({ block }: { block: Extract<EmailBlock, { type: "spacer" }> }) {
+  return (
+    <Section style={{ height: block.props.height, lineHeight: `${block.props.height}px` }}>
+      &nbsp;
+    </Section>
+  );
 }
 
 function resolveProduct(
   block: Extract<EmailBlock, { type: "product" }>,
-  ctx: BlockRenderContext,
+  ctx: BlockRenderContext
 ): ProductData | undefined {
   const { source, productId } = block.props;
   if (source && source !== "manual" && ctx.dynamicProducts?.length) {
@@ -286,6 +281,21 @@ function resolveProduct(
     };
   }
   return undefined;
+}
+
+function productDescriptionText(value: string): string {
+  return value
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function ProductBlockView({
@@ -368,7 +378,7 @@ function ProductBlockView({
                   color: bk.colors.body,
                 }}
               >
-                {product.description}
+                {productDescriptionText(product.description)}
               </Text>
             ) : null}
             {showPrice ? (
@@ -400,7 +410,7 @@ function ProductBlockView({
               </Text>
             ) : null}
             <PrimaryButton bk={bk} href={interpolate(buttonHref || "#", variables)}>
-              {buttonText}
+              {stripHtml(buttonText)}
             </PrimaryButton>
           </td>
         </tr>
@@ -469,15 +479,26 @@ function ProductGridBlockView({
               {showDescription && p.description ? (
                 <Text
                   className="bk-muted"
-                  style={{ margin: "0 0 2px", fontFamily: bk.fonts.sans, fontSize: 12, color: bk.colors.muted }}
+                  style={{
+                    margin: "0 0 2px",
+                    fontFamily: bk.fonts.sans,
+                    fontSize: 12,
+                    color: bk.colors.muted,
+                  }}
                 >
-                  {p.description}
+                  {productDescriptionText(p.description)}
                 </Text>
               ) : null}
               {showPrice ? (
                 <Text
                   className="bk-ink"
-                  style={{ margin: 0, fontFamily: bk.fonts.sans, fontSize: 14, fontWeight: 600, color: bk.colors.ink }}
+                  style={{
+                    margin: 0,
+                    fontFamily: bk.fonts.sans,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: bk.colors.ink,
+                  }}
                 >
                   {formatCurrency(p.price, bk.currency)}
                 </Text>
@@ -502,9 +523,16 @@ function IconRowBlockView({
     <Section className="bk-pad" style={{ padding: "24px 36px 0" }}>
       <Row>
         {block.props.items.map((item, i) => (
-          <Column key={i} className="bk-stack" valign="top" style={{ padding: "0 8px", textAlign: "center" }}>
+          <Column
+            key={i}
+            className="bk-stack"
+            valign="top"
+            style={{ padding: "0 8px", textAlign: "center" }}
+          >
             {item.icon ? (
-              <Text style={{ margin: "0 0 6px", fontSize: 22, lineHeight: "24px", textAlign: "center" }}>
+              <Text
+                style={{ margin: "0 0 6px", fontSize: 22, lineHeight: "24px", textAlign: "center" }}
+              >
                 {item.icon}
               </Text>
             ) : null}
@@ -524,7 +552,13 @@ function IconRowBlockView({
             {item.description ? (
               <Text
                 className="bk-muted"
-                style={{ margin: "4px 0 0", fontFamily: bk.fonts.sans, fontSize: 12, color: bk.colors.muted, textAlign: "center" }}
+                style={{
+                  margin: "4px 0 0",
+                  fontFamily: bk.fonts.sans,
+                  fontSize: 12,
+                  color: bk.colors.muted,
+                  textAlign: "center",
+                }}
               >
                 {item.description}
               </Text>
@@ -559,7 +593,14 @@ function TestimonialBlockView({
             }}
           >
             {stars ? (
-              <Text style={{ margin: "0 0 8px", fontSize: 15, letterSpacing: "2px", color: bk.colors.primary }}>
+              <Text
+                style={{
+                  margin: "0 0 8px",
+                  fontSize: 15,
+                  letterSpacing: "2px",
+                  color: bk.colors.primary,
+                }}
+              >
                 {stars}
               </Text>
             ) : null}
@@ -574,11 +615,17 @@ function TestimonialBlockView({
                 color: bk.colors.ink,
               }}
             >
-              &ldquo;{interpolate(quote, variables)}&rdquo;
+              &ldquo;{stripHtml(interpolate(quote, variables))}&rdquo;
             </Text>
             <Text
               className="bk-muted"
-              style={{ margin: 0, fontFamily: bk.fonts.sans, fontSize: 13, fontWeight: 600, color: bk.colors.muted }}
+              style={{
+                margin: 0,
+                fontFamily: bk.fonts.sans,
+                fontSize: 13,
+                fontWeight: 600,
+                color: bk.colors.muted,
+              }}
             >
               {"— "}
               {author}
@@ -625,7 +672,7 @@ function CountdownBlockView({
                 textAlign: "center",
               }}
             >
-              {interpolate(block.props.label, variables)}
+              {stripHtml(interpolate(block.props.label, variables))}
             </Text>
             <Text
               style={{
@@ -657,7 +704,15 @@ function SocialBlockView({
   if (block.props.links.length === 0) return null;
   return (
     <Section className="bk-pad" style={{ padding: "20px 36px 0", textAlign: "center" }}>
-      <Text style={{ margin: 0, fontFamily: bk.fonts.sans, fontSize: 13, color: bk.colors.muted, textAlign: "center" }}>
+      <Text
+        style={{
+          margin: 0,
+          fontFamily: bk.fonts.sans,
+          fontSize: 13,
+          color: bk.colors.muted,
+          textAlign: "center",
+        }}
+      >
         {block.props.links.map((l, i) => (
           <React.Fragment key={l.platform}>
             {i > 0 ? "  ·  " : ""}

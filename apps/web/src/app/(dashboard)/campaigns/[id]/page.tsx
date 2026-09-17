@@ -76,6 +76,7 @@ export default function CampaignDetailPage() {
     trpc.campaigns.timingPreview as any
   ).useQuery({ id: campaignId }, { enabled: campaign?.status === "draft" }) as {
     data?: {
+      available: boolean;
       recipients: number;
       cohortCount: number;
       timezoneCount: number;
@@ -95,6 +96,22 @@ export default function CampaignDetailPage() {
     };
     isLoading: boolean;
   };
+
+  const timingWindowLabel = (window: "morning" | "afternoon" | "evening") => {
+    if (window === "morning") return "09:00–11:00";
+    if (window === "afternoon") return "13:00–15:00";
+    return "18:00–20:00";
+  };
+  const dominantTimingCohort = timingPreview?.cohorts[0];
+  const timingDateLabel =
+    timingPreview?.earliestAt && dominantTimingCohort
+      ? new Intl.DateTimeFormat(undefined, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          timeZone: dominantTimingCohort.timezone,
+        }).format(new Date(timingPreview.earliestAt))
+      : null;
 
   // Render preview from blocks if template has no pre-rendered HTML
   const templateBlocks =
@@ -162,6 +179,7 @@ export default function CampaignDetailPage() {
   const includeLeftAloneMut = trpc.campaigns.includeLeftAloneCustomers.useMutation({
     onSuccess: () => {
       utils.campaigns.dryRun.invalidate({ id: campaignId });
+      (utils.campaigns.timingPreview as any).invalidate({ id: campaignId });
       toast("They'll be reconsidered for this campaign.", "success");
     },
     onError: () => toast("We couldn't change that audience. Mind trying again?", "error"),
@@ -169,7 +187,10 @@ export default function CampaignDetailPage() {
   const overrideRecentPurchaseMut = trpc.campaigns.overrideRecentPurchase.useMutation({
     onSuccess: async ({ included }) => {
       await refetchDryRun();
-      await utils.campaigns.getById.invalidate({ id: campaignId });
+      await Promise.all([
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+        (utils.campaigns.timingPreview as any).invalidate({ id: campaignId }),
+      ]);
       setShowRecentOverride(false);
       setSelectedRecentIds([]);
       setOverrideReason("");
@@ -183,7 +204,10 @@ export default function CampaignDetailPage() {
   const overrideFatigueMut = trpc.campaigns.overrideFatigue.useMutation({
     onSuccess: async ({ included }) => {
       await refetchDryRun();
-      await utils.campaigns.getById.invalidate({ id: campaignId });
+      await Promise.all([
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+        (utils.campaigns.timingPreview as any).invalidate({ id: campaignId }),
+      ]);
       setShowFatigueOverride(false);
       setSelectedFatigueIds([]);
       setFatigueOverrideReason("");
@@ -198,7 +222,10 @@ export default function CampaignDetailPage() {
   const overrideGovernorMut = trpc.campaigns.overrideGovernorDecision.useMutation({
     onSuccess: async ({ included }) => {
       await refetchDryRun();
-      await utils.campaigns.getById.invalidate({ id: campaignId });
+      await Promise.all([
+        utils.campaigns.getById.invalidate({ id: campaignId }),
+        (utils.campaigns.timingPreview as any).invalidate({ id: campaignId }),
+      ]);
       setGovernorOverrideType(null);
       setSelectedGovernorIds([]);
       setGovernorOverrideReason("");
@@ -590,7 +617,7 @@ export default function CampaignDetailPage() {
               <button
                 type="button"
                 onClick={() => sendMut.mutate({ id: campaignId, timing: "joon" })}
-                disabled={sendMut.isPending}
+                disabled={sendMut.isPending || timingPreview?.available === false}
                 className="w-full rounded-xl border border-foreground bg-background px-4 py-4 text-left transition-[background-color,transform] duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:opacity-50"
               >
                 <span className="flex items-center justify-between gap-3">
@@ -604,11 +631,13 @@ export default function CampaignDetailPage() {
                 <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
                   {timingPreviewLoading
                     ? "Working out the delivery window…"
-                    : timingPreview
-                      ? `Deliver ${formatDeliveryTime(timingPreview.earliestAt)}–${formatDeliveryTime(timingPreview.latestAt)}.`
-                      : "Joon will use customer engagement, store patterns and quiet hours."}
+                    : timingPreview?.available && dominantTimingCohort
+                      ? `Deliver ${timingDateLabel ?? "next"} · ${timingWindowLabel(dominantTimingCohort.window)} ${dominantTimingCohort.timezone}.`
+                      : timingPreview?.available === false
+                        ? "No eligible recipients are available to schedule. Review the audience plan first."
+                        : "Joon will use customer engagement, store patterns and quiet hours."}
                 </span>
-                {timingPreview && (
+                {timingPreview?.available && dominantTimingCohort && (
                   <span className="mt-2 block text-[10px] leading-4 text-muted-foreground">
                     {timingPreview.recipients.toLocaleString("en-IN")} recipients ·{" "}
                     {timingPreview.timezoneCount}{" "}
@@ -619,7 +648,7 @@ export default function CampaignDetailPage() {
                       ? "Based on customer engagement history"
                       : timingPreview.evidence.store > 0
                         ? "Based on your store’s engagement history"
-                        : "Using the default morning window"}
+                        : `Using the store’s default ${dominantTimingCohort.window} window`}
                     {timingPreview.quietHoursDeferred > 0
                       ? `; ${timingPreview.quietHoursDeferred.toLocaleString("en-IN")} will wait until quiet hours end.`
                       : "."}
@@ -629,7 +658,7 @@ export default function CampaignDetailPage() {
               <button
                 type="button"
                 onClick={() => sendMut.mutate({ id: campaignId, timing: "now" })}
-                disabled={sendMut.isPending}
+                disabled={sendMut.isPending || timingPreview?.available === false}
                 className="w-full rounded-xl border border-border bg-background px-4 py-4 text-left transition-[border-color,transform] duration-150 hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:opacity-50"
               >
                 <span className="text-[13px] font-semibold text-foreground">

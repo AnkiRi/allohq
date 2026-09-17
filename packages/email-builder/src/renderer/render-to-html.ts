@@ -243,7 +243,7 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
               ${product.imageUrl ? `<mj-image src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" border-radius="4px" padding-bottom="8px" />` : ""}
               <mj-text font-family="Arial, sans-serif" padding="0">
                 <p style="font-size: 14px; font-weight: bold; margin: 0 0 4px; color: #111;">${escapeHtml(product.title)}</p>
-                ${showDescription && product.description ? `<p style="font-size: 12px; color: #666; margin: 0 0 4px;">${escapeHtml(product.description)}</p>` : ""}
+                ${showDescription && product.description ? `<p style="font-size: 12px; color: #666; margin: 0 0 4px;">${escapeHtml(stripHtml(product.description))}</p>` : ""}
                 ${showPrice ? `<p style="font-size: 14px; font-weight: bold; margin: 0; color: #111;">${formatPrice(product.price)}</p>` : ""}
               </mj-text>
             </mj-column>`;

@@ -143,10 +143,14 @@ export const campaignsRouter = router({
           hour >= definition.startHour && hour < definition.endHour
             ? now
             : nextLocalHour(now, definition.startHour, profile.timezone);
-        const end = new Date(
-          start.getTime() + (definition.endHour - definition.startHour) * 60 * 60 * 1000
+        // Quiet hours constrain the planned window, not the instant the merchant
+        // happens to open this preview. Checking `now` made a future morning
+        // window look as if it were waiting for quiet hours to end.
+        const quiet = checkQuietHours(profile.timezone, governor.quietHours, start);
+        const plannedStart = quiet.allowed ? start : quiet.delayUntil!;
+        const plannedEnd = new Date(
+          plannedStart.getTime() + (definition.endHour - definition.startHour) * 60 * 60 * 1000
         );
-        const quiet = checkQuietHours(profile.timezone, governor.quietHours, now);
         if (!quiet.allowed) quietHoursDeferred++;
         if (profile.bestDayOfWeek != null) {
           const day = String(profile.bestDayOfWeek);
@@ -157,8 +161,8 @@ export const campaignsRouter = router({
         if (current) {
           current.count++;
           current.confidence += profile.confidence;
-          if (start < current.earliestAt) current.earliestAt = start;
-          if (end > current.latestAt) current.latestAt = end;
+          if (plannedStart < current.earliestAt) current.earliestAt = plannedStart;
+          if (plannedEnd > current.latestAt) current.latestAt = plannedEnd;
         } else {
           cohorts.set(key, {
             window: profile.window,
@@ -166,8 +170,8 @@ export const campaignsRouter = router({
             source: profile.source,
             confidence: profile.confidence,
             count: 1,
-            earliestAt: start,
-            latestAt: end,
+            earliestAt: plannedStart,
+            latestAt: plannedEnd,
           });
         }
       }
@@ -175,6 +179,7 @@ export const campaignsRouter = router({
         .map((cohort) => ({ ...cohort, confidence: cohort.confidence / cohort.count }))
         .sort((left, right) => right.count - left.count);
       return {
+        available: customerIds.length > 0 && rows.length > 0,
         recipients: customerIds.length,
         cohortCount: rows.length,
         timezoneCount: new Set(rows.map((row) => row.timezone)).size,

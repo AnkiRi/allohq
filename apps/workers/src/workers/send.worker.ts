@@ -517,21 +517,23 @@ export async function planCampaignSend(
 
     // Assign this recipient to an explainable broad delivery-window cohort.
     const planningNow = new Date();
+    const windowDelay = deliveryWindowDelay({
+      customerId: customer.id,
+      window: deliveryWindow,
+      timezone: deliveryTimezone,
+      now: planningNow,
+      isDemo,
+    });
+    const windowDeliveryAt = new Date(planningNow.getTime() + windowDelay);
     const quietDecision = checkQuietHours(
       deliveryTimezone,
       planningGovernorConfig.quietHours,
-      planningNow
+      windowDeliveryAt
     );
     const deliveryDelay = forceImmediate
       ? 0
       : quietDecision.allowed
-        ? deliveryWindowDelay({
-            customerId: customer.id,
-            window: deliveryWindow,
-            timezone: deliveryTimezone,
-            now: planningNow,
-            isDemo,
-          })
+        ? windowDelay
         : isDemo
           ? DEMO_MAX_DELAY_MS
           : Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime());

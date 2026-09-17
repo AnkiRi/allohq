@@ -34,7 +34,8 @@ const PAGE_SIZE = 25;
 function humanState(customer: any) {
   const parts = [
     customer.lifecycle?.replaceAll("_", " "),
-    customer.purchaseCyclePosition && `${customer.purchaseCyclePosition.replaceAll("_", " ")} in purchase cycle`,
+    customer.purchaseCyclePosition &&
+      `${customer.purchaseCyclePosition.replaceAll("_", " ")} in purchase cycle`,
     customer.discountBehavior?.replaceAll("_", " "),
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "Not enough customer history yet";
@@ -49,7 +50,9 @@ export function AudienceReviewDrawer({
 }) {
   const visibleGroups = useMemo(() => groups.filter((group) => group.count > 0), [groups]);
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState<AudienceReason>(visibleGroups[0]?.reason ?? "deliberately_left_alone");
+  const [reason, setReason] = useState<AudienceReason>(
+    visibleGroups[0]?.reason ?? "deliberately_left_alone"
+  );
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -76,7 +79,7 @@ export function AudienceReviewDrawer({
 
   const review = (trpc.campaigns.audienceReview as any).useQuery(
     { id: campaignId, reason, query: debouncedQuery, page, pageSize: PAGE_SIZE },
-    { enabled: open },
+    { enabled: open }
   );
   const afterOverride = async (included: number) => {
     setSelectedIds([]);
@@ -85,8 +88,12 @@ export function AudienceReviewDrawer({
       utils.campaigns.dryRun.invalidate({ id: campaignId }),
       (utils.campaigns.audienceReview as any).invalidate(),
       utils.campaigns.getById.invalidate({ id: campaignId }),
+      (utils.campaigns.timingPreview as any).invalidate({ id: campaignId }),
     ]);
-    toast(`${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`, "success");
+    toast(
+      `${included} ${included === 1 ? "customer is" : "customers are"} back in consideration.`,
+      "success"
+    );
   };
   const stateOverride = trpc.campaigns.includeLeftAloneCustomers.useMutation({
     onSuccess: ({ included }) => afterOverride(included),
@@ -112,19 +119,25 @@ export function AudienceReviewDrawer({
         utils.campaigns.dryRun.invalidate({ id: campaignId }),
         (utils.campaigns.audienceReview as any).invalidate(),
         utils.campaigns.getById.invalidate({ id: campaignId }),
+        (utils.campaigns.timingPreview as any).invalidate({ id: campaignId }),
       ]);
       toast(
         enabled
           ? `Whole-group override recorded for ${affected.toLocaleString()} current customers.`
           : "Whole-group override removed. Joon will apply the audience rule again.",
-        "success",
+        "success"
       );
     },
     onError: (error) => toast(error.message || "We couldn't change that override.", "error"),
   });
   const activeGroup = visibleGroups.find((group) => group.reason === reason);
   const overrideable = review.data?.overridePolicy && review.data.overridePolicy !== "blocked";
-  const isOverriding = stateOverride.isPending || recentOverride.isPending || fatigueOverride.isPending || governorOverride.isPending || groupOverride.isPending;
+  const isOverriding =
+    stateOverride.isPending ||
+    recentOverride.isPending ||
+    fatigueOverride.isPending ||
+    governorOverride.isPending ||
+    groupOverride.isPending;
   const submitOverride = () => {
     const input = { id: campaignId, customerIds: selectedIds, reason: overrideReason.trim() };
     if (reason === "deliberately_left_alone") stateOverride.mutate(input);
@@ -157,7 +170,8 @@ export function AudienceReviewDrawer({
                 Audience review
               </Dialog.Title>
               <Dialog.Description className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">
-                See every customer who will not receive this campaign, the rule behind that decision and when Joon will reconsider it.
+                See every customer who will not receive this campaign, the rule behind that decision
+                and when Joon will reconsider it.
               </Dialog.Description>
             </div>
             <Dialog.Close className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -167,7 +181,10 @@ export function AudienceReviewDrawer({
           </header>
 
           <div className="grid min-h-0 flex-1 md:grid-cols-[220px_minmax(0,1fr)]">
-            <nav className="border-b border-border p-3 md:border-b-0 md:border-r" aria-label="Audience decision reasons">
+            <nav
+              className="border-b border-border p-3 md:border-b-0 md:border-r"
+              aria-label="Audience decision reasons"
+            >
               <div className="flex gap-2 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible">
                 {visibleGroups.map((group) => (
                   <button
@@ -191,7 +208,9 @@ export function AudienceReviewDrawer({
               <div className="border-b border-border px-5 py-4 sm:px-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-[14px] font-semibold text-foreground">{activeGroup?.label}</h3>
+                    <h3 className="text-[14px] font-semibold text-foreground">
+                      {activeGroup?.label}
+                    </h3>
                     <p className="mt-1 max-w-xl text-[11px] leading-5 text-muted-foreground">
                       {activeGroup?.explanation}
                     </p>
@@ -201,7 +220,10 @@ export function AudienceReviewDrawer({
                   </span>
                 </div>
                 <label className="relative mt-4 block">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <span className="sr-only">Search customers</span>
                   <input
                     value={query}
@@ -214,7 +236,9 @@ export function AudienceReviewDrawer({
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2 sm:px-6">
                 {review.isLoading ? (
-                  <div className="py-12 text-center text-[12px] text-muted-foreground">Loading the audience decision…</div>
+                  <div className="py-12 text-center text-[12px] text-muted-foreground">
+                    Loading the audience decision…
+                  </div>
                 ) : review.error ? (
                   <div className="py-12 text-center text-[12px] text-[var(--color-urgent)]">
                     We couldn&apos;t load this audience group. Close the review and try again.
@@ -222,7 +246,9 @@ export function AudienceReviewDrawer({
                 ) : review.data?.customers.length ? (
                   <div className="divide-y divide-border">
                     {review.data.customers.map((customer: any) => {
-                      const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
+                      const name =
+                        [customer.firstName, customer.lastName].filter(Boolean).join(" ") ||
+                        customer.email;
                       return (
                         <article key={customer.id} className="py-4">
                           <div className="flex items-start justify-between gap-4">
@@ -231,16 +257,26 @@ export function AudienceReviewDrawer({
                                 <input
                                   type="checkbox"
                                   checked={selectedIds.includes(customer.id)}
-                                  onChange={(event) => setSelectedIds((current) => event.target.checked
-                                    ? [...new Set([...current, customer.id])]
-                                    : current.filter((id) => id !== customer.id))}
+                                  onChange={(event) =>
+                                    setSelectedIds((current) =>
+                                      event.target.checked
+                                        ? [...new Set([...current, customer.id])]
+                                        : current.filter((id) => id !== customer.id)
+                                    )
+                                  }
                                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-current"
                                   aria-label={`Select ${name} for override`}
                                 />
                               )}
                               <div className="min-w-0">
-                              <div className="truncate text-[12px] font-semibold text-foreground">{name}</div>
-                              {name !== customer.email && <div className="truncate text-[10px] text-muted-foreground">{customer.email}</div>}
+                                <div className="truncate text-[12px] font-semibold text-foreground">
+                                  {name}
+                                </div>
+                                {name !== customer.email && (
+                                  <div className="truncate text-[10px] text-muted-foreground">
+                                    {customer.email}
+                                  </div>
+                                )}
                               </div>
                             </div>
                             {customer.nextEvaluationAt && (
@@ -249,8 +285,14 @@ export function AudienceReviewDrawer({
                               </span>
                             )}
                           </div>
-                          <p className="mt-2 text-[11px] capitalize text-foreground">{humanState(customer)}</p>
-                          {customer.evidence && <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{customer.evidence}</p>}
+                          <p className="mt-2 text-[11px] capitalize text-foreground">
+                            {humanState(customer)}
+                          </p>
+                          {customer.evidence && (
+                            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                              {customer.evidence}
+                            </p>
+                          )}
                           <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
                             Re-enters consideration: {review.data.reconsideration}.
                           </p>
@@ -269,7 +311,9 @@ export function AudienceReviewDrawer({
                 <div className="border-t border-border bg-muted/30 px-5 py-4 sm:px-6">
                   {activeGroup?.activeOverride && (
                     <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-[11px] leading-5 text-foreground">
-                      Everyone currently held back for this reason is being reconsidered. New customers matching the same reason will also be included until this campaign is approved or the override is removed.
+                      Everyone currently held back for this reason is being reconsidered. New
+                      customers matching the same reason will also be included until this campaign
+                      is approved or the override is removed.
                     </div>
                   )}
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -279,7 +323,11 @@ export function AudienceReviewDrawer({
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedIds(review.data?.customers.map((customer: any) => customer.id) ?? [])}
+                        onClick={() =>
+                          setSelectedIds(
+                            review.data?.customers.map((customer: any) => customer.id) ?? []
+                          )
+                        }
                         className="text-[10px] font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         Select this page
@@ -295,7 +343,10 @@ export function AudienceReviewDrawer({
                       )}
                     </div>
                   </div>
-                  <label className="mt-3 block text-[11px] font-medium text-foreground" htmlFor="audience-review-override-reason">
+                  <label
+                    className="mt-3 block text-[11px] font-medium text-foreground"
+                    htmlFor="audience-review-override-reason"
+                  >
                     Why should Joon include them?
                   </label>
                   <textarea
@@ -308,25 +359,39 @@ export function AudienceReviewDrawer({
                   />
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="max-w-md text-[10px] leading-4 text-muted-foreground">
-                      Joon keeps the original evidence and records your reason. Consent, complaints, bounces and delivery safeguards remain mandatory.
+                      Joon keeps the original evidence and records your reason. Consent, complaints,
+                      bounces and delivery safeguards remain mandatory.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={submitOverride}
-                        disabled={selectedIds.length === 0 || overrideReason.trim().length < 5 || isOverriding}
+                        disabled={
+                          selectedIds.length === 0 ||
+                          overrideReason.trim().length < 5 ||
+                          isOverriding
+                        }
                         className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        {isOverriding ? "Recording override…" : `Include ${selectedIds.length || "selected"} anyway`}
+                        {isOverriding
+                          ? "Recording override…"
+                          : `Include ${selectedIds.length || "selected"} anyway`}
                       </button>
                       <button
                         type="button"
-                        onClick={() => groupOverride.mutate({
-                          id: campaignId,
-                          reasonCode: reason as "deliberately_left_alone" | "recent_purchase" | "fatigue" | "collision" | "cooldown",
-                          enabled: !activeGroup?.activeOverride,
-                          reason: overrideReason.trim(),
-                        })}
+                        onClick={() =>
+                          groupOverride.mutate({
+                            id: campaignId,
+                            reasonCode: reason as
+                              | "deliberately_left_alone"
+                              | "recent_purchase"
+                              | "fatigue"
+                              | "collision"
+                              | "cooldown",
+                            enabled: !activeGroup?.activeOverride,
+                            reason: overrideReason.trim(),
+                          })
+                        }
                         disabled={overrideReason.trim().length < 5 || isOverriding}
                         className="rounded-lg bg-secondary px-3 py-2 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
