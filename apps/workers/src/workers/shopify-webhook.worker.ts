@@ -6,8 +6,91 @@ import { redactAcquisitionEvidence } from "../acquisition-privacy";
 import { calculateCountedOrderRevenue } from "../refund-revenue";
 import { isWebhookOlderThanInstall } from "../shopify-webhook-ordering";
 import { shopify } from "@allohq/ecommerce-integrations";
+import { calculateCustomerLtv } from "@allohq/customer-intelligence";
 
 const { getShopifyAdminClient } = shopify;
+
+async function refreshCustomerOrderProjection(storeId: string, customerId: string) {
+  const [orders, existing] = await Promise.all([
+    prisma.order.findMany({
+      where: { storeId, customerId, status: { not: "cancelled" } },
+      select: { totalPrice: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.rfmScore.findUnique({ where: { customerId } }),
+  ]);
+  const orderCount = orders.length;
+  const totalSpent = orders.reduce((sum, order) => sum + order.totalPrice, 0);
+  const lastOrderAt = orders.at(-1)?.createdAt ?? null;
+  const avgOrderValue = orderCount > 0 ? totalSpent / orderCount : 0;
+  const recency = orderCount > 0 ? 5 : 1;
+  const frequency = orderCount === 0 ? 1 : Math.min(5, Math.max(2, orderCount));
+  const monetary =
+    orderCount === 0 ? 1 : Math.max(2, Math.min(5, existing?.monetary ?? 2));
+  const totalScore = recency + frequency + monetary;
+  const segment =
+    orderCount === 0
+      ? "Subscribers"
+      : orderCount === 1
+        ? "New Customers"
+        : existing?.segment === "Subscribers" || existing?.segment === "Lost" || !existing
+          ? "Potential Loyalists"
+          : existing.segment;
+
+  await prisma.rfmScore.upsert({
+    where: { customerId },
+    create: {
+      customerId,
+      storeId,
+      recency,
+      frequency,
+      monetary,
+      totalScore,
+      segment,
+      lastOrderAt,
+      orderCount,
+      totalSpent,
+      avgOrderValue,
+    },
+    update: {
+      recency,
+      frequency,
+      monetary,
+      totalScore,
+      segment,
+      lastOrderAt,
+      orderCount,
+      totalSpent,
+      avgOrderValue,
+      calculatedAt: new Date(),
+    },
+  });
+  const ltv = calculateCustomerLtv({ customerId, orders }, new Date());
+  if (ltv) {
+    await prisma.customerLifetimeValue.upsert({
+      where: { customerId },
+      create: {
+        customerId,
+        storeId,
+        historicalLtv: ltv.historicalLtv,
+        predictedLtv: ltv.predictedLtv,
+        avgOrderValue: ltv.avgOrderValue,
+        purchaseFrequency: ltv.purchaseFrequency,
+        customerLifespan: ltv.customerLifespan,
+        churnProbability: ltv.churnProbability,
+      },
+      update: {
+        historicalLtv: ltv.historicalLtv,
+        predictedLtv: ltv.predictedLtv,
+        avgOrderValue: ltv.avgOrderValue,
+        purchaseFrequency: ltv.purchaseFrequency,
+        customerLifespan: ltv.customerLifespan,
+        churnProbability: ltv.churnProbability,
+        lastCalculatedAt: new Date(),
+      },
+    });
+  }
+}
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 const productImageQueue = new Queue(QUEUE_NAMES.PRODUCT_IMAGE, { connection: redisConnection });
@@ -227,6 +310,10 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
       case "orders/create": {
         const order = await upsertOrder(store.id, payload);
         if (order?.customerId) {
+          // Keep merchant-facing customer totals coherent before state and
+          // attribution jobs read them. The periodic full RFM pass can later
+          // refine relative quintiles without leaving zero-order projections.
+          await refreshCustomerOrderProjection(store.id, order.customerId);
           // Acquisition attribution: prefer an exact issued-code match, then
           // associate the order with the customer's latest signup in 30 days.
           // This is labelled associated conversion, not causal incremental lift.
@@ -397,6 +484,18 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
               data: { netRevenue: countedRevenue },
             }),
           ]);
+        }
+        if (order?.customerId) {
+          await refreshCustomerOrderProjection(store.id, order.customerId);
+          await customerStateQueue.add(
+            "order-updated",
+            {
+              type: "order_created",
+              customerId: order.customerId,
+              storeId: store.id,
+            },
+            { jobId: `customer-order-projection-${order.id}-${eventId ?? job.id}` }
+          );
         }
         break;
       }

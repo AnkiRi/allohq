@@ -51,6 +51,11 @@ the design-partner demo and must not be mistaken for unverified speculation.
 
 ### A. Customer projections disagree after a real order
 
+Implementation update: the Shopify order webhook now refreshes the affected customer's
+order-count, spend, average-order, most-recent-order, first-buyer/RFM projection and LTV before
+enqueueing the state recomputation. Cancellation updates the same projection. Production
+acceptance and a later scalable relative-RFM refinement still remain.
+
 Observed on the same customer page after order `#1052`:
 
 - the order and ₹730 value appear in the timeline and recent-orders table;
