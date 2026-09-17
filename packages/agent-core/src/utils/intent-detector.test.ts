@@ -40,3 +40,11 @@ test("preserves no-offer, no-control and immediate-delivery instructions", () =>
     }
   );
 });
+
+test("treats without any discount as a hard full-price constraint", () => {
+  const constraints = extractMerchantRequestConstraints(
+    "Create a campaign for uast23@gmail.com without any discount, featuring new products."
+  );
+  assert.equal(constraints.noDiscount, true);
+  assert.equal(constraints.discountPercent, undefined);
+});

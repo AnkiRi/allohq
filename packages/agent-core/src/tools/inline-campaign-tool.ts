@@ -5,7 +5,7 @@ import { generateCode } from "./discount-tools";
 const FULL_PRICE_CREATIVE_POLICY_VERSION = 2;
 
 export function containsDiscountLanguage(value: unknown): boolean {
-  return /\b(?:\d{1,2}%\s*off|discount|promo(?:tional)?\s+code|coupon|sale)\b/i.test(
+  return /\b(?:\d{1,2}%\s*off|discount|promo(?:tional)?\s+code|coupon|sale|use\s+code|exclusive\s+promotion|special\s+offer|limited[- ]time\s+(?:offer|deal)|save\s+\d)\b/i.test(
     JSON.stringify(value)
   );
 }

@@ -1623,7 +1623,9 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
             segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
             segments.find((s) => s.customerCount > 0));
         if (bestTarget) {
-          processedMessage += `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. Target: ${bestTarget.name} (${bestTarget.customerCount} customers). Discount: ${discount}%. This gives the merchant an inline email preview they can approve directly.]`;
+          processedMessage += requestConstraints.noDiscount
+            ? `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. This is a hard full-price request: do not pass discountPercent and do not add a sale, coupon, offer code, promotion code, or percentage-off language. Preserve the merchant's exact audience; do not replace a named customer with ${bestTarget.name}.]`
+            : `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. Target: ${bestTarget.name} (${bestTarget.customerCount} customers). Discount: ${discount}%. This gives the merchant an inline email preview they can approve directly.]`;
         }
       }
 

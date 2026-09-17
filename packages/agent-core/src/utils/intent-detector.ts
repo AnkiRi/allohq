@@ -38,7 +38,7 @@ export function extractMerchantRequestConstraints(message: string): MerchantRequ
         ? Number(requestedDiscountMatch[1])
         : undefined,
     noDiscount:
-      /\b(?:no|without)\s+(?:a\s+)?(?:discount|coupon|code|offer)\b|\bfull[- ]price\b/i.test(
+      /\b(?:no|without)\s+(?:(?:a|any|the)\s+)?(?:discount|coupon|code|offer)\b|\bfull[- ]price\b/i.test(
         message
       ) || undefined,
     noControl: /\b(?:no|without)\s+(?:a\s+)?(?:control|holdout)\b/i.test(message) || undefined,
