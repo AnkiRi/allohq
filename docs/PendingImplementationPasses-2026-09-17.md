@@ -17,6 +17,7 @@ This document is the single reference point for these passes. Later implementati
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
 | 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
+| 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
 
 ## Post-demo acceptance findings — 2026-09-17
 
@@ -562,14 +563,204 @@ will buy without a discount.
 8. Implement Pass 8 so the merchant agent reasons from the customer-state and product
    intelligence already produced by Passes 6 and 7 rather than from a shallow lookup or
    lifecycle label.
-9. Run one bounded product-wide UX coherence pass: terminal styling remains Joon's
+9. Implement Pass 9 before widening delivery beyond controlled recipients. A verified
+   domain is not automatically a warmed domain, and elapsed calendar time is not healthy
+   sending evidence.
+10. Run one bounded product-wide UX coherence pass: terminal styling remains Joon's
    decision/ledger voice; operational navigation and dense exploration remain quiet,
    conventional and accessible. Do not create a fourth visual language for the new maps.
-10. Run the complete design-partner path: Shopify sync → customer-state map → product
+11. Run the complete design-partner path: Shopify sync → customer-state map → product
    graph → natural-language request → audience reconciliation → override → control
    assignment → creative → approval → timing → provider delivery → open → click →
    order → attribution → outcome.
-11. Do not widen production delivery beyond the recipient allowlist during these passes.
+12. Do not widen production delivery beyond the recipient allowlist during these passes.
+
+## Pass 9 — Provider-neutral domain reputation and warm-up
+
+Status: planned after a code-and-document audit on 2026-09-17. The repository contains a
+useful SES warm-up skeleton, but it is not yet a complete production warm-up system and must
+not be described as one.
+
+### Why this pass exists
+
+DNS verification proves control of a sending domain. It does not prove that mailbox providers
+trust the domain, that its recent volume is healthy, or that an existing sender can safely move
+its traffic to Joon. Warm-up also has more than one reputation surface: From/DKIM domain,
+custom MAIL FROM domain, provider account or SES tenant, and shared or dedicated IP reputation.
+Joon must state which surface it knows about and must never equate `verified` with `warmed`.
+
+The current implementation has the following limitations:
+
+- gradual warm-up is applied only on the SES capacity path; production Resend sends receive
+  only a generic new-store cap;
+- `SesWarmupState` begins on the first SES capacity acquisition rather than from an explicit
+  domain assessment and activation decision;
+- `healthyDay` can advance from elapsed time without requiring meaningful delivered volume
+  and healthy observed bounce/complaint evidence;
+- the code cannot assess or import evidence that a merchant domain is already warmed;
+- the merchant UI exposes only a terse SES status, not cap usage, deferred recipients,
+  reputation evidence, next step, confidence or the reason for a hold/pause;
+- the provider switch from Resend to SES has no explicit reputation-migration workflow;
+- a founder override records a reason, but does not model a reviewed starting tier, actor,
+  expiry or rollback condition.
+
+### Required domain assessment
+
+At domain verification and whenever provider/MAIL FROM/IP changes, create a versioned
+`SenderReputationAssessment` rather than guessing a warm-up day. Record evidence separately:
+
+- verified From/DKIM domain, alignment and DMARC state;
+- provider, account/tenant, region, configuration set and IP-pool type;
+- first-seen and last-send dates available to Joon;
+- recent delivered volume by day and peak daily volume;
+- rolling delivery, hard-bounce, complaint and unsubscribe rates with denominators;
+- whether the evidence came from Joon/provider APIs, an authenticated import, a merchant
+  declaration or is unknown;
+- assessed state: `unknown`, `new`, `warming`, `established`, `held`, `paused` or `degraded`;
+- confidence, reviewer/actor, timestamp, evidence window and next review condition.
+
+“Already warmed” is allowed only when adequate authenticated provider history exists. A
+merchant assertion may inform a cautious starting tier, but cannot mark a domain established
+on its own. DNS age, domain age, Shopify order volume, list size and an earlier provider name
+are not sufficient evidence. A provider/account/IP change can require a step-down even when
+the From domain has history.
+
+### Required ramp policy
+
+- Make capacity and health policy provider-neutral; provider adapters supply evidence and
+  hard limits, while one Joon policy chooses the ramp.
+- Retain the current conservative default of 500/day doubling only after a healthy sending
+  day, but make the policy configurable and versioned rather than hard-coded as product truth.
+- A healthy day requires actual attempted/delivered volume above a defined minimum plus a
+  closed-enough event window; a day with zero sends must not advance the ramp.
+- Preserve the rolling seven-day gates already documented: hold growth above 2% bounce or
+  0.1% complaint, pause above 0.3% complaint, with minimum denominators so one tiny seed send
+  cannot be misrepresented as stable reputation.
+- Prioritize recent purchasers/clickers, then older engaged recipients, then the remainder;
+  opens alone do not establish high engagement. Preserve frozen treatment/control membership.
+- Defer overflow to a visible future cohort; never drop it, silently expand the cap or convert
+  a control recipient into treatment.
+- Recheck consent, suppression, complaint, bounce, domain, allowlist and campaign approval at
+  actual delivery.
+- Step down or pause on deterioration; do not merely stop cap growth.
+- Keep the 180-day unengaged-sunset proposal disabled until the founder explicitly approves
+  its policy and merchant-facing behavior.
+
+### Merchant experience
+
+Setup readiness and campaign approval must show a plain-language reputation plan:
+
+> Domain verified · reputation still learning
+>
+> Today: 312 of 500 delivered · 188 capacity remaining
+>
+> 1,240 approved recipients will continue in three cohorts
+>
+> Growth is healthy; next review follows delivery-event reconciliation
+
+For an assessed established sender, say what evidence supports the decision and what changes
+because of a provider migration. For a hold or pause, name the observed rate, denominator,
+window, threshold, affected campaigns and recovery condition. Show provider/account/domain/IP
+status separately so the merchant is not told that one green check means the entire path is
+warmed.
+
+Before campaign approval, show warm-up impact alongside delivery timing: recipients deliverable
+today, deferred remainder, expected completion, cohort count and reason. Provide an inspector
+for large audiences without rendering every recipient. Notify the owner when a tier changes,
+growth is held, delivery pauses, or a deferred cohort completes. Every manual override requires
+actor, reason, scope, expiry and an audit event.
+
+### Acceptance criteria
+
+- A newly verified domain starts conservatively on both Resend and SES paths.
+- Zero-volume days do not advance the ramp; healthy reconciled sending does.
+- Authenticated prior history can produce a reviewed established/cautious-start decision,
+  while unverified claims cannot bypass warm-up.
+- Changing provider, SES tenant, MAIL FROM or IP pool triggers a new assessment without erasing
+  the earlier evidence.
+- Cap overflow defers visibly and resumes idempotently with frozen arms.
+- Bounce/complaint fixtures hold and pause the correct store only; recovery and override are
+  audited.
+- The UI reconciles cap, used, remaining, deferred and terminal delivery counts.
+- Load proof covers a representative large audience with bounded cohort/chunk jobs.
+- Production evidence is collected under the allowlist before any broader partner ramp.
+
+## Consolidated remaining-work register — audited 2026-09-17
+
+This register reconciles the current conversation with the repository documents. It is not a
+claim that every unchecked line in an older plan is still current. Where an older document
+conflicts with a later locked decision, this document wins and the older checklist must be
+corrected rather than implemented literally.
+
+### Product/code work still open
+
+| Area | Current status | Required resolution |
+| --- | --- | --- |
+| Campaign-specific agent reasoning | Pass 8 planned | Make chat and campaign creation reason over canonical consent, orders, state, product graph and merchant constraints; never trust a shallow RFM label over fresher facts. |
+| Sender reputation and warm-up | Pass 9 planned | Implement the provider-neutral assessment, ramp, health gates, UI, notifications and migration behavior above. |
+| Customer projection consistency | Defect observed in production | Recompute customer/RFM/list/story projections idempotently after orders and expose one freshness contract. |
+| Outcomes and proof | Defect observed in production | Separate live attribution, pooled control evidence, billing preview, forecast calibration and illustrative education; remove fake precision for no-control cohorts. |
+| Overnight decisions | Defect observed in production | Deduplicate opportunities, fix lifecycle copy, add material-change notifications and link every approved proposal to its artifact. |
+| Billing ledger policy | Decision/code conflict | The locked decision says an order counts unless cancelled, but the worker currently reduces attributed revenue for refunds. Resolve explicitly before billing is enabled and update code, tests and acceptance documents together. |
+| Legacy causal/billing paths | Audit required | Prove no production invoice path still uses caused-revenue, postage or obsolete comparison logic; retain causal data only for learning/proof. Billing remains disabled until reconciled. |
+| Product-wide UX coherence | Deferred design pass | Use terminal/receipt styling for Joon decisions and ledgers; keep navigation, setup and dense exploration quiet and conventional. Include chat history, errors, retries, loading and artifact lifecycle. |
+| Read-only commerce evidence | Product decision required | Do not recreate Shopify order/product administration. Add lightweight searchable order and product evidence/drill-down only where it explains customer state, attribution, opportunities or the product graph. |
+| Landing narrative accuracy | Copy audit required | Clarify Rohan's full-price percentages and Ankita's chronology/evidence; do not say every field comes from order history when open/click timing is also used. Keep composites explicitly illustrative and keep public competitor references/testimonials removed. |
+| Active workspace | Deferred but mandatory | Replace most-recently-linked workspace selection with an explicit active-workspace model and switcher before multi-store merchants. |
+
+### Acceptance/document conflicts to correct
+
+- Later locked behavior is **no random journey holdout**; journeys reach every eligible
+  customer and use purchase-exit/suppression rules. Older acceptance documents that still
+  require journey controls must be revised.
+- Billing is **5% of non-cancelled Joon-attributed revenue** in early shadow mode, with 6% and
+  8% computed for learning; holdout lift is proof/learning, not the invoice. Any older “gap is
+  the only billed number” requirement is obsolete.
+- SMS, WhatsApp and RCS are outside v1. Old provider/template acceptance lines for those
+  channels do not gate email design-partner testing.
+- `measurement-ready` cannot mean “proven” merely because an audience exceeds a fixed count.
+  Significance requires an estimand, valid control, adequate sample and uncertainty; otherwise
+  pool evidence and label it learning.
+- Public landing copy must not promise live merchant results, quote a former company as a
+  current testimonial, or name competitors after the founder's removal decision.
+
+### External/operational work still open
+
+- Verify every additive migration in production and record web/API/worker deploy provenance;
+  do not continue relying on an assumption that migrations ran.
+- Create isolated staging before a partner begins testing, with separate data stores, queues,
+  Shopify/Clerk/provider credentials and encryption keys.
+- Complete the deliberate SES decision and, if selected, production access, tenant/region,
+  quotas, runtime maximum send rate, configuration sets, SNS/SQS/DLQ, IAM, custom MAIL FROM
+  and event reconciliation. Resend evidence does not prove SES readiness.
+- Enable encrypted database backups/PITR, execute and record a restore drill, confirm Redis
+  persistence for delayed work, and exercise incident response.
+- Add queue lag/oldest-job, provider spend, bounce, complaint, warm-up hold/pause and failed-job
+  alerts with named owners.
+- Finish Protected Customer Data Level 2 evidence, staff least privilege/MFA/access review,
+  DLP/export controls, access-log retention and the privacy policy, terms, DPA and subprocessors.
+- Complete fresh-account Shopify install/reinstall/uninstall/redaction/HMAC acceptance,
+  protected-data and `read_all_orders` approvals, embedded App Bridge/session-token work,
+  listing assets and Shopify billing before App Store submission.
+- Rotate development credentials before a real merchant and keep production secrets only in
+  the platform secret managers.
+
+### External testing still open
+
+- Controlled Gmail delivery, bounce, open, click and one attributed order are proven on the
+  current Resend path. Still exercise complaint and unsubscribe suppression, later-send
+  blocking, duplicate/out-of-order provider events and ambiguous provider acceptance.
+- Test Outlook, Apple/iCloud and a merchant-domain inbox across mobile/desktop, dark mode,
+  blocked images, plain text, replies and spam placement; authentication passing does not by
+  itself establish inbox reputation.
+- Run all enabled email journeys end to end, with purchase exit, waits, re-entry/cooldown,
+  quiet hours, restart recovery and no random journey holdout.
+- Validate storefront forms, consent provenance, Web Pixel events, anonymous-to-known stitching
+  and idempotent Shopify webhooks without cross-store leakage.
+- Run representative 100,000-recipient delivery/timing/warm-up load, million-customer state
+  scheduling and large-catalog product-graph rebuild tests with recorded resource use.
+- Complete a final fresh-store design-partner path and preserve screenshots, IDs, timestamps,
+  queue/provider evidence and rollback ownership.
 
 ## Linked external and operational work
 
