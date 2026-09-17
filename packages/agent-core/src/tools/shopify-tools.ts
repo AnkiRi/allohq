@@ -1,20 +1,27 @@
 import { prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
-const {
-  ShopifyClient,
-  getShopifyAdminClient,
-  getOrderTracking,
-} = shopify;
+const { ShopifyClient, getShopifyAdminClient, getOrderTracking } = shopify;
 import type { ToolDefinition } from "../types";
 
 /** Get a ShopifyClient for a store */
-async function getShopifyClient(storeId: string): Promise<InstanceType<typeof ShopifyClient> | null> {
+async function getShopifyClient(
+  storeId: string
+): Promise<InstanceType<typeof ShopifyClient> | null> {
   const store = await prisma.store.findFirst({
     where: { id: storeId },
     select: { platform: true },
   });
   if (!store || store.platform !== "shopify") return null;
   return getShopifyAdminClient(storeId);
+}
+
+export function productSearchMode(query: string): "newest" | "text" {
+  const normalized = query.trim().toLowerCase().replace(/\s+/g, " ");
+  return /\b(new products?|new arrivals?|new collection|newest|latest products?|latest arrivals?|recently added|recent products?)\b/.test(
+    normalized
+  )
+    ? "newest"
+    : "text";
 }
 
 export const shopifyTools: ToolDefinition[] = [
@@ -76,47 +83,69 @@ export const shopifyTools: ToolDefinition[] = [
   {
     name: "search_products",
     description:
-      "Search products in the store by keyword. Returns matching products with price and availability.",
+      "Search the synchronized store catalog. For 'new products', 'new arrivals', 'latest', 'newest', or 'recently added', this returns active products ordered by their Shopify creation date—it does not look for the literal word 'new'. For other queries it searches title, description, product type, and vendor. Returns the selection basis, product creation date, price, imagery, and inventory evidence. An empty keyword result does not mean the store has no products.",
     parameters: {
       query: { type: "string", description: "Search query (product name, type, or description)" },
       limit: { type: "number", description: "Max results (default 5)" },
     },
     handler: async (params, ctx) => {
-      const query = String(params.query ?? "");
-      const limit = Number(params.limit ?? 5);
+      const query = String(params.query ?? "").trim();
+      const limit = Math.min(Math.max(Number(params.limit ?? 5), 1), 20);
+      const mode = productSearchMode(query);
 
       const products = await prisma.product.findMany({
         where: {
           storeId: ctx.storeId,
           status: "active",
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            { productType: { contains: query, mode: "insensitive" } },
-            { vendor: { contains: query, mode: "insensitive" } },
-          ],
+          ...(mode === "text"
+            ? {
+                OR: [
+                  { title: { contains: query, mode: "insensitive" as const } },
+                  { description: { contains: query, mode: "insensitive" as const } },
+                  { productType: { contains: query, mode: "insensitive" as const } },
+                  { vendor: { contains: query, mode: "insensitive" as const } },
+                ],
+              }
+            : {}),
         },
+        orderBy:
+          mode === "newest"
+            ? [{ externalCreatedAt: "desc" }, { updatedAt: "desc" }]
+            : [{ updatedAt: "desc" }],
         take: limit,
         include: {
           variants: { take: 5 },
         },
       });
 
-      return products.map((p) => ({
-        id: p.id,
-        title: p.title,
-        price: p.price,
-        compareAtPrice: p.compareAtPrice,
-        imageUrl: p.imageUrl,
-        handle: p.handle,
-        vendor: p.vendor,
-        productType: p.productType,
-        variants: p.variants.map((v) => ({
-          title: v.title,
-          price: v.price,
-          inventory: v.inventory,
-        })),
-      }));
+      return {
+        count: products.length,
+        selectionBasis:
+          mode === "newest"
+            ? "Newest active products by synchronized Shopify creation date"
+            : `Active products matching “${query}”`,
+        products: products.map((p) => {
+          const totalInventory = p.variants.reduce((sum, variant) => sum + variant.inventory, 0);
+          return {
+            id: p.id,
+            title: p.title,
+            price: p.price,
+            compareAtPrice: p.compareAtPrice,
+            imageUrl: p.imageUrl,
+            handle: p.handle,
+            vendor: p.vendor,
+            productType: p.productType,
+            createdAt: p.externalCreatedAt,
+            totalInventory,
+            inStock: totalInventory > 0,
+            variants: p.variants.map((v) => ({
+              title: v.title,
+              price: v.price,
+              inventory: v.inventory,
+            })),
+          };
+        }),
+      };
     },
   },
 
