@@ -51,15 +51,17 @@ export const customerTools: ToolDefinition[] = [
   {
     name: "find_customers",
     description:
-      "Find specific customers in the store. TWO modes: (1) SEARCH by name/email — pass `query` (e.g. 'Archana S'); (2) TOP-N ranking — pass `topBy` ('spend' | 'orders' | 'rfm') with `limit` (e.g. 'top 25 customers' → topBy:'spend', limit:25). Returns each customer's id, name, email, segment, and spend. ALWAYS use this for 'top N customers', 'best/highest-value customers', named people, or 'these N' — then pass the returned ids as customerIds to create_segment / create_campaign_with_preview. NEVER invent customer names, and NEVER approximate a named/explicit/top-N set with an RFM segment.",
+      "Find specific customers in the store. TWO modes: (1) SEARCH by name/email — pass `query` (e.g. 'Archana S'); (2) TOP-N ranking — pass `topBy` ('spend' | 'orders' | 'rfm') with `limit` (e.g. 'top 25 customers' → topBy:'spend', limit:25). Returns each customer's id, name, email, merchant-facing lifecycle segment, current email consent, and spend. Treat acceptsMarketing/emailReachable as authoritative. ALWAYS use this for 'top N customers', 'best/highest-value customers', named people, or 'these N' — then pass the returned ids as customerIds to create_segment / create_campaign_with_preview. NEVER invent customer names, and NEVER approximate a named/explicit/top-N set with an RFM segment.",
     parameters: {
       query: {
         type: "string",
-        description: "Name or email fragment to match (case-insensitive). Use for specific named customers.",
+        description:
+          "Name or email fragment to match (case-insensitive). Use for specific named customers.",
       },
       topBy: {
         type: "string",
-        description: "Return the TOP customers ranked by this metric: 'spend' (highest lifetime spend), 'orders' (most orders), or 'rfm' (best RFM score). Use this for 'top N' / 'best customers' — do NOT search by name for those.",
+        description:
+          "Return the TOP customers ranked by this metric: 'spend' (highest lifetime spend), 'orders' (most orders), or 'rfm' (best RFM score). Use this for 'top N' / 'best customers' — do NOT search by name for those.",
       },
       limit: {
         type: "number",
@@ -69,12 +71,11 @@ export const customerTools: ToolDefinition[] = [
     handler: async (params, ctx) => {
       if (!ctx.storeId) return { error: "No store in context" };
       const query = String(params.query ?? "").trim();
-      const topBy = String(params.topBy ?? "").trim().toLowerCase();
+      const topBy = String(params.topBy ?? "")
+        .trim()
+        .toLowerCase();
       const requestedTopCount = ctx.requestConstraints?.topCustomerCount;
-      const take = Math.min(
-        Math.max(Number(requestedTopCount ?? params.limit ?? 25), 1),
-        100
-      );
+      const take = Math.min(Math.max(Number(requestedTopCount ?? params.limit ?? 25), 1), 100);
 
       // Ranked retrieval for "top N" requests (customers without an RFM score sort last).
       let orderBy: unknown;
@@ -97,7 +98,9 @@ export const customerTools: ToolDefinition[] = [
       const [customers, totalStoreCustomers] = await Promise.all([
         prisma.customer.findMany({
           where,
-          include: { rfmScore: { select: { segment: true, totalSpent: true } } },
+          include: {
+            rfmScore: { select: { segment: true, totalSpent: true, orderCount: true } },
+          },
           ...(orderBy ? { orderBy: orderBy as never } : {}),
           take,
         }),
@@ -110,6 +113,12 @@ export const customerTools: ToolDefinition[] = [
           totalStoreCustomers,
         };
       }
+      if (query) {
+        ctx.resolvedExplicitCustomerSelection = {
+          customerIds: customers.map((customer) => customer.id),
+          query,
+        };
+      }
       return {
         count: customers.length,
         totalStoreCustomers,
@@ -117,7 +126,14 @@ export const customerTools: ToolDefinition[] = [
           id: c.id,
           name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,
           email: c.email,
-          segment: c.rfmScore?.segment ?? null,
+          segment:
+            (c.rfmScore?.orderCount ?? 0) === 0
+              ? c.acceptsMarketing
+                ? "Subscribers"
+                : "Not subscribed"
+              : (c.rfmScore?.segment ?? null),
+          acceptsMarketing: c.acceptsMarketing,
+          emailReachable: c.acceptsMarketing,
           totalSpent: c.rfmScore?.totalSpent ?? 0,
         })),
       };

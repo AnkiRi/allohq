@@ -29,6 +29,11 @@ export interface ToolContext {
     requestedCount: number;
     totalStoreCustomers: number;
   };
+  /** Exact people returned by the latest name/email lookup in this request. */
+  resolvedExplicitCustomerSelection?: {
+    customerIds: string[];
+    query: string;
+  };
 }
 
 /** A message in the agent conversation */

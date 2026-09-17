@@ -202,7 +202,9 @@ export const inlineCampaignTools: ToolDefinition[] = [
           ? ctx.resolvedTopCustomerSelection.customerIds
           : Array.isArray(params.customerIds)
             ? (params.customerIds as unknown[]).map(String).filter(Boolean)
-            : [];
+            : ctx.resolvedExplicitCustomerSelection
+              ? ctx.resolvedExplicitCustomerSelection.customerIds
+              : [];
       let segment;
       if (directive && existingAlternative?.segment) {
         segment = existingAlternative.segment;
