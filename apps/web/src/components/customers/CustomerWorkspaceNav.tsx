@@ -11,7 +11,13 @@ const views = [
   { href: "/intelligence/products", label: "Product graph", description: "Reorder, cross-sell and product relationships" },
 ];
 
+const customerSectionRoutes = new Set(["/customers/states", "/customers/left-alone"]);
+
+function isCustomerProfileRoute(pathname: string) {
+  return /^\/customers\/[^/]+$/.test(pathname) && !customerSectionRoutes.has(pathname);
+}
+
 export function CustomerWorkspaceNav() {
   const pathname = usePathname();
-  return <nav aria-label="Customer workspace" className="app-workspace-nav">{views.map((view) => { const profileRoute = view.href === "/customers" && /^\/customers\/[^/]+$/.test(pathname); const active = view.exact ? pathname === view.href || profileRoute : pathname.startsWith(view.href); return <Link key={view.href} href={view.href} title={view.description} aria-label={`${view.label}. ${view.description}`} aria-current={active ? "page" : undefined} className="app-workspace-tab">{view.label}</Link>; })}</nav>;
+  return <nav aria-label="Customer workspace" className="app-workspace-nav">{views.map((view) => { const profileRoute = view.href === "/customers" && isCustomerProfileRoute(pathname); const active = view.exact ? pathname === view.href || profileRoute : pathname === view.href || pathname.startsWith(`${view.href}/`); return <Link key={view.href} href={view.href} title={view.description} aria-label={`${view.label}. ${view.description}`} aria-current={active ? "page" : undefined} className="app-workspace-tab">{view.label}</Link>; })}</nav>;
 }

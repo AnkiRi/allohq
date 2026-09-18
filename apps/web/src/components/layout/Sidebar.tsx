@@ -51,9 +51,12 @@ export function Sidebar() {
   const initials = user ? (user.firstName?.[0] || "") + (user.lastName?.[0] || "") || user.emailAddresses[0]?.emailAddress?.[0]?.toUpperCase() || "U" : "U";
   const signOutRedirect = process.env.NODE_ENV === "production" ? (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host.replace(/^agent\./, "")}` : "https://joonhq.ai") : "/";
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const customerWorkspaceActive = isActive("/customers") || isActive("/segments") || isActive("/intelligence/products");
+  const isCustomerWorkspaceAlias = (href: string) => href === "/segments" || href === "/intelligence/products";
+  const isNestedActive = (href: string) => !isCustomerWorkspaceAlias(href) && isActive(href);
 
   const navItem = (item: NavItem) => {
-    const active = isActive(item.href);
+    const active = item.href === "/customers" ? customerWorkspaceActive : isActive(item.href);
     return <Link key={item.name} href={item.href} onClick={close} aria-current={active ? "page" : undefined} className={cn("group/nav relative flex min-h-10 items-center rounded-[9px] text-[14px] transition-colors", collapsed ? "justify-center px-2" : "gap-3 px-3", active ? "bg-[var(--surface)] font-medium text-[var(--ink)]" : "text-white/78 hover:bg-white/[0.07] hover:text-white")}>
       <item.icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.1 : 1.7} />
       {!collapsed && <span className="min-w-0 flex-1 truncate">{item.name}</span>}
@@ -69,16 +72,16 @@ export function Sidebar() {
       {!collapsed && <p className="px-6 pb-5 font-mono text-[12px] uppercase leading-[1.45] tracking-[0.18em] text-white/62">Your retention,<br />handled</p>}
       <nav className="app-sidebar-scroll flex-1 overflow-y-auto px-3" aria-label="Main navigation">
         <div className="space-y-0.5">{primaryItems.map(navItem)}</div>
-        {!collapsed && <details open={brandItems.some(({ href }) => isActive(href))} className="group rounded-[9px] text-white/78">
+        {!collapsed && <details open={brandItems.some(({ href }) => isNestedActive(href))} className="group rounded-[9px] text-white/78">
           <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 rounded-[9px] px-3 text-[14px] hover:bg-white/[0.07] hover:text-white"><Sparkles className="h-4 w-4" /><span className="flex-1">Brand & content</span><span className="transition-transform group-open:rotate-45">＋</span></summary>
           <div className="ml-3 border-l border-white/12 pl-2">
-            {brandItems.map(({ name, href }) => { const active = isActive(href); return <Link key={href} href={href} onClick={close} aria-current={active ? "page" : undefined} className={cn("block rounded-md px-3 py-1.5 text-[12px] hover:bg-white/[0.07] hover:text-white", active && "bg-white/[0.11] font-medium text-white")}>{name}</Link>; })}
+            {brandItems.map(({ name, href }) => { const active = isNestedActive(href); return <Link key={href} href={href} onClick={close} aria-current={active ? "page" : undefined} className={cn("block rounded-md px-3 py-1.5 text-[12px] hover:bg-white/[0.07] hover:text-white", active && "bg-white/[0.11] font-medium text-white")}>{name}</Link>; })}
           </div>
         </details>}
-        {!collapsed && <details open={dataItems.some(({ href }) => isActive(href))} className="group rounded-[9px] text-white/78">
+        {!collapsed && <details open={dataItems.some(({ href }) => isNestedActive(href))} className="group rounded-[9px] text-white/78">
           <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 rounded-[9px] px-3 text-[14px] hover:bg-white/[0.07] hover:text-white"><Database className="h-4 w-4" /><span className="flex-1">Data & store</span><span className="transition-transform group-open:rotate-45">＋</span></summary>
           <div className="ml-3 border-l border-white/12 pl-2">
-            {dataItems.map(({ name, href }) => { const active = isActive(href); return <Link key={href} href={href} onClick={close} aria-current={active ? "page" : undefined} className={cn("block rounded-md px-3 py-1.5 text-[12px] hover:bg-white/[0.07] hover:text-white", active && "bg-white/[0.11] font-medium text-white")}>{name}</Link>; })}
+            {dataItems.map(({ name, href }) => { const active = isNestedActive(href); return <Link key={href} href={href} onClick={close} aria-current={active ? "page" : undefined} className={cn("block rounded-md px-3 py-1.5 text-[12px] hover:bg-white/[0.07] hover:text-white", active && "bg-white/[0.11] font-medium text-white")}>{name}</Link>; })}
           </div>
         </details>}
         <Link href="/settings/readiness" onClick={close} className={cn("mt-4 block rounded-xl border border-white/15 bg-white/[0.045] p-3 text-white", collapsed && "p-2 text-center")}>
