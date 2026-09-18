@@ -623,8 +623,8 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      <nav className="app-tab-bed sticky top-0 z-20 max-w-full overflow-x-auto" aria-label="Campaign workspace" role="tablist">
-        {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className={`app-tab inline-flex items-center capitalize ${activeSection === section ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{section}</button>)}
+      <nav className="app-workspace-nav sticky top-0 z-20" aria-label="Campaign workspace" role="tablist">
+        {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className="app-workspace-tab capitalize">{section}</button>)}
       </nav>
 
       {activeSection === "overview" && <section className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Campaign summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Status</p><p className="mt-1 text-[20px] font-medium capitalize">{campaign.status.replaceAll("_", " ")}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Would receive</p><p className="mt-1 font-mono text-[20px]">{(stats?.holdout.treatmentAssigned ?? dryRun?.estimatedTreatment ?? 0).toLocaleString("en-IN")}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Attributed orders</p><p className="mt-1 font-mono text-[20px]">{stats?.attributedOrders.toLocaleString() ?? "0"}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Attributed revenue</p><p className="mt-1 font-mono text-[20px]">{money(stats?.attributedRevenue ?? 0)}</p></div></section>}

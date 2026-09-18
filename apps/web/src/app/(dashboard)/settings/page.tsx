@@ -763,9 +763,9 @@ export default function SettingsPage() {
         </p>
       </motion.div>
 
-      <nav className="app-tab-bed max-w-full overflow-x-auto" role="tablist" aria-label="Settings sections">
+      <nav className="app-workspace-nav" role="tablist" aria-label="Settings sections">
         {(["general", "sending", "notifications", "team", "integrations", "billing", "advanced"] as const).map((section) => (
-          <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className={`app-tab whitespace-nowrap capitalize ${activeSection === section ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{section}</button>
+          <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className="app-workspace-tab capitalize">{section}</button>
         ))}
       </nav>
 

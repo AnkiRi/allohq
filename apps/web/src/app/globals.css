@@ -657,6 +657,68 @@ html[data-theme="drenched"] :is(.bg-card, .bg-popover, .glass-card, .glass-card-
 .app-tab-bed { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-soft); }
 .app-tab { min-height: 34px; border-radius: 7px; padding: 0 13px; font-size: 13px; color: var(--text-muted); }
 .app-tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(23,23,23,.08); }
+.app-workspace-nav {
+  position: relative;
+  display: flex;
+  width: 100%;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 4px 4px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px 12px 0 0;
+  background: var(--surface-soft);
+  scrollbar-width: none;
+}
+.app-workspace-nav::-webkit-scrollbar { display: none; }
+.app-workspace-tab {
+  position: relative;
+  display: inline-flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  border-radius: 8px 8px 0 0;
+  padding: 0 14px 2px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+.app-workspace-tab:hover { background: color-mix(in srgb, var(--surface) 62%, transparent); color: var(--ink); }
+.app-workspace-tab[aria-selected="true"],
+.app-workspace-tab[aria-current="page"] {
+  background: var(--surface);
+  color: var(--ink);
+}
+.app-workspace-tab[aria-selected="true"]::after,
+.app-workspace-tab[aria-current="page"]::after {
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--attention);
+  content: "";
+}
+.app-workspace-count {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, var(--ink));
+  border-radius: 999px;
+  padding: 0 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.app-workspace-tab[aria-selected="true"] .app-workspace-count,
+.app-workspace-tab[aria-current="page"] .app-workspace-count { color: var(--ink); }
 .app-attention-button { border: 1px solid var(--attention); background: var(--attention-strong); color: var(--ink); border-radius: 9px; }
 .app-meta { font-size: 12px; color: var(--text-muted); }
 

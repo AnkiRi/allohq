@@ -302,9 +302,9 @@ export default function OutcomesPage() {
         <div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-xs text-muted-foreground">AI return · {COHORT.windowDays}d</p><p className="mt-1 text-2xl font-medium tabular-nums">{roi ? `${roi}x` : "—"}</p></div>
       </div>
 
-      <nav className="app-tab-bed max-w-full overflow-x-auto" role="tablist" aria-label="Results workspace">
+      <nav className="app-workspace-nav" role="tablist" aria-label="Results workspace">
         {(["overview", "attribution", "control", "forecasts", "costs", "method"] as const).map((view) => (
-          <button key={view} role="tab" aria-selected={activeView === view} onClick={() => setActiveView(view)} className={`app-tab whitespace-nowrap capitalize ${activeView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>
+          <button key={view} role="tab" aria-selected={activeView === view} onClick={() => setActiveView(view)} className="app-workspace-tab capitalize">
             {view === "control" ? "Control evidence" : view}
           </button>
         ))}

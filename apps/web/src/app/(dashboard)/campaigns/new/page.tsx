@@ -110,18 +110,14 @@ export default function NewCampaignPage() {
       </div>
 
       {/* Step indicator */}
-      <div className="app-tab-bed max-w-full overflow-x-auto">
+      <div className="app-workspace-nav" role="tablist" aria-label="Campaign builder steps">
         {steps.map((s, i) => (
           <div key={s.key} className="flex items-center gap-2">
             <button
               onClick={() => i <= currentIdx && setStep(s.key)}
-              className={`app-tab flex items-center gap-2 whitespace-nowrap ${
-                s.key === step
-                  ? "bg-[var(--surface)] text-foreground shadow-sm"
-                  : i < currentIdx
-                    ? "text-foreground"
-                    : "text-muted-foreground"
-              }`}
+              role="tab"
+              aria-selected={s.key === step}
+              className={`app-workspace-tab ${i < currentIdx ? "text-foreground" : ""}`}
             >
               {i < currentIdx && <Check className="w-3 h-3" />}
               {s.label}

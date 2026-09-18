@@ -185,7 +185,7 @@ export default function AutomationDetailPage() {
           )}
         </div>
       </div>
-      <nav className="app-tab-bed overflow-x-auto" role="tablist" aria-label="Automation workspace">{(["overview", "messages", "activity", "experiments"] as const).map((view) => <button key={view} role="tab" aria-selected={activeView === view} onClick={() => setActiveView(view)} className={`app-tab capitalize ${activeView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{view}</button>)}</nav>
+      <nav className="app-workspace-nav" role="tablist" aria-label="Automation workspace">{(["overview", "messages", "activity", "experiments"] as const).map((view) => <button key={view} role="tab" aria-selected={activeView === view} onClick={() => setActiveView(view)} className="app-workspace-tab capitalize">{view}</button>)}</nav>
       {activeView === "overview" && <>
       {preflight && (
         <div className="rounded-xl border border-border bg-card p-5">
