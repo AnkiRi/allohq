@@ -22,7 +22,13 @@ const STATUS_CONFIG: Record<string, { icon: typeof Check; tone: string; label: s
 export default function CampaignsPage() {
   const { submit: submitToJoon } = useAlloAI();
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const { data: campaigns, isLoading } = (trpc.campaigns.list as any).useQuery(undefined) as { data: any[] | undefined; isLoading: boolean };
+  const { data: campaigns, isLoading, error, refetch, isFetching } = (trpc.campaigns.list as any).useQuery(undefined) as {
+    data: any[] | undefined;
+    isLoading: boolean;
+    isFetching: boolean;
+    error: { message?: string } | null;
+    refetch: () => Promise<unknown>;
+  };
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const deleteMut = (trpc.campaigns.delete as any).useMutation({ onSuccess: () => { utils.campaigns.list.invalidate(); toast("Draft deleted.", "info"); }, onError: () => toast("We couldn't delete that. Mind trying again?", "error") }) as { mutate: (v: { id: string }) => void; isPending: boolean; variables?: { id: string } };
@@ -37,13 +43,13 @@ export default function CampaignsPage() {
   return <div className="space-y-7">
     <PageHeader eyebrow="Campaign workspace" title="Campaigns" description="Draft, approve and deliver—without losing the reasoning behind each send." actions={<><button type="button" onClick={() => submitToJoon("Create an email with me. Ask for the audience, goal, offer, products and image direction, preserve them as campaign constraints, and let me review the editable draft before delivery.")} className="inline-flex min-h-10 items-center gap-2 rounded-[9px] border border-border bg-[var(--surface)] px-4 text-[13px] font-medium"><Sparkles className="h-4 w-4" />Create with Joon</button><Link href="/campaigns/new" className="app-attention-button inline-flex min-h-10 items-center gap-2 px-4 text-[13px] font-medium"><Plus className="h-4 w-4" />New campaign</Link></>} />
 
-    <MetricStrip items={[{ label: "Drafts", value: count("draft") }, { label: "Scheduled", value: count("scheduled") }, { label: "Sent", value: count("sent") }, { label: "Needs attention", value: count("partially_sent") + count("failed") }]} />
+    {error ? <section className="rounded-xl border border-[var(--risk)]/35 bg-[var(--risk-soft)] p-5" role="alert"><h2 className="text-[15px] font-medium text-foreground">Campaign data did not load</h2><p className="mt-1 text-[14px] text-muted-foreground">The numbers below have not been replaced with zero. Try the request again; your saved campaigns are unchanged.</p><button type="button" disabled={isFetching} onClick={() => void refetch()} className="mt-4 inline-flex min-h-9 items-center rounded-lg border border-[var(--risk)]/30 bg-[var(--surface)] px-4 text-[13px] font-medium disabled:opacity-50">{isFetching ? "Trying again…" : "Try again"}</button></section> : <MetricStrip items={[{ label: "Drafts", value: isLoading ? "—" : count("draft") }, { label: "Scheduled", value: isLoading ? "—" : count("scheduled") }, { label: "Sent", value: isLoading ? "—" : count("sent") }, { label: "Needs attention", value: isLoading ? "—" : count("partially_sent") + count("failed") }]} />}
 
     <div className="app-tab-bed max-w-full overflow-x-auto" role="tablist" aria-label="Campaign status">
       {statuses.map((s) => <button key={s.label} role="tab" aria-selected={statusFilter === s.value} onClick={() => setStatusFilter(s.value)} className="app-tab whitespace-nowrap">{s.label}</button>)}
     </div>
 
-    {isLoading ? <div className="app-surface divide-y divide-border">{[1,2,3].map(i => <div key={i} className="h-[88px] animate-pulse bg-[var(--surface-soft)]/50" />)}</div> : visibleCampaigns?.length ? <div className="app-surface overflow-hidden">
+    {error ? null : isLoading ? <div className="app-surface divide-y divide-border">{[1,2,3].map(i => <div key={i} className="h-[88px] animate-pulse bg-[var(--surface-soft)]/50" />)}</div> : visibleCampaigns?.length ? <div className="app-surface overflow-hidden">
       <div className="hidden grid-cols-[minmax(260px,1fr)_180px_115px_190px_42px] gap-4 border-b border-border px-5 py-3 text-[12px] text-muted-foreground md:grid"><span>Campaign</span><span>Audience</span><span>Status</span><span>Performance</span><span /></div>
       <div className="divide-y divide-border">{visibleCampaigns.map((campaign: any) => {
         const displayStatus = campaign.deliveryStatus ?? campaign.status;
