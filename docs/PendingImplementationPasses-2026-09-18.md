@@ -777,8 +777,9 @@ Support two deliberately staged operating envelopes:
 Status: eight controlled phases, 11A–11H. Phase 11A is complete. Phase 11B now has its
 scan-first Today structure but still needs notification/context hardening. Phase 11C now has
 its master-detail Decisions and Activity workspaces and awaits production-data verification.
-Phase 11E has an initial layout pass but is not complete against its acceptance criteria; 11D,
-11F, 11G and 11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
+Phase 11D has its customer-intelligence workspace migration and awaits deployed-data verification.
+Phase 11E has an initial layout pass but is not complete against its acceptance criteria; 11F,
+11G and 11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
 and benchmark routes” followed by “remaining routes”; they do not replace this eight-phase
 checklist. This programme is a
 representation and interaction redesign, not a product-scope reduction. The current build is
