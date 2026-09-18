@@ -9,8 +9,8 @@
       "surface-subtle": { "role": "neutral", "displayName": "Subtle Surface", "canonical": "#ECE9E1", "tonalRamp": ["#211f1a", "#3a3832", "#56544d", "#75736b", "#99968f", "#bfbbb5", "#dcd9d2", "#ECE9E1"] },
       "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#171717", "tonalRamp": ["#171717", "#30302c", "#4c4c47", "#6c6c66", "#91918a", "#b8b8b1", "#deded9", "#f5f5f1"] },
       "muted-ink": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#666861", "tonalRamp": ["#1b1b21", "#34343d", "#50505a", "#6f6f7a", "#93939e", "#b9b9c2", "#dedee4", "#f4f4f6"] },
-      "action-yellow": { "role": "primary", "displayName": "Attention Yellow", "canonical": "#F2C84C", "tonalRamp": ["#332500", "#604600", "#8e6900", "#C99116", "#e8b72b", "#F2C84C", "#FFF0B8", "#fff8df"] },
-      "action-amber": { "role": "secondary", "displayName": "Attention Amber", "canonical": "#C99116", "tonalRamp": ["#332500", "#604600", "#8e6900", "#C99116", "#e8b72b", "#F2C84C", "#FFF0B8", "#fff8df"] },
+      "action-gold-paper": { "role": "primary", "displayName": "Action Gold on Paper", "canonical": "#C38A16", "tonalRamp": ["#332500", "#604600", "#7a5008", "#946000", "#C38A16", "#e3b24f", "#f3d994", "#fff7df"] },
+      "action-gold-cobalt": { "role": "secondary", "displayName": "Action Gold on Cobalt", "canonical": "oklch(0.84 0.145 76)", "tonalRamp": ["#332500", "#604600", "#8e6900", "#C38A16", "#e3b24f", "oklch(0.84 0.145 76)", "#f6dfa1", "#fff8df"] },
       "blue-measurement": { "role": "secondary", "displayName": "Evidence Blue", "canonical": "#2D4F9E", "tonalRamp": ["#081739", "#0d2866", "#1b3775", "#2D4F9E", "#5676bb", "#8ea7d8", "#c3d0ea", "#E9EFFF"] },
       "green-outcome": { "role": "tertiary", "displayName": "Success Green", "canonical": "#157858", "tonalRamp": ["#05251b", "#074230", "#0d6047", "#157858", "#319576", "#68b69b", "#a9d7c7", "#E5F4EE"] },
       "red-failure": { "role": "tertiary", "displayName": "Risk Red", "canonical": "#B95849", "tonalRamp": ["#360b08", "#61130e", "#8f2d23", "#B95849", "#d47a6d", "#e6a69d", "#f1cbc5", "#FAE8E4"] },
@@ -102,18 +102,18 @@
   ],
   "narrative": {
     "northStar": "Scan → work → prove",
-    "overview": "Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The interactive Joon application redesign reference is the visual and interaction authority. Warm canvas, ivory surfaces, dense ink, a navy navigation rail and decisive yellow actions establish the application world without competing with the task.\n\nThe system simplifies representation, never capability. Pages follow scan → work → prove: a concise summary, one principal workspace, then evidence in drawers, inspectors and receipts. Terminal language is reserved for evidence and decision receipts.",
+    "overview": "Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The interactive Joon application redesign reference is the visual and interaction authority. Warm canvas, ivory surfaces, dense ink, a navy navigation rail and decisive warm-gold actions establish the application world without competing with the task.\n\nThe system simplifies representation, never capability. Pages follow scan → work → prove: a concise summary, one principal workspace, then evidence in drawers, inspectors and receipts. Terminal language is reserved for evidence and decision receipts.",
     "keyCharacteristics": [
       "Quiet, information-dense operational surfaces with obvious next actions.",
       "Direct task navigation with Setup status, Settings and Ask Joon as utilities.",
-      "Semantic color with stable meaning: yellow/action, blue/measurement, green/healthy status and red/failure.",
+      "Semantic color with stable meaning: warm gold/action, blue/measurement, green/healthy status and red/failure.",
       "Sans-serif language for operation; monospaced type only for data, measurements and receipts.",
-      "Two deliberate themes: warm paper, navy and yellow in light mode; near-black and amber in dark mode."
+      "Two deliberate themes: warm paper, cobalt and the landing-page gold pair in light mode; near-black and amber in dark mode."
     ],
     "rules": [
-      { "name": "The Stable Meaning Rule", "body": "Yellow asks for action, blue measures, green reports a truly healthy state or verified outcome and red reports failure. Never swap these roles to create visual variety.", "section": "colors" },
+      { "name": "The Stable Meaning Rule", "body": "Warm gold asks for action, blue measures, green reports a truly healthy state or verified outcome and red reports failure. Never swap these roles to create visual variety.", "section": "colors" },
       { "name": "The Green Means Healthy Rule", "body": "Green is evidence of health, successful completion or a verified positive result. Never use it as the general product accent.", "section": "colors" },
-      { "name": "The Theme Pair Rule", "body": "Light mode is warm canvas, warm paper, ink, navy and yellow; dark mode is near-black, pale ink and amber. Dark mode is a designed counterpart, not an inverted light palette.", "section": "colors" },
+      { "name": "The Theme Pair Rule", "body": "Light mode is warm canvas, warm paper, ink, navy and the landing-page gold pair; dark mode is near-black, pale ink and amber. Dark mode is a designed counterpart, not an inverted light palette.", "section": "colors" },
       { "name": "The Operation Before Instrumentation Rule", "body": "Use sans-serif type for navigation, instructions, actions and prose. Use mono only when the content is data, measurement, an identifier or a decision receipt.", "section": "typography" },
       { "name": "The Sentence Case Rule", "body": "Founder-facing titles and controls use sentence case. Uppercase is a compact structural annotation, never the default voice.", "section": "typography" },
       { "name": "The Structure Carries Depth Rule", "body": "Start with tone, spacing and border. Add shadow only when a surface must separate from its immediate context.", "section": "elevation" },
@@ -129,7 +129,7 @@
     ],
     "donts": [
       "Don't expose the internal feature taxonomy when a merchant task is the clearer label.",
-      "Don't use yellow as generic decoration, blue as success, green as a general accent or pending action, or red as routine emphasis.",
+      "Don't use warm gold as generic decoration, blue as success, green as a general accent or pending action, or red as routine emphasis.",
       "Don't spread terminal styling or monospaced prose across ordinary navigation, forms, cards or explanations.",
       "Don't hide consequential scope, audience, suppression, schedule or measurement details behind decorative minimalism.",
       "Don't add gradients, glass effects, glow or ornamental motion to compensate for weak hierarchy.",

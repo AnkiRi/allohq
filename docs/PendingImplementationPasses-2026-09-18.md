@@ -774,10 +774,40 @@ Support two deliberately staged operating envelopes:
 
 ## Pass 11 — Product-wide UX simplification without capability loss
 
-Status: Phase 11A completed in `782b5aa`; Phases 11B–11H remain. This programme is a
+Status: eight controlled phases, 11A–11H. Phase 11A is complete; 11B and 11E have an initial
+layout pass but are not complete against their acceptance criteria; 11C, 11D, 11F, 11G and
+11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
+and benchmark routes” followed by “remaining routes”; they do not replace this eight-phase
+checklist. This programme is a
 representation and interaction redesign, not a product-scope reduction. The current build is
 the product truth. Mockups and reference images may suggest hierarchy, density and interaction
 patterns, but they must never silently delete, rename inaccurately or invent capabilities.
+
+### Feature-preservation ledger — locked before further migration
+
+No route is removed when its navigation is simplified. A renamed or grouped destination keeps
+its URL, deep links, permissions, API calls, loading/error states and consequential actions until
+an explicit product decision—not a design pass—changes them.
+
+| Existing capability/routes | New destination or disclosure | Preservation rule |
+| --- | --- | --- |
+| `/dashboard`, operator prompt and AI drawer | Today + Ask Joon | Keep store/onboarding gates, readiness warning, real command execution, linked artifacts, decision approval and activity access. |
+| `/actions` | Decisions | Keep approve, pass, expiry, confidence, impact, proposal evidence and exact created-artifact link. |
+| `/activity` | Activity | Keep raw agent/system history and receipts; grouping may reduce repetition but never delete underlying events. |
+| `/customers`, `/customers/[id]`, `/customers/states`, `/customers/left-alone` | Customers with local views and inspectors | Keep list/search, profiles, orders, RFM, independent state, transitions, decision history, deliberate-restraint reasons and overrides. |
+| `/segments`, `/segments/[id]`, `/segments/new` | Customers → Segments | Keep dynamic/manual segment creation, provenance, membership, campaign entry points and deep links. |
+| `/campaigns`, `/campaigns/[id]`, `/campaigns/new` | Campaigns | Keep drafting, editing, audience equation, grouped exclusions, overrides, control assignment, timing, alternatives, discount lifecycle, approval, sending, attribution and receipts. |
+| `/automations`, `/automations/[id]`, edit and A/B routes | Automations | Keep creation, edit, activation/pause, workflow conditions, purchase exits, execution state, variants and history; journey holdouts remain excluded by product decision. |
+| `/outcomes`, `/analytics` | Results | Keep attributed orders/revenue, control evidence, forecasts, costs, billing preview, methods and links to source records; clearly separate live, measured and illustrative data. |
+| `/conversations` | Inbox | Keep the customer conversation system separate from Ask Joon. |
+| `/templates`, `/emails`, `/creative-studio`, `/forms`, `/intelligence/brand`, `/intelligence/products` | Brand & content | Keep dedicated creation/editing routes, previews, product graph, provenance, channel controls and forms; grouping changes navigation only. |
+| `/products`, `/orders`, `/intelligence`, `/intelligence/cohorts` | Contextual evidence with direct routes retained | Keep synchronized read-only evidence and deep links without pretending Joon is an ecommerce administrator. |
+| `/integrations`, Shopify detail, onboarding and brand review | Setup / Store & integrations | Keep OAuth/sync state, webhook health, store identity, onboarding and retry/error behavior. |
+| `/settings`, readiness, autonomy and guardrails | Settings / Setup status | Keep sender domain, warm-up, allowlists, delivery gates, consent, autonomy, guardrails, billing and advanced provider controls. |
+| `/admin/llm`, demo routes and internal diagnostics | Permissioned advanced/internal surfaces | Keep route and authorization behavior; do not promote them into ordinary merchant navigation. |
+
+The migration rule for every route is: inventory its visible controls and mutations first,
+recompose second, then compare old and new capability lists before declaring that phase complete.
 
 ### Locked experience principle
 

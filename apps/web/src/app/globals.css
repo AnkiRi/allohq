@@ -478,9 +478,9 @@ a {
 /* ---------------------------------------------------------------------
    Joon application system
 
-   The landing page supplies the brand world: pale paper, near-black ink and
-   emerald restraint. The product shell uses those colours more quietly so
-   dense operational work remains effortless to scan. Amber belongs to an
+   The landing page supplies the brand world: pale paper, near-black ink,
+   cobalt and warm gold. The product shell uses those colours more quietly so
+   dense operational work remains effortless to scan. Gold belongs to an
    action that needs the merchant; blue belongs to measurement; green belongs
    to healthy outcomes. Complexity remains available through hierarchy rather
    than being removed from the product.
@@ -494,9 +494,11 @@ html[data-theme="light"] {
   --surface: #FFFDF8;
   --surface-soft: #ECE9E1;
   --sidebar-color: #17204D;
-  --attention: #C99116;
-  --attention-strong: #F2C84C;
-  --attention-soft: #FFF0B8;
+  /* These are the landing page's actual light-paper and cobalt golds. */
+  --attention: #946000;
+  --attention-strong: #c38a16;
+  --attention-on-dark: oklch(0.84 0.145 76);
+  --attention-soft: rgba(195, 138, 22, 0.1);
   --evidence: #2D4F9E;
   --evidence-soft: #E9EFFF;
   --success-color: #157858;
@@ -516,10 +518,10 @@ html[data-theme="light"] {
   --secondary-foreground: 0 0% 9%;
   --border: 43 15% 82%;
   --input: 43 15% 82%;
-  --primary: 43 100% 68%;
-  --primary-foreground: 60 6% 8%;
-  --accent: 43 100% 68%;
-  --accent-foreground: 60 6% 8%;
+  --primary: 41 80% 43%;
+  --primary-foreground: 240 7% 6%;
+  --accent: 41 80% 43%;
+  --accent-foreground: 240 7% 6%;
   --ring: 228 57% 26%;
   --radius: 0.75rem;
 

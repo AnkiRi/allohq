@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Store,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -21,9 +22,9 @@ import {
   StreamRow,
   DecisionCard,
   DecisionDetail,
-  MetricReadout,
   formatStoreCurrency,
 } from "@/components/console";
+import { MetricStrip, Surface } from "@/components/ui/AppPrimitives";
 import type { OpTagKind, DecisionDetailData } from "@/components/console";
 import {
   ReasoningReveal,
@@ -745,17 +746,28 @@ export default function DashboardPage() {
           <span className="shrink-0 font-medium text-warning">Review setup →</span>
         </Link>
       )}
-      {/* The ask: heading + command line read as one prompt unit */}
-      <div className="order-1 space-y-5">
-        {/* Heading — prose, no motion */}
-        <div>
-          <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.15em] text-[var(--attention)]">Today · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</p>
-          <h1 className="app-page-title">{pendingActions.length > 0 ? `${pendingActions.length} ${pendingActions.length === 1 ? "decision needs" : "decisions need"} you.` : `${greeting}, ${firstName}.`}</h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">{pendingActions.length > 0 ? "One brief, the highest-impact work, then back to your day." : "Joon is watching the store. Ask a question or review what changed."}</p>
+      {/* Scan: one state, one primary action, four useful numbers. */}
+      <div className="space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.15em] text-[var(--attention)]">Today · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</p>
+            <h1 className="app-page-title">{pendingActions.length > 0 ? `${pendingActions.length} ${pendingActions.length === 1 ? "decision needs" : "decisions need"} you.` : `${greeting}, ${firstName}.`}</h1>
+            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">{pendingActions.length > 0 ? "One brief, the highest-impact work, then back to your day." : "Joon is watching the store. Ask a question or review what changed."}</p>
+          </div>
+          <button onClick={() => openPanel()} className="app-attention-button inline-flex min-h-10 items-center justify-center gap-2 px-4 text-[13px] font-medium">
+            <MessageSquare className="h-4 w-4" /> Ask Joon
+          </button>
         </div>
-
-        {/* 1. Command line */}
-        <details className="app-surface group p-3"><summary className="cursor-pointer list-none px-1 text-[13px] font-medium text-foreground">Ask Joon anything <span className="float-right text-muted-foreground group-open:rotate-45">＋</span></summary><div className="mt-3"><CommandLine placeholder={["Tell Joon what you want done", "Who's slipping away?", "Draft a Diwali win-back for me", "Look after my best customers"]} onSubmit={handleCommand} /></div></details>
+        <MetricStrip items={[
+          { label: "Customers monitored", value: totalCustomers.toLocaleString("en-IN") },
+          { label: "Attributed revenue · 30d", value: formatStoreCurrency(revenue30d, storeCurrency) },
+          { label: "At risk", value: atRisk.toLocaleString("en-IN") },
+          { label: "AI cost · window", value: aiCostLabel },
+        ]} />
+        <details className="group border-b border-border pb-4">
+          <summary className="cursor-pointer list-none text-[13px] font-medium text-foreground">Type a quick command <span className="float-right text-muted-foreground transition-transform group-open:rotate-45">＋</span></summary>
+          <div className="mt-3"><CommandLine placeholder={["Tell Joon what you want done", "Who's slipping away?", "Draft a Diwali win-back for me", "Look after my best customers"]} onSubmit={handleCommand} /></div>
+        </details>
       </div>
 
       {/* Demo: staged reasoning for the typed goal, then the actual drafted
@@ -807,43 +819,8 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* The response: console + decisions, given room to breathe */}
-      {/* 2 + 3. Reasoning stream + status line, in the console frame */}
-      <ConsoleFrame title="overnight brief" className="order-3 mt-8">
-        {/* Status line — mono readouts; the live lamp rides the first readout */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
-          <MetricReadout label="customers" value={totalCustomers} live />
-          <MetricReadout label="revenue · 30d" value={revenue30d} money currency={storeCurrency} />
-          <MetricReadout label="at risk" value={atRisk} />
-          <MetricReadout label="AI cost" value={aiCostLabel} />
-        </div>
-
-        {/* Reasoning reveal — the ONE shared component the landing hero uses,
-            fed from this page's real data (falls back to ATTENTION_STORIES when
-            there's no real reasoning yet). Same reveal, so the two can't drift. */}
-        {hasSyncedData ? (
-          <ReasoningReveal stories={homeStories} />
-        ) : (
-          <StreamOutput aria-label="what joon has been doing">
-            <StreamRow tick="step">
-              pulling in your store data, this usually takes a minute
-            </StreamRow>
-          </StreamOutput>
-        )}
-        {/* This is the live preview of joon's autonomous work; the full persisted
-            run log lives at /activity (one dream cycle, two views). */}
-        <div className="mt-4 pt-3 border-t border-border flex justify-end">
-          <Link
-            href="/activity"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-sans font-medium text-foreground hover:border-decision hover:text-decision transition-colors"
-          >
-            View full activity →
-          </Link>
-        </div>
-      </ConsoleFrame>
-
       {/* 4. Pending decisions */}
-      <div className="order-2 mt-8">
+      <div className="mt-8">
         <div className="mb-3 flex items-end justify-between"><div><h2 className="app-section-title">
           Highest-impact decisions
           {pendingActions.length > 0 ? ` · ${pendingActions.length}` : ""}
@@ -908,6 +885,24 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Prove: the overnight reasoning remains available, but it no longer
+          competes with the work queue as a second dashboard voice. */}
+      <Surface className="mt-8 overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <div><h2 className="app-section-title">What Joon checked overnight</h2><p className="mt-1 text-[13px] text-muted-foreground">The short receipt behind today’s recommendations.</p></div>
+          <Link href="/activity" className="shrink-0 text-[13px] font-medium text-[var(--attention)]">Full activity →</Link>
+        </div>
+        <details className="group">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-5 text-[13px] font-medium hover:bg-[var(--surface-soft)]">
+            <span>{hasSyncedData ? `${homeLines.length} material observations` : "Store data is still syncing"}</span>
+            <span className="text-muted-foreground transition-transform group-open:rotate-45">＋</span>
+          </summary>
+          <div className="border-t border-border bg-[var(--surface-soft)] px-5 py-5">
+            {hasSyncedData ? <ReasoningReveal stories={homeStories} /> : <StreamOutput aria-label="what joon has been doing"><StreamRow tick="step">pulling in your store data, this usually takes a minute</StreamRow></StreamOutput>}
+          </div>
+        </details>
+      </Surface>
 
       {/* View detail — opens the actual draft + predicted consequence before
           you approve. Works for real pending actions and the demo decision. */}

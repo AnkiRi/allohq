@@ -7,8 +7,8 @@ colors:
   surface-subtle: "#ECE9E1"
   ink: "#171717"
   muted-ink: "#666861"
-  action-yellow: "#F2C84C"
-  action-amber: "#C99116"
+  action-gold-paper: "#C38A16"
+  action-gold-cobalt: "oklch(0.84 0.145 76)"
   blue-measurement: "#2D4F9E"
   blue-measurement-soft: "#E9EFFF"
   green-outcome: "#157858"
@@ -58,14 +58,14 @@ spacing:
   3xl: "32px"
 components:
   button-action:
-    backgroundColor: "{colors.action-yellow}"
+    backgroundColor: "{colors.action-gold-paper}"
     textColor: "#17120a"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
     padding: "9px 14px"
     height: "36px"
   button-primary:
-    backgroundColor: "{colors.action-yellow}"
+    backgroundColor: "{colors.action-gold-paper}"
     textColor: "{colors.ink}"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
@@ -98,7 +98,7 @@ components:
 
 **Creative North Star: "Scan → work → prove"**
 
-Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The interactive reference at `.codex/visualizations/2026/07/12/019f5521-af3b-7c73-8974-bece1b177f01/joon-app-redesign.html` is the visual and interaction authority. Warm canvas, ivory work surfaces, dense ink, a navy navigation rail and decisive yellow actions establish the application world without competing with the task.
+Joon is an operating surface for consequential retention work. It should feel watchful, exact and calm: a capable team has prepared the work, exposed the evidence and left the merchant in command. The interactive reference at `.codex/visualizations/2026/07/12/019f5521-af3b-7c73-8974-bece1b177f01/joon-app-redesign.html` is the visual and interaction authority. Warm canvas, ivory work surfaces, dense ink, a navy navigation rail and decisive warm-gold actions establish the application world without competing with the task.
 
 The system simplifies representation, never capability. Task-based navigation replaces feature taxonomy; progressive disclosure keeps explanation near the moment it matters; and pages move through a consistent anatomy of summary, workspace and receipt. The default surface is approachable operational software. Terminal language is reserved for evidence and decision receipts, where provenance and immutability are the point.
 
@@ -106,9 +106,9 @@ The system simplifies representation, never capability. Task-based navigation re
 
 - Quiet, information-dense operational surfaces with obvious next actions.
 - Direct task navigation: Today, Decisions, Customers, Campaigns, Automations, Results, Activity, Inbox and Brand & content.
-- Semantic color with stable meaning: yellow/action, blue/measurement, green/healthy status and red/failure.
+- Semantic color with stable meaning: warm gold/action, blue/measurement, green/healthy status and red/failure.
 - Sans-serif language for operation; monospaced type only for data, measurements and receipts.
-- Two deliberate themes: warm paper, navy and yellow in light mode; near-black and amber in dark mode.
+- Two deliberate themes: warm paper, cobalt and gold in light mode; near-black and amber in dark mode.
 
 ## Colors
 
@@ -116,11 +116,12 @@ The palette is restrained enough for long work sessions and explicit enough that
 
 ### Primary
 
-- **Action Yellow:** The light-theme product accent and primary action treatment. It marks controls, attention badges and moments requiring merchant intent; it is not a success color.
+- **Action Gold on paper:** `#C38A16`, shared with the public landing page. It marks controls and merchant-attention moments on light surfaces; it is not a success color.
+- **Action Gold on cobalt:** the landing page's brighter `oklch(0.84 0.145 76)`, reserved for marks, badges and progress on the navy/cobalt shell where the paper gold loses energy.
 
 ### Secondary
 
-- **Dark Amber:** The dark-theme product accent and action color, preserving the role played by yellow in light mode.
+- **Dark Amber:** The dark-theme product accent and action color, preserving the role played by warm gold in light mode.
 - **Measurement Blue:** Analytics, control comparisons, quantified evidence, focus and informational selection. Blue never implies that an action succeeded.
 
 ### Tertiary
@@ -142,11 +143,11 @@ The palette is restrained enough for long work sessions and explicit enough that
 
 ### Named Rules
 
-**The Stable Meaning Rule.** Yellow asks for action, blue measures, green reports a truly healthy state or verified outcome and red reports failure. Never swap these roles to create visual variety.
+**The Stable Meaning Rule.** Warm gold asks for action, blue measures, green reports a truly healthy state or verified outcome and red reports failure. Never swap these roles to create visual variety.
 
 **The Green Means Healthy Rule.** Green is evidence of health, successful completion or a verified positive result. Never use it as the general product accent.
 
-**The Theme Pair Rule.** Light mode is warm canvas, warm paper, ink, navy and yellow; dark mode is near-black, pale ink and amber. Dark mode is a designed counterpart, not an inverted light palette.
+**The Theme Pair Rule.** Light mode is warm canvas, warm paper, ink, navy and the landing-page gold pair; dark mode is near-black, pale ink and amber. Dark mode is a designed counterpart, not an inverted light palette.
 
 ## Typography
 
@@ -210,7 +211,7 @@ Components should feel compact, certain and native to sustained work. State chan
 
 - **Shape:** Compact rounded rectangle (8px) with a 36px default height.
 - **Action:** Amber fill with dark ink for approval, intervention and decisions requiring the merchant.
-- **Primary:** Yellow with dark ink in light mode and amber with near-black ink in dark mode for the leading action.
+- **Primary:** Warm gold with dark ink in light mode and amber with near-black ink in dark mode for the leading action.
 - **Secondary:** Surface fill, hairline border and ink text. Ghost actions remove the fill but retain a clear hover field.
 - **Hover / Focus:** Strengthen color or border without changing layout. Focus uses a 2px semantic outline with 2px offset. Active press scales briefly to 97%; disabled controls remove press feedback and meet readable contrast.
 
@@ -235,7 +236,7 @@ Components should feel compact, certain and native to sustained work. State chan
 
 ### Navigation
 
-The sidebar is a 204px navy rail with 14px task labels and 16px line icons. It presents the direct task IA without category headings. Active items use a warm-paper field with dark ink and set `aria-current="page"`; yellow remains available for action badges rather than active navigation. Setup status, Settings and Ask Joon are utilities; Store & integrations is reached through the More tools disclosure or Settings. The compact top bar names the current task and keeps the active store identity visible; global search and workspace health remain secondary.
+The sidebar is a 204px navy rail with 14px task labels and 16px line icons. It presents the direct task IA without category headings. Active items use a warm-paper field with dark ink and set `aria-current="page"`; cobalt gold remains available for action badges rather than active navigation. Setup status, Settings and Ask Joon are utilities; Store & integrations is reached through Data & store or Settings. The compact top bar names the current task and keeps the active store identity visible; global search and workspace health remain secondary.
 
 ### Decision and evidence receipts
 
@@ -255,7 +256,7 @@ Receipts are the only place terminal styling may become a dominant motif. Use mo
 ### Don't:
 
 - **Don't** expose the internal feature taxonomy when a merchant task is the clearer label.
-- **Don't** use yellow as generic decoration, blue as success, green as a general accent or pending action, or red as routine emphasis.
+- **Don't** use warm gold as generic decoration, blue as success, green as a general accent or pending action, or red as routine emphasis.
 - **Don't** spread terminal styling or monospaced prose across ordinary navigation, forms, cards or explanations.
 - **Don't** hide consequential scope, audience, suppression, schedule or measurement details behind decorative minimalism.
 - **Don't** add gradients, glass effects, glow or ornamental motion to compensate for weak hierarchy.
