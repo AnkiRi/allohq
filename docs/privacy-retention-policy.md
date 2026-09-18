@@ -2,9 +2,27 @@
 
 Last updated: 2 September 2026
 
+Engineering lifecycle clarification: 18 September 2026
+
 This is the operational retention schedule for Joon's Shopify v1. It is the
 engineering source of truth; the public privacy policy must describe the same
 behavior before App Store submission.
+
+## Merchant store lifecycle
+
+- Disconnecting Shopify is reversible. Joon immediately stops synchronization and delivery,
+  invalidates stored commerce credentials, and retains the store's operational history,
+  customer intelligence and verified sender-domain configuration for reconnection.
+- Retained disconnected-store data remains until the merchant permanently deletes the store
+  data or a verified Shopify `shop/redact` request requires deletion. An automatic
+  disconnected-store expiry period is not yet promised; legal review must set one before
+  Shopify App Store submission.
+- Permanent deletion is a separate, explicit action with exact shop-domain confirmation. It
+  deletes the store record and store-scoped data and attempts to deprovision the email-provider
+  sending identity.
+- Joon cannot remove DNS records at a merchant's external DNS host. The product must tell the
+  merchant which records can be removed after permanent deletion.
+- Workspace membership is not deleted with one store because a workspace may own other stores.
 
 ## Shopify privacy requests
 

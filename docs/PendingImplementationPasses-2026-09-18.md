@@ -9,6 +9,7 @@ This document is the single reference point for these passes. Later implementati
 
 | Pass | Code status | Commits | What remains outside code |
 | --- | --- | --- | --- |
+| L — Store lifecycle safety | Complete in code | `1de3b26` | Deploy; verify disconnect/reconnect, permanent deletion, provider cleanup and Shopify uninstall/redact against a disposable store |
 | 0 — Creative, offer and attribution correctness | Complete | `39053f8`, `6fe8785` | Production attribution/creative acceptance under the recipient allowlist |
 | 1 — Audience review and override consistency | Complete | `f4620ac`, `b620798`, `5ce98e1`, `4465908`, `ee5486a` | Deploy migration and complete production UX acceptance |
 | 2 — Explainable, scalable delivery timing | Complete | `ba5265c` | Deploy migration; production acceptance; representative 100k-recipient load proof |
@@ -21,6 +22,64 @@ This document is the single reference point for these passes. Later implementati
 | 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
+
+## Execution order after store-lifecycle safety
+
+Store lifecycle safety is the prerequisite because a disconnected or uninstalled store must
+never continue sending while later passes are tested. After it is deployed and accepted, use
+this order without re-litigating it:
+
+1. Finish the remaining currency tail.
+2. Complete Pass 8 customer-context reasoning.
+3. Complete Pass 9 provider-neutral warm-up before widening delivery.
+4. Run the full deployed-data acceptance path.
+5. Run the 100,000-customer Shopify scale tests.
+6. Create staging before active design-partner testing begins.
+7. Complete SES, monitoring, backups and security operations.
+8. Prepare and submit the Shopify App Store package.
+9. Design the separate approximately 45-million-customer mobile-app architecture.
+
+## Pass L — Store lifecycle safety
+
+### Locked merchant model
+
+`Disconnect Shopify` and `Permanently delete store data` are different actions.
+
+**Disconnect is reversible.** It must immediately deactivate the store, invalidate stored
+Shopify credentials, pause active automations, cancel unsent scheduled/sending campaigns,
+remove pending store jobs where BullMQ permits removal, and make every delivery worker refuse
+inactive stores. It retains customers, orders, campaigns, decisions, intelligence, brand
+configuration, verified sender-domain configuration and warm-up history. Reconnection reuses
+the existing store and sender-domain identity, performs a fresh Shopify import and does not
+silently reactivate paused automations or cancelled campaigns.
+
+**Permanent deletion is irreversible.** It requires the merchant to type the exact Shopify
+domain. It deactivates delivery first, removes pending work, attempts to delete the
+provider-side sender identity, deletes store-linked templates, then deletes the Store row so
+database cascade rules remove all store-scoped data. The workspace and its users remain so
+other stores are not affected. DNS records at the merchant's DNS host cannot be removed by
+Joon and the UI must state this explicitly.
+
+**Shopify uninstall is a safety disconnect.** It immediately marks the store inactive,
+invalidates the stored token, pauses automations and cancels unsent campaigns. Shopify's
+verified `shop/redact` webhook remains the authoritative permanent platform-deletion event.
+
+### Acceptance
+
+- A delayed campaign cannot send after manual disconnect or Shopify uninstall.
+- Active automations are paused; scheduled/sending campaigns become cancelled.
+- All known store-scoped queues are inspected, including `email-send`, `journey-step`,
+  automation, state, attribution, opportunity and overnight work.
+- Active jobs that BullMQ cannot remove are harmless because workers check active-store state
+  at execution and immediately before campaign delivery.
+- Reconnection preserves sender-domain verification/DNS metadata and clears the disconnect
+  delivery pause, but does not resume old campaigns or automations.
+- Permanent deletion removes database store data and the provider sending identity where the
+  provider is available; any provider cleanup failure is surfaced for operator remediation.
+- The interface never claims that data is retained when deletion is about to occur, or that
+  DNS records have been removed from an external DNS host.
+- Manual disconnect, uninstall, reconnect, deletion and `shop/redact` have automated and
+  disposable-store acceptance coverage.
 
 ## Decisions locked after the design-partner demo
 
