@@ -20,7 +20,7 @@ This document is the single reference point for these passes. Later implementati
 | 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
 | 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
-| 11 — Product-wide UX simplification | 11A–11H implemented; 11I–11P active | `782b5aa` and subsequent route commits | Complete the interactive intelligence layer, authenticated responsive acceptance and merchant usability testing without removing any product capability |
+| 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
 
 ## Decisions locked after the design-partner demo
 
@@ -833,6 +833,15 @@ The extension is executed as the following phases:
 | 11N | Product graph and automations | An interactive product-relationship network with evidence/confidence/corrections, plus a living journey map showing population, exits, deferrals, failures and attributed outcomes. Journeys never display random holdouts. |
 | 11O | Results and delivery health | Live attributed revenue, campaign/journey split, delivered-to-order funnel, billing mapping, valid pooled control evidence and a provider-neutral domain warm-up/ramp calendar. Underpowered evidence never appears as proven lift. |
 | 11P | Landing | Small interactive product truths: Connect → Learn → Decide → Send → Measure; Ankita's changing state; and an audience/funnel/fee simulator driven by attributed revenue rather than list size or lift billing. |
+
+Implementation checkpoint `465368b` completes the cross-surface integration: persistent Ask
+Joon dock and rounded focused mode; campaign audience flow linked to the existing inspector;
+Today intelligence receipt and compact approval rows; date-grouped Activity ledger; semantic
+customer states and lifecycle path; focused product relationship network; domain warm-up ramp;
+and the landing intelligence loop. The pre-existing automation execution monitor, Results modes,
+Ankita state story and attributed-revenue simulator remain the implementation authority for the
+remaining rows rather than being duplicated. Production-data, high-scale and authenticated
+responsive acceptance remain external verification work, not missing UI implementation.
 
 Global rules for 11I–11P:
 
