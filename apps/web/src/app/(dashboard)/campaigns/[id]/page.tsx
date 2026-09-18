@@ -295,6 +295,17 @@ export default function CampaignDetailPage() {
     return () => window.clearInterval(timer);
   }, [alternativeSubmitting, dryRun?.linkedAlternative, refetchDryRun]);
 
+  useEffect(() => {
+    if (
+      campaign &&
+      activeSection === "audience" &&
+      campaign.status !== "draft" &&
+      campaign.status !== "scheduled"
+    ) {
+      setActiveSection("overview");
+    }
+  }, [activeSection, campaign?.status]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 gap-2">
@@ -478,12 +489,6 @@ export default function CampaignDetailPage() {
   const campaignSections = (["overview", "message", "audience", "delivery", "results", "receipt"] as const).filter(
     (section) => section !== "audience" || campaign.status === "draft" || campaign.status === "scheduled"
   );
-  useEffect(() => {
-    if (activeSection === "audience" && campaign.status !== "draft" && campaign.status !== "scheduled") {
-      setActiveSection("overview");
-    }
-  }, [activeSection, campaign.status]);
-
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
