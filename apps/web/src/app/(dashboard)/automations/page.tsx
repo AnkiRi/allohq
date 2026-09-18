@@ -51,7 +51,7 @@ export default function AutomationsPage() {
 
   const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-5");
   const [polling, setPolling] = useState(false);
-  const [statusView, setStatusView] = useState<"all" | "active" | "draft" | "paused" | "recommended">("all");
+  const [statusView, setStatusView] = useState<"all" | "active" | "draft" | "paused" | "recommended" | "templates">("all");
 
   const { data: brandStatus } = (trpc.ai.brandProfileStatus as any).useQuery(
     { storeId },
@@ -111,6 +111,7 @@ export default function AutomationsPage() {
   const isGenerating = automations?.some((a) => a.status === "generating");
   const visibleAutomations = automations?.filter((automation) => {
     if (statusView === "all") return true;
+    if (statusView === "templates") return false;
     if (statusView === "draft") return ["draft", "ready", "generating"].includes(automation.status);
     return automation.status === statusView;
   });
@@ -154,7 +155,7 @@ export default function AutomationsPage() {
 
       <div className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Automation summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Active</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => item.status === "active").length ?? 0}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Ready or draft</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => ["ready", "draft", "generating"].includes(item.status)).length ?? 0}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Paused</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => item.status === "paused").length ?? 0}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Recommended</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => item.status === "recommended").length ?? 0}</p></div></div>
 
-      <div className="app-tab-bed w-fit max-w-full overflow-x-auto" role="tablist" aria-label="Automation status">{(["all", "active", "draft", "paused", "recommended"] as const).map((view) => <button key={view} role="tab" aria-selected={statusView === view} onClick={() => setStatusView(view)} className={`app-tab capitalize ${statusView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{view === "draft" ? "Draft and ready" : view}</button>)}</div>
+      <div className="app-tab-bed w-fit max-w-full overflow-x-auto" role="tablist" aria-label="Automation status">{(["all", "active", "draft", "paused", "recommended", "templates"] as const).map((view) => <button key={view} role="tab" aria-selected={statusView === view} onClick={() => setStatusView(view)} className={`app-tab capitalize ${statusView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{view === "draft" ? "Draft and ready" : view}</button>)}</div>
 
       {/* Brand analysis gate banner */}
       {storeId && !hasBrandProfile && (
@@ -199,7 +200,17 @@ export default function AutomationsPage() {
       )}
 
       {/* Automations grid */}
-      {isLoading ? (
+      {statusView === "templates" ? (
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px]">
+          <section className="rounded-xl border border-border bg-card p-6">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Journey messages</p>
+            <h2 className="mt-2 text-xl font-medium text-foreground">{new Set(automations?.flatMap((item) => item.templateIds) ?? []).size} email templates across {automations?.length ?? 0} automations</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Open an automation to see its messages in sequence, or use the email library to search and edit every reusable template.</p>
+            <div className="mt-5 flex flex-wrap gap-2"><Link href="/templates" className="app-attention-button inline-flex px-4 py-2 text-sm font-medium">Open email library</Link><button type="button" onClick={() => setStatusView("all")} className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted">Back to automations</button></div>
+          </section>
+          <aside className="rounded-xl border border-border bg-muted p-5"><p className="text-sm font-medium text-foreground">Where to edit</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Automation detail keeps message order and trigger context. Email library keeps the reusable content itself. No template has been moved or duplicated.</p></aside>
+        </div>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-40 glass-skeleton rounded-xl" />

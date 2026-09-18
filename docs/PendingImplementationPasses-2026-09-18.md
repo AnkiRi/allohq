@@ -779,7 +779,7 @@ scan-first Today structure but still needs notification/context hardening. Phase
 its master-detail Decisions and Activity workspaces and awaits production-data verification.
 Phase 11D has its customer-intelligence workspace migration and awaits deployed-data verification.
 Phase 11E is implemented and awaits deployed-data verification. Phase 11F now has its automation
-list/detail workspace; its separate template view and deployed journey-state verification remain.
+list/detail/template workspace; deployed journey-state verification remains.
 Phases 11G and 11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
 and benchmark routes” followed by “remaining routes”; they do not replace this eight-phase
 checklist. This programme is a
@@ -1031,8 +1031,8 @@ Acceptance:
 Outcome: merchants can understand what is active, what is a draft, what is paused and what
 happens next without reading workflow-engine internals.
 
-Implementation status (18 September 2026): **automation list/detail workspace implemented;
-separate template view and deployed journey-state verification remain**.
+Implementation status (18 September 2026): **automation list/detail/template workspace
+implemented; deployed journey-state verification remains**.
 
 - the automation list now opens with active, draft/ready, paused and recommended counts and
   offers matching status work views without removing generation, activation, editing, pausing,
@@ -1048,11 +1048,12 @@ separate template view and deployed journey-state verification remain**.
 - Experiments retains every existing A/B result and a direct path to configure the first test;
 - action colours now follow the shared semantic system: gold requests merchant action, green
   means genuinely active/healthy, blue remains measurement.
+- Templates gives a dedicated journey-message summary and clear paths to automation sequence
+  context or the existing reusable email library, without moving or duplicating content.
 
 Required work:
 
-- active, draft/recommended and paused work views are implemented; a separate template view
-  remains;
+- active, draft/recommended, paused and template work views are implemented;
 - show trigger, waits, conditions, purchase exits, suppression, quiet hours and next scheduled
   work in merchant language;
 - remove random-holdout concepts from journeys everywhere; all eligible customers receive
@@ -1113,8 +1114,8 @@ Acceptance:
 Outcome: the remaining product feels like one system and the redesign is safe to ship to
 design partners across devices and real operational states.
 
-Implementation status (18 September 2026): **settings hierarchy implemented; Brand & Content
-hub consolidation and full release/device acceptance remain**.
+Implementation status (18 September 2026): **settings hierarchy and Brand & Content hub
+implemented; full release/device acceptance remains**.
 
 - Settings is now divided into General, Sending, Notifications, Team, Integrations, Billing
   and Advanced work views instead of one long stack;
@@ -1125,6 +1126,8 @@ hub consolidation and full release/device acceptance remain**.
   connected-store summary and full management route;
 - the existing sidebar already preserves the primary Today-to-Inbox navigation, a grouped
   Brand & Content area, a grouped Data & Store area, Setup status, Settings and Ask Joon;
+- Brand & Content now has an overview route that connects the existing Email library, Brand
+  voice, Product graph and Forms routes while keeping every dedicated workspace intact;
 - no existing route or deep link was renamed or removed.
 
 Required work:

@@ -16,6 +16,7 @@ const routeMeta: Record<string, { title: string; description: string }> = {
   "/campaigns": { title: "Campaigns", description: "Create, approve, deliver, and measure every campaign." },
   "/automations": { title: "Automations", description: "Triggered journeys that wait for the right moment." },
   "/conversations": { title: "Inbox", description: "Customer conversations that need attention." },
+  "/brand-content": { title: "Brand & content", description: "Voice, reusable email content, forms, and product intelligence in one place." },
   "/outcomes": { title: "Results", description: "Attributed orders and control-backed evidence, clearly separated." },
   "/analytics": { title: "Analytics", description: "Understand engagement, revenue, cost, and delivery health." },
   "/segments": { title: "Segments", description: "Saved audiences, dynamic states, and their provenance." },

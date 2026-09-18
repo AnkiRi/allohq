@@ -21,6 +21,7 @@ const primaryItems: NavItem[] = [
   { name: "Inbox", href: "/conversations", icon: Inbox },
 ];
 const brandItems: { name: string; href: string }[] = [
+  { name: "Overview", href: "/brand-content" },
   { name: "Email library", href: "/templates" },
   { name: "Forms", href: "/forms" },
   { name: "Brand voice", href: "/intelligence/brand" },
