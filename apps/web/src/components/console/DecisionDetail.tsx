@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { cn } from "@allohq/ui";
 import { OpTag, type OpTagKind } from "./OpTag";
 import { StreamOutput, StreamRow } from "./StreamOutput";
-import { formatINR } from "./MetricReadout";
+import { formatStoreCurrency } from "./MetricReadout";
 import type { DecisionPrediction, DecisionReasonLine } from "./DecisionCard";
 
 // ---------------------------------------------------------------------------
@@ -34,12 +34,14 @@ export interface DecisionDetailData {
 
 export function DecisionDetail({
   data,
+  currency,
   busy = false,
   onApprove,
   onPass,
   onClose,
 }: {
   data: DecisionDetailData;
+  currency: string;
   busy?: boolean;
   onApprove?: () => void;
   onPass?: () => void;
@@ -120,7 +122,7 @@ export function DecisionDetail({
               )}
               {(data.impact ?? 0) > 0 && (
                 <span className="text-[hsl(var(--accent))]">
-                  ~{formatINR(data.impact as number)}
+                  ~{formatStoreCurrency(data.impact as number, currency)}
                 </span>
               )}
             </div>
@@ -180,7 +182,7 @@ export function DecisionDetail({
                   <span className="text-[hsl(var(--accent))]">↗ upside</span>{" "}
                   expected recovery{" "}
                   <b className="text-foreground">
-                    {formatINR(data.prediction.upsideRevenue)}
+                    {formatStoreCurrency(data.prediction.upsideRevenue, currency)}
                   </b>{" "}
                   · ~<b className="text-foreground">{data.prediction.liftPct}%</b>{" "}
                   incremental lift vs control

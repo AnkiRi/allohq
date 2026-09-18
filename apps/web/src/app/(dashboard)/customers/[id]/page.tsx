@@ -8,7 +8,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { ReasoningReveal, type ReasoningStory } from "@/components/console/ReasoningReveal";
-import { formatINR } from "@/components/console";
+import { formatStoreCurrency } from "@/components/console";
 import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
 
 const containerVariants = {
@@ -215,6 +215,8 @@ function getLtvEmptyStateCta(segment: string | undefined): { label: string; desc
 export default function CustomerDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
   const { data: customer, isLoading } = trpc.customers.getById.useQuery({ id });
   const { submit: submitToJoon } = useAlloAI();
   const [profileView, setProfileView] = useState<"overview" | "history">("overview");
@@ -511,7 +513,7 @@ export default function CustomerDetailPage() {
                   {
                     label: "MONETARY",
                     score: rfm.monetary,
-                    context: `${formatINR(rfm.totalSpent)} total spent`,
+                    context: `${formatStoreCurrency(rfm.totalSpent, storeCurrency)} total spent`,
                   },
                 ].map((dim) => (
                   <div key={dim.label}>
@@ -543,13 +545,13 @@ export default function CustomerDetailPage() {
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans">TOTAL SPENT</div>
                   <div className="text-lg font-bold font-mono text-foreground">
-                    {formatINR(rfm.totalSpent)}
+                    {formatStoreCurrency(rfm.totalSpent, storeCurrency)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground font-sans">AVG ORDER</div>
                   <div className="text-lg font-bold font-mono text-foreground">
-                    {formatINR(rfm.avgOrderValue)}
+                    {formatStoreCurrency(rfm.avgOrderValue, storeCurrency)}
                   </div>
                 </div>
               </div>
@@ -572,7 +574,7 @@ export default function CustomerDetailPage() {
                     HISTORICAL LTV
                   </div>
                   <div className="text-[28px] tabular-nums font-bold font-mono text-foreground">
-                    {formatINR(ltv.historicalLtv)}
+                    {formatStoreCurrency(ltv.historicalLtv, storeCurrency)}
                   </div>
                 </div>
                 <div>
@@ -580,7 +582,7 @@ export default function CustomerDetailPage() {
                     PREDICTED LTV
                   </div>
                   <div className="text-[28px] tabular-nums font-bold font-mono text-foreground">
-                    {formatINR(ltv.predictedLtv)}
+                    {formatStoreCurrency(ltv.predictedLtv, storeCurrency)}
                   </div>
                 </div>
               </div>
@@ -692,7 +694,7 @@ export default function CustomerDetailPage() {
             <div key={order.id} className="relative pb-5">
               <div className="absolute left-[-19px] top-1.5 w-2.5 h-2.5 rounded-full bg-decision border-2 border-background" />
               <div className="text-[12px] font-mono text-foreground">
-                Order #{order.orderNumber} &middot; {formatINR(order.totalPrice)}
+                Order #{order.orderNumber} &middot; {formatStoreCurrency(order.totalPrice, storeCurrency)}
               </div>
               <div className="text-[11px] font-sans text-muted-foreground mt-0.5">
                 {new Date(order.createdAt).toLocaleDateString("en-US", {
@@ -832,7 +834,7 @@ export default function CustomerDetailPage() {
                     </span>
                   </td>
                   <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground">
-                    {formatINR(order.totalPrice)}
+                    {formatStoreCurrency(order.totalPrice, storeCurrency)}
                   </td>
                   <td className="px-6 py-3 text-right text-[11px] font-mono text-muted-foreground">
                     {new Date(order.createdAt).toLocaleDateString()}

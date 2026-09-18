@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Search, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 export default function ProductsPage() {
   const [search, setSearch] = useState("");
@@ -11,6 +12,7 @@ export default function ProductsPage() {
 
   const { data: stores } = trpc.stores.list.useQuery();
   const store = stores?.[0]; // Use first active store
+  const storeCurrency = store?.currency ?? "USD";
 
   const { data, isLoading } = trpc.stores.products.useQuery(
     { storeId: store?.id ?? "", page, limit: 20, search: search || undefined },
@@ -123,7 +125,7 @@ export default function ProductsPage() {
                     {product.productType ?? "\u2014"}
                   </td>
                   <td className="px-5 py-4 text-right text-[13px] font-mono font-bold text-foreground">
-                    ₹{product.price.toFixed(2)}
+                    {formatStoreCurrency(product.price, storeCurrency)}
                   </td>
                   <td className="px-5 py-4">
                     <span

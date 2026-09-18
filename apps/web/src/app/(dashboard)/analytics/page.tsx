@@ -15,6 +15,7 @@ import {
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SmartEmptyState } from "@/components/ui/SmartEmptyState";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -49,6 +50,7 @@ export default function AnalyticsPage() {
   const { data: stores } = (trpc as any).stores.list.useQuery();
   const store = stores?.[0];
   const storeId = store?.id as string | undefined;
+  const storeCurrency = store?.currency ?? "USD";
 
   // Queries
   const { data: channelData, isLoading: channelLoading } = (trpc as any).analytics.channelBreakdown.useQuery(
@@ -170,7 +172,7 @@ export default function AnalyticsPage() {
         {[
           {
             label: "Attributed revenue",
-            value: `₹${totalChannelRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+            value: formatStoreCurrency(totalChannelRevenue, storeCurrency),
             icon: DollarSign,
           },
           {
@@ -185,7 +187,7 @@ export default function AnalyticsPage() {
           },
           {
             label: "AI revenue",
-            value: roiData ? `₹${roiData.aiAttributedRevenue.toLocaleString("en-IN")}` : "·",
+            value: roiData ? formatStoreCurrency(roiData.aiAttributedRevenue, storeCurrency) : "·",
             icon: TrendingUp,
           },
         ].map((stat) => (
@@ -225,10 +227,10 @@ export default function AnalyticsPage() {
                   key={i}
                   className="flex-1 bg-foreground/20 hover:bg-foreground/40 rounded-t transition-colors group relative"
                   style={{ height: `${(point.value / maxVal) * 100}%`, minHeight: "2px" }}
-                  title={`${point.date}: ₹${point.value.toLocaleString("en-IN")}`}
+                  title={`${point.date}: ${formatStoreCurrency(point.value, storeCurrency)}`}
                 >
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block bg-foreground text-background text-[9px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap">
-                    ₹{point.value.toLocaleString("en-IN")}
+                    {formatStoreCurrency(point.value, storeCurrency)}
                   </div>
                 </div>
               ));
@@ -298,7 +300,7 @@ export default function AnalyticsPage() {
                           <span className="px-2 py-0.5 rounded text-[9px] font-sans bg-muted border border-border uppercase">{row.sourceType}</span>
                         </td>
                         <td className="px-4 py-3 text-[12px] font-sans text-muted-foreground">{row.channel}</td>
-                        <td className="px-4 py-3 text-[12px] font-mono font-bold text-foreground tabular-nums">₹{row.revenue.toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-3 text-[12px] font-mono font-bold text-foreground tabular-nums">{formatStoreCurrency(row.revenue, storeCurrency)}</td>
                         <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground tabular-nums">{row.orderCount}</td>
                       </motion.tr>
                     ))}
@@ -328,7 +330,7 @@ export default function AnalyticsPage() {
                           <span className="text-[13px] font-sans font-bold text-foreground uppercase">{ch.channel}</span>
                         </div>
                         <span className="text-[18px] font-mono font-bold text-foreground tabular-nums">
-                          ₹{ch.revenue.toLocaleString("en-IN")}
+                          {formatStoreCurrency(ch.revenue, storeCurrency)}
                         </span>
                       </div>
                       <div className="grid grid-cols-4 gap-4">
@@ -373,8 +375,8 @@ export default function AnalyticsPage() {
                         { label: "Recipients", value: group.data.totalRecipients.toLocaleString() },
                         { label: "Open Rate", value: `${group.data.avgOpenRate}%` },
                         { label: "Click Rate", value: `${group.data.avgClickRate}%` },
-                        { label: "Revenue", value: `₹${group.data.totalRevenue.toLocaleString("en-IN")}` },
-                        { label: "Avg Rev/Campaign", value: `₹${group.data.avgRevenuePerCampaign.toLocaleString("en-IN")}` },
+                        { label: "Revenue", value: formatStoreCurrency(group.data.totalRevenue, storeCurrency) },
+                        { label: "Avg Rev/Campaign", value: formatStoreCurrency(group.data.avgRevenuePerCampaign, storeCurrency) },
                       ].map((s) => (
                         <div key={s.label} className="flex items-center justify-between">
                           <span className="text-[11px] font-sans text-muted-foreground">{s.label}</span>
@@ -451,7 +453,7 @@ export default function AnalyticsPage() {
               <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
                 {[
                   { label: "AI Token Cost", value: `$${roiData.aiTokenCost.toFixed(4)}`, sub: `${period} day period` },
-                  { label: "AI Attributed Revenue", value: `₹${roiData.aiAttributedRevenue.toLocaleString("en-IN")}`, sub: "Campaigns + Automations" },
+                  { label: "AI Attributed Revenue", value: formatStoreCurrency(roiData.aiAttributedRevenue, storeCurrency), sub: "Campaigns + Automations" },
                   { label: "Return on Investment", value: `${roiData.roi}x`, sub: "(Revenue - Cost) / Cost" },
                   { label: "Activity", value: `${roiData.campaignsSent} campaigns, ${roiData.automationsSent} automations`, sub: `${period} day period` },
                 ].map((card) => (
@@ -492,7 +494,7 @@ export default function AnalyticsPage() {
                         {fc.label}
                       </div>
                       <div className="text-[24px] font-bold text-foreground font-mono tabular-nums">
-                        ₹{(fc.value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                        {formatStoreCurrency(fc.value ?? 0, storeCurrency)}
                       </div>
                       {fc.trend != null && (
                         <div className={`text-[11px] font-mono mt-1 ${fc.trend >= 0 ? "text-outcome" : "text-destructive"}`}>

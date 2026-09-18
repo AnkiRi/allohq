@@ -8,6 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 const STATUS_COLORS: Record<string, string> = {
   paid: "bg-[hsl(var(--success))/0.12] text-outcome",
@@ -22,6 +23,7 @@ export default function OrdersPage() {
 
   const { data: stores } = trpc.stores.list.useQuery();
   const store = stores?.[0];
+  const storeCurrency = store?.currency ?? "USD";
 
   const { data, isLoading } = trpc.stores.orders.useQuery(
     { storeId: store?.id ?? "", page, limit: 20, search: search || undefined },
@@ -123,7 +125,7 @@ export default function OrdersPage() {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-right text-[13px] font-mono font-bold text-foreground">
-                    ₹{order.totalPrice.toFixed(2)}
+                    {formatStoreCurrency(order.totalPrice, storeCurrency)}
                   </td>
                   <td className="px-5 py-4 text-right text-[13px] font-mono text-muted-foreground">
                     {order.items.length}

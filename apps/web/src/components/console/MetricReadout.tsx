@@ -4,7 +4,7 @@ import { cn } from "@allohq/ui";
 
 // ---------------------------------------------------------------------------
 // MetricReadout — a mono tabular label + value, for KPIs as console readouts.
-// Money uses ₹ + en-IN; AI cost stays USD ($) — pass a preformatted string.
+// Merchant money follows the connected store currency. AI cost stays USD ($).
 // ---------------------------------------------------------------------------
 
 export function formatINR(n: number): string {
@@ -23,7 +23,7 @@ export interface MetricReadoutProps {
   label: string;
   /** A number is rendered with en-IN grouping; a string is shown verbatim. */
   value: string | number;
-  /** When true and value is a number, format as ₹ en-IN currency. */
+  /** When true and value is a number, format in the supplied store currency. */
   money?: boolean;
   /** Store currency used when money is true. */
   currency?: string;

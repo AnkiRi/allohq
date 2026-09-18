@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, Loader2, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { MetricStrip, PageHeader, Surface } from "@/components/ui/AppPrimitives";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 const TZ = "Asia/Kolkata";
 const LABELS: Record<string, string> = {
@@ -37,7 +38,6 @@ function dayHeading(value: string | Date) {
   if (key === dayKey(yesterday)) return "Yesterday";
   return new Date(value).toLocaleDateString("en-IN", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" });
 }
-function money(value: number | null) { return value ? `₹${Math.round(value).toLocaleString("en-IN")}` : "—"; }
 function entityHref(row: ActivityRow) {
   if (!row.entityId) return null;
   if (row.entityType === "campaign") return `/campaigns/${row.entityId}`;
@@ -47,6 +47,9 @@ function entityHref(row: ActivityRow) {
 }
 
 export default function ActivityPage() {
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
+  const money = (value: number | null) => value ? formatStoreCurrency(value, storeCurrency) : "—";
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | "needs_you" | "sent" | "analysis">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);

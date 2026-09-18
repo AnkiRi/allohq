@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { MetricStrip, PageHeader, Surface } from "@/components/ui/AppPrimitives";
 import type { OpTagKind, DecisionPrediction } from "@/components/console";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 // ---------------------------------------------------------------------------
 // Action shape (autonomy.listActions) — surfaced in operator language.
@@ -107,6 +108,7 @@ export default function ActionsPage() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
 
   const actionsQuery = (trpc as any).autonomy.listActions.useInfiniteQuery(
     { storeId, limit: 100 },
@@ -182,7 +184,7 @@ export default function ActionsPage() {
   const busy = approveMut.isPending || rejectMut.isPending;
   const bulkBusy = bulkApproveMut.isPending || bulkRejectMut.isPending;
 
-  // Status line — total est. ₹ impact across the queue.
+  // Status line — total estimated impact across the queue, in store currency.
   const totalImpact = summary?.pendingEstimatedRevenue ?? pending.reduce((sum, a) => sum + (a.estimatedRevenue ?? 0), 0);
   const pendingCount = summary?.statusCounts?.pending ?? pending.length;
   const completedCount = summary?.statusCounts
@@ -199,7 +201,7 @@ export default function ActionsPage() {
       reason: "Cleared by operator",
     });
 
-  const formatMoney = (value: number | null | undefined) => `₹${Math.round(value ?? 0).toLocaleString("en-IN")}`;
+  const formatMoney = (value: number | null | undefined) => formatStoreCurrency(value ?? 0, storeCurrency);
   const artifactHref = selected?.artifactId && selected.artifactType === "automation"
     ? `/automations/${selected.artifactId}`
     : selected?.artifactId && selected.artifactType === "campaign"

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { CommandLine, formatINR } from "@/components/console";
+import { CommandLine, formatStoreCurrency } from "@/components/console";
 import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
 import { MetricStrip, PageHeader, Surface } from "@/components/ui/AppPrimitives";
 
@@ -41,6 +41,8 @@ function CustomersWorkspace() {
   const [page, setPage] = useState(1);
   useEffect(() => { const value = params.get("segment"); if (value && SEGMENTS.includes(value)) { setSegment(value); setPage(1); } }, [params]);
   const { data: stats } = trpc.customers.stats.useQuery();
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
   const { data, isLoading } = trpc.customers.list.useQuery({ page, limit: 20, search: search || undefined, segment: segment === "All" ? undefined : segment });
   const { data: distribution } = trpc.segments.distribution.useQuery();
   const atRisk = ((distribution ?? []) as any[]).filter((row) => row.segment === "At Risk" || row.segment === "Hibernating").reduce((sum, row) => sum + row.customerCount, 0);
@@ -53,7 +55,7 @@ function CustomersWorkspace() {
       { label: "Subscribed audience", value: stats ? Math.round(stats.totalCustomers * stats.marketingRate / 100).toLocaleString("en-IN") : "—" },
       { label: "Needs attention", value: atRisk.toLocaleString("en-IN") },
       { label: "Email opt-in", value: stats ? `${stats.marketingRate.toFixed(0)}%` : "—" },
-      { label: "Revenue observed", value: stats ? formatINR(stats.totalRevenue) : "—" },
+      { label: "Revenue observed", value: stats ? formatStoreCurrency(stats.totalRevenue, storeCurrency) : "—" },
     ]} />
     <Surface className="overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -65,7 +67,7 @@ function CustomersWorkspace() {
         <tbody className="divide-y divide-border">{isLoading ? Array.from({ length: 6 }).map((_, index) => <tr key={index}><td colSpan={6} className="px-5 py-4"><div className="h-5 animate-pulse rounded bg-[var(--surface-soft)] motion-reduce:animate-none" /></td></tr>) : !data?.customers.length ? <tr><td colSpan={6} className="px-5 py-16 text-center"><Users className="mx-auto h-7 w-7 text-muted-foreground" /><p className="mt-3 text-[14px] font-medium">No customers match this view</p><p className="mt-1 text-[13px] text-muted-foreground">Clear a filter or search another name or email.</p></td></tr> : data.customers.map((customer: any) => {
           const subscriber = noOrders(customer);
           const cohort = subscriber ? customer.acceptsMarketing ? "Subscriber" : "Not subscribed" : customer.rfmScore?.segment ?? "Unclassified";
-          return <tr key={customer.id} className="hover:bg-[var(--surface-soft)]/55"><td className="px-5 py-4"><Link href={`/customers/${customer.id}`} className="block"><span className="text-[14px] font-medium">{customerName(customer)}</span><span className="mt-0.5 block text-[12px] text-muted-foreground">{customer.email}</span></Link></td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-medium ${cohortTone(cohort)}`}>{cohort}</span></td><td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums">{customer.rfmScore?.orderCount ?? customer._count.orders}</td><td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums">{formatINR(customer.rfmScore?.totalSpent ?? 0)}</td><td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums">{customer.rfmScore?.totalScore ?? "—"}</td><td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-[11px] ${customer.acceptsMarketing ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--surface-soft)] text-muted-foreground"}`}>{customer.acceptsMarketing ? "Subscribed" : "Not subscribed"}</span></td></tr>;
+          return <tr key={customer.id} className="hover:bg-[var(--surface-soft)]/55"><td className="px-5 py-4"><Link href={`/customers/${customer.id}`} className="block"><span className="text-[14px] font-medium">{customerName(customer)}</span><span className="mt-0.5 block text-[12px] text-muted-foreground">{customer.email}</span></Link></td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-medium ${cohortTone(cohort)}`}>{cohort}</span></td><td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums">{customer.rfmScore?.orderCount ?? customer._count.orders}</td><td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums">{formatStoreCurrency(customer.rfmScore?.totalSpent ?? 0, storeCurrency)}</td><td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums">{customer.rfmScore?.totalScore ?? "—"}</td><td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-[11px] ${customer.acceptsMarketing ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--surface-soft)] text-muted-foreground"}`}>{customer.acceptsMarketing ? "Subscribed" : "Not subscribed"}</span></td></tr>;
         })}</tbody>
       </table></div>
       {data && data.pages > 1 && <div className="flex items-center justify-between border-t border-border px-5 py-3"><span className="text-[12px] text-muted-foreground">{data.total.toLocaleString("en-IN")} customers · page {data.page} of {data.pages}</span><div className="flex gap-1"><button aria-label="Previous page" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="rounded-lg border border-border p-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button><button aria-label="Next page" disabled={page === data.pages} onClick={() => setPage((value) => value + 1)} className="rounded-lg border border-border p-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button></div></div>}

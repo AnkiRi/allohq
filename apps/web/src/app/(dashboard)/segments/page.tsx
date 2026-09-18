@@ -9,7 +9,7 @@ import {
   StreamOutput,
   StreamRow,
   MetricReadout,
-  formatINR,
+  formatStoreCurrency,
 } from "@/components/console";
 import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
 import { PageHeader, Surface } from "@/components/ui/AppPrimitives";
@@ -26,6 +26,8 @@ const AT_RISK_SEGMENTS = new Set([
 
 export default function SegmentsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("rfm");
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
 
   const segmentsQuery = trpc.segments.list.useQuery();
   const distQuery = trpc.segments.distribution.useQuery();
@@ -177,7 +179,7 @@ export default function SegmentsPage() {
                       <b>{opportunity.name}</b>:{" "}
                       <b>{opportunity.liveCount.toLocaleString("en-IN")}</b>{" "}
                       customers worth{" "}
-                      <b>{formatINR(opportunity.liveRevenue)}</b> are slipping;
+                      <b>{formatStoreCurrency(opportunity.liveRevenue, storeCurrency)}</b> are slipping;
                       a warm note usually brings them back
                     </>
                   ) : (
@@ -185,7 +187,7 @@ export default function SegmentsPage() {
                       your biggest group is <b>{opportunity.name}</b>:{" "}
                       <b>{opportunity.liveCount.toLocaleString("en-IN")}</b>{" "}
                       customers who&apos;ve brought in{" "}
-                      <b>{formatINR(opportunity.liveRevenue)}</b> so far
+                      <b>{formatStoreCurrency(opportunity.liveRevenue, storeCurrency)}</b> so far
                     </>
                   )}
                 </StreamRow>
@@ -261,7 +263,7 @@ export default function SegmentsPage() {
 
                         {/* Revenue readout */}
                         <div className="w-28 flex-shrink-0 text-right font-mono text-[11.5px] tabular-nums text-foreground">
-                          {formatINR(seg.liveRevenue)}
+                          {formatStoreCurrency(seg.liveRevenue, storeCurrency)}
                         </div>
 
                         {/* Delete — only for custom (manual/conditions) segments; RFM

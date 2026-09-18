@@ -786,6 +786,7 @@ export default function DashboardPage() {
               <DecisionCard
                 tags={demoDecision.tags}
                 impact={demoDecision.impact}
+                currency={storeCurrency}
                 decision={demoDecision.title}
                 reasoning={[{ tick: "ok", text: "drafted, ready for your okay" }]}
                 onView={() =>
@@ -882,6 +883,7 @@ export default function DashboardPage() {
       {viewing && (
         <DecisionDetail
           data={viewing.data}
+          currency={storeCurrency}
           busy={approveMut.isPending || rejectMut.isPending}
           onApprove={viewing.onApprove}
           onPass={viewing.onPass}

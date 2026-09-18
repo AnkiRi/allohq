@@ -3,12 +3,12 @@
 import { cn } from "@allohq/ui";
 import { OpTag, type OpTagKind } from "./OpTag";
 import { StreamOutput, StreamRow, type StreamTick } from "./StreamOutput";
-import { formatINR } from "./MetricReadout";
+import { formatStoreCurrency } from "./MetricReadout";
 
 // ---------------------------------------------------------------------------
 // DecisionCard — joon's decision in operator language. A one-line decision
 // (sans prose), a short mono reasoning block (what it found / held back /
-// drafted), an OpTag, an estimated ₹ impact, and inline Approve / Pass.
+// drafted), an OpTag, an estimated impact, and inline Approve / Pass.
 // Calm, not busy.
 // ---------------------------------------------------------------------------
 
@@ -36,8 +36,9 @@ export interface DecisionCardProps {
   reasoning?: DecisionReasonLine[];
   /** Operator pattern tag(s). */
   tags?: OpTagKind[];
-  /** Estimated impact in ₹ (en-IN). Omitted if undefined/null. */
+  /** Estimated impact in the connected store's currency. Omitted if undefined/null. */
   impact?: number | null;
+  currency: string;
   /** Track C — the predicted consequence joon commits to before acting. */
   prediction?: DecisionPrediction | null;
   /** Open the full draft / decision detail before deciding. */
@@ -55,6 +56,7 @@ export function DecisionCard({
   reasoning,
   tags,
   impact,
+  currency,
   prediction,
   onView,
   onApprove,
@@ -77,7 +79,7 @@ export function DecisionCard({
           ))}
           {impact != null && impact > 0 && (
             <span className="ml-auto font-mono text-[12px] text-[hsl(var(--accent))] tabular-nums">
-              ~{formatINR(impact)}
+              ~{formatStoreCurrency(impact, currency)}
             </span>
           )}
         </div>
@@ -124,7 +126,7 @@ export function DecisionCard({
             <div>
               <span className="text-[hsl(var(--accent))]">↗ upside</span>{" "}
               expected recovery{" "}
-              <b className="text-foreground">{formatINR(prediction.upsideRevenue)}</b>{" "}
+              <b className="text-foreground">{formatStoreCurrency(prediction.upsideRevenue, currency)}</b>{" "}
               · ~<b className="text-foreground">{prediction.liftPct}%</b>{" "}
               incremental lift vs control
             </div>
