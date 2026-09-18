@@ -929,6 +929,25 @@ Acceptance:
 Outcome: customer intelligence becomes visible and explainable without forcing merchants to
 understand state-engine internals or render enormous audiences.
 
+Implementation status (18 September 2026): **workspace migration implemented; deployed-data
+verification remains**.
+
+- Customers now opens as a scan-first audience table with four reconciled metrics, search,
+  lifecycle filters, pagination, reachability and direct profile access;
+- Audience, States, Segments, Left alone and Product graph now share one persistent local
+  navigation model without changing their existing URLs or deep links;
+- the state view preserves independent lifecycle, purchase-cycle and discount dimensions,
+  cohort drafting, transition digests, search, filters and pagination;
+- deliberately-left-alone customers remain a campaign-context decision, gain server-backed
+  customer search and retain reason, active-policy count, reconsideration timing and profile
+  evidence;
+- customer profiles retain the recommendation, six-dimensional state, RFM, LTV, orders,
+  timeline and complete audience-decision history while joining the same workspace;
+- the product graph retains rebuild, approve, pin, block and campaign-use actions, adds summary
+  metrics and now collapses to readable evidence blocks instead of a desktop grid on mobile;
+- products and orders remain read-only evidence inside customer intelligence rather than
+  becoming a second ecommerce administration surface.
+
 Required work:
 
 - unify customer list, state explorer, dynamic segments and `Left alone by Joon` under a clear

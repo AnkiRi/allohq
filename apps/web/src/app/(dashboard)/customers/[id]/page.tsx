@@ -4,10 +4,12 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Tag, ShoppingBag, BarChart2, Sparkles, Send } from "lucide-react";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { ReasoningReveal, type ReasoningStory } from "@/components/console/ReasoningReveal";
 import { formatINR } from "@/components/console";
+import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -206,6 +208,7 @@ export default function CustomerDetailPage() {
   const id = params.id as string;
   const { data: customer, isLoading } = trpc.customers.getById.useQuery({ id });
   const { submit: submitToJoon } = useAlloAI();
+  const [profileView, setProfileView] = useState<"overview" | "history">("overview");
   const { data: decisionHistory } = (trpc.customers.decisionHistory as any).useQuery({
     customerId: id,
     limit: 100,
@@ -225,7 +228,7 @@ export default function CustomerDetailPage() {
       <div className="space-y-6">
         <div className="glass-skeleton h-8 w-48 rounded" />
         <div className="glass-skeleton h-64 rounded-xl" />
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid gap-6 lg:grid-cols-2">
           <div className="glass-skeleton h-72 rounded-xl" />
           <div className="glass-skeleton h-72 rounded-xl" />
         </div>
@@ -272,11 +275,12 @@ export default function CustomerDetailPage() {
 
   return (
     <motion.div
-      className="space-y-6"
+      className="mx-auto max-w-7xl space-y-6"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
+      <CustomerWorkspaceNav />
       {/* ── Profile Card ── */}
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <Link
@@ -359,10 +363,16 @@ export default function CustomerDetailPage() {
         </div>
       </motion.div>
 
+      <div className="flex w-fit gap-1 rounded-xl bg-[var(--surface-soft)] p-1" role="tablist" aria-label="Customer profile views">
+        <button role="tab" aria-selected={profileView === "overview"} onClick={() => setProfileView("overview")} className={`rounded-lg px-4 py-2 text-[13px] font-medium ${profileView === "overview" ? "bg-[var(--surface)] shadow-sm" : "text-muted-foreground"}`}>Overview</button>
+        <button role="tab" aria-selected={profileView === "history"} onClick={() => setProfileView("history")} className={`rounded-lg px-4 py-2 text-[13px] font-medium ${profileView === "history" ? "bg-[var(--surface)] shadow-sm" : "text-muted-foreground"}`}>History and evidence</button>
+      </div>
+
       {/* ── What joon noticed about THIS person ── leads the page, right after
           who they are. The ONE shared reasoning-reveal: what joon saw, the move
           (or the deliberate restraint), predicted upside + named downside +
           confidence. Estimate until control data backs it. ── */}
+      {profileView === "overview" && <>
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="w-4 h-4 text-[hsl(var(--accent))]" />
@@ -452,7 +462,7 @@ export default function CustomerDetailPage() {
       )}
 
       {/* ── RFM + LTV ── */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* RFM Card */}
         <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
           <h2 className="section-header accent-bar-left text-[13px] mb-6">RFM analysis</h2>
@@ -621,7 +631,10 @@ export default function CustomerDetailPage() {
         </motion.div>
       </div>
 
+      </>}
+
       {/* ── Customer Timeline ── */}
+      {profileView === "history" && <>
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <h2 className="section-header accent-bar-left text-[13px] mb-6">Timeline</h2>
         <div className="relative pl-6">
@@ -817,6 +830,7 @@ export default function CustomerDetailPage() {
           </table>
         )}
       </motion.div>
+      </>}
     </motion.div>
   );
 }

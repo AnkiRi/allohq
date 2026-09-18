@@ -138,6 +138,7 @@ export const customersRouter = router({
       z.object({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(25),
+        search: z.string().trim().max(120).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -160,7 +161,21 @@ export const customersRouter = router({
         rows.push(decision);
         byCustomer.set(decision.customerId, rows);
       }
-      const customerIds = [...byCustomer.keys()];
+      let customerIds = [...byCustomer.keys()];
+      if (input.search) {
+        const matches = await ctx.prisma.customer.findMany({
+          where: {
+            id: { in: customerIds },
+            OR: [
+              { email: { contains: input.search, mode: "insensitive" } },
+              { firstName: { contains: input.search, mode: "insensitive" } },
+              { lastName: { contains: input.search, mode: "insensitive" } },
+            ],
+          },
+          select: { id: true },
+        });
+        customerIds = matches.map((customer) => customer.id);
+      }
       const total = customerIds.length;
       const pageIds = customerIds.slice((input.page - 1) * input.limit, input.page * input.limit);
       const customers = await ctx.prisma.customer.findMany({

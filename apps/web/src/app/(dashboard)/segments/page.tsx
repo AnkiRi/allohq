@@ -6,12 +6,13 @@ import { Users, ArrowUpRight, Plus, ShoppingCart, Layers, Trash2, Loader2 } from
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import {
-  ConsoleFrame,
   StreamOutput,
   StreamRow,
   MetricReadout,
   formatINR,
 } from "@/components/console";
+import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
+import { PageHeader, Surface } from "@/components/ui/AppPrimitives";
 
 type Tab = "rfm" | "baskets";
 
@@ -100,43 +101,33 @@ export default function SegmentsPage() {
   );
 
   return (
-    <div className="space-y-6 w-full max-w-4xl mx-auto">
-      {/* Heading — prose, no motion */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
-            The base
-          </h1>
-          <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-            How joon reads your customers, grouped by how they shop, and what
-            they tend to buy together.
-          </p>
-        </div>
-        <Link
+    <div className="space-y-6 w-full max-w-7xl mx-auto">
+      <PageHeader title="Segments" description="Explore live customer cohorts and the basket patterns Joon can use when preparing relevant campaigns." actions={<Link
           href="/segments/new"
-          className="flex-shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card text-foreground font-mono text-[12px] hover:border-muted-foreground/40 transition-colors"
+          className="app-attention-button inline-flex min-h-9 items-center gap-2 px-3.5 text-[12px] font-medium"
         >
           <Plus className="w-3.5 h-3.5" />
-          new segment
-        </Link>
-      </div>
+          New segment
+        </Link>} />
+
+      <CustomerWorkspaceNav />
 
       {/* Tab switcher — operator chips */}
       <div className="flex gap-1 bg-card border border-border rounded-lg p-1 w-fit">
         <button
           onClick={() => setActiveTab("rfm")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[12px] lowercase transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium transition-colors ${
             activeTab === "rfm"
               ? "bg-background text-foreground"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          rfm segments
+          Customer segments
         </button>
         <button
           onClick={() => setActiveTab("baskets")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md font-mono text-[12px] lowercase transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium transition-colors ${
             activeTab === "baskets"
               ? "bg-background text-foreground"
               : "text-muted-foreground hover:text-foreground"
@@ -154,7 +145,7 @@ export default function SegmentsPage() {
 
       {/* RFM Segments tab */}
       {activeTab === "rfm" && (
-        <ConsoleFrame title="joon · segment view">
+        <Surface className="p-5">
           {/* Status line — pure counts. The "largest" and "watch" framing lives
               in the warm-voice stream just below, so it isn't said twice. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
@@ -328,12 +319,12 @@ export default function SegmentsPage() {
               </p>
             </div>
           )}
-        </ConsoleFrame>
+        </Surface>
       )}
 
       {/* Basket Patterns tab */}
       {activeTab === "baskets" && (
-        <ConsoleFrame title="joon · basket patterns">
+        <Surface className="p-5">
           {basketsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -436,7 +427,7 @@ export default function SegmentsPage() {
               </p>
             </div>
           )}
-        </ConsoleFrame>
+        </Surface>
       )}
     </div>
   );

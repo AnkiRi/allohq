@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
+import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
+import { MetricStrip, PageHeader } from "@/components/ui/AppPrimitives";
 
 const LIFECYCLE = [
   "visitor",
@@ -153,48 +155,15 @@ export default function CustomerStatesPage() {
     .join(", ");
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6">
-      <header className="space-y-3">
-        <Link
-          href="/customers"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Customers
-        </Link>
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <h1 className="font-serif text-[26px] font-semibold tracking-[-0.02em] text-foreground">
-              Customer states
-            </h1>
-            <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
-              Joon keeps each dimension independent, updates profiles when evidence changes, and
-              revisits time-based states when they are due.
-            </p>
-          </div>
-          {overview.data && (
-            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border text-xs">
-              <div className="bg-card px-3 py-2">
-                <span className="block font-mono font-medium text-foreground">
-                  {overview.data.queue.due.toLocaleString("en-IN")}
-                </span>
-                <span className="text-[10px] text-muted-foreground">due</span>
-              </div>
-              <div className="bg-card px-3 py-2">
-                <span className="block font-mono font-medium text-foreground">
-                  {overview.data.queue.updatedLastHour.toLocaleString("en-IN")}
-                </span>
-                <span className="text-[10px] text-muted-foreground">updated · 1h</span>
-              </div>
-              <div className="bg-card px-3 py-2">
-                <span className="block font-mono font-medium text-foreground">
-                  {overview.data.queue.failed.toLocaleString("en-IN")}
-                </span>
-                <span className="text-[10px] text-muted-foreground">retrying</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
+    <main className="mx-auto w-full max-w-7xl space-y-6">
+      <PageHeader title="Customer states" description="Independent signals update as orders, engagement and time change. Campaign context still decides whether each customer is a candidate." />
+      <CustomerWorkspaceNav />
+      {overview.data && <MetricStrip items={[
+        { label: "Profiles", value: overview.data.total.toLocaleString("en-IN") },
+        { label: "Due for evaluation", value: overview.data.queue.due.toLocaleString("en-IN") },
+        { label: "Updated in the last hour", value: overview.data.queue.updatedLastHour.toLocaleString("en-IN") },
+        { label: "Retrying", value: overview.data.queue.failed.toLocaleString("en-IN") },
+      ]} />}
 
       {overview.data && (
         <>

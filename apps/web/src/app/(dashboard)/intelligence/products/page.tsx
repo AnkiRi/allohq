@@ -5,6 +5,8 @@ import { GitBranch, RefreshCw, Check, Ban, Pin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
+import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
+import { MetricStrip, PageHeader } from "@/components/ui/AppPrimitives";
 
 const TYPES = ["all", "cross_sell", "upsell", "replenishment", "bundle", "substitute"] as const;
 
@@ -27,27 +29,21 @@ export default function ProductGraphPage() {
   });
   const rows = query.data ?? [];
   return (
-    <div className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-decision">
-            joon · merchandising intelligence
-          </p>
-          <h1 className="mt-1 text-[24px] font-serif font-semibold">Product graph</h1>
-          <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">
-            What customers buy together, what they buy next, when they replenish, and which upgrades
-            you have approved.
-          </p>
-        </div>
-        <button
+    <main className="mx-auto w-full max-w-7xl space-y-6">
+      <PageHeader title="Product graph" description="See what customers buy together, what tends to come next and which relationships Joon may use for cross-sell, replenishment or upgrades." actions={<button
           disabled={!storeId || rebuild.isPending}
           onClick={() => storeId && rebuild.mutate({ storeId })}
           className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh evidence
-        </button>
-      </header>
+        </button>} />
+      <CustomerWorkspaceNav />
+      <MetricStrip items={[
+        { label: "Relationships", value: rows.length.toLocaleString("en-IN") },
+        { label: "Approved", value: rows.filter((row: any) => row.status === "approved").length.toLocaleString("en-IN") },
+        { label: "Pinned", value: rows.filter((row: any) => row.pinned).length.toLocaleString("en-IN") },
+      ]} />
       <div className="flex flex-wrap gap-2">
         {TYPES.map((item) => (
           <button
@@ -60,7 +56,7 @@ export default function ProductGraphPage() {
         ))}
       </div>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="grid grid-cols-[1.4fr_32px_1.4fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+        <div className="hidden grid-cols-[1.2fr_24px_1.2fr_.8fr_1.5fr_auto] gap-3 border-b border-border bg-[var(--surface-soft)] px-4 py-2 text-[12px] text-muted-foreground lg:grid">
           <span>From</span>
           <span></span>
           <span>To</span>
@@ -82,11 +78,11 @@ export default function ProductGraphPage() {
           rows.map((row: any) => (
             <div
               key={row.id}
-              className="grid grid-cols-[1.4fr_32px_1.4fr_1fr_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+              className="grid gap-3 border-b border-border px-4 py-4 last:border-0 lg:grid-cols-[1.2fr_24px_1.2fr_.8fr_1.5fr_auto] lg:items-center"
             >
-              <span className="text-sm font-medium">{row.source?.title ?? "Unknown product"}</span>
-              <span className="text-muted-foreground">→</span>
-              <span className="text-sm font-medium">{row.target?.title ?? "Unknown product"}</span>
+              <div><span className="text-[11px] text-muted-foreground lg:hidden">From</span><span className="block text-sm font-medium">{row.source?.title ?? "Unknown product"}</span></div>
+              <span className="hidden text-muted-foreground lg:block">→</span>
+              <div><span className="text-[11px] text-muted-foreground lg:hidden">Recommended next</span><span className="block text-sm font-medium">{row.target?.title ?? "Unknown product"}</span></div>
               <div>
                 <span className="rounded bg-muted px-2 py-1 text-[11px]">
                   {row.relationshipType.replace("_", " ")}
@@ -104,7 +100,7 @@ export default function ProductGraphPage() {
                   confidence
                 </p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 <button
                   title="Approve"
                   onClick={() => update.mutate({ storeId, id: row.id, status: "approved" })}
@@ -141,6 +137,6 @@ export default function ProductGraphPage() {
           ))
         )}
       </div>
-    </div>
+    </main>
   );
 }

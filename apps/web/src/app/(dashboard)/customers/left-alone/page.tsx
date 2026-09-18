@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { ConsoleFrame } from "@/components/console";
+import { CustomerWorkspaceNav } from "@/components/customers/CustomerWorkspaceNav";
+import { PageHeader } from "@/components/ui/AppPrimitives";
 
 function nameOf(customer: { firstName: string | null; lastName: string | null; email: string }) {
   return [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email;
@@ -12,9 +14,11 @@ function nameOf(customer: { firstName: string | null; lastName: string | null; e
 
 export default function LeftAlonePage() {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
   const { data, isLoading, error } = (trpc.customers.leftAlone as any).useQuery({
     page,
     limit: 25,
+    search: search || undefined,
   }) as {
     data?: {
       customers: Array<{
@@ -34,24 +38,11 @@ export default function LeftAlonePage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="space-y-3">
-        <Link
-          href="/customers"
-          className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Customers
-        </Link>
-        <div>
-          <h1 className="font-serif text-[26px] font-semibold tracking-[-0.02em] text-foreground">
-            Left alone by Joon
-          </h1>
-          <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted-foreground">
-            Customers Joon deliberately kept out of a particular campaign. They can return when
-            their state changes, and may still suit a different message.
-          </p>
-        </div>
-      </div>
+    <main className="mx-auto w-full max-w-7xl space-y-6">
+      <PageHeader title="Left alone by Joon" description="These are deliberate campaign decisions, not permanent labels. Each customer can return when their evidence, timing or campaign context changes." />
+      <CustomerWorkspaceNav />
+
+      <div className="relative max-w-sm"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search customers left alone" className="h-9 w-full rounded-lg border border-border bg-[var(--surface)] pl-9 pr-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div>
 
       <ConsoleFrame title="joon · current restraint decisions">
         {isLoading ? (
