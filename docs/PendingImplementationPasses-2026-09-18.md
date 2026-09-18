@@ -978,6 +978,26 @@ Acceptance:
 Outcome: one coherent campaign workspace replaces the current long sequence of repeated
 sections while retaining every control, explanation, override and audit record.
 
+Implementation status (18 September 2026): **campaign-detail workspace implemented; deployed
+campaign-state verification remains**.
+
+- anchor links over one long document are replaced by durable Overview, Message, Audience,
+  Delivery, Results and Receipt work modes;
+- Overview leads with four reconciled campaign facts and keeps campaign identity, status and
+  primary approval/scheduling actions visible;
+- Message contains the rendered email, full-preview control and editor link;
+- Audience retains the complete requested → available → deliberately left alone → candidate →
+  control → treatment equation, grouped review drawer, offer override, full-price alternative,
+  all merchant audience overrides, immutable exclusions and preview assignments;
+- Delivery exposes recipient, delivery-group, timezone, quiet-hour and evidence-source timing
+  information, while scheduled campaigns retain edit and explicit send-now override behavior;
+- Results contains delivery engagement, attribution and control evidence without repeating it
+  across operational modes;
+- Receipt contains the decision trace, while destructive draft deletion moves out of the
+  primary action row into the overflow menu;
+- no campaign mutation, safety gate, preview, alternative link, discount-code lifecycle or
+  causal evidence was removed.
+
 Required work:
 
 - organize campaign detail into stable modes such as Overview, Message, Audience, Delivery,

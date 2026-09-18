@@ -57,6 +57,7 @@ export default function CampaignDetailPage() {
   const [offerOverrideReason, setOfferOverrideReason] = useState("");
   const [showTimingOverride, setShowTimingOverride] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
+  const [activeSection, setActiveSection] = useState<"overview" | "message" | "audience" | "delivery" | "results" | "receipt">("overview");
   const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
     { id: campaignId },
     {
@@ -474,9 +475,17 @@ export default function CampaignDetailPage() {
       ]
     : [];
   const audienceReviewCount = audienceReviewGroups.reduce((sum, group) => sum + group.count, 0);
+  const campaignSections = (["overview", "message", "audience", "delivery", "results", "receipt"] as const).filter(
+    (section) => section !== "audience" || campaign.status === "draft" || campaign.status === "scheduled"
+  );
+  useEffect(() => {
+    if (activeSection === "audience" && campaign.status !== "draft" && campaign.status !== "scheduled") {
+      setActiveSection("overview");
+    }
+  }, [activeSection, campaign.status]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/campaigns" className="p-2 rounded-lg hover:bg-muted transition-colors">
@@ -605,33 +614,15 @@ export default function CampaignDetailPage() {
               {cancelMut.isPending ? "Cancelling…" : "Cancel"}
             </button>
           )}
-          {campaign.status === "draft" && (
-            <button
-              onClick={() => {
-                if (window.confirm(`Delete the draft "${campaign.name}"? This can't be undone.`)) {
-                  deleteMut.mutate({ id: campaignId });
-                }
-              }}
-              disabled={deleteMut.isPending}
-              className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-xs font-sans text-muted-foreground hover:border-[var(--color-urgent)] hover:text-[var(--color-urgent)] disabled:opacity-50 transition-all"
-            >
-              {deleteMut.isPending ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5" />
-              )}
-              {deleteMut.isPending ? "Deleting…" : "Delete"}
-            </button>
-          )}
+          {campaign.status === "draft" && <details className="relative"><summary className="list-none rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground">More</summary><div className="absolute right-0 z-30 mt-2 min-w-44 rounded-xl border border-border bg-[var(--surface)] p-1 shadow-lg"><button onClick={() => { if (window.confirm(`Delete the draft "${campaign.name}"? This can't be undone.`)) deleteMut.mutate({ id: campaignId }); }} disabled={deleteMut.isPending} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--risk)] hover:bg-[var(--risk-soft)] disabled:opacity-50">{deleteMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}{deleteMut.isPending ? "Deleting…" : "Delete draft"}</button></div></details>}
         </div>
       </div>
 
-      <nav className="app-tab-bed sticky top-0 z-20 max-w-full overflow-x-auto" aria-label="Campaign sections">
-        <a className="app-tab inline-flex items-center" href="#overview">Overview</a>
-        {(campaign.status === "draft" || campaign.status === "scheduled") && <a className="app-tab inline-flex items-center" href="#audience">Audience</a>}
-        <a className="app-tab inline-flex items-center" href="#evidence">Evidence</a>
-        <a className="app-tab inline-flex items-center" href="#creative">Creative</a>
+      <nav className="app-tab-bed sticky top-0 z-20 max-w-full overflow-x-auto" aria-label="Campaign workspace" role="tablist">
+        {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className={`app-tab inline-flex items-center capitalize ${activeSection === section ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{section}</button>)}
       </nav>
+
+      {activeSection === "overview" && <section className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Campaign summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Status</p><p className="mt-1 text-[20px] font-medium capitalize">{campaign.status.replaceAll("_", " ")}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Would receive</p><p className="mt-1 font-mono text-[20px]">{(stats?.holdout.treatmentAssigned ?? dryRun?.estimatedTreatment ?? 0).toLocaleString("en-IN")}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Attributed orders</p><p className="mt-1 font-mono text-[20px]">{stats?.attributedOrders.toLocaleString() ?? "0"}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Attributed revenue</p><p className="mt-1 font-mono text-[20px]">{money(stats?.attributedRevenue ?? 0)}</p></div></section>}
 
       <Dialog.Root open={showApproval} onOpenChange={setShowApproval}>
         <Dialog.Portal>
@@ -712,7 +703,7 @@ export default function CampaignDetailPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      {awaitingDelivery && (
+      {activeSection === "delivery" && awaitingDelivery && (
         <section
           className="rounded-xl border border-border bg-card px-5 py-5 sm:px-6"
           aria-labelledby="delivery-plan-title"
@@ -808,8 +799,10 @@ export default function CampaignDetailPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+      {activeSection === "delivery" && !awaitingDelivery && <section className="app-surface p-5 sm:p-6"><h2 className="text-[18px] font-medium">Delivery plan</h2><p className="mt-1 text-[14px] text-muted-foreground">Review when this campaign leaves Joon and what evidence supports that timing.</p><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><p className="text-[12px] text-muted-foreground">Recipients</p><p className="mt-1 font-mono text-[18px]">{(timingPreview?.recipients ?? stats?.holdout.treatmentAssigned ?? dryRun?.estimatedTreatment ?? 0).toLocaleString("en-IN")}</p></div><div><p className="text-[12px] text-muted-foreground">Delivery groups</p><p className="mt-1 font-mono text-[18px]">{timingPreview?.cohortCount ?? "—"}</p></div><div><p className="text-[12px] text-muted-foreground">Timezones</p><p className="mt-1 font-mono text-[18px]">{timingPreview?.timezoneCount ?? "—"}</p></div><div><p className="text-[12px] text-muted-foreground">Bounced</p><p className="mt-1 font-mono text-[18px]">{stats?.bounceCount.toLocaleString() ?? "0"}</p></div></div>{dominantTimingCohort ? <p className="mt-5 border-t border-border pt-4 text-[14px]">Expected window: {timingDateLabel} · {timingWindowLabel(dominantTimingCohort.window)} {dominantTimingCohort.timezone}. <span className="text-muted-foreground">Evidence source: {dominantTimingCohort.source}; {Math.round(dominantTimingCohort.confidence * 100)}% confidence.</span></p> : campaign.sentAt ? <p className="mt-5 border-t border-border pt-4 text-[14px]">Delivery began {new Date(campaign.sentAt).toLocaleString()}. <span className="text-muted-foreground">Per-recipient delivery outcomes remain in Results and the immutable receipt.</span></p> : null}</section>}
+
+      {/* Results */}
+      {activeSection === "results" && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
         {[
           {
             icon: Mail,
@@ -856,9 +849,9 @@ export default function CampaignDetailPage() {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
 
-      {stats?.holdout.experimentId && (
+      {activeSection === "results" && stats?.holdout.experimentId && (
         <section
           className="border border-border rounded-xl bg-card px-5 py-5 sm:px-6"
           aria-labelledby="holdout-result-title"
@@ -921,7 +914,7 @@ export default function CampaignDetailPage() {
       )}
 
       {/* Campaign details */}
-      <div className="app-surface scroll-mt-24 p-5 sm:p-6" id="overview">
+      <div className={`${activeSection === "overview" ? "block" : "hidden"} app-surface p-5 sm:p-6`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-px h-6 bg-secondary" />
           <h2 className="text-[13px] font-bold text-foreground font-serif">Details</h2>
@@ -952,7 +945,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {(campaign.status === "draft" || campaign.status === "scheduled") && (
-        <div className="app-surface scroll-mt-24 p-5 sm:p-6" id="audience">
+        <div className={`${activeSection === "audience" ? "block" : "hidden"} app-surface p-5 sm:p-6`}>
           <div className="flex items-start justify-between gap-6 mb-5">
             <div>
               <p className="text-[10px] uppercase tracking-[1px] font-bold text-muted-foreground">
@@ -1658,13 +1651,13 @@ export default function CampaignDetailPage() {
       )}
 
       {/* How joon decided — the moat, made legible */}
-      <div id="evidence" className="scroll-mt-24"><DecisionTracePanel
+      <div className={activeSection === "receipt" ? "block" : "hidden"}><DecisionTracePanel
         campaignId={campaignId}
         preview={dryRun ? { treatmentCount: dryRun.estimatedTreatment, controlCount: dryRun.estimatedControl, controlRate: dryRun.measurement.holdoutRate } : undefined}
       /></div>
 
       {/* Email preview — full width */}
-      <div className="app-surface scroll-mt-24 overflow-hidden" id="creative">
+      <div className={`${activeSection === "message" ? "block" : "hidden"} app-surface overflow-hidden`}>
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-px h-6 bg-secondary" />
