@@ -85,6 +85,7 @@ export const autonomyRouter = router({
         category: z.string().optional(),
         limit: z.number().min(1).max(100).optional(),
         offset: z.number().min(0).optional(),
+        cursor: z.number().min(0).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -94,8 +95,24 @@ export const autonomyRouter = router({
         status: input.status,
         category: input.category,
         limit: input.limit,
-        offset: input.offset,
+        offset: input.cursor ?? input.offset,
       });
+      const [statusGroups, pendingAggregate, pendingRows] = await Promise.all([
+        ctx.prisma.actionQueue.groupBy({
+          by: ["status"],
+          where: { storeId: input.storeId },
+          _count: { _all: true },
+        }),
+        ctx.prisma.actionQueue.aggregate({
+          where: { storeId: input.storeId, status: ActionStatus.PENDING },
+          _sum: { estimatedRevenue: true },
+        }),
+        ctx.prisma.actionQueue.findMany({
+          where: { storeId: input.storeId, status: ActionStatus.PENDING },
+          select: { id: true },
+          orderBy: [{ urgencyScore: "desc" }, { createdAt: "desc" }],
+        }),
+      ]);
 
       // Track C: derive store-level calibration ONCE from real control data
       // (Track B). It flips each prediction from "estimate" to "calibrated"
@@ -153,13 +170,37 @@ export const autonomyRouter = router({
           targetSegment,
           campaignName: (payload.campaignName as string) ?? null,
           subjectLine: (payload.subjectLine as string) ?? null,
+          offer:
+            typeof payload.offer === "string"
+              ? payload.offer
+              : typeof payload.discountCode === "string"
+                ? payload.discountCode
+                : typeof payload.discount === "string"
+                  ? payload.discount
+                  : null,
+          scheduledAt:
+            typeof payload.scheduledAt === "string"
+              ? payload.scheduledAt
+              : typeof payload.sendAt === "string"
+                ? payload.sendAt
+                : null,
           channel,
           products:
             (payload.products as Array<{ name: string; imageUrl: string; price: number }>) ?? [],
         };
       });
 
-      return { actions: enrichedActions, total: result.total };
+      return {
+        actions: enrichedActions,
+        total: result.total,
+        statusCounts: Object.fromEntries(statusGroups.map((group) => [group.status, group._count._all])),
+        pendingEstimatedRevenue: pendingAggregate._sum.estimatedRevenue ?? 0,
+        pendingActionIds: pendingRows.map((row) => row.id),
+        nextCursor:
+          (input.cursor ?? input.offset ?? 0) + result.actions.length < result.total
+            ? (input.cursor ?? input.offset ?? 0) + result.actions.length
+            : null,
+      };
     }),
 
   /** Get a single action by ID */

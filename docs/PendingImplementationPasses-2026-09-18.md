@@ -774,9 +774,11 @@ Support two deliberately staged operating envelopes:
 
 ## Pass 11 — Product-wide UX simplification without capability loss
 
-Status: eight controlled phases, 11A–11H. Phase 11A is complete; 11B and 11E have an initial
-layout pass but are not complete against their acceptance criteria; 11C, 11D, 11F, 11G and
-11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
+Status: eight controlled phases, 11A–11H. Phase 11A is complete. Phase 11B now has its
+scan-first Today structure but still needs notification/context hardening. Phase 11C now has
+its master-detail Decisions and Activity workspaces and awaits production-data verification.
+Phase 11E has an initial layout pass but is not complete against its acceptance criteria; 11D,
+11F, 11G and 11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
 and benchmark routes” followed by “remaining routes”; they do not replace this eight-phase
 checklist. This programme is a
 representation and interaction redesign, not a product-scope reduction. The current build is
@@ -883,6 +885,21 @@ Acceptance:
 - no feature is available only through prose in a generic chatbot response.
 
 ### Phase 11C — Decisions and Activity as master-detail workspaces
+
+Implementation status on 18 September:
+
+- Decisions now provides Needs you, Completed, Passed/expired and All views over the complete
+  action history rather than querying only pending work;
+- search, compact queue rows and a persistent inspector expose audience, offer, delivery,
+  expected value, confidence, expiry, evaluation time and artifact links without card walls;
+- approve, pass, approve-all and pass-all retain the existing mutations and exact-artifact
+  routing;
+- Activity now separates Needs you, Delivery and Analysis, keeps raw metadata in the receipt
+  and links back to the decision or created artifact;
+- identical recurring activity is grouped for scanning while every underlying timestamp,
+  receipt ID and metadata record remains inspectable;
+- final verification still requires a deployed workspace containing real pending, executed,
+  rejected, expired and repeated events.
 
 Outcome: decisions are reviewable work; activity is the durable audit ledger. They no longer
 read as two unrelated streams of cards and terminal rows.

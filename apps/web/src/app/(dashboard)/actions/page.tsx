@@ -1,17 +1,13 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Check, ChevronRight, Clock3, Loader2, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  ConsoleFrame,
-  StreamOutput,
-  StreamRow,
-  DecisionCard,
-  MetricReadout,
-} from "@/components/console";
-import type { OpTagKind, DecisionReasonLine, DecisionPrediction } from "@/components/console";
+import { MetricStrip, PageHeader, Surface } from "@/components/ui/AppPrimitives";
+import type { OpTagKind, DecisionPrediction } from "@/components/console";
 
 // ---------------------------------------------------------------------------
 // Action shape (autonomy.listActions) — surfaced in operator language.
@@ -34,6 +30,11 @@ interface Action {
   lastEvaluatedAt?: string | null;
   lifecycle?: string | null;
   createdAt?: string | null;
+  artifactId?: string | null;
+  artifactType?: string | null;
+  artifactStatus?: string | null;
+  offer?: string | null;
+  scheduledAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,16 +63,6 @@ function firstLine(text: string | null | undefined, max = 140): string {
   const t = text.trim();
   const sentence = t.split(/(?<=[.!?])\s/)[0] ?? t;
   return sentence.length > max ? sentence.slice(0, max) + "…" : sentence;
-}
-
-// Remainder of a reasoning blob after the first sentence.
-function restLines(text: string | null | undefined, max = 160): string {
-  if (!text) return "";
-  const t = text.trim();
-  const parts = t.split(/(?<=[.!?])\s/);
-  const rest = parts.slice(1).join(" ").trim();
-  if (!rest) return "";
-  return rest.length > max ? rest.slice(0, max) + "…" : rest;
 }
 
 // Confidence as a warm mono readout label.
@@ -103,79 +94,6 @@ function decisionLine(action: Action): string {
   return "joon lined up something worth doing";
 }
 
-// Build the mono reasoning stream for a decision: what it found, what it held
-// back & why, what it drafted — pulled from real fields, warm voice. Never
-// repeats the headline (see decisionLine): when the headline IS the first
-// reasoning sentence, the stream starts from the rest.
-function buildReasoning(action: Action): DecisionReasonLine[] {
-  const lines: DecisionReasonLine[] = [];
-
-  // The headline already carries the first sentence when there's no campaign
-  // name; only surface it here when the headline is the campaign name instead.
-  if (action.campaignName) {
-    const found = firstLine(action.reasoning);
-    if (found) lines.push({ tick: "ok", text: found });
-  }
-
-  // who it's for / what it scanned
-  const audience = action.targetSegment?.count;
-  if (audience && audience > 0) {
-    lines.push({
-      tick: "ok",
-      text: (
-        <>
-          for <b>{audience.toLocaleString("en-IN")}</b> customers
-          {action.archetype ? <> · {action.archetype}</> : null}
-        </>
-      ),
-    });
-  }
-
-  // any deeper reasoning it drafted (the sentences after the first)
-  const rest = restLines(action.reasoning);
-  if (rest) lines.push({ tick: "ok", text: rest });
-
-  // what it drafted / staged
-  if (action.campaignName) {
-    lines.push({
-      tick: "ok",
-      text: (
-        <>
-          proposal prepared for <b>{action.campaignName}</b>; final creative is generated after
-          approval
-        </>
-      ),
-    });
-  }
-
-  // confidence + timing as a single mono data line
-  const conf = confidenceLabel(action.confidenceScore);
-  const exp = expiresIn(action.expiresAt);
-  lines.push({
-    tick: "hold",
-    text: (
-      <>
-        {conf}
-        {exp ? <> · {exp}</> : null}
-      </>
-    ),
-  });
-  if (action.lastEvaluatedAt) {
-    lines.push({
-      tick: "step",
-      text: <>last evaluated {new Date(action.lastEvaluatedAt).toLocaleString()}</>,
-    });
-  }
-  if (action.createdAt) {
-    lines.push({
-      tick: "step",
-      text: <>prepared {new Date(action.createdAt).toLocaleString()}</>,
-    });
-  }
-
-  return lines;
-}
-
 // ---------------------------------------------------------------------------
 // Decision Queue — joon's queue of decisions, in the operator console.
 // ---------------------------------------------------------------------------
@@ -183,16 +101,22 @@ function buildReasoning(action: Action): DecisionReasonLine[] {
 export default function ActionsPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [view, setView] = useState<"pending" | "completed" | "passed" | "all">("pending");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
 
-  const { data, isLoading } = (trpc as any).autonomy.listActions.useQuery(
-    { storeId, status: "pending", limit: 50 },
-    { enabled: !!storeId, refetchInterval: 15000 }
-  ) as { data: { actions: Action[]; total: number } | undefined; isLoading: boolean };
+  const actionsQuery = (trpc as any).autonomy.listActions.useInfiniteQuery(
+    { storeId, limit: 100 },
+    { enabled: !!storeId, refetchInterval: 15000, getNextPageParam: (lastPage: { nextCursor: number | null }) => lastPage.nextCursor ?? undefined }
+  ) as { data: { pages: Array<{ actions: Action[]; total: number; statusCounts?: Record<string, number>; pendingEstimatedRevenue?: number; pendingActionIds?: string[]; nextCursor: number | null }> } | undefined; isLoading: boolean; hasNextPage?: boolean; isFetchingNextPage?: boolean; fetchNextPage: () => void };
+  const { isLoading } = actionsQuery;
+  const summary = actionsQuery.data?.pages[0];
 
   const utils = trpc.useUtils();
-  const invalidate = () => (utils as any).autonomy.listActions.invalidate({ storeId });
+  const invalidate = () => (utils as any).autonomy.listActions.invalidate();
 
   const approveMut = (trpc as any).autonomy.approveAction.useMutation({
     onSuccess: (result: { executedType?: string; resultId?: string }) => {
@@ -241,123 +165,83 @@ export default function ActionsPage() {
       toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
-  const pending = (data?.actions ?? []).filter((a) => a.status === "pending");
+  const actions = actionsQuery.data?.pages.flatMap((page) => page.actions) ?? [];
+  const pending = actions.filter((a) => a.status === "pending");
+  const completed = actions.filter((a) => ["approved", "executed"].includes(a.status));
+  const passed = actions.filter((a) => ["rejected", "expired", "failed"].includes(a.status));
+  const visible = useMemo(() => {
+    const pool = view === "pending" ? pending : view === "completed" ? completed : view === "passed" ? passed : actions;
+    const needle = query.trim().toLowerCase();
+    return needle ? pool.filter((action) => `${decisionLine(action)} ${action.reasoning ?? ""} ${action.category ?? ""}`.toLowerCase().includes(needle)) : pool;
+  }, [actions, completed, passed, pending, query, view]);
+  useEffect(() => {
+    if (!visible.length) setSelectedId(null);
+    else if (!selectedId || !visible.some((action) => action.id === selectedId)) setSelectedId(visible[0]!.id);
+  }, [selectedId, visible]);
+  const selected = visible.find((action) => action.id === selectedId) ?? null;
   const busy = approveMut.isPending || rejectMut.isPending;
   const bulkBusy = bulkApproveMut.isPending || bulkRejectMut.isPending;
 
   // Status line — total est. ₹ impact across the queue.
-  const totalImpact = pending.reduce((sum, a) => sum + (a.estimatedRevenue ?? 0), 0);
+  const totalImpact = summary?.pendingEstimatedRevenue ?? pending.reduce((sum, a) => sum + (a.estimatedRevenue ?? 0), 0);
+  const pendingCount = summary?.statusCounts?.pending ?? pending.length;
+  const completedCount = summary?.statusCounts
+    ? (summary.statusCounts.approved ?? 0) + (summary.statusCounts.executed ?? 0)
+    : completed.length;
+  const passedCount = summary?.statusCounts
+    ? (summary.statusCounts.rejected ?? 0) + (summary.statusCounts.expired ?? 0) + (summary.statusCounts.failed ?? 0)
+    : passed.length;
 
-  const handleBulkApprove = () => bulkApproveMut.mutate({ actionIds: pending.map((a) => a.id) });
+  const handleBulkApprove = () => bulkApproveMut.mutate({ actionIds: summary?.pendingActionIds ?? pending.map((a) => a.id) });
   const handleBulkReject = () =>
     bulkRejectMut.mutate({
-      actionIds: pending.map((a) => a.id),
+      actionIds: summary?.pendingActionIds ?? pending.map((a) => a.id),
       reason: "Cleared by operator",
     });
 
+  const formatMoney = (value: number | null | undefined) => `₹${Math.round(value ?? 0).toLocaleString("en-IN")}`;
+  const artifactHref = selected?.artifactId && selected.artifactType === "automation"
+    ? `/automations/${selected.artifactId}`
+    : selected?.artifactId && selected.artifactType === "campaign"
+      ? `/campaigns/${selected.artifactId}`
+      : null;
+
   return (
-    <div className="space-y-6 w-full max-w-4xl mx-auto">
-      {/* Heading — serif prose, no motion */}
-      <div>
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
-          Decision queue
-        </h1>
-        <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          What joon wants to do next, its thinking laid out, yours to approve or pass.
-        </p>
+    <div className="space-y-6">
+      <PageHeader title="Decisions" description="Review what Joon prepared, the evidence behind it and exactly what approval will create." actions={pendingCount > 1 ? <><button onClick={handleBulkReject} disabled={bulkBusy} className="min-h-10 rounded-lg border border-border bg-[var(--surface)] px-4 text-[13px] font-medium disabled:opacity-50">Pass on all</button><button onClick={handleBulkApprove} disabled={bulkBusy} className="app-attention-button min-h-10 px-4 text-[13px] font-medium disabled:opacity-50">Approve all {pendingCount}</button></> : null} />
+      <MetricStrip items={[{ label: "Needs you", value: pendingCount }, { label: "Expected value", value: formatMoney(totalImpact) }, { label: "Completed", value: completedCount }, { label: "Passed or expired", value: passedCount }]} />
+      <div className="app-tab-bed" role="tablist" aria-label="Decision views">
+        {([ ["pending", `Needs you · ${pendingCount}`], ["completed", `Completed · ${completedCount}`], ["passed", `Passed / expired · ${passedCount}`], ["all", `All · ${summary?.total ?? actions.length}`] ] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className="app-tab" onClick={() => setView(id)}>{label}</button>)}
       </div>
-
-      {/* Console frame — status line + queue summary */}
-      <ConsoleFrame title="joon · decisions">
-        {/* Status line — mono readouts. The frame's status bar already carries
-            the live lamp, so we don't repeat a second pulsing dot here. */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-4 mb-4 border-b border-border">
-          <MetricReadout label="decisions waiting" value={pending.length} />
-          {totalImpact > 0 && <MetricReadout label="est. impact" value={totalImpact} money />}
-        </div>
-
-        {/* Operator summary stream — the readouts above hold the numbers, so
-            this carries what joon did and how to act, not a restated count. */}
-        <StreamOutput aria-label="what's in the queue">
-          {isLoading ? (
-            <StreamRow tick="step">reading the queue…</StreamRow>
-          ) : pending.length > 0 ? (
-            <>
-              <StreamRow tick="ok">joon thought these through and held the rest back</StreamRow>
-              <StreamRow tick="step">
-                approve to put one live, pass to let it go ·{" "}
-                <span className="text-[hsl(var(--accent))]">ready</span>
-              </StreamRow>
-            </>
-          ) : (
-            <StreamRow tick="hold">the queue is clear</StreamRow>
-          )}
-        </StreamOutput>
-
-        {/* Operator action — approve / clear all, in mono */}
-        {pending.length > 1 && (
-          <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border">
-            <button
-              type="button"
-              onClick={handleBulkApprove}
-              disabled={bulkBusy}
-              className="font-mono text-[12px] rounded-lg px-3 py-1.5 bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] hover:opacity-90 transition-colors disabled:opacity-50"
-            >
-              approve all ({pending.length})
-            </button>
-            <button
-              type="button"
-              onClick={handleBulkReject}
-              disabled={bulkBusy}
-              className="font-mono text-[12px] rounded-lg px-3 py-1.5 border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-            >
-              pass on all
-            </button>
-          </div>
-        )}
-      </ConsoleFrame>
-
-      {/* The decisions — the primary task; the frame above is just the lay of
-          the land. A quiet mono label marks where acting begins. */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : pending.length > 0 ? (
-        <div className="space-y-3">
-          <p className="font-mono text-[11px] text-muted-foreground tracking-tight px-0.5">
-            {pending.length === 1
-              ? "one decision, yours to make"
-              : `${pending.length} decisions, top of the queue first`}
-          </p>
-          {pending.map((action) => (
-            <DecisionCard
-              key={action.id}
-              tags={actionToTags(action)}
-              impact={action.estimatedRevenue ?? null}
-              prediction={action.prediction ?? null}
-              decision={decisionLine(action)}
-              reasoning={buildReasoning(action)}
-              busy={busy}
-              onApprove={() => approveMut.mutate({ actionId: action.id })}
-              onPass={() =>
-                rejectMut.mutate({
-                  actionId: action.id,
-                  reason: "Passed from decision queue",
-                })
-              }
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border bg-card p-6">
-          <p className="font-sans text-[14px] text-foreground">Nothing waiting on you.</p>
-          <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-relaxed">
-            Drafts before sunrise, approvals over coffee. joon will have the next decision ready
-            when it&apos;s worth your okay.
-          </p>
-        </div>
-      )}
+      <div className="grid min-h-[560px] gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <Surface className="overflow-hidden">
+          <div className="border-b border-border p-3"><label className="flex min-h-10 items-center gap-2 rounded-lg border border-border bg-[var(--surface)] px-3"><Search className="h-4 w-4 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search decisions" className="min-w-0 flex-1 bg-transparent text-[14px] outline-none" /></label></div>
+          {isLoading ? <div className="flex items-center justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : visible.length ? <ul className="divide-y divide-border" role="listbox" aria-label="Decisions">{visible.map((action) => {
+            const active = action.id === selected?.id;
+            const exp = expiresIn(action.expiresAt);
+            return <li key={action.id} role="presentation"><button role="option" onClick={() => { setSelectedId(action.id); setInspectorOpen(true); }} className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-4 text-left transition-colors ${active ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]/60"}`} aria-selected={active}><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-[14px] font-medium">{decisionLine(action)}</span><span className="rounded-full bg-[var(--evidence-soft)] px-2 py-0.5 text-[11px] text-[var(--evidence)]">{action.status}</span></span><span className="mt-1 block line-clamp-2 text-[13px] leading-5 text-muted-foreground">{firstLine(action.reasoning, 150) || "Prepared for review."}</span><span className="mt-2 flex flex-wrap gap-3 text-[12px] text-muted-foreground"><span>{confidenceLabel(action.confidenceScore)}</span>{exp && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{exp}</span>}</span></span><span className="flex items-center gap-2"><span className="font-mono text-[12px] tabular-nums text-[var(--attention)]">{action.estimatedRevenue ? `~${formatMoney(action.estimatedRevenue)}` : ""}</span><ChevronRight className="h-4 w-4 text-muted-foreground" /></span></button></li>;
+          })}</ul> : <div className="px-6 py-20 text-center"><p className="text-[15px] font-medium">Nothing in this view</p><p className="mt-1 text-[13px] text-muted-foreground">Joon will place the next material decision here with its evidence.</p></div>}
+          {actionsQuery.hasNextPage && <div className="border-t border-border p-3 text-center"><button onClick={() => actionsQuery.fetchNextPage()} disabled={actionsQuery.isFetchingNextPage} className="min-h-9 rounded-lg border border-border px-4 text-[13px] font-medium disabled:opacity-50">{actionsQuery.isFetchingNextPage ? "Loading…" : "Load older decisions"}</button></div>}
+        </Surface>
+        {inspectorOpen && <button className="fixed inset-0 z-40 bg-black/25 lg:hidden" onClick={() => setInspectorOpen(false)} aria-label="Close decision inspector" />}
+        <aside className={`${inspectorOpen ? "fixed inset-x-3 bottom-3 top-20 z-50 overflow-auto" : "hidden"} lg:sticky lg:top-0 lg:z-auto lg:block lg:self-start`} aria-label="Selected decision">
+          <Surface className="overflow-hidden">{selected ? <>
+            <div className="border-b border-border p-5"><button onClick={() => setInspectorOpen(false)} className="float-right rounded-md p-1 text-muted-foreground lg:hidden" aria-label="Close inspector"><X className="h-5 w-5" /></button><div className="flex flex-wrap gap-2">{actionToTags(selected).map((tag) => <span key={tag} className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 text-[11px]">{tag.replace(/-/g, " ")}</span>)}</div><h2 className="mt-3 text-[20px] font-medium leading-7">{decisionLine(selected)}</h2><p className="mt-2 text-[13px] leading-5 text-muted-foreground">{selected.reasoning || "Joon prepared this for your review."}</p></div>
+            <dl className="divide-y divide-border text-[13px]">{[
+              ["Audience", selected.targetSegment?.count ? `${selected.targetSegment.count.toLocaleString("en-IN")} customers` : "Not specified"],
+              ["Offer", selected.offer ?? "No offer specified"],
+              ["Delivery", selected.scheduledAt ? new Date(selected.scheduledAt).toLocaleString("en-IN") : "Set when the artifact is reviewed"],
+              ["Expected value", selected.estimatedRevenue ? formatMoney(selected.estimatedRevenue) : "No estimate"],
+              ["Confidence", confidenceLabel(selected.confidenceScore)],
+              ["Prepared", selected.createdAt ? new Date(selected.createdAt).toLocaleString("en-IN") : "—"],
+              ["Last evaluated", selected.lastEvaluatedAt ? new Date(selected.lastEvaluatedAt).toLocaleString("en-IN") : "—"],
+              ["Expires", expiresIn(selected.expiresAt) ?? "No expiry"],
+            ].map(([label, value]) => <div key={label} className="grid grid-cols-[112px_1fr] gap-3 px-5 py-3"><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl>
+            {selected.prediction && <div className="border-t border-border bg-[var(--evidence-soft)]/55 p-5"><p className="text-[12px] font-medium text-[var(--evidence)]">Predicted consequence · {selected.prediction.basis === "calibrated" ? "control-backed" : "estimate"}</p><p className="mt-2 text-[13px]">Upside: {formatMoney(selected.prediction.upsideRevenue)} · Risk: {selected.prediction.downsideRiskPct}% unsubscribe or annoyance · {selected.prediction.confidence} confidence</p></div>}
+            <div className="flex flex-wrap gap-2 border-t border-border p-4">{artifactHref && <Link href={artifactHref} className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">Open artifact</Link>}{selected.status === "pending" && <><button onClick={() => rejectMut.mutate({ actionId: selected.id, reason: "Passed from decision queue" })} disabled={busy} className="min-h-10 rounded-lg border border-border px-4 text-[13px] font-medium disabled:opacity-50"><X className="mr-1 inline h-4 w-4" />Pass</button><button onClick={() => approveMut.mutate({ actionId: selected.id })} disabled={busy} className="app-attention-button min-h-10 px-4 text-[13px] font-medium disabled:opacity-50"><Check className="mr-1 inline h-4 w-4" />Approve</button></>}</div>
+          </> : <div className="p-8 text-center text-[13px] text-muted-foreground">Select a decision to inspect its evidence and consequence.</div>}</Surface>
+        </aside>
+      </div>
     </div>
   );
 }
