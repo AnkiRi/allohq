@@ -24,7 +24,7 @@ export {
   assertUnsubscribeSigningConfigured,
 } from "./unsubscribe";
 export type { UnsubscribeChannel } from "./unsubscribe";
-export { createSenderDomain, getSenderDomain, requestSenderDomainVerification, type SenderDomainProvider } from "./sender-domains";
+export { createSenderDomain, deleteSenderDomain, getSenderDomain, requestSenderDomainVerification, type SenderDomainProvider } from "./sender-domains";
 export { isTransientProviderError, withProviderRetry } from "./provider-retry";
 export { htmlToPlainText } from "./plain-text";
 export {

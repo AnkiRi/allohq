@@ -1,5 +1,6 @@
 import { Worker, Queue } from "bullmq";
-import { prisma } from "@allohq/database";
+import { randomBytes } from "node:crypto";
+import { encryptSecret, prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { checkEventTriggers } from "../utils/event-triggers";
 import { redactAcquisitionEvidence } from "../acquisition-privacy";
@@ -7,6 +8,7 @@ import { calculateCountedOrderRevenue } from "../refund-revenue";
 import { isWebhookOlderThanInstall } from "../shopify-webhook-ordering";
 import { shopify } from "@allohq/ecommerce-integrations";
 import { calculateCustomerLtv } from "@allohq/customer-intelligence";
+import { deleteSenderDomain, type SenderDomainProvider } from "@allohq/messaging";
 
 const { getShopifyAdminClient } = shopify;
 
@@ -542,10 +544,29 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
           console.log(`Ignored stale uninstall webhook for store ${store.id}`);
           break;
         }
-        await prisma.store.update({
-          where: { id: store.id },
-          data: { isActive: false },
-        });
+        await prisma.$transaction([
+          prisma.store.update({
+            where: { id: store.id },
+            data: {
+              isActive: false,
+              accessToken: encryptSecret(`uninstalled:${randomBytes(24).toString("hex")}`),
+              accessTokenExpiresAt: new Date(),
+              refreshToken: null,
+              refreshTokenExpiresAt: null,
+              tokenScopes: [],
+              emailSendingPausedAt: new Date(),
+              emailSendingPauseReason: "Shopify app uninstalled",
+            },
+          }),
+          prisma.campaign.updateMany({
+            where: { storeId: store.id, status: { in: ["scheduled", "sending"] } },
+            data: { status: "cancelled", scheduledAt: null },
+          }),
+          prisma.automation.updateMany({
+            where: { storeId: store.id, status: "active" },
+            data: { status: "paused" },
+          }),
+        ]);
         console.log(`Store ${store.id} marked inactive (app uninstalled)`);
         break;
 
@@ -609,7 +630,7 @@ async function processPrivacyWebhook(params: {
 
     if (params.topic === "shop/redact") {
       if (params.storeId) {
-        await prisma.store.delete({ where: { id: params.storeId } });
+        await permanentlyDeleteStore(params.storeId);
       }
       if (params.workspaceId) {
         const remainingStores = await prisma.store.count({
@@ -635,6 +656,61 @@ async function processPrivacyWebhook(params: {
     });
     throw error;
   }
+}
+
+async function permanentlyDeleteStore(storeId: string): Promise<void> {
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    include: { senderDomain: true },
+  });
+  if (!store) return;
+
+  if (store.senderDomain?.externalId) {
+    try {
+      await deleteSenderDomain(
+        store.senderDomain.externalId,
+        store.senderDomain.provider as SenderDomainProvider
+      );
+    } catch (error) {
+      // Privacy deletion must not be blocked by a provider outage. The failed
+      // provider cleanup is emitted to production logs for operator follow-up.
+      console.error(`Sender identity cleanup failed for redacted store ${storeId}`, error);
+    }
+  }
+
+  const [campaigns, automations] = await Promise.all([
+    prisma.campaign.findMany({ where: { storeId }, select: { templateId: true } }),
+    prisma.automation.findMany({ where: { storeId }, select: { templateIds: true } }),
+  ]);
+  const templateIds = [...new Set([
+    ...campaigns.map(({ templateId }) => templateId).filter((id): id is string => Boolean(id)),
+    ...automations.flatMap(({ templateIds: ids }) => ids),
+  ])];
+
+  await prisma.$transaction(async (tx) => {
+    await tx.orderAttribution.deleteMany({ where: { storeId } });
+    await tx.messageLog.deleteMany({ where: { storeId } });
+    await tx.customerAudienceDecision.deleteMany({ where: { storeId } });
+    await tx.consentConfirmation.deleteMany({ where: { storeId } });
+    await tx.customerSegmentHistory.deleteMany({ where: { storeId } });
+    await tx.customerLifetimeValue.deleteMany({ where: { storeId } });
+    await tx.customerMemory.deleteMany({ where: { storeId } });
+    await tx.customerTrait.deleteMany({ where: { storeId } });
+    await tx.rfmScore.deleteMany({ where: { storeId } });
+    await tx.embedding.deleteMany({ where: { storeId } });
+    await tx.agentPipelineRun.deleteMany({ where: { storeId } });
+    await tx.productSegmentMember.deleteMany({ where: { storeId } });
+    await tx.productSegment.deleteMany({ where: { storeId } });
+    await tx.basketArchetype.deleteMany({ where: { storeId } });
+    if (templateIds.length > 0) {
+      await tx.emailTemplate.deleteMany({
+        where: { id: { in: templateIds }, workspaceId: store.workspaceId },
+      });
+    }
+    await tx.campaign.deleteMany({ where: { storeId } });
+    await tx.customerSegment.deleteMany({ where: { storeId } });
+    await tx.store.delete({ where: { id: storeId } });
+  });
 }
 
 async function exportCustomerData(

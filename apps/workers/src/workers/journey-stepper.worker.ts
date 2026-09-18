@@ -54,6 +54,13 @@ export const journeyStepperWorker = new Worker<JourneyStepJobData>(
     }
     const { journeyId, customerId, storeId, automationId, stepIndex, nodes } = job.data;
 
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      select: { isActive: true, emailSendingPausedAt: true },
+    });
+    if (!store?.isActive) return { status: "store_disconnected" };
+    if (store.emailSendingPausedAt) return { status: "store_email_paused" };
+
     console.log(`Journey step ${stepIndex} for journey ${journeyId}, customer ${customerId}`);
 
     const input: JourneyStepInput = {

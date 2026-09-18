@@ -181,6 +181,8 @@ export async function handleShopifyInstall(req: IncomingMessage, res: ServerResp
         installedAt: new Date(),
         onboardingStep: 1,
         onboardingCompletedAt: null,
+        emailSendingPausedAt: null,
+        emailSendingPauseReason: null,
         // Only a genuine reinstall resets the one-time installer claim. A
         // routine scope reconnect must never promote the next staff visitor.
         ...(!existingStore?.isActive ? { shopifyInstallerClaimedAt: null } : {}),

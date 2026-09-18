@@ -12,17 +12,22 @@ import {
   Check,
   Clock,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/Toast";
 
 export default function ShopifyDetailPage() {
   const [disconnecting, setDisconnecting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncDone, setSyncDone] = useState(false);
   const [preSyncLastSyncAt, setPreSyncLastSyncAt] = useState<string | null>(null);
   const utils = trpc.useUtils();
+  const { toast } = useToast();
 
-  const { data: stores, isLoading } = trpc.stores.list.useQuery(undefined, {
+  const { data: stores, isLoading } = trpc.stores.connections.useQuery(undefined, {
     refetchInterval: isSyncing ? 3000 : false,
   });
   const store = stores?.find((s: { platform: string }) => s.platform === "shopify");
@@ -53,8 +58,27 @@ export default function ShopifyDetailPage() {
   const disconnect = trpc.stores.disconnect.useMutation({
     onSuccess: () => {
       utils.stores.list.invalidate();
+      utils.stores.connections.invalidate();
       setDisconnecting(false);
+      toast("Shopify disconnected. Joon retained your intelligence and verified sender setup.", "success");
     },
+    onError: (error) => toast(error.message || "We couldn't disconnect this store.", "error"),
+  });
+
+  const deleteStoreData = trpc.stores.deleteStoreData.useMutation({
+    onSuccess: (result) => {
+      utils.stores.list.invalidate();
+      utils.stores.connections.invalidate();
+      setDeleting(false);
+      setDeleteConfirmation("");
+      toast(
+        result.providerCleanupWarning
+          ? "Store data deleted. Sender-provider cleanup needs operator review."
+          : "Store data permanently deleted. DNS records at your DNS host were not changed.",
+        result.providerCleanupWarning ? "error" : "success"
+      );
+    },
+    onError: (error) => toast(error.message || "We couldn't delete this store's data.", "error"),
   });
 
   if (isLoading) {
@@ -102,6 +126,7 @@ export default function ShopifyDetailPage() {
   }
 
   const syncing = isSyncing || triggerSync.isPending;
+  const active = store.isActive;
 
   return (
     <div className="space-y-6">
@@ -123,7 +148,7 @@ export default function ShopifyDetailPage() {
         <div className="flex gap-2">
           <button
             onClick={() => triggerSync.mutate({ storeId: store.id })}
-            disabled={syncing}
+            disabled={syncing || !active}
             className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-primary/50 disabled:opacity-50 transition-all"
           >
             {syncing ? (
@@ -135,12 +160,28 @@ export default function ShopifyDetailPage() {
             )}
             {syncing ? "Syncing..." : syncDone ? "All synced" : "Sync now"}
           </button>
+          {active ? (
+            <button
+              onClick={() => setDisconnecting(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-[11px] font-sans text-foreground hover:border-foreground/50 transition-all"
+            >
+              <Unplug className="w-3.5 h-3.5" />
+              Disconnect
+            </button>
+          ) : (
+            <Link
+              href="/integrations"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-[11px] font-sans"
+            >
+              Reconnect Shopify
+            </Link>
+          )}
           <button
-            onClick={() => setDisconnecting(true)}
+            onClick={() => setDeleting(true)}
             className="flex items-center gap-2 px-4 py-2 border border-destructive/30 rounded-lg text-[11px] font-sans text-destructive hover:border-destructive/60 transition-all"
           >
-            <Unplug className="w-3.5 h-3.5" />
-            Disconnect
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete data
           </button>
         </div>
       </div>
@@ -218,9 +259,13 @@ export default function ShopifyDetailPage() {
               <span className="text-[13px] font-medium text-foreground font-mono">
                 {store.shopDomain}
               </span>
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans bg-[hsl(var(--success))/0.12] text-outcome">
+              <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans ${
+                active
+                  ? "bg-[hsl(var(--success))/0.12] text-outcome"
+                  : "bg-muted text-muted-foreground"
+              }`}>
                 <Check className="w-3 h-3" />
-                Active
+                {active ? "Active" : "Disconnected"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground font-sans">
@@ -283,8 +328,10 @@ export default function ShopifyDetailPage() {
               Disconnect this store?
             </h3>
             <p className="text-[11px] text-muted-foreground mb-5">
-              joon will stop syncing from {store.shopDomain}. Everything it&apos;s
-              already learned stays put.
+              Joon will immediately stop syncing and sending for {store.shopDomain}.
+              Customers, orders, campaigns, decisions and verified sender-domain setup stay
+              available for reconnection. Active automations are paused and unsent campaigns
+              are cancelled; Joon will not silently restart them later.
             </p>
             <div className="flex gap-2">
               <button
@@ -299,6 +346,44 @@ export default function ShopifyDetailPage() {
                 className="flex-1 py-2 bg-destructive text-destructive-foreground rounded-lg text-[11px] font-sans hover:bg-destructive/90 disabled:opacity-50 transition-colors"
               >
                 {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+            <h3 className="text-[16px] font-semibold text-foreground">Permanently delete store data?</h3>
+            <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+              This permanently removes customers, orders, campaigns, intelligence, history,
+              sender-domain setup and other data Joon stores for this shop. It cannot be
+              undone. Provider-side sending identity removal will be attempted, but DNS
+              records at your DNS host must be removed there.
+            </p>
+            <label className="mt-5 block text-[12px] font-medium text-foreground">
+              Type <span className="font-mono">{store.shopDomain}</span> to confirm
+            </label>
+            <input
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground outline-none focus:border-destructive"
+              autoComplete="off"
+            />
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => { setDeleting(false); setDeleteConfirmation(""); }}
+                className="flex-1 rounded-lg border border-border py-2 text-[12px] text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteStoreData.mutate({ storeId: store.id, confirmation: deleteConfirmation })}
+                disabled={deleteConfirmation !== store.shopDomain || deleteStoreData.isPending}
+                className="flex-1 rounded-lg bg-destructive py-2 text-[12px] text-destructive-foreground disabled:opacity-40"
+              >
+                {deleteStoreData.isPending ? "Deleting…" : "Delete permanently"}
               </button>
             </div>
           </div>

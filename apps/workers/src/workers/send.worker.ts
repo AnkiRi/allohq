@@ -145,6 +145,9 @@ export async function planCampaignSend(
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (!campaign.template) throw new Error(`Campaign ${campaignId} has no template`);
+  if (!campaign.store.isActive) {
+    throw new Error("Campaign blocked: store is disconnected");
+  }
   if (campaign.store.emailSendingPausedAt) {
     throw new Error(
       `Campaign blocked: store email delivery is paused (${campaign.store.emailSendingPauseReason ?? "manual or safety pause"})`
@@ -723,6 +726,9 @@ export async function deliverOne(data: DeliverOneData) {
     include: { template: true, segment: true, store: true },
   });
   if (!campaign || !campaign.template) return { skipped: true, reason: "campaign_gone" };
+  if (!campaign.store.isActive) {
+    return { skipped: true, reason: "store_disconnected" };
+  }
   if (campaign.store.emailSendingPausedAt) {
     return { skipped: true, reason: "store_email_paused" };
   }

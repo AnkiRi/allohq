@@ -41,6 +41,12 @@ export const eventReactorWorker = new Worker<EventReactJobData>(
     const { storeId, eventType, customerId, payload } = job.data;
     console.log(`[event-reactor] Processing ${eventType} for store ${storeId}`);
 
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      select: { isActive: true },
+    });
+    if (!store?.isActive) return { status: "store_disconnected" };
+
     const category = EVENT_CATEGORY_MAP[eventType];
     if (!category) {
       console.warn(`[event-reactor] Unknown event type: ${eventType}`);

@@ -88,8 +88,12 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
     // Fetch store messaging config for per-store provider selection
     const storeForConfig = await prisma.store.findUnique({
       where: { id: automation.storeId },
-      select: { messagingConfig: true, emailSendingPausedAt: true, installedAt: true },
+      select: { isActive: true, messagingConfig: true, emailSendingPausedAt: true, installedAt: true },
     });
+    if (!storeForConfig?.isActive) {
+      console.log(`[automation-runner] Store ${automation.storeId} is disconnected, skipping`);
+      return { status: "store_disconnected" };
+    }
     if (storeForConfig?.emailSendingPausedAt) {
       console.log(`[automation-runner] Store ${automation.storeId} email is paused, skipping`);
       return { status: "store_email_paused" };

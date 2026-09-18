@@ -1,4 +1,4 @@
-import { CreateConfigurationSetCommand, CreateConfigurationSetEventDestinationCommand, CreateEmailIdentityCommand, CreateTenantCommand, CreateTenantResourceAssociationCommand, GetAccountCommand, GetEmailIdentityCommand, PutEmailIdentityMailFromAttributesCommand, UpdateConfigurationSetEventDestinationCommand, UpdateReputationEntityPolicyCommand, SESv2Client, type EventType } from "@aws-sdk/client-sesv2";
+import { CreateConfigurationSetCommand, CreateConfigurationSetEventDestinationCommand, CreateEmailIdentityCommand, CreateTenantCommand, CreateTenantResourceAssociationCommand, DeleteEmailIdentityCommand, GetAccountCommand, GetEmailIdentityCommand, PutEmailIdentityMailFromAttributesCommand, UpdateConfigurationSetEventDestinationCommand, UpdateReputationEntityPolicyCommand, SESv2Client, type EventType } from "@aws-sdk/client-sesv2";
 import { sesSafeTag } from "./channels/email/ses";
 
 export class SesProvisioningService {
@@ -42,5 +42,6 @@ export class SesProvisioningService {
     return { tenantName, configurationSets, identity: domain, mailFromDomain, dkimTokens: currentIdentity.DkimAttributes?.Tokens || [] };
   }
   async domainStatus(domain: string) { return this.client.send(new GetEmailIdentityCommand({ EmailIdentity: domain })); }
+  async deleteDomain(domain: string) { return this.client.send(new DeleteEmailIdentityCommand({ EmailIdentity: domain })); }
   async maximumSendRate() { const account = await this.client.send(new GetAccountCommand({})); return account.SendQuota?.MaxSendRate || 1; }
 }

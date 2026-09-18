@@ -8,6 +8,10 @@ import {
 } from "../trpc";
 import { Queue } from "bullmq";
 import { randomBytes } from "node:crypto";
+import { TRPCError } from "@trpc/server";
+import { encryptSecret } from "@allohq/database";
+import { deleteSenderDomain, type SenderDomainProvider } from "@allohq/messaging";
+import { removeStoreJobs } from "../lib/store-lifecycle";
 
 const widgetOriginSchema = z.string().url().transform((value, ctx) => {
   const url = new URL(value);
@@ -28,11 +32,6 @@ const redisConnection = {
 };
 
 const syncQueue = new Queue("sync", { connection: redisConnection });
-const automationGenerateQueue = new Queue("automation-generate", { connection: redisConnection });
-const storeActivationQueue = new Queue("store-activation", { connection: redisConnection });
-const campaignFactoryQueue = new Queue("campaign-factory", { connection: redisConnection });
-const brandAnalysisQueue = new Queue("brand-analysis", { connection: redisConnection });
-const agentPipelineQueue = new Queue("agent-pipeline", { connection: redisConnection });
 
 export const storesRouter = router({
   listPrivacyRequests: ownerProcedure.query(async ({ ctx }) => {
@@ -103,6 +102,20 @@ export const storesRouter = router({
       orderBy: { installedAt: "desc" },
     });
     return stores;
+  }),
+
+  /** Active and disconnected commerce connections for lifecycle management. */
+  connections: ownerProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.store.findMany({
+      where: { workspaceId: ctx.workspaceId },
+      include: {
+        senderDomain: {
+          select: { domain: true, provider: true, status: true, verifiedAt: true },
+        },
+        _count: { select: { products: true, customers: true, orders: true, campaigns: true } },
+      },
+      orderBy: { installedAt: "desc" },
+    });
   }),
 
   /**
@@ -718,128 +731,142 @@ export const storesRouter = router({
       return { status: "queued" as const };
     }),
 
-  /**
-   * Disconnect a store — deletes all related data and soft-deletes the store.
-   */
+  /** Reversible safety disconnect. Store intelligence and sender setup remain. */
   disconnect: ownerStoreProcedure
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
       });
-      if (!store) throw new Error("Store not found");
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
-      // ── Kill all pending/delayed jobs for this store ──────────────────────
-      // This ensures a fresh start when the user reconnects
-      const queuesToClean = [
-        automationGenerateQueue,
-        storeActivationQueue,
-        campaignFactoryQueue,
-        brandAnalysisQueue,
-        agentPipelineQueue,
-      ];
-      for (const queue of queuesToClean) {
-        try {
-          // Remove waiting and delayed jobs
-          const waiting = await queue.getJobs(["waiting", "delayed", "active"]);
-          for (const job of waiting) {
-            const data = job.data as Record<string, unknown>;
-            if (data?.storeId === input.storeId) {
-              await job.remove().catch(() => {});
-            }
-          }
-          // Also clean failed jobs for this store
-          const failed = await queue.getJobs(["failed"]);
-          for (const job of failed) {
-            const data = job.data as Record<string, unknown>;
-            if (data?.storeId === input.storeId) {
-              await job.remove().catch(() => {});
-            }
-          }
-        } catch {
-          // Queue cleanup is best-effort
-        }
-      }
+      const [campaignIds, automationIds] = await Promise.all([
+        ctx.prisma.campaign.findMany({ where: { storeId: store.id }, select: { id: true } }),
+        ctx.prisma.automation.findMany({ where: { storeId: store.id }, select: { id: true } }),
+      ]);
 
-      // Collect template IDs tied to this store before deleting campaigns/automations
-      const storeCampaigns = await ctx.prisma.campaign.findMany({
-        where: { storeId: input.storeId },
-        select: { templateId: true },
-      });
-      const storeAutomations = await ctx.prisma.automation.findMany({
-        where: { storeId: input.storeId },
-        select: { id: true, templateIds: true, smsTemplateIds: true, whatsappTemplateIds: true, rcsTemplateIds: true },
-      });
-      const storeTemplateIds = [...new Set([
-        ...storeCampaigns.map((c) => c.templateId).filter((id): id is string => !!id),
-        ...storeAutomations.flatMap((a) => (a.templateIds as string[]) || []),
-      ])];
+      const disconnectedAt = new Date();
+      await ctx.prisma.$transaction([
+        ctx.prisma.store.update({
+          where: { id: store.id },
+          data: {
+            isActive: false,
+            accessToken: encryptSecret(`disconnected:${randomBytes(24).toString("hex")}`),
+            accessTokenExpiresAt: disconnectedAt,
+            refreshToken: null,
+            refreshTokenExpiresAt: null,
+            tokenScopes: [],
+            emailSendingPausedAt: disconnectedAt,
+            emailSendingPauseReason: "Store disconnected by merchant",
+          },
+        }),
+        ctx.prisma.campaign.updateMany({
+          where: { storeId: store.id, status: { in: ["scheduled", "sending"] } },
+          data: { status: "cancelled", scheduledAt: null },
+        }),
+        ctx.prisma.automation.updateMany({
+          where: { storeId: store.id, status: "active" },
+          data: { status: "paused" },
+        }),
+      ]);
 
-      // Delete related data in dependency order
-      await ctx.prisma.actionQueue.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.orderItem.deleteMany({
-        where: { order: { storeId: input.storeId } },
-      });
-      await ctx.prisma.order.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.customerLifetimeValue.deleteMany({
-        where: { customer: { storeId: input.storeId } },
-      });
-      await ctx.prisma.rfmScore.deleteMany({
-        where: { customer: { storeId: input.storeId } },
-      });
-      await ctx.prisma.customer.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.productVariant.deleteMany({
-        where: { product: { storeId: input.storeId } },
-      });
-      await ctx.prisma.product.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.campaign.deleteMany({ where: { storeId: input.storeId } });
+      const queueCleanup = await removeStoreJobs({
+        storeId: store.id,
+        campaignIds: new Set(campaignIds.map(({ id }) => id)),
+        automationIds: new Set(automationIds.map(({ id }) => id)),
+      }, redisConnection);
+      return {
+        success: true,
+        retained: true,
+        senderDomainRetained: true,
+        queueCleanup,
+      };
+    }),
 
-      // Clean up messaging templates tied to automations
-      const automationIds = storeAutomations.map((a) => a.id);
-      if (automationIds.length > 0) {
-        await ctx.prisma.smsTemplate.deleteMany({ where: { automationId: { in: automationIds } } }).catch(() => {});
-        await ctx.prisma.whatsAppTemplate.deleteMany({ where: { automationId: { in: automationIds } } }).catch(() => {});
-        await ctx.prisma.rcsTemplate.deleteMany({ where: { automationId: { in: automationIds } } }).catch(() => {});
-      }
-
-      await ctx.prisma.automation.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.autonomyConfig.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.brandProfile.deleteMany({ where: { storeId: input.storeId } });
-      await ctx.prisma.customerSegment.deleteMany({ where: { storeId: input.storeId } });
-
-      // Clean up templates tied to this store's campaigns/automations
-      if (storeTemplateIds.length > 0) {
-        // GeneratedContent cascades on EmailTemplate delete, but clean up explicitly
-        await ctx.prisma.generatedContent.deleteMany({
-          where: { templateId: { in: storeTemplateIds } },
-        });
-        await ctx.prisma.emailTemplate.deleteMany({
-          where: { id: { in: storeTemplateIds }, workspaceId: ctx.workspaceId },
+  /** Irreversible store-data deletion, deliberately separate from disconnect. */
+  deleteStoreData: ownerStoreProcedure
+    .input(z.object({ confirmation: z.string().trim() }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        include: { senderDomain: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+      if (input.confirmation !== store.shopDomain) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Type ${store.shopDomain} exactly to delete this store's data.`,
         });
       }
 
-      // Clean up new analytics tables
-      await ctx.prisma.productSegmentMember.deleteMany({
-        where: { productSegment: { storeId: input.storeId } },
-      }).catch(() => {});
-      await ctx.prisma.productSegment.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
-      await ctx.prisma.basketArchetype.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
-      await ctx.prisma.agentActivityLog.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
-      await ctx.prisma.browseEvent.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
-      await ctx.prisma.copyPerformance.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
-      await ctx.prisma.brandVisualProfile.deleteMany({ where: { storeId: input.storeId } }).catch(() => {});
-
-      // Reset the store — full clean slate for reconnection
       await ctx.prisma.store.update({
-        where: { id: input.storeId },
+        where: { id: store.id },
         data: {
           isActive: false,
-          activatedAt: null,
-          onboardingCompletedAt: null,
-          onboardingStep: 0,
-          activationLog: { set: null } as any,
+          emailSendingPausedAt: new Date(),
+          emailSendingPauseReason: "Store data deletion requested by merchant",
         },
       });
 
-      return { success: true };
+      const [campaigns, automations] = await Promise.all([
+        ctx.prisma.campaign.findMany({ where: { storeId: store.id }, select: { id: true, templateId: true } }),
+        ctx.prisma.automation.findMany({ where: { storeId: store.id }, select: { id: true, templateIds: true } }),
+      ]);
+      const queueCleanup = await removeStoreJobs({
+        storeId: store.id,
+        campaignIds: new Set(campaigns.map(({ id }) => id)),
+        automationIds: new Set(automations.map(({ id }) => id)),
+      }, redisConnection);
+
+      let providerCleanupWarning: string | null = null;
+      if (store.senderDomain?.externalId) {
+        try {
+          await deleteSenderDomain(
+            store.senderDomain.externalId,
+            store.senderDomain.provider as SenderDomainProvider
+          );
+        } catch (error) {
+          providerCleanupWarning = error instanceof Error ? error.message : String(error);
+        }
+      }
+
+      const templateIds = [...new Set([
+        ...campaigns.map((campaign) => campaign.templateId).filter((id): id is string => Boolean(id)),
+        ...automations.flatMap((automation) => automation.templateIds),
+      ])];
+
+      await ctx.prisma.$transaction(async (tx) => {
+        // A few historical ledgers intentionally store scalar IDs without a
+        // Store foreign key. Remove them explicitly so deletion cannot leave
+        // orphaned merchant/customer data behind.
+        await tx.orderAttribution.deleteMany({ where: { storeId: store.id } });
+        await tx.messageLog.deleteMany({ where: { storeId: store.id } });
+        await tx.customerAudienceDecision.deleteMany({ where: { storeId: store.id } });
+        await tx.consentConfirmation.deleteMany({ where: { storeId: store.id } });
+        await tx.customerSegmentHistory.deleteMany({ where: { storeId: store.id } });
+        await tx.customerLifetimeValue.deleteMany({ where: { storeId: store.id } });
+        await tx.customerMemory.deleteMany({ where: { storeId: store.id } });
+        await tx.customerTrait.deleteMany({ where: { storeId: store.id } });
+        await tx.rfmScore.deleteMany({ where: { storeId: store.id } });
+        await tx.embedding.deleteMany({ where: { storeId: store.id } });
+        await tx.agentPipelineRun.deleteMany({ where: { storeId: store.id } });
+        await tx.productSegmentMember.deleteMany({ where: { storeId: store.id } });
+        await tx.productSegment.deleteMany({ where: { storeId: store.id } });
+        await tx.basketArchetype.deleteMany({ where: { storeId: store.id } });
+        if (templateIds.length > 0) {
+          await tx.emailTemplate.deleteMany({
+            where: { id: { in: templateIds }, workspaceId: ctx.workspaceId },
+          });
+        }
+        await tx.campaign.deleteMany({ where: { storeId: store.id } });
+        await tx.customerSegment.deleteMany({ where: { storeId: store.id } });
+        await tx.store.delete({ where: { id: store.id } });
+      });
+
+      return {
+        success: true,
+        queueCleanup,
+        providerCleanupWarning,
+        dnsRecordsRemainAtDnsHost: true,
+      };
     }),
 });

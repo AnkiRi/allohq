@@ -48,3 +48,16 @@ export async function requestSenderDomainVerification(externalId: string, provid
   if (error || !data) throw new Error(error?.message ?? "Resend did not start verification");
   return data;
 }
+
+/** Remove the provider-side sending identity. DNS records remain at the DNS host. */
+export async function deleteSenderDomain(
+  externalId: string,
+  provider: SenderDomainProvider = selectedEmailProvider()
+) {
+  if (provider === "ses") {
+    await new SesProvisioningService().deleteDomain(externalId);
+    return;
+  }
+  const { error } = await client().domains.remove(externalId);
+  if (error) throw new Error(error.message);
+}
