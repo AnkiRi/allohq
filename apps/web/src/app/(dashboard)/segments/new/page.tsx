@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Users, Eye } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { formatINR } from "@/components/console";
+import { formatStoreCurrency } from "@/components/console";
 
 const FIELD_OPTIONS = [
   { value: "rfmSegment", label: "RFM Segment", type: "select" as const },
-  { value: "totalSpent", label: "Total Spent (₹)", type: "number" as const },
+  { value: "totalSpent", label: "Total spent", type: "number" as const },
   { value: "orderCount", label: "Order Count", type: "number" as const },
-  { value: "avgOrderValue", label: "Avg Order Value (₹)", type: "number" as const },
+  { value: "avgOrderValue", label: "Average order value", type: "number" as const },
   { value: "daysSinceLastOrder", label: "Days Since Last Order", type: "number" as const },
   { value: "acceptsMarketing", label: "Accepts Marketing", type: "boolean" as const },
   { value: "purchasedProduct", label: "Purchased Product", type: "text" as const },
@@ -59,6 +59,7 @@ export default function NewSegmentPage() {
   ]);
 
   const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
   const storeId = stores?.[0]?.id;
 
   const utils = trpc.useUtils();
@@ -345,7 +346,7 @@ export default function NewSegmentPage() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right text-[13px] font-mono font-bold text-foreground">
-                          {formatINR(c.totalSpent ?? 0)}
+                          {formatStoreCurrency(c.totalSpent ?? 0, storeCurrency)}
                         </td>
                       </tr>
                     ))}

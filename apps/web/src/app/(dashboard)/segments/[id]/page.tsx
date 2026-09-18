@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Loader2, Save, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 /**
  * Segment detail — shows ANY segment's RESOLVED members (names/emails/spend),
@@ -16,6 +17,8 @@ export default function SegmentDetailPage() {
   const params = useParams();
   const id = String(params.id ?? "");
   const utils = trpc.useUtils();
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
 
   const { data, isLoading, error } = (trpc.segments.getById as any).useQuery(
     { id },
@@ -156,7 +159,7 @@ export default function SegmentDetailPage() {
                   <div className="text-muted-foreground font-mono text-[11px] truncate">{m.email}</div>
                 </div>
                 {m.segment ? <span className="text-[11px] font-mono text-muted-foreground hidden sm:inline">{m.segment}</span> : null}
-                <span className="font-mono text-[12px] text-foreground tabular-nums w-24 text-right">₹{Math.round(m.totalSpent ?? 0).toLocaleString("en-IN")}</span>
+                <span className="w-24 text-right font-mono text-[12px] tabular-nums text-foreground">{formatStoreCurrency(m.totalSpent ?? 0, storeCurrency)}</span>
                 <span className="font-mono text-[11px] text-muted-foreground tabular-nums w-16 text-right hidden sm:inline">{m.orderCount ?? 0} ord</span>
               </div>
             ))}
