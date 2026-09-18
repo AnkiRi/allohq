@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 import { Store, User, Users, Bell, CreditCard, Sparkles, Activity, BookOpen, Plus, Pencil, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
@@ -725,6 +726,7 @@ function BillingPreviewSection({ storeId }: { storeId: string }) {
 }
 
 export default function SettingsPage() {
+  const [activeSection, setActiveSection] = useState<"general" | "sending" | "notifications" | "team" | "integrations" | "billing" | "advanced">("general");
   const { user } = useUser();
   const { toast } = useToast();
   const utils = trpc.useUtils();
@@ -761,6 +763,13 @@ export default function SettingsPage() {
         </p>
       </motion.div>
 
+      <nav className="app-tab-bed max-w-full overflow-x-auto" role="tablist" aria-label="Settings sections">
+        {(["general", "sending", "notifications", "team", "integrations", "billing", "advanced"] as const).map((section) => (
+          <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className={`app-tab whitespace-nowrap capitalize ${activeSection === section ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{section}</button>
+        ))}
+      </nav>
+
+      {activeSection === "general" && <>
       {/* Profile */}
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
@@ -794,6 +803,10 @@ export default function SettingsPage() {
         <AppearanceSetting />
       </motion.div>
 
+      {storeId && <BusinessProfileSection storeId={storeId} />}
+      </>}
+
+      {activeSection === "integrations" && <>
       {/* Connected Stores */}
       <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
@@ -839,12 +852,18 @@ export default function SettingsPage() {
         )}
       </motion.div>
 
-      {storeId && <BusinessProfileSection storeId={storeId} />}
+      <motion.div variants={itemVariants} className="rounded-xl border border-border bg-card p-6">
+        <h2 className="text-base font-medium text-foreground">Store and integrations</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Manage Shopify connectivity, synchronized data and provider connections without losing this settings context.</p>
+        <Link href="/integrations" className="app-attention-button mt-4 inline-flex px-4 py-2 text-sm font-medium">Open integrations</Link>
+      </motion.div>
+      </>}
 
-      <TeamAccessSection />
+      {activeSection === "team" && <TeamAccessSection />}
 
       {/* Messaging Providers */}
 
+      {activeSection === "advanced" && <>
       {/* Knowledge Base */}
       {storeId && <KnowledgeBaseSection storeId={storeId} />}
 
@@ -898,14 +917,21 @@ export default function SettingsPage() {
 
       {/* Token Usage */}
       <TokenUsageSection />
+      </>}
 
+      {activeSection === "sending" && <>
+      <motion.div variants={itemVariants} className="rounded-xl border border-border bg-card p-6">
+        <h2 className="text-base font-medium text-foreground">Sending readiness</h2>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Authenticate the sender domain, verify delivery safety and see the exact blocker before any email can leave Joon.</p>
+        <Link href="/settings/readiness" className="app-attention-button mt-4 inline-flex px-4 py-2 text-sm font-medium">Open setup status</Link>
+      </motion.div>
       {/* Message Protection — fatigue suppression stats */}
       <SuppressionStatsSection />
+      </>}
 
-      {/* Notification Preferences */}
-      <NotificationPreferencesSection />
+      {activeSection === "notifications" && <NotificationPreferencesSection />}
 
-      <BillingPreviewSection storeId={storeId} />
+      {activeSection === "billing" && <BillingPreviewSection storeId={storeId} />}
     </motion.div>
   );
 }

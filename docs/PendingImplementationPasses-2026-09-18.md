@@ -1113,6 +1113,20 @@ Acceptance:
 Outcome: the remaining product feels like one system and the redesign is safe to ship to
 design partners across devices and real operational states.
 
+Implementation status (18 September 2026): **settings hierarchy implemented; Brand & Content
+hub consolidation and full release/device acceptance remain**.
+
+- Settings is now divided into General, Sending, Notifications, Team, Integrations, Billing
+  and Advanced work views instead of one long stack;
+- every existing setting remains present: profile, appearance, business profile, stores,
+  team access, knowledge base, creative intensity, model/provider controls, token usage,
+  suppression statistics, notification/quiet-hour rules and billing preview;
+- Sending links directly to the existing readiness workflow, while Integrations preserves the
+  connected-store summary and full management route;
+- the existing sidebar already preserves the primary Today-to-Inbox navigation, a grouped
+  Brand & Content area, a grouped Data & Store area, Setup status, Settings and Ask Joon;
+- no existing route or deep link was renamed or removed.
+
 Required work:
 
 - consolidate email library, brand voice, product graph and forms into a clear Brand & Content
