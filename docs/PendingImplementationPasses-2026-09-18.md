@@ -1075,6 +1075,21 @@ Outcome: Results becomes trustworthy. Live attributed revenue, pooled control ev
 billing preview, forecast calibration and illustrative education cannot be mistaken for one
 another.
 
+Implementation status (18 September 2026): **results workspace implemented; deployed ledger,
+currency and one-order reconciliation remain**.
+
+- Results now has explicit Overview, Attribution, Control evidence, Forecasts, Costs and
+  Method work views instead of one continuous mixed-evidence page;
+- the overview leads with window-labelled attributed revenue, shadow fee, closed records and
+  AI return, while keeping the early-access billing rule visibly tied to attributed revenue;
+- campaigns without usable controls remain attribution-only/learning records and never receive
+  invented lift or confidence intervals;
+- the Control evidence view renders measured cohort math only when closed control evidence is
+  real; otherwise it explains why Joon is still learning;
+- Costs now compares model cost with attributed revenue, not representative lift;
+- Method fixes the definitions for attribution, campaign-only controls, journey treatment and
+  cancelled-order handling, while keeping illustrative examples outside live results.
+
 Required work:
 
 - create explicit Overview, Attribution, Control evidence, Forecasts, Costs and Method views;

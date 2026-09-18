@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -76,6 +77,7 @@ function Reveal({
 }
 
 export default function OutcomesPage() {
+  const [activeView, setActiveView] = useState<"overview" | "attribution" | "control" | "forecasts" | "costs" | "method">("overview");
   const { data: stores, isLoading: storesLoading } = (
     trpc as any
   ).stores.list.useQuery() as {
@@ -281,22 +283,37 @@ export default function OutcomesPage() {
 
   // --- Outcome / control console -----------------------------------------
   return (
-    <div className="space-y-6 w-full max-w-3xl mx-auto">
+    <div className="mx-auto w-full max-w-7xl space-y-6">
       {/* Heading — prose, no motion */}
       <div>
         <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground font-serif">
           Outcomes
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-1 font-sans leading-relaxed">
-          joon grows revenue by sending <b>less</b>, not more. A random holdout separates
-          revenue the email caused from revenue that would have happened anyway. Below:
-          what that earned, and the causal proof underneath it.
+          See revenue attributed to emails Joon sent, the separate control evidence that helps
+          Joon learn when not to send, and the exact early-access billing preview.
         </p>
       </div>
 
-      <ConsoleFrame title="joon · measured campaign outcomes" live={false} clock={false}>
+      <div className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Results summary">
+        <div className="py-4"><p className="text-xs text-muted-foreground">Attributed revenue · billing window</p><p className="mt-1 text-2xl font-medium tabular-nums">{moneyExact(billingData?.attributedRevenue ?? aiRevenue, billingData?.currency ?? displayCurrency)}</p></div>
+        <div className="border-l border-border py-4 pl-5"><p className="text-xs text-muted-foreground">Shadow fee · billing window</p><p className="mt-1 text-2xl font-medium tabular-nums">{moneyExact(totalFee, billingData?.currency ?? displayCurrency)}</p></div>
+        <div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-xs text-muted-foreground">Closed campaign records</p><p className="mt-1 text-2xl font-medium tabular-nums">{ledgerData?.length ?? 0}</p></div>
+        <div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-xs text-muted-foreground">AI return · {COHORT.windowDays}d</p><p className="mt-1 text-2xl font-medium tabular-nums">{roi ? `${roi}x` : "—"}</p></div>
+      </div>
+
+      <nav className="app-tab-bed max-w-full overflow-x-auto" role="tablist" aria-label="Results workspace">
+        {(["overview", "attribution", "control", "forecasts", "costs", "method"] as const).map((view) => (
+          <button key={view} role="tab" aria-selected={activeView === view} onClick={() => setActiveView(view)} className={`app-tab whitespace-nowrap capitalize ${activeView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>
+            {view === "control" ? "Control evidence" : view}
+          </button>
+        ))}
+      </nav>
+
+      {activeView === "attribution" && <>
+      <ConsoleFrame title="joon · campaign attribution and evidence" live={false} clock={false}>
         <p className="font-sans text-[13px] leading-relaxed text-foreground">
-          Joon emails most of your customers and holds back a few at random. What the emailed ones spend beyond the held-back ones is what Joon caused.
+          Attributed revenue records orders tied to emails Joon sent. Control evidence is shown separately and never changes the invoice.
         </p>
         <p className="mt-2 font-sans text-[12px] leading-relaxed text-muted-foreground">
           Doesn&apos;t holding people back cost me sales? A little - they still buy as usual; they just miss one email. It&apos;s how you know the rest is real.
@@ -314,20 +331,17 @@ export default function OutcomesPage() {
                     <div>
                       <p className="font-sans text-[13px] font-semibold">{row.campaign?.name ?? "Campaign"}</p>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                        measured · {row.tier.replaceAll("_", " ")} · {holdoutRate.toFixed(0)}% held back
+                        {row.assignedControl > 0 ? `control assigned · ${row.tier.replaceAll("_", " ")} · ${holdoutRate.toFixed(0)}% held back` : "no control · attribution only"}
                       </p>
                     </div>
-                    <span className={`rounded-full border px-2 py-1 font-mono text-[10px] ${row.billable ? "border-outcome/30 text-outcome" : "border-measure/30 text-measure"}`}>
-                      {row.billable ? "measured · billable after early access" : "measured · not billed"}
+                    <span className="rounded-full border border-measure/30 px-2 py-1 font-mono text-[10px] text-measure">
+                      {row.intervalLow !== null && row.intervalHigh !== null && row.assignedControl > 0 ? "control evidence available" : "learning · not control-backed"}
                     </span>
                   </div>
-                  <p className="mt-4 font-mono text-[12px] leading-relaxed tabular-nums">
-                    Emailed {moneyExact(treatmentPerCustomer, row.currency)} per customer · Held back {moneyExact(controlPerCustomer, row.currency)} · <span className="font-semibold text-outcome">Caused {moneyExact(row.causedRevenue, row.currency)}</span>
-                  </p>
+                  <p className="mt-4 font-mono text-[12px] leading-relaxed tabular-nums">Attributed {moneyExact(row.attributedRevenue, row.currency)}{row.assignedControl > 0 ? ` · Emailed ${moneyExact(treatmentPerCustomer, row.currency)} per customer · Held back ${moneyExact(controlPerCustomer, row.currency)}` : ""}</p>
                   <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[10px] text-muted-foreground">
-                    <span>Attributed {moneyExact(row.attributedRevenue, row.currency)}</span>
-                    {row.intervalLow !== null && row.intervalHigh !== null && <span>95% interval {moneyExact(row.intervalLow, row.currency)} to {moneyExact(row.intervalHigh, row.currency)}</span>}
-                    {!row.billable && row.nonBillableReason && <span>{row.nonBillableReason}</span>}
+                    {row.intervalLow !== null && row.intervalHigh !== null && row.assignedControl > 0 && <span>Directional gap {moneyExact(row.causedRevenue, row.currency)} · 95% interval {moneyExact(row.intervalLow, row.currency)} to {moneyExact(row.intervalHigh, row.currency)}</span>}
+                    {row.nonBillableReason && <span>{row.nonBillableReason}</span>}
                   </div>
                 </article>
               );
@@ -344,9 +358,10 @@ export default function OutcomesPage() {
           intelligence panel follows them and remains representative until a
           closed ledger row exists. */}
       <GrowthImpactPanel storeId={storeId} windowDays={COHORT.windowDays} />
+      </>}
 
       {/* 1. The control comparison — the most important pixel ---------------- */}
-      <ConsoleFrame title="joon · incremental revenue vs control">
+      {activeView === "control" && (isReal ? <ConsoleFrame title="joon · incremental revenue vs control">
         {/* Caption: honesty about measurement state */}
         <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
           {isReal
@@ -496,9 +511,13 @@ export default function OutcomesPage() {
           </p>
           <ReasoningReveal stories={outcomeStory} />
         </div>
-      </ConsoleFrame>
+      </ConsoleFrame> : <ConsoleFrame title="joon · control evidence" live={false} clock={false}>
+        <p className="font-sans text-sm text-foreground">Joon is still gathering enough randomized campaign evidence to report a reliable lift.</p>
+        <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">Small or no-control campaigns stay labelled as learning. They do not receive invented lift, confidence intervals, or “proven” language. Control evidence teaches campaign decisions; it does not calculate the invoice.</p>
+      </ConsoleFrame>)}
 
       {/* 2. Early-access shadow invoice ------------------------------------- */}
+      {activeView === "overview" && <>
       <ConsoleFrame title="joon · billing preview" live={false} clock={false}>
         <p className="font-sans text-[13px] text-foreground leading-relaxed mb-4">
           Not charged during early access. This preview is 5% of non-cancelled order revenue attributed to an email Joon actually sent within seven days. Sending is included.
@@ -537,12 +556,21 @@ export default function OutcomesPage() {
             : `cap pending · ${billingData?.pendingReason ?? "approved cap evidence is not configured"}`}
         </p>
       </ConsoleFrame>
+      <ConsoleFrame title="joon · what this means" live={false} clock={false}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div><p className="text-sm font-medium text-foreground">Revenue Joon touched</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Non-cancelled orders attributed to an email Joon actually sent within seven days.</p></div>
+          <div><p className="text-sm font-medium text-foreground">Evidence Joon learns from</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Random campaign controls, pooled until the comparison is strong enough to report honestly.</p></div>
+          <div><p className="text-sm font-medium text-foreground">What you pay now</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Nothing during early access. The shadow invoice shows 5% of attributed revenue, subject to the approved cap.</p></div>
+        </div>
+      </ConsoleFrame>
+      </>}
 
       {/* 3. Real AI cost vs the lift — unit economics ----------------------- */}
+      {activeView === "costs" &&
       <ConsoleFrame title="joon · unit economics" live={false} clock={false}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pb-4 mb-4 border-b border-border">
           <MetricReadout label="AI cost · window" value={aiCostLabel} />
-          <MetricReadout label="AI revenue" value={aiRevenue} money />
+          <MetricReadout label="Attributed revenue" value={aiRevenue} money />
           <MetricReadout
             label="ROI"
             value={roi ? `${roi}x` : "·"}
@@ -555,8 +583,7 @@ export default function OutcomesPage() {
             the model cost <b>{aiCostLabel}</b> to run this window
           </StreamRow>
           <StreamRow tick="ok">
-            against <b>{moneyExact(incrementalRevenue)}</b> of incremental
-            revenue vs control. The spend rounds to nothing next to the lift
+            against <b>{moneyExact(aiRevenue, displayCurrency)}</b> of revenue attributed to Joon emails in the same window
           </StreamRow>
           <StreamRow tick="ok">
             early access charge <b>{moneyExact(0, billingData?.currency)}</b> · shadow invoice{" "}
@@ -565,14 +592,22 @@ export default function OutcomesPage() {
         </StreamOutput>
 
         <p className="font-mono text-[10.5px] text-muted-foreground mt-4">
-          {isReal
-            ? "AI cost & revenue are live · cohort lift measured against a held-out control"
-            : "AI cost & revenue are live · cohort lift representative while control-group measurement is wired up"}
+          AI cost and attributed revenue are live. Control evidence is reported separately when the sample supports it.
         </p>
       </ConsoleFrame>
+      }
 
       {/* 4. Forecast accuracy — Track C's track record against the control ----- */}
-      <ForecastAccuracy storeId={storeId} windowDays={COHORT.windowDays} />
+      {activeView === "forecasts" && <ForecastAccuracy storeId={storeId} windowDays={COHORT.windowDays} />}
+
+      {activeView === "method" && <ConsoleFrame title="joon · method" live={false} clock={false}>
+        <div className="space-y-5 font-sans text-sm leading-relaxed">
+          <section><h2 className="font-medium text-foreground">Attribution</h2><p className="mt-1 text-muted-foreground">An order is attributed to the last eligible Joon email touch within seven days. It counts unless cancelled. Refund, fulfilment and external OMS state do not independently change the v1 ledger.</p></section>
+          <section><h2 className="font-medium text-foreground">Control evidence</h2><p className="mt-1 text-muted-foreground">Random controls apply to campaigns only, after state-based suppression. Journeys have no random holdout. Evidence is pooled and reported only when the sample supports it.</p></section>
+          <section><h2 className="font-medium text-foreground">Billing</h2><p className="mt-1 text-muted-foreground">Billing is not based on lift. The early-access preview is 5% of non-cancelled attributed revenue from emails actually sent, with sending included and the approved cap applied.</p></section>
+          <section className="rounded-xl border border-border bg-muted p-4"><p className="font-medium text-foreground">Illustrative examples stay separate</p><p className="mt-1 text-muted-foreground">Educational cohort examples may appear in demos or documentation, but never masquerade as a live store result on this page.</p></section>
+        </div>
+      </ConsoleFrame>}
     </div>
   );
 }
