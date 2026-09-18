@@ -6,6 +6,7 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { useState } from "react";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 type WorkflowNodeType = "send_email" | "send_sms" | "send_whatsapp" | "send_rcs" | "wait" | "condition" | "webhook" | "channel_select" | "ab_test" | "silence_check";
 
@@ -65,6 +66,8 @@ export default function AutomationDetailPage() {
   const params = useParams();
   const automationId = params.id as string;
   const { toast } = useToast();
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
   const [activeView, setActiveView] = useState<"overview" | "messages" | "activity" | "experiments">("overview");
 
   type Template = { id: string; name: string; subject: string; previewText?: string | null };
@@ -609,7 +612,7 @@ export default function AutomationDetailPage() {
                             </div>
                             {r.revenue > 0 && (
                               <div className="text-[11px] font-mono text-outcome mt-1">
-                                Revenue: ₹{r.revenue.toFixed(2)}
+                                Revenue: {formatStoreCurrency(r.revenue, storeCurrency)}
                               </div>
                             )}
                           </div>

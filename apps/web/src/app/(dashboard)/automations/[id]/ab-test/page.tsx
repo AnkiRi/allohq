@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -248,6 +249,8 @@ interface ABTestRecord {
 
 export default function ABTestPage() {
   const params = useParams();
+  const { data: stores } = trpc.stores.list.useQuery();
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
   const automationId = params.id as string;
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -865,7 +868,7 @@ export default function ABTestPage() {
                         </div>
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                        {a.sent} sent &middot; ₹{a.revenue.toFixed(2)} rev
+                        {a.sent} sent &middot; {formatStoreCurrency(a.revenue, storeCurrency)} rev
                       </div>
                     </div>
                     <div className="p-3 rounded-lg border border-border bg-muted/30">
@@ -887,7 +890,7 @@ export default function ABTestPage() {
                         </div>
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                        {b.sent} sent &middot; ₹{b.revenue.toFixed(2)} rev
+                        {b.sent} sent &middot; {formatStoreCurrency(b.revenue, storeCurrency)} rev
                       </div>
                     </div>
                   </div>
@@ -1014,7 +1017,7 @@ export default function ABTestPage() {
                             </div>
                           </div>
                           <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                            {r.sent} sent &middot; ₹{r.revenue.toFixed(2)} rev
+                            {r.sent} sent &middot; {formatStoreCurrency(r.revenue, storeCurrency)} rev
                           </div>
                         </div>
                       );
