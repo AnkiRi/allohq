@@ -1267,9 +1267,9 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   const pageContext = derivePageContext(pathname);
   const isDashboard = pathname === "/dashboard";
 
-  // Default COLLAPSED: the page/console is the primary, full-width surface.
-  // joon is summoned on demand (floating button · ⌘K · Home command line).
-  // Restore a stored pref if present, but default to collapsed (never auto-dock).
+  // The page remains the primary surface. Collapsed mode is a persistent,
+  // page-aware command dock; open and fullscreen modes share the same durable
+  // conversation rather than starting another assistant surface.
   const [panelState, setPanelState] = useState<PanelState>("collapsed");
 
   // Hydrate stored open/collapsed pref after mount. Anything other than an
@@ -1291,7 +1291,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     if (typeof window === "undefined" || embedded) return;
     sessionStorage.setItem("allo-panel-state", panelState);
   }, [panelState, embedded]);
-  const [panelWidth, setPanelWidth] = useState(380);
+  const [panelWidth, setPanelWidth] = useState(468);
   const [isResizing, setIsResizing] = useState(false);
   // On phones the docked 380px panel would crush the page; render it as a full
   // overlay below the header instead, with an obvious close.
@@ -1993,7 +1993,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
                   effectiveState === "expanded" &&
                     "fixed top-14 right-0 bottom-0 w-[60%] z-50 ai-panel-bg border-border shadow-[-20px_0_60px_rgba(0,0,0,0.08)]",
                   effectiveState === "fullscreen" &&
-                    "fixed inset-4 z-[60] rounded-2xl ai-panel-bg border-border shadow-2xl"
+                    "fixed inset-3 z-[60] rounded-[22px] border ai-panel-bg border-border shadow-2xl sm:inset-5"
                 ),
           isProcessing && "animate-[ai-thinking-glow_2s_ease-in-out_infinite]"
         )}
@@ -2507,22 +2507,24 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
         )}
       </aside>
 
-      {/* Summon affordance when collapsed — a calm console cue, not a docked chat.
-          The console/page stays full-width; joon is summoned here, via ⌘K, or
-          the Home command line. Hidden in embedded mode. */}
+      {/* Resting command dock. It follows the merchant across the workspace and
+          opens this same contextual conversation rather than a separate chat. */}
       {!embedded && effectiveState === "collapsed" && (
         <button
           onClick={() => {
             setPanelState("open");
             setTimeout(() => inputRef.current?.focus(), 200);
           }}
-          className="group fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent))]/30 bg-card px-3.5 py-2.5 shadow-lg hover:border-[hsl(var(--accent))] transition-colors z-[60]"
-          title="Summon joon (⌘J)"
+          className="group fixed bottom-4 left-4 right-4 z-[60] mx-auto flex min-h-14 max-w-4xl items-center gap-3 rounded-xl border border-border bg-[var(--surface)] px-4 text-left shadow-[0_12px_38px_-24px_rgba(23,23,23,0.5)] transition-colors hover:border-[var(--attention)] md:left-[228px] md:right-6"
+          title="Ask Joon about this page (⌘J)"
         >
-          <span className="font-mono text-sm font-semibold text-foreground select-none">
+          <span className="shrink-0 font-mono text-sm font-semibold text-foreground select-none">
             joon ›
           </span>
-          <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 select-none">
+          <span className="min-w-0 flex-1 truncate text-[14px] text-muted-foreground">
+            Ask about this page, or tell Joon what to do
+          </span>
+          <kbd className="hidden sm:inline-flex items-center font-mono text-[11px] text-muted-foreground border border-border rounded px-2 py-1 select-none">
             ⌘J
           </kbd>
         </button>

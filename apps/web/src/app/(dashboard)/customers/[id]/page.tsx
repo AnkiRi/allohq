@@ -48,6 +48,15 @@ function stateWords(value: string | null | undefined): string {
   return value ? value.replaceAll("_", " ") : "unknown";
 }
 
+const LIFECYCLE_PATH = ["subscriber", "first buyer", "repeat", "loyal", "at risk", "lost"] as const;
+function lifecyclePosition(value: string | null | undefined) {
+  const normalized = stateWords(value).toLowerCase();
+  const direct = LIFECYCLE_PATH.findIndex((stage) => normalized.includes(stage));
+  if (direct >= 0) return direct;
+  if (normalized.includes("champion")) return 3;
+  return 0;
+}
+
 // (getAiInsight removed — the per-customer worldview now flows through the
 // shared ReasoningReveal story below.)
 
@@ -408,6 +417,10 @@ export default function CustomerDetailPage() {
             >
               Open state explorer
             </Link>
+          </div>
+          <div className="mt-5 overflow-x-auto rounded-xl border border-border bg-[var(--surface-soft)] px-4 py-4" aria-label="Customer lifecycle timeline">
+            <div className="flex min-w-[650px] items-start">{LIFECYCLE_PATH.map((stage, index) => { const current = lifecyclePosition(customer.customerState?.lifecycleStage); const reached = index <= current; const active = index === current; return <div key={stage} className="relative flex flex-1 flex-col items-center text-center before:absolute before:left-0 before:right-0 before:top-2 before:h-px before:bg-border first:before:left-1/2 last:before:right-1/2"><span className={`relative z-10 h-4 w-4 rounded-full border-2 ${active ? "border-[var(--attention)] bg-[var(--attention-soft)]" : reached ? "border-[var(--success)] bg-[var(--success-soft)]" : "border-border bg-[var(--surface)]"}`} /><span className={`mt-2 text-[12px] capitalize ${active ? "font-medium text-foreground" : "text-muted-foreground"}`}>{stage}</span></div>; })}</div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-[12px]"><span><span className="text-muted-foreground">Now: </span><span className="font-medium capitalize">{stateWords(customer.customerState.lifecycleStage)} · {stateWords(customer.customerState.purchaseCyclePosition)}</span></span><span className="text-muted-foreground">Re-evaluates {customer.customerState.nextEvaluationAt ? new Date(customer.customerState.nextEvaluationAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "when new evidence arrives"}</span></div>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {[

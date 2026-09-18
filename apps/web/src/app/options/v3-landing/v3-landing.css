@@ -608,7 +608,21 @@
   border: 1px solid var(--line-2);
 }
 
+.v3-system { padding: 90px 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+.v3-system__head { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; }
+.v3-system__loop { display: grid; grid-template-columns: repeat(5, 1fr); margin: 44px 0 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.v3-system__loop li { position: relative; min-height: 190px; padding: 24px; border-right: 1px solid var(--line); }
+.v3-system__loop li:last-child { border-right: 0; }
+.v3-system__loop span { color: var(--gold); font-size: 11px; }
+.v3-system__loop strong { display: block; margin-top: 34px; font-size: 20px; }
+.v3-system__loop p { margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.v3-system__loop i { position: absolute; z-index: 2; top: 50%; right: -12px; display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--gold); font-style: normal; transform: translateY(-50%); }
+
 @media (max-width: 900px) {
+  .v3-landing .v3-system__head { grid-template-columns: 1fr; gap: 14px; }
+  .v3-landing .v3-system__loop { grid-template-columns: 1fr 1fr; }
+  .v3-landing .v3-system__loop li { min-height: 150px; border-bottom: 1px solid var(--line); }
+  .v3-landing .v3-system__loop i { display: none; }
   .v3-landing #bill .v2-half__art { order: initial; }
   .v3-landing .v3-after__head {
     display: block;
@@ -635,6 +649,10 @@
 }
 
 @media (max-width: 640px) {
+  .v3-landing .v3-system { padding: 64px 0; }
+  .v3-landing .v3-system__loop { grid-template-columns: 1fr; }
+  .v3-landing .v3-system__loop li { min-height: 0; border-right: 0; }
+  .v3-landing .v3-system__loop strong { margin-top: 16px; }
   .v3-landing .v3-calc__inputs { padding: 20px 18px; }
   .v3-landing .v3-calc__results article, .v3-landing .v3-calc__chart { padding-inline: 18px; }
   .v3-landing .v3-calc__crossing, .v3-landing .v3-calc__explain, .v3-landing .v3-calc__fine { padding-inline: 18px; }

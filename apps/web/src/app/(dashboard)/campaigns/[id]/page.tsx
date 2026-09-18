@@ -978,39 +978,22 @@ export default function CampaignDetailPage() {
                   </p>
                 </div>
               )}
-              <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Audience plan
+              <div className="mb-5 overflow-hidden rounded-xl border border-border bg-background/50">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <div><h3 className="text-[14px] font-medium">Audience flow</h3><p className="mt-0.5 text-[12px] text-muted-foreground">Every selected customer reconciled from request to delivery plan.</p></div>
+                  <span className="font-mono text-[12px] text-muted-foreground">preview</span>
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  {[
-                    ["You asked for", dryRun.requestedAudienceCount ?? dryRun.requested],
-                    ["Found in store", dryRun.requested],
-                    ["Not in store", dryRun.audienceShortfall],
-                    ["Campaign candidates", dryRun.eligibleBeforeHoldout],
-                    ["Random control", dryRun.estimatedControl],
-                    ["Would receive", dryRun.estimatedTreatment],
-                  ].map(([label, value]) => (
-                    <div key={String(label)}>
-                      <div className="text-[10px] text-muted-foreground">{label}</div>
-                      <div className="mt-0.5 font-mono text-lg font-bold">
-                        {Number(value).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto px-4 py-5">
+                  <div className="grid min-w-[760px] grid-cols-[1fr_28px_1fr_28px_1fr_28px_1fr] items-stretch gap-2" aria-label="Campaign audience flow">
+                    <div className="rounded-lg border border-border bg-[var(--surface)] p-3"><p className="text-[12px] text-muted-foreground">Requested</p><p className="mt-1 font-mono text-xl font-semibold">{Number(dryRun.requestedAudienceCount ?? dryRun.requested).toLocaleString("en-IN")}</p><p className="mt-2 text-[12px] text-muted-foreground">{dryRun.requested.toLocaleString("en-IN")} found · {dryRun.audienceShortfall.toLocaleString("en-IN")} unavailable</p></div>
+                    <div className="grid place-items-center text-muted-foreground" aria-hidden="true">→</div>
+                    <div className="rounded-lg border border-border bg-[var(--surface)] p-3"><p className="text-[12px] text-muted-foreground">Found and contactable</p><p className="mt-1 font-mono text-xl font-semibold">{(dryRun.eligibleBeforeHoldout + dryRun.otherLeftAlone).toLocaleString("en-IN")}</p><div className="mt-2 flex items-center justify-between gap-2 text-[12px]"><span className="text-muted-foreground">{dryRun.otherLeftAlone.toLocaleString("en-IN")} deliberately left alone</span>{audienceReviewCount > 0 ? <AudienceReviewDrawer campaignId={campaignId} groups={audienceReviewGroups} /> : null}</div></div>
+                    <div className="grid place-items-center text-muted-foreground" aria-hidden="true">→</div>
+                    <div className="rounded-lg border border-[var(--evidence)]/25 bg-[var(--evidence-soft)] p-3"><p className="text-[12px] text-[var(--evidence)]">Campaign candidates</p><p className="mt-1 font-mono text-xl font-semibold">{dryRun.eligibleBeforeHoldout.toLocaleString("en-IN")}</p><p className="mt-2 text-[12px] text-muted-foreground">Eligible after consent, safety and customer-state decisions</p></div>
+                    <div className="grid place-items-center text-muted-foreground" aria-hidden="true">→</div>
+                    <div className="grid gap-2"><div className="rounded-lg border border-border bg-[var(--surface)] p-3"><p className="text-[12px] text-muted-foreground">Random control</p><p className="mt-1 font-mono text-lg font-semibold">{dryRun.estimatedControl.toLocaleString("en-IN")}</p></div><div className="rounded-lg border border-[var(--attention)]/35 bg-[var(--attention-soft)] p-3"><p className="text-[12px] text-[var(--attention)]">Would receive</p><p className="mt-1 font-mono text-lg font-semibold">{dryRun.estimatedTreatment.toLocaleString("en-IN")}</p></div></div>
+                  </div>
                 </div>
-                <p className="mt-3 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
-                  {dryRun.requestedAudienceCount != null && dryRun.audienceShortfall > 0
-                    ? `This store has ${dryRun.requested} of the ${dryRun.requestedAudienceCount} customers requested. `
-                    : ""}
-                  {dryRun.otherLeftAlone > 0
-                    ? `${dryRun.otherLeftAlone} ${dryRun.otherLeftAlone === 1 ? "customer is" : "customers are"} not receiving this campaign for the reasons below. `
-                    : ""}
-                  From {dryRun.eligibleBeforeHoldout} campaign{" "}
-                  {dryRun.eligibleBeforeHoldout === 1 ? "candidate" : "candidates"},{" "}
-                  {dryRun.estimatedControl} {dryRun.estimatedControl === 1 ? "is" : "are"} randomly
-                  assigned to control and {dryRun.estimatedTreatment} would receive the email.
-                </p>
               </div>
               {audienceReviewCount > 0 && (
                 <div className="mb-5 rounded-xl border border-border bg-background/50 p-4">

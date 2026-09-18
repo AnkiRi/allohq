@@ -17,7 +17,6 @@ import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { DemoOnboarding } from "@/components/dashboard/DemoOnboarding";
 import {
   ConsoleFrame,
-  CommandLine,
   StreamOutput,
   StreamRow,
   DecisionCard,
@@ -300,7 +299,7 @@ function DemoReasoning({
 export default function DashboardPage() {
   const { user } = useUser();
   const { toast } = useToast();
-  const { openPanel, submit: submitAI } = useAlloAI();
+  const { openPanel } = useAlloAI();
   const demo = useDemo();
   // Demo onboarding arc — show once per browser session (skippable).
   const [arcSeen, setArcSeen] = useState<boolean>(() => {
@@ -536,16 +535,6 @@ export default function DashboardPage() {
     onPass?: () => void;
   } | null>(null);
 
-  // ---- Command line → goal flow ----
-  const handleCommand = (value: string) => {
-    // The Home field is a SHORTCUT into the one conversation: open it AND submit
-    // the goal in a single action — a single Enter carries the text in and fires
-    // it (no second Enter). Works for the demo (live chat: scoped, ephemeral,
-    // cost-capped) and real users alike — one input, one conversation.
-    openPanel();
-    setTimeout(() => submitAI(value), 150);
-  };
-
   // ---- Derived values ----
   const aiCost = tokenUsage?.totalCost ?? 0;
   const hasSyncedData = (stats?.totalCustomers ?? 0) > 0;
@@ -764,10 +753,19 @@ export default function DashboardPage() {
           { label: "At risk", value: atRisk.toLocaleString("en-IN") },
           { label: "AI cost · window", value: aiCostLabel },
         ]} />
-        <details className="group border-b border-border pb-4">
-          <summary className="cursor-pointer list-none text-[13px] font-medium text-foreground">Type a quick command <span className="float-right text-muted-foreground transition-transform group-open:rotate-45">＋</span></summary>
-          <div className="mt-3"><CommandLine placeholder={["Tell Joon what you want done", "Who's slipping away?", "Draft a Diwali win-back for me", "Look after my best customers"]} onSubmit={handleCommand} /></div>
-        </details>
+        <Surface className="overflow-hidden p-0">
+          <div className="grid gap-0 md:grid-cols-[minmax(0,1.35fr)_minmax(360px,1fr)]">
+            <div className="p-5 sm:p-6"><h2 className="text-[20px] font-medium">What Joon worked through overnight</h2><p className="mt-2 max-w-2xl text-[14px] leading-6 text-muted-foreground">Customer state changed first. Joon turned those changes into opportunities, prepared only the useful work and left the rest alone.</p><div className="mt-5 flex flex-wrap gap-2"><Link href="/activity" className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">Inspect the run</Link>{pendingActions.length > 0 ? <Link href="/actions" className="app-attention-button min-h-10 px-4 py-2.5 text-[13px] font-medium">Review what needs you</Link> : null}</div></div>
+            <div className="grid grid-cols-2 border-t border-border md:border-l md:border-t-0">
+              {[
+                ["Observed", totalCustomers, "customers monitored"],
+                ["Changed", homeLines.length, "material observations"],
+                ["Prepared", pendingActions.length, "recommendations"],
+                ["Waiting", pendingActions.length, "for your approval"],
+              ].map(([label, value, note], index) => <Link href={index < 2 ? "/customers/states" : "/actions"} key={String(label)} className={`p-4 transition-colors hover:bg-[var(--surface-soft)] ${index % 2 ? "border-l border-border" : ""} ${index > 1 ? "border-t border-border" : ""}`}><span className="font-mono text-[12px] text-muted-foreground">0{index + 1}</span><span className="mt-2 block text-[14px] font-medium">{label}</span><span className="mt-0.5 block font-mono text-[18px] tabular-nums">{Number(value).toLocaleString("en-IN")}</span><span className="block text-[12px] text-muted-foreground">{note}</span></Link>)}
+            </div>
+          </div>
+        </Surface>
       </div>
 
       {/* Demo: staged reasoning for the typed goal, then the actual drafted
@@ -827,27 +825,11 @@ export default function DashboardPage() {
         </h2><p className="mt-1 text-[13px] text-muted-foreground">Sorted by expected value and urgency.</p></div><Link href="/actions" className="text-[13px] font-medium text-[var(--attention)]">View all →</Link></div>
 
         {pendingActions.length > 0 ? (
-          <div className="space-y-3">
-            {pendingActions.map((action) => {
+          <Surface className="overflow-hidden p-0">
+            {pendingActions.slice(0, 3).map((action, index) => {
               const reasoning = firstLine(action.reasoning, 160);
               return (
-                <DecisionCard
-                  key={action.id}
-                  tags={actionToTags(action)}
-                  impact={action.estimatedRevenue ?? null}
-                  decision={
-                    action.campaignName ||
-                    reasoning ||
-                    "joon lined up an action for you"
-                  }
-                  reasoning={
-                    action.campaignName && reasoning
-                      ? [{ tick: "ok", text: reasoning }]
-                      : undefined
-                  }
-                  busy={approveMut.isPending || rejectMut.isPending}
-                  onView={() =>
-                    setViewing({
+                <div key={action.id} className={`grid gap-4 p-4 sm:grid-cols-[120px_minmax(0,1fr)_120px_auto] sm:items-center ${index ? "border-t border-border" : ""}`}><div><span className="text-[12px] uppercase tracking-wide text-muted-foreground">{actionToTags(action)[0]?.replace("-", " ")}</span></div><div className="min-w-0"><p className="text-[14px] font-medium">{action.campaignName || reasoning || "Joon lined up an action for you"}</p>{action.campaignName && reasoning ? <p className="mt-1 truncate text-[12px] text-muted-foreground">{reasoning}</p> : null}</div><div>{action.estimatedRevenue ? <><span className="block text-[11px] uppercase text-muted-foreground">Expected</span><span className="font-mono text-[14px]">~{formatStoreCurrency(action.estimatedRevenue, storeCurrency)}</span></> : <span className="text-[12px] text-muted-foreground">Evidence ready</span>}</div><div className="flex gap-2"><button className="min-h-9 rounded-lg border border-border px-3 text-[13px] font-medium" onClick={() => setViewing({
                       data: actionToDetail(action),
                       onApprove: () => {
                         approveMut.mutate({ actionId: action.id });
@@ -860,19 +842,10 @@ export default function DashboardPage() {
                         });
                         setViewing(null);
                       },
-                    })
-                  }
-                  onApprove={() => approveMut.mutate({ actionId: action.id })}
-                  onPass={() =>
-                    rejectMut.mutate({
-                      actionId: action.id,
-                      reason: "Passed from dashboard",
-                    })
-                  }
-                />
+                    })}>Inspect</button><button disabled={approveMut.isPending || rejectMut.isPending} className="app-attention-button min-h-9 px-3 text-[13px] font-medium disabled:opacity-50" onClick={() => approveMut.mutate({ actionId: action.id })}>Approve</button></div></div>
               );
             })}
-          </div>
+          </Surface>
         ) : (
           <div className="rounded-xl border border-border bg-card p-5">
             <p className="font-sans text-[13.5px] text-foreground">

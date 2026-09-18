@@ -20,7 +20,7 @@ This document is the single reference point for these passes. Later implementati
 | 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
 | 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
-| 11 — Product-wide UX simplification | Phase 11A complete; 11B–11H planned | `782b5aa` | Complete the route-by-route migration, authenticated responsive acceptance and merchant usability testing without removing any product capability |
+| 11 — Product-wide UX simplification | 11A–11H implemented; 11I–11P active | `782b5aa` and subsequent route commits | Complete the interactive intelligence layer, authenticated responsive acceptance and merchant usability testing without removing any product capability |
 
 ## Decisions locked after the design-partner demo
 
@@ -812,6 +812,41 @@ an explicit product decision—not a design pass—changes them.
 
 The migration rule for every route is: inventory its visible controls and mutations first,
 recompose second, then compare old and new capability lists before declaring that phase complete.
+
+### Interaction and visualization extension — locked 2026-09-18
+
+The supplied `des/n-home.png`, `des/n-activity.png`, `des/n-customers.png`,
+`des/n-chat-side.png` and `des/n-full-chat-rounded.png` establish the disclosure model for the
+next product-wide pass. They do not replace business logic or narrow the feature set. The
+application must keep all existing routes, mutations, evidence, inspectors, permissions and
+failure states while making the first view substantially easier to scan.
+
+The extension is executed as the following phases:
+
+| Phase | Surface | Locked outcome |
+| --- | --- | --- |
+| 11I | Global Ask Joon | A persistent page-aware command dock; a 440–480px contextual side workspace; and a rounded focused workspace for complex multi-step work. Conversation history, linked artifacts, structured cards and approval rules remain durable. |
+| 11J | Campaign audience | One interactive reconciliation from requested audience through unavailable, subscribed, deliberately left alone, campaign candidates, control, treatment and terminal delivery. Selecting a branch opens the existing searchable inspector; repeated prose blocks are consolidated, not deleted. |
+| 11K | Today | One overnight brief, a state-to-opportunity-to-recommendation map, compact highest-impact decisions and small recent-state/result panels. Approval is prominent; pass remains available without occupying equal page width. |
+| 11L | Activity | A date-grouped ledger with Today/Yesterday/calendar headings, sticky day labels, collapsed repeated runs, filters, search and the existing complete receipt inspector. |
+| 11M | Customers | Semantic pastel state chips, a compact human state summary and a customer state timeline showing purchase rhythm, decisions, restraint, engagement, orders and the next reevaluation trigger. |
+| 11N | Product graph and automations | An interactive product-relationship network with evidence/confidence/corrections, plus a living journey map showing population, exits, deferrals, failures and attributed outcomes. Journeys never display random holdouts. |
+| 11O | Results and delivery health | Live attributed revenue, campaign/journey split, delivered-to-order funnel, billing mapping, valid pooled control evidence and a provider-neutral domain warm-up/ramp calendar. Underpowered evidence never appears as proven lift. |
+| 11P | Landing | Small interactive product truths: Connect → Learn → Decide → Send → Measure; Ankita's changing state; and an audience/funnel/fee simulator driven by attributed revenue rather than list size or lift billing. |
+
+Global rules for 11I–11P:
+
+- every visualization is code-native, keyboard reachable, responsive and backed by real data;
+- selecting a node or branch must resolve to the underlying customers, records or receipt;
+- visualizations replace duplicated explanation rather than becoming additional dashboard cards;
+- gold means merchant action, blue means evidence, green means verified health/outcome and red
+  means material risk/failure;
+- ordinary operational screens stay sans-serif; mono remains limited to time, identifiers,
+  state labels and aligned evidence;
+- the bottom command dock is present throughout the authenticated workspace and becomes the
+  composer inside side/focused Ask Joon modes rather than rendering twice;
+- the app remains summary → workspace → receipt: complexity moves into tabs, drawers and
+  inspectors, never out of the product.
 
 ### Locked experience principle
 

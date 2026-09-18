@@ -20,7 +20,7 @@ import {
   ConsoleClock,
 } from "./Clock";
 import { DecisionMarquee, CustomerStories } from "../v3-landing/V3Sections";
-import { ChannelsStrip, FormsSection, JourneySection, SharperDecisions } from "../v3-landing/StaticSections";
+import { ChannelsStrip, FormsSection, IntelligenceLoop, JourneySection, SharperDecisions } from "../v3-landing/StaticSections";
 import { CrmCapture } from "../v3-landing/CrmCapture";
 import { PricingCalculator } from "../v3-landing/PricingCalculator";
 import type { PricingCalculatorInitialState } from "../v3-landing/pricing-calculator-state";
@@ -229,6 +229,7 @@ export function V2Landing({
           </section>
 
           {enhanced && <DecisionMarquee />}
+          {enhanced && <IntelligenceLoop />}
           {enhanced && <JourneySection />}
 
           {/* ── 3 · MORNING BRIEF, HALF page, visual-LEFT ─────────── */}
@@ -763,4 +764,3 @@ export default async function V2Page({
 
   return <V2Landing showBanner initialPal={initialPal} />;
 }
-

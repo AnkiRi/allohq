@@ -25,6 +25,18 @@ interface ActivityGroup { id: string; latest: ActivityRow; rows: ActivityRow[]; 
 function labelFor(type: string) { return LABELS[type] ?? type.replace(/_/g, " "); }
 function timeLabel(value: string | Date) { return new Date(value).toLocaleTimeString("en-IN", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }); }
 function dateLabel(value: string | Date) { return new Date(value).toLocaleDateString("en-IN", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", year: "numeric" }); }
+function dayKey(value: string | Date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+function dayHeading(value: string | Date) {
+  const current = dayKey(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const key = dayKey(value);
+  if (key === current) return "Today";
+  if (key === dayKey(yesterday)) return "Yesterday";
+  return new Date(value).toLocaleDateString("en-IN", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" });
+}
 function money(value: number | null) { return value ? `₹${Math.round(value).toLocaleString("en-IN")}` : "—"; }
 function entityHref(row: ActivityRow) {
   if (!row.entityId) return null;
@@ -65,6 +77,16 @@ export default function ActivityPage() {
     else if (!selectedId || !visible.some((group) => group.id === selectedId)) setSelectedId(visible[0]!.id);
   }, [selectedId, visible]);
   const selected = visible.find((group) => group.id === selectedId) ?? null;
+  const datedVisible = useMemo(() => {
+    const days = new Map<string, { label: string; groups: ActivityGroup[] }>();
+    for (const group of visible) {
+      const key = dayKey(group.latest.createdAt);
+      const existing = days.get(key);
+      if (existing) existing.groups.push(group);
+      else days.set(key, { label: dayHeading(group.latest.createdAt), groups: [group] });
+    }
+    return [...days.entries()].map(([key, value]) => ({ key, ...value }));
+  }, [visible]);
   const selectedRow = selected?.latest ?? null;
   const selectedHref = selectedRow ? entityHref(selectedRow) : null;
   const revenue = items.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
@@ -76,11 +98,11 @@ export default function ActivityPage() {
     <div className="grid min-h-[560px] gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
       <Surface className="overflow-hidden">
         <div className="border-b border-border p-3"><label className="flex min-h-10 items-center gap-2 rounded-lg border border-border px-3"><Search className="h-4 w-4 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search activity" className="min-w-0 flex-1 bg-transparent text-[14px] outline-none" /></label></div>
-        {isLoading ? <div className="flex justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : visible.length ? <><ol className="divide-y divide-border" role="listbox" aria-label="Activity events">{visible.map((group) => {
+        {isLoading ? <div className="flex justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : visible.length ? <>{datedVisible.map((day) => <section key={day.key} aria-labelledby={`activity-${day.key}`}><h2 id={`activity-${day.key}`} className="sticky top-0 z-10 border-b border-border bg-[var(--surface)]/95 px-4 py-3 text-[18px] font-medium backdrop-blur-sm">{day.label}</h2><ol className="divide-y divide-border" role="listbox" aria-label={`${day.label} activity`}>{day.groups.map((group) => {
           const row = group.latest;
           const active = group.id === selected?.id;
-          return <li key={group.id} role="presentation"><button role="option" onClick={() => { setSelectedId(group.id); setInspectorOpen(true); }} className={`grid w-full grid-cols-[58px_minmax(0,1fr)_auto] gap-3 px-4 py-4 text-left ${active ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]/60"}`} aria-selected={active}><span className="font-mono text-[12px] tabular-nums text-muted-foreground">{timeLabel(row.createdAt)}</span><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-medium">{labelFor(row.activityType)}</span>{group.rows.length > 1 && <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[11px] text-muted-foreground">{group.rows.length} runs</span>}{row.tier && <span className="text-[11px] text-muted-foreground">{TIER_NOTE[row.tier] ?? row.tier}</span>}</span><span className="mt-1 block text-[13px] leading-5 text-muted-foreground">{row.summary}</span></span><span className="flex items-center gap-2">{row.revenue ? <span className="font-mono text-[12px] text-[var(--success-color)]">{money(row.revenue)}</span> : null}<ChevronRight className="h-4 w-4 text-muted-foreground" /></span></button></li>;
-        })}</ol>{activityQuery.hasNextPage && <div className="border-t border-border p-3 text-center"><button onClick={() => activityQuery.fetchNextPage()} disabled={activityQuery.isFetchingNextPage} className="min-h-9 rounded-lg border border-border px-4 text-[13px] font-medium disabled:opacity-50">{activityQuery.isFetchingNextPage ? "Loading…" : "Load older activity"}</button></div>}</> : <div className="px-6 py-20 text-center"><p className="text-[15px] font-medium">No activity in this view</p><p className="mt-1 text-[13px] text-muted-foreground">Background evaluations and completed work will appear here.</p></div>}
+          return <li key={group.id} role="presentation"><button role="option" onClick={() => { setSelectedId(group.id); setInspectorOpen(true); }} className={`grid w-full grid-cols-[58px_minmax(0,1fr)_auto] gap-3 px-4 py-4 text-left ${active ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]/60"}`} aria-selected={active}><span className="font-mono text-[12px] tabular-nums text-muted-foreground">{timeLabel(row.createdAt)}</span><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="text-[14px] font-medium">{labelFor(row.activityType)}</span>{group.rows.length > 1 && <span className="rounded-full bg-[var(--surface-soft)] px-2 py-0.5 text-[12px] text-muted-foreground">{group.rows.length} runs</span>}{row.tier && <span className="text-[12px] text-muted-foreground">{TIER_NOTE[row.tier] ?? row.tier}</span>}</span><span className="mt-1 block text-[14px] leading-5 text-muted-foreground">{row.summary}</span></span><span className="flex items-center gap-2">{row.revenue ? <span className="font-mono text-[12px] text-[var(--success-color)]">{money(row.revenue)}</span> : null}<ChevronRight className="h-4 w-4 text-muted-foreground" /></span></button></li>;
+        })}</ol></section>)}{activityQuery.hasNextPage && <div className="border-t border-border p-3 text-center"><button onClick={() => activityQuery.fetchNextPage()} disabled={activityQuery.isFetchingNextPage} className="min-h-9 rounded-lg border border-border px-4 text-[13px] font-medium disabled:opacity-50">{activityQuery.isFetchingNextPage ? "Loading…" : "Load earlier activity"}</button></div>}</> : <div className="px-6 py-20 text-center"><p className="text-[15px] font-medium">No activity in this view</p><p className="mt-1 text-[13px] text-muted-foreground">Background evaluations and completed work will appear here.</p></div>}
       </Surface>
       {inspectorOpen && <button className="fixed inset-0 z-40 bg-black/25 lg:hidden" onClick={() => setInspectorOpen(false)} aria-label="Close activity receipt" />}
       <aside className={`${inspectorOpen ? "fixed inset-x-3 bottom-3 top-20 z-50 overflow-auto" : "hidden"} lg:sticky lg:top-0 lg:z-auto lg:block lg:self-start`} aria-label="Activity receipt"><Surface className="overflow-hidden">{selected && selectedRow ? <>

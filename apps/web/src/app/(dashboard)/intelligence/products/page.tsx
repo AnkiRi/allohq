@@ -12,6 +12,7 @@ const TYPES = ["all", "cross_sell", "upsell", "replenishment", "bundle", "substi
 
 export default function ProductGraphPage() {
   const [type, setType] = useState<(typeof TYPES)[number]>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id;
   const utils = trpc.useUtils();
@@ -28,6 +29,10 @@ export default function ProductGraphPage() {
     onSuccess: () => toast("Product graph rebuild queued.", "success"),
   });
   const rows = query.data ?? [];
+  const selected = rows.find((row: any) => row.id === selectedId) ?? rows[0] ?? null;
+  const related = selected
+    ? rows.filter((row: any) => row.source?.id === selected.source?.id).slice(0, 5)
+    : [];
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6">
       <PageHeader title="Product graph" description="See what customers buy together, what tends to come next and which relationships Joon may use for cross-sell, replenishment or upgrades." actions={<button
@@ -55,6 +60,15 @@ export default function ProductGraphPage() {
           </button>
         ))}
       </div>
+      {selected && (
+        <section className="overflow-hidden rounded-xl border border-border bg-card" aria-label="Selected product relationships">
+          <div className="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-[18px] font-medium">What tends to follow {selected.source?.title ?? "this product"}</h2><p className="mt-1 text-[13px] text-muted-foreground">Select a relationship to inspect its evidence, approve it or use it in a campaign.</p></div><span className="text-[12px] text-muted-foreground">{related.length} visible connection{related.length === 1 ? "" : "s"}</span></div>
+          <div className="grid min-h-[260px] gap-6 p-5 lg:grid-cols-[minmax(220px,.8fr)_minmax(0,1.5fr)] lg:items-center">
+            <div className="mx-auto flex min-h-28 w-full max-w-xs items-center justify-center rounded-xl border border-[var(--attention)]/35 bg-[var(--attention-soft)] px-5 text-center"><div><p className="text-[12px] text-[var(--attention)]">Starting product</p><p className="mt-2 text-[16px] font-medium">{selected.source?.title ?? "Unknown product"}</p></div></div>
+            <div className="grid gap-2 sm:grid-cols-2">{related.map((row: any) => <button key={row.id} onClick={() => setSelectedId(row.id)} className={`relative rounded-xl border p-4 text-left transition-colors before:absolute before:-left-6 before:top-1/2 before:h-px before:w-6 before:bg-border ${row.id === selected.id ? "border-[var(--evidence)] bg-[var(--evidence-soft)]" : "border-border hover:bg-[var(--surface-soft)]"}`}><span className="text-[12px] capitalize text-muted-foreground">{row.relationshipType.replace("_", " ")}</span><span className="mt-1 block text-[14px] font-medium">{row.target?.title ?? "Unknown product"}</span><span className="mt-2 block text-[12px] text-muted-foreground">{row.supportCount || "Catalog"} evidence · {Math.round(row.confidence * 100)}% confidence{row.medianLagDays != null ? ` · ~${Math.round(row.medianLagDays)} days` : ""}</span></button>)}</div>
+          </div>
+        </section>
+      )}
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="hidden grid-cols-[1.2fr_24px_1.2fr_.8fr_1.5fr_auto] gap-3 border-b border-border bg-[var(--surface-soft)] px-4 py-2 text-[12px] text-muted-foreground lg:grid">
           <span>From</span>
@@ -78,7 +92,8 @@ export default function ProductGraphPage() {
           rows.map((row: any) => (
             <div
               key={row.id}
-              className="grid gap-3 border-b border-border px-4 py-4 last:border-0 lg:grid-cols-[1.2fr_24px_1.2fr_.8fr_1.5fr_auto] lg:items-center"
+              onClick={() => setSelectedId(row.id)}
+              className={`grid cursor-pointer gap-3 border-b border-border px-4 py-4 last:border-0 lg:grid-cols-[1.2fr_24px_1.2fr_.8fr_1.5fr_auto] lg:items-center ${selected?.id === row.id ? "bg-[var(--evidence-soft)]" : "hover:bg-[var(--surface-soft)]/60"}`}
             >
               <div><span className="text-[11px] text-muted-foreground lg:hidden">From</span><span className="block text-sm font-medium">{row.source?.title ?? "Unknown product"}</span></div>
               <span className="hidden text-muted-foreground lg:block">→</span>

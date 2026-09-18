@@ -1,5 +1,16 @@
 import { Rise } from "../v2/Clock";
 
+export function IntelligenceLoop() {
+  const steps = [
+    ["Connect", "Orders, customers, products and consent"],
+    ["Learn", "Buying rhythm, state and product relationships"],
+    ["Decide", "Who needs contact and who should be left alone"],
+    ["Send", "Approved campaigns and journeys at a useful time"],
+    ["Measure", "Attributed orders and pooled control evidence"],
+  ] as const;
+  return <section className="v3-system"><div className="v2-wrap"><Rise><div className="v3-system__head"><h2 className="v2-section__h">The loop gets sharper without getting louder.</h2><p className="v2-section__lede">Joon turns store history into customer state, customer state into fewer decisions, and every outcome into better evidence for the next one.</p></div><ol className="v3-system__loop" aria-label="How Joon works">{steps.map(([label, copy], index) => <li key={label}><span className="mono">0{index + 1}</span><strong>{label}</strong><p>{copy}</p>{index < steps.length - 1 ? <i aria-hidden="true">→</i> : null}</li>)}</ol></Rise></div></section>;
+}
+
 export function JourneySection() {
   const decisions = [
     ["Day 28", "Inside her usual 45-day rhythm", "Left alone", "She normally buys at full price"],
