@@ -778,8 +778,9 @@ Status: eight controlled phases, 11A–11H. Phase 11A is complete. Phase 11B now
 scan-first Today structure but still needs notification/context hardening. Phase 11C now has
 its master-detail Decisions and Activity workspaces and awaits production-data verification.
 Phase 11D has its customer-intelligence workspace migration and awaits deployed-data verification.
-Phase 11E has an initial layout pass but is not complete against its acceptance criteria; 11F,
-11G and 11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
+Phase 11E is implemented and awaits deployed-data verification. Phase 11F now has its automation
+list/detail workspace; its separate template view and deployed journey-state verification remain.
+Phases 11G and 11H remain. The two rollout labels used in the interactive-reference brief mean “foundation
 and benchmark routes” followed by “remaining routes”; they do not replace this eight-phase
 checklist. This programme is a
 representation and interaction redesign, not a product-scope reduction. The current build is
@@ -1030,9 +1031,28 @@ Acceptance:
 Outcome: merchants can understand what is active, what is a draft, what is paused and what
 happens next without reading workflow-engine internals.
 
+Implementation status (18 September 2026): **automation list/detail workspace implemented;
+separate template view and deployed journey-state verification remain**.
+
+- the automation list now opens with active, draft/ready, paused and recommended counts and
+  offers matching status work views without removing generation, activation, editing, pausing,
+  resuming or experiment actions;
+- automation detail is reorganized into Overview, Messages, Activity and Experiments instead
+  of one continuous stack;
+- Overview retains trigger, workflow steps, eligibility preflight, sender/domain readiness and
+  the explicit rule that journeys have no random control group;
+- Messages retains every generated email and the blocked future-channel artifacts already
+  stored for SMS, WhatsApp and RCS, without implying those channels can deliver in public v1;
+- Activity retains current entrants, progress, exits, suppression reasons, pauses and channel
+  paths, with an honest empty state before the journey runs;
+- Experiments retains every existing A/B result and a direct path to configure the first test;
+- action colours now follow the shared semantic system: gold requests merchant action, green
+  means genuinely active/healthy, blue remains measurement.
+
 Required work:
 
-- separate active, draft/recommended, paused and template views;
+- active, draft/recommended and paused work views are implemented; a separate template view
+  remains;
 - show trigger, waits, conditions, purchase exits, suppression, quiet hours and next scheduled
   work in merchant language;
 - remove random-holdout concepts from journeys everywhere; all eligible customers receive

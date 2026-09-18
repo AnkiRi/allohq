@@ -5,6 +5,7 @@ import { ArrowLeft, FileText, Sparkles, Play, Zap, Clock, Mail, Timer, GitBranch
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { useState } from "react";
 
 type WorkflowNodeType = "send_email" | "send_sms" | "send_whatsapp" | "send_rcs" | "wait" | "condition" | "webhook" | "channel_select" | "ab_test" | "silence_check";
 
@@ -64,6 +65,7 @@ export default function AutomationDetailPage() {
   const params = useParams();
   const automationId = params.id as string;
   const { toast } = useToast();
+  const [activeView, setActiveView] = useState<"overview" | "messages" | "activity" | "experiments">("overview");
 
   type Template = { id: string; name: string; subject: string; previewText?: string | null };
   type WhatsAppTemplate = { id: string; name: string; body: string; variables: string[]; category: string; language: string };
@@ -122,8 +124,8 @@ export default function AutomationDetailPage() {
   const workflowNodes = (data.nodes ?? []) as WorkflowNodeData[];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-7xl space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/automations" className="p-2 rounded-lg hover:bg-muted transition-colors">
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
@@ -136,7 +138,7 @@ export default function AutomationDetailPage() {
             <p className="text-[11px] text-muted-foreground mt-0.5">{data.description}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <Link
             href={`/automations/${automationId}/edit`}
             className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-xs font-sans font-bold text-foreground hover:bg-muted transition-all"
@@ -183,6 +185,8 @@ export default function AutomationDetailPage() {
           )}
         </div>
       </div>
+      <nav className="app-tab-bed overflow-x-auto" role="tablist" aria-label="Automation workspace">{(["overview", "messages", "activity", "experiments"] as const).map((view) => <button key={view} role="tab" aria-selected={activeView === view} onClick={() => setActiveView(view)} className={`app-tab capitalize ${activeView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{view}</button>)}</nav>
+      {activeView === "overview" && <>
       {preflight && (
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center justify-between gap-4">
@@ -279,7 +283,10 @@ export default function AutomationDetailPage() {
         </div>
       )}
 
+      </>}
+
       {/* Generated emails */}
+      {activeView === "messages" && <>
       <div className="border border-border rounded-xl bg-card overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-3">
           <Sparkles className="w-4 h-4 text-muted-foreground" />
@@ -319,7 +326,10 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <MessageSquare className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-serif">SMS messages</h2>
+            <div>
+              <h2 className="text-[13px] font-bold text-foreground font-serif">SMS drafts</h2>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Prepared for future channel support. Joon cannot deliver SMS yet.</p>
+            </div>
           </div>
           <div className="divide-y divide-border">
             {data.smsTemplates.map((template, i) => (
@@ -356,7 +366,10 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Phone className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-serif">WhatsApp messages</h2>
+            <div>
+              <h2 className="text-[13px] font-bold text-foreground font-serif">WhatsApp drafts</h2>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Prepared for future channel support. Joon cannot deliver WhatsApp yet.</p>
+            </div>
           </div>
           <div className="divide-y divide-border">
             {data.whatsappTemplates.map((template, i) => (
@@ -393,7 +406,10 @@ export default function AutomationDetailPage() {
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Radio className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[13px] font-bold text-foreground font-serif">RCS messages</h2>
+            <div>
+              <h2 className="text-[13px] font-bold text-foreground font-serif">RCS drafts</h2>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Prepared for future channel support. Joon cannot deliver RCS yet.</p>
+            </div>
           </div>
           <div className="divide-y divide-border">
             {data.rcsTemplates.map((template, i) => (
@@ -437,9 +453,10 @@ export default function AutomationDetailPage() {
           </div>
         </div>
       )}
+      </>}
 
       {/* Journey Monitoring */}
-      {journeyStats && journeyStats.total > 0 && (
+      {activeView === "activity" && journeyStats && journeyStats.total > 0 && (
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <Route className="w-4 h-4 text-muted-foreground" />
@@ -450,7 +467,7 @@ export default function AutomationDetailPage() {
           {/* Journey stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
             {[
-              { label: "Active", value: journeyStats.active, color: "text-decision" },
+              { label: "Active", value: journeyStats.active, color: "text-[var(--success)]" },
               { label: "Completed", value: journeyStats.completed, color: "text-outcome" },
               { label: "Left alone", value: journeyStats.suppressed, color: "text-warning" },
               { label: "Paused", value: journeyStats.paused, color: "text-muted-foreground" },
@@ -515,7 +532,7 @@ export default function AutomationDetailPage() {
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-sans ${
-                      journey.status === "active" ? "bg-decision/10 text-decision" :
+                      journey.status === "active" ? "bg-[var(--success-soft)] text-[var(--success)]" :
                       journey.status === "completed" ? "bg-outcome/10 text-outcome" :
                       journey.status === "suppressed" ? "bg-[var(--color-warning)]/10 text-warning" :
                       "bg-muted text-muted-foreground"
@@ -534,9 +551,10 @@ export default function AutomationDetailPage() {
           )}
         </div>
       )}
+      {activeView === "activity" && (!journeyStats || journeyStats.total === 0) && <div className="app-surface p-10 text-center"><p className="text-[14px] font-medium">No journey activity yet</p><p className="mt-1 text-[13px] text-muted-foreground">Entrants, exits, pauses and delivery outcomes will appear after this automation begins processing customers.</p></div>}
 
       {/* A/B Tests */}
-      {abTests && abTests.length > 0 && (
+      {activeView === "experiments" && abTests && abTests.length > 0 && (
         <div className="border border-border rounded-xl bg-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-3">
             <FlaskConical className="w-4 h-4 text-muted-foreground" />
@@ -605,6 +623,7 @@ export default function AutomationDetailPage() {
           </div>
         </div>
       )}
+      {activeView === "experiments" && (!abTests || abTests.length === 0) && <div className="app-surface p-10 text-center"><p className="text-[14px] font-medium">No experiments configured</p><p className="mt-1 text-[13px] text-muted-foreground">Create an A/B test when you have a specific message or timing question to compare.</p><Link href={`/automations/${automationId}/ab-test`} className="mt-4 inline-flex rounded-lg border border-border px-3 py-2 text-[13px] font-medium">Open experiments</Link></div>}
     </div>
   );
 }

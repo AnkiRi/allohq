@@ -51,6 +51,7 @@ export default function AutomationsPage() {
 
   const [selectedModel, setSelectedModel] = useState<AIModelId>("claude-sonnet-5");
   const [polling, setPolling] = useState(false);
+  const [statusView, setStatusView] = useState<"all" | "active" | "draft" | "paused" | "recommended">("all");
 
   const { data: brandStatus } = (trpc.ai.brandProfileStatus as any).useQuery(
     { storeId },
@@ -108,16 +109,21 @@ export default function AutomationsPage() {
   } satisfies MutOpts<unknown>) as Mut<{ id: string }>;
 
   const isGenerating = automations?.some((a) => a.status === "generating");
+  const visibleAutomations = automations?.filter((automation) => {
+    if (statusView === "all") return true;
+    if (statusView === "draft") return ["draft", "ready", "generating"].includes(automation.status);
+    return automation.status === statusView;
+  });
 
   return (
     <motion.div
-      className="space-y-6"
+      className="mx-auto max-w-7xl space-y-6"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
       {/* Header */}
-      <motion.div variants={itemVariants} className="flex items-center justify-between">
+      <motion.div variants={itemVariants} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="section-header accent-bar-left text-[22px] tracking-[-0.5px] font-semibold text-foreground font-serif flex items-center gap-2">
             <Sparkles className="w-5 h-5" /> Automations
@@ -126,13 +132,13 @@ export default function AutomationsPage() {
             {automations ? `${automations.filter((a) => a.status === "active").length} live, ${automations.filter((a) => a.status === "ready").length} ready to go, ${automations.filter((a) => a.status === "generating").length} being written` : "Email journeys that keep working after you approve them"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {storeId && automations && automations.some((a) => a.status === "recommended") && (
             <button
               onClick={() => storeId && generateAllMut.mutate({ storeId, model: selectedModel })}
               disabled={generateAllMut.isPending || !hasBrandProfile}
               title={!hasBrandProfile ? "Run brand analysis first" : ""}
-              className="flex items-center gap-2 px-4 py-2 bg-decision text-decision-foreground rounded-lg text-xs font-sans font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+              className="app-attention-button flex items-center gap-2 px-4 py-2 text-xs font-bold disabled:opacity-50"
             >
               {generateAllMut.isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -146,13 +152,17 @@ export default function AutomationsPage() {
         </div>
       </motion.div>
 
+      <div className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Automation summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Active</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => item.status === "active").length ?? 0}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Ready or draft</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => ["ready", "draft", "generating"].includes(item.status)).length ?? 0}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Paused</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => item.status === "paused").length ?? 0}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Recommended</p><p className="mt-1 text-[24px] font-medium">{automations?.filter((item) => item.status === "recommended").length ?? 0}</p></div></div>
+
+      <div className="app-tab-bed w-fit max-w-full overflow-x-auto" role="tablist" aria-label="Automation status">{(["all", "active", "draft", "paused", "recommended"] as const).map((view) => <button key={view} role="tab" aria-selected={statusView === view} onClick={() => setStatusView(view)} className={`app-tab capitalize ${statusView === view ? "bg-[var(--surface)] text-foreground shadow-sm" : ""}`}>{view === "draft" ? "Draft and ready" : view}</button>)}</div>
+
       {/* Brand analysis gate banner */}
       {storeId && !hasBrandProfile && (
         <motion.div
           variants={itemVariants}
           className="glass-card-static flex items-center gap-3 px-4 py-3"
         >
-          <Palette className="w-4 h-4 text-terracotta flex-shrink-0" />
+          <Palette className="w-4 h-4 text-[var(--attention)] flex-shrink-0" />
           <div className="flex-1">
             <p className="text-[13px] font-bold text-foreground">Let's set up your brand voice first</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
@@ -161,7 +171,7 @@ export default function AutomationsPage() {
           </div>
           <Link
             href="/intelligence/brand"
-            className="flex items-center gap-2 px-4 py-2 bg-terracotta text-white rounded-lg text-xs font-sans hover:bg-terracotta/90 transition-all whitespace-nowrap"
+            className="app-attention-button flex items-center gap-2 px-4 py-2 text-xs whitespace-nowrap"
           >
             <Palette className="w-3.5 h-3.5" />
             Set up brand
@@ -175,13 +185,13 @@ export default function AutomationsPage() {
           variants={itemVariants}
           className="glass-card-static flex items-center gap-3 px-4 py-3"
         >
-          <Loader2 className="w-4 h-4 text-warm-gold animate-spin flex-shrink-0" />
+          <Loader2 className="w-4 h-4 text-[var(--attention)] animate-spin flex-shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-foreground">joon is writing your messages…</p>
             <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
               Drafting the emails and timing for this journey, usually 30 to 60 seconds per automation.
             </p>
-            <p className="text-[10px] text-warm-gold mt-1">
+            <p className="text-[12px] text-[var(--attention)] mt-1">
               You'll see each one update here as it's done.
             </p>
           </div>
@@ -195,14 +205,14 @@ export default function AutomationsPage() {
             <div key={i} className="h-40 glass-skeleton rounded-xl" />
           ))}
         </div>
-      ) : automations && automations.length > 0 ? (
+      ) : visibleAutomations && visibleAutomations.length > 0 ? (
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
         >
-          {automations.map((automation) => {
+          {visibleAutomations.map((automation) => {
             const badge = STATUS_BADGES[automation.status] ?? STATUS_BADGES["recommended"]!;
             const emailCount = automation.templateIds.length;
 
@@ -248,7 +258,7 @@ export default function AutomationsPage() {
                     <button
                       onClick={() => generateMut.mutate({ id: automation.id, model: selectedModel })}
                       disabled={generateMut.isPending}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-terracotta text-white rounded-lg text-xs font-sans font-bold hover:bg-terracotta/90 disabled:opacity-50 transition-all"
+                      className="app-attention-button flex items-center gap-1.5 px-4 py-2 text-xs font-bold disabled:opacity-50"
                     >
                       {generateMut.isPending ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -259,7 +269,7 @@ export default function AutomationsPage() {
                     </button>
                   )}
                   {automation.status === "generating" && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-warm-gold/10 text-warm-gold border border-warm-gold/20 rounded-lg text-xs font-sans">
+                    <div className="flex items-center gap-1.5 rounded-lg border border-[var(--attention)]/25 bg-[var(--attention-soft)] px-3 py-1.5 text-xs text-[var(--attention)]">
                       <Loader2 className="w-3 h-3 animate-spin" />
                       joon is writing…
                     </div>
@@ -282,7 +292,7 @@ export default function AutomationsPage() {
                       <button
                         onClick={() => activateMut.mutate({ id: automation.id })}
                         disabled={activateMut.isPending}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-olive text-white rounded-lg text-xs font-sans font-bold hover:bg-olive/90 disabled:opacity-50 transition-all"
+                        className="app-attention-button flex items-center gap-1.5 px-4 py-2 text-xs font-bold disabled:opacity-50"
                       >
                         <Play className="w-3 h-3" />
                         Go Live
@@ -332,7 +342,7 @@ export default function AutomationsPage() {
                       <button
                         onClick={() => resumeMut.mutate({ id: automation.id })}
                         disabled={resumeMut.isPending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-olive/80 text-white rounded-lg text-xs font-sans hover:bg-olive/90 disabled:opacity-50 transition-all"
+                        className="app-attention-button flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
                       >
                         <Play className="w-3 h-3" />
                         Resume
@@ -353,6 +363,13 @@ export default function AutomationsPage() {
             );
           })}
         </motion.div>
+      ) : statusView !== "all" ? (
+        <div className="rounded-xl border border-border bg-card px-6 py-12 text-center">
+          <Sparkles className="mx-auto h-7 w-7 text-muted-foreground/60" />
+          <h2 className="mt-3 text-base font-medium text-foreground">No {statusView === "draft" ? "draft or ready" : statusView} automations</h2>
+          <p className="mt-1 text-sm text-muted-foreground">There is nothing in this view right now. Your other automations are unchanged.</p>
+          <button type="button" onClick={() => setStatusView("all")} className="mt-4 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">View all automations</button>
+        </div>
       ) : (
         <SmartEmptyState
           icon={Sparkles}
