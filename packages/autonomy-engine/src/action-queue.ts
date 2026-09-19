@@ -9,29 +9,44 @@ export async function proposeAction(
   urgencyScore: number,
   confidenceScore: number
 ): Promise<ActionResult> {
-  // Dedup: skip if an identical pending/approved action already exists
-  const existing = await prisma.actionQueue.findFirst({
-    where: {
-      storeId: action.storeId,
-      type: action.type,
-      ...(action.category ? { category: action.category } : {}),
-      status: { in: [ActionStatus.PENDING, ActionStatus.APPROVED] },
-    },
-  });
+  // Prefer a material fingerprint. A completed/rejected unchanged opportunity
+  // stays resolved; a pending one is refreshed in place with a new evaluation
+  // timestamp instead of creating another indistinguishable queue card.
+  const existing = action.fingerprint
+    ? await prisma.actionQueue.findUnique({
+        where: {
+          storeId_fingerprint: { storeId: action.storeId, fingerprint: action.fingerprint },
+        },
+      })
+    : await prisma.actionQueue.findFirst({
+        where: {
+          storeId: action.storeId,
+          type: action.type,
+          ...(action.category ? { category: action.category } : {}),
+          status: { in: [ActionStatus.PENDING, ActionStatus.APPROVED] },
+        },
+      });
   if (existing) {
+    const mayRefresh = [ActionStatus.PENDING, ActionStatus.APPROVED].includes(
+      existing.status as ActionStatus
+    );
     await prisma.actionQueue.update({
       where: { id: existing.id },
       data: {
-        urgencyScore,
-        confidenceScore,
-        reasoning: action.reasoning,
-        estimatedRevenue: action.estimatedRevenue ?? null,
-        payload: action.payload as any,
-        expiresAt: action.expiresAt ?? null,
+        ...(mayRefresh
+          ? {
+              urgencyScore,
+              confidenceScore,
+              reasoning: action.reasoning,
+              estimatedRevenue: action.estimatedRevenue ?? null,
+              payload: action.payload as any,
+              expiresAt: action.expiresAt ?? null,
+            }
+          : {}),
         lastEvaluatedAt: new Date(),
       },
     });
-    return { id: existing.id, status: existing.status as ActionStatus, autoExecuted: false };
+    return { id: existing.id, status: existing.status as ActionStatus, autoExecuted: false, created: false };
   }
 
   const record = await prisma.actionQueue.create({
@@ -45,6 +60,7 @@ export async function proposeAction(
       reasoning: action.reasoning,
       estimatedRevenue: action.estimatedRevenue ?? null,
       payload: action.payload as any,
+      fingerprint: action.fingerprint ?? null,
       expiresAt: action.expiresAt ?? null,
       lastEvaluatedAt: new Date(),
     },
@@ -54,6 +70,7 @@ export async function proposeAction(
     id: record.id,
     status: ActionStatus.PENDING,
     autoExecuted: false,
+    created: true,
   };
 }
 

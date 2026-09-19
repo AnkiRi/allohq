@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, ownerStoreProcedure } from "../trpc";
-import { createSenderDomain, getSenderDomain, requestSenderDomainVerification, selectedEmailProvider, type SenderDomainProvider } from "@allohq/messaging";
+import { createSenderDomain, getSenderDomain, requestSenderDomainVerification, selectedEmailProvider, warmupDailyCap, warmupHealthAction, type SenderDomainProvider } from "@allohq/messaging";
 import { getStoreSenderIdentity } from "@allohq/database";
 import { canReuseSenderDomain, conflictsWithConfiguredDomain } from "../lib/sender-domain-provider";
 
@@ -14,13 +14,59 @@ function providerData(data: any) {
   };
 }
 
+async function reputationWindow(prisma: any, storeId: string, provider: "resend" | "ses", now = new Date()) {
+  const windowStartsAt = new Date(now.getTime() - 24 * 60 * 60 * 1_000);
+  const where = { storeId, provider, sentAt: { gte: windowStartsAt } };
+  const [attempted, delivered, bounced, complained] = await Promise.all([
+    prisma.messageLog.count({ where }),
+    prisma.messageLog.count({ where: { ...where, status: { in: ["delivered", "opened", "clicked"] } } }),
+    prisma.messageLog.count({ where: { ...where, status: "bounced" } }),
+    prisma.messageLog.count({ where: { ...where, error: "spam_complaint" } }),
+  ]);
+  const recommended = attempted < 100
+    ? "hold"
+    : warmupHealthAction({ delivered, bounced, complained });
+  return {
+    provider,
+    windowStartsAt,
+    windowEndsAt: now,
+    attempted,
+    delivered,
+    bounced,
+    complained,
+    bounceRate: attempted ? bounced / attempted : 0,
+    complaintRate: delivered ? complained / delivered : 0,
+    recommended,
+    reason: attempted < 100
+      ? `Hold until at least 100 delivery attempts provide enough evidence (${attempted} so far).`
+      : recommended === "grow"
+        ? "Delivery health is inside Joon's conservative bounce and complaint thresholds."
+        : recommended === "pause"
+          ? "Complaint rate is above the safety threshold; pause and review the audience and copy."
+          : "Bounce or complaint evidence requires holding the current volume tier.",
+  } as const;
+}
+
 export const senderDomainsRouter = router({
   get: ownerStoreProcedure.query(async ({ ctx, input }) => {
-    const [domain, warmup] = await Promise.all([
+    const provider = selectedEmailProvider();
+    const [domain, warmup, reputation, assessments] = await Promise.all([
       getStoreSenderIdentity(input.storeId, selectedEmailProvider()),
       ctx.prisma.sesWarmupState.findUnique({ where: { storeId: input.storeId } }),
+      reputationWindow(ctx.prisma, input.storeId, provider),
+      ctx.prisma.senderReputationAssessment.findMany({
+        where: { storeId: input.storeId },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      }),
     ]);
-    return domain ? { ...domain, warmup } : null;
+    return domain ? {
+      ...domain,
+      warmup,
+      reputation,
+      assessments,
+      currentDailyCap: warmupDailyCap(warmup?.healthyDay ?? 1, Number.MAX_SAFE_INTEGER),
+    } : null;
   }),
   configure: ownerStoreProcedure.input(z.object({ domain: domainSchema })).mutation(async ({ ctx, input }) => {
     const providerName = selectedEmailProvider();
@@ -75,4 +121,113 @@ export const senderDomainsRouter = router({
     const now = new Date();
     return ctx.prisma.sesWarmupState.upsert({ where: { storeId: input.storeId }, create: { storeId: input.storeId, startedAt: now, overrideReason: input.reason, overrideRecordedAt: now }, update: { pausedAt: null, heldUntil: null, overrideReason: input.reason, overrideRecordedAt: now } });
   }),
+  reviewWarmup: ownerStoreProcedure
+    .input(z.object({
+      action: z.enum(["grow", "hold", "pause"]),
+      reason: z.string().trim().min(12).max(500),
+      rollbackCondition: z.string().trim().min(12).max(500),
+      reviewAfterHours: z.number().int().min(1).max(168).default(24),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      const provider = selectedEmailProvider();
+      const [health, current] = await Promise.all([
+        reputationWindow(ctx.prisma, input.storeId, provider, now),
+        ctx.prisma.sesWarmupState.upsert({
+          where: { storeId: input.storeId },
+          create: { storeId: input.storeId, startedAt: now },
+          update: {},
+        }),
+      ]);
+      if (input.action === "grow" && health.recommended !== "grow") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: health.reason,
+        });
+      }
+      const nextTier = input.action === "grow" ? Math.min(current.healthyDay + 1, 31) : current.healthyDay;
+      const heldUntil = input.action === "hold" ? new Date(now.getTime() + 24 * 60 * 60 * 1_000) : null;
+      const pausedAt = input.action === "pause" ? now : null;
+      const capBefore = warmupDailyCap(current.healthyDay, Number.MAX_SAFE_INTEGER);
+      const capAfter = warmupDailyCap(nextTier, Number.MAX_SAFE_INTEGER);
+      const [, assessment] = await ctx.prisma.$transaction([
+        ctx.prisma.sesWarmupState.update({
+          where: { storeId: input.storeId },
+          data: {
+            healthyDay: nextTier,
+            lastGrowthAt: now,
+            heldUntil,
+            pausedAt,
+            overrideReason: input.reason,
+            overrideRecordedAt: now,
+          },
+        }),
+        ctx.prisma.senderReputationAssessment.create({
+          data: {
+            storeId: input.storeId,
+            provider,
+            windowStartsAt: health.windowStartsAt,
+            windowEndsAt: health.windowEndsAt,
+            attempted: health.attempted,
+            delivered: health.delivered,
+            bounced: health.bounced,
+            complained: health.complained,
+            action: input.action,
+            dailyCapBefore: capBefore,
+            dailyCapAfter: capAfter,
+            evidence: {
+              recommended: health.recommended,
+              bounceRate: health.bounceRate,
+              complaintRate: health.complaintRate,
+              explanation: health.reason,
+            },
+            reviewedBy: ctx.userId,
+            reviewReason: input.reason,
+            reviewedAt: now,
+            nextReviewAt: new Date(now.getTime() + input.reviewAfterHours * 60 * 60 * 1_000),
+            rollbackCondition: input.rollbackCondition,
+          },
+        }),
+        ctx.prisma.agentObservation.create({
+          data: {
+            storeId: input.storeId,
+            type: `sender_reputation_${input.action}`,
+            severity: input.action === "pause" ? "critical" : input.action === "hold" ? "warning" : "info",
+            summary:
+              input.action === "grow"
+                ? `Reviewed sending cap increased to ${capAfter.toLocaleString("en-IN")} messages per day.`
+                : input.action === "hold"
+                  ? `Sending volume remains at ${capAfter.toLocaleString("en-IN")} messages per day pending more evidence.`
+                  : "Email delivery was paused after a reputation review.",
+            data: {
+              provider,
+              dailyCapBefore: capBefore,
+              dailyCapAfter: capAfter,
+              nextReviewAt: new Date(now.getTime() + input.reviewAfterHours * 60 * 60 * 1_000),
+              rollbackCondition: input.rollbackCondition,
+            },
+            suggestedAction: {
+              type: "review_sender_reputation",
+              description: input.rollbackCondition,
+            },
+          },
+        }),
+        input.action === "pause"
+          ? ctx.prisma.store.update({
+              where: { id: input.storeId },
+              data: {
+                emailSendingPausedAt: now,
+                emailSendingPauseReason: `Warm-up review pause: ${input.reason}`,
+              },
+            })
+          : ctx.prisma.store.updateMany({
+              where: {
+                id: input.storeId,
+                emailSendingPauseReason: { startsWith: "Warm-up review pause:" },
+              },
+              data: { emailSendingPausedAt: null, emailSendingPauseReason: null },
+            }),
+      ]);
+      return { assessment, nextTier, dailyCap: capAfter };
+    }),
 });

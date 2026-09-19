@@ -85,7 +85,7 @@ export function GrowthImpactPanel({ storeId, windowDays, currency }: { storeId: 
   return (
     <ConsoleFrame title="joon · growth intelligence">
       <p className="font-mono text-[10.5px] text-muted-foreground mb-4">
-        send where lift is proven · hold back where it isn&apos;t · {windowDays}-day window
+        pooled campaign evidence · separate from billing · {windowDays}-day window
       </p>
 
       {/* The thesis, stated once. */}
@@ -112,7 +112,7 @@ export function GrowthImpactPanel({ storeId, windowDays, currency }: { storeId: 
           <div className="font-mono text-[10.5px] text-muted-foreground lowercase mb-1.5">sends joon would skip</div>
           <div className="font-mono text-[22px] tabular-nums text-foreground">{t.sendsAvoidablePct}%</div>
           <div className="font-sans text-[11px] text-muted-foreground mt-1">
-            {num(t.sendsAvoidable)} of {num(t.messaged)} messages — no proven lift, so drop them
+            {num(t.sendsAvoidable)} of {num(t.messaged)} messages in adequately measured campaigns where sending did not improve revenue
           </div>
         </div>
         <div className="rounded-xl border border-border bg-background/40 p-4">
@@ -186,9 +186,8 @@ export function GrowthImpactPanel({ storeId, windowDays, currency }: { storeId: 
         calls get sharper — every holdout adds to what it knows about who to send and who to skip.
       </p>
 
-      <p className="font-sans text-[11px] text-muted-foreground/70 italic mt-2">
-        Demo data — figures illustrative while control measurement accrues; the send/hold call is
-        computed live from each segment&apos;s measured lift.
+      <p className="font-sans text-[11px] text-muted-foreground/70 mt-2">
+        Every row above comes from this store&apos;s closed campaign measurements. Underpowered rows stay labelled learning and never become a send/hold conclusion.
       </p>
     </ConsoleFrame>
   );

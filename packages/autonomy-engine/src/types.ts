@@ -36,12 +36,15 @@ export interface ProposedAction {
   estimatedRevenue?: number;
   payload: Record<string, unknown>;
   expiresAt?: Date;
+  /** Stable material identity; prevents an unchanged opportunity resurfacing. */
+  fingerprint?: string;
 }
 
 export interface ActionResult {
   id: string;
   status: ActionStatus;
   autoExecuted: boolean;
+  created: boolean;
 }
 
 export interface AutonomyConfigData {

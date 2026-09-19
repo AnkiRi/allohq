@@ -1,4 +1,6 @@
 import { prisma } from "@allohq/database";
+import { createHash } from "node:crypto";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 import type { ImageSizes } from "./types";
 
@@ -17,6 +19,42 @@ const SIZE_SPECS = {
   thumb: { width: 100, height: 100 },
   whatsapp: { width: 400, height: 400 },
 } as const;
+
+function assetStorage() {
+  const bucket = process.env["ASSET_BUCKET"];
+  const cdnBaseUrl = process.env["ASSET_CDN_BASE_URL"]?.replace(/\/$/, "");
+  if (!bucket || !cdnBaseUrl) return null;
+  const endpoint = process.env["ASSET_S3_ENDPOINT"];
+  return {
+    bucket,
+    cdnBaseUrl,
+    client: new S3Client({
+      region: process.env["ASSET_REGION"] ?? process.env["AWS_REGION"] ?? "us-east-1",
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    }),
+  };
+}
+
+async function persistDerivative(
+  storeId: string,
+  productId: string,
+  name: string,
+  body: Buffer,
+) {
+  const storage = assetStorage();
+  if (!storage) return null;
+  const checksum = createHash("sha256").update(body).digest("hex");
+  const key = `stores/${storeId}/products/${productId}/${name}-${checksum}.png`;
+  await storage.client.send(new PutObjectCommand({
+    Bucket: storage.bucket,
+    Key: key,
+    Body: body,
+    ContentType: "image/png",
+    CacheControl: "public,max-age=31536000,immutable",
+    Metadata: { store: storeId, product: productId, sha256: checksum },
+  }));
+  return `${storage.cdnBaseUrl}/${key}`;
+}
 
 /**
  * Process a single product image:
@@ -70,14 +108,17 @@ export async function processProductImage(options: ProcessImageOptions): Promise
         .png({ quality: 85 })
         .toBuffer();
 
-      // In production, upload to CDN and get URL back
-      // For now, store base64 data URL (to be replaced with CDN upload)
-      const dataUrl = `data:image/png;base64,${resized.toString("base64")}`;
-      sizes[sizeName as keyof ImageSizes] = dataUrl;
+      const url = await persistDerivative(storeId, productId, sizeName, resized);
+      // Without asset storage, retain Shopify's authoritative durable image;
+      // never place multi-megabyte data URLs in the database.
+      sizes[sizeName as keyof ImageSizes] = url ?? originalUrl;
     }
 
     // Upsert processed image record
-    const transparentUrl = `data:image/png;base64,${transparentBuffer.toString("base64")}`;
+    const transparentUrl =
+      (await persistDerivative(storeId, productId, "transparent", transparentBuffer)) ?? originalUrl;
+    const brandBgUrl =
+      (await persistDerivative(storeId, productId, "brand-background", brandBgBuffer)) ?? originalUrl;
     await prisma.processedProductImage.upsert({
       where: { productId_storeId: { productId, storeId } },
       create: {
@@ -85,14 +126,14 @@ export async function processProductImage(options: ProcessImageOptions): Promise
         storeId,
         originalUrl,
         transparentUrl,
-        brandBgUrl: `data:image/png;base64,${brandBgBuffer.toString("base64")}`,
+        brandBgUrl,
         sizes: sizes as any,
         processedAt: new Date(),
       },
       update: {
         originalUrl,
         transparentUrl,
-        brandBgUrl: `data:image/png;base64,${brandBgBuffer.toString("base64")}`,
+        brandBgUrl,
         sizes: sizes as any,
         processedAt: new Date(),
       },

@@ -70,12 +70,13 @@ export async function createContext(opts: { req?: any; res?: any }) {
       userId = payload.sub;
       authSource = "clerk";
 
-      // Get user's workspace (for now, just get the first one)
+      // Load every membership. A standalone user may choose one explicitly via
+      // the client header; Shopify-embedded auth is pinned to the current shop
+      // earlier and never reaches this branch.
       let user = await prisma.user.findUnique({
         where: { clerkId: userId },
         include: {
           workspaceMembers: {
-            take: 1,
             orderBy: { createdAt: "desc" as const },
             include: { workspace: true },
           },
@@ -104,7 +105,6 @@ export async function createContext(opts: { req?: any; res?: any }) {
           },
           include: {
             workspaceMembers: {
-              take: 1,
               orderBy: { createdAt: "desc" as const },
               include: { workspace: true },
             },
@@ -112,7 +112,21 @@ export async function createContext(opts: { req?: any; res?: any }) {
         });
       }
 
-      workspaceId = user?.workspaceMembers[0]?.workspaceId || null;
+      const requestedWorkspaceHeader = opts.req?.headers?.["x-joon-workspace-id"];
+      const requestedWorkspaceId = Array.isArray(requestedWorkspaceHeader)
+        ? requestedWorkspaceHeader[0]
+        : requestedWorkspaceHeader;
+      const selectedMembership = requestedWorkspaceId
+        ? user?.workspaceMembers.find(
+            (membership) => membership.workspaceId === requestedWorkspaceId
+          )
+        : undefined;
+      // An explicit but invalid workspace choice must fail closed. Falling back
+      // to another membership would make the UI appear to honor a selection
+      // while actually operating on a different tenant.
+      workspaceId = requestedWorkspaceId
+        ? selectedMembership?.workspaceId ?? null
+        : user?.workspaceMembers[0]?.workspaceId ?? null;
 
       // NOTE: authenticated users are ALWAYS real — they resolve to their own
       // workspace and are NEVER routed to the Vana demo, even if a stale demo

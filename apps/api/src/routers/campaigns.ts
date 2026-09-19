@@ -13,7 +13,7 @@ import {
   getStoreSenderIdentity,
   type PrismaClient,
 } from "@allohq/database";
-import { selectedEmailProvider } from "@allohq/messaging";
+import { selectedEmailProvider, warmupDailyCap } from "@allohq/messaging";
 import {
   AUDIENCE_EXCLUSION_REASONS,
   campaignApprovalChecksum,
@@ -33,12 +33,53 @@ import {
   loadStoreGovernorConfig,
   nextLocalHour,
 } from "@allohq/communication-governor";
+import { ensureEmailVersion } from "../lib/email-versions";
+import { preflightEmailDocument, type EmailBlock } from "@allohq/email-builder";
+import { persistCampaignAudienceEvaluation } from "../lib/campaign-audience-evaluation";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
   port: Number(process.env["REDIS_PORT"] ?? 6379),
   password: process.env["REDIS_PASSWORD"],
 };
+
+type EmailAssetReceipt = {
+  blockId: string;
+  blockType: string;
+  field: string;
+  url: string;
+};
+
+function collectEmailAssetManifest(blocks: unknown): EmailAssetReceipt[] {
+  const receipts = new Map<string, EmailAssetReceipt>();
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const block = value as {
+      id?: unknown;
+      type?: unknown;
+      props?: Record<string, unknown>;
+    };
+    const blockId = typeof block.id === "string" ? block.id : "unknown";
+    const blockType = typeof block.type === "string" ? block.type : "unknown";
+    const props = block.props;
+    if (props && typeof props === "object") {
+      for (const field of ["src", "bgImageSrc", "logoSrc", "imageUrl", "avatarUrl"] as const) {
+        const url = props[field];
+        if (typeof url !== "string" || !url.trim()) continue;
+        const key = `${blockId}:${field}:${url}`;
+        receipts.set(key, { blockId, blockType, field, url });
+      }
+      const columns = props["columns"];
+      if (Array.isArray(columns)) {
+        for (const column of columns) {
+          if (Array.isArray(column)) column.forEach(visit);
+        }
+      }
+    }
+  };
+  if (Array.isArray(blocks)) blocks.forEach(visit);
+  return [...receipts.values()];
+}
 
 const emailSendQueue = new Queue("email-send", { connection: redisConnection });
 
@@ -290,6 +331,24 @@ export const campaignsRouter = router({
       const rows = [...cohorts.values()]
         .map((cohort) => ({ ...cohort, confidence: cohort.confidence / cohort.count }))
         .sort((left, right) => right.count - left.count);
+      const dayStart = new Date(now);
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const [warmup, attemptedToday] = await Promise.all([
+        ctx.prisma.sesWarmupState.findUnique({ where: { storeId: campaign.storeId } }),
+        ctx.prisma.messageLog.count({
+          where: {
+            storeId: campaign.storeId,
+            sentAt: { gte: dayStart },
+            status: { in: ["sent", "delivered", "opened", "clicked", "bounced", "failed"] },
+          },
+        }),
+      ]);
+      const dailyCap = warmupDailyCap(warmup?.healthyDay ?? 1, Number.MAX_SAFE_INTEGER);
+      const held = Boolean(warmup?.heldUntil && warmup.heldUntil > now);
+      const paused = Boolean(warmup?.pausedAt);
+      const remainingToday = paused || held ? 0 : Math.max(0, dailyCap - attemptedToday);
+      const deliverableToday = Math.min(customerIds.length, remainingToday);
+      const deferredByReputation = Math.max(0, customerIds.length - deliverableToday);
       return {
         available: customerIds.length > 0 && rows.length > 0,
         recipients: customerIds.length,
@@ -315,6 +374,26 @@ export const campaignsRouter = router({
           default: rows
             .filter((row) => row.source === "default")
             .reduce((sum, row) => sum + row.count, 0),
+        },
+        reputationPlan: {
+          provider: selectedEmailProvider(),
+          tier: warmup?.healthyDay ?? 1,
+          dailyCap,
+          attemptedToday,
+          remainingToday,
+          deliverableToday,
+          deferred: deferredByReputation,
+          estimatedDeliveryDays:
+            customerIds.length === 0 ? 0 : Math.ceil(customerIds.length / Math.max(1, dailyCap)),
+          heldUntil: warmup?.heldUntil ?? null,
+          paused,
+          reason: paused
+            ? "Sending is paused pending a reviewed reputation decision."
+            : held
+              ? `The current volume tier is held until ${warmup!.heldUntil!.toISOString()}.`
+              : deferredByReputation > 0
+                ? `${deliverableToday.toLocaleString("en-IN")} recipients fit today’s reviewed cap; ${deferredByReputation.toLocaleString("en-IN")} continue in later cohorts.`
+                : "The audience fits inside today’s reviewed sending cap.",
         },
         cohorts: rows.slice(0, 100),
       };
@@ -428,6 +507,7 @@ export const campaignsRouter = router({
         select: {
           id: true,
           storeId: true,
+          updatedAt: true,
           audienceOverridePolicies: {
             where: { active: true, mode: "all_current" },
             select: { reasonCode: true, justification: true, actorId: true, updatedAt: true },
@@ -436,32 +516,64 @@ export const campaignsRouter = router({
       });
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
 
-      const audience = await resolveCampaignAudience(campaign.id, new Date(), {
-        enforceDeliveryPauses: false,
+      let evaluation = await ctx.prisma.campaignAudienceEvaluation.findFirst({
+        where: {
+          campaignId: campaign.id,
+          campaignUpdatedAt: { gte: campaign.updatedAt },
+        },
+        orderBy: { evaluatedAt: "desc" },
+        select: { id: true },
       });
-      const base =
-        input.reason === "deliberately_left_alone"
-          ? audience.deliberatelyLeftAlone
-          : (audience.excludedCustomers[input.reason] ?? []);
-      const needle = input.query.toLocaleLowerCase();
-      const filtered = needle
-        ? base.filter((customer) =>
-            [customer.firstName, customer.lastName, customer.email]
-              .filter(Boolean)
-              .join(" ")
-              .toLocaleLowerCase()
-              .includes(needle)
-          )
-        : base;
-      const total = filtered.length;
+      if (!evaluation) {
+        const audience = await resolveCampaignAudience(campaign.id, new Date(), {
+          enforceDeliveryPauses: false,
+        });
+        evaluation = await persistCampaignAudienceEvaluation(ctx.prisma, {
+          campaignId: campaign.id,
+          storeId: campaign.storeId,
+          campaignUpdatedAt: campaign.updatedAt,
+          audience,
+        });
+      }
+      if (!evaluation) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Audience review is unavailable" });
+      }
+
+      const rowWhere = {
+        evaluationId: evaluation.id,
+        ...(input.reason === "deliberately_left_alone"
+          ? { decision: "deliberately_left_alone" }
+          : { reasonCode: input.reason }),
+        ...(input.query
+          ? {
+              customer: {
+                OR: [
+                  { firstName: { contains: input.query, mode: "insensitive" as const } },
+                  { lastName: { contains: input.query, mode: "insensitive" as const } },
+                  { email: { contains: input.query, mode: "insensitive" as const } },
+                ],
+              },
+            }
+          : {}),
+      };
+      const total = await ctx.prisma.campaignAudienceEvaluationRow.count({ where: rowWhere });
       const pageCount = Math.max(1, Math.ceil(total / input.pageSize));
       const page = Math.min(input.page, pageCount);
-      const pageRows = filtered.slice((page - 1) * input.pageSize, page * input.pageSize);
-      const details = pageRows.length
-        ? await ctx.prisma.customer.findMany({
-            where: { storeId: campaign.storeId, id: { in: pageRows.map((row) => row.id) } },
+      const pageRows = await ctx.prisma.campaignAudienceEvaluationRow.findMany({
+        where: rowWhere,
+        orderBy: [{ customer: { firstName: "asc" } }, { customerId: "asc" }],
+        skip: (page - 1) * input.pageSize,
+        take: input.pageSize,
+        select: {
+          customerId: true,
+          reasonText: true,
+          evidence: true,
+          customer: {
             select: {
               id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
               rfmScore: { select: { segment: true } },
               customerState: {
                 select: {
@@ -475,12 +587,9 @@ export const campaignsRouter = router({
                 },
               },
             },
-          })
-        : [];
-      const detailById = new Map(details.map((row) => [row.id, row]));
-      const decisionById = new Map(
-        audience.deliberatelyLeftAlone.map((row) => [row.id, row.decision])
-      );
+          },
+        },
+      });
       const overridePolicy = {
         recent_purchase: "allowed",
         fatigue: "warning",
@@ -519,21 +628,20 @@ export const campaignsRouter = router({
           reconsideration[input.reason as keyof typeof reconsideration] ??
           "When the underlying delivery condition changes",
         customers: pageRows.map((row) => {
-          const detail = detailById.get(row.id);
-          const state = detail?.customerState;
-          const decision = decisionById.get(row.id);
+          const detail = row.customer;
+          const state = detail.customerState;
           return {
-            id: row.id,
-            email: row.email,
-            firstName: row.firstName,
-            lastName: row.lastName,
+            id: detail.id,
+            email: detail.email,
+            firstName: detail.firstName,
+            lastName: detail.lastName,
             lifecycle: state?.lifecycleStage ?? detail?.rfmScore?.segment ?? null,
             purchaseCyclePosition: state?.purchaseCyclePosition ?? null,
             discountBehavior: state?.discountBehavior ?? null,
             medianOrderIntervalDays: state?.medianOrderIntervalDays ?? null,
             nextExpectedOrderAt: state?.nextExpectedOrderAt ?? null,
             nextEvaluationAt: state?.nextEvaluationAt ?? null,
-            evidence: decision?.reasonText ?? null,
+            evidence: row.reasonText ?? null,
           };
         }),
       };
@@ -924,17 +1032,21 @@ export const campaignsRouter = router({
     });
     const discountPercent = Math.max(0, Math.min(100, Number(proposal.discountPercent ?? 0)));
     const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000);
-    const recentOrders =
-      audience.eligible.length > 0
-        ? await ctx.prisma.order.findMany({
+    const eligibleIds = new Set(audience.eligible.map((customer) => customer.id));
+    // Query the bounded seven-day store window, then intersect in memory. This
+    // avoids a 100k+ `IN (...)` clause for large campaign audiences.
+    const recentOrders = audience.eligible.length
+      ? (
+          await ctx.prisma.order.findMany({
             where: {
-              customerId: { in: audience.eligible.map((customer) => customer.id) },
+              customer: { storeId: campaign.storeId },
               createdAt: { gte: recentSince },
               status: { not: "cancelled" },
             },
             select: { customerId: true, subtotal: true },
           })
-        : [];
+        ).filter((order) => eligibleIds.has(order.customerId))
+      : [];
     const recentBuyerIds = new Set(recentOrders.map((order) => order.customerId));
     const recentOrderSubtotal = recentOrders.reduce((sum, order) => sum + order.subtotal, 0);
     const previewSeed = `campaign-preview:${campaign.id}`;
@@ -970,6 +1082,27 @@ export const campaignsRouter = router({
       email: customer.email,
       arm: holdout.assignment.assignments[customer.id]?.arm ?? "TREATMENT",
     }));
+    const latestEvaluation = await ctx.prisma.campaignAudienceEvaluation.findFirst({
+      where: {
+        campaignId: campaign.id,
+        campaignUpdatedAt: { gte: campaign.updatedAt },
+      },
+      orderBy: { evaluatedAt: "desc" },
+      select: { id: true, treatmentCount: true, controlCount: true },
+    });
+    if (
+      !latestEvaluation ||
+      (audience.eligible.length > 0 &&
+        latestEvaluation.treatmentCount + latestEvaluation.controlCount === 0)
+    ) {
+      await persistCampaignAudienceEvaluation(ctx.prisma, {
+        campaignId: campaign.id,
+        storeId: campaign.storeId,
+        campaignUpdatedAt: campaign.updatedAt,
+        audience,
+        assignments: holdout.assignment.assignments,
+      });
+    }
     const currency = campaign.store.currency === "INR" ? ("INR" as const) : ("USD" as const);
     const estimatedProviderCost =
       (audience.eligible.length - control) * emailMessagingCostForCurrency(currency);
@@ -997,7 +1130,8 @@ export const campaignsRouter = router({
       leftAloneSamples: audience.deliberatelyLeftAlone.slice(0, 10),
       estimatedTreatment: audience.eligible.length - control,
       estimatedControl: control,
-      previewAssignments,
+      previewAssignments: previewAssignments.slice(0, 100),
+      previewAssignmentTotal: previewAssignments.length,
       requestedAudienceCount: proposal.requestedAudienceCount ?? null,
       audienceShortfall: Math.max(
         0,
@@ -1011,20 +1145,24 @@ export const campaignsRouter = router({
       audienceFreezesOnApproval: true,
       exclusions: audience.exclusions,
       exclusionSamples: audience.samples,
-      recentPurchaseCustomers: audience.recentPurchaseExcluded,
+      recentPurchaseCustomers: audience.recentPurchaseExcluded.slice(0, 50),
+      recentPurchaseCustomerTotal: audience.recentPurchaseExcluded.length,
       recentPurchaseOverrideCount: Array.isArray(proposal.overrideRecentPurchaseCustomerIds)
         ? proposal.overrideRecentPurchaseCustomerIds.filter((value) => typeof value === "string")
             .length
         : 0,
-      fatigueCustomers: audience.fatigueExcluded,
+      fatigueCustomers: audience.fatigueExcluded.slice(0, 50),
+      fatigueCustomerTotal: audience.fatigueExcluded.length,
       fatigueOverrideCount: Array.isArray(proposal.overrideFatigueCustomerIds)
         ? proposal.overrideFatigueCustomerIds.filter((value) => typeof value === "string").length
         : 0,
-      collisionCustomers: audience.collisionExcluded,
+      collisionCustomers: audience.collisionExcluded.slice(0, 50),
+      collisionCustomerTotal: audience.collisionExcluded.length,
       collisionOverrideCount: Array.isArray(proposal.overrideCollisionCustomerIds)
         ? proposal.overrideCollisionCustomerIds.filter((value) => typeof value === "string").length
         : 0,
-      cooldownCustomers: audience.cooldownExcluded,
+      cooldownCustomers: audience.cooldownExcluded.slice(0, 50),
+      cooldownCustomerTotal: audience.cooldownExcluded.length,
       cooldownOverrideCount: Array.isArray(proposal.overrideCooldownCustomerIds)
         ? proposal.overrideCooldownCustomerIds.filter((value) => typeof value === "string").length
         : 0,
@@ -1520,6 +1658,31 @@ export const campaignsRouter = router({
           message: `Email contains words your brand forbids: ${violations.join(", ")}. Edit the copy before approval.`,
         });
       }
+      const offer = (campaign.agentProposal ?? {}) as {
+        discountPercent?: unknown;
+        discountCode?: unknown;
+      };
+      const emailPreflight = preflightEmailDocument({
+        subject: campaign.template.subject,
+        previewText: campaign.template.previewText,
+        blocks: campaign.template.blocks as unknown as EmailBlock[],
+        expectedDiscountPercent:
+          typeof offer.discountPercent === "number" ? offer.discountPercent : null,
+        expectedDiscountCode:
+          typeof offer.discountCode === "string" ? offer.discountCode : null,
+      });
+      if (emailPreflight.blockingFailures.length > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Email preflight failed: ${emailPreflight.blockingFailures.map((check) => check.detail).join(" ")}`,
+        });
+      }
+      const emailAssetManifest = collectEmailAssetManifest(campaign.template.blocks);
+      const emailPreflightReceipt = {
+        ...emailPreflight,
+        blockCount: Array.isArray(campaign.template.blocks) ? campaign.template.blocks.length : 0,
+        validatedAt: new Date().toISOString(),
+      };
 
       const audience = await resolveCampaignAudience(campaign.id);
       const family = campaignFamily(campaign.agentProposal);
@@ -1568,7 +1731,9 @@ export const campaignsRouter = router({
           subject: campaign.template.subject,
           previewText: campaign.template.previewText,
           blocks: campaign.template.blocks,
-          html: campaign.template.html,
+          // Blocks are the canonical artifact. Cached HTML is deliberately not
+          // part of new approvals because preview and delivery share one renderer.
+          html: null,
         },
         segment: campaign.segment
           ? {
@@ -1602,8 +1767,27 @@ export const campaignsRouter = router({
         ? controlCount / audience.eligible.length
         : policy.rate;
       const measurement = campaignMeasurementPolicy(audience.eligible.length, effectiveRate);
+      // Persist the exact approval-time decision tree before freezing delivery.
+      // The immutable measurement assignments remain the delivery authority;
+      // this indexed snapshot is the merchant-readable review/audit surface.
+      await persistCampaignAudienceEvaluation(ctx.prisma, {
+        campaignId: campaign.id,
+        storeId: campaign.storeId,
+        campaignUpdatedAt: campaign.updatedAt,
+        audience,
+        assignments: holdout.assignment.assignments,
+      });
       await ctx.prisma.$transaction(
         async (tx) => {
+          const approvedEmailVersion = await ensureEmailVersion(tx, {
+            workspaceId: campaign.workspaceId,
+            templateId: campaign.template!.id,
+            storeId: campaign.storeId,
+            template: campaign.template!,
+            source: "approval",
+            note: `Frozen for campaign approval · ${campaign.name}`,
+            createdBy: (ctx as any).userId,
+          });
           const claimed = await tx.campaign.updateMany({
             where: campaignApprovalClaimWhere(input.id),
             // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
@@ -1613,6 +1797,7 @@ export const campaignsRouter = router({
               agentProposal: approvedProposal as object,
               approvalChecksum,
               approvedAt,
+              approvedEmailVersionId: approvedEmailVersion.id,
             },
           });
           if (claimed.count !== 1) {
@@ -1621,6 +1806,26 @@ export const campaignsRouter = router({
               message: "Campaign was approved concurrently; retry to dispatch its frozen cohort",
             });
           }
+          await tx.emailApproval.upsert({
+            where: { campaignId: campaign.id },
+            create: {
+              campaignId: campaign.id,
+              emailVersionId: approvedEmailVersion.id,
+              renderHash: approvedEmailVersion.contentHash,
+              assetManifest: emailAssetManifest as any,
+              preflight: emailPreflightReceipt as any,
+              approvedBy: (ctx as any).userId,
+              approvedAt,
+            },
+            update: {
+              emailVersionId: approvedEmailVersion.id,
+              renderHash: approvedEmailVersion.contentHash,
+              assetManifest: emailAssetManifest as any,
+              preflight: emailPreflightReceipt as any,
+              approvedBy: (ctx as any).userId,
+              approvedAt,
+            },
+          });
           await tx.measurementAssignment.createMany({
             data: Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
               storeId: campaign.storeId,

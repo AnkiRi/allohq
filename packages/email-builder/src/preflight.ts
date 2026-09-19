@@ -1,0 +1,75 @@
+import type { EmailBlock } from "./types";
+
+export type EmailPreflightCheck = {
+  id: string;
+  label: string;
+  severity: "error" | "warning" | "info";
+  passed: boolean;
+  detail: string;
+};
+
+function collectLinksAndImages(blocks: EmailBlock[]): {
+  links: string[];
+  missingAlt: string[];
+  unsafeHtml: boolean;
+} {
+  const links: string[] = [];
+  const missingAlt: string[] = [];
+  let unsafeHtml = false;
+  for (const block of blocks) {
+    if (block.type === "image") {
+      if (!block.props.alt?.trim()) missingAlt.push(block.id);
+      if (block.props.href) links.push(block.props.href);
+    }
+    if (block.type === "button") links.push(block.props.href);
+    if (block.type === "hero" && block.props.buttonHref) links.push(block.props.buttonHref);
+    if (block.type === "product" && block.props.buttonHref) links.push(block.props.buttonHref);
+    if (block.type === "custom_html") {
+      unsafeHtml ||= /<(script|iframe|form|input|object|embed)\b|\son\w+\s*=|javascript:/i.test(block.props.html);
+    }
+    if (block.type === "columns") {
+      const nested = collectLinksAndImages(block.props.columns.flat());
+      links.push(...nested.links);
+      missingAlt.push(...nested.missingAlt);
+      unsafeHtml ||= nested.unsafeHtml;
+    }
+  }
+  return { links, missingAlt, unsafeHtml };
+}
+
+export function preflightEmailDocument(input: {
+  subject: string;
+  previewText?: string | null;
+  blocks: EmailBlock[];
+  expectedDiscountPercent?: number | null;
+  expectedDiscountCode?: string | null;
+}) {
+  const { links, missingAlt, unsafeHtml } = collectLinksAndImages(input.blocks);
+  const artifactText = `${input.subject}\n${input.previewText ?? ""}\n${JSON.stringify(input.blocks)}`;
+  const percentMatches = [...artifactText.matchAll(/\b(\d{1,2})\s*%/g)].map((match) => Number(match[1]));
+  const uniquePercents = [...new Set(percentMatches)];
+  const discountTerms = /\b(discount|coupon|promo code|use code|%\s*off|sale)\b/i.test(artifactText);
+  const expectedPercent = input.expectedDiscountPercent ?? null;
+  const expectedCode = input.expectedDiscountCode?.trim() || null;
+  const hasOfferConstraint = Object.prototype.hasOwnProperty.call(input, "expectedDiscountPercent") || Object.prototype.hasOwnProperty.call(input, "expectedDiscountCode");
+  const offerMismatch = !hasOfferConstraint
+    ? false
+    : expectedPercent == null
+    ? discountTerms || uniquePercents.length > 0 || Boolean(expectedCode && artifactText.includes(expectedCode))
+    : uniquePercents.some((value) => value !== expectedPercent);
+
+  const checks: EmailPreflightCheck[] = [
+    { id: "subject", label: "Subject is present", severity: "error", passed: input.subject.trim().length > 0, detail: input.subject.trim() ? `${input.subject.length} characters` : "Add a subject before approval." },
+    { id: "preview_text", label: "Inbox preview is present", severity: "warning", passed: Boolean(input.previewText?.trim()), detail: input.previewText?.trim() ? `${input.previewText.length} characters` : "Add preview text so inboxes do not pull arbitrary body copy." },
+    { id: "image_alt", label: "Images have alt text", severity: "warning", passed: missingAlt.length === 0, detail: missingAlt.length ? `${missingAlt.length} image${missingAlt.length === 1 ? "" : "s"} need alt text.` : "All images are described." },
+    { id: "links", label: "Links are structurally usable", severity: "error", passed: links.every((link) => /^(https?:\/\/|#|\{\{)/.test(link)), detail: `${links.length} link${links.length === 1 ? "" : "s"} checked.` },
+    { id: "custom_html", label: "Custom code is safe", severity: "error", passed: !unsafeHtml, detail: unsafeHtml ? "Scripts, forms, frames and event handlers are not allowed." : "No unsafe markup detected." },
+    { id: "offer", label: "Offer matches the campaign", severity: "error", passed: !offerMismatch, detail: !hasOfferConstraint ? "Exact offer consistency runs when this version is attached to a campaign." : offerMismatch ? "The creative contains discount language or a percentage that does not match the approved offer." : expectedPercent == null ? "No unapproved discount language detected." : `${expectedPercent}% offer is consistent.` },
+  ];
+  return {
+    checks,
+    passed: checks.filter((check) => check.passed).length,
+    blockingFailures: checks.filter((check) => !check.passed && check.severity === "error"),
+    warnings: checks.filter((check) => !check.passed && check.severity === "warning"),
+  };
+}

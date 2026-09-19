@@ -10,10 +10,10 @@ export type {
 
 // Opportunity Scanner
 export { scanOpportunities } from "./opportunity-scanner";
-export { opportunityJobId } from "./opportunity-dedupe";
+export { opportunityFingerprint, opportunityJobId } from "./opportunity-dedupe";
 
 // Campaign Factory
-export { generateCampaignDraft } from "./campaign-factory";
+export { generateCampaignDraft, prepareCampaignDecision } from "./campaign-factory";
 
 // Revenue Estimator
 export { estimateRevenue } from "./revenue-estimator";

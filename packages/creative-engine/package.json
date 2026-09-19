@@ -8,6 +8,7 @@
     "test": "pnpm --dir ../../apps/api exec tsx --test ../../packages/creative-engine/src/*.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.888.0",
     "@allohq/database": "workspace:*",
     "@allohq/ecommerce-integrations": "workspace:*",
     "mjml": "^4.15.3",

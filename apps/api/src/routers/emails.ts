@@ -7,6 +7,15 @@ import {
   renderBrandedEmail,
 } from "@allohq/customer-intelligence";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
+import { TRPCError } from "@trpc/server";
+import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema } from "@allohq/email-builder";
+import { ensureEmailVersion } from "../lib/email-versions";
+import {
+  createEmailAssetUpload,
+  inspectUploadedEmailAsset,
+  persistProductSafeComposite,
+  persistRemoteEmailImage,
+} from "../lib/email-asset-storage";
 
 /**
  * Emails router — powers the "generate-first, edit-freely" /emails experience.
@@ -22,14 +31,6 @@ import { buildBrandKit, type BrandKit } from "@allohq/emails";
  * demo brand without requiring a connected store.
  */
 
-// A loose schema — EmailBlock[] is a discriminated union; we validate the shape
-// downstream by rendering. We only require id/type/props to be present.
-const blockSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  props: z.record(z.any()),
-});
-
 const brandKitSchema = z.any().optional();
 
 /** Resolve a BrandKit: prefer an inline kit, else derive from the store, else default. */
@@ -41,9 +42,22 @@ async function resolveBrandKit(
   if (inlineKit && typeof inlineKit === "object") {
     return { brandKit: inlineKit as BrandKit, storeId: storeId ?? "" };
   }
-  const store = storeId
-    ? await ctx.prisma.store.findFirst({ where: { id: storeId, workspaceId: ctx.workspaceId } })
-    : await ctx.prisma.store.findFirst({ where: { workspaceId: ctx.workspaceId } });
+  const stores = storeId
+    ? await ctx.prisma.store.findMany({
+        where: { id: storeId, workspaceId: ctx.workspaceId },
+        take: 1,
+      })
+    : await ctx.prisma.store.findMany({
+        where: { workspaceId: ctx.workspaceId, isActive: true },
+        take: 2,
+      });
+  if (!storeId && stores.length > 1) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose a store before editing this email. Joon will not guess across stores.",
+    });
+  }
+  const store = stores[0];
   const resolvedStoreId = store?.id ?? "";
   return {
     brandKit: resolvedStoreId ? await loadBrandKit(resolvedStoreId) : buildBrandKit(null, null),
@@ -71,6 +85,83 @@ function extractJsonPayload(s: string): string {
 }
 
 export const emailsRouter = router({
+  proposalHistory: workspaceProcedure
+    .input(z.object({ templateId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const template = await ctx.prisma.emailTemplate.findFirst({
+        where: { id: input.templateId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await ctx.prisma.emailProposal.findMany({
+        where: { templateId: input.templateId, workspaceId: ctx.workspaceId },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+        select: {
+          id: true,
+          instruction: true,
+          scope: true,
+          status: true,
+          operations: true,
+          createdAt: true,
+          resolvedAt: true,
+        },
+      });
+      return rows.reverse();
+    }),
+
+  createAssetUpload: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      fileName: z.string().min(1).max(240),
+      mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+      size: z.number().int().positive().max(12 * 1024 * 1024),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId, isActive: true },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND" });
+      return createEmailAssetUpload({ workspaceId: ctx.workspaceId, ...input });
+    }),
+
+  completeAssetUpload: workspaceProcedure
+    .input(z.object({
+      storeId: z.string(),
+      key: z.string().min(1).max(1000),
+      fileName: z.string().min(1).max(240),
+      type: z.enum(["logo", "logo_dark", "hero", "lifestyle", "icon", "reference_image", "other"]),
+      altText: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId, isActive: true },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND" });
+      const uploaded = await inspectUploadedEmailAsset({
+        workspaceId: ctx.workspaceId,
+        storeId: input.storeId,
+        key: input.key,
+      });
+      return ctx.prisma.brandAsset.create({
+        data: {
+          workspaceId: ctx.workspaceId,
+          storeId: input.storeId,
+          type: input.type,
+          url: uploaded.url,
+          fileName: input.fileName,
+          mimeType: uploaded.mimeType,
+          storageKey: input.key,
+          checksum: uploaded.checksum,
+          source: "upload",
+          altText: input.altText,
+          status: "ready",
+        },
+      });
+    }),
+
   /**
    * Render an EmailBlock[] content model to bulletproof, brand-styled HTML.
    * Used by the live preview after every edit.
@@ -78,7 +169,7 @@ export const emailsRouter = router({
   renderPreview: workspaceProcedure
     .input(
       z.object({
-        blocks: z.array(blockSchema),
+        blocks: emailBlocksSchema,
         subject: z.string().optional(),
         previewText: z.string().optional(),
         variables: z.record(z.string()).optional(),
@@ -110,13 +201,14 @@ export const emailsRouter = router({
     .input(
       z.object({
         instruction: z.string().min(1).max(2000),
-        blocks: z.array(blockSchema),
+        blocks: emailBlocksSchema,
         subject: z.string().optional(),
         previewText: z.string().optional(),
         brandVoice: z.string().optional(),
         storeId: z.string().optional(),
         templateId: z.string().optional(),
         sourceAssetIds: z.array(z.string()).max(5).optional(),
+        selectedBlockId: z.string().optional(),
         // Lane for a chip: "subject" → only the subject; "copy"/"tone" → only
         // existing-block copy edits; "visual" → only structure (add/remove/reorder
         // + visual blocks). Omitted (free-text "tell joon") = no restriction.
@@ -129,6 +221,58 @@ export const emailsRouter = router({
         where: { id: ctx.workspaceId },
         select: { modelHarness: true },
       });
+      const persistProposal = async (
+        candidateBlocks: unknown,
+        candidateSubject: string,
+        candidatePreviewText: string,
+        operations: unknown,
+      ) => {
+        if (!input.templateId) return null;
+        const template = await ctx.prisma.emailTemplate.findFirst({
+          where: { id: input.templateId, workspaceId: ctx.workspaceId },
+          select: { id: true },
+        });
+        if (!template) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "This email no longer exists." });
+        }
+        const baseVersion = await ctx.prisma.emailVersion.findFirst({
+          where: { templateId: input.templateId },
+          orderBy: { sequence: "desc" },
+          select: { id: true },
+        });
+        const candidate = emailDocumentSchema.parse({
+          schemaVersion: 1,
+          envelope: {
+            subject: candidateSubject,
+            previewText: candidatePreviewText,
+            locale: "en",
+          },
+          blocks: candidateBlocks,
+          metadata: {},
+        });
+        return ctx.prisma.emailProposal.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            templateId: input.templateId,
+            baseVersionId: baseVersion?.id,
+            instruction: input.instruction,
+            scope: input.scope,
+            operations: operations as any,
+            candidate: candidate as any,
+            createdBy: (ctx as any).userId,
+          },
+          select: { id: true },
+        });
+      };
+
+      const conversationHistory = input.templateId
+        ? await ctx.prisma.emailProposal.findMany({
+            where: { templateId: input.templateId, workspaceId: ctx.workspaceId },
+            orderBy: { createdAt: "desc" },
+            take: 8,
+            select: { instruction: true, status: true },
+          })
+        : [];
 
       // CONTRACT: the model returns ONLY the CHANGES (subject + per-block changed
       // props), keyed by block id — NOT the whole array. Small, targeted JSON is
@@ -156,6 +300,7 @@ export const emailsRouter = router({
         "RETURN EXACTLY this shape (include only the keys you actually need):",
         "{",
         '  "subject": "<new subject — omit if unchanged>",',
+        '  "previewText": "<new inbox preview — omit if unchanged>",',
         '  "blocks": { "<existingId>": { "<prop>": <newValue> } },        // EDIT existing',
         '  "add": [ { "type": "image", "props": { }, "afterId": "<existingId>" } ], // ADD new',
         '  "remove": ["<existingId>"],                                     // DELETE',
@@ -169,6 +314,7 @@ export const emailsRouter = router({
         "  product_grid renders REAL store products at send time, so you never need an image URL. Place it with afterId.",
         '- CHANGE LAYOUT: use "order" to resequence, and add/remove blocks as needed.',
         "- Keep existing ids/types stable. Keep merge tags like {{first_name}} intact. ₹ prices plain numbers.",
+        "- If the instruction concerns the inbox line, edit previewText. Keep it complementary to the subject, not repetitive.",
         "- Warm, unhurried brand voice. Never hype, ALL-CAPS, or fake urgency.",
         '- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\". No literal line breaks inside strings.',
         "- Return ONLY the JSON object — no prose, no markdown fences.",
@@ -178,6 +324,15 @@ export const emailsRouter = router({
       const prompt = [
         `INSTRUCTION: ${input.instruction}`,
         input.subject ? `\nCURRENT SUBJECT: ${input.subject}` : "",
+        input.selectedBlockId
+          ? `\nSELECTED BLOCK: ${input.selectedBlockId}. Unless the instruction explicitly says whole email, target this block.`
+          : "",
+        conversationHistory.length
+          ? `\nRECENT STUDIO CONTEXT (oldest to newest):\n${conversationHistory
+              .reverse()
+              .map((item) => `- ${item.instruction} [${item.status}]`)
+              .join("\n")}`
+          : "",
         "",
         "CURRENT BLOCKS:",
         JSON.stringify(
@@ -225,7 +380,7 @@ export const emailsRouter = router({
             prompt: [
               input.instruction,
               sourceAssets.length
-                ? `Merchant-provided visual references: ${sourceAssets.map((asset: any) => asset.url).join(", ")}. Preserve the referenced product identity and visible brand details.`
+                ? "Generate only the setting and background. Do not draw products, packaging, labels, logos or text; Joon will composite the authoritative product pixels afterward."
                 : "",
             ]
               .filter(Boolean)
@@ -242,35 +397,106 @@ export const emailsRouter = router({
               : undefined,
             fallbackToStock: false,
           });
+          if (!storeId) throw new Error("Choose a store before generating an email image.");
+          const persisted = sourceAssets[0]
+            ? await persistProductSafeComposite({
+                workspaceId: ctx.workspaceId,
+                storeId,
+                backgroundUrl: generated.url,
+                productUrl: sourceAssets[0].url,
+                fileName: `${input.templateId ?? "email"}-${Date.now()}.png`,
+              })
+            : await persistRemoteEmailImage({
+                workspaceId: ctx.workspaceId,
+                storeId,
+                remoteUrl: generated.url,
+                fileName: `${input.templateId ?? "email"}-${Date.now()}.png`,
+              });
           await ctx.prisma.generatedImage.create({
             data: {
               workspaceId: ctx.workspaceId,
               provider: generated.provider,
               prompt: generated.prompt,
-              url: generated.url,
+              url: persisted.url,
               purpose: "hero_banner",
               cost: generated.cost,
-              width: 1200,
-              height: 600,
+              width: persisted.width,
+              height: persisted.height,
               templateId: input.templateId,
               sourceAssetIds: sourceAssets.map((asset: any) => asset.id),
             },
           });
-          const imageBlock = {
+          const durableAsset = await ctx.prisma.brandAsset.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              storeId,
+              type: "hero",
+              url: persisted.url,
+              fileName: `${input.templateId ?? "email"}-generated.png`,
+              mimeType: persisted.mimeType,
+              width: persisted.width,
+              height: persisted.height,
+              storageKey: persisted.key,
+              checksum: persisted.checksum,
+              source: "generated",
+              sourcePrompt: generated.prompt,
+              sourceAssetIds: sourceAssets.map((asset: any) => asset.id),
+              altText: input.instruction,
+              status: "ready",
+            },
+          });
+          const imageBlock = emailBlockSchema.parse({
             id: `b-${Date.now()}-generated-image`,
             type: "image",
             props: {
-              src: generated.url,
+                src: persisted.url,
               alt: input.instruction,
               align: "center",
               fullWidth: true,
             },
-          };
+          });
+          const selectedIndex = input.selectedBlockId
+            ? original.findIndex((block) => block.id === input.selectedBlockId)
+            : -1;
+          const selectedBlock = selectedIndex >= 0 ? original[selectedIndex] : null;
+          let nextBlocks = [...original];
+          if (selectedBlock?.type === "image") {
+            nextBlocks[selectedIndex] = {
+              ...selectedBlock,
+              props: { ...selectedBlock.props, src: persisted.url, alt: input.instruction },
+            };
+          } else if (selectedBlock?.type === "hero") {
+            nextBlocks[selectedIndex] = {
+              ...selectedBlock,
+              props: { ...selectedBlock.props, bgImageSrc: persisted.url },
+            };
+          } else if (selectedBlock?.type === "product") {
+            nextBlocks[selectedIndex] = {
+              ...selectedBlock,
+              props: { ...selectedBlock.props, imageUrl: persisted.url },
+            };
+          } else {
+            nextBlocks.push(imageBlock);
+          }
+          const proposal = await persistProposal(
+            nextBlocks,
+            input.subject ?? "",
+            input.previewText ?? "",
+            {
+              type: selectedBlock?.type === "image" || selectedBlock?.type === "hero" || selectedBlock?.type === "product"
+                ? "replaceAsset"
+                : "insertBlock",
+              blockId: selectedBlock?.id ?? null,
+              generatedUrl: persisted.url,
+            },
+          );
           return {
             applied: true,
-            blocks: [...original, imageBlock],
+            blocks: emailBlocksSchema.parse(nextBlocks),
             subject: input.subject,
-            generatedAsset: { url: generated.url, provider: generated.provider },
+            previewText: input.previewText,
+            proposalId: proposal?.id,
+            generatedAsset: { id: durableAsset.id, url: persisted.url, provider: generated.provider },
           };
         } catch (error) {
           return fail(
@@ -310,6 +536,10 @@ export const emailsRouter = router({
           typeof parsed?.subject === "string" && parsed.subject.trim()
             ? parsed.subject.trim()
             : undefined;
+        const newPreviewText =
+          typeof parsed?.previewText === "string"
+            ? parsed.previewText.trim()
+            : undefined;
 
         // Enforce the chip's lane — drop any out-of-scope changes the model returned,
         // so Subject chips never touch the body, Copy/Tone never touch the subject or
@@ -319,11 +549,13 @@ export const emailsRouter = router({
         const editsAllowed = !sc || sc === "copy" || sc === "tone" || sc === "visual";
         const structureAllowed = !sc || sc === "visual";
         const subjectAllowed = !sc || sc === "subject";
+        const previewAllowed = !sc || sc === "subject" || sc === "copy" || sc === "tone";
         const effChanges = editsAllowed ? changes : {};
         const effRemove = structureAllowed ? removeIds : new Set<string>();
         const effAdd = structureAllowed ? addList : [];
         const effOrder = structureAllowed ? order : null;
         const effSubject = subjectAllowed ? newSubject : undefined;
+        const effPreviewText = previewAllowed ? newPreviewText : undefined;
 
         // 1. edit existing + drop removed
         let next = original
@@ -361,19 +593,112 @@ export const emailsRouter = router({
           original.some((b) => b.id === id)
         ).length;
         const applied =
-          changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject;
+          changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject || effPreviewText !== undefined;
 
         if (!applied) {
           return fail("joon didn't change anything — try rephrasing.");
         }
+        const validatedBlocks = emailBlocksSchema.safeParse(next);
+        if (!validatedBlocks.success) {
+          return fail(`Joon proposed an invalid email change: ${validatedBlocks.error.issues[0]?.message ?? "validation failed"}`);
+        }
+        const proposal = await persistProposal(
+          validatedBlocks.data,
+          effSubject ?? input.subject ?? "",
+          effPreviewText ?? input.previewText ?? "",
+          parsed,
+        );
         return {
           applied: true,
-          blocks: next,
+          blocks: validatedBlocks.data,
           subject: effSubject ?? input.subject,
+          previewText: effPreviewText ?? input.previewText,
+          proposalId: proposal?.id,
           model: result.model,
         };
       } catch (err: any) {
         return fail(err?.message ?? "joon is unavailable right now. Your email is unchanged.");
       }
+    }),
+
+  resolveProposal: workspaceProcedure
+    .input(
+      z.object({
+        proposalId: z.string(),
+        decision: z.enum(["accepted", "rejected"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const proposal = await ctx.prisma.emailProposal.findFirst({
+        where: {
+          id: input.proposalId,
+          workspaceId: ctx.workspaceId,
+          status: "pending",
+        },
+      });
+      if (!proposal) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This proposal was already resolved or no longer exists.",
+        });
+      }
+      if (input.decision === "rejected") {
+        await ctx.prisma.emailProposal.update({
+          where: { id: proposal.id },
+          data: { status: "rejected", resolvedAt: new Date() },
+        });
+        return { status: "rejected" as const, version: null };
+      }
+
+      const candidate = emailDocumentSchema.parse(proposal.candidate);
+      const result = await ctx.prisma.$transaction(async (tx) => {
+        const latestVersion = await tx.emailVersion.findFirst({
+          where: { templateId: proposal.templateId },
+          orderBy: { sequence: "desc" },
+          select: { id: true },
+        });
+        if ((proposal.baseVersionId ?? null) !== (latestVersion?.id ?? null)) {
+          await tx.emailProposal.update({
+            where: { id: proposal.id },
+            data: { status: "superseded", resolvedAt: new Date() },
+          });
+          return { status: "superseded" as const, version: null };
+        }
+        const updated = await tx.emailTemplate.update({
+          where: { id: proposal.templateId },
+          data: {
+            subject: candidate.envelope.subject,
+            previewText: candidate.envelope.previewText,
+            blocks: candidate.blocks as any,
+            html: null,
+          },
+        });
+        const campaign = await tx.campaign.findFirst({
+          where: { templateId: proposal.templateId },
+          select: { storeId: true },
+          orderBy: { createdAt: "desc" },
+        });
+        const version = await ensureEmailVersion(tx, {
+          workspaceId: ctx.workspaceId,
+          templateId: proposal.templateId,
+          storeId: campaign?.storeId,
+          template: updated,
+          source: "joon",
+          note: proposal.instruction,
+          createdBy: (ctx as any).userId,
+        });
+        await tx.emailProposal.update({
+          where: { id: proposal.id },
+          data: { status: "accepted", resolvedAt: new Date() },
+        });
+        return { status: "accepted" as const, version };
+      });
+      if (result.status === "superseded") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This proposal was based on an older email version. Ask Joon again to review the current version.",
+        });
+      }
+      return result;
     }),
 });

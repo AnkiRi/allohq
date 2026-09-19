@@ -4,8 +4,62 @@ import type { ContentSlots, BrandDesignTokens, TemplateArchetypeId } from "@allo
 import { DEFAULT_BRAND_TOKENS } from "@allohq/creative-engine";
 import { routeAction, ActionCategory } from "@allohq/autonomy-engine";
 import type { CampaignOpportunity, CampaignDraft } from "./types";
+import { opportunityFingerprint } from "./opportunity-dedupe";
 import { generateEmail, renderBrandedEmail } from "@allohq/customer-intelligence";
 import type { EmailIntent } from "@allohq/customer-intelligence";
+
+/**
+ * Persist a reviewable decision without spending creative-generation tokens.
+ * Final copy/images are generated only after the merchant approves the action.
+ */
+export async function prepareCampaignDecision(opportunity: CampaignOpportunity) {
+  const store = await prisma.store.findUniqueOrThrow({
+    where: { id: opportunity.storeId },
+    select: { storeName: true },
+  });
+  const products = opportunity.productIds?.length
+    ? await prisma.product.findMany({
+        where: { id: { in: opportunity.productIds }, storeId: opportunity.storeId },
+        select: { id: true, title: true, imageUrl: true, price: true },
+      })
+    : [];
+  const meta = generateCampaignMeta(
+    opportunity.type,
+    opportunity,
+    store.storeName ?? "Store"
+  );
+  return routeAction(
+    {
+      storeId: opportunity.storeId,
+      type: "campaign_send",
+      category: mapOpportunityToCategory(opportunity.type),
+      reasoning: opportunity.reasoning,
+      estimatedRevenue: opportunity.estimatedRevenue?.mid,
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+      fingerprint: opportunityFingerprint(opportunity),
+      payload: {
+        lifecycle: "decision_proposed",
+        opportunity,
+        campaignName: meta.name,
+        targetSegment: {
+          name: opportunity.segmentName ?? opportunity.type.replaceAll("_", " "),
+          count: opportunity.customerCount,
+        },
+        products: products.map((product) => ({
+          id: product.id,
+          name: product.title,
+          imageUrl: product.imageUrl,
+          price: product.price,
+        })),
+        preparedAt: new Date().toISOString(),
+      },
+    },
+    {
+      segmentSize: opportunity.customerCount,
+      hasCustomerState: true,
+    }
+  );
+}
 
 /**
  * Generate a campaign draft from a detected opportunity.
@@ -83,6 +137,7 @@ export async function generateCampaignDraft(
     store.storeName ?? "Store"
   );
   let subject = fallbackSubject;
+  let previewText = contentSlots.preheaderText ?? "";
   let generatedBlocks: unknown[] | undefined;
 
   // Calculate confidence score based on opportunity quality
@@ -131,6 +186,7 @@ export async function generateCampaignDraft(
       modelHarness: workspace?.modelHarness,
     });
     subject = generated.subject;
+    previewText = generated.previewText;
     generatedBlocks = generated.blocks;
     html = await renderBrandedEmail({
       storeId,
@@ -181,6 +237,10 @@ export async function generateCampaignDraft(
     confidenceScore,
     reasoning: opportunity.reasoning,
     html,
+    previewText,
+    blocks: generatedBlocks,
+    contentSlots,
+    productIds: products.map((product) => product.id),
   };
 
   // Route through autonomy engine (include HTML preview in payload)

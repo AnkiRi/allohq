@@ -441,7 +441,8 @@ export const shopifyWebhookWorker = new Worker<WebhookJobData>(
         }
         break;
       }
-      case "orders/updated": {
+      case "orders/updated":
+      case "orders/cancelled": {
         const order = await upsertOrder(store.id, payload);
         if (order?.status === "cancelled") {
           await prisma.$transaction([
@@ -1159,6 +1160,7 @@ async function upsertOrder(
     total_shipping_price_set: { shop_money: { amount: string } };
     currency: string;
     financial_status: string;
+    cancelled_at?: string | null;
     fulfillment_status: string | null;
     total_discounts?: string;
     discount_codes?: Array<{ code?: string }>;
@@ -1182,7 +1184,8 @@ async function upsertOrder(
   if (!customer) return null;
 
   let status = "pending";
-  if (o.financial_status === "refunded") status = "refunded";
+  if (o.cancelled_at) status = "cancelled";
+  else if (o.financial_status === "refunded") status = "refunded";
   else if (o.fulfillment_status === "fulfilled") status = "fulfilled";
   else if (o.financial_status === "paid") status = "paid";
 

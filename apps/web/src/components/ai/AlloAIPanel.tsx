@@ -67,7 +67,8 @@ type AlloAIPanelContextType = {
 
 type CampaignDirective = {
   sourceCampaignId: string;
-  customerIds: string[];
+  customerIds?: string[];
+  sourceReason?: "recent_purchase";
   forceNoDiscount: boolean;
 };
 

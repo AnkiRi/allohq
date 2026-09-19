@@ -90,6 +90,19 @@ export default function CampaignDetailPage() {
       earliestAt: string | null;
       latestAt: string | null;
       evidence: { customer: number; store: number; default: number };
+      reputationPlan: {
+        provider: "resend" | "ses";
+        tier: number;
+        dailyCap: number;
+        attemptedToday: number;
+        remainingToday: number;
+        deliverableToday: number;
+        deferred: number;
+        estimatedDeliveryDays: number;
+        heldUntil: string | null;
+        paused: boolean;
+        reason: string;
+      };
       cohorts: Array<{
         window: "morning" | "afternoon" | "evening";
         timezone: string;
@@ -681,6 +694,14 @@ export default function CampaignDetailPage() {
                       : "."}
                   </span>
                 )}
+                {timingPreview?.available && timingPreview.reputationPlan && (
+                  <span className="mt-2 block border-t border-border/70 pt-2 text-[10px] leading-4 text-muted-foreground">
+                    Sending health · {timingPreview.reputationPlan.reason}{" "}
+                    {timingPreview.reputationPlan.deferred > 0
+                      ? `Expected completion: about ${timingPreview.reputationPlan.estimatedDeliveryDays} days.`
+                      : "No reputation-based deferral is expected."}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -693,7 +714,8 @@ export default function CampaignDetailPage() {
                 </span>
                 <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
                   Overrides Joon’s timing and quiet-hours recommendation for this campaign only.
-                  Consent, suppression, sender-domain and allowlist checks still run.
+                  Consent, suppression, sender-domain, allowlist and reviewed reputation caps still
+                  run.
                 </span>
               </button>
             </div>
@@ -1140,13 +1162,17 @@ export default function CampaignDetailPage() {
                       const customers = dryRun.previewAssignments.filter(
                         (customer) => customer.arm === arm
                       );
+                      const total =
+                        arm === "TREATMENT"
+                          ? dryRun.estimatedTreatment
+                          : dryRun.estimatedControl;
                       return (
                         <div key={arm}>
                           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                             {arm === "TREATMENT"
                               ? "Would receive this campaign"
                               : "Random control · no email"}{" "}
-                            · {customers.length}
+                            · {total.toLocaleString("en-IN")}
                           </div>
                           <div className="mt-2 space-y-1">
                             {customers.length > 0 ? (
@@ -1171,7 +1197,10 @@ export default function CampaignDetailPage() {
                     })}
                   </div>
                   <p className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
-                    Preview only. These exact assignments freeze when you approve.
+                    Previewing {dryRun.previewAssignments.length.toLocaleString("en-IN")} of{" "}
+                    {dryRun.previewAssignmentTotal.toLocaleString("en-IN")} assignments. Search and
+                    pagination remain available in audience review; the complete assignment freezes
+                    when you approve.
                   </p>
                 </details>
               )}
@@ -1244,9 +1273,7 @@ export default function CampaignDetailPage() {
                             `Create a full-price alternative to “${campaign.name}” for the ${dryRun.exclusions.recent_purchase} recent buyers Joon left alone. Keep the same occasion, products, and brand voice, and let me review the draft before anything is sent.`,
                             {
                               sourceCampaignId: campaignId,
-                              customerIds: dryRun.recentPurchaseCustomers.map(
-                                (customer) => customer.id
-                              ),
+                              sourceReason: "recent_purchase",
                               forceNoDiscount: true,
                             }
                           );

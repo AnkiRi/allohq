@@ -16,6 +16,7 @@ export type {
   IconRowBlock,
   CountdownBlock,
   TestimonialBlock,
+  CustomHtmlBlock,
   EmailTemplate,
   ProductData,
   RenderOptions,
@@ -24,6 +25,16 @@ export type {
   ArchetypeRenderOptions,
 } from "./types";
 export { createDefaultBlock } from "./types";
+export { preflightEmailDocument, type EmailPreflightCheck } from "./preflight";
+export {
+  emailBlockSchema,
+  emailBlocksSchema,
+  emailDocumentSchema,
+  emailCommandSchema,
+  emailCommandListSchema,
+  type EmailCommand,
+  type EmailDocument,
+} from "./schemas";
 
 // NOTE: renderToHtml uses MJML (Node.js only — requires 'fs').
 // Do NOT import from this file in client/browser code.

@@ -12,5 +12,12 @@ export interface BlockRenderContext {
     /** Show placeholders for missing data (editor preview). */
     previewMode?: boolean;
 }
+/**
+ * Custom code is an explicit escape hatch, not a second rendering system.
+ * Keep a deliberately small safety boundary here so preview and delivery use
+ * the exact same sanitized artifact. Email providers strip many unsupported
+ * elements too, but Joon must fail closed before an approval reaches them.
+ */
+export declare function sanitizeCustomEmailHtml(value: string): string;
 export declare function renderBlock(block: EmailBlock, ctx: BlockRenderContext): React.ReactNode;
 //# sourceMappingURL=index.d.ts.map

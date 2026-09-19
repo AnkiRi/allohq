@@ -15,7 +15,6 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 export * from "@prisma/client";
 export {
   computeAttributedInvoice,
-  computeMonthlyInvoice,
   MissingComparisonCapEvidenceError,
 } from "@allohq/pricing";
 export type { Currency as PricingCurrency } from "@allohq/pricing";

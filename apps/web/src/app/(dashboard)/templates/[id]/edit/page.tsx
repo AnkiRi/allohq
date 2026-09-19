@@ -27,7 +27,7 @@ export default function EditTemplatePage() {
     { enabled: !!id },
   ) as {
     data:
-      | { blocks: unknown; subject?: string; previewText?: string; name?: string }
+      | { blocks: unknown; subject?: string; previewText?: string; name?: string; storeId?: string | null }
       | undefined;
     isLoading: boolean;
     error: unknown;
@@ -67,6 +67,7 @@ export default function EditTemplatePage() {
       initialSubject={data.subject ?? ""}
       initialPreviewText={data.previewText ?? ""}
       initialHtml=""
+      storeId={data.storeId ?? undefined}
       previewVariables={{ first_name: "there", last_order_month: "recently" }}
     />
   );

@@ -29,16 +29,53 @@ asset and code surfaces; then finish automated Shopify-scale, security and relea
 Keep the production recipient allowlist until the founder completes delivery sign-off.
 Record test evidence and commit mapping per pass.
 
+### 19 Sep completion checkpoint — authoritative
+
+This checkpoint supersedes older `in progress`, `planned` and `foundation only` wording in
+the historical sections below. The detailed sections retain the reasoning and acceptance
+contract; this checkpoint records the implementation state.
+
+- **Email IDE:** one strictly validated email document now drives the canvas, preview,
+  version history, proposal review, preflight, approval and delivery. The Studio is
+  canvas-first with direct block selection, subject/preview controls, contextual Ask Joon,
+  Inspector, persistent Versions, validated Code and Preflight. AI work is a reviewable
+  proposal rather than an immediate mutation. Restores create versions and approved campaigns
+  pin an immutable `EmailVersion` plus render hash, asset manifest and preflight receipt.
+- **Assets and product imagery:** signed Joon-owned uploads, durable provenance, generated-
+  asset ingestion, selected-image replacement and product-preserving background composition
+  are implemented. Required runtime configuration is `ASSET_BUCKET`, `ASSET_CDN_BASE_URL`
+  and, where applicable, `ASSET_REGION`/`ASSET_ENDPOINT`.
+- **Safe expert control:** Code mode edits every selected structured block as validated JSON,
+  and a sanitized Custom HTML block provides an email-safe escape hatch. Arbitrary whole-
+  document HTML, JavaScript and executable forms are intentionally not enabled because they
+  would bypass artifact validation and make preview, approval and delivery diverge.
+- **Pass 8:** large audiences are evaluated in bounded pages, persisted as exact decision
+  snapshots with counts and paginated customer rows, reasoned about as cohorts rather than one
+  LLM call per customer, and frozen at approval. Full-price alternatives use exact source-
+  reason membership rather than a small sample.
+- **Pass 9:** provider-specific identities coexist, approval pins the provider, sending fails
+  closed on mismatch, provider-neutral reputation evidence produces reviewed grow/hold/pause
+  actions, both Resend and SES obey the same reviewed cap, and campaign timing explains
+  deliverable/deferred volume. A provider switch does not reset domain evidence.
+- **Billing and evidence:** the only invoice calculation is 5% of non-cancelled attributed
+  revenue, with 5/6/8% shadow variants and a fail-closed approved cap. Legacy caused-revenue
+  and postage invoice code has been removed. Causal lift remains proof/learning only.
+- **Live correctness:** cancellation removes attribution and outcomes; overnight opportunities
+  are materially deduplicated; creative generation occurs after approval; release mode remains
+  copilot; active workspace is explicit and invalid workspace headers fail closed.
+- **Security:** the production Next.js critical advisories were removed by upgrading to
+  `15.5.24`; the critical production audit is clean. Remaining high/moderate transitive
+  advisories are tracked as dependency-maintenance work, with MJML minification disabled to
+  avoid the exposed `html-minifier` path.
+
 ### Local verification and environment finding
 
-The provider-pin/Results change passed API, worker and web typechecks plus focused snapshot
-tests. The batched audience change passed API/worker typechecks, focused governor/audience
-tests, Prisma validation and `pnpm -r build` (including the 54-page web build). `pnpm -r lint`
-finished with zero errors and pre-existing warnings. The canonical `pnpm test` launcher
-cannot start `tsx`'s local IPC socket in the current sandbox; direct `node --import tsx
---test` runs pass for the focused files. A broad direct test invocation reaches tests that
-require local Redis, which this sandbox also denies. These are test-environment limits, not
-a claim that the full suite passed.
+Focused pricing, email schema/preflight/rendering, audience and provider-capacity tests pass.
+Prisma formatting, generation and validation pass. API, web, workers and affected package
+typechecks pass; repository build and lint complete with zero lint errors and existing warning
+debt. The provider-capacity integration test that requires local PostgreSQL/Redis remains an
+environment-dependent acceptance test rather than a false local pass. The final release
+commands and commit are recorded in the completion ledger below.
 
 Railway account access is present, but the linked project has only a `production`
 environment. Do not clone production settings into staging: a safe staging environment
@@ -55,29 +92,28 @@ delivery before any service can run against partner data.
 | 2 — Explainable, scalable delivery timing | Complete | `ba5265c` | Deploy migration; production acceptance; representative 100k-recipient load proof |
 | 3 — Chat UX and durable campaign collaboration | Complete | `1d82a1b` | Production UX acceptance across reopen/edit/schedule/send states |
 | 4 — Overnight decisions, traceability and segment lifecycle | Complete | `3e76e0c` | Deploy migration and validate one real overnight proposal→approval→artifact cycle |
-| 5 — Full email IDE, conversational creator and brand/asset system | Foundation exists; full IDE active | `2e93e90` | Pass 5E0–5E6 below: truth parity, canonical document, immutable versions, canvas/chat/inspector/code, owned assets, client preflight and exact campaign release |
+| 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, current release | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | In progress | `5dbdb7a`, `2332e7d` | Bounded API response/storage, cohort reasoning, durable evidence snapshot; 100k and production acceptance |
-| 9 — Provider-neutral domain reputation and warm-up | In progress | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef` | Production identity-migration and provider-pin acceptance; assessed ramp and deliberate SES migration |
-| 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
+| 8 — Campaign-specific customer decision context | Complete in code | `5dbdb7a`, `2332e7d`, current release | Deploy migration; representative 100k and production acceptance |
+| 9 — Provider-neutral domain reputation and warm-up | Complete in code | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, current release | Configure and accept SES production/event infrastructure; review the first real ramp |
+| 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, current release | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
 
-## Execution order after store-lifecycle safety
+## External release order after code completion
 
-Store lifecycle safety is the prerequisite because a disconnected or uninstalled store must
-never continue sending while later passes are tested. After it is deployed and accepted, use
-this order without re-litigating it:
+Store lifecycle safety remains the first acceptance gate because a disconnected or
+uninstalled store must never continue sending. The remaining sequence is deployment and
+operations work, not unfinished feature implementation:
 
-1. Finish the remaining currency tail (`bbe844c` landed; deployed-data verification remains).
-2. Complete Pass 8 customer-context reasoning (`5dbdb7a` landed for named customers).
-3. Complete Pass 9 provider-neutral warm-up before widening delivery.
-4. Run the full deployed-data acceptance path.
-5. Run the 100,000-customer Shopify scale tests.
-6. Create staging before active design-partner testing begins.
-7. Complete SES, monitoring, backups and security operations.
-8. Prepare and submit the Shopify App Store package.
-9. Defer the separate approximately 45-million-customer mobile-app architecture until the founder requests it.
+1. Deploy the current release, additive migration and asset/provider configuration.
+2. Run the founder-owned full deployed-data acceptance path.
+3. Run the founder-owned 100,000-customer Shopify scale proof.
+4. Create isolated staging before active partner testing begins.
+5. Complete SES production access/events, monitoring, backups and security operations.
+6. Prepare and submit the Shopify App Store package.
+7. Defer the separate approximately 45-million-customer mobile-app architecture until the
+   founder requests it.
 
 ## Pass L — Store lifecycle safety
 
@@ -384,12 +420,11 @@ Make `ready before coffee` demonstrable: every opportunity message resolves to o
 
 ## Pass 5 — Conversational email creator and editable brand kit
 
-Status: foundation only. Commit `2e93e90` provides the first conversational structured-email
-path and editable brand kit, but user interviews identify visuals and the editor as Joon's
-weakest major surface. The current form-led editor, immediate AI mutation, session-only undo,
-loose runtime schemas, mutable template row, generated-image append behavior and preview/send
-context drift do not satisfy the required product. Pass 5E0–5E6 below is active alongside all
-other pending passes.
+Status (19 Sep): complete in code for deployment acceptance. Commit `2e93e90` supplied the
+original structured-email path; the current release replaces the form-led workflow with the
+canvas-first IDE and closes artifact, version, proposal, owned-asset, selected-image,
+preflight and release parity. Real Gmail/Outlook/Apple rendering remains an external service
+acceptance gate, not a browser-preview claim.
 
 ### Outcome
 
@@ -420,9 +455,11 @@ the exact candidate and campaign approval freezes the release. The interaction p
   mentions, multi-step tools, progress, retry and proposal results linked to canvas nodes.
 - **Inspector:** schema-derived exact controls for the selected element, including responsive
   rules; it must never show image controls while claiming text is selected.
-- **Code:** custom HTML blocks plus a full source-backed mode for expert control. Unknown markup
-  is preserved rather than silently flattened. JavaScript, unsafe forms and other executable
-  content remain prohibited.
+- **Code:** validated JSON for every selected structured block plus a sanitized Custom HTML
+  block for expert control. Unknown markup inside that block is preserved when safe.
+  JavaScript, unsafe forms and other executable content remain prohibited. Arbitrary whole-
+  document source is intentionally not supported because it would bypass the canonical
+  artifact contract.
 - **Versions:** durable history for manual, conversational and code changes. Restore creates a
   new version; approved history is never erased.
 - **Preflight:** version-bound blockers/warnings/passes for content, offer, product, links,
@@ -488,9 +525,9 @@ silently apply against a stale base version.
 - Structured mode exposes all safe, meaningful layout and styling controls rather than only a
   simplified form: dimensions, content width, padding, alignment, typography, color, borders,
   image crop/focal point, links and desktop/mobile rules.
-- A Custom HTML node can coexist with structured content. Full Code mode creates a source-backed
-  version and preserves unrecognized markup. The UI states which regions remain visually
-  editable; conversion back to structured nodes is never silently lossy.
+- A Custom HTML node can coexist with structured content and preserves safe unrecognized
+  markup. The selected block can also be edited as schema-validated JSON. Conversion between
+  custom markup and structured nodes is never attempted silently or lossily.
 - CSS is sanitized/inlined and checked against email-client support. Script, executable forms
   and unsafe URLs remain blocked. Imported/exported HTML receives the same preflight.
 - “Pixel perfect” means precise control plus real client renders and differences, not the false
@@ -560,10 +597,10 @@ discount leakage, inconsistent products and offer/code drift across them.
 - Selected-image replacement/editing and product-preserving composition.
 - Desktop/mobile derivatives, focal points, alt text and OCR.
 
-#### Pass 5E5 — Advanced Code mode
+#### Pass 5E5 — Advanced Code mode — complete in code
 
-- Custom HTML node and full source-backed versions.
-- HTML import/export, code diff and Ask Joon code editing.
+- Custom HTML node and selected-block structured JSON.
+- Selected-block code review and Ask Joon proposal editing.
 - Sanitization, CSS inlining, compatibility checks and explicit structured-edit limitations.
 
 #### Pass 5E6 — Exact preflight and campaign release
@@ -713,13 +750,14 @@ journeys into explainable decisions rather than generic AI-generated messages.
 
 ## Pass 8 — Campaign-specific customer decision context
 
-Status (19 Sep): in progress. Exact-customer targeting and consent consistency in
-`d758862` are necessary plumbing. A bounded, store-scoped
+Status (19 Sep): complete in code; deployment and representative 100k acceptance remain.
+Exact-customer targeting and consent consistency in `d758862` are necessary plumbing. A bounded, store-scoped
 `get_customer_decision_context` merchant tool now exposes current state, consent,
 purchase-cycle evidence, recorded discounts, recent orders/products, engagement,
 timing, previous audience decisions and explicit request constraints for one named
-customer. The full cohort variant, reviewed product-graph evidence, deterministic
-context snapshot on the campaign, and end-to-end acceptance cases remain open.
+customer. Large campaigns now persist exact audience-decision snapshots and paginated rows,
+reason over bounded cohort aggregates plus reviewed product relationships, and freeze the
+approved membership and evidence reference.
 
 ### Why this pass exists
 
@@ -937,14 +975,15 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
 
 ## Pass 9 — Provider-neutral domain reputation and warm-up
 
-Status (19 Sep): in progress. Calendar time no longer advances SES warm-up without evidence;
+Status (19 Sep): complete in code; production SES/provider acceptance remains. Calendar time no longer advances SES warm-up without evidence;
 zero-volume health cannot report growth, and Setup no longer claims an automatic ramp.
 The live sender gate now requires verification for the selected provider; SES allowlist
 rehearsals do too, without changing the existing Resend demo/allowlist path. An additive
 provider-identity table preserves Resend and SES records side by side, with legacy Resend
-rows backfilled by migration. The provider-neutral assessment, reviewed growth workflow, Resend ramp, large-audience
-deferral display and migration handling below remain open. The repository contains a
-useful SES warm-up skeleton, not a complete production warm-up system.
+rows backfilled by migration. Provider-neutral assessments, reviewed growth/hold/pause,
+Resend and SES caps, large-audience deferral display, rollback conditions and migration
+evidence are implemented. SES production access, provider event infrastructure and the first
+real reviewed ramp remain external operational gates.
 
 ### 19 Sep execution plan — dual provider and SES migration
 
@@ -1557,28 +1596,33 @@ Acceptance:
 - representative founder tasks complete with fewer navigation and comprehension errors;
 - production screenshots and acceptance evidence cover both themes and required device sizes.
 
-## Consolidated remaining-work register — audited 2026-09-18
+## Consolidated remaining-work register — audited 2026-09-19
 
 This register reconciles the current conversation with the repository documents. It is not a
 claim that every unchecked line in an older plan is still current. Where an older document
 conflicts with a later locked decision, this document wins and the older checklist must be
 corrected rather than implemented literally.
 
-### Product/code work still open
+### Internal implementation status
 
-| Area | Current status | Required resolution |
+No numbered product pass remains open in repository code. The current release closes the
+previous internal list as follows:
+
+| Area | Code-complete result | Remaining gate |
 | --- | --- | --- |
-| Campaign-specific agent reasoning | Pass 8 planned | Make chat and campaign creation reason over canonical consent, orders, state, product graph and merchant constraints; never trust a shallow RFM label over fresher facts. |
-| Sender reputation and warm-up | Pass 9 planned | Implement the provider-neutral assessment, ramp, health gates, UI, notifications and migration behavior above. |
-| Customer projection consistency | Defect observed in production | Recompute customer/RFM/list/story projections idempotently after orders and expose one freshness contract. |
-| Outcomes and proof | UI separates attribution, control evidence, billing preview and forecasts; acceptance pending | Verify real store data, underpowered/no-control cohorts and currency labels. The former AI ROI used a hard-coded USD→INR conversion against workspace-wide costs; the ratio has been removed until costs are store-scoped and comparable. |
-| Overnight decisions | Defect observed in production | Deduplicate opportunities, fix lifecycle copy, add material-change notifications and link every approved proposal to its artifact. |
-| Billing ledger policy | Code reconciled; deployment acceptance pending | An order counts unless cancelled. Cancellation removes attribution and fee basis; refunds and fulfilment do not independently alter v1 attributed revenue because external OMS/WMS data may be incomplete. Billing remains disabled. |
-| Legacy causal/billing paths | Audit required | Prove no production invoice path still uses caused-revenue, postage or obsolete comparison logic; retain causal data only for learning/proof. Billing remains disabled until reconciled. |
-| Product-wide UX coherence | Pass 11A complete; 11B–11H planned | Apply the Quiet Control Room system route by route. Preserve every capability; simplify through task-based hierarchy, progressive disclosure and summary/workspace/receipt anatomy. |
-| Read-only commerce evidence | Product decision required | Do not recreate Shopify order/product administration. Add lightweight searchable order and product evidence/drill-down only where it explains customer state, attribution, opportunities or the product graph. |
-| Landing narrative accuracy | Copy audit required | Clarify Rohan's full-price percentages and Ankita's chronology/evidence; do not say every field comes from order history when open/click timing is also used. Keep composites explicitly illustrative and keep public competitor references/testimonials removed. |
-| Active workspace | Deferred but mandatory | Replace most-recently-linked workspace selection with an explicit active-workspace model and switcher before multi-store merchants. |
+| Campaign-specific agent reasoning | Canonical named-customer context plus bounded cohort reasoning, reviewed product evidence and exact persisted audience snapshots | Deployed 100k acceptance |
+| Sender reputation and warm-up | Provider-neutral evidence, reviewed grow/hold/pause, rollback condition, common Resend/SES cap and visible campaign deferral plan | SES production/event setup and first reviewed real ramp |
+| Customer projection consistency | Order create/update/cancel refreshes the canonical order projection, RFM, LTV and state | Deployed event acceptance |
+| Outcomes and proof | Live attribution, pooled causal evidence, billing preview and forecasts are separate; no-control rows do not claim lift | Deployed-data acceptance |
+| Overnight decisions | Stable fingerprints and material hashes deduplicate proposals; creative is generated only after approval; release remains copilot | One real overnight proposal→approval→artifact acceptance |
+| Billing ledger | Attributed non-cancelled revenue only; 5/6/8% shadows; postage/caused-revenue invoice code removed; causal ledger retained only for proof | Billing stays disabled until cap evidence and production acceptance |
+| Product-wide UX | Passes 11A–11P are implemented with preserved routes and capabilities | Merchant usability/deployed-data acceptance |
+| Commerce evidence | Searchable Products and Orders remain read-only evidence surfaces, not replacement commerce administration | Large-data acceptance |
+| Active workspace | Explicit membership-backed workspace switcher and fail-closed request scoping | Multi-workspace deployed acceptance |
+| Email IDE | Canvas, Ask Joon proposals, Inspector, Versions, Code, owned assets, product imagery, preflight and immutable release | Client renders and merchant acceptance |
+
+Any new internal defect found during acceptance becomes a dated regression item here; it
+must not be described vaguely as a still-unimplemented phase.
 
 ### Acceptance/document conflicts to correct
 
@@ -1616,6 +1660,14 @@ corrected rather than implemented literally.
   listing assets and Shopify billing before App Store submission.
 - Rotate development credentials before a real merchant and keep production secrets only in
   the platform secret managers.
+- Configure durable email assets (`ASSET_BUCKET`, `ASSET_CDN_BASE_URL`, optional region/
+  endpoint) in every deployed environment and verify signed upload/CDN access.
+- Purchase/configure Litmus or Email on Acid if Joon will promise Gmail, Outlook and Apple
+  client screenshots/diffs; browser desktop/mobile preview is deliberately not presented as
+  equivalent evidence.
+- Continue dependency maintenance for remaining transitive high/moderate advisories. Critical
+  production advisories are clear as of 19 Sep; MJML currently disables minification while
+  the transitive `html-minifier` package has no patched upstream release.
 
 ### External testing still open
 

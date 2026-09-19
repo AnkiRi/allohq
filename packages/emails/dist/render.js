@@ -42,7 +42,10 @@ const blocks_1 = require("./blocks");
 /** The full email document, brand-kit-driven. */
 function GeneratedEmailDocument({ content, brandKit, ctx, }) {
     const preview = content.previewText || content.subject || "";
-    return ((0, jsx_runtime_1.jsx)(BrandEmailLayout_1.BrandEmailLayout, { brandKit: brandKit, preview: preview, children: content.blocks.map((block, i) => ((0, jsx_runtime_1.jsx)(React.Fragment, { children: (0, blocks_1.renderBlock)(block, ctx) }, block.id ?? i))) }));
+    return ((0, jsx_runtime_1.jsx)(BrandEmailLayout_1.BrandEmailLayout, { brandKit: brandKit, preview: preview, children: content.blocks.map((block, i) => {
+            const rendered = (0, blocks_1.renderBlock)(block, ctx);
+            return ctx.previewMode ? ((0, jsx_runtime_1.jsx)("div", { "data-email-block-id": block.id, "data-email-block-type": block.type, style: { position: "relative" }, children: rendered }, block.id ?? i)) : ((0, jsx_runtime_1.jsx)(React.Fragment, { children: rendered }, block.id ?? i));
+        }) }));
 }
 /** Inject UTM params into <a href> URLs matching the store domain. */
 function injectUtmParams(html, tracking) {

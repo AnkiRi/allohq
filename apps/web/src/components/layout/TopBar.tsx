@@ -44,6 +44,9 @@ export function TopBar() {
   const commandPalette = useCommandPalette();
   const meta = resolveMeta(pathname);
   const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
+  const { data: workspaces } = trpc.workspaces.list.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
   const store = stores?.[0];
   const onboardingDone = !!store?.onboardingCompletedAt;
   const { data: stats } = trpc.dashboard.stats.useQuery(undefined, { enabled: onboardingDone, refetchInterval: 60000 });
@@ -78,6 +81,26 @@ export function TopBar() {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {workspaces && workspaces.length > 1 ? (
+          <label className="hidden items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5 lg:flex">
+            <span className="sr-only">Active workspace</span>
+            <select
+              value={workspaces.find((workspace) => workspace.active)?.id ?? ""}
+              onChange={(event) => {
+                window.localStorage.setItem("joon_active_workspace_id", event.target.value);
+                window.location.assign("/dashboard");
+              }}
+              className="max-w-[170px] bg-transparent text-[11px] text-foreground outline-none"
+              aria-label="Active workspace"
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name} · {workspace._count.stores} {workspace._count.stores === 1 ? "store" : "stores"}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {demo && <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] text-muted-foreground lg:flex"><Sparkles className="h-3 w-3 text-[var(--app-accent)]" /> Vana sample workspace <button type="button" onClick={() => { try { sessionStorage.clear(); } catch {} window.location.assign("/dashboard"); }} className="ml-1 inline-flex items-center gap-1 text-[var(--app-accent)] hover:underline" title="Restart the demo from a clean state"><RotateCcw className="h-3 w-3" /> restart</button></span>}
         {onboardingDone && <div className="hidden items-center gap-2 rounded-full bg-[var(--app-accent-soft)] px-2.5 py-1.5 text-[10.5px] text-[var(--app-accent)] md:flex" title={lastActivity ?? "Joon is watching this workspace"}><PulseDot color="bg-[var(--app-accent)]" />Watching {(stats?.totalCustomers ?? 0).toLocaleString("en-IN")} customers{lastActivity && <span className="hidden opacity-65 xl:inline">· {lastActivity}</span>}</div>}
         {aiRevenue > 0 && <div className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5 text-[10.5px] text-foreground xl:flex" title="Revenue attributed to AI campaigns and automations in the last 30 days"><span className="font-mono font-semibold tabular-nums">{formatStoreCurrency(aiRevenue, store?.currency ?? "USD")}</span><span className="text-muted-foreground">· 30d</span></div>}

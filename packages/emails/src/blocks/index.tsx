@@ -727,6 +727,33 @@ function SocialBlockView({
 }
 
 /**
+ * Custom code is an explicit escape hatch, not a second rendering system.
+ * Keep a deliberately small safety boundary here so preview and delivery use
+ * the exact same sanitized artifact. Email providers strip many unsupported
+ * elements too, but Joon must fail closed before an approval reaches them.
+ */
+export function sanitizeCustomEmailHtml(value: string): string {
+  return value
+    .replace(/<!--([\s\S]*?)-->/g, "")
+    .replace(/<(script|iframe|object|embed|form|input|button|textarea|select|video|audio|canvas|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<(script|iframe|object|embed|form|input|button|textarea|select|video|audio|canvas|svg|math|link|meta|base)\b[^>]*\/?\s*>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s+(href|src)\s*=\s*(["'])\s*(?:javascript|data:text\/html):[\s\S]*?\2/gi, ' $1="#"');
+}
+
+function CustomHtmlBlockView({
+  block,
+}: {
+  block: Extract<EmailBlock, { type: "custom_html" }>;
+}) {
+  return (
+    <Section className="bk-pad" style={{ padding: "20px 36px 0" }}>
+      <div dangerouslySetInnerHTML={{ __html: sanitizeCustomEmailHtml(block.props.html) }} />
+    </Section>
+  );
+}
+
+/**
  * `header` and `footer` content blocks from the content model are intentionally
  * NOT rendered here — the BrandEmailLayout shell owns the brand header and footer
  * so every email gets one consistent, on-brand chrome. Dropping these avoids a
@@ -763,6 +790,8 @@ export function renderBlock(block: EmailBlock, ctx: BlockRenderContext): React.R
       return <CountdownBlockView block={block} ctx={ctx} />;
     case "social":
       return <SocialBlockView block={block} ctx={ctx} />;
+    case "custom_html":
+      return <CustomHtmlBlockView block={block} />;
     case "columns":
       // Columns of arbitrary blocks render their children stacked (mobile-first).
       return (

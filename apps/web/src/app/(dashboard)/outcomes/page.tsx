@@ -131,8 +131,6 @@ export default function OutcomesPage() {
           pValue: number;
           confidence: number;
           incrementalTotal: number;
-          incrementalMargin: number;
-          contributionMargin: number;
         }
       | undefined;
   };
@@ -202,7 +200,7 @@ export default function OutcomesPage() {
   const liftPerCustomer = model.liftPerCustomer;
   const liftPct = model.liftPct;
   const incrementalRevenue = model.incrementalRevenue;
-  const measuredBasis = isReal && liftData?.basis === "margin" ? "contribution margin" : "net revenue";
+  const measuredBasis = "non-cancelled revenue";
   const totalFee = billingData?.total ?? 0;
   const displayCurrency = store?.currency ?? ledgerData?.[0]?.currency ?? billingData?.currency ?? "USD";
 

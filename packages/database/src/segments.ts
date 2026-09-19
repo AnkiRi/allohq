@@ -60,9 +60,22 @@ export function buildWhereFromConditions(conditions: SegmentConditions, storeIds
 
 /** Resolve ANY segment → a Prisma customer `where`, by however it's defined. */
 export function resolveSegmentWhere(
-  segment: { customerIds?: string[] | null; conditions?: unknown; rfmMin?: number | null; rfmMax?: number | null },
+  segment: {
+    id?: string;
+    kind?: string | null;
+    customerIds?: string[] | null;
+    conditions?: unknown;
+    rfmMin?: number | null;
+    rfmMax?: number | null;
+  },
   storeIds: string[],
 ): any {
+  if (segment.kind === "membership" && segment.id) {
+    return {
+      storeId: { in: storeIds },
+      segmentMemberships: { some: { segmentId: segment.id } },
+    };
+  }
   if (segment.customerIds && segment.customerIds.length > 0) {
     return { storeId: { in: storeIds }, id: { in: segment.customerIds } };
   }

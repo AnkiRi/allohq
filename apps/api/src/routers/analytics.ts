@@ -453,11 +453,10 @@ export const analyticsRouter = router({
    * From the causal substrate (decision_records / message_logs, grouped by
    * treatmentArm), computes the REAL incremental lift of joon's retention vs a
    * held-out control cohort that received nothing:
-   *   - per customer we take the measured outcome (outcomeMargin if present,
-   *     else outcomeRevenue) and average within each arm,
+   *   - per customer we take non-cancelled order revenue and average within each arm,
    *   - lift = treatment mean − control mean (per customer),
    *   - incremental total = lift × treated count,
-   *   - fee = base monthly + performance % of the incremental margin vs control.
+   * Billing is deliberately separate: 5% of attributed revenue, never this lift estimate.
    *
    * `hasRealData` is true only when there are enough CONTROL rows WITH a measured
    * outcome to be meaningful (>= MIN_CONTROL_WITH_OUTCOME). The web screen flips
@@ -471,8 +470,7 @@ export const analyticsRouter = router({
       const since = new Date(Date.now() - input.days * 86_400_000);
       const closedBefore = new Date(Date.now() - 7 * 86_400_000);
 
-      // Per-customer measured outcome by arm, over the window. Prefer margin;
-      // fall back to revenue. One row per arm with count + mean + members.
+      // Per-customer non-cancelled revenue by arm over the window.
       const rows = await ctx.prisma.$queryRaw<
         Array<{
           arm: "CONTROL" | "TREATMENT";
@@ -494,7 +492,7 @@ export const analyticsRouter = router({
             AND "createdAt" <= ${closedBefore}
           ORDER BY "experimentId", "customerId", "createdAt" ASC
         ), customer_outcomes AS (
-          SELECT "experimentId", "customerId", SUM("margin")::float AS value
+          SELECT "experimentId", "customerId", SUM("revenue")::float AS value
           FROM "experiment_order_outcomes"
           GROUP BY "experimentId", "customerId"
         )
@@ -538,24 +536,11 @@ export const analyticsRouter = router({
         MIN_CONTROL_WITH_OUTCOME
       );
 
-      // Whether the per-customer figures are margin (preferred) or revenue.
-      // New causal outcomes are always recorded in contribution-margin terms.
-      const basis: "margin" | "revenue" = "margin";
+      const basis: "revenue" = "revenue";
 
       const liftPerCustomer = treatmentMean - controlMean;
       // Incremental total = per-customer lift applied across the treated cohort.
       const incrementalTotal = liftPerCustomer * treatmentCount;
-
-      // Performance fee on the incremental margin vs control. If the per-customer
-      // basis is revenue (no costPrice data), approximate margin via the store's
-      // defaultContributionMargin so the fee stays grounded in margin.
-      const store = await ctx.prisma.store.findUnique({
-        where: { id: input.storeId },
-        select: { defaultContributionMargin: true },
-      });
-      const contributionMargin = store?.defaultContributionMargin ?? 0.6;
-      const incrementalMargin =
-        basis === "margin" ? incrementalTotal : incrementalTotal * contributionMargin;
 
       const hasRealData = controlWithOutcome >= MIN_CONTROL_WITH_OUTCOME;
 
@@ -583,8 +568,6 @@ export const analyticsRouter = router({
         underpowered: stats.underpowered,
         confidence: stats.confidence,
         incrementalTotal: Math.round(incrementalTotal),
-        incrementalMargin: Math.round(incrementalMargin),
-        contributionMargin,
       };
     }),
 
@@ -623,13 +606,13 @@ export const analyticsRouter = router({
                COUNT(*)::bigint AS n,
                COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END)::bigint AS "withOutcome",
                COALESCE(
-                 SUM(COALESCE("outcomeMargin", "outcomeRevenue", 0))
+                 SUM(COALESCE("outcomeRevenue", 0))
                    FILTER (WHERE "outcome" IS NOT NULL)
                  / NULLIF(COUNT(CASE WHEN "outcome" IS NOT NULL THEN 1 END), 0),
                  0
                )::float AS mean,
                COALESCE(
-                 SUM(POWER(COALESCE("outcomeMargin", "outcomeRevenue", 0), 2))
+                 SUM(POWER(COALESCE("outcomeRevenue", 0), 2))
                    FILTER (WHERE "outcome" IS NOT NULL),
                  0
                )::float AS sumsq
@@ -663,21 +646,7 @@ export const analyticsRouter = router({
         : [];
       const metaById = new Map(campaignMeta.map((c) => [c.id, c]));
 
-      // Whether per-customer figures are margin (preferred) or revenue → fee grounding.
-      const marginUsed = await ctx.prisma.messageLog.count({
-        where: {
-          storeId: input.storeId,
-          treatmentArm: { not: null },
-          outcomeMargin: { not: null },
-          createdAt: { gte: since },
-        },
-      });
-      const basis: "margin" | "revenue" = marginUsed > 0 ? "margin" : "revenue";
-      const store = await ctx.prisma.store.findUnique({
-        where: { id: input.storeId },
-        select: { defaultContributionMargin: true },
-      });
-      const contributionMargin = store?.defaultContributionMargin ?? 0.6;
+      const basis: "revenue" = "revenue";
 
       const campaigns = campaignIds.map((id) => {
         const { control, treatment } = byCampaign.get(id)!;
@@ -749,8 +718,6 @@ export const analyticsRouter = router({
       const provenIncrementalRaw = campaigns
         .filter((c) => c.decision === "send")
         .reduce((s, c) => s + Math.max(0, c.incremental), 0);
-      const provenIncrementalMargin =
-        basis === "margin" ? provenIncrementalRaw : provenIncrementalRaw * contributionMargin;
       // Sends joon would now AVOID = the treated volume on hold-back segments (no proven lift).
       const sendsAvoidable = campaigns
         .filter((c) => c.decision === "hold")
@@ -770,10 +737,8 @@ export const analyticsRouter = router({
           messaged: totalMessaged,
           heldToMeasure: totalHeldToMeasure,
           provenIncremental: Math.round(provenIncrementalRaw),
-          provenIncrementalMargin: Math.round(provenIncrementalMargin),
           sendsAvoidable,
           sendsAvoidablePct,
-          contributionMargin,
         },
       };
     }),

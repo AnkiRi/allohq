@@ -1,7 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { scanOpportunities } from "@allohq/campaign-engine";
-import { logAgentActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { enqueueCampaignOpportunities } from "../utils/enqueue-opportunities";
 
@@ -44,13 +43,8 @@ export const opportunityScannerWorker = new Worker<OpportunityScanJobData>(
 
         await enqueueCampaignOpportunities(campaignFactoryQueue, opportunities);
 
-        if (opportunities.length > 0) {
-          await logAgentActivity(
-            sid,
-            `Evaluated the store and prepared **${opportunities.length}** campaign decision${opportunities.length === 1 ? "" : "s"} for review`,
-            { type: "decision_proposed" }
-          ).catch(() => {});
-        }
+        // The factory logs only newly-created durable decisions. Logging here
+        // would announce the same unchanged opportunity every two-hour scan.
       } catch (err) {
         console.error(`[opportunity-scanner] Error scanning store ${sid}:`, (err as Error).message);
       }

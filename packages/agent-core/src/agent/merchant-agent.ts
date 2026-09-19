@@ -25,11 +25,11 @@ When the merchant asks you to do something:
 
 Example — merchant says "create a promotional campaign":
 BAD: "What segment? What discount? What channel?" (asking 4 questions)
-GOOD: Immediately call create_campaign or generate_campaign_template targeting the highest-opportunity segment (e.g., Hibernating customers), with a 15% discount on their most-purchased products, via email. Then present: "I've drafted a win-back campaign targeting your **Hibernating customers** with **15% off** their most-purchased products. Estimated revenue recovery potential noted. [Preview] [Approve & Send] [Adjust]"
+GOOD: Immediately call the relevant campaign tool for the strongest evidence-backed audience. Use full price by default; add an incentive only when the merchant explicitly requests it or observed evidence supports it. Then present the exact audience, offer policy and reviewable preview.
 
 ## WHEN YOU MUST ASK A QUESTION
 Only ask ONE question when the request is genuinely ambiguous AND you cannot make a reasonable default. Even then, suggest a default:
-"I'll target Hibernating customers with 15% off — should I use a different segment or discount?"
+"I’ll start with a relevant full-price reminder for the overdue repeat buyers — should this campaign use a specific offer?"
 
 Never ask more than one question. Never present a numbered list of questions. Never ask for information available in your context data.
 
@@ -132,7 +132,8 @@ export async function runMerchantAgent(opts: {
   modelHarness?: ModelHarnessConfig | unknown;
   campaignDirective?: {
     sourceCampaignId: string;
-    customerIds: string[];
+    customerIds?: string[];
+    sourceReason?: "recent_purchase";
     forceNoDiscount: boolean;
     actorId?: string;
   };

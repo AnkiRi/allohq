@@ -14,7 +14,7 @@ import {
   DELIVERY_WINDOWS,
   type DeliveryWindow,
 } from "@allohq/customer-intelligence";
-import type { EmailBlock, ProductData } from "@allohq/email-builder";
+import { emailDocumentSchema, type EmailBlock, type ProductData } from "@allohq/email-builder";
 import { sendEmail, selectedEmailProvider, sesSafeTag, engagementRank } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
@@ -48,6 +48,27 @@ const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: r
 const emailSendQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, { connection: redisConnection });
 
 const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (seconds, not hours)
+
+function frozenEmailDocument(campaign: {
+  template: { subject: string; previewText: string | null; blocks: unknown } | null;
+  approvedEmailVersion?: { document: unknown } | null;
+}) {
+  if (!campaign.template) throw new Error("Campaign has no email template");
+  const frozen = campaign.approvedEmailVersion
+    ? emailDocumentSchema.safeParse(campaign.approvedEmailVersion.document)
+    : null;
+  if (frozen?.success) return frozen.data;
+  return emailDocumentSchema.parse({
+    schemaVersion: 1,
+    envelope: {
+      subject: campaign.template.subject,
+      previewText: campaign.template.previewText ?? "",
+      locale: "en",
+    },
+    blocks: campaign.template.blocks,
+    metadata: {},
+  });
+}
 
 // Per-customer decision bundle carried from the planner to the delayed delivery job.
 interface DeliveryPlan {
@@ -141,13 +162,14 @@ export async function planCampaignSend(
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { template: true, segment: true, store: true },
+    include: { template: true, segment: true, store: true, approvedEmailVersion: true },
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (!campaign.template) throw new Error(`Campaign ${campaignId} has no template`);
   if (!campaign.store.isActive) {
     throw new Error("Campaign blocked: store is disconnected");
   }
+  const approvedEmail = frozenEmailDocument(campaign);
   if (campaign.store.emailSendingPausedAt) {
     throw new Error(
       `Campaign blocked: store email delivery is paused (${campaign.store.emailSendingPauseReason ?? "manual or safety pause"})`
@@ -161,10 +183,10 @@ export async function planCampaignSend(
     scheduledAt: campaign.scheduledAt,
     template: {
       id: campaign.template.id,
-      subject: campaign.template.subject,
-      previewText: campaign.template.previewText,
-      blocks: campaign.template.blocks,
-      html: campaign.template.html,
+      subject: approvedEmail.envelope.subject,
+      previewText: approvedEmail.envelope.previewText,
+      blocks: approvedEmail.blocks,
+      html: campaign.approvedEmailVersion ? null : campaign.template.html,
     },
     segment: campaign.segment
       ? {
@@ -453,7 +475,7 @@ export async function planCampaignSend(
           customerId: customer.id,
           channel: "email",
           to: customer.email,
-          subject: campaign.template.subject,
+          subject: approvedEmail.envelope.subject,
           campaignId,
           status: "skipped",
           treatmentArm: null,
@@ -496,7 +518,7 @@ export async function planCampaignSend(
           customerId: customer.id,
           channel: "email",
           to: customer.email,
-          subject: campaign.template.subject,
+          subject: approvedEmail.envelope.subject,
           campaignId,
           status: "withheld",
           treatmentArm: "CONTROL",
@@ -509,7 +531,7 @@ export async function planCampaignSend(
     }
 
     // A/B subject-line variant (decided at plan time, carried to delivery).
-    let effectiveSubject = campaign.template.subject;
+    let effectiveSubject = approvedEmail.envelope.subject;
     let abTestId: string | undefined;
     let abVariant: "a" | "b" | undefined;
     if (activeSubjectTest) {
@@ -728,9 +750,10 @@ export async function deliverOne(data: DeliverOneData) {
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { template: true, segment: true, store: true },
+    include: { template: true, segment: true, store: true, approvedEmailVersion: true },
   });
   if (!campaign || !campaign.template) return { skipped: true, reason: "campaign_gone" };
+  const approvedEmail = frozenEmailDocument(campaign);
   const approvedProvider = campaignAudienceSnapshot(campaign.agentProposal)?.deliveryProvider ?? "resend";
   if (approvedProvider !== selectedEmailProvider()) {
     throw new Error(`Campaign ${campaignId} is pinned to ${approvedProvider}; current worker uses ${selectedEmailProvider()}`);
@@ -748,10 +771,10 @@ export async function deliverOne(data: DeliverOneData) {
     scheduledAt: campaign.scheduledAt,
     template: {
       id: campaign.template.id,
-      subject: campaign.template.subject,
-      previewText: campaign.template.previewText,
-      blocks: campaign.template.blocks,
-      html: campaign.template.html,
+      subject: approvedEmail.envelope.subject,
+      previewText: approvedEmail.envelope.previewText,
+      blocks: approvedEmail.blocks,
+      html: campaign.approvedEmailVersion ? null : campaign.template.html,
     },
     segment: campaign.segment
       ? {
@@ -1019,7 +1042,7 @@ export async function deliverOne(data: DeliverOneData) {
       });
 
   // Blocks + products + brand kit for rendering.
-  const blocks = campaign.template.blocks as unknown as EmailBlock[];
+  const blocks = approvedEmail.blocks as EmailBlock[];
   const productIds: string[] = [];
   for (const block of blocks) {
     if (block.type === "product" && block.props.productId) productIds.push(block.props.productId);
@@ -1099,6 +1122,7 @@ export async function deliverOne(data: DeliverOneData) {
     brandKit,
     blocks,
     subject: effectiveSubject,
+    previewText: approvedEmail.envelope.previewText || undefined,
     variables,
     products: productsMap,
     dynamicProducts,
@@ -1124,7 +1148,7 @@ export async function deliverOne(data: DeliverOneData) {
       where: { id: messageLog.id },
       data: { status: "queued", error: `Deferred: ${capacity.reason}` },
     });
-    if (selectedEmailProvider() === "ses" && capacity.reason === "daily_cap") {
+    if (capacity.reason === "daily_cap") {
       const nextDay = nextSesWarmupResume();
       await emailSendQueue.add(
         "deliver-one",

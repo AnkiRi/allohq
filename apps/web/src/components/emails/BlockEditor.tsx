@@ -222,6 +222,31 @@ function ProductEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
   );
 }
 
+function ProductGridEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "product_grid" }>; onUpdate: (b: EmailBlock) => void }) {
+  const set = useSet(block, onUpdate);
+  return (
+    <>
+      <Field><Label>Product IDs (one per line)</Label><TextArea value={block.props.productIds.join("\n")} onChange={(value) => set({ productIds: value.split(/\n|,/).map((item) => item.trim()).filter(Boolean) })} rows={6} /></Field>
+      <Field><Label>Columns</Label><SelectInput value={String(block.props.columns ?? 2)} onChange={(columns) => set({ columns: Number(columns) })} options={[{ label: "Two", value: "2" }, { label: "Three", value: "3" }]} /></Field>
+      <div className="space-y-2 pt-1">
+        <Checkbox checked={block.props.showPrice ?? true} onChange={(showPrice) => set({ showPrice })} label="Show price" />
+        <Checkbox checked={block.props.showDescription ?? false} onChange={(showDescription) => set({ showDescription })} label="Show description" />
+      </div>
+    </>
+  );
+}
+
+function CustomHtmlEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "custom_html" }>; onUpdate: (b: EmailBlock) => void }) {
+  const set = useSet(block, onUpdate);
+  return (
+    <>
+      <Field><Label>Label</Label><TextInput value={block.props.label ?? ""} onChange={(label) => set({ label })} placeholder="Custom section" /></Field>
+      <Field><Label>Email-safe HTML</Label><TextArea value={block.props.html} onChange={(html) => set({ html })} rows={14} /></Field>
+      <p className="text-[12px] leading-5 text-muted-foreground">Scripts, forms, frames and event handlers are removed before preview and delivery. Keep layout table-based for dependable inbox rendering.</p>
+    </>
+  );
+}
+
 function TestimonialEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "testimonial" }>; onUpdate: (b: EmailBlock) => void }) {
   const set = useSet(block, onUpdate);
   return (
@@ -298,9 +323,11 @@ export function BlockEditor({
       case "image": return <ImageEditor block={block} onUpdate={onUpdate} />;
       case "button": return <ButtonEditor block={block} onUpdate={onUpdate} />;
       case "product": return <ProductEditor block={block} onUpdate={onUpdate} />;
+      case "product_grid": return <ProductGridEditor block={block} onUpdate={onUpdate} />;
       case "testimonial": return <TestimonialEditor block={block} onUpdate={onUpdate} />;
       case "icon_row": return <IconRowEditor block={block} onUpdate={onUpdate} />;
       case "spacer": return <SpacerEditor block={block} onUpdate={onUpdate} />;
+      case "custom_html": return <CustomHtmlEditor block={block} onUpdate={onUpdate} />;
       default:
         return (
           <p className="text-[13px] font-sans text-muted-foreground">

@@ -78,11 +78,20 @@ function SenderDomainSetup({ storeId }: { storeId: string }) {
   // tRPC does not recursively infer every provider record shape into the page.
   const senderDomains = (trpc as any).senderDomains;
   const [domain, setDomain] = useState("");
+  const [reviewReason, setReviewReason] = useState("");
+  const [rollbackCondition, setRollbackCondition] = useState("");
   const { data, isLoading } = senderDomains.get.useQuery({ storeId });
   const invalidate = () => (utils as any).senderDomains.get.invalidate({ storeId });
   const configure = senderDomains.configure.useMutation({ onSuccess: invalidate });
   const verify = senderDomains.verify.useMutation({ onSuccess: invalidate });
   const refresh = senderDomains.refresh.useMutation({ onSuccess: invalidate });
+  const reviewWarmup = senderDomains.reviewWarmup.useMutation({
+    onSuccess: () => {
+      setReviewReason("");
+      setRollbackCondition("");
+      void invalidate();
+    },
+  });
   const records = Array.isArray(data?.dnsRecords) ? data.dnsRecords as Array<Record<string, unknown>> : [];
 
   return (
@@ -109,11 +118,26 @@ function SenderDomainSetup({ storeId }: { storeId: string }) {
               <span className="break-all text-muted-foreground">{String(record.value ?? "")}</span>
             </div>
           ))}
-          {data.provider === "ses" && (
+          {data.reputation && (
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
               <p><span className="font-semibold text-foreground">DMARC:</span> add a TXT record at <span className="font-mono">_dmarc.{data.domain}</span>. Start with <span className="font-mono">p=none</span>, monitor reports, then tighten the policy with your domain administrator.</p>
-              <p className="mt-2"><span className="font-semibold text-foreground">Warmup:</span> {data.warmup?.pausedAt ? "paused for deliverability review" : data.warmup?.heldUntil ? `volume held until ${new Date(data.warmup.heldUntil).toLocaleDateString()}` : data.warmup ? `tier ${data.warmup.healthyDay}; volume remains capped until sending health is reviewed` : "starts conservatively after verification; verification alone does not establish sending reputation"}.</p>
-              <div className="mt-4 border-t border-border pt-3" aria-label="Domain warm-up ramp"><div className="flex items-center justify-between"><span className="font-medium text-foreground">Safe volume ramp</span><span>{data.warmup?.pausedAt ? "Paused" : data.warmup?.heldUntil ? "Held" : data.warmup ? `Tier ${data.warmup.healthyDay}` : "Starts after verification"}</span></div><div className="mt-3 grid grid-cols-4 gap-2">{[500, 1000, 2000, 4000].map((cap, index) => { const reached = (data.warmup?.healthyDay ?? 0) > index; const current = (data.warmup?.healthyDay ?? 0) === index + 1; return <div key={cap} className={`rounded-lg border px-2 py-2 text-center ${current ? "border-[var(--attention)] bg-[var(--attention-soft)]" : reached ? "border-[var(--success)]/30 bg-[var(--success-soft)]" : "border-border bg-[var(--surface)]"}`}><span className="block font-mono text-[12px] text-foreground">{cap.toLocaleString("en-IN")}</span><span className="mt-0.5 block text-[10px]">tier {index + 1}</span></div>; })}</div><p className="mt-3 text-[10px]">Calendar days alone do not raise the cap. Higher tiers require a reviewed sending-health assessment; this is not yet an automatic ramp.</p></div>
+              <p className="mt-2"><span className="font-semibold text-foreground">Warmup:</span> {data.warmup?.pausedAt ? "paused for deliverability review" : data.warmup?.heldUntil ? `volume held until ${new Date(data.warmup.heldUntil).toLocaleDateString()}` : data.warmup ? `tier ${data.warmup.healthyDay}; ${Number(data.currentDailyCap).toLocaleString("en-IN")} messages/day` : "starts conservatively after verification; verification alone does not establish sending reputation"}.</p>
+              <div className="mt-4 border-t border-border pt-3" aria-label="Domain warm-up ramp">
+                <div className="flex items-center justify-between"><span className="font-medium text-foreground">Safe volume ramp</span><span>{data.warmup?.pausedAt ? "Paused" : data.warmup?.heldUntil ? "Held" : data.warmup ? `Tier ${data.warmup.healthyDay}` : "Starts after verification"}</span></div>
+                <div className="mt-3 grid grid-cols-4 gap-2">{[500, 1000, 2000, 4000].map((cap, index) => { const reached = (data.warmup?.healthyDay ?? 0) > index; const current = (data.warmup?.healthyDay ?? 0) === index + 1; return <div key={cap} className={`rounded-lg border px-2 py-2 text-center ${current ? "border-[var(--attention)] bg-[var(--attention-soft)]" : reached ? "border-[var(--success)]/30 bg-[var(--success-soft)]" : "border-border bg-[var(--surface)]"}`}><span className="block font-mono text-[12px] text-foreground">{cap.toLocaleString("en-IN")}</span><span className="mt-0.5 block text-[10px]">tier {index + 1}</span></div>; })}</div>
+                <div className="mt-4 rounded-lg border border-border bg-[var(--surface)] p-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div><span className="font-medium text-foreground">Last 24 hours · {data.reputation.provider}</span><p className="mt-1 text-[10px]">{data.reputation.attempted.toLocaleString("en-IN")} attempted · {(data.reputation.bounceRate * 100).toFixed(2)}% bounced · {(data.reputation.complaintRate * 100).toFixed(3)}% complained</p></div>
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase text-foreground">{data.reputation.recommended}</span>
+                  </div>
+                  <p className="mt-2 text-[10px]">{data.reputation.reason} Reputation belongs to the sending domain; changing Resend/SES does not reset it.</p>
+                  <input value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} placeholder="Record why you are accepting this volume decision" className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-[11px] text-foreground" />
+                  <input value={rollbackCondition} onChange={(event) => setRollbackCondition(event.target.value)} placeholder="Rollback condition, e.g. pause above 0.3% complaints" className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-[11px] text-foreground" />
+                  <button type="button" disabled={reviewReason.trim().length < 12 || rollbackCondition.trim().length < 12 || reviewWarmup.isPending} onClick={() => reviewWarmup.mutate({ storeId, action: data.reputation.recommended, reason: reviewReason.trim(), rollbackCondition: rollbackCondition.trim(), reviewAfterHours: 24 })} className="mt-2 rounded-lg bg-secondary px-3 py-2 text-[11px] text-secondary-foreground disabled:opacity-50">{reviewWarmup.isPending ? "Recording review…" : `Review and ${data.reputation.recommended}`}</button>
+                  {reviewWarmup.error ? <p className="mt-2 text-[10px] text-destructive">{reviewWarmup.error.message}</p> : null}
+                </div>
+                <p className="mt-3 text-[10px]">Calendar days alone never raise the cap. A reviewed, event-backed assessment is required for every tier change.</p>
+              </div>
             </div>
           )}
           <div className="flex gap-2 pt-2">

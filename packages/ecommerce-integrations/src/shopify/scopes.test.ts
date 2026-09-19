@@ -15,6 +15,7 @@ test("public v1 requests only its email decision-layer scopes", () => {
 test("customer consent changes are subscribed independently of customer profile updates", () => {
   assert.equal(SHOPIFY_WEBHOOK_TOPICS.includes("customers/create"), true);
   assert.equal(SHOPIFY_WEBHOOK_TOPICS.includes("customers/update"), true);
+  assert.equal(SHOPIFY_WEBHOOK_TOPICS.includes("orders/cancelled"), true);
   assert.equal(
     SHOPIFY_WEBHOOK_TOPICS.includes("customers_email_marketing_consent/update"),
     true,

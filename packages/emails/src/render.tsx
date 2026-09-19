@@ -42,9 +42,21 @@ function GeneratedEmailDocument({
   const preview = content.previewText || content.subject || "";
   return (
     <BrandEmailLayout brandKit={brandKit} preview={preview}>
-      {content.blocks.map((block, i) => (
-        <React.Fragment key={block.id ?? i}>{renderBlock(block, ctx)}</React.Fragment>
-      ))}
+      {content.blocks.map((block, i) => {
+        const rendered = renderBlock(block, ctx);
+        return ctx.previewMode ? (
+          <div
+            key={block.id ?? i}
+            data-email-block-id={block.id}
+            data-email-block-type={block.type}
+            style={{ position: "relative" }}
+          >
+            {rendered}
+          </div>
+        ) : (
+          <React.Fragment key={block.id ?? i}>{rendered}</React.Fragment>
+        );
+      })}
     </BrandEmailLayout>
   );
 }

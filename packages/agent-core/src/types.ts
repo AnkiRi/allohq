@@ -13,7 +13,8 @@ export interface ToolContext {
   conversationId?: string;
   campaignDirective?: {
     sourceCampaignId: string;
-    customerIds: string[];
+    customerIds?: string[];
+    sourceReason?: "recent_purchase";
     forceNoDiscount: boolean;
     actorId?: string;
   };

@@ -40,6 +40,10 @@ export interface CampaignDraft {
   subject: string;
   archetypeId: string;
   html?: string;
+  previewText?: string;
+  blocks?: unknown[];
+  contentSlots?: unknown;
+  productIds?: string[];
   targetSegment: string;
   targetCount: number;
   estimatedRevenue: RevenueEstimate;

@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { generateCampaignDraft } from "@allohq/campaign-engine";
+import { prepareCampaignDecision } from "@allohq/campaign-engine";
 import type { CampaignOpportunity } from "@allohq/campaign-engine";
 import { logAgentActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
@@ -10,26 +10,29 @@ interface CampaignFactoryJobData {
 
 /**
  * Campaign factory worker.
- * On-demand: generates a campaign draft from a detected opportunity.
- * Routes through autonomy engine for approval.
+ * Persists a decision for review. Creative generation intentionally happens
+ * only after approval, so repeated scans do not spend model tokens.
  */
 export const campaignFactoryWorker = new Worker<CampaignFactoryJobData>(
   QUEUE_NAMES.CAMPAIGN_FACTORY,
   async (job) => {
     const { opportunity } = job.data;
-    console.log(`[campaign-factory] Generating draft for ${opportunity.type} (store ${opportunity.storeId})`);
+    console.log(`[campaign-factory] Preparing decision for ${opportunity.type} (store ${opportunity.storeId})`);
 
-    const draft = await generateCampaignDraft(opportunity);
+    const result = await prepareCampaignDecision(opportunity);
 
-    console.log(`[campaign-factory] Draft created: "${draft.name}" targeting ${draft.targetCount} customers`);
+    console.log(`[campaign-factory] Decision ${result.id} prepared for ${opportunity.customerCount} customers`);
 
-    // Log activity to AI chat
-    await logAgentActivity(opportunity.storeId,
-      `✓ Drafted **${draft.name}** targeting ${draft.targetCount} customers — awaiting your review`,
-      { type: "campaign_drafted", entityType: "campaign" },
-    ).catch(() => {});
+    // A rescan refreshes lastEvaluatedAt on the durable decision. It should not
+    // create another chat notification for the same material opportunity.
+    if (result.created) {
+      await logAgentActivity(opportunity.storeId,
+        `Prepared a **${opportunity.type.replaceAll("_", " ")}** decision for ${opportunity.customerCount} customers — awaiting your review`,
+        { type: "decision_proposed", entityType: "action", entityId: result.id },
+      ).catch(() => {});
+    }
 
-    return { draftName: draft.name, targetCount: draft.targetCount, confidence: draft.confidenceScore };
+    return { actionId: result.id, targetCount: opportunity.customerCount, status: result.status };
   },
   { connection: redisConnection },
 );

@@ -33,6 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.sanitizeCustomEmailHtml = sanitizeCustomEmailHtml;
 exports.renderBlock = renderBlock;
 const jsx_runtime_1 = require("react/jsx-runtime");
 const React = __importStar(require("react"));
@@ -348,6 +349,23 @@ function SocialBlockView({ block, ctx, }) {
             }, children: block.props.links.map((l, i) => ((0, jsx_runtime_1.jsxs)(React.Fragment, { children: [i > 0 ? "  ·  " : "", (0, jsx_runtime_1.jsx)(components_1.Link, { href: l.url, style: { color: bk.colors.secondary }, children: l.platform })] }, l.platform))) }) }));
 }
 /**
+ * Custom code is an explicit escape hatch, not a second rendering system.
+ * Keep a deliberately small safety boundary here so preview and delivery use
+ * the exact same sanitized artifact. Email providers strip many unsupported
+ * elements too, but Joon must fail closed before an approval reaches them.
+ */
+function sanitizeCustomEmailHtml(value) {
+    return value
+        .replace(/<!--([\s\S]*?)-->/g, "")
+        .replace(/<(script|iframe|object|embed|form|input|button|textarea|select|video|audio|canvas|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+        .replace(/<(script|iframe|object|embed|form|input|button|textarea|select|video|audio|canvas|svg|math|link|meta|base)\b[^>]*\/?\s*>/gi, "")
+        .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/\s+(href|src)\s*=\s*(["'])\s*(?:javascript|data:text\/html):[\s\S]*?\2/gi, ' $1="#"');
+}
+function CustomHtmlBlockView({ block, }) {
+    return ((0, jsx_runtime_1.jsx)(components_1.Section, { className: "bk-pad", style: { padding: "20px 36px 0" }, children: (0, jsx_runtime_1.jsx)("div", { dangerouslySetInnerHTML: { __html: sanitizeCustomEmailHtml(block.props.html) } }) }));
+}
+/**
  * `header` and `footer` content blocks from the content model are intentionally
  * NOT rendered here — the BrandEmailLayout shell owns the brand header and footer
  * so every email gets one consistent, on-brand chrome. Dropping these avoids a
@@ -384,6 +402,8 @@ function renderBlock(block, ctx) {
             return (0, jsx_runtime_1.jsx)(CountdownBlockView, { block: block, ctx: ctx });
         case "social":
             return (0, jsx_runtime_1.jsx)(SocialBlockView, { block: block, ctx: ctx });
+        case "custom_html":
+            return (0, jsx_runtime_1.jsx)(CustomHtmlBlockView, { block: block });
         case "columns":
             // Columns of arbitrary blocks render their children stacked (mobile-first).
             return ((0, jsx_runtime_1.jsx)(jsx_runtime_1.Fragment, { children: block.props.columns.flat().map((b, i) => ((0, jsx_runtime_1.jsx)(React.Fragment, { children: renderBlock(b, ctx) }, b.id ?? i))) }));

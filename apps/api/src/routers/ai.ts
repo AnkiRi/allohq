@@ -683,7 +683,7 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
-        select: { id: true, shopDomain: true },
+        select: { id: true, shopDomain: true, currency: true },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
@@ -700,7 +700,11 @@ export const aiRouter = router({
             _sum: { totalSpent: true },
           }),
           ctx.prisma.order.aggregate({
-            where: { storeId: input.storeId, createdAt: { gte: startOfMonth } },
+            where: {
+              storeId: input.storeId,
+              createdAt: { gte: startOfMonth },
+              status: { not: "cancelled" },
+            },
             _sum: { totalPrice: true },
             _count: true,
           }),
@@ -718,15 +722,21 @@ export const aiRouter = router({
       const monthRevenue = revenueAgg._sum.totalPrice ?? 0;
       const monthOrders = revenueAgg._count;
       const avgOrderValue = monthOrders > 0 ? monthRevenue / monthOrders : 0;
+      const money = (value: number) =>
+        new Intl.NumberFormat("en-IN", {
+          style: "currency",
+          currency: store.currency || "USD",
+          maximumFractionDigits: 0,
+        }).format(value);
 
       const segmentSummary = segments
         .map(
           (s) =>
-            `${s.segment}: ${s._count} customers, $${Math.round(s._sum.totalSpent ?? 0).toLocaleString()} spent`
+            `${s.segment}: ${s._count} customers, ${money(s._sum.totalSpent ?? 0)} spent`
         )
         .join("; ");
 
-      const storeData = `Store: ${brandProfile?.brandName ?? store.shopDomain}. ${customerCount} customers. Month revenue: $${monthRevenue.toFixed(0)}. ${monthOrders} orders. AOV: $${avgOrderValue.toFixed(0)}. Segments: ${segmentSummary}`;
+      const storeData = `Store: ${brandProfile?.brandName ?? store.shopDomain}. ${customerCount} customers. Month revenue: ${money(monthRevenue)}. ${monthOrders} non-cancelled orders. AOV: ${money(avgOrderValue)}. Segments: ${segmentSummary}`;
 
       // Route through the AI gateway. This is a focused reasoning task, so the
       // policy keeps it on the frontier tier (Claude) while still degrading
@@ -1188,8 +1198,12 @@ export const aiRouter = router({
         campaignDirective: z
           .object({
             sourceCampaignId: z.string(),
-            customerIds: z.array(z.string()).min(1).max(500),
+            customerIds: z.array(z.string()).min(1).max(500).optional(),
+            sourceReason: z.literal("recent_purchase").optional(),
             forceNoDiscount: z.boolean(),
+          })
+          .refine((value) => Boolean(value.customerIds?.length || value.sourceReason), {
+            message: "Choose explicit customers or a source audience reason.",
           })
           .optional(),
       })
@@ -1197,12 +1211,27 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
-        select: { id: true, shopDomain: true, platform: true, lastSyncAt: true },
+        select: {
+          id: true,
+          shopDomain: true,
+          platform: true,
+          lastSyncAt: true,
+          currency: true,
+        },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+      const storeCurrency = store.currency || "USD";
+      const formatMoney = (value: number, maximumFractionDigits = 0) =>
+        new Intl.NumberFormat("en-IN", {
+          style: "currency",
+          currency: storeCurrency,
+          maximumFractionDigits,
+        }).format(value);
 
       if (input.campaignDirective) {
-        const [sourceCampaign, customerCount, sourceAudience] = await Promise.all([
+        const explicitCustomerIds = [...new Set(input.campaignDirective.customerIds ?? [])];
+        const [sourceCampaign, customerCount, sourceAudience, sourceEvaluation] =
+          await Promise.all([
           ctx.prisma.campaign.findFirst({
             where: {
               id: input.campaignDirective.sourceCampaignId,
@@ -1213,21 +1242,42 @@ export const aiRouter = router({
           }),
           ctx.prisma.customer.count({
             where: {
-              id: { in: [...new Set(input.campaignDirective.customerIds)] },
+              id: { in: explicitCustomerIds },
               storeId: input.storeId,
             },
           }),
-          resolveCampaignAudience(input.campaignDirective.sourceCampaignId, new Date(), {
-            enforceDeliveryPauses: false,
-          }),
+          explicitCustomerIds.length
+            ? resolveCampaignAudience(input.campaignDirective.sourceCampaignId, new Date(), {
+                enforceDeliveryPauses: false,
+              })
+            : Promise.resolve(null),
+          input.campaignDirective.sourceReason
+            ? ctx.prisma.campaignAudienceEvaluation.findFirst({
+                where: { campaignId: input.campaignDirective.sourceCampaignId },
+                orderBy: { evaluatedAt: "desc" },
+                select: {
+                  id: true,
+                  _count: {
+                    select: {
+                      rows: {
+                        where: { reasonCode: input.campaignDirective.sourceReason },
+                      },
+                    },
+                  },
+                },
+              })
+            : Promise.resolve(null),
         ]);
         const protectedIds = new Set(
-          sourceAudience.recentPurchaseExcluded.map((customer) => customer.id)
+          sourceAudience?.recentPurchaseExcluded.map((customer) => customer.id) ?? []
         );
         if (
           !sourceCampaign ||
-          customerCount !== new Set(input.campaignDirective.customerIds).size ||
-          input.campaignDirective.customerIds.some((customerId) => !protectedIds.has(customerId))
+          (explicitCustomerIds.length > 0 &&
+            (customerCount !== explicitCustomerIds.length ||
+              explicitCustomerIds.some((customerId) => !protectedIds.has(customerId)))) ||
+          (input.campaignDirective.sourceReason &&
+            (!sourceEvaluation || sourceEvaluation._count.rows === 0))
         ) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -1287,7 +1337,7 @@ export const aiRouter = router({
         }),
         // All campaigns
         ctx.prisma.campaign.findMany({
-          where: { workspaceId: ctx.workspaceId },
+          where: { workspaceId: ctx.workspaceId, storeId: input.storeId },
           select: {
             name: true,
             status: true,
@@ -1301,7 +1351,11 @@ export const aiRouter = router({
         }),
         // Revenue this month
         ctx.prisma.order.aggregate({
-          where: { storeId: input.storeId, createdAt: { gte: startOfMonth } },
+          where: {
+            storeId: input.storeId,
+            createdAt: { gte: startOfMonth },
+            status: { not: "cancelled" },
+          },
           _sum: { totalPrice: true },
           _count: true,
         }),
@@ -1338,6 +1392,7 @@ export const aiRouter = router({
                   select: { historicalLtv: true, predictedLtv: true, churnProbability: true },
                 },
                 orders: {
+                  where: { status: { not: "cancelled" } },
                   select: { orderNumber: true, totalPrice: true, status: true, createdAt: true },
                   orderBy: { createdAt: "desc" },
                   take: 5,
@@ -1415,7 +1470,7 @@ export const aiRouter = router({
         );
         if (hibernating && hibernating.customerCount > 0) {
           opportunities.push(
-            `${idx++}. WIN-BACK: ${hibernating.customerCount} ${hibernating.name} customers, ~$${Math.round(hibernating.totalRevenue).toLocaleString()} past revenue at risk. Best action: create win-back campaign with 10-15% discount.`
+            `${idx++}. WIN-BACK: ${hibernating.customerCount} ${hibernating.name} customers, ${formatMoney(hibernating.totalRevenue)} in observed past revenue. Review each customer’s state before choosing a full-price reminder or an incentive.`
           );
         }
 
@@ -1449,7 +1504,7 @@ export const aiRouter = router({
         const champions = segments.find((s) => s.name === "Champions");
         if (champions && champions.customerCount > 0) {
           opportunities.push(
-            `${idx++}. VIP REWARD: ${champions.customerCount} Champions generating $${Math.round(champions.totalRevenue).toLocaleString()} — consider exclusive offers to deepen loyalty.`
+            `${idx++}. VIP RECOGNITION: ${champions.customerCount} Champions with ${formatMoney(champions.totalRevenue)} in observed revenue — recognise them without assuming they need a discount.`
           );
         }
 
@@ -1462,7 +1517,7 @@ export const aiRouter = router({
           const daysSinceOrder = rfm?.lastOrderAt
             ? Math.round((Date.now() - new Date(rfm.lastOrderAt).getTime()) / 86400000)
             : -1;
-          return `- ${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email}): $${rfm?.totalSpent?.toFixed(0) ?? "0"}, ${rfm?.orderCount ?? 0} orders, last order ${daysSinceOrder >= 0 ? daysSinceOrder + " days ago" : "Never"}`;
+          return `- ${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email}): ${formatMoney(rfm?.totalSpent ?? 0)}, ${rfm?.orderCount ?? 0} orders, last order ${daysSinceOrder >= 0 ? daysSinceOrder + " days ago" : "Never"}`;
         })
         .join("\n");
 
@@ -1476,10 +1531,10 @@ export const aiRouter = router({
                 const orders = c.orders
                   .map(
                     (o) =>
-                      `  Order #${o.orderNumber}: $${o.totalPrice} (${o.status}) on ${o.createdAt.toISOString().split("T")[0]}`
+                      `  Order #${o.orderNumber}: ${formatMoney(o.totalPrice, 2)} (${o.status}) on ${o.createdAt.toISOString().split("T")[0]}`
                   )
                   .join("\n");
-                return `CUSTOMER: ${c.firstName ?? ""} ${c.lastName ?? ""}\n  Email: ${c.email}\n  Segment: ${rfm?.segment ?? "Unknown"}\n  Spent: $${rfm?.totalSpent?.toFixed(0) ?? "0"} | Orders: ${rfm?.orderCount ?? 0} | AOV: $${rfm?.avgOrderValue?.toFixed(0) ?? "0"}\n  Last Order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"}\n  Churn Probability: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"}\n  Recent Orders:\n${orders || "  None"}`;
+                return `CUSTOMER SEARCH HINT (cached segmentation; call get_customer_decision_context before deciding): ${c.firstName ?? ""} ${c.lastName ?? ""}\n  Email: ${c.email}\n  Cached segment: ${rfm?.segment ?? "Unknown"}\n  Cached spend: ${formatMoney(rfm?.totalSpent ?? 0)} | Cached orders: ${rfm?.orderCount ?? 0} | Cached AOV: ${formatMoney(rfm?.avgOrderValue ?? 0)}\n  Cached last order: ${rfm?.lastOrderAt?.toISOString().split("T")[0] ?? "Never"}\n  Churn Probability: ${ltv ? Math.round(ltv.churnProbability * 100) + "%" : "N/A"}\n  Recent non-cancelled Orders:\n${orders || "  None"}`;
               })
               .join("\n\n")
           : "";
@@ -1500,15 +1555,15 @@ export const aiRouter = router({
 
 ### Customer Health (USE THIS TO MAKE DECISIONS)
 - ${totalCustomers} total customers
-${segments.map((s) => `- ${s.name}: ${s.customerCount} customers ($${Math.round(s.totalRevenue).toLocaleString()} revenue) — ${getSegmentInsight(s)}`).join("\n")}
+${segments.map((s) => `- ${s.name}: ${s.customerCount} customers (${formatMoney(s.totalRevenue)} revenue) — ${getSegmentInsight(s)}`).join("\n")}
 - Marketing opt-in rate: ${optInRate}%${optInRate === 0 ? " — CRITICAL: cannot send campaigns until customers opt in" : ""}
 
 ### Top Opportunities (RANKED BY ESTIMATED REVENUE IMPACT)
 ${generateTopOpportunities()}
 
 ### Revenue
-- Month to date: $${monthRevenue.toFixed(2)} from ${monthOrders} orders
-- Average order value: $${avgOrderValue.toFixed(2)}
+- Month to date: ${formatMoney(monthRevenue, 2)} from ${monthOrders} non-cancelled orders
+- Average order value: ${formatMoney(avgOrderValue, 2)}
 
 ### Active Automations
 ${automations.length > 0 ? automations.map((a) => `- ${a.name}: ${a.status}${a.status === "active" ? " (running)" : a.status === "ready" ? " (needs activation)" : ""}`).join("\n") : "No automations created yet."}
@@ -1615,7 +1670,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         detectedIntent.intent === "create_flash_sale" ||
         detectedIntent.intent === "create_campaign"
       ) {
-        const discount = detectedIntent.extractedParams.discountPercent ?? "15";
+        const discount = detectedIntent.extractedParams.discountPercent;
         const seg = detectedIntent.extractedParams.segment;
         const bestTarget = seg
           ? segments.find((s) => s.name.toLowerCase().includes(seg.toLowerCase()))
@@ -1625,7 +1680,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         if (bestTarget) {
           processedMessage += requestConstraints.noDiscount
             ? `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. This is a hard full-price request: do not pass discountPercent and do not add a sale, coupon, offer code, promotion code, or percentage-off language. Preserve the merchant's exact audience; do not replace a named customer with ${bestTarget.name}.]`
-            : `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. Target: ${bestTarget.name} (${bestTarget.customerCount} customers). Discount: ${discount}%. This gives the merchant an inline email preview they can approve directly.]`;
+            : `\n\n[TOOL HINT: Use create_campaign_with_preview for inline preview. Target: ${bestTarget.name} (${bestTarget.customerCount} customers). ${discount != null ? `The merchant explicitly requested ${discount}% off; preserve it subject to the configured guardrail.` : "Do not invent a discount. Inspect named customers with get_customer_decision_context and choose a full-price message unless the merchant or evidence supports an incentive."} Return an inline preview.]`;
         }
       }
 
@@ -1665,7 +1720,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           segments.find((s) => s.name.toLowerCase().includes("at risk")) ??
           segments.find((s) => s.customerCount > 0);
         if (bestTarget) {
-          processedMessage += `\n\n[TOOL HINT: Recommended target: ${bestTarget.name} (${bestTarget.customerCount} customers, highest impact). Channel: email. Discount: 15%. Call create_campaign_with_preview for inline preview or generate_campaign_template with these parameters.]`;
+          processedMessage += `\n\n[TOOL HINT: Possible target: ${bestTarget.name} (${bestTarget.customerCount} customers). Do not invent a discount or replace an explicitly named audience. Inspect exact customer context where applicable, then call create_campaign_with_preview.]`;
         }
       }
 
@@ -1709,7 +1764,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
           if (out.totalRevenue)
             highlights.push({
               label: "Revenue",
-              value: `$${Number(out.totalRevenue).toLocaleString()}`,
+              value: formatMoney(Number(out.totalRevenue), 2),
             });
           if (out.orderCount) highlights.push({ label: "Orders", value: String(out.orderCount) });
           if (out.totalCustomers)
@@ -1725,13 +1780,18 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
         }
         if (tc.name === "simulate_scenario" && out) {
           const unit = String(out.unit ?? "");
+          const isMoney = ["$", "USD", "₹", "INR", storeCurrency].includes(unit);
           highlights.push({
             label: "Current",
-            value: `${unit}${Number(out.currentValue).toLocaleString()}`,
+            value: isMoney
+              ? formatMoney(Number(out.currentValue), 2)
+              : `${unit}${Number(out.currentValue).toLocaleString()}`,
           });
           highlights.push({
             label: "Projected",
-            value: `${unit}${Number(out.projectedValue).toLocaleString()}`,
+            value: isMoney
+              ? formatMoney(Number(out.projectedValue), 2)
+              : `${unit}${Number(out.projectedValue).toLocaleString()}`,
           });
           if (out.changePercent)
             highlights.push({

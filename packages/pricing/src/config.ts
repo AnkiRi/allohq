@@ -2,20 +2,13 @@ export type Currency = "INR" | "USD";
 
 export interface PricingConfig {
   version: string;
-  liftFeeBasisPoints: number;
   attributedFeeBasisPoints: number;
   capFactorBasisPoints: number;
-  postagePerThousandMinor: Record<Currency, number>;
   providerCostPerThousandMinor: Record<Currency, number>;
   fx: {
     inrPerUsdMinor: number;
     sourceUrl: string;
     sourcedAt: string;
-  };
-  postageSource: {
-    sourceUrl: string;
-    sourcedAt: string;
-    plan: "ses-a-la-carte";
   };
 }
 
@@ -25,24 +18,17 @@ export interface PricingConfig {
  */
 export const PRICING_CONFIG = Object.freeze<PricingConfig>({
   version: "2026-09-14.attributed-v1",
-  liftFeeBasisPoints: 2_000,
   attributedFeeBasisPoints: 500,
   // Deliberately below 100%: the promise is that Joon costs LESS than the
   // platform it replaces, so the bill must land under the benchmark rather
   // than exactly on it. At parity the two figures rendered identically and
   // read as a fault.
   capFactorBasisPoints: 8_000,
-  postagePerThousandMinor: { INR: 900, USD: 10 },
   providerCostPerThousandMinor: { INR: 850, USD: 10 },
   fx: {
     inrPerUsdMinor: 8_500,
     sourceUrl: "founder-configured",
     sourcedAt: "2026-09-10",
-  },
-  postageSource: {
-    sourceUrl: "https://aws.amazon.com/ses/pricing/",
-    sourcedAt: "2026-09-10",
-    plan: "ses-a-la-carte",
   },
 });
 
@@ -94,7 +80,6 @@ export function deriveMonthlyRevenueMinor(
   return withUpliftMinor;
 }
 
-export const LIFT_FEE_RATE = PRICING_CONFIG.liftFeeBasisPoints / 10_000;
 export const CAP_FACTOR = PRICING_CONFIG.capFactorBasisPoints / 10_000;
 
 export function providerEmailCostMinor(currency: Currency): number {

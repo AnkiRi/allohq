@@ -64,7 +64,16 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
               console.error("[trpc] Clerk getToken error:", err);
             }
             if (token) {
-              return { authorization: `Bearer ${token}` };
+              const activeWorkspaceId =
+                typeof window !== "undefined"
+                  ? window.localStorage.getItem("joon_active_workspace_id")
+                  : null;
+              return {
+                authorization: `Bearer ${token}`,
+                ...(activeWorkspaceId
+                  ? { "x-joon-workspace-id": activeWorkspaceId }
+                  : {}),
+              };
             }
             // NEVER fall back to the demo header for a signed-in user — a
             // transient null token must surface as auth-required (recoverable),

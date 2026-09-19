@@ -4,6 +4,9 @@ import { TRPCError } from "@trpc/server";
 import { assertChannelAllowed } from "@allohq/release-gate";
 import { renderBrandedEmail, complete } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
+import { emailBlocksSchema } from "@allohq/email-builder";
+import { emailDocumentSchema } from "@allohq/email-builder";
+import { ensureEmailVersion } from "../lib/email-versions";
 
 export const templatesRouter = router({
   list: workspaceProcedure
@@ -27,6 +30,13 @@ export const templatesRouter = router({
     .query(async ({ ctx, input }) => {
       const template = await ctx.prisma.emailTemplate.findFirst({
         where: { id: input.id, workspaceId: ctx.workspaceId },
+        include: {
+          campaigns: {
+            select: { storeId: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
       });
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -56,7 +66,30 @@ export const templatesRouter = router({
         }
       }
 
-      return { ...template, blocks };
+      let resolvedStoreId = template.campaigns[0]?.storeId ?? null;
+      if (!resolvedStoreId) {
+        const stores = await ctx.prisma.store.findMany({
+          where: { workspaceId: ctx.workspaceId, isActive: true },
+          select: { id: true },
+          take: 2,
+        });
+        if (stores.length === 1) resolvedStoreId = stores[0]!.id;
+      }
+
+      return {
+        id: template.id,
+        workspaceId: template.workspaceId,
+        name: template.name,
+        subject: template.subject,
+        previewText: template.previewText,
+        blocks,
+        html: template.html,
+        category: template.category,
+        thumbnailUrl: template.thumbnailUrl,
+        createdAt: template.createdAt,
+        updatedAt: template.updatedAt,
+        storeId: resolvedStoreId,
+      };
     }),
 
   create: workspaceProcedure
@@ -65,7 +98,7 @@ export const templatesRouter = router({
         name: z.string().min(1),
         subject: z.string().min(1),
         previewText: z.string().optional(),
-        blocks: z.any(), // JSON array of EmailBlock
+        blocks: emailBlocksSchema,
         category: z.enum(["marketing", "transactional", "automation", "ai_generated"]).default("marketing"),
       })
     )
@@ -89,7 +122,7 @@ export const templatesRouter = router({
         name: z.string().optional(),
         subject: z.string().optional(),
         previewText: z.string().optional(),
-        blocks: z.any().optional(),
+        blocks: emailBlocksSchema.optional(),
         category: z.enum(["marketing", "transactional", "automation", "ai_generated"]).optional(),
       })
     )
@@ -100,9 +133,85 @@ export const templatesRouter = router({
       });
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
 
-      return ctx.prisma.emailTemplate.update({
-        where: { id },
-        data,
+      return ctx.prisma.$transaction(async (tx) => {
+        const updated = await tx.emailTemplate.update({
+          where: { id },
+          data: { ...data, ...(data.blocks ? { html: null } : {}) },
+        });
+        const campaign = await tx.campaign.findFirst({
+          where: { templateId: id },
+          select: { storeId: true },
+          orderBy: { createdAt: "desc" },
+        });
+        const version = await ensureEmailVersion(tx, {
+          workspaceId: ctx.workspaceId,
+          templateId: id,
+          storeId: campaign?.storeId,
+          template: updated,
+          source: "manual",
+          note: "Saved in email studio",
+          createdBy: (ctx as any).userId,
+        });
+        return { ...updated, version };
+      });
+    }),
+
+  versions: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const template = await ctx.prisma.emailTemplate.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+      return ctx.prisma.emailVersion.findMany({
+        where: { templateId: input.id, workspaceId: ctx.workspaceId },
+        orderBy: { sequence: "desc" },
+        select: {
+          id: true,
+          sequence: true,
+          source: true,
+          note: true,
+          contentHash: true,
+          createdAt: true,
+          document: true,
+        },
+        take: 100,
+      });
+    }),
+
+  restoreVersion: workspaceProcedure
+    .input(z.object({ templateId: z.string(), versionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const version = await ctx.prisma.emailVersion.findFirst({
+        where: {
+          id: input.versionId,
+          templateId: input.templateId,
+          workspaceId: ctx.workspaceId,
+        },
+      });
+      if (!version) throw new TRPCError({ code: "NOT_FOUND" });
+      const document = emailDocumentSchema.parse(version.document);
+      return ctx.prisma.$transaction(async (tx) => {
+        const updated = await tx.emailTemplate.update({
+          where: { id: input.templateId },
+          data: {
+            subject: document.envelope.subject,
+            previewText: document.envelope.previewText,
+            blocks: document.blocks as any,
+            html: null,
+          },
+        });
+        const restored = await ensureEmailVersion(tx, {
+          workspaceId: ctx.workspaceId,
+          templateId: input.templateId,
+          storeId: version.storeId,
+          template: updated,
+          source: "restore",
+          note: `Restored from version ${version.sequence}`,
+          createdBy: (ctx as any).userId,
+        });
+        return { template: updated, version: restored };
       });
     }),
 

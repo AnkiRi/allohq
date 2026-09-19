@@ -1,4 +1,5 @@
-import { prisma, buildWhereFromConditions } from "@allohq/database";
+import { prisma, resolveSegmentWhere } from "@allohq/database";
+import type { Prisma } from "@allohq/database";
 import type { ToolDefinition } from "../types";
 import { generateCode } from "./discount-tools";
 
@@ -197,7 +198,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // precedence over a named RFM segment, so "campaign for Archana" targets
       // exactly Archana, not the nearest broad segment.
       const rawIds = directive
-        ? directive.customerIds
+        ? (directive.customerIds ?? [])
         : ctx.requestConstraints?.topCustomerCount != null && ctx.resolvedTopCustomerSelection
           ? ctx.resolvedTopCustomerSelection.customerIds
           : Array.isArray(params.customerIds)
@@ -205,9 +206,78 @@ export const inlineCampaignTools: ToolDefinition[] = [
             : ctx.resolvedExplicitCustomerSelection
               ? ctx.resolvedExplicitCustomerSelection.customerIds
               : [];
-      let segment;
+      let segment: {
+        id: string;
+        name: string;
+        kind: string;
+        customerIds: string[];
+        conditions: unknown;
+        rfmMin: number;
+        rfmMax: number;
+      } | null = null;
       if (directive && existingAlternative?.segment) {
         segment = existingAlternative.segment;
+      } else if (directive?.sourceReason) {
+        const evaluation = await prisma.campaignAudienceEvaluation.findFirst({
+          where: { campaignId: directive.sourceCampaignId, storeId: ctx.storeId },
+          orderBy: { evaluatedAt: "desc" },
+          select: {
+            id: true,
+            _count: {
+              select: { rows: { where: { reasonCode: directive.sourceReason } } },
+            },
+          },
+        });
+        if (!evaluation || evaluation._count.rows === 0) {
+          return {
+            success: false,
+            message:
+              "That protected source audience is no longer available. Refresh the source campaign and try again.",
+          };
+        }
+        const slug = `${campaignName} protected-alternative`
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .concat(`-${Date.now().toString(36)}`);
+        segment = await prisma.customerSegment.create({
+          data: {
+            storeId: ctx.storeId,
+            name: `${campaignName} · protected audience`,
+            slug,
+            description:
+              "The complete protected audience from the source campaign, preserved as durable membership rows.",
+            kind: "membership",
+            customerCount: evaluation._count.rows,
+            isSystem: true,
+            source: "campaign",
+            sourceKey: `${directive.sourceCampaignId}:${directive.sourceReason}`,
+            originatingCampaignId: directive.sourceCampaignId,
+          },
+        });
+        const membershipSegmentId = segment.id;
+        let cursor: string | undefined;
+        while (true) {
+          const rows = await prisma.campaignAudienceEvaluationRow.findMany({
+            where: {
+              evaluationId: evaluation.id,
+              reasonCode: directive.sourceReason,
+              ...(cursor ? { id: { gt: cursor } } : {}),
+            },
+            select: { id: true, customerId: true },
+            orderBy: { id: "asc" },
+            take: 2_000,
+          });
+          if (rows.length === 0) break;
+          await prisma.customerSegmentMember.createMany({
+            data: rows.map((row) => ({
+              segmentId: membershipSegmentId,
+              customerId: row.customerId,
+            })),
+            skipDuplicates: true,
+          });
+          cursor = rows[rows.length - 1]!.id;
+        }
       } else if (rawIds.length > 0) {
         const members = await prisma.customer.findMany({
           where: { id: { in: rawIds }, storeId: ctx.storeId },
@@ -255,32 +325,19 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // membership resolution + the acceptsMarketing opt-in filter. So the previewed
       // count equals what actually gets sent (no "1,243 previewed / 987 sent" gap).
       let recipientCount = 0;
+      let recipientWhere: Prisma.CustomerWhereInput | undefined;
       if (segment) {
         const seg = segment as {
+          id?: string;
           kind?: string;
           customerIds?: string[];
           conditions?: unknown;
           name: string;
         };
-        let recipientWhere: Record<string, unknown>;
-        if (seg.kind === "manual") {
-          recipientWhere = {
-            storeId: ctx.storeId,
-            id: { in: seg.customerIds ?? [] },
-            acceptsMarketing: true,
-          };
-        } else if (seg.kind === "conditions" && seg.conditions) {
-          recipientWhere = {
-            ...buildWhereFromConditions(seg.conditions as any, [ctx.storeId]),
-            acceptsMarketing: true,
-          };
-        } else {
-          recipientWhere = {
-            storeId: ctx.storeId,
-            rfmScore: { segment: seg.name },
-            acceptsMarketing: true,
-          };
-        }
+        recipientWhere = {
+          ...resolveSegmentWhere(seg, [ctx.storeId]),
+          acceptsMarketing: true,
+        };
         recipientCount = await prisma.customer.count({ where: recipientWhere });
       }
 
@@ -295,6 +352,64 @@ export const inlineCampaignTools: ToolDefinition[] = [
             : `The audience "${(segment as { name?: string }).name ?? "segment"}" has no reachable recipients (0 opted-in customers). Pick a different segment, or check that these customers accept marketing.`,
         };
       }
+
+      // Large campaigns reason over bounded cohort summaries, never one LLM call
+      // per customer. Exact membership stays in the segment/evaluation ledger;
+      // this immutable snapshot explains the evidence available at creation.
+      const [stateGroups, zeroOrderSubscribers, reviewedRelationships] = recipientWhere
+        ? await Promise.all([
+            prisma.customerState.groupBy({
+              by: ["lifecycleStage", "purchaseCyclePosition", "discountBehavior"],
+              where: { customer: recipientWhere as any },
+              _count: { _all: true },
+              _max: { stateVersion: true, lastStateUpdate: true },
+            }),
+            prisma.customer.count({
+              where: {
+                ...(recipientWhere as any),
+                orders: { none: { status: { not: "cancelled" } } },
+              },
+            }),
+            prisma.productRelationship.findMany({
+              where: { storeId: ctx.storeId, status: "approved" },
+              orderBy: [{ pinned: "desc" }, { confidence: "desc" }],
+              take: 8,
+              select: {
+                sourceProductId: true,
+                targetProductId: true,
+                relationshipType: true,
+                supportCount: true,
+                confidence: true,
+                explanation: true,
+              },
+            }),
+          ])
+        : [[], 0, []] as const;
+      const sortedStateGroups = [...stateGroups]
+        .sort((a, b) => b._count._all - a._count._all);
+      const decisionContext = {
+        schemaVersion: 1,
+        evaluatedAt: new Date().toISOString(),
+        audience: {
+          segmentId: segment?.id ?? null,
+          segmentName: segment?.name ?? null,
+          reachableCustomers: recipientCount,
+          zeroOrderSubscribers,
+        },
+        stateCohorts: sortedStateGroups.slice(0, 12).map((group) => ({
+          lifecycle: group.lifecycleStage,
+          purchaseCycle: group.purchaseCyclePosition,
+          discountBehaviour: group.discountBehavior,
+          count: group._count._all,
+          stateVersion: group._max.stateVersion,
+          lastStateUpdate: group._max.lastStateUpdate,
+        })),
+        remainingStateCohorts: Math.max(0, sortedStateGroups.length - 12),
+        reviewedProductRelationships: reviewedRelationships,
+        merchantConstraints: ctx.requestConstraints ?? null,
+        evidenceLimits:
+          "Cohorts summarize materialized customer state. They guide copy and offer recommendations; consent and delivery safety are rechecked deterministically at approval and send time.",
+      };
 
       // Fetch brand profile
       const brandProfile = await prisma.brandProfile.findFirst({
@@ -332,6 +447,9 @@ export const inlineCampaignTools: ToolDefinition[] = [
       // Build tweaks/description for the email generator
       const tweakParts: string[] = [];
       if (customInstructions) tweakParts.push(customInstructions);
+      tweakParts.push(
+        `Audience evidence: ${JSON.stringify(decisionContext)} Use this evidence without claiming certainty about any individual customer.`
+      );
       if (discountPercent)
         tweakParts.push(`Include a ${discountPercent}% discount offer prominently.`);
       if (intent === "flash_sale")
@@ -519,11 +637,17 @@ export const inlineCampaignTools: ToolDefinition[] = [
           creativePolicyVersion: forceNoDiscount ? FULL_PRICE_CREATIVE_POLICY_VERSION : 1,
           scheduledAt: null,
           recipientCount,
+          decisionContext,
           ...(directive
             ? {
                 sourceCampaignId: directive.sourceCampaignId,
-                overrideRecentPurchaseCustomerIds: directive.customerIds,
-                includeLeftAloneCustomerIds: directive.customerIds,
+                ...(directive.customerIds?.length
+                  ? {
+                      overrideRecentPurchaseCustomerIds: directive.customerIds,
+                      includeLeftAloneCustomerIds: directive.customerIds,
+                    }
+                  : {}),
+                sourceAudienceReason: directive.sourceReason ?? null,
                 alternativeType: "full_price",
               }
             : {}),
@@ -536,7 +660,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           })
         : await prisma.campaign.create({ data: campaignData });
 
-      if (directive && !existingAlternative) {
+      if (directive?.customerIds?.length && !existingAlternative) {
         await prisma.customerAudienceDecision.createMany({
           data: directive.customerIds.map((customerId) => ({
             storeId: ctx.storeId,

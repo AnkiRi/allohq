@@ -24,6 +24,21 @@ export interface ImageBlock {
     height?: number;
     href?: string;
     align?: "left" | "center" | "right";
+    fullWidth?: boolean;
+  };
+}
+
+/**
+ * An escape hatch for merchants who need precise, email-safe markup. The server
+ * sanitizes this before rendering; scripts, forms, frames and remote embeds are
+ * never allowed. Visual editing remains available for every structured block.
+ */
+export interface CustomHtmlBlock {
+  id: string;
+  type: "custom_html";
+  props: {
+    html: string;
+    label?: string;
   };
 }
 
@@ -194,7 +209,8 @@ export type EmailBlock =
   | HeroBlock
   | IconRowBlock
   | CountdownBlock
-  | TestimonialBlock;
+  | TestimonialBlock
+  | CustomHtmlBlock;
 
 /** All possible block type strings */
 export type EmailBlockType = EmailBlock["type"];
@@ -295,5 +311,7 @@ export function createDefaultBlock(type: EmailBlockType, id: string): EmailBlock
       return { id, type, props: { endDate: new Date(Date.now() + 7 * 86400000).toISOString(), label: "Sale ends in", bgColor: "#FF0000", textColor: "#FFFFFF" } };
     case "testimonial":
       return { id, type, props: { quote: "This product changed my life!", author: "Happy Customer", rating: 5 } };
+    case "custom_html":
+      return { id, type, props: { html: "<p>Add email-safe HTML here.</p>", label: "Custom HTML" } };
   }
 }
