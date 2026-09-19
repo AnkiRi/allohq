@@ -707,8 +707,9 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
 Status (19 Sep): in progress. Calendar time no longer advances SES warm-up without evidence;
 zero-volume health cannot report growth, and Setup no longer claims an automatic ramp.
 The live sender gate now requires verification for the selected provider; SES allowlist
-rehearsals do too, without changing the existing Resend demo/allowlist path. The
-provider-neutral assessment, reviewed growth workflow, Resend ramp, large-audience
+rehearsals do too, without changing the existing Resend demo/allowlist path. An additive
+provider-identity table preserves Resend and SES records side by side, with legacy Resend
+rows backfilled by migration. The provider-neutral assessment, reviewed growth workflow, Resend ramp, large-audience
 deferral display and migration handling below remain open. The repository contains a
 useful SES warm-up skeleton, not a complete production warm-up system.
 
@@ -723,9 +724,11 @@ MAIL FROM DNS verification, in addition to its Resend setup.
 1. Make the live sender gate provider-aware: a verified Resend identity cannot authorize
    SES, or vice versa. Check selected provider, From domain, identity status, required
    configuration and delivery mode before approval and again before sending.
-2. Preserve both provider identities at once. Do not overwrite the sole current
+2. Preserve both provider identities at once. Do not overwrite the legacy
    `SenderDomain` row when provisioning the alternate provider. Store provider-specific
-   external ID, DNS evidence, verification status and timestamps separately.
+   external ID, DNS evidence, verification status and timestamps separately. This
+   storage and provider-specific lookup are now implemented; production migration and
+   two-provider verification still require acceptance.
 3. Keep `EMAIL_PROVIDER` as an operator-controlled default, but record the chosen provider
    on each approved delivery/cohort. API, workers and event consumers must agree. A switch
    affects only newly planned sends; in-flight accepted/ambiguous sends reconcile with

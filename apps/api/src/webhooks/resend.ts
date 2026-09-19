@@ -153,6 +153,16 @@ export async function handleResendWebhook(req: IncomingMessage, res: ServerRespo
           error: status === "failed" || status === "temporary_failure" ? status : null,
         },
       });
+      await prisma.senderProviderIdentity.updateMany({
+        where: { provider: "resend", externalId: String(data.id) },
+        data: {
+          status,
+          dnsRecords: Array.isArray(data.records) ? data.records : undefined,
+          lastCheckedAt: new Date(),
+          verifiedAt: status === "verified" ? new Date() : null,
+          error: status === "failed" || status === "temporary_failure" ? status : null,
+        },
+      });
       await prisma.providerWebhookEvent.update({
         where: { provider_eventId: { provider: "resend", eventId: svixId } },
         data: { status: "processed", processedAt: new Date() },

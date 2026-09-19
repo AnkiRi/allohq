@@ -366,6 +366,7 @@ model Store {
   // Product-Based Smart Segments
   productSegments             ProductSegment[]
   senderDomain                SenderDomain?
+  senderProviderIdentities    SenderProviderIdentity[]
   migrationAssistanceRequests MigrationAssistanceRequest[]
   sesDeliveryAttempts         SesDeliveryAttempt[]
   sesWarmupState              SesWarmupState?
@@ -420,6 +421,29 @@ model SenderDomain {
 
   @@index([status])
   @@map("sender_domains")
+}
+
+/// Provider-specific verification is kept side by side so preparing SES never
+/// erases the Resend identity needed for an operational rollback.
+model SenderProviderIdentity {
+  id            String    @id @default(cuid())
+  storeId       String
+  provider      String
+  domain        String
+  externalId    String?
+  status        String    @default("not_started")
+  dnsRecords    Json      @default("[]")
+  error         String?
+  lastCheckedAt DateTime?
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, provider])
+  @@unique([provider, externalId])
+  @@index([storeId, status])
+  @@map("sender_provider_identities")
 }
 
 // ============================================================================

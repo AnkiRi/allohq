@@ -29,7 +29,11 @@ export async function getSenderDomain(externalId: string, provider: SenderDomain
     const tokens = data.DkimAttributes?.Tokens ?? [];
     return {
       id: externalId,
-      status: data.VerificationStatus === "SUCCESS" && data.DkimAttributes?.Status === "SUCCESS" ? "verified" : String(data.VerificationStatus || "pending").toLowerCase(),
+      status: data.VerificationStatus === "SUCCESS" &&
+        data.DkimAttributes?.Status === "SUCCESS" &&
+        data.MailFromAttributes?.MailFromDomainStatus === "SUCCESS"
+        ? "verified"
+        : String(data.MailFromAttributes?.MailFromDomainStatus === "FAILED" ? "failed" : "pending"),
       records: [
         ...tokens.map((token: string) => ({ type: "CNAME", name: `${token}._domainkey.${externalId}`, value: `${token}.dkim.amazonses.com` })),
         { type: "MX", name: mailFromDomain, value: `10 feedback-smtp.${region}.amazonses.com` },

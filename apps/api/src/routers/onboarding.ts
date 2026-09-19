@@ -9,6 +9,8 @@ import {
 } from "@allohq/autonomy-engine";
 import { DEFAULT_MODEL } from "@allohq/customer-intelligence";
 import { Queue } from "bullmq";
+import { getStoreSenderIdentity } from "@allohq/database";
+import { selectedEmailProvider } from "@allohq/messaging";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -44,6 +46,7 @@ export const onboardingRouter = router({
         include: { senderDomain: true },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+      const senderIdentity = await getStoreSenderIdentity(store.id, selectedEmailProvider());
       const [
         products,
         customers,
@@ -87,7 +90,7 @@ export const onboardingRouter = router({
       const syncReady = Boolean(store.lastSyncAt);
       const consentReady = customers === 0 || consentRows > 0;
       const brandReady = Boolean(brand?.fromName && brand.fromEmail);
-      const senderReady = store.senderDomain?.status === "verified";
+      const senderReady = senderIdentity?.status === "verified";
       const trackingRegistered = store.webPixelStatus === "registered";
       const intelligenceReady = customers === 0 || rfm > 0;
       const deliveryMode = process.env.MESSAGING_SEND_MODE ?? "disabled";
@@ -140,8 +143,8 @@ export const onboardingRouter = router({
           },
           senderDomain: {
             ready: senderReady,
-            detail: store.senderDomain
-              ? `${store.senderDomain.domain} · ${store.senderDomain.status}`
+            detail: senderIdentity
+              ? `${senderIdentity.domain} · ${senderIdentity.status} with ${senderIdentity.provider}`
               : "Sending domain not configured",
           },
           suppression: {

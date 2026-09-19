@@ -1,5 +1,17 @@
 import { prisma } from "./index";
 
+export type SenderProvider = "resend" | "ses";
+
+export async function getStoreSenderIdentity(storeId: string, provider: SenderProvider) {
+  const current = await prisma.senderProviderIdentity.findUnique({
+    where: { storeId_provider: { storeId, provider } },
+  });
+  if (current) return current;
+  // Existing installations remain valid during the additive backfill.
+  const legacy = await prisma.senderDomain.findUnique({ where: { storeId } });
+  return legacy?.provider === provider ? legacy : null;
+}
+
 export function emailDomain(address: string): string | null {
   const match = address.trim().match(/(?:<)?[^<>\s@]+@([^<>\s@]+)>?$/);
   return match?.[1]?.toLowerCase() ?? null;
@@ -8,7 +20,7 @@ export function emailDomain(address: string): string | null {
 export function verifiedSenderMatchesProvider(
   sender: { domain: string; status: string; provider: string } | null,
   fromDomain: string,
-  provider: "resend" | "ses",
+  provider: SenderProvider,
 ): boolean {
   return sender?.status === "verified" &&
     sender.domain === fromDomain &&
@@ -23,7 +35,7 @@ export async function requireVerifiedSenderDomain(storeId: string, fromAddress: 
   if (mode !== "live" && !(mode === "allowlist" && provider === "ses")) return;
   const domain = emailDomain(fromAddress);
   if (!domain) throw new Error("Email blocked: invalid From address");
-  const sender = await prisma.senderDomain.findUnique({ where: { storeId } });
+  const sender = await getStoreSenderIdentity(storeId, provider);
   if (!verifiedSenderMatchesProvider(sender, domain, provider)) {
     throw new Error(`Email blocked: sender domain ${domain} is not verified for ${provider} on this store`);
   }

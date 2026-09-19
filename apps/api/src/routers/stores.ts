@@ -10,7 +10,7 @@ import { Queue } from "bullmq";
 import { randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { encryptSecret } from "@allohq/database";
-import { deleteSenderDomain, type SenderDomainProvider } from "@allohq/messaging";
+import { deleteSenderDomain, selectedEmailProvider, type SenderDomainProvider } from "@allohq/messaging";
 import { removeStoreJobs } from "../lib/store-lifecycle";
 
 const widgetOriginSchema = z.string().url().transform((value, ctx) => {
@@ -106,16 +106,26 @@ export const storesRouter = router({
 
   /** Active and disconnected commerce connections for lifecycle management. */
   connections: ownerProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.store.findMany({
+    const provider = selectedEmailProvider();
+    const stores = await ctx.prisma.store.findMany({
       where: { workspaceId: ctx.workspaceId },
       include: {
         senderDomain: {
+          select: { domain: true, provider: true, status: true, verifiedAt: true },
+        },
+        senderProviderIdentities: {
+          where: { provider },
           select: { domain: true, provider: true, status: true, verifiedAt: true },
         },
         _count: { select: { products: true, customers: true, orders: true, campaigns: true } },
       },
       orderBy: { installedAt: "desc" },
     });
+    return stores.map(({ senderProviderIdentities, ...store }) => ({
+      ...store,
+      senderDomain: senderProviderIdentities[0] ??
+        (store.senderDomain?.provider === provider ? store.senderDomain : null),
+    }));
   }),
 
   /**
@@ -788,7 +798,7 @@ export const storesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.prisma.store.findFirst({
         where: { id: input.storeId, workspaceId: ctx.workspaceId },
-        include: { senderDomain: true },
+        include: { senderDomain: true, senderProviderIdentities: true },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
       if (input.confirmation !== store.shopDomain) {
@@ -818,14 +828,19 @@ export const storesRouter = router({
       }, redisConnection);
 
       let providerCleanupWarning: string | null = null;
-      if (store.senderDomain?.externalId) {
+      const providerIdentities = new Map(
+        [...store.senderProviderIdentities, ...(store.senderDomain ? [store.senderDomain] : [])]
+          .filter((identity) => Boolean(identity.externalId))
+          .map((identity) => [`${identity.provider}:${identity.externalId}`, identity])
+      );
+      for (const identity of providerIdentities.values()) {
         try {
           await deleteSenderDomain(
-            store.senderDomain.externalId,
-            store.senderDomain.provider as SenderDomainProvider
+            identity.externalId!,
+            identity.provider as SenderDomainProvider
           );
         } catch (error) {
-          providerCleanupWarning = error instanceof Error ? error.message : String(error);
+          providerCleanupWarning = [providerCleanupWarning, `${identity.provider}: ${error instanceof Error ? error.message : String(error)}`].filter(Boolean).join("; ");
         }
       }
 

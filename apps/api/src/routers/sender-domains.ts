@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, ownerStoreProcedure } from "../trpc";
 import { createSenderDomain, getSenderDomain, requestSenderDomainVerification, selectedEmailProvider, type SenderDomainProvider } from "@allohq/messaging";
+import { getStoreSenderIdentity } from "@allohq/database";
 import { canReuseSenderDomain, conflictsWithConfiguredDomain } from "../lib/sender-domain-provider";
 
 const domainSchema = z.string().trim().toLowerCase().regex(/^(?!-)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/);
@@ -16,34 +17,59 @@ function providerData(data: any) {
 export const senderDomainsRouter = router({
   get: ownerStoreProcedure.query(async ({ ctx, input }) => {
     const [domain, warmup] = await Promise.all([
-      ctx.prisma.senderDomain.findUnique({ where: { storeId: input.storeId } }),
+      getStoreSenderIdentity(input.storeId, selectedEmailProvider()),
       ctx.prisma.sesWarmupState.findUnique({ where: { storeId: input.storeId } }),
     ]);
     return domain ? { ...domain, warmup } : null;
   }),
   configure: ownerStoreProcedure.input(z.object({ domain: domainSchema })).mutation(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.senderDomain.findUnique({ where: { storeId: input.storeId } });
     const providerName = selectedEmailProvider();
+    const existing = await getStoreSenderIdentity(input.storeId, providerName);
     if (canReuseSenderDomain(existing, input.domain, providerName)) return existing;
     if (conflictsWithConfiguredDomain(existing, input.domain)) throw new TRPCError({ code: "CONFLICT", message: "A different provider domain is already configured" });
     const provider = await createSenderDomain(input.domain, input.storeId);
-    return ctx.prisma.senderDomain.upsert({
-      where: { storeId: input.storeId },
-      create: { storeId: input.storeId, domain: input.domain, provider: providerName, ...providerData(provider) },
-      update: { domain: input.domain, provider: providerName, ...providerData(provider) },
+    return ctx.prisma.$transaction(async (tx) => {
+      const identity = await tx.senderProviderIdentity.upsert({
+        where: { storeId_provider: { storeId: input.storeId, provider: providerName } },
+        create: { storeId: input.storeId, domain: input.domain, provider: providerName, ...providerData(provider) },
+        update: { domain: input.domain, ...providerData(provider) },
+      });
+      // Preserve the legacy Resend projection for existing operational views.
+      // SES provisioning must never overwrite it; both identities coexist.
+      if (providerName === "resend") {
+        await tx.senderDomain.upsert({
+          where: { storeId: input.storeId },
+          create: { storeId: input.storeId, domain: input.domain, provider: providerName, ...providerData(provider) },
+          update: { domain: input.domain, provider: providerName, ...providerData(provider) },
+        });
+      }
+      return identity;
     });
   }),
   refresh: ownerStoreProcedure.mutation(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.senderDomain.findUnique({ where: { storeId: input.storeId } });
+    const existing = await getStoreSenderIdentity(input.storeId, selectedEmailProvider());
     if (!existing?.externalId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Configure a sender domain first" });
     const provider = await getSenderDomain(existing.externalId, existing.provider as SenderDomainProvider);
-    return ctx.prisma.senderDomain.update({ where: { storeId: input.storeId }, data: providerData(provider) });
+    const next = await ctx.prisma.senderProviderIdentity.upsert({
+      where: { storeId_provider: { storeId: input.storeId, provider: existing.provider } },
+      create: { storeId: input.storeId, domain: existing.domain, provider: existing.provider, ...providerData(provider) },
+      update: providerData(provider),
+    });
+    if (existing.provider === "resend") await ctx.prisma.senderDomain.updateMany({ where: { storeId: input.storeId, provider: "resend" }, data: providerData(provider) });
+    return next;
   }),
   verify: ownerStoreProcedure.mutation(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.senderDomain.findUnique({ where: { storeId: input.storeId } });
+    const existing = await getStoreSenderIdentity(input.storeId, selectedEmailProvider());
     if (!existing?.externalId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Configure a sender domain first" });
     await requestSenderDomainVerification(existing.externalId, existing.provider as SenderDomainProvider);
-    return ctx.prisma.senderDomain.update({ where: { storeId: input.storeId }, data: { status: "pending", error: null, lastCheckedAt: new Date() } });
+    const data = { status: "pending", error: null, lastCheckedAt: new Date() };
+    const next = await ctx.prisma.senderProviderIdentity.upsert({
+      where: { storeId_provider: { storeId: input.storeId, provider: existing.provider } },
+      create: { storeId: input.storeId, domain: existing.domain, provider: existing.provider, externalId: existing.externalId, ...data },
+      update: data,
+    });
+    if (existing.provider === "resend") await ctx.prisma.senderDomain.updateMany({ where: { storeId: input.storeId, provider: "resend" }, data });
+    return next;
   }),
   overrideWarmup: ownerStoreProcedure.input(z.object({ reason: z.string().trim().min(12).max(500) })).mutation(async ({ ctx, input }) => {
     const now = new Date();

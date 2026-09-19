@@ -68,7 +68,7 @@ export {
   assertDataEncryptionConfigured,
 } from "./secrets";
 export { getMarketingDeliveryPermission, marketingPermissionFromState } from "./contact-policy";
-export { emailDomain, requireVerifiedSenderDomain } from "./sender-domain";
+export { emailDomain, getStoreSenderIdentity, requireVerifiedSenderDomain } from "./sender-domain";
 export type { DeliveryPermission, MarketingChannel } from "./contact-policy";
 export { withSesDeliveryAttempt } from "./ses-delivery";
 

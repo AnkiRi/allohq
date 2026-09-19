@@ -661,15 +661,20 @@ async function processPrivacyWebhook(params: {
 async function permanentlyDeleteStore(storeId: string): Promise<void> {
   const store = await prisma.store.findUnique({
     where: { id: storeId },
-    include: { senderDomain: true },
+    include: { senderDomain: true, senderProviderIdentities: true },
   });
   if (!store) return;
 
-  if (store.senderDomain?.externalId) {
+  const providerIdentities = new Map(
+    [...store.senderProviderIdentities, ...(store.senderDomain ? [store.senderDomain] : [])]
+      .filter((identity) => Boolean(identity.externalId))
+      .map((identity) => [`${identity.provider}:${identity.externalId}`, identity])
+  );
+  for (const identity of providerIdentities.values()) {
     try {
       await deleteSenderDomain(
-        store.senderDomain.externalId,
-        store.senderDomain.provider as SenderDomainProvider
+        identity.externalId!,
+        identity.provider as SenderDomainProvider
       );
     } catch (error) {
       // Privacy deletion must not be blocked by a provider outage. The failed

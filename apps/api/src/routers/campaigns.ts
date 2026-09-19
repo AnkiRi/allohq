@@ -10,8 +10,10 @@ import {
 import {
   DEMO_STORE_DOMAIN,
   emailMessagingCostForCurrency,
+  getStoreSenderIdentity,
   type PrismaClient,
 } from "@allohq/database";
+import { selectedEmailProvider } from "@allohq/messaging";
 import {
   AUDIENCE_EXCLUSION_REASONS,
   campaignApprovalChecksum,
@@ -893,6 +895,7 @@ export const campaignsRouter = router({
         code: "PRECONDITION_FAILED",
         message: "Campaign has no email template",
       });
+    const senderIdentity = await getStoreSenderIdentity(campaign.storeId, selectedEmailProvider());
     // A delivery pause is an operational safety gate, not an audience fact.
     // Preview the real candidate/control split while surfacing the pause
     // separately; approval and the send worker continue to enforce it.
@@ -1030,7 +1033,7 @@ export const campaignsRouter = router({
       subject: campaign.template.subject,
       previewText: campaign.template.previewText,
       sender: campaign.store.brandProfiles[0]?.fromEmail ?? campaign.store.storeEmail,
-      senderDomain: campaign.store.senderDomain,
+      senderDomain: senderIdentity,
       storePaused: Boolean(campaign.store.emailSendingPausedAt),
       currency,
       offer: {

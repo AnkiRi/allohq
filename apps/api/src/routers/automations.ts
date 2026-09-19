@@ -4,6 +4,8 @@ import { verifyWorkspaceObjectAccess } from "../lib/storeAccess";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { assertV1EmailAutomation } from "@allohq/release-gate";
+import { getStoreSenderIdentity } from "@allohq/database";
+import { selectedEmailProvider } from "@allohq/messaging";
 import {
   automationActivationChecksum,
   loadAutomationActivationSnapshot,
@@ -39,6 +41,7 @@ export const automationsRouter = router({
         },
       });
       if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
+      const senderIdentity = await getStoreSenderIdentity(automation.storeId, selectedEmailProvider());
       const audience = await resolveAutomationAudience(automation.id);
       return {
         providerCalled: false,
@@ -52,7 +55,7 @@ export const automationsRouter = router({
         exclusions: audience.exclusions,
         exclusionSamples: audience.samples,
         sender: automation.store.brandProfiles[0]?.fromEmail ?? null,
-        senderDomain: automation.store.senderDomain,
+        senderDomain: senderIdentity,
         storePaused: Boolean(automation.store.emailSendingPausedAt),
       };
     }),
