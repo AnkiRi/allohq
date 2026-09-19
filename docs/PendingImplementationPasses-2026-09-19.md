@@ -1895,13 +1895,94 @@ Consequence for the migration: **no production cleanup is required.** Existing r
 deterministic key. The local database could not answer this because its migrations have not
 been applied.
 
-### Open: email IDE audit not started
+### Email IDE audit — completed 20 Sep
 
-Pass 5E is marked complete in code and has **not** been independently audited. Verify rather
-than assume: OCR operational versus schema-only; malware scanning, metadata stripping and asset
-moderation; generated-image cost limits; Ask Joon conversation persistence; keyboard and
-reduced-motion accessibility; font handling; real Gmail/Outlook/Apple client evidence; and
-upload ownership with cross-workspace isolation. Do not redesign the editor.
+Pass 5E is marked "complete in code" throughout this document. Audited against its own
+acceptance criteria rather than the label. The editor itself is real and is **not** redesigned
+here; the gaps are in the asset and safety claims around it.
+
+| Pass 5E claim | Verified state |
+| --- | --- |
+| Asset OCR | **Schema only.** `BrandAsset.ocrText` exists at `schema.prisma:1368`, nothing writes it, and no OCR provider or library appears anywhere in the repository. Pass 5E4 lists OCR as complete |
+| Malware scanning | **Absent.** No scanner, no reference of any kind |
+| Metadata/EXIF stripping | **Absent.** No reference of any kind |
+| Asset moderation status | **Absent.** `BrandAsset.status` is `uploading \| processing \| ready \| failed`, an upload lifecycle rather than a moderation verdict, defaulting to `ready` |
+| Generated-image cost limits | **Absent.** `generate-image.ts` records a per-image cost (0.05 flux, 0.04 dalle, 0 unsplash) and logs it, but nothing caps spend, rate or volume |
+| Upload validation | **Sound.** `email-asset-storage.ts:36` enforces a MIME allowlist of JPEG, PNG, WebP and GIF plus a size assertion, and object keys are namespaced `workspaces/<id>/stores/<id>/email-assets/` |
+| Upload ownership and cross-workspace isolation | **Sound on every live path.** Both `brandAsset.findMany` sites filter `workspaceId: ctx.workspaceId`, and `emails.ts` verifies the store belongs to the workspace before use. `creative-engine`'s `listAssets` scopes by `storeId` alone, but it has no callers and is dead code |
+| Ask Joon conversation persistence | **Partial.** Proposal history is persisted and rendered, but a durable email-scoped conversation thread is not evident |
+| Uploaded fonts in the brand kit | **Not implemented.** The kit stores font family *names*; there is no font upload and no `@font-face`. Arguably correct for email, but Pass 5 claims uploaded fonts |
+| Keyboard and screen-reader operation of the canvas | **Largely absent.** `EmailStudio.tsx` has five aria/role/keydown occurrences; `BlockEditor.tsx` and `EmailPreviewFrame.tsx` have **zero**, so the primary direct-manipulation surface has no keyboard or ARIA affordance |
+| Reduced motion | **Not handled in the studio.** Present in global and landing CSS, absent from every studio component |
+| Gmail/Outlook/Apple render evidence | **Not integrated.** No Litmus or Email on Acid client anywhere, consistent with this document's own statement that real client rendering is an external gate |
+
+Required corrections, in the order they matter:
+
+1. Either implement OCR, scanning, metadata stripping and moderation, or strike them from Pass
+   5E4 and the 19 Sep checkpoint. Today the document asserts four safety properties the code
+   does not have, which is worse than not claiming them.
+2. Cap generated-image spend. The cost is already known per call, so a per-store daily budget
+   is small work and is the difference between a bounded and an unbounded bill.
+3. Give the canvas keyboard selection and ARIA roles, and respect reduced motion in the studio.
+4. Decide whether uploaded fonts are a real requirement for email; if not, remove the claim.
+
+None of this blocks the v1 email path, which renders and delivers. It blocks claiming the asset
+pipeline is safe for merchant-uploaded files.
+
+## Shopflo checkout — abandoned-cart ingestion for a design partner
+
+The partner's checkout is Shopflo rather than Shopify's own, so Joon's current abandonment
+path does not see their sessions.
+
+**How abandonment works today.** Shopify `checkouts/create` and `checkouts/update` (scope
+`read_checkouts`) populate `AbandonedCheckout`; `abandoned-cart.worker.ts` sweeps every five
+minutes and marks anything open for sixty minutes as abandoned, firing the `cart_abandoned`
+trigger into journeys. Recovery is inferred when the same customer places an order afterwards,
+and the Shopify order webhook also marks open or abandoned checkouts recovered. Joon therefore
+*infers* abandonment from checkout state it observes.
+
+**What Shopflo changes.** Shopflo pushes a webhook instead, configured per URL in its dashboard
+under Apps & Integrations. Payload fields, verbatim: `event_name` (`checkout_abandoned`),
+`checkout_id`, `cart_token`, `abandoned_checkout_url`, `email` (nullable), `phone`,
+`created_at`, `updated_at`, `note_attributes`, `shipping_address`, `billing_address`,
+`line_items` (price, id, quantity, title), `customer` (`uid`, `email`, `first_name`,
+`last_name`, `phone`, `marketing_consent`), `currency`, `subtotal_price`, `total_discount`,
+`total_shipping`, `total_tax`, `total_price`.
+
+**Work required.**
+
+- A per-store webhook endpoint. The payload carries **no shop identifier**, so store identity
+  must live in the URL.
+- Map the payload onto `AbandonedCheckout`, keyed on `checkout_id` for idempotency, retaining
+  `abandoned_checkout_url` because the recovery email needs it as its call to action.
+- Identity and consent: `email` is nullable and v1 is email-only, so a phone-only checkout is
+  not actionable. `customer.marketing_consent` must map to `ContactConsent`; a checkout is
+  never a consent grant on its own.
+- Bypass the sixty-minute sweeper for Shopflo-sourced rows. Shopflo asserts abandonment, so
+  inferring it again delays the recovery email twice.
+- Recovery and purchase-exit: confirm orders still arrive through Shopify `orders/create`. If
+  Shopflo writes `cart_token` into order note attributes, link recovery by token instead of the
+  present "same customer ordered later" heuristic. This matters for billing, because recovered
+  abandoned-cart revenue is part of the attributed-revenue basis.
+- Currency arrives on the payload and should flow into `formatStoreMoney` rather than the store
+  default.
+
+**Three gaps in Shopflo's documentation, to put to them before this goes live.**
+
+1. **No authentication is documented** — no HMAC, no shared secret, no signature header. This
+   is the blocking one, and not merely a hardening preference: an abandoned-cart webhook that
+   can trigger email is a spam and reputation vector, because anyone holding the URL could
+   have Joon send to arbitrary addresses. Until Shopflo confirms a signature, the endpoint
+   should **store and reconcile but never trigger a journey for an address Joon cannot already
+   match to a consented customer of that store**. That single rule contains the blast radius
+   whatever they answer.
+2. **No retry or idempotency semantics** are documented, so assume at-least-once delivery and
+   deduplicate on `checkout_id` with `updated_at`.
+3. **No firing delay** is documented, which directly sets how soon the recovery email goes out
+   and therefore whether the sweeper bypass is correct.
+
+Implementation is bounded and additive. The uncertainty is in those three answers, not in the
+code, so the questions should go to Shopflo before the endpoint is built.
 
 ### Acceptance/document conflicts to correct
 
