@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 /* ------------------------------------------------------------------ */
 /*  Motion variants                                                    */
@@ -31,7 +32,7 @@ const itemVariants = {
 /*  CohortAreaChart — inline SVG area chart                            */
 /* ------------------------------------------------------------------ */
 
-function CohortAreaChart({ data }: { data: { label: string; value: number }[] }) {
+function CohortAreaChart({ data, currency }: { data: { label: string; value: number }[]; currency: string }) {
   if (!data.length) return null;
 
   // Single data point — render a centered bar
@@ -57,7 +58,7 @@ function CohortAreaChart({ data }: { data: { label: string; value: number }[] })
             fontSize={13}
             fontFamily="monospace"
           >
-            ₹{data[0]!.value.toLocaleString()}
+            {formatStoreCurrency(data[0]!.value, currency)}
           </text>
           <text
             x={300}
@@ -162,8 +163,8 @@ const SEGMENT_FALLBACK = "hsl(var(--muted-foreground) / 0.6)";
 /*  CohortDetailPanel — expanded row detail                            */
 /* ------------------------------------------------------------------ */
 
-function CohortDetailPanel({ month }: { month: string }) {
-  const { data, isLoading } = trpc.rfm.cohortDetail.useQuery({ month });
+function CohortDetailPanel({ month, storeId, currency }: { month: string; storeId: string; currency: string }) {
+  const { data, isLoading } = trpc.rfm.cohortDetail.useQuery({ month, storeId });
 
   if (isLoading) {
     return (
@@ -205,7 +206,7 @@ function CohortDetailPanel({ month }: { month: string }) {
                 <div>
                   <div className="text-[13px] text-foreground font-sans">{tc.name}</div>
                   <div className="text-[11px] text-muted-foreground font-mono">
-                    ₹{tc.revenue.toLocaleString()} &middot; {tc.orders} orders
+                    {formatStoreCurrency(tc.revenue, currency)} &middot; {tc.orders} orders
                   </div>
                 </div>
                 <span
@@ -264,7 +265,7 @@ function CohortDetailPanel({ month }: { month: string }) {
           <div className="space-y-3">
             {[
               { label: "Avg Orders", value: purchaseStats.avgOrders.toFixed(1) },
-              { label: "Avg Order Value", value: `₹${purchaseStats.avgOrderValue.toFixed(0)}` },
+              { label: "Avg Order Value", value: formatStoreCurrency(purchaseStats.avgOrderValue, currency) },
               { label: "Repeat Rate", value: `${(purchaseStats.repeatRate * 100).toFixed(0)}%` },
             ].map((stat) => (
               <div
@@ -286,10 +287,6 @@ function CohortDetailPanel({ month }: { month: string }) {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function formatCurrency(n: number): string {
-  return "₹" + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
-
 function getNextMonths(count: number): string[] {
   const now = new Date();
   const months: string[] = [];
@@ -307,7 +304,15 @@ function getNextMonths(count: number): string[] {
 /* ------------------------------------------------------------------ */
 
 export default function CohortAnalysisPage() {
-  const { data: cohorts, isLoading } = trpc.rfm.cohorts.useQuery();
+  const { data: stores } = trpc.stores.list.useQuery();
+  const store = stores?.[0];
+  const storeId = store?.id ?? "";
+  const currency = store?.currency ?? "USD";
+  const formatCurrency = (value: number) => formatStoreCurrency(value, currency);
+  const { data: cohorts, isLoading } = trpc.rfm.cohorts.useQuery(
+    { storeId },
+    { enabled: Boolean(storeId) }
+  );
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
   // Compute all unique retention months for column headers
@@ -450,7 +455,7 @@ export default function CohortAnalysisPage() {
           <h2 className="section-header accent-bar-left text-[13px] text-foreground mb-6">
             Revenue by cohort over time
           </h2>
-          <CohortAreaChart data={chartData} />
+          <CohortAreaChart data={chartData} currency={currency} />
           {bestCohort && (
             <p className="text-[11px] text-muted-foreground mt-4 text-center">
               {bestCohort.month}: {bestCohort.customers} customers have brought in{" "}
@@ -587,7 +592,7 @@ export default function CohortAnalysisPage() {
                       <tr>
                         <td colSpan={5 + sortedMonths.length} className="p-0">
                           <AnimatePresence>
-                            {isExpanded && <CohortDetailPanel month={cohort.month} />}
+                            {isExpanded && <CohortDetailPanel month={cohort.month} storeId={storeId} currency={currency} />}
                           </AnimatePresence>
                         </td>
                       </tr>

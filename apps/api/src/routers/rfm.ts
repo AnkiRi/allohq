@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, workspaceProcedure, storeProcedure } from "../trpc";
+import { router, storeProcedure } from "../trpc";
 import {
   scoreQuintile,
   getSegmentName,
@@ -161,13 +161,8 @@ export const rfmRouter = router({
     }),
 
   /** Get RFM overview stats */
-  overview: workspaceProcedure.query(async ({ ctx }) => {
-    const stores = await ctx.prisma.store.findMany({
-      where: { workspaceId: ctx.workspaceId },
-      select: { id: true },
-    });
-    const storeIds = stores.map((s) => s.id);
-
+  overview: storeProcedure.input(z.object({ storeId: z.string() })).query(async ({ ctx, input }) => {
+    const storeIds = [input.storeId];
     const [totalScored, avgScores, segmentBreakdown, topCustomers] =
       await Promise.all([
         ctx.prisma.rfmScore.count({
@@ -274,13 +269,8 @@ export const rfmRouter = router({
     }),
 
   /** Get LTV overview */
-  ltvOverview: workspaceProcedure.query(async ({ ctx }) => {
-    const stores = await ctx.prisma.store.findMany({
-      where: { workspaceId: ctx.workspaceId },
-      select: { id: true },
-    });
-    const storeIds = stores.map((s) => s.id);
-
+  ltvOverview: storeProcedure.input(z.object({ storeId: z.string() })).query(async ({ ctx, input }) => {
+    const storeIds = [input.storeId];
     const stats = await ctx.prisma.customerLifetimeValue.aggregate({
       where: { storeId: { in: storeIds } },
       _avg: {
@@ -310,29 +300,17 @@ export const rfmRouter = router({
   }),
 
   /** Cohort analysis — group customers by first purchase month */
-  cohorts: workspaceProcedure.query(async ({ ctx }) => {
-    const stores = await ctx.prisma.store.findMany({
-      where: { workspaceId: ctx.workspaceId },
-      select: { id: true },
-    });
-    const storeIds = stores.map((s) => s.id);
-
-    return computeCohorts(ctx.prisma, storeIds);
-  }),
+  cohorts: storeProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(async ({ ctx, input }) => computeCohorts(ctx.prisma, [input.storeId])),
 
   /** Cohort detail — expanded row data for a specific cohort month */
-  cohortDetail: workspaceProcedure
-    .input(z.object({ month: z.string() }))
+  cohortDetail: storeProcedure
+    .input(z.object({ storeId: z.string(), month: z.string() }))
     .query(async ({ ctx, input }) => {
-      const stores = await ctx.prisma.store.findMany({
-        where: { workspaceId: ctx.workspaceId },
-        select: { id: true },
-      });
-      const storeIds = stores.map((s) => s.id);
-
       // Get customers whose first order falls in the requested month
       const customers = await ctx.prisma.customer.findMany({
-        where: { storeId: { in: storeIds } },
+        where: { storeId: input.storeId },
         include: {
           orders: {
             select: { totalPrice: true, createdAt: true },

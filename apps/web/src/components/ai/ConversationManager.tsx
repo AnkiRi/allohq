@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { trpc } from "../../lib/trpc";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -152,7 +153,7 @@ const VIP_COLORS: Record<string, string> = {
 // Context Sidebar
 // ---------------------------------------------------------------------------
 
-function ContextSidebar({ conversationId }: { conversationId: string }) {
+function ContextSidebar({ conversationId, currency }: { conversationId: string; currency: string }) {
   const { data: ctx } = (trpc.conversations as any).getContext.useQuery(
     { conversationId },
     { enabled: !!conversationId },
@@ -249,7 +250,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
               <div className="text-[10px] text-muted-foreground font-sans">Spent</div>
-              <div className="text-sm font-bold">₹{ctx.customer.totalSpent.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+              <div className="text-sm font-bold">{formatStoreCurrency(ctx.customer.totalSpent, currency)}</div>
             </div>
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
               <div className="text-[10px] text-muted-foreground font-sans">Orders</div>
@@ -257,7 +258,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
             </div>
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
               <div className="text-[10px] text-muted-foreground font-sans">LTV</div>
-              <div className="text-sm font-bold">₹{ctx.customer.ltv.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+              <div className="text-sm font-bold">{formatStoreCurrency(ctx.customer.ltv, currency)}</div>
             </div>
             <div className="bg-foreground/3 rounded-lg p-2 text-center">
               <div className="text-[10px] text-muted-foreground font-sans">Convos</div>
@@ -289,7 +290,7 @@ function ContextSidebar({ conversationId }: { conversationId: string }) {
                   )}>
                     {order.status}
                   </span>
-                  <span className="font-mono font-bold">₹{order.totalPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                  <span className="font-mono font-bold">{formatStoreCurrency(order.totalPrice, currency)}</span>
                 </div>
               </div>
             ))}
@@ -503,7 +504,7 @@ export function ConversationManager() {
         </div>
 
         {/* Context Sidebar */}
-        <ContextSidebar conversationId={selectedId} />
+        <ContextSidebar conversationId={selectedId} currency={stores?.[0]?.currency ?? "USD"} />
       </div>
     );
   }

@@ -44,7 +44,7 @@ const COHORT = {
   windowDays: 90,
 };
 
-function moneyExact(n: number, currency: "INR" | "USD" = "INR"): string {
+function moneyExact(n: number, currency: string): string {
   return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
     currency,
@@ -81,7 +81,7 @@ export default function OutcomesPage() {
   const { data: stores, isLoading: storesLoading } = (
     trpc as any
   ).stores.list.useQuery() as {
-    data: { id: string; onboardingCompletedAt?: string | null }[] | undefined;
+    data: { id: string; currency?: string | null; onboardingCompletedAt?: string | null }[] | undefined;
     isLoading: boolean;
   };
   const store = stores?.[0];
@@ -140,7 +140,7 @@ export default function OutcomesPage() {
     { storeId: storeId ?? "", limit: 50 },
     { enabled: !!storeId && onboardingDone },
   ) as { data: Array<{
-    id: string; unitId: string; currency: "INR" | "USD"; campaign: { name: string } | null; assignedTreated: number; assignedControl: number;
+    id: string; unitId: string; currency: string; campaign: { name: string } | null; assignedTreated: number; assignedControl: number;
     treatedNetRevenue: number; controlNetRevenue: number; attributedRevenue: number; causedRevenue: number;
     intervalLow: number | null; intervalHigh: number | null; tier: string; billable: boolean;
     nonBillableReason: string | null; strata: unknown; computedAt: string;
@@ -149,7 +149,7 @@ export default function OutcomesPage() {
     { storeId: storeId ?? "" },
     { enabled: !!storeId && onboardingDone },
   ) as { data: null | {
-    currency: "INR" | "USD"; attributedFee: number; total: number; attributedRevenue: number;
+    currency: string; attributedFee: number; total: number; attributedRevenue: number;
     performanceFeeCap: number | null; status: string; pendingReason: string | null;
   } | undefined };
 
@@ -203,7 +203,7 @@ export default function OutcomesPage() {
   const incrementalRevenue = model.incrementalRevenue;
   const measuredBasis = isReal && liftData?.basis === "margin" ? "contribution margin" : "net revenue";
   const totalFee = billingData?.total ?? 0;
-  const displayCurrency = ledgerData?.[0]?.currency ?? billingData?.currency ?? "INR";
+  const displayCurrency = store?.currency ?? ledgerData?.[0]?.currency ?? billingData?.currency ?? "USD";
 
   // --- Reasoning story: the decision behind the result, in joon's voice -----
   // Predicted upside (the lift) → NAMED downside (control gives up revenue;
@@ -357,7 +357,7 @@ export default function OutcomesPage() {
       {/* Measured ledger rows are the primary source of truth. The aggregate
           intelligence panel follows them and remains representative until a
           closed ledger row exists. */}
-      <GrowthImpactPanel storeId={storeId} windowDays={COHORT.windowDays} />
+      <GrowthImpactPanel storeId={storeId} windowDays={COHORT.windowDays} currency={store?.currency ?? displayCurrency} />
       </>}
 
       {/* 1. The control comparison — the most important pixel ---------------- */}
@@ -491,13 +491,13 @@ export default function OutcomesPage() {
             </StreamRow>
             <StreamRow tick="ok">
               treatment earned{" "}
-              <b>{moneyExact(model.treatmentRevPerCustomer)}</b> / customer ·
+              <b>{moneyExact(model.treatmentRevPerCustomer, displayCurrency)}</b> / customer ·
               control earned{" "}
-              <b>{moneyExact(model.controlRevPerCustomer)}</b> / customer
+              <b>{moneyExact(model.controlRevPerCustomer, displayCurrency)}</b> / customer
             </StreamRow>
             <StreamRow tick="ok">
-              the gap is the lift: <b>{moneyExact(liftPerCustomer)}</b> each ·{" "}
-              <b>{moneyExact(incrementalRevenue)}</b> you wouldn&apos;t have
+              the gap is the lift: <b>{moneyExact(liftPerCustomer, displayCurrency)}</b> each ·{" "}
+              <b>{moneyExact(incrementalRevenue, displayCurrency)}</b> you wouldn&apos;t have
               earned otherwise
             </StreamRow>
           </StreamOutput>
@@ -529,7 +529,7 @@ export default function OutcomesPage() {
               Joon-attributed revenue · campaigns and journeys
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(billingData?.attributedRevenue ?? 0, billingData?.currency)}
+              {moneyExact(billingData?.attributedRevenue ?? 0, billingData?.currency ?? displayCurrency)}
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-4 py-1">
@@ -537,7 +537,7 @@ export default function OutcomesPage() {
               {billingData?.status === "ready" ? "Joon fee · 5%, capped" : "Joon fee · pending approved cap"}
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(billingData?.attributedFee ?? 0, billingData?.currency)}
+              {moneyExact(billingData?.attributedFee ?? 0, billingData?.currency ?? displayCurrency)}
             </span>
           </div>
           <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
@@ -545,7 +545,7 @@ export default function OutcomesPage() {
               total preview · sending included
             </span>
             <span className="text-[hsl(var(--accent))] tabular-nums text-[16px] font-semibold">
-              {moneyExact(totalFee, billingData?.currency)}
+              {moneyExact(totalFee, billingData?.currency ?? displayCurrency)}
             </span>
           </div>
         </div>
@@ -586,8 +586,8 @@ export default function OutcomesPage() {
             against <b>{moneyExact(aiRevenue, displayCurrency)}</b> of revenue attributed to Joon emails in the same window
           </StreamRow>
           <StreamRow tick="ok">
-            early access charge <b>{moneyExact(0, billingData?.currency)}</b> · shadow invoice{" "}
-            <b>{moneyExact(totalFee, billingData?.currency)}</b>
+            early access charge <b>{moneyExact(0, billingData?.currency ?? displayCurrency)}</b> · shadow invoice{" "}
+            <b>{moneyExact(totalFee, billingData?.currency ?? displayCurrency)}</b>
           </StreamRow>
         </StreamOutput>
 
@@ -598,7 +598,7 @@ export default function OutcomesPage() {
       }
 
       {/* 4. Forecast accuracy — Track C's track record against the control ----- */}
-      {activeView === "forecasts" && <ForecastAccuracy storeId={storeId} windowDays={COHORT.windowDays} />}
+      {activeView === "forecasts" && <ForecastAccuracy storeId={storeId} windowDays={COHORT.windowDays} displayCurrency={displayCurrency} />}
 
       {activeView === "method" && <ConsoleFrame title="joon · method" live={false} clock={false}>
         <div className="space-y-5 font-sans text-sm leading-relaxed">
@@ -625,9 +625,11 @@ export default function OutcomesPage() {
 function ForecastAccuracy({
   storeId,
   windowDays,
+  displayCurrency,
 }: {
   storeId: string;
   windowDays: number;
+  displayCurrency: string;
 }) {
   const { data } = (trpc.analytics.predictionAccuracy as any).useQuery(
     { storeId, days: windowDays },
@@ -685,13 +687,13 @@ function ForecastAccuracy({
                 {row.label}
               </span>
               <span className="text-foreground tabular-nums shrink-0">
-                {moneyExact(row.predicted)}
+                {moneyExact(row.predicted, displayCurrency)}
                 <span className="text-muted-foreground">
                   {" "}
                   →{" "}
                   {row.actual != null ? (
                     <span className="text-[hsl(var(--accent))]">
-                      {moneyExact(row.actual)}
+                      {moneyExact(row.actual, displayCurrency)}
                     </span>
                   ) : (
                     "pending"
@@ -705,13 +707,13 @@ function ForecastAccuracy({
               total · {data.executedCount} executed
             </span>
             <span className="text-foreground tabular-nums">
-              {moneyExact(data.predictedTotal)}
+              {moneyExact(data.predictedTotal, displayCurrency)}
               <span className="text-muted-foreground">
                 {" "}
                 →{" "}
                 {calibrated ? (
                   <span className="text-[hsl(var(--accent))] font-semibold">
-                    {moneyExact(data.actualTotal)}
+                    {moneyExact(data.actualTotal, displayCurrency)}
                   </span>
                 ) : (
                   "pending"

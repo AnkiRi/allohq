@@ -2,6 +2,7 @@
 
 import { trpc } from "@/lib/trpc";
 import { ConsoleFrame } from "@/components/console";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 // ---------------------------------------------------------------------------
 // Growth intelligence — "do MORE by sending LESS", made legible.
@@ -17,8 +18,6 @@ import { ConsoleFrame } from "@/components/console";
 // data the figures are labelled illustrative.
 // ---------------------------------------------------------------------------
 
-const inr = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Math.round(n));
 const num = (n: number) => n.toLocaleString("en-IN");
 
 type Campaign = {
@@ -72,7 +71,7 @@ function DecisionBadge({ decision }: { decision: Campaign["decision"] }) {
   );
 }
 
-export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; windowDays: number }) {
+export function GrowthImpactPanel({ storeId, windowDays, currency }: { storeId: string; windowDays: number; currency: string }) {
   const { data } = (trpc.analytics.camImpact as any).useQuery(
     { storeId, days: windowDays },
     { enabled: !!storeId },
@@ -81,6 +80,7 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
   if (!data || !data.hasData) return null;
   const t = data.total;
   const calibrated = data.campaigns.filter((c) => !c.underpowered).length;
+  const money = (value: number) => formatStoreCurrency(value, currency);
 
   return (
     <ConsoleFrame title="joon · growth intelligence">
@@ -101,9 +101,9 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <div className="rounded-xl border-2 border-[hsl(var(--accent))]/55 bg-[hsl(var(--accent))]/[0.05] p-4">
           <div className="font-mono text-[10.5px] text-[hsl(var(--accent))] lowercase font-semibold mb-1.5">
-            proven incremental ₹
+            proven incremental revenue
           </div>
-          <div className="font-mono text-[22px] tabular-nums text-foreground">{inr(t.provenIncremental)}</div>
+          <div className="font-mono text-[22px] tabular-nums text-foreground">{money(t.provenIncremental)}</div>
           <div className="font-sans text-[11px] text-muted-foreground mt-1">
             from {t.sendSegments} of {t.campaigns} segments — the rest did not yet show reliable lift
           </div>
@@ -164,11 +164,11 @@ export function GrowthImpactPanel({ storeId, windowDays }: { storeId: string; wi
                   }
                 >
                   {c.liftPerCustomer >= 0 ? "+" : ""}
-                  {inr(c.liftPerCustomer)}
+                  {money(c.liftPerCustomer)}
                 </span>
                 <span className="hidden sm:inline text-muted-foreground text-[10.5px]">
                   {" "}
-                  · CI {inr(c.ciLow)}…{inr(c.ciHigh)}
+                  · CI {money(c.ciLow)}…{money(c.ciHigh)}
                 </span>
               </div>
               {/* call */}

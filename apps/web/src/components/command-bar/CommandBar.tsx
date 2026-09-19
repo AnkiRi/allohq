@@ -11,7 +11,7 @@ interface CommandBarProps {
 
 const EXAMPLES: Record<CommandBarProps["pageContext"], string[]> = {
   automations: [
-    "Create a win-back flow for inactive customers who spent over ₹500",
+    "Create a win-back flow for inactive high-value customers",
     "Build a three-email welcome series",
     "Set up an abandoned cart automation with 20% discount",
   ],
@@ -26,7 +26,7 @@ const EXAMPLES: Record<CommandBarProps["pageContext"], string[]> = {
     "Build a product-led promotional email",
   ],
   segments: [
-    "Find customers who spent over ₹500 but haven't ordered in 30 days",
+    "Find high-value customers who haven't ordered in 30 days",
     "Show me my ten highest-value customers",
     "Create a segment of new customers from the last 7 days",
   ],

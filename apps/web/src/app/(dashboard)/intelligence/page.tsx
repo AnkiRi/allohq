@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Brain, TrendingUp, Users, DollarSign, AlertTriangle, RefreshCw, Grid3X3, Palette, Sparkles } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { motion } from "framer-motion";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -24,15 +25,20 @@ function rfmBarColor(value: number): string {
 export default function IntelligencePage() {
   const [analyzing, setAnalyzing] = useState(false);
 
-  const { data: rfmData, isLoading: rfmLoading } = trpc.rfm.overview.useQuery();
-  const { data: ltvData, isLoading: ltvLoading } = trpc.rfm.ltvOverview.useQuery();
   const { data: stores } = trpc.stores.list.useQuery();
+  const storeId = stores?.[0]?.id ?? "";
+  const currency = stores?.[0]?.currency ?? "USD";
+  const money = (value: number) => formatStoreCurrency(value, currency);
+  const { data: rfmData, isLoading: rfmLoading } = trpc.rfm.overview.useQuery(
+    { storeId }, { enabled: Boolean(storeId) }
+  );
+  const { data: ltvData, isLoading: ltvLoading } = trpc.rfm.ltvOverview.useQuery(
+    { storeId }, { enabled: Boolean(storeId) }
+  );
 
   const utils = trpc.useUtils();
   const calculateRfm = trpc.rfm.calculate.useMutation();
   const calculateLtv = trpc.rfm.calculateLtv.useMutation();
-
-  const storeId = stores?.[0]?.id;
 
   const isLoading = rfmLoading || ltvLoading;
 
@@ -42,8 +48,8 @@ export default function IntelligencePage() {
     try {
       await calculateRfm.mutateAsync({ storeId });
       await calculateLtv.mutateAsync({ storeId });
-      await utils.rfm.overview.invalidate();
-      await utils.rfm.ltvOverview.invalidate();
+      await utils.rfm.overview.invalidate({ storeId });
+      await utils.rfm.ltvOverview.invalidate({ storeId });
       await utils.segments.list.invalidate();
       await utils.segments.distribution.invalidate();
     } catch (err: any) {
@@ -65,7 +71,7 @@ export default function IntelligencePage() {
     championsSegment && totalRevenue > 0
       ? ((championsSegment.revenue / totalRevenue) * 100).toFixed(0)
       : null;
-  const avgLTV = ltvData ? ltvData.avgPredictedLtv.toFixed(0) : null;
+  const avgLTV = ltvData?.avgPredictedLtv;
 
   return (
     <motion.div
@@ -127,12 +133,12 @@ export default function IntelligencePage() {
           {
             icon: DollarSign,
             label: "AVG LTV",
-            value: ltvData ? `₹${ltvData.avgPredictedLtv.toFixed(0)}` : "---",
+            value: ltvData ? money(ltvData.avgPredictedLtv) : "---",
           },
           {
             icon: DollarSign,
             label: "TOTAL LTV",
-            value: ltvData ? `₹${(ltvData.totalPredictedLtv / 1000).toFixed(0)}K` : "---",
+            value: ltvData ? money(ltvData.totalPredictedLtv) : "---",
           },
           {
             icon: AlertTriangle,
@@ -170,21 +176,19 @@ export default function IntelligencePage() {
             {championsSegment && championsRevenuePct && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-outcome shrink-0" />
-                Your {championsSegment.count} Champions bring in {championsRevenuePct}% of your revenue (₹
-                {(championsSegment.revenue / 1000).toFixed(0)}K)
+                Your {championsSegment.count} Champions bring in {championsRevenuePct}% of your revenue ({money(championsSegment.revenue)})
               </li>
             )}
-            {avgLTV && (
+            {avgLTV != null && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-warning)] shrink-0" />
-                Average lifetime value is ₹{avgLTV}{Number(avgLTV) >= 200 ? ", above the industry norm" : Number(avgLTV) >= 100 ? ", right in line with the industry" : ", below the industry norm"}
+                Average estimated lifetime value is {money(avgLTV)}.
               </li>
             )}
             {hibernatingSegment && (
               <li className="flex items-start gap-2 text-[13px] text-foreground/90 font-sans">
                 <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-[var(--color-urgent)] shrink-0" />
-                {hibernatingSegment.count} Hibernating customers are worth ₹
-                {(hibernatingSegment.revenue / 1000).toFixed(0)}K, plenty of room to win them back
+                {hibernatingSegment.count} Hibernating customers have spent {money(hibernatingSegment.revenue)} in total; review whether a win-back is timely.
               </li>
             )}
           </ul>
@@ -247,9 +251,9 @@ export default function IntelligencePage() {
           {ltvData ? (
             <div className="space-y-4">
               {[
-                { label: "AVG HISTORICAL LTV", value: `₹${ltvData.avgHistoricalLtv.toFixed(0)}` },
-                { label: "AVG PREDICTED LTV", value: `₹${ltvData.avgPredictedLtv.toFixed(0)}` },
-                { label: "AVG ORDER VALUE", value: `₹${ltvData.avgOrderValue.toFixed(2)}` },
+                { label: "AVG HISTORICAL LTV", value: money(ltvData.avgHistoricalLtv) },
+                { label: "AVG PREDICTED LTV", value: money(ltvData.avgPredictedLtv) },
+                { label: "AVG ORDER VALUE", value: money(ltvData.avgOrderValue) },
                 { label: "PURCHASE FREQUENCY", value: `${ltvData.avgPurchaseFrequency.toFixed(2)}/mo` },
                 { label: "AVG CHURN RISK", value: `${(ltvData.avgChurnProbability * 100).toFixed(1)}%` },
               ].map((stat) => (
@@ -317,10 +321,10 @@ export default function IntelligencePage() {
                         </div>
                       </td>
                       <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground">
-                        ₹{(seg.revenue / 1000).toFixed(1)}K
+                        {money(seg.revenue)}
                       </td>
                       <td className="px-6 py-3 text-right text-[13px] font-mono text-foreground">
-                        ₹{seg.avgOrderValue.toFixed(2)}
+                        {money(seg.avgOrderValue)}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <span className="inline-block px-2 py-0.5 bg-secondary text-secondary-foreground text-[11px] font-mono font-bold rounded">
@@ -399,7 +403,7 @@ export default function IntelligencePage() {
                       </span>
                     </td>
                     <td className="px-6 py-3 text-right text-[13px] font-mono font-bold text-foreground tabular-nums">
-                      ₹{tc.totalSpent.toFixed(2)}
+                      {money(tc.totalSpent)}
                     </td>
                   </tr>
                 );

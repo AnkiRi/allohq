@@ -1733,6 +1733,8 @@ function StoreReportStep({
   isAdvancing: boolean;
   onBack?: () => void;
 }) {
+  const { data: stores } = (trpc.stores.list as any).useQuery() as { data: Array<{ id: string; currency: string | null }> | undefined };
+  const currency = stores?.find((store) => store.id === storeId)?.currency ?? "USD";
   const { data: report, isLoading } = trpc.briefings.storeReport.useQuery(
     { storeId },
     { enabled: !!storeId }
@@ -1780,11 +1782,11 @@ function StoreReportStep({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <Stat
                 label="Total Revenue"
-                value={`₹${(report.revenueInsights.totalRevenue / 100).toLocaleString("en-IN")}`}
+                value={new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(report.revenueInsights.totalRevenue / 100)}
               />
               <Stat
                 label="Avg Order Value"
-                value={`₹${(report.revenueInsights.avgOrderValue / 100).toFixed(2)}`}
+                value={new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(report.revenueInsights.avgOrderValue / 100)}
               />
               <Stat
                 label="Repeat Purchase Rate"

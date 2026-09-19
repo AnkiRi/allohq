@@ -210,7 +210,7 @@ function ProductEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
       <Field><Label>Title</Label><TextInput value={block.props.title ?? ""} onChange={(title) => set({ title })} /></Field>
       <Field><Label>Description</Label><TextArea value={block.props.description ?? ""} onChange={(description) => set({ description })} rows={2} /></Field>
       <Field><Label>Image URL</Label><TextInput value={block.props.imageUrl ?? ""} onChange={(imageUrl) => set({ imageUrl })} mono placeholder="https://…" /></Field>
-      <Field><Label>Price (₹)</Label><NumberInput value={block.props.price} onChange={(price) => set({ price })} min={0} /></Field>
+      <Field><Label>Price (store currency)</Label><NumberInput value={block.props.price} onChange={(price) => set({ price })} min={0} /></Field>
       <Field><Label>Button text</Label><TextInput value={block.props.buttonText ?? ""} onChange={(buttonText) => set({ buttonText })} /></Field>
       <Field><Label>Button link</Label><TextInput value={block.props.buttonHref ?? ""} onChange={(buttonHref) => set({ buttonHref })} mono placeholder="https://…" /></Field>
       <div className="space-y-2 pt-1">

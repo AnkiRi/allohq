@@ -5,6 +5,7 @@ import { ShieldCheck, Plus, Trash2, ToggleLeft, ToggleRight } from "lucide-react
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -20,13 +21,14 @@ const RULE_TYPES = [
   { value: "max_sends_per_week", label: "Max Sends/Week", fields: [{ key: "max", label: "Maximum sends", type: "number" as const }, { key: "channel", label: "Channel", type: "text" as const }] },
   { value: "blocked_words", label: "Blocked Words", fields: [{ key: "words", label: "Words (comma-separated)", type: "text" as const }] },
   { value: "quiet_hours", label: "Quiet Hours", fields: [{ key: "startHour", label: "Start hour (0-23)", type: "number" as const }, { key: "endHour", label: "End hour (0-23)", type: "number" as const }] },
-  { value: "spending_cap", label: "Monthly Spending Cap", fields: [{ key: "maxMonthly", label: "Max monthly (₹)", type: "number" as const }] },
+  { value: "spending_cap", label: "Monthly Spending Cap", fields: [{ key: "maxMonthly", label: "Max monthly (store currency)", type: "number" as const }] },
 ];
 
 export default function GuardrailsPage() {
   const { toast } = useToast();
   const { data: stores } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
+  const currency = stores?.[0]?.currency ?? "USD";
 
   const { data: guardrails, isLoading } = (trpc as any).guardrails.list.useQuery(
     { storeId },
@@ -91,7 +93,7 @@ export default function GuardrailsPage() {
       case "max_sends_per_week": return `Max ${value.max} per week${value.channel ? ` (${value.channel})` : ""}`;
       case "blocked_words": return `${(value.words as string[])?.length ?? 0} blocked words`;
       case "quiet_hours": return `${value.startHour}:00 - ${value.endHour}:00`;
-      case "spending_cap": return `₹${value.maxMonthly}/month`;
+      case "spending_cap": return `${formatStoreCurrency(Number(value.maxMonthly), currency)}/month`;
       default: return JSON.stringify(value);
     }
   };

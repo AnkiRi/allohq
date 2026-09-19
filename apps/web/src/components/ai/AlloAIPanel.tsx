@@ -47,6 +47,7 @@ import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
 import { CampaignPreviewCard } from "./CampaignPreviewCard";
 import { StreamOutput, StreamRow } from "@/components/console";
+import { formatStoreCurrency } from "@/components/console/MetricReadout";
 import {
   useActivationChecklist,
   type ChecklistStep,
@@ -148,14 +149,6 @@ function restoreChatMessage(message: PersistedChatMessage): Message {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
   if (seconds < 60) return "Just now";
@@ -240,7 +233,7 @@ type PanelInsights = {
 
 type Pill = { label: string; instruction: string | null; href?: string };
 
-function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext: string): Pill[] {
+function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext: string, currency: string): Pill[] {
   if (!insights) return [];
   if (!insights.storeState.hasSyncedData) return [];
 
@@ -274,7 +267,7 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
     if (insights.recoveryOpportunities && insights.recoveryOpportunities.abandonedCarts.count > 0) {
       pills.push({
         label: `Recover ${insights.recoveryOpportunities.abandonedCarts.count} abandoned carts`,
-        instruction: `I see ${insights.recoveryOpportunities.abandonedCarts.count} abandoned carts worth ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(insights.recoveryOpportunities.abandonedCarts.totalValue)}. Send recovery emails for all of them.`,
+        instruction: `I see ${insights.recoveryOpportunities.abandonedCarts.count} abandoned carts worth ${formatStoreCurrency(insights.recoveryOpportunities.abandonedCarts.totalValue, currency)}. Send recovery emails for all of them.`,
       });
     }
   } else if (pageContext === "customers") {
@@ -284,7 +277,7 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
     });
     pills.push({
       label: "Find your top spenders",
-      instruction: "Find customers who spent over ₹200 in the last 90 days",
+      instruction: "Find my top-spending customers from the last 90 days",
     });
   } else if (pageContext === "campaigns" || pageContext === "templates") {
     pills.push({ label: "Help me create a campaign", instruction: "Create a new email campaign" });
@@ -329,7 +322,7 @@ function getDynamicSuggestions(insights: PanelInsights | undefined, pageContext:
 // Build briefing-style welcome message
 // ---------------------------------------------------------------------------
 
-function buildBriefingMessage(insights: PanelInsights, briefingData: any): Message[] {
+function buildBriefingMessage(insights: PanelInsights, briefingData: any, currency: string): Message[] {
   const messages: Message[] = [];
   const now = new Date();
 
@@ -380,7 +373,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     const trendText =
       trend > 0 ? `up ${trend}%` : trend < 0 ? `down ${Math.abs(trend)}%` : "steady";
     parts.push(
-      `Revenue (last 30 days): ${formatCurrency(insights.metrics.revenueThisMonth)} (${trendText} vs prior 30 days)`
+      `Revenue (last 30 days): ${formatStoreCurrency(insights.metrics.revenueThisMonth, currency)} (${trendText} vs prior 30 days)`
     );
   }
 
@@ -407,7 +400,7 @@ function buildBriefingMessage(insights: PanelInsights, briefingData: any): Messa
     const opportunityParts: string[] = [];
     if (ro.abandonedCarts.count > 0) {
       opportunityParts.push(
-        `${ro.abandonedCarts.count} abandoned cart${ro.abandonedCarts.count > 1 ? "s" : ""} worth ${formatCurrency(ro.abandonedCarts.totalValue)}`
+        `${ro.abandonedCarts.count} abandoned cart${ro.abandonedCarts.count > 1 ? "s" : ""} worth ${formatStoreCurrency(ro.abandonedCarts.totalValue, currency)}`
       );
     }
     if (ro.priceDrop.count > 0) {
@@ -565,10 +558,12 @@ const RECOVERY_CARD_CONFIG: Record<
 
 function RecoveryOpportunityCards({
   storeId,
+  currency,
   onApproveAll,
   onReview,
 }: {
   storeId: string;
+  currency: string;
   onApproveAll: (type: RecoveryCardType, actionIds: string[]) => void;
   onReview: (type: RecoveryCardType) => void;
 }) {
@@ -676,7 +671,7 @@ function RecoveryOpportunityCards({
                     </div>
                     {info.totalRevenue > 0 && (
                       <div className="font-mono text-[11px] font-bold text-foreground">
-                        {formatCurrency(info.totalRevenue)}
+                        {formatStoreCurrency(info.totalRevenue, currency)}
                       </div>
                     )}
                   </div>
@@ -1361,6 +1356,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
   // Get storeId
   const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
   const storeId = stores?.[0]?.id ?? "";
+  const storeCurrency = stores?.[0]?.currency ?? "USD";
 
   // Fetch real insights
   const { data: insights } = (trpc.ai as any).panelInsights.useQuery(
@@ -1509,7 +1505,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
 
     if (insights && !welcomeBuilt && !currentChatId && !hasUserMessagesRef.current) {
       if (isDashboard) {
-        setMessages(buildBriefingMessage(insights, latestBriefing));
+        setMessages(buildBriefingMessage(insights, latestBriefing, storeCurrency));
       } else if (pageContextData) {
         // Contextual greeting for non-dashboard pages
         setMessages([
@@ -1521,7 +1517,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           },
         ]);
       } else {
-        setMessages(buildBriefingMessage(insights, latestBriefing));
+        setMessages(buildBriefingMessage(insights, latestBriefing, storeCurrency));
       }
       setWelcomeBuilt(true);
     }
@@ -1530,6 +1526,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
     welcomeBuilt,
     storeId,
     latestBriefing,
+    storeCurrency,
     pageContext,
     isDashboard,
     pageContextData,
@@ -1862,7 +1859,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
           },
         ]);
       } else {
-        setMessages(buildBriefingMessage(insights, latestBriefing));
+        setMessages(buildBriefingMessage(insights, latestBriefing, storeCurrency));
       }
       setWelcomeBuilt(true);
     } else {
@@ -1908,7 +1905,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
       ? smartPills
       : contextSuggestions.length > 0
         ? contextSuggestions
-        : getDynamicSuggestions(insights, pageContext);
+        : getDynamicSuggestions(insights, pageContext, storeCurrency);
   const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : null;
   const placeholder = useRotatingPlaceholder(dataReady && !isProcessing);
 
@@ -2380,6 +2377,7 @@ export const AlloAIPanel = forwardRef<AlloAIPanelHandle, AlloAIPanelProps>(funct
               {storeId && dataReady && !currentChatId && (
                 <RecoveryOpportunityCards
                   storeId={storeId}
+                  currency={storeCurrency}
                   onApproveAll={(type, actionIds) => {
                     toast(
                       `On it. Sending ${actionIds.length} ${type.replace(/_/g, " ")} message${actionIds.length > 1 ? "s" : ""}.`,
