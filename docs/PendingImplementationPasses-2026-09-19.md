@@ -76,6 +76,40 @@ contract; this checkpoint records the implementation state.
   advisories are tracked as dependency-maintenance work, with MJML minification disabled to
   avoid the exposed `html-minifier` path.
 
+### 20 September work log — commit to pass mapping
+
+Unit suite went from 291 of 292 with a permanently red test to **307 of 307**; repo typecheck
+19/19 throughout. Every entry below was verified against code before being claimed.
+
+| Commit | Pass | What changed |
+| --- | --- | --- |
+| `61efbfe` | 8 | Streaming control assignment, proven identical to the in-memory function at 100k |
+| `6631302` | 6 | VIP ranked by store RFM quintiles, real send windows, reorder-confidence precedence bug |
+| `8918ea5` | 6 / billing copy | `{{ltv}}` and `{{avg_order_value}}` rendered in store currency in customer email and SMS |
+| `416e6a2` | 8 | Attribution and the causal ledger ignore unapproved arms; ledger refuses an incomplete cohort |
+| `6fb411e` | 8 | The 200k approval writes leave the `Serializable` transaction; claim becomes O(1) |
+| `05a34cf` | testing | Capacity admission split to an integration suite with a seeded Workspace and Store |
+| `091171d` | 8 | Send planner pages its cohort reads and batches control/skipped inserts |
+| `42d9f13` | 6 | Churn monetary signal made store-relative; `inventoryAlerts` counts real low stock |
+| `e0ca152` | 8 | `writeKey` makes approval writes idempotent without constraining the ledger's meaning |
+| `c5953ac` | 6 | Four merchant-facing worker summaries render in store currency |
+| `bb334d7` | 0 / billing | Causal ledger grades itself from the observed outcome; `measurement_ready` reachable at last |
+| `ca3620c` | 8 | Snapshot validation made linear; 11.51 MB of write-only detail no longer stored |
+| `02de6c1` | 5E | Generated-image spend capped per workspace, degrading to stock rather than failing |
+
+Register commits `2b7a9dc`, `6c33261`, `f813cab`, `03a6e90`, `95db874`, `b291e3d`, `8374f34`
+and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those changes.
+
+**Still open after today**, in rough order of value: serve `customerIds` and the arm map from
+`MeasurementAssignment` so the frozen snapshot stops being a multi-megabyte JSON column;
+implement or strike the OCR, malware-scanning, metadata-stripping and moderation claims; give
+the email canvas keyboard and ARIA operation and honour reduced motion; make lifecycle
+thresholds store-relative as VIP and churn now are; build the Shopflo endpoint once its three
+documentation gaps are answered; the storefront widget and WhatsApp currency surfaces; the
+journey webhook node; A/B hypothesis generation, parked by founder decision; and the
+infrastructure gates — CI, which does not exist, and the 100k load proof, which needs a seeded
+database rather than code.
+
 ### Local verification and environment finding
 
 Focused pricing, email schema/preflight/rendering, audience and provider-capacity tests pass.
