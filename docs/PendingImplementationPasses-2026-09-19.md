@@ -35,7 +35,7 @@ This checkpoint supersedes older `in progress`, `planned` and `foundation only` 
 the historical sections below. The detailed sections retain the reasoning and acceptance
 contract; this checkpoint records the implementation state.
 
-- **Email IDE:** one strictly validated email document now drives the canvas, preview,
+- **Email IDE:** one discriminated, runtime-validated email document now drives the canvas, preview,
   version history, proposal review, preflight, approval and delivery. The Studio is
   canvas-first with direct block selection, subject/preview controls, contextual Ask Joon,
   Inspector, persistent Versions, validated Code and Preflight. AI work is a reviewable
@@ -92,13 +92,34 @@ delivery before any service can run against partner data.
 | 2 — Explainable, scalable delivery timing | Complete | `ba5265c` | Deploy migration; production acceptance; representative 100k-recipient load proof |
 | 3 — Chat UX and durable campaign collaboration | Complete | `1d82a1b` | Production UX acceptance across reopen/edit/schedule/send states |
 | 4 — Overnight decisions, traceability and segment lifecycle | Complete | `3e76e0c` | Deploy migration and validate one real overnight proposal→approval→artifact cycle |
-| 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, current release | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
+| 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Complete in code | `5dbdb7a`, `2332e7d`, current release | Deploy migration; representative 100k and production acceptance |
-| 9 — Provider-neutral domain reputation and warm-up | Complete in code | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, current release | Configure and accept SES production/event infrastructure; review the first real ramp |
-| 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, current release | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
+| 8 — Campaign-specific customer decision context | Complete in code | `5dbdb7a`, `2332e7d`, `95b0824` | Deploy migration; representative 100k and production acceptance |
+| 9 — Provider-neutral domain reputation and warm-up | Complete in code | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Configure and accept SES production/event infrastructure; review the first real ramp |
+| 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
+
+### Release evidence for `95b0824` + `6b1f88c`
+
+| Check | Result |
+| --- | --- |
+| Monorepo typecheck | Passed across 31 workspace projects after regenerating Next build types |
+| Production build | `pnpm -r build` passed; web compiled and generated all 54 routes on Next `15.5.24` |
+| Focused behavior tests | 46 passed across billing, proof separation, email schema/preflight/custom HTML, audience, opportunity dedupe, provider safety, governor policy and Shopify scopes |
+| Database | Prisma schema formatted/generated and `prisma validate` passed |
+| Lint | API and web completed with zero errors; the existing warning backlog remains visible |
+| Dependency audit | `pnpm audit --prod --audit-level critical` passed with zero critical findings; 20 moderate and 33 high transitive advisories remain tracked |
+| Environment-bound integration | Atomic capacity admission still requires local PostgreSQL and Redis; the test reaches those services and fails closed when they are absent |
+
+The release was also visually inspected at desktop width through a temporary local audit route;
+that route was removed before commit. The email canvas, selection model, palette, proposal
+panel and responsive application frame were reviewed using the Pass 11 design system.
+
+`6b1f88c` closes the final artifact-integrity edge: approval now freezes the reviewed brand
+kit with the document and asset manifest, hashes the combined render context and makes the
+worker render from that snapshot. A later brand-profile edit therefore cannot silently change
+an already approved email.
 
 ## External release order after code completion
 
@@ -557,7 +578,7 @@ discount leakage, inconsistent products and offer/code drift across them.
 
 ### Implementation phases
 
-#### Pass 5E0 — Artifact truth and renderer parity
+#### Pass 5E0 — Artifact truth and renderer parity — complete in code
 
 - Make preview text editable and pass it into final delivery rendering.
 - Require explicit store/campaign context; never silently choose the first workspace store.
@@ -567,7 +588,7 @@ discount leakage, inconsistent products and offer/code drift across them.
 - Replace loose block schemas/raw text HTML with shared discriminated runtime schemas.
 - Freeze or version brand context used by an approved release.
 
-#### Pass 5E1 — Immutable document foundation
+#### Pass 5E1 — Immutable document foundation — complete in code
 
 - Add canonical document, immutable EmailVersion, working draft, EmailProposal, edit-operation
   journal, preflight and release references.
@@ -575,7 +596,7 @@ discount leakage, inconsistent products and offer/code drift across them.
 - Preserve stable node IDs and introduce document/renderer hashes.
 - Provide persistent restore/undo across sessions and actors.
 
-#### Pass 5E2 — Canvas, Inspector and proposal review
+#### Pass 5E2 — Canvas, Inspector and proposal review — complete in code
 
 - Canvas-first responsive studio with direct nested selection and structural outline.
 - Schema-generated Inspector with full element/style/responsive controls.
@@ -583,14 +604,14 @@ discount leakage, inconsistent products and offer/code drift across them.
 - Explicit labels for saved draft, unapplied proposal, applied version, preflight and release.
 - Wide/laptop/tablet/mobile application layouts; do not squeeze three columns on mobile.
 
-#### Pass 5E3 — Full contextual Ask Joon
+#### Pass 5E3 — Full contextual Ask Joon — complete in code
 
 - Persistent email-scoped thread, attachments, product/image mentions and selection scope.
 - Multi-step tool execution with progress, result cards, retries and command proposals.
 - Whole-email and cross-variant checks as explicit operations.
 - Never mutate the document directly from model text or rewrite arbitrary raw HTML opaquely.
 
-#### Pass 5E4 — Owned asset and image studio
+#### Pass 5E4 — Owned asset and image studio — complete in code
 
 - Signed upload and Joon-owned durable storage/CDN.
 - Searchable asset/catalog/generated library with provenance.
@@ -603,7 +624,7 @@ discount leakage, inconsistent products and offer/code drift across them.
 - Selected-block code review and Ask Joon proposal editing.
 - Sanitization, CSS inlining, compatibility checks and explicit structured-edit limitations.
 
-#### Pass 5E6 — Exact preflight and campaign release
+#### Pass 5E6 — Exact preflight and campaign release — complete in code
 
 - Version-bound blocker/warning/info/pass reports and audited waivers.
 - Preview personas, personalization fallbacks, fixed/dynamic product policy and test-send receipt.
