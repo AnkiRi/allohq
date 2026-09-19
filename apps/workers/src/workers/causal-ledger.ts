@@ -10,15 +10,42 @@ import {
   type PricingCurrency,
 } from "@allohq/database";
 import { estimateStratifiedCausedRevenue } from "@allohq/customer-state";
+import { campaignAudienceSnapshot } from "@allohq/campaign-engine";
 import { createHash } from "node:crypto";
 
 const toMinor = (value: unknown) => Math.round(Number(value) * 100);
 const toMajor = (minor: number) => minor / 100;
 
+/**
+ * Frozen customers that have no assignment row.
+ *
+ * Extra assignment rows are deliberately tolerated: re-approving a campaign with
+ * a narrower audience leaves the earlier rows in place, and those are history
+ * rather than corruption. A *missing* row is fatal, because it means the chunked
+ * approval write was interrupted and any lift computed from what landed would be
+ * a confident answer over the wrong cohort.
+ */
+export function missingAssignedCustomers(
+  frozenCustomerIds: readonly string[],
+  assignedCustomerIds: readonly string[]
+): string[] {
+  const assigned = new Set(assignedCustomerIds);
+  return frozenCustomerIds.filter((customerId) => !assigned.has(customerId));
+}
+
 export async function persistClosedCampaignLedgers(now = new Date()): Promise<number> {
+  // Only campaigns that actually completed approval. Frozen assignment rows are
+  // written in bounded chunks before the approval claim, because a 100k cohort
+  // cannot be inserted inside one transaction. A claim that then fails leaves
+  // those rows behind, and an unapproved campaign's arms must never reach
+  // attribution or this ledger.
   const assignments = await prisma.measurementAssignment.findMany({
-    where: { unitType: "campaign", windowEndsAt: { lte: now } },
-    include: { campaign: { select: { origin: true } } },
+    where: {
+      unitType: "campaign",
+      windowEndsAt: { lte: now },
+      campaign: { approvedAt: { not: null } },
+    },
+    include: { campaign: { select: { origin: true, agentProposal: true } } },
     orderBy: [{ unitId: "asc" }, { customerId: "asc" }],
   });
   const byUnit = new Map<string, typeof assignments>();
@@ -31,6 +58,21 @@ export async function persistClosedCampaignLedgers(now = new Date()): Promise<nu
   for (const [unitId, rows] of byUnit) {
     const first = rows[0]!;
     const customerIds = rows.map((row) => row.customerId);
+    // Refuse to measure an incomplete cohort. Assignment rows are written in
+    // chunks, so an interrupted approval would otherwise yield a confident lift
+    // computed over only the customers whose rows happened to land. The frozen
+    // snapshot is the authority on who was approved. Extra rows are tolerated:
+    // a re-approval with a narrower audience leaves earlier rows in place.
+    const frozenCohort = campaignAudienceSnapshot(first.campaign?.agentProposal ?? null);
+    if (frozenCohort) {
+      const missing = missingAssignedCustomers(frozenCohort.customerIds, customerIds);
+      if (missing.length > 0) {
+        console.error(
+          `[causal-ledger] Skipping ${unitId}: ${missing.length} of ${frozenCohort.customerIds.length} frozen customers have no assignment row`
+        );
+        continue;
+      }
+    }
     const windowStart = new Date(Math.min(...rows.map((row) => row.windowStartsAt.getTime())));
     const windowEnd = new Date(Math.max(...rows.map((row) => row.windowEndsAt.getTime())));
     const [orders, attributed, possibleOverlaps, latest] = await Promise.all([

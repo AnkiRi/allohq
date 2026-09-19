@@ -145,6 +145,12 @@ export async function attributeOrdersForStore(storeId: string) {
         customerId: order.customerId,
         windowStartsAt: { lte: order.createdAt },
         windowEndsAt: { gte: order.createdAt },
+        // Campaign arms count only once approval actually completed. Rows are
+        // written before the approval claim so a large cohort need not fit in
+        // one transaction; a failed claim leaves rows for a campaign that never
+        // sent, and those must not collect outcomes. Journey rows carry no
+        // campaign and are unaffected.
+        OR: [{ campaignId: null }, { campaign: { approvedAt: { not: null } } }],
       },
       select: { id: true },
     });
