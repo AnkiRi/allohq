@@ -25,6 +25,33 @@ const toMajor = (minor: number) => minor / 100;
  * approval write was interrupted and any lift computed from what landed would be
  * a confident answer over the wrong cohort.
  */
+/**
+ * Observed customers per arm before a campaign may be called measured. Matches
+ * `computeLiftStats`' own `minObservedPerArm`, so the ledger and the lift
+ * statistics agree on what is too small to trust.
+ */
+export const MIN_OBSERVED_PER_ARM = 30;
+
+/**
+ * Grade a closed unit from the outcome that actually happened.
+ *
+ * A row count alone can never mean "proven": significance needs a valid
+ * control, an adequate sample and an interval that excludes zero. Anything
+ * short of that stays directional and pools as learning rather than being
+ * presented, or billed, as measured.
+ */
+export function measuredTier(
+  outcomes: ReadonlyArray<{ treatedCount: number; controlCount: number }>,
+  estimate: { ciLow: number; ciHigh: number }
+): "empty" | "unmeasured" | "directional" | "measurement_ready" {
+  const treated = outcomes.reduce((sum, row) => sum + row.treatedCount, 0);
+  const control = outcomes.reduce((sum, row) => sum + row.controlCount, 0);
+  if (treated === 0 && control === 0) return "empty";
+  if (control === 0) return "unmeasured";
+  if (treated < MIN_OBSERVED_PER_ARM || control < MIN_OBSERVED_PER_ARM) return "directional";
+  return estimate.ciLow > 0 || estimate.ciHigh < 0 ? "measurement_ready" : "directional";
+}
+
 export function missingAssignedCustomers(
   frozenCustomerIds: readonly string[],
   assignedCustomerIds: readonly string[]
@@ -112,20 +139,19 @@ export async function persistClosedCampaignLedgers(now = new Date()): Promise<nu
         orderBy: { version: "desc" },
       }),
     ]);
+    // assignmentData still carries the campaign family recorded at approval.
     const metadata = (first.assignmentData ?? {}) as Record<string, unknown>;
-    const tier =
-      metadata["tier"] === "measurement_ready"
-        ? "measurement_ready"
-        : metadata["tier"] === "directional"
-          ? "directional"
-          : metadata["tier"] === "unmeasured"
-            ? "unmeasured"
-            : "empty";
-    const snapshot = computeLedgerSnapshot({
-      unitType: "campaign",
+    // The tier used to be read back from assignmentData, which approval fills
+    // from campaignMeasurementPolicy. That function can only return empty,
+    // unmeasured or directional, so "measurement_ready" was unreachable, every
+    // unit was permanently non-billable, and pooled evidence never matured. A
+    // tier is a result, not a plan, so it is now decided from the outcome that
+    // was actually observed.
+    const snapshotInput = {
+      unitType: "campaign" as const,
       unitId,
       assignments: rows.map((row) => ({
-        unitType: "campaign",
+        unitType: "campaign" as const,
         unitId,
         customerId: row.customerId,
         arm: row.arm,
@@ -134,7 +160,7 @@ export async function persistClosedCampaignLedgers(now = new Date()): Promise<nu
         windowEndsAt: row.windowEndsAt,
       })),
       possibleOverlaps: possibleOverlaps.map((row) => ({
-        unitType: row.unitType === "campaign" ? "campaign" : "journey",
+        unitType: (row.unitType === "campaign" ? "campaign" : "journey") as "campaign" | "journey",
         unitId: row.unitId,
         customerId: row.customerId,
         arm: row.arm,
@@ -151,11 +177,17 @@ export async function persistClosedCampaignLedgers(now = new Date()): Promise<nu
         updatedAt: order.updatedAt,
       })),
       attributedRevenueMinor: toMinor(attributed._sum.revenue ?? 0),
-      tier,
       origin: first.campaign?.origin ?? null,
       computedAt: now,
-    });
-    const estimate = estimateStratifiedCausedRevenue(snapshot.stratifiedOutcomes);
+    };
+    // computeLedgerSnapshot is pure, and the tier only affects its billability
+    // verdict, so a provisional pass is what produces the outcomes the real
+    // tier is derived from.
+    const provisional = computeLedgerSnapshot({ ...snapshotInput, tier: "directional" });
+    const estimate = estimateStratifiedCausedRevenue(provisional.stratifiedOutcomes);
+    const tier = measuredTier(provisional.stratifiedOutcomes, estimate);
+    const snapshot =
+      tier === "directional" ? provisional : computeLedgerSnapshot({ ...snapshotInput, tier });
     const latestComparable = latest
       ? {
           causedMinor: toMinor(latest.causedRevenue),
