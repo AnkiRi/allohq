@@ -273,13 +273,18 @@ export async function buildMonthlyShadowInvoices(now = new Date()): Promise<numb
           orderBy: { version: "desc" },
         }),
       ]);
-      const currency: PricingCurrency = existingInvoice
-        ? existingInvoice.currency === "INR"
-          ? "INR"
-          : "USD"
-        : store.currency?.toUpperCase() === "INR"
-          ? "INR"
-          : "USD";
+      const storeCurrency = store.currency?.toUpperCase();
+      if (storeCurrency !== "INR" && storeCurrency !== "USD") {
+        // Comparison-cap evidence and minor-unit math are currently configured
+        // only for these currencies. A shadow invoice in a different currency
+        // must not be silently relabelled or priced as USD.
+        console.warn("Skipping shadow invoice for unsupported store currency", {
+          storeId: store.id,
+          currency: storeCurrency ?? null,
+        });
+        continue;
+      }
+      const currency: PricingCurrency = storeCurrency;
       const invoiceActiveSubscribers = existingInvoice?.activeSubscribers ?? activeSubscribers;
       const invoiceSubscriberSnapshotAt =
         existingInvoice?.subscriberSnapshotAt ?? subscriberSnapshotAt;
