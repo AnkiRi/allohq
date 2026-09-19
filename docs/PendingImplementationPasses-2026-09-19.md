@@ -49,14 +49,18 @@ contract; this checkpoint records the implementation state.
   and a sanitized Custom HTML block provides an email-safe escape hatch. Arbitrary whole-
   document HTML, JavaScript and executable forms are intentionally not enabled because they
   would bypass artifact validation and make preview, approval and delivery diverge.
-- **Pass 8:** large audiences are evaluated in bounded pages, persisted as exact decision
+- **Pass 8 core:** large audiences are evaluated in bounded pages, persisted as exact decision
   snapshots with counts and paginated customer rows, reasoned about as cohorts rather than one
   LLM call per customer, and frozen at approval. Full-price alternatives use exact source-
-  reason membership rather than a small sample.
-- **Pass 9:** provider-specific identities coexist, approval pins the provider, sending fails
-  closed on mismatch, provider-neutral reputation evidence produces reviewed grow/hold/pause
-  actions, both Resend and SES obey the same reviewed cap, and campaign timing explains
-  deliverable/deferred volume. A provider switch does not reset domain evidence.
+  reason membership rather than a small sample. Remaining engineering work is a genuinely
+  streaming/set-based 100k execution path and its load proof; the current planner still builds
+  the final audience/assignment map in memory.
+- **Pass 9 core:** provider-specific identities coexist, approval pins the provider, sending
+  fails closed on mismatch, provider-neutral evidence produces reviewed grow/hold/pause actions,
+  both Resend and SES obey the same reviewed cap, and timing explains deliverable/deferred
+  volume. Remaining engineering work is authenticated prior-history assessment, automatic
+  healthy-day reconciliation and a tested provider-migration workflow; a switch does not reset
+  domain evidence.
 - **Billing and evidence:** the only invoice calculation is 5% of non-cancelled attributed
   revenue, with 5/6/8% shadow variants and a fail-closed approved cap. Legacy caused-revenue
   and postage invoice code has been removed. Causal lift remains proof/learning only.
@@ -95,8 +99,8 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Complete in code | `5dbdb7a`, `2332e7d`, `95b0824` | Deploy migration; representative 100k and production acceptance |
-| 9 — Provider-neutral domain reputation and warm-up | Complete in code | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Configure and accept SES production/event infrastructure; review the first real ramp |
+| 8 — Campaign-specific customer decision context | Core complete; scale hardening remains | `5dbdb7a`, `2332e7d`, `95b0824` | Replace in-memory large-audience planning with bounded streaming/set-based execution; 100k production/load proof |
+| 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
 
@@ -124,16 +128,18 @@ an already approved email.
 ## External release order after code completion
 
 Store lifecycle safety remains the first acceptance gate because a disconnected or
-uninstalled store must never continue sending. The remaining sequence is deployment and
-operations work, not unfinished feature implementation:
+uninstalled store must never continue sending. The remaining sequence combines the two
+explicit internal hardening items above with deployment and operations work:
 
-1. Deploy the current release, additive migration and asset/provider configuration.
-2. Run the founder-owned full deployed-data acceptance path.
-3. Run the founder-owned 100,000-customer Shopify scale proof.
-4. Create isolated staging before active partner testing begins.
-5. Complete SES production access/events, monitoring, backups and security operations.
-6. Prepare and submit the Shopify App Store package.
-7. Defer the separate approximately 45-million-customer mobile-app architecture until the
+1. Finish the Pass 8 bounded streaming/set-based audience path and run its 100k proof.
+2. Finish Pass 9 authenticated prior-history assessment, healthy-day reconciliation and
+   provider-migration receipt/rollback workflow.
+3. Deploy the current release, additive migration and asset/provider configuration.
+4. Run the founder-owned full deployed-data acceptance path.
+5. Create isolated staging before active partner testing begins.
+6. Complete SES production access/events, monitoring, backups and security operations.
+7. Prepare and submit the Shopify App Store package.
+8. Defer the separate approximately 45-million-customer mobile-app architecture until the
    founder requests it.
 
 ## Pass L — Store lifecycle safety
@@ -771,7 +777,8 @@ journeys into explainable decisions rather than generic AI-generated messages.
 
 ## Pass 8 — Campaign-specific customer decision context
 
-Status (19 Sep): complete in code; deployment and representative 100k acceptance remain.
+Status (19 Sep): core decision-context code complete; large-audience execution hardening and
+representative 100k acceptance remain.
 Exact-customer targeting and consent consistency in `d758862` are necessary plumbing. A bounded, store-scoped
 `get_customer_decision_context` merchant tool now exposes current state, consent,
 purchase-cycle evidence, recorded discounts, recent orders/products, engagement,
@@ -934,12 +941,12 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
    bounded batches. Reevaluate at 75%, 95% and 120% of a repeat buyer's median cycle;
    use a seven-day fallback where the rhythm is unknown. Consent, suppression, recent
    purchase and other delivery safety checks remain live at planning and send time.
-2. Move large-audience planning to keyset-paginated or set-based candidate retrieval and
-   batched governor facts. Campaign planning now fetches 200 customers per keyset page and
-   reads support, fatigue, message, redemption and order facts in bounded batches instead
-   of one database sequence per customer. The final audience object still accumulates all
-   excluded customers and approved IDs in memory, so paginated response/storage and the
-   representative 100k load proof remain open.
+2. Move large-audience planning from the current keyset/batched retrieval to a truly
+   bounded streaming or set-based execution path. Campaign planning now fetches 200
+   customers per keyset page and reads support, fatigue, message, redemption and order facts
+   in bounded batches, while review rows are persisted in chunks. The final audience object
+   still accumulates excluded customers and approved IDs in memory; eliminate that remaining
+   bottleneck before claiming 100k readiness.
 3. Persist exact reason counts, representative examples and customer-level decisions.
    The audience equation must reconcile requested → unavailable → deliberately left alone
    → candidates → control/treatment, including merchant overrides. Drill-down is paginated.
@@ -966,7 +973,7 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
   purchase, consent, engagement or product-affinity facts.
 - Load testing proves the cohort path does not invoke an LLM once per customer.
 
-## Sequencing
+## Historical sequencing (superseded by “External release order after code completion” above)
 
 1. Complete Pass 0 production acceptance and Pass 1's scalable audience-review UI.
 2. Complete Pass 6's scheduler before presenting the state engine as large-store ready;
@@ -996,7 +1003,9 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
 
 ## Pass 9 — Provider-neutral domain reputation and warm-up
 
-Status (19 Sep): complete in code; production SES/provider acceptance remains. Calendar time no longer advances SES warm-up without evidence;
+Status (19 Sep): core provider gate and reviewed ramp code complete; reputation assessment,
+healthy-day reconciliation, provider migration hardening and production SES acceptance remain.
+Calendar time no longer advances SES warm-up without evidence;
 zero-volume health cannot report growth, and Setup no longer claims an automatic ramp.
 The live sender gate now requires verification for the selected provider; SES allowlist
 rehearsals do too, without changing the existing Resend demo/allowlist path. An additive
@@ -1048,20 +1057,16 @@ its traffic to Joon. Warm-up also has more than one reputation surface: From/DKI
 custom MAIL FROM domain, provider account or SES tenant, and shared or dedicated IP reputation.
 Joon must state which surface it knows about and must never equate `verified` with `warmed`.
 
-The current implementation has the following limitations:
+The remaining implementation limitations are:
 
-- gradual warm-up is applied only on the SES capacity path; production Resend sends receive
-  only a generic new-store cap;
-- `SesWarmupState` begins on the first SES capacity acquisition rather than from an explicit
-  domain assessment and activation decision;
-- `healthyDay` no longer advances from elapsed time, but it cannot yet grow from a reviewed,
-  reconciled healthy sending day either;
-- the code cannot assess or import evidence that a merchant domain is already warmed;
-- the merchant UI exposes only a terse SES status, not cap usage, deferred recipients,
-  reputation evidence, next step, confidence or the reason for a hold/pause;
-- the provider switch from Resend to SES has no explicit reputation-migration workflow;
-- a founder override records a reason, but does not model a reviewed starting tier, actor,
-  expiry or rollback condition.
+- there is no authenticated import/assessment path for a domain that was already warmed on
+  another provider; DNS age, domain age and merchant assertion remain insufficient evidence;
+- `healthyDay` advances only through the reviewed action today; a reconciled healthy sending
+  day should be able to produce a reviewable growth recommendation automatically;
+- provider migration stores both identities and pins approved sends, but the explicit
+  reputation-migration receipt/rollback workflow still needs implementation and acceptance;
+- production SES configuration sets, event destinations, quotas and provider history are
+  operational prerequisites and cannot be inferred from Resend verification.
 
 ### Required domain assessment
 
@@ -1626,13 +1631,15 @@ corrected rather than implemented literally.
 
 ### Internal implementation status
 
-No numbered product pass remains open in repository code. The current release closes the
-previous internal list as follows:
+Most numbered product passes are complete in repository code. Pass 8 scale execution and
+Pass 9 reputation-assessment/migration hardening remain genuine internal work; deployment
+and acceptance gates are listed separately below.
 
 | Area | Code-complete result | Remaining gate |
 | --- | --- | --- |
 | Campaign-specific agent reasoning | Canonical named-customer context plus bounded cohort reasoning, reviewed product evidence and exact persisted audience snapshots | Deployed 100k acceptance |
-| Sender reputation and warm-up | Provider-neutral evidence, reviewed grow/hold/pause, rollback condition, common Resend/SES cap and visible campaign deferral plan | SES production/event setup and first reviewed real ramp |
+| Pass 8 large-audience execution | Keyset pages, batched governor facts, exact paginated decision rows and frozen assignments | Remove final in-memory audience/assignment accumulation; set-based or streamed 100k path and benchmark |
+| Sender reputation and warm-up | Provider-neutral evidence, reviewed grow/hold/pause, rollback condition, common Resend/SES cap and visible campaign deferral plan | Authenticated “already warmed” assessment, automatic healthy-day reconciliation and provider migration workflow |
 | Customer projection consistency | Order create/update/cancel refreshes the canonical order projection, RFM, LTV and state | Deployed event acceptance |
 | Outcomes and proof | Live attribution, pooled causal evidence, billing preview and forecasts are separate; no-control rows do not claim lift | Deployed-data acceptance |
 | Overnight decisions | Stable fingerprints and material hashes deduplicate proposals; creative is generated only after approval; release remains copilot | One real overnight proposal→approval→artifact acceptance |
