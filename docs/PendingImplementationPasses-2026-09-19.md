@@ -664,8 +664,11 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
    use a seven-day fallback where the rhythm is unknown. Consent, suppression, recent
    purchase and other delivery safety checks remain live at planning and send time.
 2. Move large-audience planning to keyset-paginated or set-based candidate retrieval and
-   batched governor facts. Avoid the current sequential per-customer database fan-out and
-   avoid returning every excluded customer to a single API response.
+   batched governor facts. Campaign planning now fetches 200 customers per keyset page and
+   reads support, fatigue, message, redemption and order facts in bounded batches instead
+   of one database sequence per customer. The final audience object still accumulates all
+   excluded customers and approved IDs in memory, so paginated response/storage and the
+   representative 100k load proof remain open.
 3. Persist exact reason counts, representative examples and customer-level decisions.
    The audience equation must reconcile requested → unavailable → deliberately left alone
    → candidates → control/treatment, including merchant overrides. Drill-down is paginated.

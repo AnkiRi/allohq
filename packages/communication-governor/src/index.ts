@@ -8,6 +8,7 @@ export type {
 export { DEFAULT_FATIGUE_CONFIG, DEFAULT_QUIET_HOURS } from "./types";
 
 export { checkAllRules } from "./governor";
+export { checkCampaignRulesBatch, evaluateCampaignGovernorFacts } from "./campaign-batch";
 export { loadStoreGovernorConfig } from "./store-config";
 export type { StoreGovernorConfig } from "./store-config";
 export { checkFatigue } from "./fatigue-manager";

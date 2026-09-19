@@ -711,6 +711,7 @@ model Order {
 
   @@unique([storeId, externalId])
   @@index([customerId])
+  @@index([storeId, customerId, createdAt])
   @@map("orders")
 }
 
@@ -1483,6 +1484,7 @@ model MessageLog {
   @@index([externalId])
   @@index([channel, status])
   @@index([customerId, status, createdAt])
+  @@index([storeId, customerId, sentAt])
   @@index([outcome, createdAt])
   @@index([experimentId])
   @@map("message_logs")
@@ -1670,6 +1672,7 @@ model Conversation {
 
   @@index([storeId, status])
   @@index([customerId])
+  @@index([storeId, customerId, status, updatedAt])
   @@map("conversations")
 }
 

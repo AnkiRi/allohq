@@ -1,5 +1,9 @@
-import { prisma, resolveSegmentWhere } from "@allohq/database";
-import { checkAllRules, loadStoreGovernorConfig } from "@allohq/communication-governor";
+import { prisma, resolveSegmentWhere, type Prisma } from "@allohq/database";
+import {
+  checkAllRules,
+  checkCampaignRulesBatch,
+  loadStoreGovernorConfig,
+} from "@allohq/communication-governor";
 import { evaluateCampaignCandidate, type CandidateDecision } from "./candidate-policy";
 
 export const AUDIENCE_EXCLUSION_REASONS = [
@@ -185,43 +189,36 @@ export async function resolveCampaignAudience(
   const groupOverrides = new Set(
     campaign.audienceOverridePolicies.map((policy) => policy.reasonCode)
   );
-  const [customers, processed, governorConfig] = await Promise.all([
-    prisma.customer.findMany({
-      where,
+  const governorConfig = await loadStoreGovernorConfig(campaign.storeId);
+  const customerSelect = {
+    id: true,
+    email: true,
+    firstName: true,
+    lastName: true,
+    acceptsMarketing: true,
+    rfmScore: { select: { segment: true } },
+    contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
+    orders: {
+      where: { status: { not: "cancelled" } },
+      orderBy: { createdAt: "desc" },
+      take: 1,
+      select: { createdAt: true },
+    },
+    contactSuppressions: {
+      where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      take: 1,
+      select: { reason: true },
+    },
+    customerState: {
       select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        acceptsMarketing: true,
-        rfmScore: { select: { segment: true } },
-        contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
-        orders: {
-          where: { status: { not: "cancelled" } },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { createdAt: true },
-        },
-        contactSuppressions: {
-          where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-          take: 1,
-          select: { reason: true },
-        },
-        customerState: {
-          select: {
-            discountBehavior: true,
-            purchaseCyclePosition: true,
-            medianOrderIntervalDays: true,
-            nextExpectedOrderAt: true,
-            stateEvidence: true,
-          },
-        },
+        discountBehavior: true,
+        purchaseCyclePosition: true,
+        medianOrderIntervalDays: true,
+        nextExpectedOrderAt: true,
+        stateEvidence: true,
       },
-    }),
-    prisma.messageLog.findMany({ where: { campaignId }, select: { customerId: true } }),
-    loadStoreGovernorConfig(campaign.storeId),
-  ]);
-  const already = new Set(processed.map((row) => row.customerId).filter(Boolean));
+    },
+  } satisfies Prisma.CustomerSelect;
   const exclusions = Object.fromEntries(
     AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
   ) as Record<AudienceExclusionReason, number>;
@@ -253,117 +250,136 @@ export async function resolveCampaignAudience(
       });
   };
 
-  for (const customer of customers) {
-    const suppression = customer.contactSuppressions[0];
-    const consent = customer.contactConsents[0]?.status;
-    const staticReason = staticAudienceExclusion({
-      email: customer.email,
-      consentStatus: consent,
-      acceptsMarketing: customer.acceptsMarketing,
-      suppressionReason: suppression?.reason,
-      alreadyProcessed: already.has(customer.id),
-      storePaused:
-        options.enforceDeliveryPauses === false
-          ? false
-          : Boolean(campaign.store.emailSendingPausedAt),
-      globalPaused:
-        options.enforceDeliveryPauses === false
-          ? false
-          : process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
+  let requested = 0;
+  let cursor: string | undefined;
+  while (true) {
+    const customers = await prisma.customer.findMany({
+      where: cursor ? { AND: [where, { id: { gt: cursor } }] } : where,
+      select: customerSelect,
+      orderBy: { id: "asc" },
+      take: 200,
     });
-    if (staticReason) {
-      exclude(staticReason, customer);
-      continue;
-    }
-    if (
-      !groupOverrides.has("recent_purchase") &&
-      !recentPurchaseOverrides.has(customer.id) &&
-      isRecentPurchase({
-        lastOrderAt: customer.orders[0]?.createdAt,
-        hasDiscount,
+    if (customers.length === 0) break;
+    requested += customers.length;
+    cursor = customers[customers.length - 1]!.id;
+    const processed = await prisma.messageLog.findMany({
+      where: { campaignId, customerId: { in: customers.map((customer) => customer.id) } },
+      select: { customerId: true },
+    });
+    const already = new Set(processed.map((row) => row.customerId).filter(Boolean));
+    const governorDecisions = await checkCampaignRulesBatch(
+      customers.map((customer) => customer.id),
+      campaign.storeId,
+      {
         now,
-        standardHours: governorConfig.recentPurchase?.standardHours,
-        discountHours: governorConfig.recentPurchase?.discountHours,
-      })
-    ) {
-      recentPurchaseExcluded.push({
-        id: customer.id,
+        timezone: governorConfig.timezone ?? campaign.store.timezone ?? "UTC",
+        quietHours: governorConfig.quietHours,
+        maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
+      }
+    );
+    for (const customer of customers) {
+      const suppression = customer.contactSuppressions[0];
+      const consent = customer.contactConsents[0]?.status;
+      const staticReason = staticAudienceExclusion({
         email: customer.email,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
+        consentStatus: consent,
+        acceptsMarketing: customer.acceptsMarketing,
+        suppressionReason: suppression?.reason,
+        alreadyProcessed: already.has(customer.id),
+        storePaused:
+          options.enforceDeliveryPauses === false
+            ? false
+            : Boolean(campaign.store.emailSendingPausedAt),
+        globalPaused:
+          options.enforceDeliveryPauses === false
+            ? false
+            : process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
       });
-      exclude("recent_purchase", customer);
-      continue;
-    }
-    const candidateDecision = evaluateCampaignCandidate({
-      state: customer.customerState,
-      hasDiscount,
-      merchantIncluded:
-        groupOverrides.has("deliberately_left_alone") || merchantIncluded.has(customer.id),
-    });
-    if (!candidateDecision.candidate) {
-      deliberatelyLeftAlone.push({
-        id: customer.id,
-        email: customer.email,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        decision: candidateDecision,
-      });
-      continue;
-    }
-    const decision = await checkAllRules({
-      customerId: customer.id,
-      storeId: campaign.storeId,
-      channel: "email",
-      messageType: "marketing",
-      campaignId,
-      timezone: governorConfig.timezone ?? campaign.store.timezone ?? "UTC",
-      quietHours: governorConfig.quietHours,
-      maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
-      now,
-    });
-    // Quiet hours defer treatment delivery; they do not change eligibility or
-    // the frozen randomized arm map.
-    if (shouldExcludeGovernorDecision(decision)) {
-      const reason = governorReason(decision.rule);
-      const overridden =
-        groupOverrides.has(reason) ||
-        (reason === "fatigue" && fatigueOverrides.has(customer.id)) ||
-        (reason === "collision" && collisionOverrides.has(customer.id)) ||
-        (reason === "cooldown" && cooldownOverrides.has(customer.id));
-      if (overridden) {
-        eligible.push({
+      if (staticReason) {
+        exclude(staticReason, customer);
+        continue;
+      }
+      if (
+        !groupOverrides.has("recent_purchase") &&
+        !recentPurchaseOverrides.has(customer.id) &&
+        isRecentPurchase({
+          lastOrderAt: customer.orders[0]?.createdAt,
+          hasDiscount,
+          now,
+          standardHours: governorConfig.recentPurchase?.standardHours,
+          discountHours: governorConfig.recentPurchase?.discountHours,
+        })
+      ) {
+        recentPurchaseExcluded.push({
           id: customer.id,
           email: customer.email,
           firstName: customer.firstName,
           lastName: customer.lastName,
-          rfmStratum: customer.rfmScore?.segment ?? null,
+        });
+        exclude("recent_purchase", customer);
+        continue;
+      }
+      const candidateDecision = evaluateCampaignCandidate({
+        state: customer.customerState,
+        hasDiscount,
+        merchantIncluded:
+          groupOverrides.has("deliberately_left_alone") || merchantIncluded.has(customer.id),
+      });
+      if (!candidateDecision.candidate) {
+        deliberatelyLeftAlone.push({
+          id: customer.id,
+          email: customer.email,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          decision: candidateDecision,
         });
         continue;
       }
-      if (reason === "fatigue") {
-        fatigueExcluded.push({
-          id: customer.id,
-          email: customer.email,
-          firstName: customer.firstName,
-          lastName: customer.lastName,
-        });
+      const decision = governorDecisions.get(customer.id);
+      if (!decision) throw new Error(`Campaign governor decision missing for ${customer.id}`);
+      // Quiet hours defer treatment delivery; they do not change eligibility or
+      // the frozen randomized arm map.
+      if (shouldExcludeGovernorDecision(decision)) {
+        const reason = governorReason(decision.rule);
+        const overridden =
+          groupOverrides.has(reason) ||
+          (reason === "fatigue" && fatigueOverrides.has(customer.id)) ||
+          (reason === "collision" && collisionOverrides.has(customer.id)) ||
+          (reason === "cooldown" && cooldownOverrides.has(customer.id));
+        if (overridden) {
+          eligible.push({
+            id: customer.id,
+            email: customer.email,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            rfmStratum: customer.rfmScore?.segment ?? null,
+          });
+          continue;
+        }
+        if (reason === "fatigue") {
+          fatigueExcluded.push({
+            id: customer.id,
+            email: customer.email,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+          });
+        }
+        if (reason === "collision") collisionExcluded.push(customer);
+        if (reason === "cooldown") cooldownExcluded.push(customer);
+        exclude(reason, customer);
+        continue;
       }
-      if (reason === "collision") collisionExcluded.push(customer);
-      if (reason === "cooldown") cooldownExcluded.push(customer);
-      exclude(reason, customer);
-      continue;
+      eligible.push({
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        rfmStratum: customer.rfmScore?.segment ?? null,
+      });
     }
-    eligible.push({
-      id: customer.id,
-      email: customer.email,
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      rfmStratum: customer.rfmScore?.segment ?? null,
-    });
   }
   return {
-    requested: customers.length,
+    requested,
     eligible,
     exclusions,
     samples,

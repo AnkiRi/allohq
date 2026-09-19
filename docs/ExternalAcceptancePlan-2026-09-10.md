@@ -5,7 +5,12 @@ Owner: founder, with Codex recording evidence and defects
 Current restart point: **Stage 0 — production safety and observability**  
 Delivery posture: **disabled until Stage 8 explicitly moves it to allowlist**
 
-This is the durable working plan for external acceptance. If implementation work interrupts testing, record the interruption in the session log below and resume from the first incomplete gate. Do not skip a failed gate because a later feature appears to work.
+This is the durable working plan for external acceptance. The later locked product decisions
+and current implementation status live in [PendingImplementationPasses-2026-09-19.md](./PendingImplementationPasses-2026-09-19.md);
+where an older acceptance line conflicts, the dated implementation plan wins. If
+implementation work interrupts testing, record the interruption in the session log below
+and resume from the first incomplete gate. Do not skip a failed gate because a later feature
+appears to work.
 
 The older [ProductionAcceptanceChecklist-2026-09-06.md](./ProductionAcceptanceChecklist-2026-09-06.md) remains historical evidence. This document is the current execution order.
 
@@ -18,7 +23,8 @@ The external sequence begins from this verified repository state:
 - Typecheck: `pnpm -r typecheck` — all 18 workspaces with a typecheck script passed.
 - Production builds: `pnpm -r build` — widget, email builder, emails, API, workers and web passed; web generated 56/56 static pages.
 - Prisma: `pnpm --filter @allohq/database exec prisma validate --schema=prisma/schema.prisma` — valid.
-- The suite directly covers storefront-event authentication/minimization, trigger deduplication, six email journey fixtures, onboarding intelligence readiness, opportunity deduplication, email-only release gates, transactional DOI, incentive recovery and partial-refund attribution.
+- This historical preflight predates the locked cancellation-only v1 billing rule. Re-run
+  the current tests and use the 19 September plan for current behavioral acceptance.
 
 This is repository evidence, not production acceptance. Stage 0 must still establish that the same commit, migrations and safe configuration are actually running in production.
 
@@ -183,8 +189,9 @@ Goal: prove experiment assignment, reporting and revenue reversal are causally h
 - [ ] Confirm reporting uses assigned denominators and does not claim significance from the directional threshold.
 - [ ] Place treatment/control purchases and verify outcome attribution.
 - [ ] Retry purchase webhooks and verify no double attribution.
-- [ ] Apply a partial refund and verify attributed revenue decreases by the correct amount.
-- [ ] Apply a full refund and cancellation and verify clean reversal.
+- [ ] Apply partial and full refunds without cancellation; verify they do not independently
+  change v1 attributed revenue under the locked order-counting rule.
+- [ ] Cancel the order and verify attributed revenue and any shadow fee basis reverse once.
 - [ ] Confirm anonymous exposure redaction after the customer is identified and erased.
 
 ## Stage 6 — customer intelligence and segmentation
@@ -207,7 +214,8 @@ Goal: prove an approved campaign is frozen, measurable and cannot drift on retry
 - [ ] Verify the structured segment, ranked audience, discount and generated email.
 - [ ] Inspect exclusions for missing email, consent, unsubscribe, complaint, bounce, fatigue, quiet hours, duplicates and controls.
 - [ ] Verify exact finite-campaign quota behavior, including 50 eligible → 43 treatment / 7 control.
-- [ ] Verify 1–6 eligible is unmeasured, 7–199 directional, and 200+ measurement-ready rather than automatically significant.
+- [ ] Verify 1–6 eligible is unmeasured and larger cohorts remain directional until actual
+  control evidence supports a measured claim; 200 recipients alone never proves lift.
 - [ ] Approve and retain checksum, frozen audience and complete arm map.
 - [ ] Change content, offer, timing or audience and verify approval becomes stale.
 - [ ] Retry and restart planning; every customer’s arm must remain unchanged.
@@ -276,8 +284,9 @@ Goal: prove one approved delivery or none, plus accurate measured outcomes.
 - [ ] Confirm provider idempotency keys survive retry and restart.
 - [ ] Verify delivery/open/click events update once.
 - [ ] Place controlled treatment and control orders during the attribution window.
-- [ ] Verify gross revenue, control baseline and incremental lift use the approved formulas.
-- [ ] Verify partial refund, full refund and cancellation adjustments.
+- [ ] Verify Joon-attributed non-cancelled revenue and separate campaign-control evidence
+  use their approved formulas; control lift does not calculate the invoice.
+- [ ] Verify refunds alone do not change the v1 fee base and cancellation reverses it once.
 - [ ] Verify late and duplicate webhooks do not double count.
 - [ ] Confirm reports retain honest evidence-tier labels.
 
@@ -289,7 +298,8 @@ Run welcome, abandoned checkout, post-purchase, replenishment, win-back and anni
 - [ ] Trigger it with the correct controlled Shopify event.
 - [ ] Verify waits, timezone, entry rules, cooldown/re-entry and cancellation.
 - [ ] Verify generated email uses the current brand profile.
-- [ ] Verify stable per-entrant holdout and visible “left alone, and why” evidence.
+- [ ] Verify there is no random journey holdout; every eligible entrant follows the
+  journey, while purchase exits, suppression and deferrals remain visible with reasons.
 - [ ] Verify consent and suppression immediately before every email step.
 - [ ] Change active content/workflow and confirm activation becomes stale.
 - [ ] Restart workers mid-wait and verify exactly one continuation.
