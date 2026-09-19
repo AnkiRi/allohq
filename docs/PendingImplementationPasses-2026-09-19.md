@@ -22,6 +22,22 @@ run the 100k Shopify and complete delivery/attribution acceptance; then staging,
 backups, security/legal and App Store gates. Keep the production recipient allowlist until
 the delivery sign-off. Record test evidence and commit mapping per pass.
 
+### Local verification and environment finding
+
+The provider-pin/Results change passed API, worker and web typechecks plus focused snapshot
+tests. The batched audience change passed API/worker typechecks, focused governor/audience
+tests, Prisma validation and `pnpm -r build` (including the 54-page web build). `pnpm -r lint`
+finished with zero errors and pre-existing warnings. The canonical `pnpm test` launcher
+cannot start `tsx`'s local IPC socket in the current sandbox; direct `node --import tsx
+--test` runs pass for the focused files. A broad direct test invocation reaches tests that
+require local Redis, which this sandbox also denies. These are test-environment limits, not
+a claim that the full suite passed.
+
+Railway account access is present, but the linked project has only a `production`
+environment. Do not clone production settings into staging: a safe staging environment
+requires separate databases, Redis, credentials, encryption keys and disabled/allowlisted
+delivery before any service can run against partner data.
+
 ## Implementation map
 
 | Pass | Code status | Commits | What remains outside code |
@@ -129,6 +145,7 @@ verified `shop/redact` webhook remains the authoritative permanent platform-dele
 | `782b5aa` | Pass 11A | Established the Quiet Control Room design system, landing-derived themes, task-based application navigation, responsive shell, contextual top bar and durable `DESIGN.md`; removed obsolete design prototypes without removing product routes | Route-body migration in 11B–11H; authenticated light/mobile/dense-page acceptance |
 | `d5a54ef` | Pass 9 and Results correctness | Approved campaign snapshots pin Resend/SES; worker fails closed on provider mismatch. Removed the invalid AI-return ratio that compared store revenue with workspace-wide USD token cost using a fixed INR conversion; top-bar AI revenue now uses store currency. | Production queued-send switch rehearsal; store-scoped cost ledger and sourced FX before a return ratio can be shown; deployed-data Results acceptance |
 | `2332e7d` | Pass 8 and external acceptance | Campaign audience loads keyset pages of 200 and checks governor facts in bounded batches; added supporting indexes and pure safety tests. Corrected the old external plan's refund and journey-control requirements to match locked policy. | Prove parity with live governor decisions and representative 100k database load; paginate dry-run details and durable snapshot storage |
+| Pending commit | Currency tail | Analytics ledger, campaign detail and Settings now use the store's ISO currency instead of silently interpreting every non-INR store as USD. API and web typechecks pass. | Deployed-data check with a non-INR, non-USD store; audit other formatters and currency conversion boundaries |
 
 ## Post-demo acceptance findings — 2026-09-17
 

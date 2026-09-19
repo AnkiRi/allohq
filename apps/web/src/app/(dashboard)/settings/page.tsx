@@ -684,7 +684,7 @@ function BillingPreviewSection({ storeId }: { storeId: string }) {
     status: string; pendingReason: string | null;
   } | undefined; isLoading: boolean };
   const money = (value: number) => new Intl.NumberFormat(data?.currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency", currency: data?.currency === "INR" ? "INR" : "USD", maximumFractionDigits: 0,
+    style: "currency", currency: data?.currency ?? "USD", maximumFractionDigits: 0,
   }).format(value);
   return (
     <motion.div variants={itemVariants} className="glass-card-static rounded-xl p-6">

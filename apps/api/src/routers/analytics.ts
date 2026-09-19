@@ -37,7 +37,7 @@ export const analyticsRouter = router({
       ].slice(0, input.limit);
       return latest.map((row) => ({
         ...row,
-        currency: store?.currency?.toUpperCase() === "INR" ? "INR" : "USD",
+        currency: store?.currency?.toUpperCase() ?? "USD",
         treatedNetRevenue: Number(row.treatedNetRevenue),
         controlNetRevenue: Number(row.controlNetRevenue),
         attributedRevenue: Number(row.attributedRevenue),

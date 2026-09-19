@@ -336,7 +336,7 @@ export default function CampaignDetailPage() {
         nTreatment?: number;
         nControl?: number;
       };
-  const moneyCurrency = stats?.currency === "INR" ? "INR" : "USD";
+  const moneyCurrency = stats?.currency ?? "USD";
   const money = (value: number) =>
     new Intl.NumberFormat(moneyCurrency === "INR" ? "en-IN" : "en-US", {
       style: "currency",
