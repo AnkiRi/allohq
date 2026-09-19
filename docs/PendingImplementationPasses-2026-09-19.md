@@ -19,7 +19,7 @@ This document is the single reference point for these passes. Later implementati
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
 | 8 — Campaign-specific customer decision context | In progress | `5dbdb7a` | Batched audience policy and cohort reasoning; durable evidence snapshot; scale and production acceptance |
-| 9 — Provider-neutral domain reputation and warm-up | In progress | `aeec41f`, `664cbe7` | Dual-provider identity records and preflight; assessed ramp and deliberate SES migration |
+| 9 — Provider-neutral domain reputation and warm-up | In progress | `aeec41f`, `664cbe7`, `534efc6` | Production identity-migration acceptance; provider-pinned queued sends; assessed ramp and deliberate SES migration |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
 
