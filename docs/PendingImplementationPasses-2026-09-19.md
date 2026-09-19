@@ -52,9 +52,13 @@ contract; this checkpoint records the implementation state.
 - **Pass 8 core:** large audiences are evaluated in bounded pages, persisted as exact decision
   snapshots with counts and paginated customer rows, reasoned about as cohorts rather than one
   LLM call per customer, and frozen at approval. Full-price alternatives use exact source-
-  reason membership rather than a small sample. Remaining engineering work is a genuinely
-  streaming/set-based 100k execution path and its load proof; the current planner still builds
-  the final audience/assignment map in memory.
+  reason membership rather than a small sample. A 19 Sep code audit found the in-memory
+  planner is **not** the binding constraint: approval also writes roughly 200k rows inside one
+  `Serializable` transaction under Prisma's default five-second timeout, freezes a
+  multi-megabyte per-customer assignment map into the `agentProposal` JSON column, and the
+  send worker re-resolves the audience and reads it back through whole-cohort `IN` clauses.
+  `61efbfe` makes control assignment streaming and parity-proven at 100k; the call sites still
+  need converting. See `19 Sep code audit — what actually blocks 100k` under Pass 8.
 - **Pass 9 core:** provider-specific identities coexist, approval pins the provider, sending
   fails closed on mismatch, provider-neutral evidence produces reviewed grow/hold/pause actions,
   both Resend and SES obey the same reviewed cap, and timing explains deliverable/deferred
@@ -99,7 +103,7 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Core complete; scale hardening remains | `5dbdb7a`, `2332e7d`, `95b0824` | Replace in-memory large-audience planning with bounded streaming/set-based execution; 100k production/load proof |
+| 8 — Campaign-specific customer decision context | Core complete; scale hardening remains | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe` | Convert approval/send onto the streaming assignment; chunk approval writes out of the `Serializable` transaction; stop freezing per-customer maps in campaign JSON; replace whole-cohort `IN` clauses in the send worker; 100k production/load proof |
 | 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
@@ -944,9 +948,11 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
 2. Move large-audience planning from the current keyset/batched retrieval to a truly
    bounded streaming or set-based execution path. Campaign planning now fetches 200
    customers per keyset page and reads support, fatigue, message, redemption and order facts
-   in bounded batches, while review rows are persisted in chunks. The final audience object
-   still accumulates excluded customers and approved IDs in memory; eliminate that remaining
-   bottleneck before claiming 100k readiness.
+   in bounded batches, while review rows are persisted in chunks. Control assignment is now
+   streaming and proven identical to the in-memory function at 100k (`61efbfe`). The final
+   audience object still accumulates excluded customers and approved IDs in memory, and the
+   audit below records four heavier blockers above it. Eliminate all of them before claiming
+   100k readiness.
 3. Persist exact reason counts, representative examples and customer-level decisions.
    The audience equation must reconcile requested → unavailable → deliberately left alone
    → candidates → control/treatment, including merchant overrides. Drill-down is paginated.
@@ -956,6 +962,59 @@ may receive deeper AI context; no campaign should invoke the LLM once per custom
 5. Benchmark 30, 100k and 1m profiles separately. Approval and send must preserve frozen
    assignments while rechecking live safety. Do not claim large-store readiness from
    functional top-30 testing alone.
+
+### 19 Sep code audit — what actually blocks 100k
+
+Audited against the code rather than the status labels. The in-memory audience object is real
+(`packages/campaign-engine/src/audience-resolver.ts:227`–`232` keeps eight unbounded arrays,
+four of which duplicate rows already held in `excludedCustomers`), but four heavier failures
+sit above it and would stop a 100k approval first.
+
+1. **Approval writes roughly 200k rows inside one `Serializable` transaction.**
+   `apps/api/src/routers/campaigns.ts:1839` and `:1862` call `createMany` unchunked for
+   `MeasurementAssignment` and `CustomerAudienceDecision`, inside the transaction opened at
+   `:1782` and configured at `:1923`. No `timeout` or `maxWait` is set anywhere in the
+   repository, so Prisma's five-second default applies and the write fails far below 100k.
+2. **The frozen snapshot is a per-customer map in a JSON column.**
+   `packages/campaign-engine/src/audience-snapshot.ts:45`, written at
+   `apps/api/src/routers/campaigns.ts:1712`, stores `customerIds`, `holdout.assignments` and
+   `holdout.assignmentDetails` in `campaign.agentProposal`. At 100k that is roughly 17 MB of
+   JSON, re-parsed by every reader of the proposal and hashed whole into the approval
+   checksum.
+3. **The send worker re-resolves the audience and reads it back by whole-cohort `IN`.**
+   `apps/workers/src/workers/send.worker.ts:230` re-runs the resolver, then `:252`, `:279`
+   and `:413` pass the entire approved cohort as an `IN` list. The dry-run path already avoids
+   exactly this at `apps/api/src/routers/campaigns.ts:1039`–`1049`, by querying a bounded
+   store window and intersecting in memory; the send path never received that treatment.
+4. **Control and skipped recipients are written one round trip at a time.**
+   `apps/workers/src/workers/send.worker.ts:482` and `:525` each `await` a single
+   `messageLog` create per customer, so a 100k campaign performs roughly 15,000 sequential
+   inserts before the first delivery is enqueued. Delivery enqueue itself is already bounded
+   in chunks of 100 at `:628`.
+
+Two correctness defects surfaced in the same audit:
+
+- `CustomerAudienceDecision` has no unique constraint
+  (`packages/database/prisma/schema.prisma:1153`) and is written with `createMany` without
+  `skipDuplicates` (`apps/api/src/routers/campaigns.ts:1862`), so a retried approval silently
+  duplicates the audit ledger. `MeasurementAssignment` is idempotent by contrast: it carries
+  `@@unique([unitType, unitId, customerId])` and does pass `skipDuplicates`.
+- `persistCampaignAudienceEvaluation` chunks its rows at 2,000
+  (`apps/api/src/lib/campaign-audience-evaluation.ts:80`) but wraps every chunk in a single
+  `$transaction`, so the same five-second default defeats the chunking.
+
+**Completed in `61efbfe`.** Small strata are pooled below ten, so no quota can be fixed until
+the cohort has been counted; the streamed path counts per stratum first, plans exact quotas,
+then retains only each stratum's control quota. Measured at 100,000 candidates: heap +6.5 MB
+against +58.5 MB, 142 ms against 383 ms, 19,499 retained entries against 100,000 arms plus
+100,000 assignment records, and an identical control set. A parity test covers pooled
+sub-ten strata and the shared rate clamp. No caller changed behaviour in that commit.
+
+**Still open.** Convert the approval and send call sites onto the streaming assignment; chunk
+the approval writes outside the `Serializable` transaction while preserving atomic campaign
+claim and frozen membership; stop freezing per-customer maps in `agentProposal`; replace the
+send worker's whole-cohort `IN` clauses and per-recipient inserts; add the missing
+`CustomerAudienceDecision` uniqueness; then run the 100k proof against a real database.
 
 ### Acceptance criteria
 
@@ -1638,7 +1697,7 @@ and acceptance gates are listed separately below.
 | Area | Code-complete result | Remaining gate |
 | --- | --- | --- |
 | Campaign-specific agent reasoning | Canonical named-customer context plus bounded cohort reasoning, reviewed product evidence and exact persisted audience snapshots | Deployed 100k acceptance |
-| Pass 8 large-audience execution | Keyset pages, batched governor facts, exact paginated decision rows and frozen assignments | Remove final in-memory audience/assignment accumulation; set-based or streamed 100k path and benchmark |
+| Pass 8 large-audience execution | Keyset pages, batched governor facts, exact paginated decision rows, frozen assignments, and streaming control assignment proven identical to the in-memory function at 100k (`61efbfe`) | Convert the approval/send call sites; chunk the `Serializable` approval writes; remove per-customer maps from campaign JSON; replace whole-cohort `IN` clauses and per-recipient inserts in the send worker; add `CustomerAudienceDecision` uniqueness; 100k load proof on a real database |
 | Sender reputation and warm-up | Provider-neutral evidence, reviewed grow/hold/pause, rollback condition, common Resend/SES cap and visible campaign deferral plan | Authenticated “already warmed” assessment, automatic healthy-day reconciliation and provider migration workflow |
 | Customer projection consistency | Order create/update/cancel refreshes the canonical order projection, RFM, LTV and state | Deployed event acceptance |
 | Outcomes and proof | Live attribution, pooled causal evidence, billing preview and forecasts are separate; no-control rows do not claim lift | Deployed-data acceptance |
