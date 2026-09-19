@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "queue:ops": "tsx src/queue-ops.ts",
     "test": "tsx --test src/**/*.test.ts",
-    "test:privacy:integration": "tsx --test src/acquisition-privacy.integration.ts"
+    "test:privacy:integration": "tsx --test src/acquisition-privacy.integration.ts",
+    "test:capacity:integration": "tsx --test src/utils/email-capacity.integration.ts",
+    "test:integration": "tsx --test src/**/*.integration.ts"
   },
   "dependencies": {
     "@allohq/agent-brain": "workspace:*",
