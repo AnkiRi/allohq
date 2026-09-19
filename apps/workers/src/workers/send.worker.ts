@@ -1,6 +1,7 @@
 import { Worker, Queue } from "bullmq";
 import {
   prisma,
+  Prisma,
   messagingCostFor,
   getMarketingDeliveryPermission,
   requireVerifiedSenderDomain,
@@ -49,6 +50,14 @@ const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: r
 const emailSendQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, { connection: redisConnection });
 
 const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (seconds, not hours)
+/**
+ * Ids per query when the planner reads an approved cohort back out of Postgres.
+ * A 100k campaign previously passed every id in one `IN (...)`. Mirrors the
+ * bound `getTimingProfiles` already applies.
+ */
+const RECIPIENT_QUERY_CHUNK = 5_000;
+/** Rows per statement when the planner records control and skipped recipients. */
+const RECIPIENT_WRITE_CHUNK = 2_000;
 type BrandKit = Awaited<ReturnType<typeof loadBrandKit>>;
 
 function frozenEmailDocument(campaign: {
@@ -250,41 +259,57 @@ export async function planCampaignSend(
     ...currentAudience,
     eligible: currentAudience.eligible.filter((customer) => approvedIds.has(customer.id)),
   };
-  const customers = await prisma.customer.findMany({
-    where: { id: { in: audience.eligible.map((customer) => customer.id) } },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      rfmScore: {
-        select: {
-          segment: true,
-          totalSpent: true,
-          orderCount: true,
-          avgOrderValue: true,
-          lastOrderAt: true,
-          recency: true,
-          frequency: true,
-          monetary: true,
-          totalScore: true,
+  const loadRecipientChunk = (ids: string[]) =>
+    prisma.customer.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        rfmScore: {
+          select: {
+            segment: true,
+            totalSpent: true,
+            orderCount: true,
+            avgOrderValue: true,
+            lastOrderAt: true,
+            recency: true,
+            frequency: true,
+            monetary: true,
+            totalScore: true,
+          },
+        },
+        lifetimeValue: {
+          select: { historicalLtv: true, predictedLtv: true, churnProbability: true },
         },
       },
-      lifetimeValue: {
-        select: { historicalLtv: true, predictedLtv: true, churnProbability: true },
-      },
-    },
-  });
+    });
+  // Read the approved cohort back in bounded pages. The whole audience used to
+  // arrive as one `IN (...)` of every approved id.
+  const eligibleIds = audience.eligible.map((customer) => customer.id);
+  const customers: Awaited<ReturnType<typeof loadRecipientChunk>> = [];
+  for (let index = 0; index < eligibleIds.length; index += RECIPIENT_QUERY_CHUNK) {
+    customers.push(
+      ...(await loadRecipientChunk(eligibleIds.slice(index, index + RECIPIENT_QUERY_CHUNK)))
+    );
+  }
   if (selectedEmailProvider() === "ses") {
     const rankedAt = new Date();
-    const clicks = await prisma.messageLog.groupBy({
-      by: ["customerId"],
-      where: {
-        customerId: { in: customers.map((customer) => customer.id) },
-        clickedAt: { not: null },
-      },
-      _max: { clickedAt: true },
-    });
+    const recipientIds = customers.map((customer) => customer.id);
+    const clicks: Array<{ customerId: string | null; _max: { clickedAt: Date | null } }> = [];
+    for (let index = 0; index < recipientIds.length; index += RECIPIENT_QUERY_CHUNK) {
+      clicks.push(
+        ...(await prisma.messageLog.groupBy({
+          by: ["customerId"],
+          where: {
+            customerId: { in: recipientIds.slice(index, index + RECIPIENT_QUERY_CHUNK) },
+            clickedAt: { not: null },
+          },
+          _max: { clickedAt: true },
+        }))
+      );
+    }
     const latestClick = new Map(clicks.map((row) => [row.customerId, row._max.clickedAt]));
     const signal = (customer: (typeof customers)[number]) => {
       const click = latestClick.get(customer.id);
@@ -416,6 +441,21 @@ export async function planCampaignSend(
     customers.map((customer) => customer.id)
   );
   const plannedDeliveries = new Map<number, DeliverOneData[]>();
+  // Control and skipped recipients used to cost one round trip each, so a 100k
+  // campaign performed roughly fifteen thousand sequential inserts before the
+  // first email was enqueued. They are buffered and written in batches instead.
+  // Neither row carries a deliveryKey, so createMany is safe here.
+  const plannedLogs: Prisma.MessageLogCreateManyInput[] = [];
+  const flushPlannedLogs = async (force = false) => {
+    if (plannedLogs.length === 0) return;
+    if (!force && plannedLogs.length < RECIPIENT_WRITE_CHUNK) return;
+    const batch = plannedLogs.splice(0, plannedLogs.length);
+    for (let index = 0; index < batch.length; index += RECIPIENT_WRITE_CHUNK) {
+      await prisma.messageLog.createMany({
+        data: batch.slice(index, index + RECIPIENT_WRITE_CHUNK),
+      });
+    }
+  };
 
   for (const customer of customers) {
     if (processedCustomerIds.has(customer.id)) continue;
@@ -480,41 +520,40 @@ export async function planCampaignSend(
     // held-back decision for the result page + decision-trace.
     if (decision.skip) {
       skippedCount++;
-      await prisma.messageLog.create({
-        data: {
-          workspaceId: campaign.store.workspaceId,
-          storeId: campaign.storeId,
-          customerId: customer.id,
-          channel: "email",
-          to: customer.email,
-          subject: approvedEmail.envelope.subject,
-          campaignId,
-          status: "skipped",
-          treatmentArm: null,
-          experimentId: experiment.id,
-          customerStateSnap: stateSnap,
-          discountCode: discountCode ?? null,
-          offerId,
-          messageVariantId: decision.toneKey,
-          messageFeatures: {
-            channel: selectedChannel,
-            messageType: "campaign",
-            hasDiscount,
-            discountPercent,
-            segment: rfm?.segment ?? null,
-            decision: "skip",
-            skipReason: decision.skipReason,
-          },
-          metadata: {
-            skipped: true,
-            skipReason: decision.skipReason,
-            reasoning: decision.reasoning,
-            selectedChannel,
-            bestHour,
-            toneKey: decision.toneKey,
-          },
+      plannedLogs.push({
+        workspaceId: campaign.store.workspaceId,
+        storeId: campaign.storeId,
+        customerId: customer.id,
+        channel: "email",
+        to: customer.email,
+        subject: approvedEmail.envelope.subject,
+        campaignId,
+        status: "skipped",
+        treatmentArm: null,
+        experimentId: experiment.id,
+        customerStateSnap: stateSnap,
+        discountCode: discountCode ?? null,
+        offerId,
+        messageVariantId: decision.toneKey,
+        messageFeatures: {
+          channel: selectedChannel,
+          messageType: "campaign",
+          hasDiscount,
+          discountPercent,
+          segment: rfm?.segment ?? null,
+          decision: "skip",
+          skipReason: decision.skipReason,
+        },
+        metadata: {
+          skipped: true,
+          skipReason: decision.skipReason,
+          reasoning: decision.reasoning,
+          selectedChannel,
+          bestHour,
+          toneKey: decision.toneKey,
         },
       });
+      await flushPlannedLogs();
       continue;
     }
 
@@ -523,22 +562,21 @@ export async function planCampaignSend(
     // measured comparison remains symmetric and randomized.
     if (arm === "CONTROL") {
       controlCount++;
-      await prisma.messageLog.create({
-        data: {
-          workspaceId: campaign.store.workspaceId,
-          storeId: campaign.storeId,
-          customerId: customer.id,
-          channel: "email",
-          to: customer.email,
-          subject: approvedEmail.envelope.subject,
-          campaignId,
-          status: "withheld",
-          treatmentArm: "CONTROL",
-          experimentId: experiment.id,
-          customerStateSnap: stateSnap,
-          metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
-        },
+      plannedLogs.push({
+        workspaceId: campaign.store.workspaceId,
+        storeId: campaign.storeId,
+        customerId: customer.id,
+        channel: "email",
+        to: customer.email,
+        subject: approvedEmail.envelope.subject,
+        campaignId,
+        status: "withheld",
+        treatmentArm: "CONTROL",
+        experimentId: experiment.id,
+        customerStateSnap: stateSnap,
+        metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
       });
+      await flushPlannedLogs();
       continue;
     }
 
@@ -623,6 +661,11 @@ export async function planCampaignSend(
     plannedDeliveries.set(deliveryBucket, bucket);
     scheduledCount++;
   }
+
+  // Control and skipped rows must be durable before any delivery is enqueued,
+  // so the merchant's audience reconciliation is complete even if the process
+  // dies between planning and sending.
+  await flushPlannedLogs(true);
 
   let chunkIndex = 0;
   for (const [deliveryTimestamp, deliveries] of plannedDeliveries) {
