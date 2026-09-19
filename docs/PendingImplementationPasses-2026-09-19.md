@@ -7,20 +7,27 @@ This document is the single reference point for these passes. Later implementati
 
 ## Active scope — 19 Sep
 
-Complete the remaining code, acceptance and operational gates before returning to broad
-external testing. Pass 5's email-designer expansion (durable asset storage, faithful
-reference-image editing and the proposed canvas/chat/inspector interaction) is explicitly
-excluded from this execution run at the founder's request; retain the existing editor and
-its safety/creative regression checks. The separate approximately 45-million-customer
-mobile-app architecture is deferred until the founder specifically requests it. Neither
-exclusion should be reported as complete.
+Complete the remaining code and operational gates together with the full Pass 5 email-IDE
+expansion. The email is the primary artifact; Canvas, Ask Joon, Inspector, Code and Versions
+are complementary controls over one canonical document. The editor must include durable
+assets, product-preserving image work, direct manipulation, persistent conversation,
+reviewable proposals, precise per-element control, custom HTML/full-code escape hatches,
+client-aware preflight and immutable campaign release. This work is additive: it must not
+replace or postpone Passes 8/9, live-data correctness, overnight-decision reconciliation,
+product hardening, security checks or documentation.
 
-Work in this order: reconcile the register and release evidence; finish Pass 8 scale and
-decision snapshots; finish Pass 9 provider-pinned sending and reputation-controlled SES
-migration; close live-data correctness in customers, Results, decisions and billing preview;
-run the 100k Shopify and complete delivery/attribution acceptance; then staging, monitoring,
-backups, security/legal and App Store gates. Keep the production recipient allowlist until
-the delivery sign-off. Record test evidence and commit mapping per pass.
+Deployed acceptance and creation/configuration of staging are assigned to the founder. Code,
+automated verification, migration design and acceptance instructions remain engineering
+work. The separate approximately 45-million-customer mobile-app architecture is deferred
+until the founder specifically requests it and must not be reported as complete.
+
+Work in bounded, shippable slices: reconcile the register and release evidence; finish Pass 8
+scale and decision snapshots; finish Pass 9 provider-pinned sending and reputation-controlled
+SES migration; close live-data correctness in customers, Results, decisions and billing
+preview; implement Pass 5E's artifact/version/rendering foundation before its canvas, chat,
+asset and code surfaces; then finish automated Shopify-scale, security and release gates.
+Keep the production recipient allowlist until the founder completes delivery sign-off.
+Record test evidence and commit mapping per pass.
 
 ### Local verification and environment finding
 
@@ -48,7 +55,7 @@ delivery before any service can run against partner data.
 | 2 — Explainable, scalable delivery timing | Complete | `ba5265c` | Deploy migration; production acceptance; representative 100k-recipient load proof |
 | 3 — Chat UX and durable campaign collaboration | Complete | `1d82a1b` | Production UX acceptance across reopen/edit/schedule/send states |
 | 4 — Overnight decisions, traceability and segment lifecycle | Complete | `3e76e0c` | Deploy migration and validate one real overnight proposal→approval→artifact cycle |
-| 5 — Conversational email creator and editable brand kit | Complete within the available provider boundary | `2e93e90` | Production creative acceptance; choose/validate durable binary storage and true reference-image editing before claiming pixel-faithful swaps |
+| 5 — Full email IDE, conversational creator and brand/asset system | Foundation exists; full IDE active | `2e93e90` | Pass 5E0–5E6 below: truth parity, canonical document, immutable versions, canvas/chat/inspector/code, owned assets, client preflight and exact campaign release |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
 | 8 — Campaign-specific customer decision context | In progress | `5dbdb7a`, `2332e7d` | Bounded API response/storage, cohort reasoning, durable evidence snapshot; 100k and production acceptance |
@@ -377,7 +384,12 @@ Make `ready before coffee` demonstrable: every opportunity message resolves to o
 
 ## Pass 5 — Conversational email creator and editable brand kit
 
-Status: code complete in `2e93e90` for the conversational structured-email path and editable brand-kit foundation. `Create your own email` opens the durable chat workflow; the Email Studio supports conversational copy/layout edits, generated imagery, selectable hosted merchant references, undo, structured template save and generated-asset provenance. Brand voice, colours, typography, logos, sender settings and hosted font/reference assets are merchant-editable. Production acceptance remains, and durable binary upload/storage plus pixel-faithful reference-image transformation must be validated with the chosen production asset store/image provider before claiming Photoshop-style product replacement.
+Status: foundation only. Commit `2e93e90` provides the first conversational structured-email
+path and editable brand kit, but user interviews identify visuals and the editor as Joon's
+weakest major surface. The current form-led editor, immediate AI mutation, session-only undo,
+loose runtime schemas, mutable template row, generated-image append behavior and preview/send
+context drift do not satisfy the required product. Pass 5E0–5E6 below is active alongside all
+other pending passes.
 
 ### Outcome
 
@@ -394,6 +406,187 @@ Add `Create your own email` beside Joon-generated work: a conversational creativ
 - Let the merchant review and correct what Joon inferred during initial brand analysis.
 - Ensure generated emails use the connected store’s products, currency, sender identity and reviewed brand assets.
 - Preserve versions and make generated assets recoverable when the conversation is reopened.
+
+### Locked product model — full email IDE
+
+The email is the primary object. Chat supplies intent, the Inspector supplies precision,
+Code provides an expert escape hatch, Versions makes changes recoverable, Preflight checks
+the exact candidate and campaign approval freezes the release. The interaction promise is:
+
+> One canonical email document. Two editing surfaces. Three review states. One frozen release.
+
+- **Canvas:** directly select, edit, insert, move, duplicate and remove the actual email.
+- **Ask Joon:** a persistent artifact-aware conversation with attachments, product/image
+  mentions, multi-step tools, progress, retry and proposal results linked to canvas nodes.
+- **Inspector:** schema-derived exact controls for the selected element, including responsive
+  rules; it must never show image controls while claiming text is selected.
+- **Code:** custom HTML blocks plus a full source-backed mode for expert control. Unknown markup
+  is preserved rather than silently flattened. JavaScript, unsafe forms and other executable
+  content remain prohibited.
+- **Versions:** durable history for manual, conversational and code changes. Restore creates a
+  new version; approved history is never erased.
+- **Preflight:** version-bound blockers/warnings/passes for content, offer, product, links,
+  personalization, accessibility, responsive behavior, required footer and supported clients.
+- **Release:** campaign approval references an immutable version, assets, offer, audience,
+  timing, provider and resolution rules. It never points only at a mutable template row.
+
+“Full ChatGPT/Claude experience” means persistent context, attachments, multimodal input,
+tool use, iteration, granular review, recoverability and useful errors. It does not mean a
+large prompt box that replaces the email with opaque HTML.
+
+### Canonical artifact and exactness
+
+Use a normalized, versioned document tree rather than loose `{id,type,props:any}` arrays:
+
+```text
+EmailDocument
+  schemaVersion
+  envelope (subject, preview, from/reply-to, locale)
+  theme / frozen brand reference
+  rootNodeIds
+  nodesById (typed node props + child IDs + responsive rules)
+  assets, products, offers and personalization bindings
+```
+
+Text is validated rich content, not arbitrary HTML stored in ordinary text nodes. Every
+runtime boundary uses shared discriminated schemas. Stable node IDs survive editing and
+rendering. Nested hero/column/product elements are independently selectable.
+
+An approved personalized email is exact in two dimensions:
+
+1. the immutable creative artifact: structure, copy, theme, fixed assets/products, offer and
+   fallbacks;
+2. the immutable resolution contract: allowed personalization, dynamic-product policy,
+   currency/price behavior, missing-data fallbacks and send-time safety checks.
+
+Each recipient send records the version, resolved products/offer, resolution context, render
+hash and provider message ID. Dynamic fields are visibly labelled in preview and can be
+previewed as representative or selected customers.
+
+### Command, proposal and version contract
+
+Manual editing and Ask Joon use the same validated command service. Commands include stable
+operation ID, base version, target node, expected prior value where relevant, actor/source and
+scope (`element`, `variant`, `all_variants`). Core commands cover text/style/envelope/theme,
+asset replacement, product/offer binding and node insertion/move/removal. Model-produced
+commands use strict tool schemas, but server validation is authoritative.
+
+State is explicit:
+
+```text
+autosaved working draft → proposal against base version → candidate render/diff
+→ accept/reject/refine operations → immutable version → bound preflight → campaign release
+```
+
+Do not create one immutable version per keystroke. Coalesce a typing session into an autosaved
+working draft and checkpoint on field commit, structural edits, proposal acceptance, asset
+replacement, restore, test send and approval. Every proposal remains recoverable and cannot
+silently apply against a stale base version.
+
+### HTML and pixel-control policy
+
+- Structured mode exposes all safe, meaningful layout and styling controls rather than only a
+  simplified form: dimensions, content width, padding, alignment, typography, color, borders,
+  image crop/focal point, links and desktop/mobile rules.
+- A Custom HTML node can coexist with structured content. Full Code mode creates a source-backed
+  version and preserves unrecognized markup. The UI states which regions remain visually
+  editable; conversion back to structured nodes is never silently lossy.
+- CSS is sanitized/inlined and checked against email-client support. Script, executable forms
+  and unsafe URLs remain blocked. Imported/exported HTML receives the same preflight.
+- “Pixel perfect” means precise control plus real client renders and differences, not the false
+  claim that Gmail and Outlook render arbitrary CSS identically.
+
+### Assets and product-safe image work
+
+Consolidate overlapping brand/generated/creative asset concepts behind one owned asset
+service. Persist immutable original, object-storage key/CDN URL, checksum, MIME/dimensions,
+store/workspace owner, source and lineage, prompt/reference inputs, focal point, desktop/mobile
+derivatives, alt text, OCR text and processing/moderation status. Provider URLs are ingested;
+they are never the durable source of truth.
+
+Selecting an image exposes upload, Shopify catalog, library, generate, edit, remove/replace
+background, crop/focal point and variant actions. “Replace” updates the selected node; it never
+appends an unrelated block. Product imagery defaults to preserving authoritative product
+pixels, generating only the environment, compositing the product, then allowing crop/scale/
+position changes. Every variant records lineage.
+
+### Joon-specific creative context
+
+The editor must not become a generic Canva clone. It understands audience, deliberate
+restraint, campaign goal, customer/product state, offer guardrails and linked variants. A
+campaign may expose a discount email and a full-price alternative derived from a shared base.
+The merchant can apply a change to one element, one variant or all variants; preflight detects
+discount leakage, inconsistent products and offer/code drift across them.
+
+### Implementation phases
+
+#### Pass 5E0 — Artifact truth and renderer parity
+
+- Make preview text editable and pass it into final delivery rendering.
+- Require explicit store/campaign context; never silently choose the first workspace store.
+- Remove stale cached-HTML precedence and define cache keys from immutable inputs.
+- Use the same product, brand, personalization and offer resolution service for Studio,
+  campaign preview, test send, approval and delivery.
+- Replace loose block schemas/raw text HTML with shared discriminated runtime schemas.
+- Freeze or version brand context used by an approved release.
+
+#### Pass 5E1 — Immutable document foundation
+
+- Add canonical document, immutable EmailVersion, working draft, EmailProposal, edit-operation
+  journal, preflight and release references.
+- Migrate existing templates without losing current campaigns or deep links.
+- Preserve stable node IDs and introduce document/renderer hashes.
+- Provide persistent restore/undo across sessions and actors.
+
+#### Pass 5E2 — Canvas, Inspector and proposal review
+
+- Canvas-first responsive studio with direct nested selection and structural outline.
+- Schema-generated Inspector with full element/style/responsive controls.
+- Before/Proposed diff hotspots and granular accept/reject/refine.
+- Explicit labels for saved draft, unapplied proposal, applied version, preflight and release.
+- Wide/laptop/tablet/mobile application layouts; do not squeeze three columns on mobile.
+
+#### Pass 5E3 — Full contextual Ask Joon
+
+- Persistent email-scoped thread, attachments, product/image mentions and selection scope.
+- Multi-step tool execution with progress, result cards, retries and command proposals.
+- Whole-email and cross-variant checks as explicit operations.
+- Never mutate the document directly from model text or rewrite arbitrary raw HTML opaquely.
+
+#### Pass 5E4 — Owned asset and image studio
+
+- Signed upload and Joon-owned durable storage/CDN.
+- Searchable asset/catalog/generated library with provenance.
+- Selected-image replacement/editing and product-preserving composition.
+- Desktop/mobile derivatives, focal points, alt text and OCR.
+
+#### Pass 5E5 — Advanced Code mode
+
+- Custom HTML node and full source-backed versions.
+- HTML import/export, code diff and Ask Joon code editing.
+- Sanitization, CSS inlining, compatibility checks and explicit structured-edit limitations.
+
+#### Pass 5E6 — Exact preflight and campaign release
+
+- Version-bound blocker/warning/info/pass reports and audited waivers.
+- Preview personas, personalization fallbacks, fixed/dynamic product policy and test-send receipt.
+- Gmail/Outlook/Apple rendering integration rather than browser-width claims alone.
+- Campaign release freezes document, renderer, brand/assets, offer, audience, timing, provider
+  and resolution policy; every send stores its resolved receipt.
+
+### Pass 5E acceptance
+
+- Preview, test, approved campaign and delivery use one renderer contract and the same version.
+- No proposal or manual edit can alter an approved release; any change creates a new version
+  and requires campaign reapproval.
+- Subject, preview, visible image text, body, CTA, offer metadata and code reconcile.
+- Generated/edit URLs remain valid because Joon owns their stored originals and derivatives.
+- Discount/full-price variants cannot leak offer language into each other.
+- A merchant can complete the primary workflow through Canvas, Ask Joon, Inspector or Code and
+  always return to a recoverable version.
+- Desktop/mobile application UX is usable without horizontal overflow; email-client evidence
+  is not confused with a browser-width preview.
+- Existing campaigns and templates migrate safely and current delivery tests continue to pass.
 
 ## Pass 6 — Scalable customer-state intelligence and explorer
 
