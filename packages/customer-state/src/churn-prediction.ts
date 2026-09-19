@@ -1,6 +1,6 @@
 import { prisma } from "@allohq/database";
 import { estimateChurnRisk } from "./churn-risk";
-export interface ChurnSignals { daysSinceLastOrder: number | null; orderCount: number; totalSpend: number; avgOrderIntervalDays: number | null; }
+export interface ChurnSignals { daysSinceLastOrder: number | null; orderCount: number; totalSpend: number; monetaryQuintile?: number | null; avgOrderIntervalDays: number | null; }
 
 /** Collect engagement signals, then delegate to the single canonical risk formula. */
 export async function computeChurnRiskEstimate(customerId: string, _storeId: string, signals: ChurnSignals): Promise<number> {

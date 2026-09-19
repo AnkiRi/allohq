@@ -1,6 +1,9 @@
 import { prisma } from "@allohq/database";
 import type { MissionControlData } from "./types";
 
+/** Matches campaign-engine's checkInventoryConflicts default. */
+const LOW_STOCK_THRESHOLD = 5;
+
 /**
  * Get Mission Control data for the merchant dashboard.
  * "What happened / What matters / What needs approval / What Joon did"
@@ -16,6 +19,7 @@ export async function getMissionControlData(storeId: string): Promise<MissionCon
     recentMessages,
     recentAttributions,
     opportunities,
+    lowStockProducts,
   ] = await Promise.all([
     // Orders in last 24h
     prisma.order.aggregate({
@@ -49,6 +53,21 @@ export async function getMissionControlData(storeId: string): Promise<MissionCon
       orderBy: { urgencyScore: "desc" },
       take: 5,
     }),
+    // Low stock on live products. This counter was hardcoded to zero behind a
+    // TODO while being shown to merchants as a real figure. campaign-engine's
+    // checkInventoryConflicts is the richer, campaign-aware version; counting
+    // distinct low-stock products here avoids a new package dependency for a
+    // headline number.
+    prisma.product
+      .findMany({
+        where: {
+          storeId,
+          status: "active",
+          variants: { some: { inventory: { lte: LOW_STOCK_THRESHOLD } } },
+        },
+        select: { id: true },
+      })
+      .then((products) => products.length),
   ]);
 
   const sentCount = recentMessages.filter((m) => ["sent", "delivered", "opened", "clicked"].includes(m.status)).length;
@@ -68,7 +87,7 @@ export async function getMissionControlData(storeId: string): Promise<MissionCon
     needsAttention: {
       pendingActions: pendingActions.length,
       urgentActions: pendingActions.filter((a) => a.urgencyScore > 70).length,
-      inventoryAlerts: 0, // TODO: wire to inventory-aware checks
+      inventoryAlerts: lowStockProducts,
     },
     alloActivity: {
       campaignsSent,

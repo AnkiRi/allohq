@@ -1,4 +1,4 @@
-export interface ChurnRiskInput { daysSinceLastOrder: number | null; orderCount: number; totalSpend: number; avgOrderIntervalDays: number | null; emailOpenRate?: number | null; emailClickRate?: number | null; daysSinceLastBrowse?: number | null; }
+export interface ChurnRiskInput { daysSinceLastOrder: number | null; orderCount: number; totalSpend: number; /** RFM monetary quintile, 1-5, scored against this store's own distribution. */ monetaryQuintile?: number | null; avgOrderIntervalDays: number | null; emailOpenRate?: number | null; emailClickRate?: number | null; daysSinceLastBrowse?: number | null; }
 export interface ChurnRiskEstimate { riskEstimate: number; riskTier: "low" | "medium" | "high" | "critical"; explanations: string[]; signalBreakdown: Record<string, number>; modelKind: "heuristic_v1"; }
 const sigmoid = (x: number, mid: number, k: number) => 1 / (1 + Math.exp(-k * (x - mid)));
 /** Transparent deterministic risk score. It is deliberately not called a probability until calibrated. */
@@ -6,7 +6,13 @@ export function estimateChurnRisk(input: ChurnRiskInput): ChurnRiskEstimate {
   const signalBreakdown: Record<string, number> = {
     recency: input.daysSinceLastOrder === null ? .9 : sigmoid(input.daysSinceLastOrder, 90, .03),
     frequency: 1 - sigmoid(input.orderCount, 4, .8),
-    monetary: 1 - sigmoid(input.totalSpend, 150, .015),
+    // Store-relative. This was `sigmoid(totalSpend, 150, .015)`, an absolute
+    // rupee midpoint, so at a ₹2,000 average order value every buyer saturated
+    // the signal and it stopped separating anyone. RFM monetary is already a
+    // quintile scored against the store's own distribution. `totalSpend` is
+    // retained on the input as evidence for callers but is deliberately no
+    // longer scored, and an unknown quintile stays neutral rather than guessing.
+    monetary: input.monetaryQuintile == null ? .5 : 1 - sigmoid(input.monetaryQuintile, 3, 1.2),
     overdue: input.avgOrderIntervalDays && input.daysSinceLastOrder !== null ? sigmoid(input.daysSinceLastOrder / input.avgOrderIntervalDays, 1.5, 2) : .5,
     emailEngagement: input.emailOpenRate == null ? .5 : Math.max(0, 1 - sigmoid(input.emailOpenRate, .2, 10) - ((input.emailClickRate ?? 0) > .05 ? .15 : 0)),
     browseRecency: input.daysSinceLastBrowse == null ? .5 : Math.max(0, sigmoid(input.daysSinceLastBrowse, 30, .08) - (input.daysSinceLastBrowse <= 7 ? .2 : 0)),

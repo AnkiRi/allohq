@@ -129,6 +129,7 @@ export async function computeFullState(
     daysSinceLastOrder,
     orderCount,
     totalSpend,
+    monetaryQuintile: rfmScore?.monetary ?? null,
     avgOrderIntervalDays,
   });
   const discountProfile = computeDiscountProfile(orders);
