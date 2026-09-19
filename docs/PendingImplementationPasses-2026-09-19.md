@@ -1802,51 +1802,55 @@ labelled in the UI and already tracked as finding B of 2026-09-17.
 
 ### Open: the audience-decision ledger duplicate question
 
-`CustomerAudienceDecision` has no unique constraint and approval writes it with `createMany`
-and no `skipDuplicates`, so a retried approval duplicates the ledger. A unique index cannot
-simply be added: the model is documented as an immutable append-only record, and re-approval
-after an edit legitimately records a new decision. Proposed key is
-`(campaignId, customerId, contextKey, decision)` with `skipDuplicates`, which makes a repeat of
-the *same* decision a no-op while still recording a changed one, and leaves merchant override
-rows (a different `decision` value) untouched. `campaignId` is nullable for automation rows, so
-this needs a partial unique index written as raw SQL.
+`CustomerAudienceDecision` has no unique constraint and no write path passes `skipDuplicates`,
+so the ledger can record the same write twice. **An earlier proposal in this document —
+a unique index on `(campaignId, customerId, contextKey, decision)` — was wrong and is
+withdrawn.** It omits `reasonCode`, so it would have deleted legitimate merchant overrides
+rather than retries. The distinction it missed:
 
-**Production was measured on 19 Sep: 1 duplicate group, 1 extra row.** The index cannot be
-added until that row is removed, but the cleanup is trivial and the near-zero count is
-consistent with a single retried approval rather than a systemic problem. The local database
-could not answer this — its migrations have not been applied and the table does not exist
-there.
+- **Bad duplication is the same write *event* recorded twice.** Approval
+  (`campaigns.ts:1862`) runs inside a `Serializable` transaction, which is retried on
+  serialization failure, and a merchant can submit approval twice. A retry re-runs `createMany`
+  and writes byte-identical rows. Nothing new happened in the world, and
+  `overnight-ops.worker.ts:371` counts `deliberately_left_alone` rows from the last 24 hours
+  for the merchant's overnight brief, so duplicates inflate a merchant-facing number.
+- **Good duplication is the same customer legitimately recorded more than once.** Four real
+  shapes: a decision that changes over time (left alone → overridden → assigned an arm); the
+  same decision for a *different reason*, where a customer held back by both fatigue and recent
+  purchase is overridden separately via `campaigns.ts:793` and `:881` and both rows carry
+  `decision: "campaign_candidate"` with `contextKey: campaign.id`, differing only in
+  `reasonCode`, actor and justification; a different `contextKey`, since overrides key on the
+  campaign id while approval keys on the campaign family; and a different campaign entirely.
 
-Order of operations, all read-only until the delete:
+The merchant-override paths (`campaigns.ts:715`, `:793`, `:881`, `:975`) deduplicate the
+*effective* override into `agentProposal` with a `Set`, but always append the audit row, so a
+repeated override has no functional effect yet is still a real user event.
+
+**Required fix — idempotency on the write, not uniqueness on the meaning.** Add a nullable
+`writeKey` with a unique index. Approval sets it deterministically per attempt, for example
+`approval:<campaignId>:<approvedAt>:<customerId>:<decision>`, and switches to `skipDuplicates`,
+so a retry of the same approval collapses while a genuine re-approval carries a new `approvedAt`
+and correctly records new rows. Override paths leave it null — Postgres permits many nulls in a
+unique index — preserving every merchant action. Existing rows are unaffected because their
+`writeKey` is null, so no cleanup is required before the migration.
+
+**Production measurement, 19 Sep: 1 duplicate group, 1 extra row**, on campaign
+`cmu53umg20013rz011pold1uj`, `contextKey` equal to the campaign id and `decision`
+`campaign_candidate` — an override row rather than an approval retry, with the two writes
+sixteen minutes apart. Classify before touching it:
 
 ```sql
--- 1. See which row it is before removing anything.
-SELECT "campaignId", "customerId", "contextKey", "decision",
-       count(*), min("createdAt"), max("createdAt")
+SELECT id, "reasonCode", "overrideActorId", "overrideReason", evidence, "createdAt"
 FROM customer_audience_decisions
-WHERE "campaignId" IS NOT NULL
-GROUP BY 1, 2, 3, 4 HAVING count(*) > 1;
-
--- 2. Keep the earliest row of each group, drop the retries.
-DELETE FROM customer_audience_decisions
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id, row_number() OVER (
-      PARTITION BY "campaignId", "customerId", "contextKey", "decision"
-      ORDER BY "createdAt" ASC, id ASC
-    ) AS rn
-    FROM customer_audience_decisions
-    WHERE "campaignId" IS NOT NULL
-  ) ranked WHERE rn > 1
-);
-
--- 3. Re-run the count from step 1; it must return no rows before migrating.
+WHERE "campaignId" = 'cmu53umg20013rz011pold1uj'
+  AND "customerId" = 'cmu3on8nk0005mt010sfw40ir'
+ORDER BY "createdAt";
 ```
 
-The migration then adds the partial unique index and approval switches to `skipDuplicates`.
-Note that `CREATE INDEX CONCURRENTLY` cannot run inside Prisma's migration transaction; the
-table is small enough for a plain `CREATE UNIQUE INDEX`, otherwise the index is created as a
-separate operator step.
+A differing `reasonCode` means legitimate history and **nothing is deleted**. An identical
+`reasonCode` means a repeated click, which the `writeKey` design also leaves in place as a
+genuine user event. The local database could not answer this because its migrations have not
+been applied.
 
 ### Open: email IDE audit not started
 
