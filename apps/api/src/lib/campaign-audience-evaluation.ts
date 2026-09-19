@@ -63,6 +63,11 @@ export async function persistCampaignAudienceEvaluation(
     reasons: input.audience.exclusions,
   };
 
+  // The row inserts below are already chunked, but they all run inside this one
+  // transaction, so Prisma's five-second default cancelled the whole snapshot
+  // for a large audience and took campaign approval down with it. The snapshot
+  // is the merchant-readable review surface rather than the delivery or
+  // measurement authority, so it stays atomic and is given a realistic budget.
   return prisma.$transaction(async (tx: any) => {
     const evaluation = await tx.campaignAudienceEvaluation.create({
       data: {
@@ -100,5 +105,5 @@ export async function persistCampaignAudienceEvaluation(
       },
     });
     return evaluation;
-  });
+  }, { timeout: 120_000, maxWait: 15_000 });
 }

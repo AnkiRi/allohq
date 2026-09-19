@@ -125,6 +125,14 @@ function replaceDiscountPercent(value: unknown, fromPercent: number, toPercent: 
   return value;
 }
 
+/**
+ * Rows per statement when approval writes its per-customer tables. A 100k
+ * campaign wrote roughly 200,000 rows in two unchunked statements inside one
+ * Serializable transaction, which Prisma's default five-second limit cancelled
+ * long before it finished.
+ */
+const APPROVAL_WRITE_CHUNK = 2_000;
+
 function planCampaignHoldout(
   storeId: string,
   assignmentSeed: string,
@@ -1779,6 +1787,42 @@ export const campaignsRouter = router({
         audience,
         assignments: holdout.assignment.assignments,
       });
+      // Frozen measurement rows are written before the approval claim, in
+      // bounded chunks. They are idempotent through the
+      // (unitType, unitId, customerId) unique key, and both attribution and the
+      // causal ledger ignore assignments whose campaign has no approvedAt, so a
+      // claim that fails leaves inert rows rather than phantom arms. The
+      // campaign stays in draft in that case, so the merchant's next approval
+      // rewrites them identically and completes.
+      const assignmentRows = Object.entries(holdout.assignment.assignments).map(
+        ([customerId, detail]) => ({
+          storeId: campaign.storeId,
+          experimentId: experiment.id,
+          campaignId: campaign.id,
+          unitType: "campaign",
+          unitId: campaign.id,
+          customerId,
+          arm: detail.arm,
+          stratum: detail.assignmentStratum,
+          holdoutRate: detail.holdoutRate,
+          assignedAt: approvedAt,
+          windowStartsAt,
+          windowEndsAt,
+          assignmentData: {
+            tier: measurement.tier,
+            family,
+            policyReason: policy.reason,
+            originalStratum: detail.stratum,
+          },
+        })
+      );
+      for (let offset = 0; offset < assignmentRows.length; offset += APPROVAL_WRITE_CHUNK) {
+        await ctx.prisma.measurementAssignment.createMany({
+          data: assignmentRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
+          skipDuplicates: true,
+        });
+      }
+
       await ctx.prisma.$transaction(
         async (tx) => {
           const approvedEmailVersion = await ensureEmailVersion(tx, {
@@ -1836,92 +1880,80 @@ export const campaignsRouter = router({
               approvedAt,
             },
           });
-          await tx.measurementAssignment.createMany({
-            data: Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
-              storeId: campaign.storeId,
-              experimentId: experiment.id,
-              campaignId: campaign.id,
-              unitType: "campaign",
-              unitId: campaign.id,
-              customerId,
-              arm: detail.arm,
-              stratum: detail.assignmentStratum,
-              holdoutRate: detail.holdoutRate,
-              assignedAt: approvedAt,
-              windowStartsAt,
-              windowEndsAt,
-              assignmentData: {
-                tier: measurement.tier,
-                family,
-                policyReason: policy.reason,
-                originalStratum: detail.stratum,
-              },
-            })),
-            skipDuplicates: true,
-          });
-          await tx.customerAudienceDecision.createMany({
-            data: [
-              ...audience.deliberatelyLeftAlone.map((customer) => ({
-                storeId: campaign.storeId,
-                customerId: customer.id,
-                campaignId: campaign.id,
-                contextKey: family,
-                decision: "deliberately_left_alone",
-                reasonCode: customer.decision.reasonCode ?? null,
-                reasonText: customer.decision.reasonText ?? null,
-                evidence: customer.decision.evidence as any,
-                reconsiderAt: customer.decision.reconsiderAt ?? null,
-                reconsiderOn: customer.decision.reconsiderOn ?? null,
-              })),
-              ...Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
-                storeId: campaign.storeId,
-                customerId,
-                campaignId: campaign.id,
-                contextKey: family,
-                decision: detail.arm === "CONTROL" ? "control" : "treatment",
-                reasonCode: "experiment_assignment",
-                reasonText:
-                  detail.arm === "CONTROL"
-                    ? "Randomly placed in this campaign's control group."
-                    : "Assigned to receive this campaign.",
-                evidence: {
-                  stratum: detail.stratum,
-                  assignmentStratum: detail.assignmentStratum,
-                  controlRate: detail.holdoutRate,
-                },
-              })),
-            ],
-          });
-          if (audience.deliberatelyLeftAlone.length > 0) {
-            const reasonCounts = audience.deliberatelyLeftAlone.reduce<Record<string, number>>(
-              (counts, customer) => {
-                const reason = customer.decision.reasonCode ?? "state_policy";
-                counts[reason] = (counts[reason] ?? 0) + 1;
-                return counts;
-              },
-              {}
-            );
-            await tx.agentActivityLog.create({
-              data: {
-                storeId: campaign.storeId,
-                activityType: "customers_left_alone",
-                summary: `Joon left ${audience.deliberatelyLeftAlone.length.toLocaleString("en-IN")} customers out of ${campaign.name} because their current state suggested a different action.`,
-                category: "campaign",
-                actionTaken: "deliberately_left_alone",
-                entityId: campaign.id,
-                entityType: "campaign",
-                metadata: {
-                  reasonCounts,
-                  customerIds: audience.deliberatelyLeftAlone
-                    .map((customer) => customer.id)
-                    .slice(0, 100),
-                },
-              },
-            });
-          }
         },
-        { isolationLevel: "Serializable" }
+        // The claim now performs only constant work. Keeping it small is what
+        // lets a large campaign approve at all; the explicit timeout replaces
+        // reliance on Prisma's five-second default.
+        { isolationLevel: "Serializable", timeout: 15_000 }
       );
+
+      // The audience-decision ledger follows the claim, in bounded chunks. It is
+      // read by the merchant's decision history, never by delivery or
+      // measurement, so an interruption here costs audit detail rather than
+      // corrupting a number.
+      const decisionRows = [
+        ...audience.deliberatelyLeftAlone.map((customer) => ({
+          storeId: campaign.storeId,
+          customerId: customer.id,
+          campaignId: campaign.id,
+          contextKey: family,
+          decision: "deliberately_left_alone",
+          reasonCode: customer.decision.reasonCode ?? null,
+          reasonText: customer.decision.reasonText ?? null,
+          evidence: customer.decision.evidence as any,
+          reconsiderAt: customer.decision.reconsiderAt ?? null,
+          reconsiderOn: customer.decision.reconsiderOn ?? null,
+        })),
+        ...Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
+          storeId: campaign.storeId,
+          customerId,
+          campaignId: campaign.id,
+          contextKey: family,
+          decision: detail.arm === "CONTROL" ? "control" : "treatment",
+          reasonCode: "experiment_assignment",
+          reasonText:
+            detail.arm === "CONTROL"
+              ? "Randomly placed in this campaign's control group."
+              : "Assigned to receive this campaign.",
+          evidence: {
+            stratum: detail.stratum,
+            assignmentStratum: detail.assignmentStratum,
+            controlRate: detail.holdoutRate,
+          },
+        })),
+      ];
+      for (let offset = 0; offset < decisionRows.length; offset += APPROVAL_WRITE_CHUNK) {
+        await ctx.prisma.customerAudienceDecision.createMany({
+          data: decisionRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
+        });
+      }
+      if (audience.deliberatelyLeftAlone.length > 0) {
+        const reasonCounts = audience.deliberatelyLeftAlone.reduce<Record<string, number>>(
+          (counts, customer) => {
+            const reason = customer.decision.reasonCode ?? "state_policy";
+            counts[reason] = (counts[reason] ?? 0) + 1;
+            return counts;
+          },
+          {}
+        );
+        await ctx.prisma.agentActivityLog.create({
+          data: {
+            storeId: campaign.storeId,
+            activityType: "customers_left_alone",
+            summary: `Joon left ${audience.deliberatelyLeftAlone.length.toLocaleString("en-IN")} customers out of ${campaign.name} because their current state suggested a different action.`,
+            category: "campaign",
+            actionTaken: "deliberately_left_alone",
+            entityId: campaign.id,
+            entityType: "campaign",
+            metadata: {
+              reasonCounts,
+              customerIds: audience.deliberatelyLeftAlone
+                .map((customer) => customer.id)
+                .slice(0, 100),
+            },
+          },
+        });
+      }
 
       try {
         await emailSendQueue.add(
