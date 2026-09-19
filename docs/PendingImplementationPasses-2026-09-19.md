@@ -1711,6 +1711,82 @@ and acceptance gates are listed separately below.
 Any new internal defect found during acceptance becomes a dated regression item here; it
 must not be described vaguely as a still-unimplemented phase.
 
+## 19 Sep verification of intelligence claims — audited against code
+
+Requested after the Pass 8 audit: find where the product claims more than it implements. Every
+item below was verified in code rather than inferred. Two earlier verbal claims of mine were
+wrong; they are corrected here rather than left standing.
+
+### Fixed in `6631302`
+
+| Defect | Evidence | Fix |
+| --- | --- | --- |
+| VIP tier read absolute money, so one order made a high-AOV store's customer platinum | `state-engine.ts:529`–`534` compared `historicalLtv` — store currency, "actual spend to date" — against 1000/500/200. At ₹2,000 average order value a first purchase cleared the platinum bar and effectively the whole list became VIP. Consumed by `opportunity-scanner.ts:173` (VIP campaign targeting), `conversation-router.ts:67` (support priority), `escalation-engine.ts:53`, and exposed to the merchant agent at `autonomy-tools.ts:54` | Rank against the store's own RFM monetary/frequency quintiles, which `rfm.worker.ts:80`–`82` already scores per store. No currency in the calculation, no extra query, and an uncomputed RFM is standard rather than assumed valuable |
+| `optimalSendWindow` was the same five hardcoded hours for every customer in every store | `state-engine.ts:175`–`178`. Nothing read `bestHours`, so delivery timing was never affected, but the field was handed to the merchant agent as a per-customer fact | Read the `CustomerTimingProfile`/`StoreTimingProfile` rows the delivery path already plans from, and report `source`, `evidenceCount` and `confidence` so a default is visibly a default |
+| `reorder-predictor` confidence was binary | `reorder-predictor.ts:50` closed its parenthesis after `Math.round`, collapsing every value to exactly 0 or 1 | Round to two decimals as intended. The function is exported but uncalled, so this had no live blast radius |
+
+### Corrections to earlier statements
+
+- I previously said `discountSensitivity` is "always 0.2". **Wrong.** `computeDiscountProfile`
+  (`state-engine.ts:491`) returns the discounted-order ratio, and 0.5 only when there are no
+  orders. No fix needed.
+- I previously said the measurement threshold is "200 customers". **Wrong, and the real
+  problem is worse** — see immediately below.
+
+### Open: the `measurement_ready` tier is unreachable
+
+`campaignMeasurementPolicy` (`experiments.ts:86`) returns only `empty`, `unmeasured` or
+`directional`. It can never return `measurement_ready`. That value is written to
+`assignmentData.tier` at approval (`campaigns.ts:1854`) and read back by the ledger worker
+(`causal-ledger.ts:74`–`81`). Two consequences follow:
+
+- `computeLedgerSnapshot` always sets `nonBillableReason = "unit is not measurement ready"`
+  (`packages/database/src/causal-ledger.ts:211`), so **no campaign can ever become billable**;
+- `campaignEvidence` queries ledgers with `tier: "measurement_ready"` (`campaigns.ts:150`), so
+  pooled evidence never matures and `holdoutRateFor` always reports `evidenceReady: false`.
+
+Billing is disabled during early access, so this is latent rather than live-breaking, but the
+causal ledger has never graduated a single unit. The fix must **not** be a row-count
+threshold: per the locked decision above, the tier has to be derived from measured
+significance at ledger time (`computeLiftStats`, at least 30 observed per arm, interval
+excluding zero), not from audience size at approval time. Design and implement before billing
+is enabled.
+
+### Open: claims still ahead of implementation
+
+| Item | Evidence | Required |
+| --- | --- | --- |
+| A/B "evolver" generates hypotheses at random | `ab-test-evolver.ts:268`–`296` picks variants via `[...patterns].sort(() => Math.random() - 0.5)` from static dictionaries, while the module header claims "smart variant values" and "continuous self-optimization"; that shuffle is also statistically biased | Either learn the next hypothesis from prior results, or restate the module honestly as random exploration. Winner *selection* is genuinely rigorous (`ab-test-engine.ts:154`–`167`, z-test at 95%) and is not in question |
+| `inventoryAlerts` hardcoded to zero | `packages/merchant-copilot/src/mission-control.ts:71` surfaces a merchant-facing count that is permanently 0, with a `TODO` | Wire it to the inventory checks or remove the metric |
+| Lifecycle thresholds are absolute days and order counts | `lifecycle-classifier.ts:27`–`57` applies 180/90/60 days and 8/4/2 orders to every store. A coffee brand and a mattress brand cannot share them | Make store-relative using the same quintile approach. Already tracked as "scalable store-relative RFM threshold design" under `538413b` |
+| Churn monetary signal uses an absolute rupee midpoint | `churn-risk.ts:9` uses `sigmoid(totalSpend, 150, .015)`; at ₹2,000 average order value every buyer saturates that signal | Make the midpoint store-relative. The other five churn signals are ratio- or day-based and are sound |
+| Journey webhook node unimplemented | `automation-runner.worker.ts:777` carries `TODO: Implement webhook node` | Implement it or hide the node type |
+| Intent thresholds are fixed counts | `intent-detector.ts:53`–`61` uses fixed click/open counts | Lower priority: engagement counts, not currency. Revisit after the lifecycle work |
+
+Outcomes' "figures representative" copy is deliberately **not** in this list: it is explicitly
+labelled in the UI and already tracked as finding B of 2026-09-17.
+
+### Open: the audience-decision ledger duplicate question
+
+`CustomerAudienceDecision` has no unique constraint and approval writes it with `createMany`
+and no `skipDuplicates`, so a retried approval duplicates the ledger. A unique index cannot
+simply be added: the model is documented as an immutable append-only record, and re-approval
+after an edit legitimately records a new decision. Proposed key is
+`(campaignId, customerId, contextKey, decision)` with `skipDuplicates`, which makes a repeat of
+the *same* decision a no-op while still recording a changed one, and leaves merchant override
+rows (a different `decision` value) untouched. `campaignId` is nullable for automation rows, so
+this needs a partial unique index written as raw SQL. **Blocked on counting existing duplicates
+in production.** The local database cannot answer it: its migrations have not been applied and
+the table does not exist there.
+
+### Open: email IDE audit not started
+
+Pass 5E is marked complete in code and has **not** been independently audited. Verify rather
+than assume: OCR operational versus schema-only; malware scanning, metadata stripping and asset
+moderation; generated-image cost limits; Ask Joon conversation persistence; keyboard and
+reduced-motion accessibility; font handling; real Gmail/Outlook/Apple client evidence; and
+upload ownership with cross-workspace isolation. Do not redesign the editor.
+
 ### Acceptance/document conflicts to correct
 
 - Later locked behavior is **no random journey holdout**; journeys reach every eligible
