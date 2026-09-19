@@ -1,6 +1,8 @@
 import { Worker } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { formatStoreMoney } from "../utils/format-money";
+import { storeCurrency } from "../utils/store-currency";
 
 interface MemoryWriterJobData {
   type: "campaign_complete" | "brand_analysis_complete";
@@ -23,7 +25,9 @@ export const memoryWriterWorker = new Worker<MemoryWriterJobData>(
         const clickRate = payload.clickRate as number ?? 0;
         const revenue = payload.revenue as number ?? 0;
 
-        const content = `Campaign "${name}" sent to ${recipientCount} recipients. Open rate: ${openRate}%. Click rate: ${clickRate}%. Revenue: $${revenue.toLocaleString()}.`;
+        // This memory feeds the agent's own context, so a dollar sign on an
+        // Indian store would teach it the wrong currency as well as show it.
+        const content = `Campaign "${name}" sent to ${recipientCount} recipients. Open rate: ${openRate}%. Click rate: ${clickRate}%. Revenue: ${formatStoreMoney(revenue, await storeCurrency(storeId))}.`;
 
         await prisma.agentMemory.create({
           data: {

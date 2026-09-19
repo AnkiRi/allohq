@@ -1,6 +1,8 @@
 import { Worker, type Job } from "bullmq";
 import { prisma } from "@allohq/database";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { formatStoreMoney } from "../utils/format-money";
+import { storeCurrency } from "../utils/store-currency";
 
 interface ObserveJobData {
   type: "cron" | "store";
@@ -110,7 +112,7 @@ async function detectRevenueAnomaly(storeId: string) {
         storeId,
         type: "revenue_anomaly",
         severity: changePct < -0.4 ? "critical" : "warning",
-        summary: `Revenue dropped ${Math.abs(changePct * 100).toFixed(0)}% this week ($${thisWeekRevenue.toFixed(0)} vs $${lastWeekRevenue.toFixed(0)} last week).`,
+        summary: `Revenue dropped ${Math.abs(changePct * 100).toFixed(0)}% this week (${formatStoreMoney(thisWeekRevenue, await storeCurrency(storeId))} vs ${formatStoreMoney(lastWeekRevenue, await storeCurrency(storeId))} last week).`,
         data: { thisWeekRevenue, lastWeekRevenue, changePct } as any,
       },
     });
@@ -320,7 +322,7 @@ async function detectSeasonalTrend(storeId: string) {
       storeId,
       type: "seasonal_trend",
       severity,
-      summary: `Revenue is ${direction} ${Math.abs(yoyChange * 100).toFixed(0)}% compared to the same period last year ($${currentRev.toFixed(0)} vs $${lastYearRev.toFixed(0)}).`,
+      summary: `Revenue is ${direction} ${Math.abs(yoyChange * 100).toFixed(0)}% compared to the same period last year (${formatStoreMoney(currentRev, await storeCurrency(storeId))} vs ${formatStoreMoney(lastYearRev, await storeCurrency(storeId))}).`,
       data: { currentRevenue: currentRev, lastYearRevenue: lastYearRev, yoyChange } as any,
       suggestedAction: yoyChange < 0
         ? { type: "create_campaign", message: "Revenue is down YoY. Consider a re-engagement campaign or seasonal promotion." }

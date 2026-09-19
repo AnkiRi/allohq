@@ -10,6 +10,8 @@ import {
   AutonomyTier,
 } from "@allohq/autonomy-engine";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { formatStoreMoney } from "../utils/format-money";
+import { storeCurrency } from "../utils/store-currency";
 
 const journeyStepQueue = new Queue(QUEUE_NAMES.JOURNEY_STEP, { connection: redisConnection });
 
@@ -72,7 +74,7 @@ export const eventReactorWorker = new Worker<EventReactJobData>(
       hasBrandProfile: true,
     });
 
-    const reasoning = buildReasoning(eventType, customerId, payload);
+    const reasoning = buildReasoning(eventType, customerId, payload, await storeCurrency(storeId));
 
     if (tier === AutonomyTier.AUTOPILOT) {
       // Trigger journey directly
@@ -158,14 +160,16 @@ function buildReasoning(
   eventType: string,
   customerId: string | undefined,
   payload: Record<string, unknown>,
+  currency: string | null,
 ): string {
+  const money = (value: unknown) => formatStoreMoney(Number(value ?? 0), currency);
   switch (eventType) {
     case "order_placed":
       return `Order placed${customerId ? " by customer" : ""} — trigger post-purchase follow-up`;
     case "cart_abandoned":
-      return `Cart abandoned${payload.totalPrice ? ` (value: $${payload.totalPrice})` : ""} — send recovery email`;
+      return `Cart abandoned${payload.totalPrice ? ` (value: ${money(payload.totalPrice)})` : ""} — send recovery email`;
     case "price_drop":
-      return `Price dropped on product${payload.productId ? ` ${payload.productId}` : ""} from $${payload.oldPrice ?? "?"} to $${payload.newPrice ?? "?"} — notify interested customers`;
+      return `Price dropped on product${payload.productId ? ` ${payload.productId}` : ""} from ${money(payload.oldPrice)} to ${money(payload.newPrice)} — notify interested customers`;
     case "back_in_stock":
       return `Product${payload.productId ? ` ${payload.productId}` : ""} back in stock — notify waitlist customers`;
     case "browse_abandon":

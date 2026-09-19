@@ -2,6 +2,8 @@ import { Worker, Queue } from "bullmq";
 import { prisma } from "@allohq/database";
 import { logActivity } from "@allohq/agent-core";
 import { redisConnection, QUEUE_NAMES } from "../config";
+import { formatStoreMoney } from "../utils/format-money";
+import { storeCurrency } from "../utils/store-currency";
 
 const journeyStepQueue = new Queue(QUEUE_NAMES.JOURNEY_STEP, { connection: redisConnection });
 
@@ -132,7 +134,7 @@ async function processStore(storeId: string) {
         await logActivity({
           storeId,
           activityType: "cart_recovery_sent",
-          summary: `Triggered cart recovery for abandoned checkout ($${cart.totalPrice.toFixed(2)})`,
+          summary: `Triggered cart recovery for abandoned checkout (${formatStoreMoney(cart.totalPrice, await storeCurrency(storeId))})`,
           category: "cart_recovery",
           tier: "autopilot",
           actionTaken: "triggered_journey",
