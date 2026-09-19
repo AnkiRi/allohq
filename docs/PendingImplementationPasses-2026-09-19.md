@@ -1,7 +1,7 @@
-# Joon pending implementation passes — 2026-09-18
+# Joon pending implementation passes — 2026-09-19
 
 Status: canonical implementation and external-readiness backlog after the 2026-09-17
-design-partner demo. Audited and extended on 2026-09-18.
+design-partner demo. Audited and extended on 2026-09-19.
 
 This document is the single reference point for these passes. Later implementation summaries must map completed commits and remaining work back to the numbered passes below. New design decisions should update this document rather than creating another disconnected list.
 
@@ -18,8 +18,8 @@ This document is the single reference point for these passes. Later implementati
 | 5 — Conversational email creator and editable brand kit | Complete within the available provider boundary | `2e93e90` | Production creative acceptance; choose/validate durable binary storage and true reference-image editing before claiming pixel-faithful swaps |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Planned next | — | Implement, verify against real customer histories, then run production acceptance |
-| 9 — Provider-neutral domain reputation and warm-up | Planned | — | Implement the code and UI below; validate first on the controlled Resend domain, then repeat after the deliberate SES move |
+| 8 — Campaign-specific customer decision context | In progress | `5dbdb7a` | Batched audience policy and cohort reasoning; durable evidence snapshot; scale and production acceptance |
+| 9 — Provider-neutral domain reputation and warm-up | In progress | `aeec41f` | Provider-aware sender gate and preflight; dual-provider readiness; assessed ramp and deliberate SES migration |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
 
@@ -29,8 +29,8 @@ Store lifecycle safety is the prerequisite because a disconnected or uninstalled
 never continue sending while later passes are tested. After it is deployed and accepted, use
 this order without re-litigating it:
 
-1. Finish the remaining currency tail.
-2. Complete Pass 8 customer-context reasoning.
+1. Finish the remaining currency tail (`bbe844c` landed; deployed-data verification remains).
+2. Complete Pass 8 customer-context reasoning (`5dbdb7a` landed for named customers).
 3. Complete Pass 9 provider-neutral warm-up before widening delivery.
 4. Run the full deployed-data acceptance path.
 5. Run the 100,000-customer Shopify scale tests.
@@ -633,6 +633,31 @@ will buy without a discount.
 - The campaign page should lead with the audience reconciliation and let the merchant drill
   into evidence, exceptions and overrides without rendering the full audience at once.
 
+### 19 Sep execution plan — audience scale and reevaluation
+
+Current top-N campaigns load selected customers with stored state, consent and latest-order
+facts, then check the communication governor sequentially for each campaign candidate. This
+is correct for a small audience but is not a 100k-customer execution plan. A named customer
+may receive deeper AI context; no campaign should invoke the LLM once per customer.
+
+1. Keep event updates for orders, email opens/clicks/sends, support and forms. Keep the
+   02:30 IST daily scheduler, but query only indexed `nextEvaluationAt <= now` rows in
+   bounded batches. Reevaluate at 75%, 95% and 120% of a repeat buyer's median cycle;
+   use a seven-day fallback where the rhythm is unknown. Consent, suppression, recent
+   purchase and other delivery safety checks remain live at planning and send time.
+2. Move large-audience planning to keyset-paginated or set-based candidate retrieval and
+   batched governor facts. Avoid the current sequential per-customer database fan-out and
+   avoid returning every excluded customer to a single API response.
+3. Persist exact reason counts, representative examples and customer-level decisions.
+   The audience equation must reconcile requested → unavailable → deliberately left alone
+   → candidates → control/treatment, including merchant overrides. Drill-down is paginated.
+4. Let the merchant agent reason over cohort counts plus selected evidence and exceptions;
+   use the named-customer tool for individual questions. Freeze a context version/evidence
+   reference with approval so later state changes cannot rewrite the historical rationale.
+5. Benchmark 30, 100k and 1m profiles separately. Approval and send must preserve frozen
+   assignments while rechecking live safety. Do not claim large-store readiness from
+   functional top-30 testing alone.
+
 ### Acceptance criteria
 
 - A zero-order opted-in customer is described as a subscriber/first-purchase opportunity,
@@ -681,9 +706,40 @@ will buy without a discount.
 
 Status (19 Sep): in progress. Calendar time no longer advances SES warm-up without evidence;
 zero-volume health cannot report growth, and Setup no longer claims an automatic ramp.
-The provider-neutral assessment, reviewed growth workflow, Resend ramp, large-audience
+The live sender gate now requires verification for the selected provider; SES allowlist
+rehearsals do too, without changing the existing Resend demo/allowlist path. The
+provider-neutral assessment, reviewed growth workflow, Resend ramp, large-audience
 deferral display and migration handling below remain open. The repository contains a
 useful SES warm-up skeleton, not a complete production warm-up system.
+
+### 19 Sep execution plan — dual provider and SES migration
+
+Production API and workers currently select `resend`. The `EMAIL_PROVIDER` environment
+variable is a global selector, **not** a safe flip-anytime failover control. Keep Resend
+live while preparing SES. No customer DNS work is needed for Joon-owned
+`mail.joonhq.com`; a merchant-owned From domain needs one-time SES DKIM and custom
+MAIL FROM DNS verification, in addition to its Resend setup.
+
+1. Make the live sender gate provider-aware: a verified Resend identity cannot authorize
+   SES, or vice versa. Check selected provider, From domain, identity status, required
+   configuration and delivery mode before approval and again before sending.
+2. Preserve both provider identities at once. Do not overwrite the sole current
+   `SenderDomain` row when provisioning the alternate provider. Store provider-specific
+   external ID, DNS evidence, verification status and timestamps separately.
+3. Keep `EMAIL_PROVIDER` as an operator-controlled default, but record the chosen provider
+   on each approved delivery/cohort. API, workers and event consumers must agree. A switch
+   affects only newly planned sends; in-flight accepted/ambiguous sends reconcile with
+   their original provider so failover cannot duplicate them.
+4. Configure SES production access, account/region/tenant, configuration sets, SNS/SQS
+   delivery events, quotas, and From/DKIM/MAIL FROM. Verify inbox placement and event
+   reconciliation on allowlisted addresses. Do not infer SES readiness from Resend DNS.
+5. Assess reputation for each domain/provider/account/IP combination. Gradually shift
+   a monitored cohort only after evidence supports the volume. Keep the ability to pause
+   SES and return *new* traffic to Resend if the fault is provider-specific; do not use
+   failover to evade complaints, poor consent or damaged domain reputation.
+6. Show operators current provider, alternate readiness, cap, evidence, switch actor,
+   reason, time, affected queued work and rollback condition. Merchant UI should show
+   only truthful sending status, not an unnecessary provider choice.
 
 ### Why this pass exists
 
@@ -699,8 +755,8 @@ The current implementation has the following limitations:
   only a generic new-store cap;
 - `SesWarmupState` begins on the first SES capacity acquisition rather than from an explicit
   domain assessment and activation decision;
-- `healthyDay` can advance from elapsed time without requiring meaningful delivered volume
-  and healthy observed bounce/complaint evidence;
+- `healthyDay` no longer advances from elapsed time, but it cannot yet grow from a reviewed,
+  reconciled healthy sending day either;
 - the code cannot assess or import evidence that a merchant domain is already warmed;
 - the merchant UI exposes only a terse SES status, not cap usage, deferred recipients,
   reputation evidence, next step, confidence or the reason for a hold/pause;
