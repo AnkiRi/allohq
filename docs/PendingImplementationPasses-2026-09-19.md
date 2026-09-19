@@ -145,6 +145,11 @@ explicit internal hardening items above with deployment and operations work:
 7. Prepare and submit the Shopify App Store package.
 8. Defer the separate approximately 45-million-customer mobile-app architecture until the
    founder requests it.
+9. **A/B Testing — parked by founder decision on 19 Sep.** Hypothesis generation is currently
+   random rather than learned (`ab-test-evolver.ts:268`–`296`), while the module presents
+   itself as continuous self-optimization. Winner selection is already a real z-test and is
+   not in question. Take this up only after the Pass 8 execution fixes, the remaining
+   currency-rendering surfaces and the measurement-tier correction are complete.
 
 ## Pass L — Store lifecycle safety
 
@@ -978,9 +983,10 @@ sit above it and would stop a 100k approval first.
 2. **The frozen snapshot is a per-customer map in a JSON column.**
    `packages/campaign-engine/src/audience-snapshot.ts:45`, written at
    `apps/api/src/routers/campaigns.ts:1712`, stores `customerIds`, `holdout.assignments` and
-   `holdout.assignmentDetails` in `campaign.agentProposal`. At 100k that is roughly 17 MB of
-   JSON, re-parsed by every reader of the proposal and hashed whole into the approval
-   checksum.
+   `holdout.assignmentDetails` in `campaign.agentProposal`. Measured at 100k candidates by
+   serializing the exact structure the approval path writes: **17.97 MB** — 2.67 MB of
+   customer ids, 3.79 MB of arm assignments and 11.51 MB of assignment details. Every reader
+   of the proposal parses all of it, and the approval checksum hashes the whole payload.
 3. **The send worker re-resolves the audience and reads it back by whole-cohort `IN`.**
    `apps/workers/src/workers/send.worker.ts:230` re-runs the resolver, then `:252`, `:279`
    and `:413` pass the entire approved cohort as an `IN` list. The dry-run path already avoids
@@ -1725,6 +1731,34 @@ wrong; they are corrected here rather than left standing.
 | `optimalSendWindow` was the same five hardcoded hours for every customer in every store | `state-engine.ts:175`–`178`. Nothing read `bestHours`, so delivery timing was never affected, but the field was handed to the merchant agent as a per-customer fact | Read the `CustomerTimingProfile`/`StoreTimingProfile` rows the delivery path already plans from, and report `source`, `evidenceCount` and `confidence` so a default is visibly a default |
 | `reorder-predictor` confidence was binary | `reorder-predictor.ts:50` closed its parenthesis after `Math.round`, collapsing every value to exactly 0 or 1 | Round to two decimals as intended. The function is exported but uncalled, so this had no live blast radius |
 
+The VIP change was validated against the real `scoreQuintile` over synthetic long-tailed
+stores rather than argued from the code alone. The old ladder put **100% of customers in
+platinum** at both ₹2,000 and ₹80,000 average order value, which is why "VIP exclusive"
+targeting and support prioritisation were meaningless. The quintile version lands at roughly
+20/20/20/40 across every average order value tested, and correctly produces no VIP at all when
+every customer is identical. A worry that quintile 5 might be unreachable proved unfounded:
+the top spender scores 5 in any realistic distribution.
+
+### Fixed in `8918ea5`
+
+Found while verifying the LTV units behind the VIP defect, not by looking for it.
+
+| Defect | Evidence | Fix |
+| --- | --- | --- |
+| Store money rendered as US dollars in real customer email and SMS | `send.worker.ts:985`–`986` and `automation-runner.worker.ts:271`,`272`,`470` built the `{{ltv}}` and `{{avg_order_value}}` personalization variables as `` `$${amount.toFixed(2)}` ``. An Indian store's customer received "$4000.00". The dashboard was corrected for this in `0bd8611`; the workers had no shared formatter and drifted | A shared `formatStoreMoney` helper in `apps/workers/src/utils`. `deliverOne` already loads the full store row and the runner already loads the store, so neither needed an extra query. `Store.currency` is nullable, so an unrecognised currency falls back to the bare amount or ISO code rather than guessing dollars |
+
+Still outstanding, separated by who actually sees it:
+
+| Surface | Sites | Severity |
+| --- | --- | --- |
+| Storefront widget product prices, seen by the merchant's own shoppers | `apps/widget/src/chat/renderer.ts:163`–`164` | High, but a separate app and data path |
+| WhatsApp product listing | `apps/workers/src/utils/channel-formatter.ts:29` | Deferred: WhatsApp is outside v1 |
+| Merchant-facing summaries | `event-reactor.worker.ts:166`,`168`; `agent-observe.worker.ts:113`,`323`; `memory-writer.worker.ts:26`; `overnight-ops.worker.ts:135` | Medium; `memory-writer` also feeds agent context |
+| Console logs only | `price-drop.worker.ts:16`; `outcome-attribution.worker.ts:76`,`85`,`454`; `shopify-webhook.worker.ts:232` | Cosmetic |
+
+LLM spend shown in `admin/llm`, Settings, Analytics and the guardrail caps is genuinely US
+dollar denominated and is deliberately **not** in this list.
+
 ### Corrections to earlier statements
 
 - I previously said `discountSensitivity` is "always 0.2". **Wrong.** `computeDiscountProfile`
@@ -1756,7 +1790,7 @@ is enabled.
 
 | Item | Evidence | Required |
 | --- | --- | --- |
-| A/B "evolver" generates hypotheses at random | `ab-test-evolver.ts:268`–`296` picks variants via `[...patterns].sort(() => Math.random() - 0.5)` from static dictionaries, while the module header claims "smart variant values" and "continuous self-optimization"; that shuffle is also statistically biased | Either learn the next hypothesis from prior results, or restate the module honestly as random exploration. Winner *selection* is genuinely rigorous (`ab-test-engine.ts:154`–`167`, z-test at 95%) and is not in question |
+| A/B "evolver" generates hypotheses at random — **PARKED by founder decision, 19 Sep** | `ab-test-evolver.ts:268`–`296` picks variants via `[...patterns].sort(() => Math.random() - 0.5)` from static dictionaries, while the module header claims "smart variant values" and "continuous self-optimization"; that shuffle is also statistically biased | Deliberately deferred until the other fixes land — see "A/B Testing" in the release order. When taken up: either learn the next hypothesis from prior results, or restate the module honestly as random exploration. Winner *selection* is genuinely rigorous (`ab-test-engine.ts:154`–`167`, z-test at 95%) and is not in question |
 | `inventoryAlerts` hardcoded to zero | `packages/merchant-copilot/src/mission-control.ts:71` surfaces a merchant-facing count that is permanently 0, with a `TODO` | Wire it to the inventory checks or remove the metric |
 | Lifecycle thresholds are absolute days and order counts | `lifecycle-classifier.ts:27`–`57` applies 180/90/60 days and 8/4/2 orders to every store. A coffee brand and a mattress brand cannot share them | Make store-relative using the same quintile approach. Already tracked as "scalable store-relative RFM threshold design" under `538413b` |
 | Churn monetary signal uses an absolute rupee midpoint | `churn-risk.ts:9` uses `sigmoid(totalSpend, 150, .015)`; at ₹2,000 average order value every buyer saturates that signal | Make the midpoint store-relative. The other five churn signals are ratio- or day-based and are sound |
@@ -1775,9 +1809,44 @@ after an edit legitimately records a new decision. Proposed key is
 `(campaignId, customerId, contextKey, decision)` with `skipDuplicates`, which makes a repeat of
 the *same* decision a no-op while still recording a changed one, and leaves merchant override
 rows (a different `decision` value) untouched. `campaignId` is nullable for automation rows, so
-this needs a partial unique index written as raw SQL. **Blocked on counting existing duplicates
-in production.** The local database cannot answer it: its migrations have not been applied and
-the table does not exist there.
+this needs a partial unique index written as raw SQL.
+
+**Production was measured on 19 Sep: 1 duplicate group, 1 extra row.** The index cannot be
+added until that row is removed, but the cleanup is trivial and the near-zero count is
+consistent with a single retried approval rather than a systemic problem. The local database
+could not answer this — its migrations have not been applied and the table does not exist
+there.
+
+Order of operations, all read-only until the delete:
+
+```sql
+-- 1. See which row it is before removing anything.
+SELECT "campaignId", "customerId", "contextKey", "decision",
+       count(*), min("createdAt"), max("createdAt")
+FROM customer_audience_decisions
+WHERE "campaignId" IS NOT NULL
+GROUP BY 1, 2, 3, 4 HAVING count(*) > 1;
+
+-- 2. Keep the earliest row of each group, drop the retries.
+DELETE FROM customer_audience_decisions
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id, row_number() OVER (
+      PARTITION BY "campaignId", "customerId", "contextKey", "decision"
+      ORDER BY "createdAt" ASC, id ASC
+    ) AS rn
+    FROM customer_audience_decisions
+    WHERE "campaignId" IS NOT NULL
+  ) ranked WHERE rn > 1
+);
+
+-- 3. Re-run the count from step 1; it must return no rows before migrating.
+```
+
+The migration then adds the partial unique index and approval switches to `skipDuplicates`.
+Note that `CREATE INDEX CONCURRENTLY` cannot run inside Prisma's migration transaction; the
+table is small enough for a plain `CREATE UNIQUE INDEX`, otherwise the index is created as a
+separate operator step.
 
 ### Open: email IDE audit not started
 
