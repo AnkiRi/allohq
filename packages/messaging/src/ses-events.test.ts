@@ -12,4 +12,5 @@ test("SNS envelope rejects a mismatched topic before processing", () => {
 });
 test("warmup doubles from 500 and never exceeds eligibility", () => { assert.equal(warmupDailyCap(1, 70_000), 500); assert.equal(warmupDailyCap(8, 70_000), 64_000); assert.equal(warmupDailyCap(9, 70_000), 70_000); });
 test("warmup health holds and pauses at strict thresholds", () => { assert.equal(warmupHealthAction({ delivered: 10_000, bounced: 205, complained: 0 }), "hold"); assert.equal(warmupHealthAction({ delivered: 10_000, bounced: 0, complained: 31 }), "pause"); });
+test("zero-volume days cannot grow warmup", () => { assert.equal(warmupHealthAction({ delivered: 0, bounced: 0, complained: 0 }), "hold"); });
 test("engagement prioritizes purchases and clicks, not opens", () => { const now = new Date("2026-09-11"); assert.equal(engagementRank({ clickedOrBoughtAt: new Date("2026-08-20") }, now), 0); assert.equal(engagementRank({ openedAt: new Date("2026-09-10") }, now), 2); });

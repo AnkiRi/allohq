@@ -679,9 +679,11 @@ will buy without a discount.
 
 ## Pass 9 — Provider-neutral domain reputation and warm-up
 
-Status: planned after a code-and-document audit on 2026-09-17. The repository contains a
-useful SES warm-up skeleton, but it is not yet a complete production warm-up system and must
-not be described as one.
+Status (19 Sep): in progress. Calendar time no longer advances SES warm-up without evidence;
+zero-volume health cannot report growth, and Setup no longer claims an automatic ramp.
+The provider-neutral assessment, reviewed growth workflow, Resend ramp, large-audience
+deferral display and migration handling below remain open. The repository contains a
+useful SES warm-up skeleton, not a complete production warm-up system.
 
 ### Why this pass exists
 

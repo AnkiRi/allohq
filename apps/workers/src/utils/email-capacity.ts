@@ -76,10 +76,10 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
   if (selectedEmailProvider() === "ses") {
     const warmup = await prisma.sesWarmupState.upsert({ where: { storeId }, create: { storeId, startedAt: now }, update: {} });
     if (warmup?.pausedAt || (warmup?.heldUntil && warmup.heldUntil > now)) return { allowed: false, reason: "daily_cap", release: async () => undefined };
-    const elapsedHealthyDays = Math.max(0, Math.floor((now.getTime() - warmup.lastGrowthAt.getTime()) / DAY_MS));
-    const healthyDay = Math.min(31, warmup.healthyDay + elapsedHealthyDays);
-    if (healthyDay !== warmup.healthyDay) await prisma.sesWarmupState.update({ where: { storeId }, data: { healthyDay, lastGrowthAt: now } });
-    policy.dailyCap = warmupDailyCap(healthyDay, Number.MAX_SAFE_INTEGER);
+    // Do not advance reputation from elapsed calendar time. A new store can sit
+    // idle for weeks; only a reviewed, delivery-event-backed ramp may increase
+    // healthyDay. Until that workflow exists, retain the conservative cap.
+    policy.dailyCap = warmupDailyCap(warmup.healthyDay, Number.MAX_SAFE_INTEGER);
     policy.providerPerMinute = await sesProviderPerMinute();
     policy.providerWindowMs = 1_000;
   }

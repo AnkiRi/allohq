@@ -12,6 +12,7 @@ export function warmupHealthAction(health: WarmupHealth): WarmupAction {
   const complaintRate = health.delivered ? health.complained / health.delivered : 0;
   if (complaintRate > 0.003) return "pause";
   if (bounceRate > 0.02 || complaintRate > 0.001) return "hold";
+  if (attempted === 0) return "hold";
   return "grow";
 }
 
