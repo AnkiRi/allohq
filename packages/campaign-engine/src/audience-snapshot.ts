@@ -79,14 +79,18 @@ export function campaignAudienceSnapshot(proposal: unknown): CampaignAudienceSna
       typeof h.assignments !== "object"
     )
       return null;
+    // Membership is checked against a Set. These were `customerIds.includes(id)`
+    // inside a scan of every assignment, so validating a 100k cohort cost on the
+    // order of ten billion comparisons, on a function the send path calls before
+    // every dispatch.
+    const approvedIds = new Set(snapshot.customerIds);
     if (
-      Object.keys(h.assignments).some((id) => !snapshot.customerIds!.includes(id)) ||
+      Object.keys(h.assignments).some((id) => !approvedIds.has(id)) ||
       Object.values(h.assignments).some((arm) => arm !== "CONTROL" && arm !== "TREATMENT")
     )
       return null;
     if (h.assignmentDetails) {
-      if (Object.keys(h.assignmentDetails).some((id) => !snapshot.customerIds!.includes(id)))
-        return null;
+      if (Object.keys(h.assignmentDetails).some((id) => !approvedIds.has(id))) return null;
       for (const [id, detail] of Object.entries(h.assignmentDetails)) {
         if (!detail || typeof detail !== "object") return null;
         if (

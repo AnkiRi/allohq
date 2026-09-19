@@ -1727,7 +1727,12 @@ export const campaignsRouter = router({
           assignments: Object.fromEntries(holdout.assignment.arms),
           policyReason: policy.reason,
           strata: holdout.assignment.strata,
-          assignmentDetails: holdout.assignment.assignments,
+          // assignmentDetails is deliberately no longer written. Nothing ever
+          // read it, yet it was 11.51 MB of the measured 17.97 MB this snapshot
+          // occupied at 100k, inside a JSON column every reader of the proposal
+          // parses. The same per-customer stratum and rate live on
+          // MeasurementAssignment, which is queryable. Existing approved
+          // campaigns keep theirs and still validate.
         },
         selectedEmailProvider()
       );
