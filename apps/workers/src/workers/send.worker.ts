@@ -48,6 +48,7 @@ const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: r
 const emailSendQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, { connection: redisConnection });
 
 const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (seconds, not hours)
+type BrandKit = Awaited<ReturnType<typeof loadBrandKit>>;
 
 function frozenEmailDocument(campaign: {
   template: { subject: string; previewText: string | null; blocks: unknown } | null;
@@ -68,6 +69,16 @@ function frozenEmailDocument(campaign: {
     blocks: campaign.template.blocks,
     metadata: {},
   });
+}
+
+function frozenBrandKit(campaign: {
+  emailApproval?: { renderContext: unknown } | null;
+}): BrandKit | null {
+  const context = campaign.emailApproval?.renderContext;
+  if (!context || typeof context !== "object" || Array.isArray(context)) return null;
+  const brandKit = (context as { brandKit?: unknown }).brandKit;
+  if (!brandKit || typeof brandKit !== "object" || Array.isArray(brandKit)) return null;
+  return brandKit as BrandKit;
 }
 
 // Per-customer decision bundle carried from the planner to the delayed delivery job.
@@ -162,7 +173,7 @@ export async function planCampaignSend(
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { template: true, segment: true, store: true, approvedEmailVersion: true },
+    include: { template: true, segment: true, store: true, approvedEmailVersion: true, emailApproval: true },
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (!campaign.template) throw new Error(`Campaign ${campaignId} has no template`);
@@ -750,7 +761,7 @@ export async function deliverOne(data: DeliverOneData) {
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { template: true, segment: true, store: true, approvedEmailVersion: true },
+    include: { template: true, segment: true, store: true, approvedEmailVersion: true, emailApproval: true },
   });
   if (!campaign || !campaign.template) return { skipped: true, reason: "campaign_gone" };
   const approvedEmail = frozenEmailDocument(campaign);
@@ -1105,7 +1116,7 @@ export async function deliverOne(data: DeliverOneData) {
     }
   }
 
-  const brandKit = await loadBrandKit(campaign.storeId);
+  const brandKit = frozenBrandKit(campaign) ?? await loadBrandKit(campaign.storeId);
   // Sender identity (Phase 5): send from the brand's own from-name/email + reply-to
   // when set, instead of the hardcoded noreply@allohq.com (a deliverability + brand fix).
   const brandSender = await prisma.brandProfile.findFirst({

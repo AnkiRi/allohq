@@ -37,6 +37,7 @@ CREATE TABLE "email_approvals" (
     "emailVersionId" TEXT NOT NULL,
     "renderHash" TEXT NOT NULL,
     "assetManifest" JSONB NOT NULL DEFAULT '[]',
+    "renderContext" JSONB NOT NULL DEFAULT '{}',
     "preflight" JSONB NOT NULL DEFAULT '{}',
     "approvedBy" TEXT,
     "approvedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

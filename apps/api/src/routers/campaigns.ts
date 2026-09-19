@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
@@ -27,7 +28,7 @@ import {
   getOrCreateExperiment,
   holdoutRateFor,
 } from "@allohq/customer-state";
-import { DELIVERY_WINDOWS, getTimingProfiles, localHour } from "@allohq/customer-intelligence";
+import { DELIVERY_WINDOWS, getTimingProfiles, loadBrandKit, localHour } from "@allohq/customer-intelligence";
 import {
   checkQuietHours,
   loadStoreGovernorConfig,
@@ -1678,6 +1679,7 @@ export const campaignsRouter = router({
         });
       }
       const emailAssetManifest = collectEmailAssetManifest(campaign.template.blocks);
+      const approvedBrandKit = await loadBrandKit(campaign.storeId);
       const emailPreflightReceipt = {
         ...emailPreflight,
         blockCount: Array.isArray(campaign.template.blocks) ? campaign.template.blocks.length : 0,
@@ -1788,6 +1790,12 @@ export const campaignsRouter = router({
             note: `Frozen for campaign approval · ${campaign.name}`,
             createdBy: (ctx as any).userId,
           });
+          const releaseRenderHash = createHash("sha256")
+            .update(JSON.stringify({
+              documentHash: approvedEmailVersion.contentHash,
+              brandKit: approvedBrandKit,
+            }))
+            .digest("hex");
           const claimed = await tx.campaign.updateMany({
             where: campaignApprovalClaimWhere(input.id),
             // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
@@ -1811,16 +1819,18 @@ export const campaignsRouter = router({
             create: {
               campaignId: campaign.id,
               emailVersionId: approvedEmailVersion.id,
-              renderHash: approvedEmailVersion.contentHash,
+              renderHash: releaseRenderHash,
               assetManifest: emailAssetManifest as any,
+              renderContext: { brandKit: approvedBrandKit } as any,
               preflight: emailPreflightReceipt as any,
               approvedBy: (ctx as any).userId,
               approvedAt,
             },
             update: {
               emailVersionId: approvedEmailVersion.id,
-              renderHash: approvedEmailVersion.contentHash,
+              renderHash: releaseRenderHash,
               assetManifest: emailAssetManifest as any,
+              renderContext: { brandKit: approvedBrandKit } as any,
               preflight: emailPreflightReceipt as any,
               approvedBy: (ctx as any).userId,
               approvedAt,

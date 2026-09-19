@@ -1026,6 +1026,7 @@ model EmailApproval {
   emailVersionId String
   renderHash     String
   assetManifest  Json     @default("[]")
+  renderContext  Json     @default("{}")
   preflight      Json     @default("{}")
   approvedBy     String?
   approvedAt     DateTime @default(now())
