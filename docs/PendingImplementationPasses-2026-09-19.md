@@ -1822,9 +1822,24 @@ rather than retries. The distinction it missed:
   `reasonCode`, actor and justification; a different `contextKey`, since overrides key on the
   campaign id while approval keys on the campaign family; and a different campaign entirely.
 
-The merchant-override paths (`campaigns.ts:715`, `:793`, `:881`, `:975`) deduplicate the
-*effective* override into `agentProposal` with a `Set`, but always append the audit row, so a
-repeated override has no functional effect yet is still a real user event.
+Complete verified inventory of writers — an earlier list in this document named only the four
+`campaigns.ts` override sites and missed the agent-core path entirely:
+
+| Path | Reason code(s) | Retry risk |
+| --- | --- | --- |
+| `campaigns.ts:715` | `merchant_collision_override`, `merchant_cooldown_override` | User-initiated; no guard |
+| `campaigns.ts:793` | `merchant_fatigue_override` | User-initiated; no guard |
+| `campaigns.ts:881` | `merchant_recent_purchase_override` | User-initiated; no guard |
+| `campaigns.ts:975` | `merchant_state_policy_override` | User-initiated; no guard |
+| `campaigns.ts:1862` (approval) | `experiment_assignment`, or null for deliberately-left-alone | **The retry-prone one**: `Serializable` transaction, `createMany`, no `skipDuplicates` |
+| `packages/agent-core/src/tools/inline-campaign-tool.ts:664` | `merchant_full_price_alternative` | Guarded by `!existingAlternative`, so a repeat call writes nothing |
+
+`campaign-audience-evaluation.ts:31` also writes `experiment_assignment`, but to
+`CampaignAudienceEvaluationRow`, a different table with its own `@@unique`.
+
+The four `campaigns.ts` override paths deduplicate the *effective* override into
+`agentProposal` with a `Set`, but always append the audit row, so a repeated override has no
+functional effect yet is still a real user event.
 
 **Required fix — idempotency on the write, not uniqueness on the meaning.** Add a nullable
 `writeKey` with a unique index. Approval sets it deterministically per attempt, for example
@@ -1834,22 +1849,25 @@ and correctly records new rows. Override paths leave it null — Postgres permit
 unique index — preserving every merchant action. Existing rows are unaffected because their
 `writeKey` is null, so no cleanup is required before the migration.
 
-**Production measurement, 19 Sep: 1 duplicate group, 1 extra row**, on campaign
-`cmu53umg20013rz011pold1uj`, `contextKey` equal to the campaign id and `decision`
-`campaign_candidate` — an override row rather than an approval retry, with the two writes
-sixteen minutes apart. Classify before touching it:
+**Production measurement, 19 Sep — resolved: the single duplicate is legitimate history and
+nothing is to be deleted.** The one group on campaign `cmu53umg20013rz011pold1uj`, customer
+`cmu3on8nk0005mt010sfw40ir` holds two rows with the same `decision` and `contextKey` but
+different reasons, sixteen minutes apart:
 
-```sql
-SELECT id, "reasonCode", "overrideActorId", "overrideReason", evidence, "createdAt"
-FROM customer_audience_decisions
-WHERE "campaignId" = 'cmu53umg20013rz011pold1uj'
-  AND "customerId" = 'cmu3on8nk0005mt010sfw40ir'
-ORDER BY "createdAt";
-```
+| Time | Reason code | Merchant justification | Evidence |
+| --- | --- | --- | --- |
+| 05:44:38 | `merchant_full_price_alternative` | "Full-price alternative requested from the source campaign review." | `sourceCampaignId: cmu53rcmf0008rz01nesxz22m` |
+| 06:00:21 | `merchant_collision_override` | "Overide" | `originalDecision: collision` |
 
-A differing `reasonCode` means legitimate history and **nothing is deleted**. An identical
-`reasonCode` means a repeated click, which the `writeKey` design also leaves in place as a
-genuine user event. The local database could not answer this because its migrations have not
+This is the worked example of good duplication: the customer was pulled into a full-price
+alternative, then separately released from a campaign-collision hold. The withdrawn index would
+have deleted the collision override together with its actor and typed justification. It also
+retires an earlier guess in this document that a repeated click implied missing override-UI
+feedback — the reason codes differ, so no such inference is supported.
+
+Consequence for the migration: **no production cleanup is required.** Existing rows keep a null
+`writeKey`, the unique index admits many nulls, and the approval path alone begins setting a
+deterministic key. The local database could not answer this because its migrations have not
 been applied.
 
 ### Open: email IDE audit not started
