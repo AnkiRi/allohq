@@ -849,6 +849,7 @@ export const aiRouter = router({
         : undefined;
 
       const result = await generateEmail({
+        workspaceId: ctx.workspaceId,
         brandProfile: brandProfile
           ? {
               brandName: brandProfile.brandName,
@@ -1018,6 +1019,7 @@ export const aiRouter = router({
       const { generateEmail } = await import("@allohq/customer-intelligence");
 
       const result = await generateEmail({
+        workspaceId: ctx.workspaceId,
         brandProfile: brandProfile
           ? {
               brandName: brandProfile.brandName,

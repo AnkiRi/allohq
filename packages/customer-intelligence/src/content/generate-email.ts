@@ -20,6 +20,8 @@ export interface BrandSettings {
 }
 
 export interface GenerateEmailInput {
+  /** Workspace whose daily generated-image budget applies to this request. */
+  workspaceId?: string;
   brandProfile?: {
     brandName: string;
     brandDescription?: string | null;
@@ -310,6 +312,7 @@ async function postProcessImages(
           prompt: imagePrompt,
           brandStyle,
           fallbackToStock: false,
+          workspaceId: input.workspaceId,
         });
         (block.props as Record<string, unknown>).bgImageSrc = imgResult.url;
         totalCost += imgResult.cost;
@@ -331,6 +334,7 @@ async function postProcessImages(
           prompt: imagePrompt,
           brandStyle,
           fallbackToStock: false,
+          workspaceId: input.workspaceId,
         });
         (block.props as Record<string, unknown>).src = imgResult.url;
         totalCost += imgResult.cost;

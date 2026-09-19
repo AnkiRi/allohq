@@ -1,6 +1,7 @@
 import { generateWithFlux } from "./providers/flux";
 import { generateWithDalle } from "./providers/dalle";
 import { searchUnsplash } from "./providers/unsplash";
+import { DAILY_IMAGE_BUDGET_USD, dailyImageSpendUsd, imageBudgetExceeded } from "./image-budget";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -15,6 +16,11 @@ export interface GenerateImageInput {
   };
   dimensions?: { width: number; height: number };
   fallbackToStock?: boolean;
+  /**
+   * Workspace whose daily generation budget applies. Omitting it skips the
+   * check, so callers that cannot attribute spend stay uncapped and obvious.
+   */
+  workspaceId?: string;
 }
 
 export interface GenerateImageOutput {
@@ -117,7 +123,12 @@ function getProviderChain(
   width: number,
   height: number,
   fallbackToStock: boolean,
+  stockOnly = false,
 ): ProviderFn[] {
+  // Over budget, the paid providers are skipped entirely rather than merely
+  // having stock appended behind them, which would still spend.
+  if (stockOnly) return [() => tryUnsplash(prompt)];
+
   const chain: ProviderFn[] = [];
 
   // Primary + secondary AI provider based on purpose
@@ -165,12 +176,25 @@ export async function generateImage(
     `[Image] Generating for purpose="${input.purpose}" ${width}x${height} fallbackToStock=${fallbackToStock}`,
   );
 
+  let stockOnly = false;
+  if (input.workspaceId) {
+    const spentUsd = await dailyImageSpendUsd(input.workspaceId);
+    if (imageBudgetExceeded(spentUsd)) {
+      stockOnly = true;
+      console.warn(
+        `[Image] Daily generation budget reached for workspace ${input.workspaceId} ` +
+          `($${spentUsd.toFixed(2)} of $${DAILY_IMAGE_BUDGET_USD}); using stock imagery`,
+      );
+    }
+  }
+
   const chain = getProviderChain(
     input.purpose,
     enhancedPrompt,
     width,
     height,
     fallbackToStock,
+    stockOnly,
   );
 
   for (const providerFn of chain) {
