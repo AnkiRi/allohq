@@ -47,7 +47,9 @@ export async function predictReorderTiming(
   // More orders and more consistent intervals = higher confidence
   const dataPointFactor = Math.min(1, intervals.length / 5);
   const consistencyFactor = Math.max(0, 1 - coeffOfVariation);
-  const confidence = Math.round(dataPointFactor * 0.5 + consistencyFactor * 0.5) * 100 / 100;
+  // Round to two decimals. The closing parenthesis used to fall after
+  // Math.round(...), which collapsed every confidence to exactly 0 or 1.
+  const confidence = Math.round((dataPointFactor * 0.5 + consistencyFactor * 0.5) * 100) / 100;
 
   // Next expected date from last order
   const lastOrder = orders[orders.length - 1]!;

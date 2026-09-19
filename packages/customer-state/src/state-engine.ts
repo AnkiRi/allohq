@@ -41,27 +41,39 @@ export async function computeFullState(
   cause: StateTransitionCause = "full_recalculation"
 ): Promise<CustomerStateData> {
   // Fetch all required data in parallel
-  const [customer, orders, rfmScore, ltv, fatigueState, channelPref, intentState, suppression] =
-    await Promise.all([
-      prisma.customer.findUnique({
-        where: { id: customerId },
-        select: { email: true, acceptsMarketing: true, store: { select: { timezone: true } } },
-      }),
-      prisma.order.findMany({
-        where: { customerId, storeId, status: { not: "cancelled" } },
-        select: { createdAt: true, totalPrice: true, totalDiscounts: true, discountCodes: true },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.rfmScore.findUnique({ where: { customerId } }),
-      prisma.customerLifetimeValue.findUnique({ where: { customerId } }),
-      computeFatigueState(customerId, storeId),
-      computeChannelPreference(customerId, storeId),
-      detectIntent(customerId, storeId),
-      prisma.contactSuppression.findUnique({
-        where: { customerId_channel: { customerId, channel: "email" } },
-        select: { reason: true, expiresAt: true },
-      }),
-    ]);
+  const [
+    customer,
+    orders,
+    rfmScore,
+    fatigueState,
+    channelPref,
+    intentState,
+    suppression,
+    timingProfile,
+    storeTimingProfile,
+  ] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { email: true, acceptsMarketing: true, store: { select: { timezone: true } } },
+    }),
+    prisma.order.findMany({
+      where: { customerId, storeId, status: { not: "cancelled" } },
+      select: { createdAt: true, totalPrice: true, totalDiscounts: true, discountCodes: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.rfmScore.findUnique({ where: { customerId } }),
+    computeFatigueState(customerId, storeId),
+    computeChannelPreference(customerId, storeId),
+    detectIntent(customerId, storeId),
+    prisma.contactSuppression.findUnique({
+      where: { customerId_channel: { customerId, channel: "email" } },
+      select: { reason: true, expiresAt: true },
+    }),
+    // The send window is observed engagement, not a constant. These are the
+    // same profiles the delivery path already plans from.
+    prisma.customerTimingProfile.findUnique({ where: { customerId } }),
+    prisma.storeTimingProfile.findUnique({ where: { storeId } }),
+  ]);
 
   const now = new Date();
   const orderCount = orders.length;
@@ -152,7 +164,11 @@ export async function computeFullState(
     medianOrderIntervalDays,
     now,
   });
-  const vipLevel = computeVipLevel(orderCount, ltv?.historicalLtv ?? 0);
+  const vipLevel = computeVipLevel({
+    orderCount,
+    monetaryQuintile: rfmScore?.monetary ?? null,
+    frequencyQuintile: rfmScore?.frequency ?? null,
+  });
   const trustScore = computeTrustScore(lifecycleStage, orderCount, churnRisk);
 
   // Check support state from conversations
@@ -172,10 +188,11 @@ export async function computeFullState(
     churnRisk,
     intentState,
     channelPreference: channelPref,
-    optimalSendWindow: {
-      timezone: customer?.store.timezone ?? "UTC",
-      bestHours: [9, 10, 11, 14, 15],
-    },
+    optimalSendWindow: resolveSendWindow({
+      storeTimezone: customer?.store.timezone ?? null,
+      customerProfile: timingProfile,
+      storeProfile: storeTimingProfile,
+    }),
     communicationFatigue: fatigueState,
     discountSensitivity: discountProfile.sensitivity,
     discountBehavior: discountProfile.behavior,
@@ -526,11 +543,96 @@ export function computeDiscountProfile(
   };
 }
 
-function computeVipLevel(orderCount: number, historicalLtv: number): VipLevel {
-  if (historicalLtv >= 1000 || orderCount >= 15) return VipLevel.PLATINUM;
-  if (historicalLtv >= 500 || orderCount >= 10) return VipLevel.GOLD;
-  if (historicalLtv >= 200 || orderCount >= 5) return VipLevel.SILVER;
+/**
+ * Store-relative VIP tier.
+ *
+ * Absolute money thresholds cannot work across stores: ₹1,000 of lifetime spend
+ * is half an order at a jewellery brand and twenty orders at a snacks brand, so
+ * a fixed ladder made nearly every customer of a high-AOV store platinum after a
+ * single purchase. RFM monetary and frequency are already quintiles scored
+ * against that store's own distribution, so they rank a customer among the
+ * store's actual buyers with no currency in the calculation at all. A customer
+ * whose RFM has not been computed yet is standard rather than assumed valuable.
+ */
+export function computeVipLevel(input: {
+  orderCount: number;
+  monetaryQuintile: number | null;
+  frequencyQuintile: number | null;
+}): VipLevel {
+  const { orderCount, monetaryQuintile, frequencyQuintile } = input;
+  if (orderCount <= 0 || monetaryQuintile === null || frequencyQuintile === null) {
+    return VipLevel.STANDARD;
+  }
+  if (monetaryQuintile >= 5 && frequencyQuintile >= 4) return VipLevel.PLATINUM;
+  if (monetaryQuintile >= 4 && frequencyQuintile >= 3) return VipLevel.GOLD;
+  if (monetaryQuintile >= 3 || frequencyQuintile >= 4) return VipLevel.SILVER;
   return VipLevel.STANDARD;
+}
+
+/** Hours used only when a store has no engagement evidence at all. */
+const DEFAULT_SEND_HOURS = [9, 10, 11, 14, 15];
+
+interface TimingProfileRow {
+  timezone: string;
+  evidenceCount: number;
+  confidence: number;
+  hourlyEvidence: unknown;
+}
+
+function hoursFromEvidence(hourlyEvidence: unknown): number[] {
+  if (!Array.isArray(hourlyEvidence)) return [];
+  const hours = hourlyEvidence
+    .map((entry) =>
+      entry && typeof entry === "object" ? (entry as { hour?: unknown }).hour : undefined
+    )
+    .filter((hour): hour is number => Number.isInteger(hour) && (hour as number) >= 0 && (hour as number) <= 23);
+  return [...new Set(hours)];
+}
+
+/**
+ * Observed send hours, or a fallback that says it is one.
+ *
+ * This field previously held the same five hardcoded hours for every customer
+ * in every store while being exposed to the merchant agent as that customer's
+ * optimal window. The engagement profiles the delivery path already plans from
+ * are the real evidence; when none exists the window reports `source: "default"`
+ * rather than inventing customer-specific timing.
+ */
+export function resolveSendWindow(input: {
+  storeTimezone: string | null;
+  customerProfile: TimingProfileRow | null;
+  storeProfile: TimingProfileRow | null;
+}): CustomerStateData["optimalSendWindow"] {
+  const fallbackTimezone = input.storeTimezone || "UTC";
+  const customerHours = input.customerProfile
+    ? hoursFromEvidence(input.customerProfile.hourlyEvidence)
+    : [];
+  if (input.customerProfile && customerHours.length > 0) {
+    return {
+      timezone: input.customerProfile.timezone || fallbackTimezone,
+      bestHours: customerHours,
+      source: "customer",
+      evidenceCount: input.customerProfile.evidenceCount,
+      confidence: input.customerProfile.confidence,
+    };
+  }
+  const storeHours = input.storeProfile ? hoursFromEvidence(input.storeProfile.hourlyEvidence) : [];
+  if (input.storeProfile && storeHours.length > 0) {
+    return {
+      timezone: input.storeProfile.timezone || fallbackTimezone,
+      bestHours: storeHours,
+      source: "store",
+      evidenceCount: input.storeProfile.evidenceCount,
+      confidence: input.storeProfile.confidence,
+    };
+  }
+  return {
+    timezone: fallbackTimezone,
+    bestHours: DEFAULT_SEND_HOURS,
+    source: "default",
+    evidenceCount: 0,
+    confidence: 0,
+  };
 }
 
 function computeTrustScore(

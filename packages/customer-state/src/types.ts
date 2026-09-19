@@ -41,6 +41,14 @@ export interface ChannelPreference {
 export interface SendWindow {
   timezone: string;
   bestHours: number[];
+  /**
+   * Where the hours came from. `default` means the store has no engagement
+   * evidence yet, so the hours are a documented fallback and must never be
+   * presented as this customer's observed timing.
+   */
+  source: "customer" | "store" | "default";
+  evidenceCount: number;
+  confidence: number;
 }
 
 export interface FatigueChannelState {
