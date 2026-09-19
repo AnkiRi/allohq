@@ -81,8 +81,12 @@ contract; this checkpoint records the implementation state.
 Focused pricing, email schema/preflight/rendering, audience and provider-capacity tests pass.
 Prisma formatting, generation and validation pass. API, web, workers and affected package
 typechecks pass; repository build and lint complete with zero lint errors and existing warning
-debt. The provider-capacity integration test that requires local PostgreSQL/Redis remains an
-environment-dependent acceptance test rather than a false local pass. The final release
+debt. **Corrected 20 Sep:** the provider-capacity test was described here as an
+environment-dependent acceptance test that fails when PostgreSQL/Redis are absent. It in fact
+failed *with* both present, because it passed a fabricated store id into
+`acquireEmailCapacity`, which upserts an `SesWarmupState` row whose `storeId` is a real foreign
+key. That was test-fixture drift, not missing infrastructure, and it never reached the Redis
+section it claimed to prove. Split in `05a34cf`. The final release
 commands and commit are recorded in the completion ledger below.
 
 Railway account access is present, but the linked project has only a `production`
@@ -118,7 +122,7 @@ delivery before any service can run against partner data.
 | Database | Prisma schema formatted/generated and `prisma validate` passed |
 | Lint | API and web completed with zero errors; the existing warning backlog remains visible |
 | Dependency audit | `pnpm audit --prod --audit-level critical` passed with zero critical findings; 20 moderate and 33 high transitive advisories remain tracked |
-| Environment-bound integration | Atomic capacity admission still requires local PostgreSQL and Redis; the test reaches those services and fails closed when they are absent |
+| Environment-bound integration | **Corrected 20 Sep.** Atomic capacity admission genuinely needs PostgreSQL and Redis, but the old unit test failed even when both were present: it used a fabricated store id against a foreign-keyed `SesWarmupState` upsert, so it never exercised concurrency at all. Now `email-capacity.integration.ts`, which seeds a real Workspace and Store, proves over-admission cannot occur under 200-way contention, and asserts that admission refuses an unknown store. Unit suite is green at 291/291 |
 
 The release was also visually inspected at desktop width through a temporary local audit route;
 that route was removed before commit. The email canvas, selection model, palette, proposal
@@ -1935,6 +1939,12 @@ upload ownership with cross-workspace isolation. Do not redesign the editor.
   listing assets and Shopify billing before App Store submission.
 - Rotate development credentials before a real merchant and keep production secrets only in
   the platform secret managers.
+- **There is no continuous integration at all.** `.github/workflows` does not exist, so nothing
+  runs typecheck, the unit suite or the integration suites on a push. The integration suites are
+  runnable (`pnpm test:integration`, or the per-suite scripts in `apps/workers`) but require
+  `TEST_DATABASE_URL` and Redis, so they only run when someone runs them. Until CI exists, a
+  green unit suite is a local claim rather than an enforced gate — which is how the capacity
+  test stayed red and mischaracterised for nine days.
 - Configure durable email assets (`ASSET_BUCKET`, `ASSET_CDN_BASE_URL`, optional region/
   endpoint) in every deployed environment and verify signed upload/CDN access.
 - Purchase/configure Litmus or Email on Acid if Joon will promise Gmail, Outlook and Apple
