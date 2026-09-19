@@ -36,7 +36,7 @@ the delivery sign-off. Record test evidence and commit mapping per pass.
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
 | 8 — Campaign-specific customer decision context | In progress | `5dbdb7a` | Batched audience policy and cohort reasoning; durable evidence snapshot; scale and production acceptance |
-| 9 — Provider-neutral domain reputation and warm-up | In progress | `aeec41f`, `664cbe7`, `534efc6` | Production identity-migration acceptance; provider-pinned queued sends; assessed ramp and deliberate SES migration |
+| 9 — Provider-neutral domain reputation and warm-up | In progress | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef` | Production identity-migration and provider-pin acceptance; assessed ramp and deliberate SES migration |
 | 10 — High-scale commerce ingestion and state evaluation | Newly required | — | Prove the 100,000-customer Shopify path first; design and benchmark the separate mobile-app path for approximately 45 million customers |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
 
@@ -127,6 +127,7 @@ verified `shop/redact` webhook remains the authoritative permanent platform-dele
 | `b78f1ce` | Passes 0 and journey policy | Journey preflight and UI now expose zero random controls; refund events no longer reduce attributed revenue; cancellations continue to remove attribution | Production cancellation acceptance; revise stale older acceptance documents |
 | `538413b` | Passes 6, 8 and 10 | Order create/update/cancellation refresh the affected customer's order projection, RFM summary and LTV before state recomputation | Production verification on a new order/cancellation; scalable store-relative RFM threshold design |
 | `782b5aa` | Pass 11A | Established the Quiet Control Room design system, landing-derived themes, task-based application navigation, responsive shell, contextual top bar and durable `DESIGN.md`; removed obsolete design prototypes without removing product routes | Route-body migration in 11B–11H; authenticated light/mobile/dense-page acceptance |
+| `d5a54ef` | Pass 9 and Results correctness | Approved campaign snapshots pin Resend/SES; worker fails closed on provider mismatch. Removed the invalid AI-return ratio that compared store revenue with workspace-wide USD token cost using a fixed INR conversion; top-bar AI revenue now uses store currency. | Production queued-send switch rehearsal; store-scoped cost ledger and sourced FX before a return ratio can be shown; deployed-data Results acceptance |
 
 ## Post-demo acceptance findings — 2026-09-17
 
