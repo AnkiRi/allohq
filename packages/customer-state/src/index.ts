@@ -40,6 +40,9 @@ export {
   holdoutRateFor,
   assignStratifiedCohortArms,
   estimateStratifiedCausedRevenue,
+  normalizeStratum,
+  planStratifiedControlQuotas,
+  StratifiedControlSelector,
 } from "./experiments";
 export type {
   Arm,
@@ -51,6 +54,7 @@ export type {
   StratifiedCustomer,
   FrozenStratifiedAssignment,
   StratifiedAssignmentResult,
+  StratifiedControlPlan,
   StratifiedOutcome,
 } from "./experiments";
 export { upliftReadiness } from "./uplift-readiness";

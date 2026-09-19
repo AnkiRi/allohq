@@ -317,6 +317,210 @@ export function assignStratifiedCohortArms(input: {
   return { arms, assignments, strata };
 }
 
+/** Stratum label used when a candidate has no frozen RFM segment. */
+export function normalizeStratum(stratum: string | null | undefined): string {
+  return stratum?.trim() || "Unscored";
+}
+
+export interface StratifiedControlPlan {
+  /** Assignment stratum for each counted stratum, after small-stratum pooling. */
+  assignmentStratum: Map<string, string>;
+  strata: StratifiedAssignmentResult["strata"];
+}
+
+/**
+ * Exact per-stratum control quotas from a census alone.
+ *
+ * Pooling depends on a stratum's final size, so quotas cannot be fixed until
+ * every candidate has been counted. Counting costs one integer per stratum
+ * rather than one record per candidate.
+ */
+export function planStratifiedControlQuotas(input: {
+  census: ReadonlyMap<string, number>;
+  rateForStratum: (stratum: string) => number;
+}): StratifiedControlPlan {
+  const assignmentStratum = new Map<string, string>();
+  const assignmentCounts = new Map<string, number>();
+  for (const [stratum, count] of input.census) {
+    if (count <= 0) continue;
+    const key = count < MIN_STRATUM_SIZE ? POOLED_SMALL_STRATUM : stratum;
+    assignmentStratum.set(stratum, key);
+    assignmentCounts.set(key, (assignmentCounts.get(key) ?? 0) + count);
+  }
+  const strata: StratifiedAssignmentResult["strata"] = {};
+  for (const [key, customerCount] of assignmentCounts) {
+    const holdoutRate = normalizedRate(input.rateForStratum(key));
+    strata[key] = {
+      customerCount,
+      controlCount: Math.min(
+        Math.floor(customerCount * holdoutRate),
+        Math.max(0, customerCount - 1)
+      ),
+      holdoutRate,
+    };
+  }
+  return { assignmentStratum, strata };
+}
+
+interface RankedCandidate {
+  customerId: string;
+  value: number;
+}
+
+/** The ranking {@link assignStratifiedCohortArms} applies before taking a quota. */
+function ranksAhead(a: RankedCandidate, b: RankedCandidate): boolean {
+  return a.value < b.value || (a.value === b.value && a.customerId.localeCompare(b.customerId) < 0);
+}
+
+/**
+ * Retains only the `capacity` candidates that currently rank first. The root is
+ * the worst retained candidate, so a new candidate either displaces it or is
+ * discarded immediately.
+ */
+class ControlQuotaHeap {
+  private readonly retained: RankedCandidate[] = [];
+
+  constructor(private readonly capacity: number) {}
+
+  get size(): number {
+    return this.retained.length;
+  }
+
+  offer(candidate: RankedCandidate): void {
+    if (this.capacity === 0) return;
+    if (this.retained.length < this.capacity) {
+      this.retained.push(candidate);
+      this.siftUp(this.retained.length - 1);
+      return;
+    }
+    if (ranksAhead(candidate, this.retained[0]!)) {
+      this.retained[0] = candidate;
+      this.siftDown(0);
+    }
+  }
+
+  customerIds(): string[] {
+    return this.retained.map((candidate) => candidate.customerId);
+  }
+
+  private siftUp(start: number): void {
+    let index = start;
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (!ranksAhead(this.retained[parent]!, this.retained[index]!)) return;
+      [this.retained[parent], this.retained[index]] = [
+        this.retained[index]!,
+        this.retained[parent]!,
+      ];
+      index = parent;
+    }
+  }
+
+  private siftDown(start: number): void {
+    let index = start;
+    for (;;) {
+      const left = index * 2 + 1;
+      let worst = index;
+      if (left < this.retained.length && ranksAhead(this.retained[worst]!, this.retained[left]!))
+        worst = left;
+      if (
+        left + 1 < this.retained.length &&
+        ranksAhead(this.retained[worst]!, this.retained[left + 1]!)
+      )
+        worst = left + 1;
+      if (worst === index) return;
+      [this.retained[index], this.retained[worst]] = [this.retained[worst]!, this.retained[index]!];
+      index = worst;
+    }
+  }
+}
+
+/**
+ * Bounded streaming equivalent of {@link assignStratifiedCohortArms}.
+ *
+ * A 100k-candidate campaign cannot hold every candidate, or a 100k-entry arm
+ * map, in memory at approval. Selection instead keeps only each stratum's
+ * control quota, which the campaign control rate bounds to a fraction of the
+ * audience, and the caller streams the audience a second time to write rows.
+ * Arms are identical to the in-memory function for the same candidates.
+ *
+ * Candidates must arrive exactly once, in ascending customer-id order. Keyset
+ * pagination over the primary key guarantees this; a repeated or out-of-order
+ * page would otherwise consume a second control slot, so it fails closed.
+ */
+export class StratifiedControlSelector {
+  private readonly heaps = new Map<string, ControlQuotaHeap>();
+  private readonly assignmentSeed: string;
+  private readonly plan: StratifiedControlPlan;
+  private lastCustomerId: string | null = null;
+
+  constructor(input: { assignmentSeed: string; plan: StratifiedControlPlan }) {
+    this.assignmentSeed = input.assignmentSeed;
+    this.plan = input.plan;
+  }
+
+  /** Candidates retained so far. Bounded by the planned control quotas. */
+  get retainedCount(): number {
+    let total = 0;
+    for (const heap of this.heaps.values()) total += heap.size;
+    return total;
+  }
+
+  offer(customerId: string, stratum: string | null | undefined): void {
+    if (this.lastCustomerId !== null && customerId <= this.lastCustomerId) {
+      throw new Error(
+        `StratifiedControlSelector received ${customerId} after ${this.lastCustomerId}; candidates must stream once in ascending id order`
+      );
+    }
+    this.lastCustomerId = customerId;
+    const assignmentStratum = this.assignmentStratumFor(stratum);
+    let heap = this.heaps.get(assignmentStratum);
+    if (!heap) {
+      heap = new ControlQuotaHeap(this.plan.strata[assignmentStratum]?.controlCount ?? 0);
+      this.heaps.set(assignmentStratum, heap);
+    }
+    heap.offer({
+      customerId,
+      value: assignmentValue(`${this.assignmentSeed}:${assignmentStratum}`, customerId),
+    });
+  }
+
+  /** The frozen control set. Call only after every candidate has been offered. */
+  controlIds(): Set<string> {
+    const controls = new Set<string>();
+    for (const heap of this.heaps.values()) {
+      for (const customerId of heap.customerIds()) controls.add(customerId);
+    }
+    return controls;
+  }
+
+  /** Frozen assignment record for one candidate, for the row-writing pass. */
+  assignmentFor(
+    customerId: string,
+    stratum: string | null | undefined,
+    controls: Set<string>
+  ): FrozenStratifiedAssignment {
+    const assignmentStratum = this.assignmentStratumFor(stratum);
+    return {
+      arm: controls.has(customerId) ? "CONTROL" : "TREATMENT",
+      stratum: normalizeStratum(stratum),
+      assignmentStratum,
+      holdoutRate: this.plan.strata[assignmentStratum]?.holdoutRate ?? NEW_FAMILY_HOLDOUT_RATE,
+    };
+  }
+
+  private assignmentStratumFor(stratum: string | null | undefined): string {
+    const normalized = normalizeStratum(stratum);
+    const assignmentStratum = this.plan.assignmentStratum.get(normalized);
+    if (!assignmentStratum) {
+      throw new Error(
+        `Stratum ${normalized} was not counted before control quotas were planned`
+      );
+    }
+    return assignmentStratum;
+  }
+}
+
 export interface StratifiedOutcome {
   stratum: string;
   treatedCount: number;

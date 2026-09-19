@@ -6,7 +6,12 @@ import {
   campaignMeasurementPolicy,
   estimateStratifiedCausedRevenue,
   holdoutRateFor,
+  normalizeStratum,
+  planStratifiedControlQuotas,
+  POOLED_SMALL_STRATUM,
+  StratifiedControlSelector,
 } from "./experiments";
+import type { FrozenStratifiedAssignment, StratifiedCustomer } from "./experiments";
 
 test("finite campaign cohorts receive an exact deterministic control quota", () => {
   const experiment = { assignmentSeed: "test-seed", splitRatio: 0.15 };
@@ -176,4 +181,80 @@ test("stratified estimator recovers a known effect with unequal assignment rates
   ]);
   assert.equal(estimate.causedRevenue, 310);
   assert.ok(estimate.ciLow < 310 && estimate.ciHigh > 310);
+});
+
+test("streaming control selection reproduces the in-memory stratified assignment", () => {
+  // Deliberately mixes strata above and below the pooling threshold, so the
+  // streamed census has to reach the same pooling decision as the whole cohort.
+  const sizes: Array<[string | null, number]> = [
+    ["Champions", 150],
+    ["Loyal", 80],
+    ["At risk", 40],
+    ["Tiny", 4],
+    ["Rare", 6],
+    [null, 20],
+  ];
+  const labels: Array<string | null> = [];
+  for (const [stratum, count] of sizes) for (let index = 0; index < count; index++) labels.push(stratum);
+  // Deterministic shuffle so strata interleave across ascending customer ids
+  // exactly as a keyset scan would deliver them.
+  let seed = 20260919;
+  for (let index = labels.length - 1; index > 0; index--) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const swap = seed % (index + 1);
+    [labels[index], labels[swap]] = [labels[swap]!, labels[index]!];
+  }
+  const customers: StratifiedCustomer[] = labels.map((stratum, index) => ({
+    customerId: `cust-${String(index).padStart(6, "0")}`,
+    stratum,
+  }));
+  const assignmentSeed = "streaming-parity";
+  // 0.9 exercises the shared rate clamp on the pooled stratum.
+  const rateForStratum = (stratum: string) =>
+    stratum === "Champions" ? 0.3 : stratum === POOLED_SMALL_STRATUM ? 0.9 : 0.15;
+
+  const reference = assignStratifiedCohortArms({ assignmentSeed, customers, rateForStratum });
+
+  const census = new Map<string, number>();
+  for (const customer of customers) {
+    const stratum = normalizeStratum(customer.stratum);
+    census.set(stratum, (census.get(stratum) ?? 0) + 1);
+  }
+  const plan = planStratifiedControlQuotas({ census, rateForStratum });
+  const selector = new StratifiedControlSelector({ assignmentSeed, plan });
+  for (const customer of customers) selector.offer(customer.customerId, customer.stratum);
+  const controls = selector.controlIds();
+  const streamed: Record<string, FrozenStratifiedAssignment> = {};
+  for (const customer of customers) {
+    streamed[customer.customerId] = selector.assignmentFor(
+      customer.customerId,
+      customer.stratum,
+      controls
+    );
+  }
+
+  assert.deepEqual(plan.strata, reference.strata);
+  assert.deepEqual(streamed, reference.assignments);
+  assert.deepEqual(plan.strata[POOLED_SMALL_STRATUM], {
+    customerCount: 10,
+    controlCount: 3,
+    holdoutRate: 0.3,
+  });
+  // Memory is bounded by the control quotas, not by the audience.
+  const quota = Object.values(plan.strata).reduce((sum, stratum) => sum + stratum.controlCount, 0);
+  assert.equal(selector.retainedCount, quota);
+  assert.equal(controls.size, quota);
+  assert.ok(quota < customers.length / 3);
+});
+
+test("streaming selection fails closed on a repeated, reordered or uncounted candidate", () => {
+  const plan = planStratifiedControlQuotas({
+    census: new Map([["Champions", 20]]),
+    rateForStratum: () => 0.15,
+  });
+  const selector = new StratifiedControlSelector({ assignmentSeed: "guard", plan });
+  selector.offer("cust-000002", "Champions");
+  assert.throws(() => selector.offer("cust-000002", "Champions"), /ascending id order/);
+  assert.throws(() => selector.offer("cust-000001", "Champions"), /ascending id order/);
+  assert.throws(() => selector.offer("cust-000009", "Unseen"), /was not counted/);
 });
