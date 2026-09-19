@@ -3,6 +3,7 @@ import { shopifyTools } from "./shopify-tools";
 import { messagingTools } from "./messaging-tools";
 import { analyticsTools } from "./analytics-tools";
 import { customerTools } from "./customer-tools";
+import { customerDecisionTools } from "./customer-decision-tools";
 import { discountTools } from "./discount-tools";
 import { campaignTools } from "./campaign-tools";
 import { segmentTools } from "./segment-tools";
@@ -32,6 +33,7 @@ export function getMerchantTools(): ToolDefinition[] {
     ...shopifyTools,
     ...messagingTools,
     ...customerTools,
+    ...customerDecisionTools,
     ...analyticsTools,
     ...discountTools,
     ...campaignTools,

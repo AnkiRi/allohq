@@ -483,9 +483,13 @@ journeys into explainable decisions rather than generic AI-generated messages.
 
 ## Pass 8 — Campaign-specific customer decision context
 
-Status: planned as the next implementation phase. The exact-customer targeting and
-consent consistency correction in `d758862` is necessary plumbing, but it is not the
-finished intelligence model described here.
+Status (19 Sep): in progress. Exact-customer targeting and consent consistency in
+`d758862` are necessary plumbing. A bounded, store-scoped
+`get_customer_decision_context` merchant tool now exposes current state, consent,
+purchase-cycle evidence, recorded discounts, recent orders/products, engagement,
+timing, previous audience decisions and explicit request constraints for one named
+customer. The full cohort variant, reviewed product-graph evidence, deterministic
+context snapshot on the campaign, and end-to-end acceptance cases remain open.
 
 ### Why this pass exists
 
