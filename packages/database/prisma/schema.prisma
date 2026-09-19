@@ -1158,6 +1158,12 @@ model CustomerAudienceDecision {
   automationId     String?
   contextKey       String
   decision         String
+  /// Idempotency for the write event, not uniqueness of the fact. Approval sets
+  /// a deterministic key per attempt so a retried approval cannot duplicate the
+  /// ledger, while a changed decision still records a new row. Merchant
+  /// overrides leave it null, and Postgres permits many nulls in a unique
+  /// index, so every merchant action is preserved.
+  writeKey         String?   @unique
   reasonCode       String?
   reasonText       String?
   evidence         Json      @default("{}")

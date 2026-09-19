@@ -1891,6 +1891,12 @@ export const campaignsRouter = router({
       // read by the merchant's decision history, never by delivery or
       // measurement, so an interruption here costs audit detail rather than
       // corrupting a number.
+      // Deterministic per approval attempt. A retry of the same approval writes
+      // the same keys and is skipped; a genuine re-approval that changes a
+      // customer's decision produces a different key and is recorded. Merchant
+      // overrides leave writeKey null so none of their audit rows collapse.
+      const decisionWriteKey = (customerId: string, decision: string) =>
+        `approval:${campaign.id}:${approvedAt.toISOString()}:${customerId}:${decision}`;
       const decisionRows = [
         ...audience.deliberatelyLeftAlone.map((customer) => ({
           storeId: campaign.storeId,
@@ -1898,6 +1904,7 @@ export const campaignsRouter = router({
           campaignId: campaign.id,
           contextKey: family,
           decision: "deliberately_left_alone",
+          writeKey: decisionWriteKey(customer.id, "deliberately_left_alone"),
           reasonCode: customer.decision.reasonCode ?? null,
           reasonText: customer.decision.reasonText ?? null,
           evidence: customer.decision.evidence as any,
@@ -1910,6 +1917,7 @@ export const campaignsRouter = router({
           campaignId: campaign.id,
           contextKey: family,
           decision: detail.arm === "CONTROL" ? "control" : "treatment",
+          writeKey: decisionWriteKey(customerId, detail.arm === "CONTROL" ? "control" : "treatment"),
           reasonCode: "experiment_assignment",
           reasonText:
             detail.arm === "CONTROL"
@@ -1925,6 +1933,7 @@ export const campaignsRouter = router({
       for (let offset = 0; offset < decisionRows.length; offset += APPROVAL_WRITE_CHUNK) {
         await ctx.prisma.customerAudienceDecision.createMany({
           data: decisionRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
+          skipDuplicates: true,
         });
       }
       if (audience.deliberatelyLeftAlone.length > 0) {
