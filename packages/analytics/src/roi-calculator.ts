@@ -2,9 +2,7 @@ import { prisma } from "@allohq/database";
 import { computeTokenCost } from "@allohq/customer-intelligence";
 import type { RoiMetrics } from "./types";
 
-/**
- * Calculate ROI: AI token cost vs AI-attributed revenue.
- */
+/** Report workspace AI spend and store-attributed revenue without inventing ROI. */
 export async function calculateRoi(
   workspaceId: string,
   storeId: string,
@@ -69,14 +67,11 @@ export async function calculateRoi(
   });
 
   aiTokenCost = Math.round(aiTokenCost * 10000) / 10000;
-  // ROI must compare like-for-like currency: token cost is in USD, attributed
-  // revenue is in ₹. Convert the cost to ₹ for the ratio (the returned
-  // aiTokenCost stays in USD for display).
-  const USD_TO_INR = 83;
-  const aiTokenCostInr = aiTokenCost * USD_TO_INR;
-  const roi = aiTokenCostInr > 0
-    ? Math.round(((totalAiRevenue - aiTokenCostInr) / aiTokenCostInr) * 100) / 100
-    : 0;
+  // TokenUsage belongs to the workspace, not this store, and is priced in USD.
+  // Revenue belongs to the store and is in its Shopify currency. A ratio would
+  // be wrong even for a USD store with multiple linked stores. Keep it absent
+  // until store-scoped token costs and a sourced currency conversion exist.
+  const roi = null;
 
   return {
     aiTokenCost,

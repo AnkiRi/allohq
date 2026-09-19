@@ -206,6 +206,11 @@ export async function planCampaignSend(
       "Campaign audience was not frozen at approval; merchant re-approval is required"
     );
   }
+  // Old approved snapshots predate provider pinning and were only dispatched
+  // through Resend. Never let a provider switch reroute queued work to SES.
+  if ((approvedAudience.deliveryProvider ?? "resend") !== selectedEmailProvider()) {
+    throw new Error(`Campaign ${campaignId} is pinned to ${approvedAudience.deliveryProvider ?? "resend"}; current worker uses ${selectedEmailProvider()}`);
+  }
   const approvedIds = new Set(approvedAudience.customerIds);
   const audience = {
     ...currentAudience,
@@ -726,6 +731,10 @@ export async function deliverOne(data: DeliverOneData) {
     include: { template: true, segment: true, store: true },
   });
   if (!campaign || !campaign.template) return { skipped: true, reason: "campaign_gone" };
+  const approvedProvider = campaignAudienceSnapshot(campaign.agentProposal)?.deliveryProvider ?? "resend";
+  if (approvedProvider !== selectedEmailProvider()) {
+    throw new Error(`Campaign ${campaignId} is pinned to ${approvedProvider}; current worker uses ${selectedEmailProvider()}`);
+  }
   if (!campaign.store.isActive) {
     return { skipped: true, reason: "store_disconnected" };
   }

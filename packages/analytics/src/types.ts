@@ -53,7 +53,7 @@ export interface CohortPeriod {
 export interface RoiMetrics {
   aiTokenCost: number;
   aiAttributedRevenue: number;
-  roi: number; // (revenue - cost) / cost
+  roi: number | null; // unavailable until cost and revenue share store scope/currency
   campaignsSent: number;
   automationsSent: number;
   period: string;

@@ -2,6 +2,7 @@ import type { AudienceResolution } from "./audience-resolver";
 
 export interface CampaignAudienceSnapshot {
   capturedAt: string;
+  deliveryProvider?: "resend" | "ses";
   customerIds: string[];
   requested: number;
   eligible: number;
@@ -29,7 +30,8 @@ export function withCampaignAudienceSnapshot(
   proposal: unknown,
   audience: AudienceResolution,
   capturedAt = new Date(),
-  holdout?: CampaignAudienceSnapshot["holdout"]
+  holdout?: CampaignAudienceSnapshot["holdout"],
+  deliveryProvider?: CampaignAudienceSnapshot["deliveryProvider"]
 ): Record<string, unknown> {
   const base =
     proposal && typeof proposal === "object" && !Array.isArray(proposal)
@@ -39,6 +41,7 @@ export function withCampaignAudienceSnapshot(
     ...base,
     audienceSnapshot: {
       capturedAt: capturedAt.toISOString(),
+      ...(deliveryProvider ? { deliveryProvider } : {}),
       customerIds: audience.eligible.map((customer) => customer.id).sort(),
       requested: audience.requested,
       eligible: audience.eligible.length,
@@ -58,6 +61,8 @@ export function campaignAudienceSnapshot(proposal: unknown): CampaignAudienceSna
     !Array.isArray(snapshot.customerIds) ||
     !snapshot.customerIds.every((id) => typeof id === "string")
   )
+    return null;
+  if (snapshot.deliveryProvider && snapshot.deliveryProvider !== "resend" && snapshot.deliveryProvider !== "ses")
     return null;
   if (
     typeof snapshot.capturedAt !== "string" ||

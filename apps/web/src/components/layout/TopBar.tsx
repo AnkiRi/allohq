@@ -1,12 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, IndianRupee, Menu, RotateCcw, Search, Sparkles } from "lucide-react";
+import { Bell, Menu, RotateCcw, Search, Sparkles } from "lucide-react";
 import { useMobileSidebar } from "./MobileSidebarContext";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { useCommandPalette } from "@/components/ui/CommandPalette";
 import { trpc } from "@/lib/trpc";
 import { useDemo } from "@/lib/useDemo";
+import { formatStoreCurrency } from "@/components/console";
 
 const routeMeta: Record<string, { title: string; description: string }> = {
   "/dashboard": { title: "Today", description: "What changed, what needs you, and what Joon is doing next." },
@@ -79,7 +80,7 @@ export function TopBar() {
       <div className="flex shrink-0 items-center gap-2">
         {demo && <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] text-muted-foreground lg:flex"><Sparkles className="h-3 w-3 text-[var(--app-accent)]" /> Vana sample workspace <button type="button" onClick={() => { try { sessionStorage.clear(); } catch {} window.location.assign("/dashboard"); }} className="ml-1 inline-flex items-center gap-1 text-[var(--app-accent)] hover:underline" title="Restart the demo from a clean state"><RotateCcw className="h-3 w-3" /> restart</button></span>}
         {onboardingDone && <div className="hidden items-center gap-2 rounded-full bg-[var(--app-accent-soft)] px-2.5 py-1.5 text-[10.5px] text-[var(--app-accent)] md:flex" title={lastActivity ?? "Joon is watching this workspace"}><PulseDot color="bg-[var(--app-accent)]" />Watching {(stats?.totalCustomers ?? 0).toLocaleString("en-IN")} customers{lastActivity && <span className="hidden opacity-65 xl:inline">· {lastActivity}</span>}</div>}
-        {aiRevenue > 0 && <div className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5 text-[10.5px] text-foreground xl:flex" title="Revenue attributed to Joon emails in the last 30 days"><IndianRupee className="h-3 w-3 text-[var(--app-accent)]" /><span className="font-mono font-semibold tabular-nums">{Math.round(aiRevenue).toLocaleString("en-IN")}</span><span className="text-muted-foreground">· 30d</span></div>}
+        {aiRevenue > 0 && <div className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5 text-[10.5px] text-foreground xl:flex" title="Revenue attributed to AI campaigns and automations in the last 30 days"><span className="font-mono font-semibold tabular-nums">{formatStoreCurrency(aiRevenue, store?.currency ?? "USD")}</span><span className="text-muted-foreground">· 30d</span></div>}
         <button onClick={commandPalette.open} className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-muted-foreground hover:border-[var(--app-accent-line)] hover:text-foreground sm:min-w-[164px]" aria-label="Search and open commands">
           <Search className="h-4 w-4" /><span className="hidden flex-1 text-left text-[12px] sm:inline">Search or jump to</span><kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[9px] sm:inline">⌘K</kbd>
         </button>

@@ -181,8 +181,8 @@ export default function AnalyticsPage() {
             icon: Mail,
           },
           {
-            label: "AI ROI",
-            value: roiData ? `${roiData.roi}x` : "·",
+            label: "AI return",
+            value: roiData?.roi != null ? `${roiData.roi}x` : "Not measured",
             icon: Zap,
           },
           {
@@ -452,9 +452,9 @@ export default function AnalyticsPage() {
             ) : (
               <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
                 {[
-                  { label: "AI Token Cost", value: `$${roiData.aiTokenCost.toFixed(4)}`, sub: `${period} day period` },
+                  { label: "Workspace AI spend", value: `$${roiData.aiTokenCost.toFixed(4)}`, sub: `${period} days · USD · all stores` },
                   { label: "AI Attributed Revenue", value: formatStoreCurrency(roiData.aiAttributedRevenue, storeCurrency), sub: "Campaigns + Automations" },
-                  { label: "Return on Investment", value: `${roiData.roi}x`, sub: "(Revenue - Cost) / Cost" },
+                  { label: "AI return", value: roiData.roi != null ? `${roiData.roi}x` : "Not measured", sub: "Needs store-scoped costs and a common currency" },
                   { label: "Activity", value: `${roiData.campaignsSent} campaigns, ${roiData.automationsSent} automations`, sub: `${period} day period` },
                 ].map((card) => (
                   <div key={card.label} className="p-5 bg-card border border-border rounded-xl">

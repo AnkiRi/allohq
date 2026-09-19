@@ -21,6 +21,17 @@ test("malformed snapshots fail closed", () => {
   assert.equal(campaignAudienceSnapshot({ audienceSnapshot: { customerIds: [7] } }), null);
 });
 
+test("approval snapshots retain the selected delivery provider", () => {
+  const proposal = withCampaignAudienceSnapshot({}, {
+    requested: 1,
+    eligible: [{ id: "customer-a", email: "a@example.com", firstName: null, lastName: null, rfmStratum: null }],
+    exclusions,
+    samples: {},
+  }, new Date("2026-09-19T00:00:00.000Z"), undefined, "ses");
+  assert.equal(campaignAudienceSnapshot(proposal)?.deliveryProvider, "ses");
+  assert.equal(campaignAudienceSnapshot({ audienceSnapshot: { ...(proposal.audienceSnapshot as object), deliveryProvider: "unknown" } }), null);
+});
+
 test("stratified assignment details must agree with the frozen arm map", () => {
   const malformed = withCampaignAudienceSnapshot({}, {
     requested: 1,

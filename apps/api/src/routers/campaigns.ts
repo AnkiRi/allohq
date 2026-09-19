@@ -1555,7 +1555,8 @@ export const campaignsRouter = router({
           policyReason: policy.reason,
           strata: holdout.assignment.strata,
           assignmentDetails: holdout.assignment.assignments,
-        }
+        },
+        selectedEmailProvider()
       );
       const approvalChecksum = campaignApprovalChecksum({
         campaignId: campaign.id,

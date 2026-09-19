@@ -66,9 +66,9 @@ function comparisonToCsv(data: { ai: CampaignComparison; manual: CampaignCompari
 function roiToCsv(data: RoiMetrics): string {
   const header = "Metric,Value";
   const rows = [
-    `AI Token Cost,$${data.aiTokenCost}`,
-    `AI Attributed Revenue,$${data.aiAttributedRevenue}`,
-    `ROI,${data.roi}x`,
+    `Workspace AI Token Cost (USD),${data.aiTokenCost}`,
+    `Store AI Attributed Revenue,${data.aiAttributedRevenue}`,
+    `ROI,${data.roi === null ? "Unavailable: costs are workspace-scoped" : `${data.roi}x`}`,
     `Campaigns Sent,${data.campaignsSent}`,
     `Automations Sent,${data.automationsSent}`,
     `Period,${data.period}`,

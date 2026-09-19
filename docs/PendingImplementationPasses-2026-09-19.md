@@ -5,6 +5,23 @@ design-partner demo. Audited and extended on 2026-09-19.
 
 This document is the single reference point for these passes. Later implementation summaries must map completed commits and remaining work back to the numbered passes below. New design decisions should update this document rather than creating another disconnected list.
 
+## Active scope — 19 Sep
+
+Complete the remaining code, acceptance and operational gates before returning to broad
+external testing. Pass 5's email-designer expansion (durable asset storage, faithful
+reference-image editing and the proposed canvas/chat/inspector interaction) is explicitly
+excluded from this execution run at the founder's request; retain the existing editor and
+its safety/creative regression checks. The separate approximately 45-million-customer
+mobile-app architecture is deferred until the founder specifically requests it. Neither
+exclusion should be reported as complete.
+
+Work in this order: reconcile the register and release evidence; finish Pass 8 scale and
+decision snapshots; finish Pass 9 provider-pinned sending and reputation-controlled SES
+migration; close live-data correctness in customers, Results, decisions and billing preview;
+run the 100k Shopify and complete delivery/attribution acceptance; then staging, monitoring,
+backups, security/legal and App Store gates. Keep the production recipient allowlist until
+the delivery sign-off. Record test evidence and commit mapping per pass.
+
 ## Implementation map
 
 | Pass | Code status | Commits | What remains outside code |
@@ -37,7 +54,7 @@ this order without re-litigating it:
 6. Create staging before active design-partner testing begins.
 7. Complete SES, monitoring, backups and security operations.
 8. Prepare and submit the Shopify App Store package.
-9. Design the separate approximately 45-million-customer mobile-app architecture.
+9. Defer the separate approximately 45-million-customer mobile-app architecture until the founder requests it.
 
 ## Pass L — Store lifecycle safety
 
@@ -730,9 +747,12 @@ MAIL FROM DNS verification, in addition to its Resend setup.
    storage and provider-specific lookup are now implemented; production migration and
    two-provider verification still require acceptance.
 3. Keep `EMAIL_PROVIDER` as an operator-controlled default, but record the chosen provider
-   on each approved delivery/cohort. API, workers and event consumers must agree. A switch
-   affects only newly planned sends; in-flight accepted/ambiguous sends reconcile with
-   their original provider so failover cannot duplicate them.
+   on each approved delivery/cohort. Approved campaign snapshots now pin the provider;
+   planner and recipient worker fail closed if their current provider differs (legacy
+   approved campaigns are treated as Resend). API, workers and event consumers must agree.
+   A switch affects only newly planned sends; in-flight accepted/ambiguous sends still need
+   original-provider reconciliation and an operator migration receipt so failover cannot
+   duplicate them. Pinning is a safety stop, not automatic provider failover.
 4. Configure SES production access, account/region/tenant, configuration sets, SNS/SQS
    delivery events, quotas, and From/DKIM/MAIL FROM. Verify inbox placement and event
    reconciliation on allowlisted addresses. Do not infer SES readiness from Resend DNS.
@@ -1335,7 +1355,7 @@ corrected rather than implemented literally.
 | Campaign-specific agent reasoning | Pass 8 planned | Make chat and campaign creation reason over canonical consent, orders, state, product graph and merchant constraints; never trust a shallow RFM label over fresher facts. |
 | Sender reputation and warm-up | Pass 9 planned | Implement the provider-neutral assessment, ramp, health gates, UI, notifications and migration behavior above. |
 | Customer projection consistency | Defect observed in production | Recompute customer/RFM/list/story projections idempotently after orders and expose one freshness contract. |
-| Outcomes and proof | Defect observed in production | Separate live attribution, pooled control evidence, billing preview, forecast calibration and illustrative education; remove fake precision for no-control cohorts. |
+| Outcomes and proof | UI separates attribution, control evidence, billing preview and forecasts; acceptance pending | Verify real store data, underpowered/no-control cohorts and currency labels. The former AI ROI used a hard-coded USD→INR conversion against workspace-wide costs; the ratio has been removed until costs are store-scoped and comparable. |
 | Overnight decisions | Defect observed in production | Deduplicate opportunities, fix lifecycle copy, add material-change notifications and link every approved proposal to its artifact. |
 | Billing ledger policy | Code reconciled; deployment acceptance pending | An order counts unless cancelled. Cancellation removes attribution and fee basis; refunds and fulfilment do not independently alter v1 attributed revenue because external OMS/WMS data may be incomplete. Billing remains disabled. |
 | Legacy causal/billing paths | Audit required | Prove no production invoice path still uses caused-revenue, postage or obsolete comparison logic; retain causal data only for learning/proof. Billing remains disabled until reconciled. |

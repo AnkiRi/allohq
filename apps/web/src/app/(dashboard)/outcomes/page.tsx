@@ -24,7 +24,8 @@ import { GrowthImpactPanel } from "@/components/outcomes/GrowthImpactPanel";
 // no message at all. Billing previews use immutable ledger rows and the shared
 // pricing module; early access never creates a charge.
 //
-// DATA HONESTY: AI cost / AI revenue / ROI are REAL (analytics.roi). The
+// DATA HONESTY: workspace AI spend and store-attributed revenue are separate.
+// ROI is unavailable until costs share the store scope and currency. The
 // treatment-vs-control comparison is REAL the moment there's a closed control
 // experiment with enough measured outcomes (analytics.controlLift.hasRealData):
 // then we show the real lift, real incremental revenue/margin and the real
@@ -97,7 +98,7 @@ export default function OutcomesPage() {
       | {
           aiTokenCost: number;
           aiAttributedRevenue: number;
-          roi: number;
+          roi: number | null;
           campaignsSent: number;
           automationsSent: number;
         }
@@ -243,7 +244,7 @@ export default function OutcomesPage() {
   const aiCostLabel =
     aiCost > 0 ? (aiCost < 0.01 ? "$<0.01" : `$${aiCost.toFixed(2)}`) : "$0.00";
   const aiRevenue = roiData?.aiAttributedRevenue ?? 0;
-  const roi = roiData?.roi ?? 0;
+  const roi = roiData?.roi ?? null;
 
   // --- Loading / gating ---------------------------------------------------
   if (storesLoading) {
@@ -299,7 +300,7 @@ export default function OutcomesPage() {
         <div className="py-4"><p className="text-xs text-muted-foreground">Attributed revenue · billing window</p><p className="mt-1 text-2xl font-medium tabular-nums">{moneyExact(billingData?.attributedRevenue ?? aiRevenue, billingData?.currency ?? displayCurrency)}</p></div>
         <div className="border-l border-border py-4 pl-5"><p className="text-xs text-muted-foreground">Shadow fee · billing window</p><p className="mt-1 text-2xl font-medium tabular-nums">{moneyExact(totalFee, billingData?.currency ?? displayCurrency)}</p></div>
         <div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-xs text-muted-foreground">Closed campaign records</p><p className="mt-1 text-2xl font-medium tabular-nums">{ledgerData?.length ?? 0}</p></div>
-        <div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-xs text-muted-foreground">AI return · {COHORT.windowDays}d</p><p className="mt-1 text-2xl font-medium tabular-nums">{roi ? `${roi}x` : "—"}</p></div>
+        <div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-xs text-muted-foreground">AI return · {COHORT.windowDays}d</p><p className="mt-1 text-2xl font-medium tabular-nums">{roi != null ? `${roi}x` : "Not measured"}</p></div>
       </div>
 
       <nav className="app-workspace-nav" role="tablist" aria-label="Results workspace">
@@ -569,18 +570,18 @@ export default function OutcomesPage() {
       {activeView === "costs" &&
       <ConsoleFrame title="joon · unit economics" live={false} clock={false}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pb-4 mb-4 border-b border-border">
-          <MetricReadout label="AI cost · window" value={aiCostLabel} />
-          <MetricReadout label="Attributed revenue" value={aiRevenue} money />
+          <MetricReadout label="Workspace AI spend · USD" value={aiCostLabel} />
+          <MetricReadout label="Attributed revenue" value={moneyExact(aiRevenue, displayCurrency)} />
           <MetricReadout
             label="ROI"
-            value={roi ? `${roi}x` : "·"}
-            accentSuffix={roi ? "↗" : undefined}
+            value={roi != null ? `${roi}x` : "Not measured"}
+            accentSuffix={roi != null && roi > 0 ? "↗" : undefined}
           />
         </div>
 
         <StreamOutput aria-label="unit economics">
           <StreamRow tick="ok">
-            the model cost <b>{aiCostLabel}</b> to run this window
+            AI usage across this workspace cost <b>{aiCostLabel}</b> in this window
           </StreamRow>
           <StreamRow tick="ok">
             against <b>{moneyExact(aiRevenue, displayCurrency)}</b> of revenue attributed to Joon emails in the same window
@@ -592,7 +593,7 @@ export default function OutcomesPage() {
         </StreamOutput>
 
         <p className="font-mono text-[10.5px] text-muted-foreground mt-4">
-          AI cost and attributed revenue are live. Control evidence is reported separately when the sample supports it.
+          These are different scopes and currencies. Joon does not calculate a return ratio from them. Control evidence is reported separately when the sample supports it.
         </p>
       </ConsoleFrame>
       }
