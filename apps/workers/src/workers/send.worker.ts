@@ -41,6 +41,7 @@ import { providerJobFailure } from "../utils/provider-job-failure";
 import { nextSesWarmupDelay, nextSesWarmupResume } from "../utils/ses-warmup-defer";
 import { campaignDeliveryCompletion } from "../utils/campaign-delivery-completion";
 import { deliveryWindowDelay } from "../utils/delivery-window";
+import { formatStoreMoney } from "../utils/format-money";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
@@ -982,8 +983,14 @@ export async function deliverOne(data: DeliverOneData) {
     unsubscribe_url: getUnsubscribeUrl(customerId),
     order_count: String(customer.rfmScore?.orderCount ?? 0),
     segment: customer.rfmScore?.segment ?? "New",
-    ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
-    avg_order_value: `$${(customer.rfmScore?.avgOrderValue ?? 0).toFixed(2)}`,
+    ltv: formatStoreMoney(
+      customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0,
+      campaign.store.currency
+    ),
+    avg_order_value: formatStoreMoney(
+      customer.rfmScore?.avgOrderValue ?? 0,
+      campaign.store.currency
+    ),
     last_order_date: customer.rfmScore?.lastOrderAt
       ? customer.rfmScore.lastOrderAt.toLocaleDateString("en-US", {
           month: "short",

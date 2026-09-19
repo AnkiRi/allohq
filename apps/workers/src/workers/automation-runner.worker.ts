@@ -22,6 +22,7 @@ import { providerJobFailure } from "../utils/provider-job-failure";
 import { automationContinuationJobId } from "../utils/automation-continuation";
 import { quietHoursDeferralMs } from "../utils/automation-quiet-hours";
 import { nextSesWarmupDelay } from "../utils/ses-warmup-defer";
+import { formatStoreMoney } from "../utils/format-money";
 
 interface AutomationTriggerJobData {
   automationId: string;
@@ -88,7 +89,13 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
     // Fetch store messaging config for per-store provider selection
     const storeForConfig = await prisma.store.findUnique({
       where: { id: automation.storeId },
-      select: { isActive: true, messagingConfig: true, emailSendingPausedAt: true, installedAt: true },
+      select: {
+        isActive: true,
+        messagingConfig: true,
+        emailSendingPausedAt: true,
+        installedAt: true,
+        currency: true,
+      },
     });
     if (!storeForConfig?.isActive) {
       console.log(`[automation-runner] Store ${automation.storeId} is disconnected, skipping`);
@@ -268,8 +275,14 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             unsubscribe_url: getUnsubscribeUrl(customer.id),
             order_count: String(customer.rfmScore?.orderCount ?? 0),
             segment: customer.rfmScore?.segment ?? "New",
-            ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
-            avg_order_value: `$${(customer.rfmScore?.avgOrderValue ?? 0).toFixed(2)}`,
+            ltv: formatStoreMoney(
+              customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0,
+              storeForConfig?.currency
+            ),
+            avg_order_value: formatStoreMoney(
+              customer.rfmScore?.avgOrderValue ?? 0,
+              storeForConfig?.currency
+            ),
             last_order_date: customer.rfmScore?.lastOrderAt
               ? customer.rfmScore.lastOrderAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
               : "N/A",
@@ -467,7 +480,10 @@ export const automationRunnerWorker = new Worker<AutomationTriggerJobData>(
             last_name: customer.lastName ?? "",
             order_count: String(customer.rfmScore?.orderCount ?? 0),
             segment: customer.rfmScore?.segment ?? "New",
-            ltv: `$${(customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0).toFixed(2)}`,
+            ltv: formatStoreMoney(
+              customer.lifetimeValue?.historicalLtv ?? customer.rfmScore?.totalSpent ?? 0,
+              storeForConfig?.currency
+            ),
             days_since_purchase: customer.rfmScore?.lastOrderAt
               ? String(Math.floor((new Date().getTime() - customer.rfmScore.lastOrderAt.getTime()) / 86400000))
               : "N/A",
