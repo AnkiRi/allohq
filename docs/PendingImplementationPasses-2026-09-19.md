@@ -103,7 +103,7 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Core complete; scale hardening remains | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe` | Convert approval/send onto the streaming assignment; chunk approval writes out of the `Serializable` transaction; stop freezing per-customer maps in campaign JSON; replace whole-cohort `IN` clauses in the send worker; 100k production/load proof |
+| 8 — Campaign-specific customer decision context | Core complete; approval-write blocker closed; remaining scale hardening | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e` | Convert approval/send onto the streaming assignment; stop freezing per-customer maps in campaign JSON; replace whole-cohort `IN` clauses and per-recipient inserts in the send worker; add the `CustomerAudienceDecision` `writeKey`; 100k production/load proof |
 | 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
@@ -1016,11 +1016,32 @@ against +58.5 MB, 142 ms against 383 ms, 19,499 retained entries against 100,000
 100,000 assignment records, and an identical control set. A parity test covers pooled
 sub-ten strata and the shared rate clamp. No caller changed behaviour in that commit.
 
-**Still open.** Convert the approval and send call sites onto the streaming assignment; chunk
-the approval writes outside the `Serializable` transaction while preserving atomic campaign
-claim and frozen membership; stop freezing per-customer maps in `agentProposal`; replace the
-send worker's whole-cohort `IN` clauses and per-recipient inserts; add the missing
-`CustomerAudienceDecision` uniqueness; then run the 100k proof against a real database.
+**Blocker 1 closed — `416e6a2` then `6fb411e`.** Approval no longer writes its per-customer
+tables inside the claim. Assignment rows go first in chunks of 2,000, then an O(1) claim
+transaction with an explicit fifteen-second budget, then the audience-decision ledger in chunks,
+then the activity log. `persistCampaignAudienceEvaluation` runs on the same path and wrapped its
+own chunks in a single transaction, so the five-second default defeated that chunking too; it
+now carries a realistic budget.
+
+The ordering was chosen deliberately, not for convenience. Writing rows *before* the claim
+leaves inert rows if the claim fails: the campaign stays `draft`, its approve control
+(`campaigns/[id]/page.tsx:602`, gated on `status === "draft"`) stays visible, the error toast
+invites a retry, and the retry rewrites the rows identically through the
+`(unitType, unitId, customerId)` unique key. Writing them *after* the claim would leave a
+campaign reading as approved with only part of its cohort written — invisible to the readers,
+with the approve control gone at that status and `sendNow`'s already-approved fast path
+(`campaigns.ts:1629`) re-dispatching without repairing the missing rows.
+
+`416e6a2` is the precondition and fixes a hole that already existed: attribution and the causal
+ledger selected assignment rows with no campaign-status filter, so arms belonging to a campaign
+that never completed approval would collect order outcomes and enter a lift computation. Both
+now require `campaign.approvedAt`, and the ledger additionally refuses any unit missing a frozen
+customer rather than measuring a partial cohort.
+
+**Still open.** Convert the approval and send call sites onto the streaming assignment; stop
+freezing per-customer maps in `agentProposal` (measured 17.97 MB at 100k); replace the send
+worker's whole-cohort `IN` clauses and per-recipient inserts; add the `CustomerAudienceDecision`
+`writeKey`; then run the 100k proof against a real database.
 
 ### Acceptance criteria
 
