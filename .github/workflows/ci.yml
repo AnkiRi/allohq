@@ -1,0 +1,56 @@
+name: CI
+
+# Typecheck, unit tests, build and Prisma validation. Everything here runs
+# without a database or a queue: integration tests live in integration.yml,
+# against disposable service containers.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  # Prisma reads a URL when validating and generating. Neither connects, and
+  # this must never be a real database. Anything that does connect - migration
+  # drift included - belongs in integration.yml, against a disposable service
+  # container.
+  DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/unused_by_this_job"
+
+jobs:
+  verify:
+    name: typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate the Prisma schema
+        run: pnpm --filter @allohq/database exec prisma validate
+
+      - name: Generate the Prisma client
+        run: pnpm --filter @allohq/database exec prisma generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
