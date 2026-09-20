@@ -28,12 +28,50 @@ const databaseUrl = process.env["TEST_DATABASE_URL"];
 const SMALL = Number(process.env["LOAD_SMALL"] ?? 25_000);
 const LARGE = Number(process.env["LOAD_LARGE"] ?? 100_000);
 
+interface QuerySample {
+  query: string;
+  duration: number;
+}
+const queries: QuerySample[] = [];
+
 async function load() {
   process.env["DATABASE_URL"] = databaseUrl;
+  // The database package caches its client on globalThis outside production,
+  // so seeding that slot installs an instrumented client the engine will use.
+  // This is what lets one run report duration, heap, query count and query
+  // latency together rather than from separate runs that cannot be compared.
+  const { PrismaClient } = await import("@prisma/client");
+  const instrumented = new PrismaClient({ log: [{ emit: "event", level: "query" }] });
+  (instrumented as unknown as {
+    $on: (event: string, handler: (payload: QuerySample) => void) => void;
+  }).$on("query", (payload) => {
+    // Collapse to the shape on arrival. Keeping full statement text would have
+    // the harness retain megabytes of its own and inflate the very figure this
+    // proof reports: it measured 3.09 MB retained at 100k before this, against
+    // 0.12 MB for the same run uninstrumented.
+    queries.push({ query: queryShape(payload.query), duration: payload.duration });
+  });
+  (globalThis as Record<string, unknown>)["prisma"] = instrumented;
+
   const { prisma } = await import("@allohq/database");
   const engine = await import("./audience-run");
   const experiments = await import("@allohq/customer-state");
   return { prisma, ...engine, experiments };
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]!;
+}
+
+/** Collapse a statement to its shape so counts group meaningfully. */
+function queryShape(query: string): string {
+  return query
+    .replace(/\$\d+/g, "?")
+    .replace(/\(\s*(\?,\s*)*\?\s*\)/g, "(?)")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 92);
 }
 
 const STRATA = ["champions", "loyal", "at_risk", "hibernating", "new"] as const;
@@ -155,6 +193,14 @@ interface Measurement {
   controlCount: number;
   treatmentCount: number;
   diagnostics: Record<string, number>;
+  queries: number;
+  queryShapes: number;
+  queryMsTotal: number;
+  queryP50: number;
+  queryP95: number;
+  queryP99: number;
+  queryMax: number;
+  heaviest: Array<[string, { count: number; total: number }]>;
 }
 
 async function measure(prisma: any, engine: any, customers: number): Promise<{
@@ -172,6 +218,7 @@ async function measure(prisma: any, engine: any, customers: number): Promise<{
   }, 25);
 
   const transactionsBefore = await transactionCount(prisma);
+  queries.length = 0;
   const startedAt = process.hrtime.bigint();
   const result = await engine.runCampaignAudienceResolution({
     campaignId: fixture.campaignId,
@@ -187,6 +234,7 @@ async function measure(prisma: any, engine: any, customers: number): Promise<{
   const transactions = (await transactionCount(prisma)) - transactionsBefore;
   const retainedHeap = await settle();
 
+  const captured = queries.splice(0, queries.length);
   const memberRows = await prisma.campaignAudienceMember.count({ where: { runId: result.runId } });
   const [{ distinct }] = await prisma.$queryRaw<Array<{ distinct: bigint }>>`
     SELECT COUNT(DISTINCT "customerId")::bigint AS distinct
@@ -209,6 +257,23 @@ async function measure(prisma: any, engine: any, customers: number): Promise<{
       memberRows,
       distinctCustomers,
       duplicates: memberRows - distinctCustomers,
+      queries: captured.length,
+      queryShapes: new Set(captured.map((sample) => queryShape(sample.query))).size,
+      queryMsTotal: captured.reduce((sum, sample) => sum + sample.duration, 0),
+      queryP50: percentile(captured.map((s2) => s2.duration).sort((a, b) => a - b), 50),
+      queryP95: percentile(captured.map((s2) => s2.duration).sort((a, b) => a - b), 95),
+      queryP99: percentile(captured.map((s2) => s2.duration).sort((a, b) => a - b), 99),
+      queryMax: Math.max(0, ...captured.map((sample) => sample.duration)),
+      heaviest: [...captured.reduce((byShape, sample) => {
+        const key = queryShape(sample.query);
+        const entry = byShape.get(key) ?? { count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += sample.duration;
+        byShape.set(key, entry);
+        return byShape;
+      }, new Map<string, { count: number; total: number }>())]
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 4),
       candidateCount: result.candidateCount,
       controlCount: result.controlCount,
       treatmentCount: result.treatmentCount,
@@ -226,6 +291,8 @@ function report(m: Measurement) {
       `  peak heap above baseline . ${mb(m.peakHeap - m.baselineHeap)} MB (baseline ${mb(m.baselineHeap)} MB, peak ${mb(m.peakHeap)} MB)`,
       `  heap retained after ...... ${mb(m.retainedHeap - m.baselineHeap)} MB`,
       `  postgres transactions .... ${m.transactions.toLocaleString()}`,
+      `  queries .................. ${m.queries.toLocaleString()} in ${m.queryShapes} shapes, ${(m.queryMsTotal / 1000).toFixed(1)} s inside queries (${((m.queryMsTotal / m.durationMs) * 100).toFixed(0)}% of wall)`,
+      `  query p50/p95/p99/max .... ${m.queryP50} / ${m.queryP95} / ${m.queryP99} / ${m.queryMax} ms`,
       `  resolver pages ........... ${m.resolverPages.toLocaleString()} (200 customers per page)`,
       `  member write statements .. ${m.diagnostics["memberWriteStatements"]?.toLocaleString()} (2,000 rows per statement)`,
       `  pooled fixup ............. ${m.diagnostics["pooledFixupRows"]} rows in ${m.diagnostics["pooledFixupStatements"]} statements`,
@@ -235,6 +302,11 @@ function report(m: Measurement) {
       `  duplicate rows ........... ${m.duplicates}`,
       `  candidates ............... ${m.candidateCount.toLocaleString()}`,
       `  control / treatment ...... ${m.controlCount.toLocaleString()} / ${m.treatmentCount.toLocaleString()}`,
+      "  heaviest statements:",
+      ...m.heaviest.map(
+        ([shape, entry]) =>
+          `    ${String(entry.count).padStart(6)} x  ${entry.total.toFixed(0).padStart(7)} ms  ${shape}`
+      ),
       "",
     ].join("\n")
   );
@@ -244,6 +316,14 @@ test(
   "resolving a 100k audience keeps Node memory bounded and control selection exact",
   { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set", timeout: 30 * 60 * 1000 },
   async (t) => {
+    // A retained-heap proof that quietly degrades to measuring garbage is
+    // worse than no proof, so this refuses to run without a collector rather
+    // than reporting a skip among passes.
+    if (typeof (globalThis as Record<string, unknown>)["gc"] !== "function") {
+      assert.fail(
+        "the load proof measures retained heap and needs NODE_OPTIONS=--expose-gc"
+      );
+    }
     const { prisma, experiments, ...engine } = await load();
     const fixtures: string[] = [];
     try {

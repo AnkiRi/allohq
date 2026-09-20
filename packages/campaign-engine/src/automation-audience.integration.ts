@@ -80,12 +80,23 @@ const skip = databaseUrl ? false : "TEST_DATABASE_URL is not set";
 /**
  * Retained-heap measurement needs a real collector. Without --expose-gc,
  * `settle()` cannot collect and the reading is uncollected garbage rather than
- * retention — which passes or fails by luck. Skip loudly instead.
+ * retention — which passes or fails by luck.
+ *
+ * The test fails in that case rather than skipping. A skipped memory proof
+ * reported alongside passes is worse than no proof: it looks like coverage.
+ * ALLOW_UNMEASURED_HEAP=1 excludes it explicitly, for a runner that genuinely
+ * cannot enable the collector.
  */
-const heapMeasurable = typeof (globalThis as any).gc === "function";
-const heapSkip = heapMeasurable
-  ? false
-  : "run with NODE_OPTIONS=--expose-gc to measure retained heap";
+function requireCollector(): void {
+  if (typeof (globalThis as any).gc === "function") return;
+  if (process.env["ALLOW_UNMEASURED_HEAP"] === "1") {
+    throw new Error("ALLOW_UNMEASURED_HEAP=1: heap proof deliberately excluded");
+  }
+  assert.fail(
+    "retained-heap proof cannot run without a collector. Use NODE_OPTIONS=--expose-gc, " +
+      "or set ALLOW_UNMEASURED_HEAP=1 to exclude it explicitly."
+  );
+}
 
 
 test("the paged automation audience matches the materialised one exactly", { skip }, async () => {
@@ -112,7 +123,8 @@ test("the paged automation audience matches the materialised one exactly", { ski
   }
 });
 
-test("evaluating a larger store does not cost more Node memory", { skip: skip || heapSkip }, async () => {
+test("evaluating a larger store does not cost more Node memory", { skip }, async () => {
+  requireCollector();
   const { prisma, countAutomationAudience } = await load();
   const settle = async () => {
     for (let i = 0; i < 3; i += 1) {
