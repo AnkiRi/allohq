@@ -44,64 +44,225 @@ _Audited 2026-09-20T11:57Z. Every figure below was measured, not estimated._
 | Attribution and causal ledger ignore arms of unapproved campaigns | `416e6a2` | Closed a pre-existing hole |
 | Approval writes made idempotent | `e0ca152` | `writeKey`, additive, backfill-free |
 
-## Pass 8 — remaining structural work
+## Pass 8 — durable staging (2026-09-20T15:40Z)
 
-_Audited 2026-09-20T11:57Z against the structural acceptance criteria. **Pass 8 is not complete.**
-Criterion 1 is "no full audience-sized eligible/suppressed/exclusion arrays, Maps or Sets in the
-approval or send paths". The following violate it. Each is verified at file and line; none is an
-inference._
+_Architecture directed by the user on 2026-09-20, superseding an earlier proposal of mine that
+offered a choice between three resolver scans and a retained in-process audience. The user's
+correction was right and is recorded here because it changed the design: **"the claim that an
+in-memory 15% control heap is a theoretical minimum is not correct for this architecture. Exact
+selection can be performed by the database over the durable frozen audience rows."** It is a
+minimum only if selection happens in Node._
 
-**`packages/campaign-engine/src/audience-resolver.ts`** — `resolveCampaignAudience` pages
-customers in keyset batches of 200 but accumulates the whole audience before returning:
+**One keyset-paged policy evaluation. Postgres holds the frozen membership and performs the arm
+assignment. Nothing retained in the API process or the send worker grows with the audience.**
 
-- `:227` `eligible` — one object per candidate
-- `:226` `excludedCustomers` — one object per excluded customer, grouped by reason
-- `:228` `deliberatelyLeftAlone` — one object per left-alone customer
-- `:229`–`:232` `recentPurchaseExcluded`, `fatigueExcluded`, `collisionExcluded`,
-  `cooldownExcluded` — four further audience-sized arrays that **duplicate rows already held in
-  `excludedCustomers`**
-- `:225` `samples` is correctly bounded to three per reason and is not a violation
-- `resolveAutomationAudience` (`:432`–`:438`) repeats the same shape and additionally loads every
-  store customer in a single unpaged `findMany`
+### Shape
 
-**`apps/api/src/routers/campaigns.ts`** — approval and dry-run:
+`campaign_audience_runs` is one approval-resolution attempt: a fixed `asOf` so time-based
+eligibility cannot drift between phases, the deterministic assignment seed, policy identifiers, a
+status of `resolving | assigning | complete | failed`, and bounded counts and diagnostics.
 
-- `:305` `audience.eligible.map((customer) => customer.id)` — audience-sized id array
-- `:167` `selector.controlIds()` — a Set proportional to the audience (~15–20% of it)
-- `:1066` `new Set(audience.eligible.map(...))` in the dry-run path
-- `:1109` `previewAssignments = audience.eligible.map(...)` — one object per candidate
-- `assignmentRows` and `decisionRows` are materialised in full before being chunk-written
+`campaign_audience_members` is one durable audience decision per customer per run — the frozen
+membership, the merchant review surface, and the table the control selection ranks over. **These
+rows are intentional product and audit data, not a cache.** They are not counted as process
+memory.
 
-**`apps/workers/src/workers/send.worker.ts`** — explicitly violates criterion 4, "the worker
-pages approved assignments rather than loading an entire cohort into a Map/Set":
+Selection is a single statement:
 
-- `:77` `loadFrozenCohort` pages the query but assembles a Map of the **entire** cohort
-- `:307` `approvedIds = new Set(frozenArms.keys())`
-- `:341` `customers` — every recipient object with RFM and LTV
-- `:467` `processedCustomerIds` — a Set of every already-processed customer
-- `:490` `plannedDeliveries` — every recipient's delivery payload buffered before enqueue
-- `:495` `plannedLogs` is correctly bounded by its flush and is not a violation
+```sql
+ROW_NUMBER() OVER (PARTITION BY "assignmentStratum"
+                   ORDER BY "assignmentHash", "customerId" COLLATE "C")
+```
 
-**`packages/campaign-engine/src/audience-snapshot.ts`** — **no violation.** The snapshot is now
-counts, strata and the experiment id: 662 B measured at 100k.
+with the first `controlCount` rows per stratum marked CONTROL. Quotas still come from
+`planStratifiedControlQuotas`, so the control policy stays in TypeScript.
 
-### What completing Pass 8 requires
+One subtlety worth recording: the assignment hash is seeded by the *assignment* stratum, and
+pooling is only known once the census closes. The single pass therefore writes a provisional hash
+keyed by the customer's own stratum — already final for every stratum of ten or more — and only
+pooled strata are rewritten. Those hold fewer than ten candidates each by definition, so the fixup
+is bounded and needs no second scan. Measured at 100k: **10 rows in 10 statements.**
 
-1. A two-pass, keyset-paged execution path: first pass yields deterministic counts, strata and
-   control quotas; second pass streams decisions and assignments into bounded chunk writes.
-2. The send worker pages approved assignments rather than materialising the cohort.
-3. Exact deterministic treatment/control assignment, merchant overrides, frozen approved
-   membership and delivery-time consent/suppression rechecks all preserved.
-4. Campaign UI capabilities preserved: grouped reasons, searchable left-alone review, control and
-   treatment counts, decision history, audit receipts.
-5. A 100k integration/load proof on an **isolated disposable** Postgres and Redis — never a
-   production database — recording peak memory, duration and query/chunk counts.
+### Measured, 100k on an isolated disposable Postgres — never a production database
+
+| Measure | 25,000 | 100,000 |
+| --- | --- | --- |
+| Duration | 8.2 s | **59.6 s** |
+| Heap retained after the run | 0.56 MB | **0.10 MB** |
+| Peak heap above baseline | 55.69 MB | 67.46 MB |
+| Postgres transactions | 1,549 | 6,026 |
+| Resolver pages (200 per page) | 125 | 500 |
+| Member write statements (2,000 rows each) | 13 | **50** |
+| Pooled fixup | 10 rows / 10 statements | 10 rows / 10 statements |
+| Arm assignment statements | 1 | **1** |
+| Audience rows written | 25,000 | 100,000 |
+| Duplicate rows | 0 | **0** |
+| Candidates | 22,727 | 90,909 |
+| Control / treatment | 3,406 / 19,321 | 13,635 / 77,274 |
+| Arm parity vs the in-memory reference | — | **0 mismatches of 90,909** |
+
+**Memory is bounded in Node.** A 4.0x larger audience retained 0.10 MB against 0.56 MB. What the
+process keeps at any size: the stratum census (one integer per RFM stratum), one 2,000-row write
+buffer, and counts plus three samples per exclusion reason.
+
+The test asserts *retained* heap, not peak. Peak heap is dominated by transient per-page garbage
+V8 has not collected — 55.69 MB at 25k, 64.32 MB at 40k, 67.46 MB at 100k — so it reports GC
+timing, not retention, and is flat once the heap reaches steady state. An earlier draft asserted a
+growth ratio on peak and failed at 10k → 40k for exactly that reason. The ceiling now sits on
+retained heap, where the in-process design this replaces measured 45.1 MB at 100k and would fail
+by more than five times.
+
+### Structural acceptance criteria — status
+
+| # | Criterion | Status |
+| --- | --- | --- |
+| 1 | No audience-sized arrays, Maps or Sets in the approval or send paths | Met in both paths |
+| 2 | Keyset-paged / two-pass processing | Met — one policy pass, SQL assignment |
+| 3 | Exact deterministic arms, merchant overrides, frozen membership, delivery-time rechecks | Met — 0 arm mismatches of 90,909; rechecks strengthened |
+| 4 | Worker pages approved assignments rather than loading a cohort into a Map/Set | Met |
+| 5 | Campaign UI capabilities preserved | Met — same tables, same vocabulary, projected not reassembled |
+| 6 | No lift billing, no journey holdouts, no COGS/margin, no merchant financial input | Unchanged — nothing in this pass touches billing |
+| 7 | Approved terminology unaltered | Unchanged |
+
+`resolveCampaignAudience` still materialises an audience **by design**, and is no longer used by
+approval or the send worker. It remains for the dry-run preview and the merchant override paths,
+which operate on a screen the merchant is looking at. Its accumulators are documented as
+deliberate at `packages/campaign-engine/src/audience-resolver.ts:373`. `resolveAutomationAudience`
+still loads every store customer in one unpaged `findMany` — **open, not in the campaign path.**
+
+### Open items carried out of Pass 8
+
+- `resolveAutomationAudience` loads every store customer unpaged (`audience-resolver.ts`).
+- The dry-run preview still builds `previewAssignments` and an `eligibleIds` Set. It is a merchant
+  screen, not approval or delivery, and is bounded by what the merchant is viewing — but it has
+  not been re-measured since the run landed.
+- Migration `20260920090000_add_audience_decision_write_key`,
+  `20260920140000_add_campaign_audience_runs` and `20260920150000_add_audience_member_reconsider`
+  are **not yet deployed**.
+- Pre-existing migration drift on main, reported but not gated in CI: one
+  `ALTER TABLE "form_incentive_grants" ALTER COLUMN "updatedAt" DROP DEFAULT` and five index
+  renames. Unrelated to this work; the drift check stays non-blocking until it is cleared.
+
+## Findings outside Pass 8 — 2026-09-20T15:40Z
+
+Three defects were found while doing the Pass 8 work. All three are fixed; the second is a visible
+behaviour change that was not asked for and is flagged rather than buried.
+
+1. **`acquireEmailCapacity` raced its own warm-up row** (`apps/workers/src/utils/email-capacity.ts:76`).
+   Prisma's `upsert` compiles to a read then a write here, not `INSERT … ON CONFLICT`, so
+   concurrent sends for a store with no warm-up row raced and one threw
+   `Unique constraint failed on (storeId)` — a send failing outright rather than being admitted or
+   cleanly refused, on a store's first parallel dispatch. Its own integration test had been failing
+   on **every** run (3/3 before, 3/3 green after, and it fails identically with all of this
+   session's other work stashed). It had not surfaced because the suite ran only under a
+   workers-only script. Fixed in `34d4c16`.
+
+2. **Widget product cards were priced in dollars for every store**
+   (`apps/widget/src/chat/renderer.ts`). An Indian store's ₹2,400 product read as $2400.00 to its
+   own customers. The store's currency now reaches the card, and an unknown currency shows the
+   amount with no symbol rather than asserting dollars. Fixed in `cf83ea1`.
+   **Flagged:** while fixing it, `search_products` was found to return
+   `{ count, currency, selectionBasis, products: [...] }` while the widget only handled a bare
+   array, so its product cards had never rendered at all. The live dollar-priced cards all came
+   from `recommend_products`, which does return an array. The widget now reads `out.products`,
+   which makes search results render for the first time. That is a fix, but a visible one nobody
+   asked for.
+
+3. **No CI existed.** `.github/workflows` was absent. Added in `3c86497`: a database-free
+   verification workflow (Prisma validate, generate, typecheck, unit tests, build) and an
+   integration workflow against disposable `postgres:16` and `redis:7` service containers, plus a
+   load job for the 100k proof on main and on demand. Migration-drift detection reports rather
+   than gates, because main already carries drift it would flag.
+
+## Pass 9 pre-report — 2026-09-20T15:40Z
+
+_Requested before Pass 9 begins. Every claim below is verified at file and line. Where something
+is an inference it says so._
+
+### 1. Remaining provider-neutral warm-up and reputation work
+
+The ramp itself exists and is provider-neutral in effect despite the SES-shaped table name:
+`acquireEmailCapacity` (`apps/workers/src/utils/email-capacity.ts:73`) applies
+`warmupDailyCap(warmup.healthyDay, …)` on **every** send regardless of provider, and the code says
+so — "One reputation policy governs both transports. Switching Resend ↔ SES may change provider
+capacity, but it never resets the domain's reviewed ramp."
+
+What is outstanding:
+
+- **Ramp growth is manual.** Nothing advances `healthyDay` automatically. The only writer is the
+  `sender-domains` mutation at `apps/api/src/routers/sender-domains.ts:148`, which requires a
+  human to submit `action: "grow"` and is refused unless `warmupHealthAction` already recommends
+  it. A store therefore stays at its current cap — 500 × 2^(day−1) — until someone acts, every
+  day, per store. There is no schedule or worker that calls it: `grep healthyDay apps/workers/src`
+  returns only the cap read.
+- **Pause and hold are automated; growth is not.** `packages/database/src/email-provider-effects.ts:42,61`
+  writes `action: "pause"` and `action: "hold"` assessments from live bounce and complaint events.
+  So reputation can only ever tighten on its own. That is the safe asymmetry, but it means the
+  ramp does not run unattended.
+- **Naming.** `SesWarmupState`, `sesWarmupState`, `SES_STANDARD_REPUTATION_POLICY` are SES-named
+  for a provider-neutral policy. Cosmetic, but it is why this looked SES-only on first reading.
+- **Thresholds are hardcoded** in `packages/messaging/src/warmup.ts:13–16` — pause above 0.3%
+  complaints, hold above 2% bounces or 0.1% complaints. Not per-store configurable. Whether that
+  should be configurable is a product decision, not a defect.
+
+### 2. Exact external SES dependencies
+
+Environment variables actually read in code:
+
+`AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_SES_REGION`, `SES_EVENT_QUEUE_URL`, `SES_EVENT_TOPIC_ARN`,
+`SES_FROM_EMAIL`, `SES_OPERATIONAL_FROM_EMAIL`, `SES_STANDARD_REPUTATION_POLICY`,
+`SES_TENANT_REGION_CONFIRMED`.
+
+SDK dependencies: `@aws-sdk/client-sesv2` and `@aws-sdk/client-sqs` in `packages/messaging`.
+
+AWS-side resources the code creates or requires (`packages/messaging/src/ses-admin.ts`): an SESv2
+**tenant**, a **reputation entity policy** on that tenant, a **configuration set** with a
+`joon-events` event destination, **tenant-resource associations** for the configuration set and
+for each identity, an **email identity** per sender domain with RSA-2048 DKIM, a **custom
+MAIL FROM** domain with `BehaviorOnMxFailure: REJECT_MESSAGE`, and an **SQS queue plus SNS topic**
+for delivery events. `GetAccountCommand` supplies the max send rate.
+
+Not verifiable from the repository, and therefore stated as unknown rather than guessed: whether
+the AWS account is out of the SES sandbox, whether production sending access has been granted, and
+what the account's current sending quota is. `SES_TENANT_REGION_CONFIRMED` reads as a manual
+human confirmation gate — that is an inference from the name and its use, not something the code
+states.
+
+### 3. Do any public UI surfaces expose unsupported journey webhook nodes?
+
+**No merchant can add one.** The journey editor's palette is the authority:
+`apps/web/src/components/workflow-editor/WorkflowEditor.tsx:60` — `ACTION_OPTIONS` offers exactly
+`send_email`, `wait`, `condition`. The `webhook` branches elsewhere in that file (`:266` config,
+`:283` icon, `:295` colour) and the label at
+`apps/web/src/app/(dashboard)/automations/[id]/page.tsx:31` only *render* a node type that the UI
+cannot create. No JSON import path into the editor exists.
+
+The server fails closed independently. `assertV1EmailAutomation` rejects `webhook` along with
+`send_sms`, `send_whatsapp`, `send_rcs` and `channel_select`, and is called on `activate`
+(`apps/api/src/routers/automations.ts:249`), `resume` (`:263`), `update` (`:313` and `:352`), the
+generator worker (`apps/workers/src/workers/automation-generator.worker.ts:348`) and the agent
+tools (`packages/agent-core/src/tools/automation-tools.ts:214,252`).
+`packages/release-gate/src/release-gate.test.ts:107` pins this. The gate fails closed on an unset
+or malformed `V1_RELEASE_MODE`.
+
+**One gap, minor and reported rather than fixed:** `automations.duplicate` has no gate. A legacy
+automation containing a non-v1 node could be copied into a new draft. That draft could never be
+activated or resumed, both of which are gated, so nothing can run or send — but the copy would
+exist. Fixing it means adding one `assertV1EmailAutomation` call; it is left for a scoped decision
+because `duplicate` is also how a merchant rescues an old automation.
+
+**Recommendation:** nothing to hide or disable. The palette already excludes it and the server
+already refuses it. Implementing a generic webhook node is explicitly *not* recommended without a
+scoped product decision, per the standing instruction.
 
 ## Change log
 
 | UTC timestamp | Change |
 | --- | --- |
-| 2026-09-20T11:57Z | Renamed from `…-2026-09-19.md`. Added this change log and the locked-facts block. **Corrected Pass 8 from "complete in code" to materially improved but NOT complete** — it fails the structural acceptance criteria below. Removed contradictory historical status entries. |
+| 2026-09-20T11:57Z | Renamed from `…-2026-09-19.md`. Added this change log and the locked-facts block. **Corrected Pass 8 from "complete in code" to materially improved but NOT complete** — as of that timestamp it failed the structural acceptance criteria. Removed contradictory historical status entries. (Superseded by the 15:40Z entry below: the work was then done and measured.) |
+| 2026-09-20T15:40Z | Replaced "Pass 8 — remaining structural work" with "Pass 8 — durable staging". All seven structural acceptance criteria now met and measured at 100k. Recorded the user's architectural correction that exact control selection belongs in Postgres, not an in-process heap, and that my "theoretical minimum" claim was wrong. |
+| 2026-09-20T15:40Z | Added the Pass 9 pre-report: provider-neutral warm-up and reputation work outstanding, the exact external SES dependencies, and the journey-webhook UI audit. |
+| 2026-09-20T15:40Z | Recorded CI (none existed), the widget currency defect and a second widget defect found while fixing it, and a pre-existing concurrency defect in `acquireEmailCapacity` that its own integration test had been failing on every run. |
 
 ## Active scope — 19 Sep
 
@@ -156,7 +317,7 @@ contract; this checkpoint records the implementation state.
   multi-megabyte per-customer assignment map into the `agentProposal` JSON column, and the
   send worker re-resolves the audience and reads it back through whole-cohort `IN` clauses.
   `61efbfe` makes control assignment streaming and parity-proven at 100k; the call sites still
-  need converting. See `19 Sep code audit — what actually blocks 100k` under Pass 8.
+  need converting. See `19 Sep code audit — what actually blocks 100k` under Pass 8; the 100k path itself was completed and measured at 2026-09-20T15:40Z.
 - **Pass 9 core:** provider-specific identities coexist, approval pins the provider, sending
   fails closed on mismatch, provider-neutral evidence produces reviewed grow/hold/pause actions,
   both Resend and SES obey the same reviewed cap, and timing explains deliverable/deferred
@@ -176,11 +337,26 @@ contract; this checkpoint records the implementation state.
 
 ### 20 September work log — commit to pass mapping
 
-Unit suite went from 291 of 292 with a permanently red test to **307 of 307**; repo typecheck
-19/19 throughout. Every entry below was verified against code before being claimed.
+Unit suite went from 291 of 292 with a permanently red test to **318 of 318** (`pnpm test`); repo
+typecheck 19/19 throughout. Every entry below was verified against code before being claimed.
+
+Two test-runner counts appear in this document and they are not the same measurement.
+`pnpm test` discovers every `*.test.ts` in the workspace and reports **318**. `turbo run test`
+runs each package's own script and reports **229**, because several of those scripts use
+`src/**/*.test.ts` globs that miss files. CI runs the root discovery runner, so the gap costs
+nothing in CI, but a developer running `turbo run test` sees a smaller suite than exists. Recorded
+as a finding, not fixed in this pass.
 
 | Commit | Pass | What changed |
 | --- | --- | --- |
+| `ba71e12` | 8 | `campaign_audience_runs` + `campaign_audience_members`, additive; the index the control selection ranks over |
+| `4d2267f` | 8 | One paged policy evaluation writes durable rows; Postgres picks the exact control group in one window-function statement |
+| `1378827` | 8 | 100k load proof: 59.6 s, 0.10 MB retained, 0 duplicates, 0 arm mismatches of 90,909 |
+| `0a54404` | 8 | Approval projects measurement assignments, the evaluation surface and the decision ledger from the frozen membership; no audience arrays left in the approval path |
+| `826f69f` | 8 | Send worker pages the cohort; delivery-time rechecks moved onto the resolver's own code, scoped per page |
+| `cf83ea1` | — | Widget product cards priced in the store's currency, not dollars |
+| `34d4c16` | — | `acquireEmailCapacity` warm-up row race fixed; workspace-wide integration runner |
+| `3c86497` | — | GitHub Actions: verification workflow and Postgres/Redis integration workflow |
 | `61efbfe` | 8 | Streaming control assignment, proven identical to the in-memory function at 100k |
 | `6631302` | 6 | VIP ranked by store RFM quintiles, real send windows, reorder-confidence precedence bug |
 | `8918ea5` | 6 / billing copy | `{{ltv}}` and `{{avg_order_value}}` rendered in store currency in customer email and SMS |
@@ -201,12 +377,15 @@ and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those
 
 **Still open**, in rough order of value:
 
-1. **Pass 8 — materially improved, NOT complete.** Corrected 2026-09-20T11:57Z. Every hard
-   failure found in the 19–20 Sep audit is fixed and measured (see "Pass 8 measured results"),
-   but the pass does **not** meet its structural acceptance criteria: audience-sized arrays,
-   Maps and Sets still exist in both the approval and send paths. The specific violations are
-   enumerated under "Pass 8 — remaining structural work". An earlier revision of this document
-   claimed Pass 8 was "complete in code"; that claim was wrong and is withdrawn.
+1. **Pass 8 — structural criteria met and measured, 2026-09-20T15:40Z.** The approval and send
+   paths hold nothing that grows with the audience; Postgres holds the frozen membership and
+   performs the exact control selection. Proven at 100k on an isolated disposable database:
+   59.6 s, 0.10 MB retained heap, 0 duplicate rows, 0 arm mismatches of 90,909 candidates. See
+   "Pass 8 — durable staging". Open items carried out of the pass are listed there — chiefly
+   `resolveAutomationAudience`, the dry-run preview, and three undeployed migrations. An earlier
+   revision claimed Pass 8 was "complete in code" while audience-sized structures were still in
+   both paths; that claim was wrong, was withdrawn at 2026-09-20T11:57Z, and the work has since
+   been done rather than re-asserted.
 2. **Implement or strike** the OCR, malware-scanning, metadata-stripping and asset-moderation
    claims. The document currently asserts four safety properties the code does not have.
 3. **Email canvas accessibility** — keyboard and ARIA operation, and honour reduced motion.
@@ -255,7 +434,7 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | **Materially improved, NOT complete** (corrected 2026-09-20T11:57Z) | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386`, `07acad3` | Every hard failure is fixed and measured, but audience-sized arrays/Maps/Sets remain in the approval and send paths. See "Pass 8 — remaining structural work". Then the 100k integration/load proof on an isolated disposable database |
+| 8 — Campaign-specific customer decision context | **Structural criteria met and measured** (2026-09-20T15:40Z) | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386`, `07acad3`, `ba71e12`, `4d2267f`, `1378827`, `0a54404`, `826f69f` | Durable staging: one paged policy evaluation, Postgres performs the exact control selection, approval and the send worker hold nothing audience-sized. 100k proof on an isolated disposable database — 59.6 s, 0.10 MB retained, 0 duplicates, 0 arm mismatches of 90,909. See "Pass 8 — durable staging" for the items carried out of the pass |
 | 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
@@ -287,7 +466,8 @@ Store lifecycle safety remains the first acceptance gate because a disconnected 
 uninstalled store must never continue sending. The remaining sequence combines the two
 explicit internal hardening items above with deployment and operations work:
 
-1. Finish the Pass 8 bounded streaming/set-based audience path and run its 100k proof.
+1. ~~Finish the Pass 8 bounded streaming/set-based audience path and run its 100k proof.~~
+   Done 2026-09-20T15:40Z — durable staging, measured at 100k.
 2. Finish Pass 9 authenticated prior-history assessment, healthy-day reconciliation and
    provider-migration receipt/rollback workflow.
 3. Deploy the current release, additive migration and asset/provider configuration.
@@ -1885,9 +2065,10 @@ corrected rather than implemented literally.
 
 ### Internal implementation status
 
-Most numbered product passes are complete in repository code. Pass 8 scale execution and
-Pass 9 reputation-assessment/migration hardening remain genuine internal work; deployment
-and acceptance gates are listed separately below.
+Most numbered product passes are complete in repository code. Pass 8 scale execution was
+completed and measured at 2026-09-20T15:40Z (see "Pass 8 — durable staging"); Pass 9
+reputation-assessment and migration hardening remains genuine internal work, scoped in the
+"Pass 9 pre-report". Deployment and acceptance gates are listed separately below.
 
 | Area | Code-complete result | Remaining gate |
 | --- | --- | --- |
