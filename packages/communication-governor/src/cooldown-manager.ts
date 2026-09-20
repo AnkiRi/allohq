@@ -25,6 +25,8 @@ export async function checkCooldown(
   customerId: string,
   storeId: string,
   messageType: string,
+  /** Evaluation instant; see checkFatigue. */
+  now: Date = new Date(),
 ): Promise<GovernorDecision> {
   // Transactional messages bypass cooldowns
   if (messageType === "transactional") {
@@ -33,7 +35,7 @@ export async function checkCooldown(
 
   // Post-discount cooldown: receiving an offer is not enough. Only an actual,
   // traceable redemption may silence the customer for fourteen days.
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const recentDiscountMessages = await prisma.messageLog.findMany({
     where: {
       customerId,
@@ -73,7 +75,7 @@ export async function checkCooldown(
 
   if (recentDiscount) {
     const daysAgo = Math.round(
-      (Date.now() - recentDiscount.sentAt.getTime()) / (24 * 60 * 60 * 1000),
+      (now.getTime() - recentDiscount.sentAt.getTime()) / (24 * 60 * 60 * 1000),
     );
     const daysRemaining = 14 - daysAgo;
     if (daysRemaining > 0) {
@@ -86,7 +88,7 @@ export async function checkCooldown(
   }
 
   // Post-complaint cooldown: 7 days after resolution
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const recentResolved = await prisma.conversation.findFirst({
     where: {
       customerId,
@@ -100,7 +102,7 @@ export async function checkCooldown(
 
   if (recentResolved) {
     const daysAgo = Math.round(
-      (Date.now() - recentResolved.updatedAt.getTime()) / (24 * 60 * 60 * 1000),
+      (now.getTime() - recentResolved.updatedAt.getTime()) / (24 * 60 * 60 * 1000),
     );
     const daysRemaining = 7 - daysAgo;
     if (daysRemaining > 0) {
