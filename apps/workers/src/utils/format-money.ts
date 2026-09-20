@@ -2,9 +2,12 @@
  * Store money for merchant and customer facing text produced by workers.
  *
  * Personalization variables used to be built as `$${amount.toFixed(2)}`, so an
- * Indian store's `{{ltv}}` rendered as `$4000.00` in a real customer email. The
- * web dashboard already formats in the store's own currency; workers had no
- * shared helper and drifted to a hardcoded dollar sign.
+ * Indian store's `{{ltv}}` would render as `$4000.00`. The variable is reachable
+ * — `campaign-factory.ts` puts `{{ltv}}` in a "Total Spent" row — but no sent
+ * message has been shown to have carried it, and delivery remains allowlisted,
+ * so this is a latent defect rather than a delivered one. The web dashboard
+ * already formats in the store's own currency; workers had no shared helper and
+ * drifted to a hardcoded dollar sign.
  *
  * An unrecognised currency never invents a symbol: it falls back to the plain
  * amount, or the ISO code plus the amount, rather than guessing dollars.

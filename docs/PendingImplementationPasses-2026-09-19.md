@@ -94,7 +94,7 @@ Unit suite went from 291 of 292 with a permanently red test to **307 of 307**; r
 | `e0ca152` | 8 | `writeKey` makes approval writes idempotent without constraining the ledger's meaning |
 | `c5953ac` | 6 | Four merchant-facing worker summaries render in store currency |
 | `bb334d7` | 0 / billing | Causal ledger grades itself from the observed outcome; `measurement_ready` reachable at last |
-| `ca3620c` | 8 | Snapshot validation made linear; 11.51 MB of write-only detail no longer stored |
+| `ca3620c` | 8 | Snapshot validation made linear; 11.51 MB of write-only detail no longer stored. **Corrected afterwards:** that commit's message claimed the old implementation could not meet the test's 2000ms bound. Measured at 20,000 it took 1547ms, so the old code would have passed the very test added to catch it. The bound is now 250ms, against a measured 3.5ms |
 | `02de6c1` | 5E | Generated-image spend capped per workspace, degrading to stock rather than failing |
 
 Register commits `2b7a9dc`, `6c33261`, `f813cab`, `03a6e90`, `95db874`, `b291e3d`, `8374f34`
@@ -1804,7 +1804,7 @@ Found while verifying the LTV units behind the VIP defect, not by looking for it
 
 | Defect | Evidence | Fix |
 | --- | --- | --- |
-| Store money rendered as US dollars in real customer email and SMS | `send.worker.ts:985`–`986` and `automation-runner.worker.ts:271`,`272`,`470` built the `{{ltv}}` and `{{avg_order_value}}` personalization variables as `` `$${amount.toFixed(2)}` ``. An Indian store's customer received "$4000.00". The dashboard was corrected for this in `0bd8611`; the workers had no shared formatter and drifted | A shared `formatStoreMoney` helper in `apps/workers/src/utils`. `deliverOne` already loads the full store row and the runner already loads the store, so neither needed an extra query. `Store.currency` is nullable, so an unrecognised currency falls back to the bare amount or ISO code rather than guessing dollars |
+| Store money would render as US dollars in customer email and SMS | `send.worker.ts:985`–`986` and `automation-runner.worker.ts:271`,`272`,`470` built the `{{ltv}}` and `{{avg_order_value}}` personalization variables as `` `$${amount.toFixed(2)}` ``. **Latent, not delivered:** the variable is reachable, since `campaign-factory.ts:366` puts `{{ltv}}` in a "Total Spent" row, but no sent message has been shown to have carried it and delivery remains allowlisted. The dashboard was corrected for this in `0bd8611`; the workers had no shared formatter and drifted | A shared `formatStoreMoney` helper in `apps/workers/src/utils`. `deliverOne` already loads the full store row and the runner already loads the store, so neither needed an extra query. `Store.currency` is nullable, so an unrecognised currency falls back to the bare amount or ISO code rather than guessing dollars |
 
 Still outstanding, separated by who actually sees it:
 

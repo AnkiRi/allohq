@@ -34,9 +34,10 @@ test("approval snapshots retain the selected delivery provider", () => {
 
 test("a large frozen cohort validates without a quadratic membership scan", () => {
   // Membership used to be checked with customerIds.includes(id) inside a scan
-  // of every assignment, so a 100k cohort cost roughly ten billion comparisons
-  // on a function the send path calls before every dispatch. At 20k that is
-  // already ~4x10^8 and takes seconds; with a Set it is immediate.
+  // of every assignment. Measured at this size: the old implementation took
+  // 1547ms, the Set takes 3.5ms. The bound below is deliberately far under the
+  // old figure — an earlier 2000ms bound would have passed the very code this
+  // test exists to catch.
   const size = 20_000;
   const eligible = Array.from({ length: size }, (_, index) => ({
     id: `customer-${String(index).padStart(6, "0")}`,
@@ -58,7 +59,7 @@ test("a large frozen cohort validates without a quadratic membership scan", () =
   const snapshot = campaignAudienceSnapshot(proposal);
   const elapsed = Date.now() - startedAt;
   assert.equal(snapshot?.customerIds.length, size);
-  assert.ok(elapsed < 2_000, `validation took ${elapsed}ms; membership check is not linear`);
+  assert.ok(elapsed < 250, `validation took ${elapsed}ms; membership check is not linear`);
 });
 
 test("a customer outside the frozen set is still rejected", () => {
