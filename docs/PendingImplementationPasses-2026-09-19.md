@@ -103,11 +103,12 @@ and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those
 
 **Still open**, in rough order of value:
 
-1. **Wire the streaming assignment into approval.** Built and parity-proven in `61efbfe`, but
-   referenced only by its own tests — approval still calls `assignStratifiedCohortArms`, so the
-   full cohort is accumulated in memory (+58.5 MB heap at 100k). Needs
-   `resolveCampaignAudience` to stream rather than return eight arrays. Heap pressure, not a
-   hard failure. **This is the last Pass 8 code item.**
+1. ~~Wire the streaming assignment into approval.~~ **DONE — `ca09ac4`.** Measured over 100,000
+   candidates in the shape approval sees: heap +45.1 MB to +11.9 MB, 199ms to 102ms, arms
+   identical with zero mismatches. **Pass 8 is now complete in code.** What remains for Pass 8
+   is the 100k proof against a real database, which is infrastructure. A later, separate item:
+   `resolveCampaignAudience` still returns eight arrays, so the candidate list itself is held in
+   memory — smaller than the assignment record was, and not a hard failure.
 2. **Implement or strike** the OCR, malware-scanning, metadata-stripping and asset-moderation
    claims. The document currently asserts four safety properties the code does not have.
 3. **Email canvas accessibility** — keyboard and ARIA operation, and honour reduced motion.
