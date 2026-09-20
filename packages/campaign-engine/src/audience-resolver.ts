@@ -167,7 +167,17 @@ export async function streamCampaignAudience(
   campaignId: string,
   onDecision: (decision: AudienceStreamDecision) => void | Promise<void>,
   now = new Date(),
-  options: { enforceDeliveryPauses?: boolean } = {}
+  options: {
+    enforceDeliveryPauses?: boolean;
+    /**
+     * Restrict the scan to these customers. The send worker uses it to re-run
+     * the identical eligibility rules over one bounded page of the frozen
+     * cohort at delivery time, so a delayed job cannot outlive an unsubscribe,
+     * a complaint or a fatigue limit — and so the delivery-time check can never
+     * drift from the approval-time one, because it is the same code.
+     */
+    customerIds?: readonly string[];
+  } = {}
 ): Promise<AudienceStreamSummary> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -182,9 +192,12 @@ export async function streamCampaignAudience(
   });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
-  const where = campaign.segment
+  const segmentWhere = campaign.segment
     ? resolveSegmentWhere(campaign.segment, [campaign.storeId])
     : { storeId: campaign.storeId };
+  const where = options.customerIds
+    ? { AND: [segmentWhere, { id: { in: [...options.customerIds] } }] }
+    : segmentWhere;
   const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
   const hasDiscount =
     typeof proposal["discountPercent"] === "number" || typeof proposal["discountCode"] === "string";

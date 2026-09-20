@@ -603,3 +603,87 @@ test(
     }
   }
 );
+
+test(
+  "a scoped recheck returns the same verdicts as a full resolve, and catches later opt-outs",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma } = await load();
+    const { streamCampaignAudience, resolveCampaignAudience } = await import("./audience-resolver");
+    const fixture = await seed(prisma, { customers: 600, optOutEvery: 9 });
+    try {
+      const now = new Date("2026-03-04T12:00:00.000Z");
+      const full = await resolveCampaignAudience(fixture.campaignId, now);
+      const fullEligible = new Set(full.eligible.map((customer) => customer.id));
+
+      // The send worker re-checks one page at a time. Scoping the resolver to a
+      // page must produce the identical verdict for every customer in it.
+      const allIds = [...fullEligible];
+      const scopedEligible = new Set<string>();
+      let pages = 0;
+      for (let offset = 0; offset < allIds.length; offset += 100) {
+        const page = allIds.slice(offset, offset + 100);
+        pages += 1;
+        await streamCampaignAudience(
+          fixture.campaignId,
+          (decision) => {
+            if (decision.kind === "eligible") scopedEligible.add(decision.customer.id);
+          },
+          now,
+          { customerIds: page }
+        );
+      }
+      assert.ok(pages > 1, "fixture must span more than one page");
+      assert.deepEqual([...scopedEligible].sort(), [...fullEligible].sort());
+
+      // A delayed job must not outlive an unsubscribe: the same scoped call
+      // drops a customer who opted out after approval.
+      const victim = allIds[0]!;
+      await prisma.customer.update({
+        where: { id: victim },
+        data: { acceptsMarketing: false },
+      });
+      const afterOptOut = new Set<string>();
+      const summary = await streamCampaignAudience(
+        fixture.campaignId,
+        (decision) => {
+          if (decision.kind === "eligible") afterOptOut.add(decision.customer.id);
+        },
+        now,
+        { customerIds: allIds.slice(0, 100) }
+      );
+      assert.equal(afterOptOut.has(victim), false, "an opted-out recipient must be dropped");
+      assert.equal(summary.exclusions.no_consent, 1);
+
+      // And must not send twice: a recipient who already has a message log for
+      // this campaign is excluded as already_processed.
+      const repeat = allIds[1]!;
+      const store = await prisma.store.findUniqueOrThrow({ where: { id: fixture.storeId } });
+      await prisma.messageLog.create({
+        data: {
+          workspaceId: store.workspaceId,
+          storeId: fixture.storeId,
+          customerId: repeat,
+          campaignId: fixture.campaignId,
+          channel: "email",
+          to: "repeat@example.test",
+          status: "sent",
+        },
+      });
+      const afterSend = new Set<string>();
+      const resent = await streamCampaignAudience(
+        fixture.campaignId,
+        (decision) => {
+          if (decision.kind === "eligible") afterSend.add(decision.customer.id);
+        },
+        now,
+        { customerIds: allIds.slice(0, 100) }
+      );
+      assert.equal(afterSend.has(repeat), false, "an already-sent recipient must be dropped");
+      assert.equal(resent.exclusions.already_processed, 1);
+      await prisma.messageLog.deleteMany({ where: { campaignId: fixture.campaignId } });
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);

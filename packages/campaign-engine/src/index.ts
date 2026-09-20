@@ -62,6 +62,7 @@ export {
   streamCampaignAudience,
   resolveAutomationAudience,
   AUDIENCE_EXCLUSION_REASONS,
+  staticAudienceExclusion,
 } from "./audience-resolver";
 export type { AudienceStreamDecision, AudienceStreamSummary } from "./audience-resolver";
 export {
