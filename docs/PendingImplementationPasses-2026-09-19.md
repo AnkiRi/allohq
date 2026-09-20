@@ -101,15 +101,26 @@ Unit suite went from 291 of 292 with a permanently red test to **307 of 307**; r
 Register commits `2b7a9dc`, `6c33261`, `f813cab`, `03a6e90`, `95db874`, `b291e3d`, `8374f34`
 and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those changes.
 
-**Still open after today**, in rough order of value: serve `customerIds` and the arm map from
-`MeasurementAssignment` so the frozen snapshot stops being a multi-megabyte JSON column;
-implement or strike the OCR, malware-scanning, metadata-stripping and moderation claims; give
-the email canvas keyboard and ARIA operation and honour reduced motion; make lifecycle
-thresholds store-relative as VIP and churn now are; build the Shopflo endpoint once its three
-documentation gaps are answered; the storefront widget and WhatsApp currency surfaces; the
-journey webhook node; A/B hypothesis generation, parked by founder decision; and the
-infrastructure gates — CI, which does not exist, and the 100k load proof, which needs a seeded
-database rather than code.
+**Still open**, in rough order of value:
+
+1. **Wire the streaming assignment into approval.** Built and parity-proven in `61efbfe`, but
+   referenced only by its own tests — approval still calls `assignStratifiedCohortArms`, so the
+   full cohort is accumulated in memory (+58.5 MB heap at 100k). Needs
+   `resolveCampaignAudience` to stream rather than return eight arrays. Heap pressure, not a
+   hard failure. **This is the last Pass 8 code item.**
+2. **Implement or strike** the OCR, malware-scanning, metadata-stripping and asset-moderation
+   claims. The document currently asserts four safety properties the code does not have.
+3. **Email canvas accessibility** — keyboard and ARIA operation, and honour reduced motion.
+   `BlockEditor.tsx` and `EmailPreviewFrame.tsx` have zero aria/keydown occurrences.
+4. **Store-relative lifecycle thresholds**, as VIP and churn now are.
+5. **Shopflo endpoint**, once its three documentation gaps are answered.
+6. **Remaining currency surfaces** — the storefront widget and the WhatsApp formatter.
+7. **Journey webhook node**, currently a `TODO`.
+8. **A/B hypothesis generation** — parked by founder decision.
+9. **Infrastructure:** CI does not exist at all; the 100k load proof needs a seeded database
+   rather than code.
+
+Pushed to `origin/main` at `1422022` on 20 Sep.
 
 ### Local verification and environment finding
 
@@ -1843,7 +1854,14 @@ dollar denominated and is deliberately **not** in this list.
 - I previously said the measurement threshold is "200 customers". **Wrong, and the real
   problem is worse** — see immediately below.
 
-### Open: the `measurement_ready` tier is unreachable
+### CLOSED 20 Sep — the `measurement_ready` tier was unreachable
+
+**Fixed in `bb334d7`.** The ledger now grades a closed unit from the outcome observed rather
+than reading back the approval-time label: both arms must clear the same thirty-observation
+floor `computeLiftStats` uses, and the interval must exclude zero. Anything short stays
+directional and pools as learning. Verified first that shadow invoices key off attributed
+revenue — `billableCausedRevenue` and `liftFee` are hardcoded to zero and every usage line is
+`billableNow: false` — so no invoice figure moved. The original finding follows.
 
 `campaignMeasurementPolicy` (`experiments.ts:86`) returns only `empty`, `unmeasured` or
 `directional`. It can never return `measurement_ready`. That value is written to
@@ -1867,16 +1885,23 @@ is enabled.
 | Item | Evidence | Required |
 | --- | --- | --- |
 | A/B "evolver" generates hypotheses at random — **PARKED by founder decision, 19 Sep** | `ab-test-evolver.ts:268`–`296` picks variants via `[...patterns].sort(() => Math.random() - 0.5)` from static dictionaries, while the module header claims "smart variant values" and "continuous self-optimization"; that shuffle is also statistically biased | Deliberately deferred until the other fixes land — see "A/B Testing" in the release order. When taken up: either learn the next hypothesis from prior results, or restate the module honestly as random exploration. Winner *selection* is genuinely rigorous (`ab-test-engine.ts:154`–`167`, z-test at 95%) and is not in question |
-| `inventoryAlerts` hardcoded to zero | `packages/merchant-copilot/src/mission-control.ts:71` surfaces a merchant-facing count that is permanently 0, with a `TODO` | Wire it to the inventory checks or remove the metric |
+| ~~`inventoryAlerts` hardcoded to zero~~ — **FIXED `42d9f13`** | `mission-control.ts:71` surfaced a merchant-facing count permanently 0 behind a `TODO` | Now counts active products with a variant at or below the same low-stock threshold campaign-engine uses |
 | Lifecycle thresholds are absolute days and order counts | `lifecycle-classifier.ts:27`–`57` applies 180/90/60 days and 8/4/2 orders to every store. A coffee brand and a mattress brand cannot share them | Make store-relative using the same quintile approach. Already tracked as "scalable store-relative RFM threshold design" under `538413b` |
-| Churn monetary signal uses an absolute rupee midpoint | `churn-risk.ts:9` uses `sigmoid(totalSpend, 150, .015)`; at ₹2,000 average order value every buyer saturates that signal | Make the midpoint store-relative. The other five churn signals are ratio- or day-based and are sound |
+| ~~Churn monetary signal uses an absolute rupee midpoint~~ — **FIXED `42d9f13`** | `churn-risk.ts:9` used `sigmoid(totalSpend, 150, .015)`; at ₹2,000 average order value every buyer saturated it | Now reads the store-relative RFM monetary quintile. `totalSpend` stays on the input as evidence but is no longer scored; an unknown quintile stays neutral |
 | Journey webhook node unimplemented | `automation-runner.worker.ts:777` carries `TODO: Implement webhook node` | Implement it or hide the node type |
 | Intent thresholds are fixed counts | `intent-detector.ts:53`–`61` uses fixed click/open counts | Lower priority: engagement counts, not currency. Revisit after the lifecycle work |
 
 Outcomes' "figures representative" copy is deliberately **not** in this list: it is explicitly
 labelled in the UI and already tracked as finding B of 2026-09-17.
 
-### Open: the audience-decision ledger duplicate question
+### RESOLVED 20 Sep — the audience-decision ledger duplicate question
+
+**Fixed in `e0ca152`.** A nullable `writeKey` with a unique index keys the write *event* rather
+than the meaning: approval sets `approval:<campaignId>:<approvedAt>:<customerId>:<decision>` and
+passes `skipDuplicates`, so a retried approval collapses while a re-approval that changes a
+decision still records. Override paths leave it null, and Postgres permits many nulls in a
+unique index, so every merchant action is preserved. Additive and backfill-free — existing rows
+keep a null key, so the single production duplicate needs no cleanup. The reasoning follows.
 
 `CustomerAudienceDecision` has no unique constraint and no write path passes `skipDuplicates`,
 so the ledger can record the same write twice. **An earlier proposal in this document —
