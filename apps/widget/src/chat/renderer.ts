@@ -23,6 +23,27 @@ function renderContent(text: string): string {
 /**
  * Chat UI renderer — builds and manages the DOM inside a Shadow DOM host.
  */
+/**
+ * Price formatter for a store's own currency.
+ *
+ * Product prices were previously rendered as `$${value.toFixed(2)}` regardless
+ * of the store, so an Indian store's ₹2,400 product read as $2400.00. When the
+ * currency is unknown the amount is shown without a symbol rather than being
+ * asserted as dollars.
+ */
+export function formatMoney(currency?: string): (value: number) => string {
+  if (!currency) {
+    return (value) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  try {
+    const formatter = new Intl.NumberFormat(undefined, { style: "currency", currency });
+    return (value) => formatter.format(value);
+  } catch {
+    // An unrecognized code must not break the card.
+    return (value) => `${currency} ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+}
+
 export class ChatRenderer {
   private shadow: ShadowRoot;
   private bubble!: HTMLButtonElement;
@@ -154,14 +175,17 @@ export class ChatRenderer {
     imageUrl?: string;
     handle?: string;
     storeDomain?: string;
+    /** ISO 4217 code from the store. Prices were hardcoded as dollars before. */
+    currency?: string;
   }) {
     this.removeTyping();
     const card = document.createElement("div");
     card.className = "allo-product-card";
 
+    const money = formatMoney(product.currency);
     const priceHtml = product.compareAtPrice && product.compareAtPrice > product.price
-      ? `$${product.price.toFixed(2)} <span class="compare">$${product.compareAtPrice.toFixed(2)}</span>`
-      : `$${product.price.toFixed(2)}`;
+      ? `${money(product.price)} <span class="compare">${money(product.compareAtPrice)}</span>`
+      : money(product.price);
 
     const productUrl = product.storeDomain && product.handle
       ? `https://${product.storeDomain}/products/${product.handle}`

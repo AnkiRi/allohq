@@ -8,6 +8,8 @@ export interface ChatWidgetConfig {
   apiUrl: string;
   storeName?: string;
   storeDomain?: string;
+  /** ISO 4217 code, when the embed knows it. Tool output takes precedence. */
+  currency?: string;
   debug?: boolean;
   visitorSession: VisitorSession;
 }
@@ -123,7 +125,16 @@ export class ChatWidget {
     if (!out) return;
 
     if (data.name === "search_products" || data.name === "recommend_products") {
-      const products = Array.isArray(out) ? out : [];
+      const products = Array.isArray(out) ? out : Array.isArray(out.products) ? out.products : [];
+      // The tool reports the store's own currency; the embed's value is the
+      // fallback, and neither being present means no currency is asserted.
+      const firstCurrency = (products[0] as Record<string, unknown> | undefined)?.["currency"];
+      const currency =
+        typeof out.currency === "string"
+          ? out.currency
+          : typeof firstCurrency === "string"
+            ? firstCurrency
+            : this.config.currency;
       for (const p of products.slice(0, 3)) {
         const prod = p as Record<string, unknown>;
         this.renderer.addProductCard({
@@ -133,6 +144,7 @@ export class ChatWidget {
           imageUrl: prod.imageUrl ? String(prod.imageUrl) : undefined,
           handle: prod.handle ? String(prod.handle) : undefined,
           storeDomain: this.config.storeDomain,
+          currency,
         });
       }
     }

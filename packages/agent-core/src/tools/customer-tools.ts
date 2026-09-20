@@ -160,9 +160,16 @@ export const customerTools: ToolDefinition[] = [
         minSimilarity: 0.2,
       });
 
+      // The storefront card formats prices with this. Carried per item so the
+      // tool keeps returning a plain array.
+      const store = await prisma.store.findUnique({
+        where: { id: ctx.storeId },
+        select: { currency: true },
+      });
       return results.map((r) => ({
         title: (r.metadata as Record<string, unknown>).title,
         price: (r.metadata as Record<string, unknown>).price,
+        currency: store?.currency ?? null,
         imageUrl: (r.metadata as Record<string, unknown>).imageUrl,
         handle: (r.metadata as Record<string, unknown>).handle,
         relevance: r.similarity.toFixed(2),

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "esbuild src/index.ts --bundle --outfile=dist/widget.js --format=iife --global-name=AlloHQ --watch",
     "build": "esbuild src/index.ts --bundle --outfile=dist/widget.js --format=iife --global-name=AlloHQ --minify",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm --dir ../api exec tsx --test ../widget/src/**/*.test.ts"
   },
   "devDependencies": {
     "@allohq/tsconfig": "workspace:*",
