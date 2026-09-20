@@ -103,7 +103,7 @@ and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those
 
 **Still open**, in rough order of value:
 
-1. ~~Wire the streaming assignment into approval.~~ **DONE — `ca09ac4`.** Measured over 100,000
+1. ~~Wire the streaming assignment into approval.~~ **DONE — `07acad3`.** Measured over 100,000
    candidates in the shape approval sees: heap +45.1 MB to +11.9 MB, 199ms to 102ms, arms
    identical with zero mismatches. **Pass 8 is now complete in code.** What remains for Pass 8
    is the 100k proof against a real database, which is infrastructure. A later, separate item:
