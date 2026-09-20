@@ -96,6 +96,7 @@ Unit suite went from 291 of 292 with a permanently red test to **307 of 307**; r
 | `bb334d7` | 0 / billing | Causal ledger grades itself from the observed outcome; `measurement_ready` reachable at last |
 | `ca3620c` | 8 | Snapshot validation made linear; 11.51 MB of write-only detail no longer stored. **Corrected afterwards:** that commit's message claimed the old implementation could not meet the test's 2000ms bound. Measured at 20,000 it took 1547ms, so the old code would have passed the very test added to catch it. The bound is now 250ms, against a measured 3.5ms |
 | `02de6c1` | 5E | Generated-image spend capped per workspace, degrading to stock rather than failing |
+| `77a0386` | 8 | Frozen cohort served from `MeasurementAssignment`; the snapshot JSON goes from 17.97 MB to 662 B at 100k |
 
 Register commits `2b7a9dc`, `6c33261`, `f813cab`, `03a6e90`, `95db874`, `b291e3d`, `8374f34`
 and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those changes.
@@ -141,7 +142,7 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Core complete; approval-write blocker closed; remaining scale hardening | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e` | Convert approval/send onto the streaming assignment; stop freezing per-customer maps in campaign JSON; replace whole-cohort `IN` clauses and per-recipient inserts in the send worker; add the `CustomerAudienceDecision` `writeKey`; 100k production/load proof |
+| 8 — Campaign-specific customer decision context | Every hard failure closed; one heap item remains | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386` | Wire the streaming assignment into approval — it is built and parity-proven but referenced only by its own tests, so approval still accumulates the full cohort in memory; that needs `resolveCampaignAudience` to stream. Then the 100k production/load proof |
 | 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
@@ -1076,10 +1077,26 @@ that never completed approval would collect order outcomes and enter a lift comp
 now require `campaign.approvedAt`, and the ledger additionally refuses any unit missing a frozen
 customer rather than measuring a partial cohort.
 
-**Still open.** Convert the approval and send call sites onto the streaming assignment; stop
-freezing per-customer maps in `agentProposal` (measured 17.97 MB at 100k); replace the send
-worker's whole-cohort `IN` clauses and per-recipient inserts; add the `CustomerAudienceDecision`
-`writeKey`; then run the 100k proof against a real database.
+**Blockers 2, 3 and 4 closed.** `ca3620c` and `77a0386` removed the per-customer maps from
+`agentProposal`: measured at 100k the snapshot went from **17.97 MB to 662 bytes**, because
+membership and arms now come from `MeasurementAssignment` in bounded keyset pages rather than a
+JSON column every proposal reader parses and the approval checksum hashes whole. `ca3620c` also
+fixed a quadratic membership check in `campaignAudienceSnapshot` that ran on every dispatch.
+`091171d` paged the send planner's cohort reads and batched its control/skipped inserts.
+`e0ca152` added the `writeKey`.
+
+Legacy campaigns keep their maps and fall back to them, so in-flight work keeps sending, and
+their stored proposal is untouched so their approval checksum still matches.
+
+**Still open — and one item is a correction.** `61efbfe` added a streaming control assignment
+proven byte-identical to the in-memory function at 100k, **but it is wired into nothing**: a
+grep shows `StratifiedControlSelector` and `planStratifiedControlQuotas` are referenced only by
+their own tests, and approval still calls `assignStratifiedCohortArms`. So the original
+in-memory accumulation at approval (measured +58.5 MB of heap at 100k) is still there. Wiring it
+in requires `resolveCampaignAudience` to stream rather than return eight arrays, which is the
+remaining engineering work. This is a heap-pressure item rather than a hard failure — unlike the
+five-second transaction, the quadratic validator and the whole-cohort `IN` clauses, all of which
+are now fixed. After that, the 100k proof against a real database.
 
 ### Acceptance criteria
 
