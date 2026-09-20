@@ -115,7 +115,10 @@ and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those
    `BlockEditor.tsx` and `EmailPreviewFrame.tsx` have zero aria/keydown occurrences.
 4. **Store-relative lifecycle thresholds**, as VIP and churn now are.
 5. **Shopflo endpoint**, once its three documentation gaps are answered.
-6. **Remaining currency surfaces** — the storefront widget and the WhatsApp formatter.
+6. **Remaining currency surface: the storefront widget** (`apps/widget/src/chat/renderer.ts`),
+   which needs currency threaded through a separate app and API response. The WhatsApp formatter
+   has the same defect but is **not v1 scope** — SMS, WhatsApp and RCS are outside public v1, so
+   it is listed here only so the defect is not lost, not as work to schedule.
 7. **Journey webhook node**, currently a `TODO`.
 8. **A/B hypothesis generation** — parked by founder decision.
 9. **Infrastructure:** CI does not exist at all; the 100k load proof needs a seeded database
