@@ -30,9 +30,43 @@ _Recorded 2026-09-20T11:57Z._
   (Litmus / Email on Acid). Each is audited in "Email IDE audit" below with the evidence that it
   is absent.
 
+## Current status — 2026-09-20T18:42:29Z
+
+_This is the single canonical status section. Anything below it is history,
+evidence or detail; where an older section states a status, this one wins._
+
+| Area | Status | Evidence | Remaining limitation |
+| --- | --- | --- | --- |
+| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k approval: 0.10 MB retained heap, 0 duplicate rows, 0 arm mismatches of 90,909 | none known |
+| Pass 8 — approval concurrency | **verified** `b08eeba` | leased runs; simultaneous and 400 ms-staggered approvals both leave one complete run with a whole membership | a losing caller is refused, not queued — it must retry |
+| Pass 8 — approval resumability | **implemented** `b08eeba` | an interrupted run is taken over and resumed; rows written before the interruption survive; resumed arms match the reference exactly | **still synchronous in the API request.** Resume needs a new approval attempt to trigger it; no worker job retries on its own |
+| Pass 8 — merchant progress | **implemented** `b08eeba` | `campaignPreparationProgress` reports evaluated / candidates / left alone / not receiving / control / treatment; reconciles exactly | not yet surfaced in any UI |
+| Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count; retained heap flat | — |
+| Overnight opportunity scale | **verified** `5c0dac5` | three customer-state scans streamed; fingerprints byte-identical; retained heap 0 MB at 20,000 | the three order-driven scans still build unbounded id arrays |
+| Test-database safety | **verified** `e064f3e` | guard refuses this machine's real database and a realistic RDS URL, exits 1 | — |
+| CI | **implemented** `3c86497` `e064f3e` | verification and integration workflows; disposable-database check as its own step | never executed on GitHub — no run has been observed |
+| Journey duplicate gate | **verified** `2117bc9` | refuses with the unsupported nodes named; email-only journeys still duplicate | — |
+| Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
+| WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
+
+**Pass 8 is structurally memory-safe and concurrency-safe. It is not launch-ready**
+until approval preparation runs as a resumable job rather than inside an API
+request, and until the remaining order-driven opportunity scans are bounded.
+
+### Known defects recorded but not fixed
+
+| Defect | Evidence | Why it is still open |
+| --- | --- | --- |
+| `checkFatigue`, `checkSupportState` and `checkCooldown` build their windows from `new Date()` and ignore the `now` passed to `checkAllRules` | comparing batched and per-customer governors at a fixed past `now` disagreed 292 of 500; at wall clock they agree 0 of 500 | time-dependent rules cannot be tested at a fixed instant until this is fixed; the fix touches every governor caller |
+| Order-driven opportunity scans build unbounded `customerIds` arrays | `opportunity-scanner.ts` repurchase window, win-back purchasers, cross-sell | no fixture in this pass exercised them; bounding them needs order fixtures at scale |
+| Pre-existing migration drift on main | one `DROP DEFAULT` on `form_incentive_grants.updatedAt`, five index renames | unrelated to this work; CI reports it without gating until cleared |
+| `campaign_audience_members` ranking index is unused by the planner | bitmap scan on `(runId, arm)` chosen instead, with four runs present | dropping it measured −1% on writes, so there is no benefit either way |
+| Three migrations undeployed | `20260920090000`, `20260920140000`, `20260920150000`, `20260920190000` | deployment is a separate gate |
+
 ## Pass 8 — measured results so far
 
-_Audited 2026-09-20T11:57Z. Every figure below was measured, not estimated._
+_Audited 2026-09-20T11:57Z, superseded by "Current status" above. Retained because each row
+records a specific fix and the measurement that proved it._
 
 | Fix | Commit | Measured |
 | --- | --- | --- |
@@ -371,12 +405,22 @@ scoped product decision, per the standing instruction.
 
 ## Change log
 
-| UTC timestamp | Change |
-| --- | --- |
-| 2026-09-20T11:57Z | Renamed from `…-2026-09-19.md`. Added this change log and the locked-facts block. **Corrected Pass 8 from "complete in code" to materially improved but NOT complete** — as of that timestamp it failed the structural acceptance criteria. Removed contradictory historical status entries. (Superseded by the 15:40Z entry below: the work was then done and measured.) |
-| 2026-09-20T15:40Z | Replaced "Pass 8 — remaining structural work" with "Pass 8 — durable staging". All seven structural acceptance criteria now met and measured at 100k. Recorded the user's architectural correction that exact control selection belongs in Postgres, not an in-process heap, and that my "theoretical minimum" claim was wrong. |
-| 2026-09-20T15:40Z | Added the Pass 9 pre-report: provider-neutral warm-up and reputation work outstanding, the exact external SES dependencies, and the journey-webhook UI audit. |
-| 2026-09-20T15:40Z | Recorded CI (none existed), the widget currency defect and a second widget defect found while fixing it, and a pre-existing concurrency defect in `acquireEmailCapacity` that its own integration test had been failing on every run. |
+Each entry carries a UTC timestamp from `date -u`, the commit it describes, a
+status, the evidence, and any remaining limitation. A doc commit records SHAs
+that already exist, so no entry ever names a commit that has not been made.
+
+| UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
+| --- | --- | --- | --- | --- |
+| 2026-09-20T18:42:49Z | `5c0dac5` | verified | Overnight opportunity audiences streamed. Three customer-state scans keyset-paged; fingerprints byte-identical to the materialised form, verified against the database; retained heap 0 MB at 20,000 customers. Also fixed my own memory tests, which measured uncollected garbage because the runner never passed `--expose-gc`. | Order-driven scans (repurchase, win-back, cross-sell) still build unbounded id arrays |
+| 2026-09-20T18:42:49Z | `2117bc9` | verified | `automations.duplicate` refuses a journey containing steps public v1 cannot run, naming each one. Was the only ungated write path. | none |
+| 2026-09-20T18:42:49Z | `e064f3e` | verified | Integration suites refuse a non-disposable database: managed hosts rejected outright, host must be local without an explicit opt-in, database name must say it is a test database. Exits 1 on this machine's real database and on a realistic RDS URL. | none |
+| 2026-09-20T18:42:49Z | `a158bd8` | verified | Journey audience keyset-paged and governor-batched. 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, 17,142 eligible either way; retained heap flat. Batch equivalence proven, not assumed — and the first proof was vacuous until the fixture seeded the right table. | Exposed that `checkFatigue` and friends ignore the injected `now`; recorded, not fixed |
+| 2026-09-20T18:42:49Z | `b08eeba` | implemented | Audience preparation leased and resumable. Simultaneous and staggered approvals both leave one complete run; an interrupted run resumes from durable rows with arms matching the reference exactly. Adds `customers(storeId, id)`, measured 8.4x at 40 stores. | Preparation still runs synchronously in the API request; resume needs a new attempt to trigger it |
+| 2026-09-20T18:15:20Z | `2696343` | verified | Operational audit of approval at 100k, measurement only. 6,169 queries in 27 shapes, p50 0 / p95 2 / max 5,668 ms; concurrent approval shown to delete an in-flight attempt's rows. Corrected two of my own earlier claims. | Audit ran on a warm single-store local database with no competing load |
+| 2026-09-20T11:57Z | — | historical | Renamed from `…-2026-09-19.md`. Added this change log and the locked-facts block. **Corrected Pass 8 from "complete in code" to materially improved but NOT complete** — as of that timestamp it failed the structural acceptance criteria. Removed contradictory historical status entries. (Superseded by the 15:40Z entry below: the work was then done and measured.) |
+| 2026-09-20T15:40Z | — | historical | Replaced "Pass 8 — remaining structural work" with "Pass 8 — durable staging". All seven structural acceptance criteria now met and measured at 100k. Recorded the user's architectural correction that exact control selection belongs in Postgres, not an in-process heap, and that my "theoretical minimum" claim was wrong. |
+| 2026-09-20T15:40Z | — | historical | Added the Pass 9 pre-report: provider-neutral warm-up and reputation work outstanding, the exact external SES dependencies, and the journey-webhook UI audit. |
+| 2026-09-20T15:40Z | — | historical | Recorded CI (none existed), the widget currency defect and a second widget defect found while fixing it, and a pre-existing concurrency defect in `acquireEmailCapacity` that its own integration test had been failing on every run. |
 
 ## Active scope — 19 Sep
 
@@ -402,7 +446,10 @@ asset and code surfaces; then finish automated Shopify-scale, security and relea
 Keep the production recipient allowlist until the founder completes delivery sign-off.
 Record test evidence and commit mapping per pass.
 
-### 19 Sep completion checkpoint — authoritative
+### 19 Sep completion checkpoint — historical
+
+_Superseded by "Current status" at the top of this document. Kept for the
+evidence it records, not for the statuses it asserts._
 
 This checkpoint supersedes older `in progress`, `planned` and `foundation only` wording in
 the historical sections below. The detailed sections retain the reasoning and acceptance
@@ -491,15 +538,13 @@ and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those
 
 **Still open**, in rough order of value:
 
-1. **Pass 8 — structural criteria met and measured, 2026-09-20T15:40Z.** The approval and send
-   paths hold nothing that grows with the audience; Postgres holds the frozen membership and
-   performs the exact control selection. Proven at 100k on an isolated disposable database:
-   59.6 s, 0.10 MB retained heap, 0 duplicate rows, 0 arm mismatches of 90,909 candidates. See
-   "Pass 8 — durable staging". Open items carried out of the pass are listed there — chiefly
-   `resolveAutomationAudience`, the dry-run preview, and three undeployed migrations. An earlier
-   revision claimed Pass 8 was "complete in code" while audience-sized structures were still in
-   both paths; that claim was wrong, was withdrawn at 2026-09-20T11:57Z, and the work has since
-   been done rather than re-asserted.
+1. **Pass 8 — see "Current status" at the top of this document** for its status and remaining
+   limitations. In short: structurally memory-safe and concurrency-safe, not launch-ready until
+   approval preparation runs as a resumable job rather than inside an API request.
+   `resolveAutomationAudience` was listed here as an open item and is now paged and batched
+   (`a158bd8`). An earlier revision claimed Pass 8 was "complete in code" while audience-sized
+   structures were still in both paths; that claim was wrong, was withdrawn at
+   2026-09-20T11:57Z, and the work has since been done rather than re-asserted.
 2. **Implement or strike** the OCR, malware-scanning, metadata-stripping and asset-moderation
    claims. The document currently asserts four safety properties the code does not have.
 3. **Email canvas accessibility** — keyboard and ARIA operation, and honour reduced motion.
@@ -548,7 +593,7 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | **Structural criteria met and measured** (2026-09-20T15:40Z) | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386`, `07acad3`, `ba71e12`, `4d2267f`, `1378827`, `0a54404`, `826f69f` | Durable staging: one paged policy evaluation, Postgres performs the exact control selection, approval and the send worker hold nothing audience-sized. 100k proof on an isolated disposable database — 59.6 s, 0.10 MB retained, 0 duplicates, 0 arm mismatches of 90,909. See "Pass 8 — durable staging" for the items carried out of the pass |
+| 8 — Campaign-specific customer decision context | See "Current status" | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386`, `07acad3`, `ba71e12`, `4d2267f`, `1378827`, `0a54404`, `826f69f` | Durable staging: one paged policy evaluation, Postgres performs the exact control selection, approval and the send worker hold nothing audience-sized. 100k proof on an isolated disposable database — 59.6 s, 0.10 MB retained, 0 duplicates, 0 arm mismatches of 90,909. See "Pass 8 — durable staging" for the items carried out of the pass |
 | 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
@@ -2179,8 +2224,8 @@ corrected rather than implemented literally.
 
 ### Internal implementation status
 
-Most numbered product passes are complete in repository code. Pass 8 scale execution was
-completed and measured at 2026-09-20T15:40Z (see "Pass 8 — durable staging"); Pass 9
+Most numbered product passes are complete in repository code. For Pass 8 and the automation
+scale work, "Current status" at the top of this document is authoritative; Pass 9
 reputation-assessment and migration hardening remains genuine internal work, scoped in the
 "Pass 9 pre-report". Deployment and acceptance gates are listed separately below.
 
