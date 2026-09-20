@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma, Prisma } from "@allohq/database";
 import {
   assignmentValue,
@@ -30,6 +31,37 @@ import { streamCampaignAudience, type AudienceExclusionReason } from "./audience
 /** Rows per write statement. Bounds both the buffer and each statement's size. */
 const DEFAULT_WRITE_CHUNK = 2_000;
 
+/**
+ * How long a worker may hold a run before another may take it over. Long enough
+ * that a healthy worker never loses its lease mid-flush — the lease is renewed
+ * on every chunk — and short enough that a crashed worker does not strand a
+ * merchant's campaign.
+ */
+const LEASE_MS = 2 * 60 * 1_000;
+
+/** Thrown when another worker is actively preparing the same run. */
+export class AudienceRunBusyError extends Error {
+  readonly code = "AUDIENCE_RUN_BUSY" as const;
+  constructor(readonly runId: string) {
+    super(`Audience run ${runId} is already being prepared`);
+    this.name = "AudienceRunBusyError";
+  }
+}
+
+/** Merchant-meaningful preparation progress. No database mechanics. */
+export interface AudienceRunProgress {
+  status: AudienceRunStatus;
+  evaluated: number;
+  candidates: number;
+  deliberatelyLeftAlone: number;
+  notReceiving: number;
+  control: number;
+  treatment: number;
+  startedAt: Date;
+  completedAt: Date | null;
+  attempts: number;
+}
+
 /** Members whose decision makes them eligible for an arm. */
 export const CANDIDATE_DECISION = "campaign_candidate";
 
@@ -52,6 +84,8 @@ export interface AudienceRunInput {
   asOf?: Date;
   enforceDeliveryPauses?: boolean;
   writeChunk?: number;
+  /** Lease holder id. Defaults to a fresh id per call. */
+  owner?: string;
 }
 
 export interface AudienceRunResult {
@@ -103,6 +137,7 @@ export async function runCampaignAudienceResolution(
   input: AudienceRunInput
 ): Promise<AudienceRunResult> {
   const writeChunk = input.writeChunk ?? DEFAULT_WRITE_CHUNK;
+  const owner = input.owner ?? randomUUID();
   const existing = await prisma.campaignAudienceRun.findUnique({
     where: { campaignId_runKey: { campaignId: input.campaignId, runKey: input.runKey } },
   });
@@ -111,12 +146,17 @@ export async function runCampaignAudienceResolution(
     return summariseCompleteRun(existing, { reused: true });
   }
 
-  // A run that never completed is not partially trustworthy. Its rows are
-  // discarded and the same run record is reused, so a retried approval can
-  // never leave two frozen memberships behind.
-  const run = existing
-    ? await restartRun(existing.id, input)
-    : await prisma.campaignAudienceRun.create({
+  // Create-or-take-over, never delete-and-restart. Two approvals of the same
+  // campaign used to share one mutable run row: the second called restartRun,
+  // removed the first's in-flight member rows, and the first then wrote
+  // `failed` onto the run the second was still finishing. A lease makes
+  // ownership explicit, and durable rows are resumed rather than discarded.
+  let run: { id: string; asOf: Date; assignmentSeed: string; resumeCursor: string | null };
+  if (existing) {
+    run = await takeOverRun(existing, owner, input);
+  } else {
+    try {
+      const created = await prisma.campaignAudienceRun.create({
         data: {
           campaignId: input.campaignId,
           storeId: input.storeId,
@@ -126,17 +166,36 @@ export async function runCampaignAudienceResolution(
           policyVersion: input.policyVersion,
           policy: (input.policy ?? {}) as Prisma.InputJsonValue,
           status: "resolving",
+          leaseOwner: owner,
+          leaseExpiresAt: new Date(Date.now() + LEASE_MS),
+          attempts: 1,
         },
       });
+      run = created;
+    } catch (error) {
+      // Lost a creation race with a simultaneous approval. The winner owns the
+      // run; this caller joins it rather than surfacing a unique-violation.
+      if (!isUniqueViolation(error)) throw error;
+      const winner = await prisma.campaignAudienceRun.findUniqueOrThrow({
+        where: { campaignId_runKey: { campaignId: input.campaignId, runKey: input.runKey } },
+      });
+      if (winner.status === "complete") return summariseCompleteRun(winner, { reused: true });
+      run = await takeOverRun(winner, owner, input);
+    }
+  }
 
   try {
-    return await resolveAndAssign(run, input, writeChunk);
+    return await resolveAndAssign(run, input, writeChunk, owner);
   } catch (error) {
+    // Only the lease holder may mark the run failed. Without this check a
+    // superseded attempt could fail a run another worker is finishing.
     await prisma.campaignAudienceRun
-      .update({
-        where: { id: run.id },
+      .updateMany({
+        where: { id: run.id, leaseOwner: owner, status: { not: "complete" } },
         data: {
           status: "failed",
+          leaseOwner: null,
+          leaseExpiresAt: null,
           failureReason: error instanceof Error ? error.message.slice(0, 500) : String(error),
         },
       })
@@ -145,58 +204,104 @@ export async function runCampaignAudienceResolution(
   }
 }
 
-async function restartRun(runId: string, input: AudienceRunInput) {
-  await prisma.campaignAudienceMember.deleteMany({ where: { runId } });
-  return prisma.campaignAudienceRun.update({
-    where: { id: runId },
+function isUniqueViolation(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === "P2002";
+}
+
+/**
+ * Take ownership of an existing incomplete run, or refuse.
+ *
+ * A live lease held by someone else is not an error condition to work around —
+ * it means another worker is actively preparing this campaign, and a second
+ * one must not touch its rows.
+ */
+async function takeOverRun(
+  existing: {
+    id: string;
+    status: string;
+    leaseExpiresAt: Date | null;
+    assignmentSeed: string;
+    policyVersion: string;
+  },
+  owner: string,
+  input: AudienceRunInput
+): Promise<{ id: string; asOf: Date; assignmentSeed: string; resumeCursor: string | null }> {
+  const now = new Date();
+  // Durable rows are only resumable under the parameters that produced them.
+  // The assignment hash is seeded by the run seed, so resuming across a changed
+  // seed or policy would mix two rankings inside one control group. When they
+  // differ the run starts over from an empty membership; when they match, work
+  // already done is kept.
+  const resumable =
+    existing.assignmentSeed === input.assignmentSeed &&
+    existing.policyVersion === input.policyVersion;
+  const claimed = await prisma.campaignAudienceRun.updateMany({
+    where: {
+      id: existing.id,
+      status: { not: "complete" },
+      OR: [{ leaseOwner: null }, { leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }],
+    },
     data: {
-      asOf: input.asOf ?? new Date(),
-      assignmentSeed: input.assignmentSeed,
-      policyVersion: input.policyVersion,
-      policy: (input.policy ?? {}) as Prisma.InputJsonValue,
       status: "resolving",
+      leaseOwner: owner,
+      leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
+      attempts: { increment: 1 },
       failureReason: null,
-      assignedAt: null,
-      completedAt: null,
-      requested: 0,
-      candidateCount: 0,
-      controlCount: 0,
-      treatmentCount: 0,
-      leftAloneCount: 0,
-      excludedCount: 0,
-      diagnostics: {},
+      ...(resumable
+        ? {}
+        : {
+            assignmentSeed: input.assignmentSeed,
+            policyVersion: input.policyVersion,
+            policy: (input.policy ?? {}) as Prisma.InputJsonValue,
+            resumeCursor: null,
+            asOf: input.asOf ?? now,
+          }),
     },
   });
+  if (claimed.count !== 1) throw new AudienceRunBusyError(existing.id);
+  // Only once the lease is held, so a discard can never race another worker.
+  if (!resumable) {
+    await prisma.campaignAudienceMember.deleteMany({ where: { runId: existing.id } });
+  }
+  return prisma.campaignAudienceRun.findUniqueOrThrow({ where: { id: existing.id } });
 }
 
 async function resolveAndAssign(
-  run: { id: string; asOf: Date; assignmentSeed: string },
+  run: { id: string; asOf: Date; assignmentSeed: string; resumeCursor: string | null },
   input: AudienceRunInput,
-  writeChunk: number
+  writeChunk: number,
+  owner: string
 ): Promise<AudienceRunResult> {
   const buffer: PendingMember[] = [];
-  const census = new Map<string, number>();
   let memberWriteStatements = 0;
-  let candidateCount = 0;
-  let leftAloneCount = 0;
-  let excludedCount = 0;
 
   const flush = async () => {
     if (buffer.length === 0) return;
+    const cursor = buffer[buffer.length - 1]!.customerId;
     await prisma.campaignAudienceMember.createMany({ data: buffer, skipDuplicates: true });
     memberWriteStatements += 1;
     buffer.length = 0;
+    // Renew the lease and advance the resume cursor in the same statement the
+    // chunk is acknowledged by, so an interrupted run resumes from durable work
+    // and a healthy worker never loses its lease mid-flush. Losing the lease
+    // here means another worker has taken over; this one must stop rather than
+    // keep writing into a run it no longer owns.
+    const held = await prisma.campaignAudienceRun.updateMany({
+      where: { id: run.id, leaseOwner: owner },
+      data: { leaseExpiresAt: new Date(Date.now() + LEASE_MS), resumeCursor: cursor },
+    });
+    if (held.count !== 1) throw new AudienceRunBusyError(run.id);
   };
 
   // One policy evaluation. Every customer is judged against the run's fixed
   // `asOf`, so eligibility cannot drift between resolution and assignment.
+  // A resumed attempt continues from the last durable chunk; `skipDuplicates`
+  // on (runId, customerId) makes any overlap at the boundary a no-op.
   const summary = await streamCampaignAudience(
     input.campaignId,
     async (decision) => {
       if (decision.kind === "eligible") {
         const stratum = normalizeStratum(decision.customer.rfmStratum);
-        census.set(stratum, (census.get(stratum) ?? 0) + 1);
-        candidateCount += 1;
         buffer.push({
           runId: run.id,
           customerId: decision.customer.id,
@@ -215,7 +320,6 @@ async function resolveAndAssign(
           reconsiderOn: null,
         });
       } else if (decision.kind === "deliberately_left_alone") {
-        leftAloneCount += 1;
         buffer.push({
           runId: run.id,
           customerId: decision.customer.id,
@@ -233,7 +337,6 @@ async function resolveAndAssign(
           reconsiderOn: decision.decision.reconsiderOn ?? null,
         });
       } else {
-        excludedCount += 1;
         buffer.push({
           runId: run.id,
           customerId: decision.customer.id,
@@ -252,15 +355,41 @@ async function resolveAndAssign(
       if (buffer.length >= writeChunk) await flush();
     },
     run.asOf,
-    { enforceDeliveryPauses: input.enforceDeliveryPauses ?? true }
+    {
+      enforceDeliveryPauses: input.enforceDeliveryPauses ?? true,
+      ...(run.resumeCursor ? { afterCustomerId: run.resumeCursor } : {}),
+    }
   );
   await flush();
+
+  // Counts come from the durable rows, not from this attempt's accumulators, so
+  // a resumed run reports the whole audience rather than the part it evaluated.
+  const decisionCounts = await prisma.campaignAudienceMember.groupBy({
+    by: ["decision"],
+    where: { runId: run.id },
+    _count: { _all: true },
+  });
+  const countOf = (decision: string) =>
+    decisionCounts.find((row) => row.decision === decision)?._count._all ?? 0;
+  // The census must cover the whole run, not this attempt, or a resumed run
+  // would plan quotas against a fraction of its own candidates. It is one row
+  // per RFM stratum — tens of entries — so reading it back costs nothing.
+  const censusRows = await prisma.campaignAudienceMember.groupBy({
+    by: ["stratum"],
+    where: { runId: run.id, decision: CANDIDATE_DECISION },
+    _count: { _all: true },
+  });
+  const census = new Map(censusRows.map((row) => [row.stratum, row._count._all]));
+  const candidateCount = countOf(CANDIDATE_DECISION);
+  const leftAloneCount = countOf("deliberately_left_alone");
+  const excludedCount = countOf("excluded");
+  const evaluated = candidateCount + leftAloneCount + excludedCount;
 
   await prisma.campaignAudienceRun.update({
     where: { id: run.id },
     data: {
       status: "assigning",
-      requested: summary.requested,
+      requested: evaluated,
       candidateCount,
       leftAloneCount,
       excludedCount,
@@ -334,6 +463,8 @@ async function resolveAndAssign(
       treatmentCount,
       assignedAt: new Date(),
       completedAt: new Date(),
+      leaseOwner: null,
+      leaseExpiresAt: null,
       diagnostics: {
         exclusions: summary.exclusions,
         samples: summary.samples,
@@ -347,7 +478,7 @@ async function resolveAndAssign(
     runId: completed.id,
     reused: false,
     asOf: completed.asOf,
-    requested: summary.requested,
+    requested: evaluated,
     candidateCount,
     controlCount,
     treatmentCount,
@@ -441,6 +572,36 @@ function summariseCompleteRun(
       assignmentStatements: Number(diagnostics["assignmentStatements"] ?? 0),
       strataCounted: Number(diagnostics["strataCounted"] ?? 0),
     },
+  };
+}
+
+/**
+ * Preparation progress for a campaign, in the merchant's own terms.
+ *
+ * Deliberately not database mechanics: no row counts, no statement counts, no
+ * run ids beyond the one needed to address it. Counts come from the run record
+ * itself, which preparation keeps current, so reading progress costs one row.
+ */
+export async function campaignPreparationProgress(
+  campaignId: string
+): Promise<AudienceRunProgress | null> {
+  const run = await prisma.campaignAudienceRun.findFirst({
+    where: { campaignId },
+    orderBy: { startedAt: "desc" },
+  });
+  if (!run) return null;
+  const evaluated = run.candidateCount + run.leftAloneCount + run.excludedCount;
+  return {
+    status: run.status as AudienceRunStatus,
+    evaluated,
+    candidates: run.candidateCount,
+    deliberatelyLeftAlone: run.leftAloneCount,
+    notReceiving: run.excludedCount,
+    control: run.controlCount,
+    treatment: run.treatmentCount,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
+    attempts: run.attempts,
   };
 }
 

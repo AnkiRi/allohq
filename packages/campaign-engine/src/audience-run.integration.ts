@@ -267,21 +267,22 @@ test(
 );
 
 test(
-  "an interrupted run is replaced rather than left half-frozen",
+  "a run whose parameters changed starts over instead of mixing two rankings",
   { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
   async () => {
     const { prisma, runCampaignAudienceResolution, completedAudienceRun } = await load();
     const fixture = await seed(prisma, { customers: 300 });
     try {
-      // Simulate a process that died mid-resolution: a run stuck in `resolving`
-      // with a partial, wrongly-armed membership.
+      // A run stuck in `resolving` whose seed no longer matches the approval
+      // being attempted. Its rows were ranked under a different seed, so they
+      // cannot be resumed into the same control group and must be discarded.
       const stale = await prisma.campaignAudienceRun.create({
         data: {
           campaignId: fixture.campaignId,
           storeId: fixture.storeId,
           runKey: "attempt-1",
           asOf: new Date("2026-03-04T12:00:00.000Z"),
-          assignmentSeed: "interrupted-seed",
+          assignmentSeed: "superseded-seed",
           policyVersion: "test-v1",
           status: "resolving",
         },
@@ -682,6 +683,265 @@ test(
       assert.equal(afterSend.has(repeat), false, "an already-sent recipient must be dropped");
       assert.equal(resent.exclusions.already_processed, 1);
       await prisma.messageLog.deleteMany({ where: { campaignId: fixture.campaignId } });
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);
+
+test(
+  "two simultaneous approvals cannot corrupt or fail each other's run",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution, completedAudienceRun } = await load();
+    const fixture = await seed(prisma, { customers: 3_000, optOutEvery: 8 });
+    try {
+      const attempt = () =>
+        runCampaignAudienceResolution({
+          campaignId: fixture.campaignId,
+          storeId: fixture.storeId,
+          runKey: "same-approval",
+          assignmentSeed: "race-seed",
+          policyVersion: "test-v1",
+          rateForStratum,
+          asOf: new Date("2026-03-04T12:00:00.000Z"),
+        });
+
+      const settled = await Promise.allSettled([attempt(), attempt()]);
+      const fulfilled = settled.filter((outcome) => outcome.status === "fulfilled");
+      const rejected = settled.filter((outcome) => outcome.status === "rejected");
+
+      // Whoever loses the race must lose it cleanly. Before the lease, the
+      // loser surfaced a raw Prisma unique-violation to the merchant.
+      for (const outcome of rejected) {
+        const error = (outcome as PromiseRejectedResult).reason;
+        assert.equal(
+          (error as { code?: string }).code,
+          "AUDIENCE_RUN_BUSY",
+          `expected a busy signal, got: ${String(error).split("\n")[0]}`
+        );
+      }
+      assert.ok(fulfilled.length >= 1, "at least one attempt must succeed");
+
+      // Exactly one run, complete, with a membership that is whole.
+      const runs = await prisma.campaignAudienceRun.findMany({
+        where: { campaignId: fixture.campaignId },
+      });
+      assert.equal(runs.length, 1);
+      const run = runs[0]!;
+      assert.equal(run.status, "complete", `run ended as ${run.status}: ${run.failureReason}`);
+      assert.equal(run.leaseOwner, null, "a complete run must not still hold a lease");
+
+      const members = await prisma.campaignAudienceMember.count({ where: { runId: run.id } });
+      const armed = await prisma.campaignAudienceMember.count({
+        where: { runId: run.id, decision: "campaign_candidate", arm: { not: null } },
+      });
+      assert.equal(members, fixture.candidates.length + run.leftAloneCount + run.excludedCount);
+      assert.equal(armed, run.candidateCount);
+      assert.equal(run.controlCount + run.treatmentCount, run.candidateCount);
+      assert.ok(await completedAudienceRun(fixture.campaignId));
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);
+
+test(
+  "an approval arriving mid-resolution does not delete the first attempt's work",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution } = await load();
+    const fixture = await seed(prisma, { customers: 4_000, optOutEvery: 9 });
+    try {
+      const first = runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "same-approval",
+        assignmentSeed: "stagger-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+        // Small chunks so the second attempt lands while rows are being written.
+        writeChunk: 200,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const secondOutcome = await runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "same-approval",
+        assignmentSeed: "stagger-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+      }).then(
+        () => "completed" as const,
+        (error) => {
+          assert.equal(
+            (error as { code?: string }).code,
+            "AUDIENCE_RUN_BUSY",
+            `expected a busy signal, got: ${String(error).split("\n")[0]}`
+          );
+          return "refused" as const;
+        }
+      );
+      const firstOutcome = await first.then(
+        (result) => result,
+        (error) => {
+          assert.fail(
+            `the in-flight attempt must not be sabotaged, but it threw: ${String(error).split("\n")[0]}`
+          );
+        }
+      );
+
+      assert.equal(secondOutcome, "refused", "a live lease must refuse a second preparer");
+      assert.equal(firstOutcome.candidateCount, fixture.candidates.length);
+
+      const run = await prisma.campaignAudienceRun.findFirstOrThrow({
+        where: { campaignId: fixture.campaignId },
+      });
+      assert.equal(run.status, "complete");
+      assert.equal(
+        await prisma.campaignAudienceMember.count({
+          where: { runId: run.id, decision: "campaign_candidate", arm: null },
+        }),
+        0,
+        "no candidate may be left unassigned"
+      );
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);
+
+test(
+  "an interrupted run resumes from durable work instead of discarding it",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution, experiments } = await load();
+    const fixture = await seed(prisma, { customers: 2_000, optOutEvery: 7, smallStrata: 3 });
+    try {
+      // A worker that dies partway: rows are durable, the lease is stale, the
+      // run is still `resolving` with a resume cursor.
+      const partial = await prisma.campaignAudienceRun.create({
+        data: {
+          campaignId: fixture.campaignId,
+          storeId: fixture.storeId,
+          runKey: "interrupted",
+          asOf: new Date("2026-03-04T12:00:00.000Z"),
+          assignmentSeed: "resume-seed",
+          policyVersion: "test-v1",
+          status: "resolving",
+          leaseOwner: "dead-worker",
+          leaseExpiresAt: new Date(Date.now() - 60_000),
+          // A real first attempt records itself; the takeover is the second.
+          attempts: 1,
+        },
+      });
+      // Exactly what a real interruption leaves behind: rows written by the
+      // resolver's own chunk, carrying the stratum and the provisional
+      // assignment hash. Fabricating rows without those would test a state the
+      // resolver cannot produce.
+      const evaluatedFirst = fixture.candidates.slice(0, 500);
+      await prisma.campaignAudienceMember.createMany({
+        data: evaluatedFirst.map((candidate) => {
+          const stratum = experiments.normalizeStratum(candidate.rfmStratum);
+          return {
+            runId: partial.id,
+            customerId: candidate.id,
+            decision: "campaign_candidate",
+            stratum,
+            assignmentStratum: stratum,
+            assignmentHash: experiments.assignmentValue(`resume-seed:${stratum}`, candidate.id),
+            evidence: {},
+          };
+        }),
+      });
+      const cursor = evaluatedFirst[evaluatedFirst.length - 1]!.id;
+      await prisma.campaignAudienceRun.update({
+        where: { id: partial.id },
+        data: { resumeCursor: cursor },
+      });
+
+      const result = await runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "interrupted",
+        assignmentSeed: "resume-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+      });
+
+      assert.equal(result.runId, partial.id, "a stale lease must be taken over, not duplicated");
+      assert.equal(result.candidateCount, fixture.candidates.length);
+
+      const run = await prisma.campaignAudienceRun.findUniqueOrThrow({ where: { id: partial.id } });
+      assert.equal(run.status, "complete");
+      assert.ok(run.attempts >= 2, `expected a recorded second attempt, saw ${run.attempts}`);
+
+      // The rows written before the interruption are still the same rows.
+      const survived = await prisma.campaignAudienceMember.count({
+        where: { runId: partial.id, customerId: { in: evaluatedFirst.slice(0, 50).map((c) => c.id) } },
+      });
+      assert.equal(survived, 50, "durable work must survive a resume");
+
+      // And the resumed run's arms still match the reference exactly.
+      const reference = experiments.assignStratifiedCohortArms({
+        assignmentSeed: "resume-seed",
+        customers: fixture.candidates.map((candidate) => ({
+          customerId: candidate.id,
+          stratum: candidate.rfmStratum,
+        })),
+        rateForStratum,
+      });
+      const stored = await prisma.campaignAudienceMember.findMany({
+        where: { runId: partial.id, decision: "campaign_candidate" },
+        select: { customerId: true, arm: true },
+      });
+      let mismatches = 0;
+      for (const row of stored) {
+        if (reference.assignments[row.customerId]?.arm !== row.arm) mismatches += 1;
+      }
+      assert.equal(mismatches, 0, "a resumed run must produce the same arms as an uninterrupted one");
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);
+
+test(
+  "preparation progress reads in merchant terms",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution, campaignPreparationProgress } = await load();
+    const fixture = await seed(prisma, { customers: 1_200, optOutEvery: 6 });
+    try {
+      assert.equal(await campaignPreparationProgress(fixture.campaignId), null);
+      const result = await runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "progress",
+        assignmentSeed: "progress-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+      });
+      const progress = await campaignPreparationProgress(fixture.campaignId);
+      assert.ok(progress);
+      assert.equal(progress.status, "complete");
+      assert.equal(progress.candidates, result.candidateCount);
+      assert.equal(progress.control, result.controlCount);
+      assert.equal(progress.treatment, result.treatmentCount);
+      assert.equal(progress.deliberatelyLeftAlone, result.leftAloneCount);
+      assert.equal(progress.notReceiving, result.excludedCount);
+      assert.equal(
+        progress.evaluated,
+        progress.candidates + progress.deliberatelyLeftAlone + progress.notReceiving
+      );
+      assert.ok(progress.completedAt instanceof Date);
+      // The accounting must reconcile: everyone found is either a candidate,
+      // left alone, or not receiving.
+      assert.equal(progress.evaluated, result.requested);
     } finally {
       await teardown(prisma, fixture);
     }

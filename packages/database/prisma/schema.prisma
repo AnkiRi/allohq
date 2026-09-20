@@ -588,6 +588,11 @@ model Customer {
   @@unique([storeId, externalId])
   @@index([email])
   @@index([identityId])
+  /// Keyset paging of one store's customers. Without it the scan walks the
+  /// primary key across every store and filters, so the cost grows with the
+  /// whole table rather than the store: measured 1.3 ms/page at 4 stores,
+  /// 5.8 ms at 40, against a flat 0.7 ms with this index.
+  @@index([storeId, id])
   @@map("customers")
 }
 
@@ -1154,6 +1159,19 @@ model CampaignAudienceRun {
   status        String  @default("resolving")
   failureReason String?
 
+  /// Exactly one worker may advance a run at a time. Without this, a second
+  /// approval arriving mid-resolution deleted the first attempt's rows and
+  /// wrote `failed` onto the run the first was still finishing. The lease is
+  /// held by id, renewed while work continues, and expires so a crashed worker
+  /// cannot strand the run forever.
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  /// Highest customer id already evaluated in this run. A resumed attempt
+  /// continues from here instead of discarding durable work.
+  resumeCursor   String?
+  /// How many times preparation has been started or resumed, for the operator.
+  attempts       Int       @default(0)
+
   requested      Int  @default(0)
   candidateCount Int  @default(0)
   controlCount   Int  @default(0)
@@ -1174,6 +1192,7 @@ model CampaignAudienceRun {
   @@unique([campaignId, runKey])
   @@index([campaignId, status, startedAt])
   @@index([storeId, startedAt])
+  @@index([status, leaseExpiresAt])
   @@map("campaign_audience_runs")
 }
 

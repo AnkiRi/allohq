@@ -68,7 +68,9 @@ export type { AudienceStreamDecision, AudienceStreamSummary } from "./audience-r
 export {
   runCampaignAudienceResolution,
   completedAudienceRun,
+  campaignPreparationProgress,
   pageApprovedAssignments,
+  AudienceRunBusyError,
   CANDIDATE_DECISION,
 } from "./audience-run";
 export {
@@ -77,7 +79,12 @@ export {
   materialiseAudienceDecisions,
   leftAloneActivitySummary,
 } from "./audience-run";
-export type { AudienceRunInput, AudienceRunResult, AudienceRunStatus } from "./audience-run";
+export type {
+  AudienceRunInput,
+  AudienceRunResult,
+  AudienceRunStatus,
+  AudienceRunProgress,
+} from "./audience-run";
 export {
   withCampaignAudienceSnapshot,
   withCampaignAudienceSnapshotCounts,

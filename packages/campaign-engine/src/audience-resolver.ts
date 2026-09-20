@@ -177,6 +177,13 @@ export async function streamCampaignAudience(
      * drift from the approval-time one, because it is the same code.
      */
     customerIds?: readonly string[];
+    /**
+     * Resume the scan after this customer id. Approval preparation uses it to
+     * continue from durable work after an interruption instead of discarding
+     * it. The scan is ordered by primary key, so skipping ids at or below the
+     * cursor skips exactly what has already been evaluated.
+     */
+    afterCustomerId?: string;
   } = {}
 ): Promise<AudienceStreamSummary> {
   const campaign = await prisma.campaign.findUnique({
@@ -270,7 +277,7 @@ export async function streamCampaignAudience(
 
   let requested = 0;
   let pages = 0;
-  let cursor: string | undefined;
+  let cursor: string | undefined = options.afterCustomerId;
   while (true) {
     const customers = await prisma.customer.findMany({
       where: cursor ? { AND: [where, { id: { gt: cursor } }] } : where,
