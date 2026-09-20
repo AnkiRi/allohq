@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { assertDisposableDatabaseUrl } from "./assert-disposable-database.mjs";
 
 /**
  * Integration tests: every `*.integration.ts` in the workspace.
@@ -31,12 +32,7 @@ function collect(relativeDirectory) {
   return found;
 }
 
-if (!process.env.TEST_DATABASE_URL) {
-  console.error(
-    "TEST_DATABASE_URL is not set. Point it at an isolated, disposable database — never production."
-  );
-  process.exit(1);
-}
+assertDisposableDatabaseUrl(process.env.TEST_DATABASE_URL);
 
 const tests = roots.flatMap(collect).sort();
 if (tests.length === 0) {
