@@ -22,6 +22,73 @@ async function load() {
   return { prisma, ...scanner, ...dedupe };
 }
 
+/** Products and orders, so the order-driven scans have something to find. */
+async function seedOrders(
+  prisma: any,
+  storeId: string,
+  customerIds: string[],
+  suffix: string
+): Promise<{ productA: string; productB: string; lowStock: string }> {
+  // Inventory lives on the variant, which is what scanLowStock filters on.
+  const make = async (title: string, inventory: number) => {
+    const product = await prisma.product.create({
+      data: {
+        storeId,
+        externalId: `p-${title}-${suffix}`,
+        handle: `p-${title}-${suffix}`.toLowerCase(),
+        title,
+        price: 100,
+        status: "active",
+        variants: {
+          create: [
+            { externalId: `v-${title}-${suffix}`, title: "default", price: 100, inventory },
+          ],
+        },
+      },
+    });
+    return product.id;
+  };
+  const productA = await make("A", 500);
+  const productB = await make("B", 500);
+  const lowStock = await make("LowStock", 3);
+
+  // Customers 0..n/2 bought A; every third of those also bought B. A separate
+  // slice bought the low-stock product. Co-purchases give cross-sell a pair.
+  for (const [index, customerId] of customerIds.entries()) {
+    const buysA = index % 2 === 0;
+    const buysB = buysA && index % 6 === 0;
+    const buysLowStock = index % 5 === 0;
+    const items: Array<{ productId: string }> = [];
+    if (buysA) items.push({ productId: productA });
+    if (buysB) items.push({ productId: productB });
+    if (buysLowStock) items.push({ productId: lowStock });
+    if (items.length === 0) continue;
+    await prisma.order.create({
+      data: {
+        storeId,
+        customerId,
+        externalId: `o-${index}-${suffix}`,
+        orderNumber: `#${index}`,
+        totalPrice: 100,
+        subtotal: 100,
+        tax: 0,
+        shipping: 0,
+        status: "paid",
+        createdAt: new Date(Date.now() - 10 * 86_400_000),
+        items: {
+          create: items.map((item) => ({
+            productId: item.productId,
+            quantity: 1,
+            price: 100,
+            title: "item",
+          })),
+        },
+      },
+    });
+  }
+  return { productA, productB, lowStock };
+}
+
 async function seed(prisma: any, customers: number) {
   const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   const workspace = await prisma.workspace.create({
@@ -185,4 +252,99 @@ test("scanning a larger store does not cost more Node memory", { skip: skip || h
     large < Math.max(small, 0) + 4 * 1024 * 1024,
     `retained heap grew ${mb(small)} MB -> ${mb(large)} MB for a 4x store`
   );
+});
+
+test("order-driven scans match a reference fixture and stay bounded", { skip }, async () => {
+  const { prisma, scanOpportunities, opportunityFingerprint } = await load();
+  const fixture = await seed(prisma, 600);
+  try {
+    const customers = await prisma.customer.findMany({
+      where: { storeId: fixture.storeId },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    const ids = customers.map((customer: { id: string }) => customer.id);
+    const products = await seedOrders(prisma, fixture.storeId, ids, randomUUID().slice(0, 8));
+
+    const opportunities = await scanOpportunities(fixture.storeId);
+    const byType = new Map(opportunities.map((o: any) => [o.type, o]));
+
+    // Reference sets, computed independently of the scanner.
+    const buyersOf = async (productId: string) => {
+      const rows = await prisma.orderItem.findMany({
+        where: { productId, order: { storeId: fixture.storeId } },
+        select: { order: { select: { customerId: true } } },
+      });
+      return new Set<string>(rows.map((row: any) => row.order.customerId));
+    };
+    const boughtA = await buyersOf(products.productA);
+    const boughtB = await buyersOf(products.productB);
+    const boughtLowStock = await buyersOf(products.lowStock);
+    const crossSell = [...boughtA].filter((id) => !boughtB.has(id)).sort();
+
+    const crossSellOpportunity = byType.get("cross_sell");
+    assert.ok(crossSellOpportunity, "cross-sell was not produced");
+    assert.equal(
+      crossSellOpportunity.customerCount,
+      crossSell.length,
+      "the anti-join must select exactly bought-A-and-never-B"
+    );
+    assert.equal(
+      crossSellOpportunity.audienceFingerprint,
+      opportunityFingerprint({
+        ...crossSellOpportunity,
+        audienceFingerprint: undefined,
+        customerIds: crossSell,
+      }),
+      "cross-sell fingerprint must equal the materialised form"
+    );
+
+    const lowStockOpportunity = byType.get("low_stock");
+    assert.ok(lowStockOpportunity, "low stock was not produced");
+    assert.equal(lowStockOpportunity.customerCount, boughtLowStock.size);
+    assert.equal(
+      lowStockOpportunity.audienceFingerprint,
+      opportunityFingerprint({
+        ...lowStockOpportunity,
+        audienceFingerprint: undefined,
+        customerIds: [...boughtLowStock].sort(),
+      })
+    );
+
+    // The fixture must actually exercise the difference, or the anti-join
+    // proves nothing.
+    assert.ok(boughtB.size > 0, "fixture must contain customers who bought both");
+    assert.ok(crossSell.length < boughtA.size, "the exclusion must remove someone");
+  } finally {
+    await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
+  }
+});
+
+test("a rescan of unchanged orders produces identical fingerprints", { skip }, async () => {
+  const { prisma, scanOpportunities, opportunityJobId } = await load();
+  const fixture = await seed(prisma, 400);
+  try {
+    const customers = await prisma.customer.findMany({
+      where: { storeId: fixture.storeId },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    await seedOrders(
+      prisma,
+      fixture.storeId,
+      customers.map((customer: { id: string }) => customer.id),
+      randomUUID().slice(0, 8)
+    );
+    const at = new Date("2026-03-04T02:00:00.000Z");
+    const first = await scanOpportunities(fixture.storeId);
+    const second = await scanOpportunities(fixture.storeId);
+    assert.ok(first.length >= 3, "fixture must produce several opportunity types");
+    assert.deepEqual(
+      first.map((o: any) => opportunityJobId(o, at)).sort(),
+      second.map((o: any) => opportunityJobId(o, at)).sort(),
+      "a retry must not create duplicate opportunities"
+    );
+  } finally {
+    await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
+  }
 });
