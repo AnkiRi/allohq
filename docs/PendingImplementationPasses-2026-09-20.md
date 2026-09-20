@@ -30,55 +30,60 @@ _Recorded 2026-09-20T11:57Z._
   (Litmus / Email on Acid). Each is audited in "Email IDE audit" below with the evidence that it
   is absent.
 
-## Current status — 2026-09-20T19:00:03Z
+## Current status — 2026-09-20T19:24:18Z
 
 _This is the single canonical status section. Anything below it is history,
 evidence or detail; where an older section states a status, this one wins._
 
 ### Pass 8 in one paragraph
 
-**Pass 8 is structurally memory-safe and concurrency-safe.** The approval and
-send paths retain nothing that grows with the audience, Postgres performs the
-exact control selection, and concurrent approvals can no longer corrupt or fail
-one another.
+**Pass 8 is structurally memory-safe, concurrency-safe and operationally
+durable.** The approval and send paths retain nothing that grows with the
+audience, Postgres performs the exact control selection, concurrent approvals
+cannot corrupt one another, preparation runs as a leased background job that
+resumes itself after a crash, and every overnight scan is bounded.
 
-**Pass 8 is NOT operationally complete.** Two things block that, and neither is
-cosmetic: preparation still runs synchronously inside a tRPC request, and three
-order-driven opportunity scans are still unbounded.
+**What is not done:** CI has never executed on GitHub, and the migrations are
+undeployed. Both are gates rather than code.
 
-### Blocking items
+### Blocking items — all three closed this pass
 
-| Blocker | Why it blocks | Status |
+| Blocker | Status | Evidence |
 | --- | --- | --- |
-| Preparation runs synchronously in tRPC | A 100k approval occupies an API request for tens of seconds against Node's unmodified 300,000 ms `requestTimeout`. Resumption exists but needs another merchant approval click to trigger it; no worker retries on its own. | pending |
-| Three order-driven opportunity scans are unbounded | `scanRepurchaseWindows`, `scanWinBackPurchasers` and `scanCrossSell` build store-wide `orderItem` results and `customerIds` arrays in Node. | pending |
-| **Governor injected-time inconsistency — P0 correctness** | `checkFatigue`, `checkSupportState` and `checkCooldown` build their windows from `new Date()` and ignore the `now` passed to `checkAllRules`. **This is not test debt.** A frozen `asOf` is the contract that makes approval, retry and resume produce the same audience; a policy path that reads the wall clock silently breaks it, so a resumed run can reach a different verdict than the attempt it resumed. It was found through a test, but the defect is in production policy evaluation. | pending |
+| Preparation ran synchronously in tRPC | **closed** `ad467ac` `dd84939` | approval enqueues and returns; the worker prepares, finalises and dispatches; a lapsed lease is re-enqueued every two minutes, so no second merchant click |
+| Three order-driven opportunity scans unbounded | **closed** `c064889` | repurchase, low-stock and cross-sell all keyset-paged; cross-sell is now a SQL anti-join; decisions match an independently computed reference set |
+| Governor injected-time inconsistency (P0) | **closed** `dbee4b4` | every rule measures its window from the injected instant; 5 boundary tests fail against the old code and pass against the new |
 
 ### Constraint on the memory evidence
 
-Every retained-heap figure in this document is valid **only in a GC-enabled
-runner**. The measurements settle the heap with `globalThis.gc()` before
-reading, which requires `node --expose-gc`. Without it the reading is
-uncollected garbage rather than retention: the same opportunity scan measured
-0 MB standalone and appeared to grow 2.47 MB to 7.38 MB under a runner that had
-not enabled the collector. The integration runner therefore passes
-`--expose-gc`, and each memory test refuses to report a result without a
-collector rather than measuring garbage.
+Every retained-heap figure here is valid **only in a GC-enabled runner**: the
+measurements settle the heap with `globalThis.gc()` before reading, which needs
+`node --expose-gc`. Without it the reading is uncollected garbage — the same
+opportunity scan measured 0 MB standalone and appeared to grow 2.47 MB to
+7.38 MB under a runner without a collector. **The proofs now fail rather than
+skip when no collector is present**, because a skipped memory proof reported
+among passes looks like coverage. `ALLOW_UNMEASURED_HEAP=1` excludes one
+explicitly.
+
+A second honest caveat: instrumenting the Prisma client to capture query
+latency costs the harness its own memory. The same 100k run measures **0.12 MB
+retained uninstrumented and 2.15 MB with query capture on**. Both are reported;
+the difference is the harness, not the engine.
 
 ### Area status
 
 | Area | Status | Evidence | Remaining limitation |
 | --- | --- | --- | --- |
-| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k approval: 0.12 MB retained heap, 0 duplicate rows, 0 arm mismatches of 90,909 | valid only in a GC-enabled runner, above |
-| Pass 8 — approval concurrency | **verified** `b08eeba` | leased runs; simultaneous and 400 ms-staggered approvals both leave one complete run with a whole membership | a losing caller is refused, not queued — it must retry |
-| Pass 8 — approval resumability | **implemented** `b08eeba` | an interrupted run is taken over and resumed; rows written before the interruption survive; resumed arms match the reference exactly | **synchronous in the API request**; resume needs a new approval attempt |
-| Pass 8 — merchant progress | **implemented** `b08eeba` | `campaignPreparationProgress` reconciles evaluated = candidates + left alone + not receiving | not surfaced in any UI |
-| Policy clock consistency | **pending** | — | P0, see blocking items |
+| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k: 36.5 s, peak heap 65.49 MB, 0 duplicates, 0 arm mismatches of 90,909 | GC-enabled runner only, above |
+| Pass 8 — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run; a losing caller gets AUDIENCE_RUN_BUSY | a losing caller is refused, not queued |
+| Pass 8 — durable preparation | **verified** `ad467ac` `dd84939` | leased job; lease loss stops a worker; expired lease is adopted and finished; a completed run cannot be failed by an older worker | recovery sweep interval is 2 minutes, not tuned under load |
+| Pass 8 — merchant progress | **implemented** `b08eeba` | evaluated = candidates + left alone + not receiving, reconciles exactly | **not surfaced in any UI** |
+| Policy clock consistency | **verified** `dbee4b4` | 5 boundary tests; all fail against the previous governor | — |
 | Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count | — |
-| Overnight opportunity scale | **partial** `5c0dac5` | three customer-state scans streamed; fingerprints byte-identical; retained heap 0 MB at 20,000 | three order-driven scans still unbounded |
+| Overnight opportunity scale | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical; retained heap 0 MB at 20,000 | — |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
-| CI | **implemented** `3c86497` `e064f3e` | verification and integration workflows; disposable-database check as its own step | **never executed on GitHub**; no run observed |
-| Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named; email-only journeys still duplicate | — |
+| CI | **implemented** `3c86497` `e064f3e` | workflows and the disposable-database step exist | **never executed on GitHub; no run observed** |
+| Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named | — |
 | Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
 | WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
 
@@ -86,10 +91,11 @@ collector rather than measuring garbage.
 
 | Defect | Evidence | Why it is still open |
 | --- | --- | --- |
-| Order-driven opportunity scans build unbounded arrays | `opportunity-scanner.ts` repurchase window, win-back purchasers, cross-sell | bounding them needs order fixtures at scale |
-| Pre-existing migration drift on main | one `DROP DEFAULT` on `form_incentive_grants.updatedAt`, five index renames | unrelated to this work; CI reports without gating |
-| `campaign_audience_members` ranking index unused by the planner | bitmap scan on `(runId, arm)` chosen instead, with four runs present | dropping it measured −1% on writes; no benefit either way |
-| Four migrations undeployed | `20260920090000`, `20260920140000`, `20260920150000`, `20260920190000` | deployment is a separate gate |
+| Control selection is one long statement at scale | 9,255 ms for 90,909 candidates; ~90 s extrapolated at 900,000 | rows belong to one run and no other writer touches them, so it is a long statement rather than contention — but it is the first thing to need attention at a million |
+| Pre-existing migration drift on main | one `DROP DEFAULT`, five index renames | unrelated to this work; CI reports without gating |
+| `campaign_audience_members` ranking index unused | bitmap scan on `(runId, arm)` chosen instead | dropping it measured −1% on writes; no benefit either way |
+| Five migrations undeployed | `…090000`, `…140000`, `…150000`, `…190000` | deployment is a separate gate |
+| Preparation progress has no UI | `campaignPreparationProgress` exists and is tested | the API returns it; nothing renders it yet |
 
 ### Order of work after this pass
 
@@ -326,6 +332,68 @@ member rows persist. If `campaign.updatedAt` changes, the next approval derives 
   one statement for the whole audience; the 5,668 ms cold figure is dominated by first-touch
   buffer traffic, not plan choice.
 
+## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
+
+_Status: **verified**. Investigated rather than optimised: the point is to know
+what each source is and what it implies at a million customers, not to shrink a
+number for its own sake. Measured on an isolated disposable Postgres; the
+one-million figures are clearly marked as extrapolation._
+
+### Measured at 100,000 customers
+
+6,340 queries in 33 distinct shapes, 6,083 Postgres transactions, 20.1 s inside
+queries against a 36.5 s wall. p50 0 ms, p95 2 ms, p99 14 ms, max 9,255 ms.
+
+| Source | Count | Total ms | What it is |
+| --- | --- | --- | --- |
+| Resolver pages | 500 pages x ~11 queries ≈ 5,500 | ~2,600 | Each page of 200 customers reads customers, RFM scores, consents, orders, fatigue logs, two customer-state selections, conversations, message logs and suppressions. This is the policy evaluation itself. |
+| Member writes | 50 | 8,189 | 2,000 audience rows per statement. The single largest cost, and it is the durable product data the pass exists to produce. |
+| Control selection | 1 | 9,255 | One window-function UPDATE over 90,909 candidates. |
+| Run bookkeeping | ~550 | <200 | Lease renewal and resume-cursor advance, one per write chunk, plus run status updates and the final count groupings. |
+| Pooled-stratum fixup | 10 | <20 | Bounded by definition: only strata with fewer than ten candidates. |
+
+Two statements account for 17.4 s of the 20.1 s inside queries. Everything else
+is thousands of sub-millisecond reads.
+
+### Why none of it is being "optimised"
+
+- **The resolver's per-page reads are the policy.** Removing them means not
+  evaluating consent, fatigue, collision, cooldown or recent purchase. The
+  batching already went in: `checkCampaignRulesBatch` replaced a per-customer
+  round trip, which is how the journey path went from 5.2 queries per customer
+  to 0.045.
+- **The member writes are the deliverable.** 100,000 durable audience decisions
+  is intentional product and audit data. Dropping indexes to speed the write
+  measured −1% and 2% — noise — so there is nothing to win there.
+- **The control selection is one statement by design.** Splitting it would
+  reintroduce the in-process selection this pass removed.
+
+### One-million-customer implication — extrapolation, not measurement
+
+Scaling the measured shape linearly:
+
+| Measure | 100k (measured) | 1M (extrapolated) |
+| --- | --- | --- |
+| Resolver pages | 500 | 5,000 |
+| Queries | 6,340 | ~63,000 |
+| Transactions | 6,083 | ~61,000 |
+| Member write statements | 50 | 500 |
+| Duration | 36.5 s | ~6 minutes |
+| Retained heap | 0.12 MB | unchanged — nothing scales with audience size |
+
+**The one thing that does not extrapolate comfortably is the control
+selection.** It is a single UPDATE over every candidate, measured at 9,255 ms
+for 90,909. At roughly 900,000 candidates that is a statement running on the
+order of a minute and a half, holding row locks on the whole membership for its
+duration. Those rows belong to one run and no other writer touches them, so
+this is a long statement rather than a contention problem — but it is the
+component most likely to need attention first at that scale, and it is recorded
+here so the next person does not rediscover it under load.
+
+**Inference, not measured:** every figure in the 1M column assumes the measured
+per-page cost holds as the tables grow. Index behaviour changes with table size,
+and this was measured on a database holding one store.
+
 ## Findings outside Pass 8 — 2026-09-20T15:40Z
 
 Three defects were found while doing the Pass 8 work. All three are fixed; the second is a visible
@@ -446,6 +514,11 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-20T19:24:18Z | `81a1df8` | verified | One 100k run now reports duration, peak/retained heap, query count and shapes, transactions, p50/p95/p99/max, duplicates and arm parity. Retained-heap proofs fail rather than skip without a collector. | Instrumentation costs the harness 2.03 MB; both instrumented and uninstrumented figures are recorded |
+| 2026-09-20T19:24:18Z | `c064889` | verified | Repurchase, low-stock and cross-sell scans keyset-paged; cross-sell became a SQL anti-join. Decisions checked against an independently computed reference set; rescans produce identical job ids. | — |
+| 2026-09-20T19:24:18Z | `dd84939` | verified | Stale preparation recovery scheduled every two minutes and classified in the v1 release gate. | Interval not tuned under load |
+| 2026-09-20T19:24:18Z | `ad467ac` | verified | Preparation is a durable queue-backed job: approval enqueues and returns, the worker finalises and dispatches, no second merchant click. Three new race tests cover stale-worker failure, lease loss and lease expiry. | Progress is returned by the API but not rendered anywhere |
+| 2026-09-20T19:24:18Z | `dbee4b4` | verified | P0 policy-clock fix: every governor rule measures its window from the injected instant. 5 boundary tests, all failing against the previous governor. | — |
 | 2026-09-20T19:00:18Z | pending | pending | Canonical status block restated: Pass 8 structurally memory-safe and concurrency-safe but not operationally complete; governor injected-time inconsistency reclassified from test debt to **P0 correctness**; the GC-enabled-runner constraint on every retained-heap figure documented. | The three blockers it names are all still open at this timestamp |
 | 2026-09-20T18:42:49Z | `5c0dac5` | verified | Overnight opportunity audiences streamed. Three customer-state scans keyset-paged; fingerprints byte-identical to the materialised form, verified against the database; retained heap 0 MB at 20,000 customers. Also fixed my own memory tests, which measured uncollected garbage because the runner never passed `--expose-gc`. | Order-driven scans (repurchase, win-back, cross-sell) still build unbounded id arrays |
 | 2026-09-20T18:42:49Z | `2117bc9` | verified | `automations.duplicate` refuses a journey containing steps public v1 cannot run, naming each one. Was the only ungated write path. | none |
