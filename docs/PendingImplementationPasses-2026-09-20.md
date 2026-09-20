@@ -30,39 +30,73 @@ _Recorded 2026-09-20T11:57Z._
   (Litmus / Email on Acid). Each is audited in "Email IDE audit" below with the evidence that it
   is absent.
 
-## Current status — 2026-09-20T18:42:29Z
+## Current status — 2026-09-20T19:00:03Z
 
 _This is the single canonical status section. Anything below it is history,
 evidence or detail; where an older section states a status, this one wins._
 
+### Pass 8 in one paragraph
+
+**Pass 8 is structurally memory-safe and concurrency-safe.** The approval and
+send paths retain nothing that grows with the audience, Postgres performs the
+exact control selection, and concurrent approvals can no longer corrupt or fail
+one another.
+
+**Pass 8 is NOT operationally complete.** Two things block that, and neither is
+cosmetic: preparation still runs synchronously inside a tRPC request, and three
+order-driven opportunity scans are still unbounded.
+
+### Blocking items
+
+| Blocker | Why it blocks | Status |
+| --- | --- | --- |
+| Preparation runs synchronously in tRPC | A 100k approval occupies an API request for tens of seconds against Node's unmodified 300,000 ms `requestTimeout`. Resumption exists but needs another merchant approval click to trigger it; no worker retries on its own. | pending |
+| Three order-driven opportunity scans are unbounded | `scanRepurchaseWindows`, `scanWinBackPurchasers` and `scanCrossSell` build store-wide `orderItem` results and `customerIds` arrays in Node. | pending |
+| **Governor injected-time inconsistency — P0 correctness** | `checkFatigue`, `checkSupportState` and `checkCooldown` build their windows from `new Date()` and ignore the `now` passed to `checkAllRules`. **This is not test debt.** A frozen `asOf` is the contract that makes approval, retry and resume produce the same audience; a policy path that reads the wall clock silently breaks it, so a resumed run can reach a different verdict than the attempt it resumed. It was found through a test, but the defect is in production policy evaluation. | pending |
+
+### Constraint on the memory evidence
+
+Every retained-heap figure in this document is valid **only in a GC-enabled
+runner**. The measurements settle the heap with `globalThis.gc()` before
+reading, which requires `node --expose-gc`. Without it the reading is
+uncollected garbage rather than retention: the same opportunity scan measured
+0 MB standalone and appeared to grow 2.47 MB to 7.38 MB under a runner that had
+not enabled the collector. The integration runner therefore passes
+`--expose-gc`, and each memory test refuses to report a result without a
+collector rather than measuring garbage.
+
+### Area status
+
 | Area | Status | Evidence | Remaining limitation |
 | --- | --- | --- | --- |
-| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k approval: 0.10 MB retained heap, 0 duplicate rows, 0 arm mismatches of 90,909 | none known |
+| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k approval: 0.12 MB retained heap, 0 duplicate rows, 0 arm mismatches of 90,909 | valid only in a GC-enabled runner, above |
 | Pass 8 — approval concurrency | **verified** `b08eeba` | leased runs; simultaneous and 400 ms-staggered approvals both leave one complete run with a whole membership | a losing caller is refused, not queued — it must retry |
-| Pass 8 — approval resumability | **implemented** `b08eeba` | an interrupted run is taken over and resumed; rows written before the interruption survive; resumed arms match the reference exactly | **still synchronous in the API request.** Resume needs a new approval attempt to trigger it; no worker job retries on its own |
-| Pass 8 — merchant progress | **implemented** `b08eeba` | `campaignPreparationProgress` reports evaluated / candidates / left alone / not receiving / control / treatment; reconciles exactly | not yet surfaced in any UI |
-| Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count; retained heap flat | — |
-| 2026-09-20T18:46:41Z | `643787c` | verified | Re-ran the 100k load proof against a fresh disposable database after every change in this pass: 32.7 s, 0.12 MB retained heap, 70.92 MB peak, 0 duplicate rows, 0 arm mismatches of 90,909. | Not comparable to the earlier 59.6 s figure — that run used a database holding prior test data, this one was empty, so the difference is not attributable to any single change |
-| Overnight opportunity scale | **verified** `5c0dac5` | three customer-state scans streamed; fingerprints byte-identical; retained heap 0 MB at 20,000 | the three order-driven scans still build unbounded id arrays |
-| Test-database safety | **verified** `e064f3e` | guard refuses this machine's real database and a realistic RDS URL, exits 1 | — |
-| CI | **implemented** `3c86497` `e064f3e` | verification and integration workflows; disposable-database check as its own step | never executed on GitHub — no run has been observed |
-| Journey duplicate gate | **verified** `2117bc9` | refuses with the unsupported nodes named; email-only journeys still duplicate | — |
+| Pass 8 — approval resumability | **implemented** `b08eeba` | an interrupted run is taken over and resumed; rows written before the interruption survive; resumed arms match the reference exactly | **synchronous in the API request**; resume needs a new approval attempt |
+| Pass 8 — merchant progress | **implemented** `b08eeba` | `campaignPreparationProgress` reconciles evaluated = candidates + left alone + not receiving | not surfaced in any UI |
+| Policy clock consistency | **pending** | — | P0, see blocking items |
+| Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count | — |
+| Overnight opportunity scale | **partial** `5c0dac5` | three customer-state scans streamed; fingerprints byte-identical; retained heap 0 MB at 20,000 | three order-driven scans still unbounded |
+| Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
+| CI | **implemented** `3c86497` `e064f3e` | verification and integration workflows; disposable-database check as its own step | **never executed on GitHub**; no run observed |
+| Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named; email-only journeys still duplicate | — |
 | Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
 | WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
-
-**Pass 8 is structurally memory-safe and concurrency-safe. It is not launch-ready**
-until approval preparation runs as a resumable job rather than inside an API
-request, and until the remaining order-driven opportunity scans are bounded.
 
 ### Known defects recorded but not fixed
 
 | Defect | Evidence | Why it is still open |
 | --- | --- | --- |
-| `checkFatigue`, `checkSupportState` and `checkCooldown` build their windows from `new Date()` and ignore the `now` passed to `checkAllRules` | comparing batched and per-customer governors at a fixed past `now` disagreed 292 of 500; at wall clock they agree 0 of 500 | time-dependent rules cannot be tested at a fixed instant until this is fixed; the fix touches every governor caller |
-| Order-driven opportunity scans build unbounded `customerIds` arrays | `opportunity-scanner.ts` repurchase window, win-back purchasers, cross-sell | no fixture in this pass exercised them; bounding them needs order fixtures at scale |
-| Pre-existing migration drift on main | one `DROP DEFAULT` on `form_incentive_grants.updatedAt`, five index renames | unrelated to this work; CI reports it without gating until cleared |
-| `campaign_audience_members` ranking index is unused by the planner | bitmap scan on `(runId, arm)` chosen instead, with four runs present | dropping it measured −1% on writes, so there is no benefit either way |
-| Three migrations undeployed | `20260920090000`, `20260920140000`, `20260920150000`, `20260920190000` | deployment is a separate gate |
+| Order-driven opportunity scans build unbounded arrays | `opportunity-scanner.ts` repurchase window, win-back purchasers, cross-sell | bounding them needs order fixtures at scale |
+| Pre-existing migration drift on main | one `DROP DEFAULT` on `form_incentive_grants.updatedAt`, five index renames | unrelated to this work; CI reports without gating |
+| `campaign_audience_members` ranking index unused by the planner | bitmap scan on `(runId, arm)` chosen instead, with four runs present | dropping it measured −1% on writes; no benefit either way |
+| Four migrations undeployed | `20260920090000`, `20260920140000`, `20260920150000`, `20260920190000` | deployment is a separate gate |
+
+### Order of work after this pass
+
+1. CI.
+2. Pass 9 delivery health and provider-switch safety.
+3. Migration deployment plan and external load proof.
+4. Email editor safety and accessibility.
 
 ## Pass 8 — measured results so far
 
@@ -412,6 +446,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-20T19:00:18Z | pending | pending | Canonical status block restated: Pass 8 structurally memory-safe and concurrency-safe but not operationally complete; governor injected-time inconsistency reclassified from test debt to **P0 correctness**; the GC-enabled-runner constraint on every retained-heap figure documented. | The three blockers it names are all still open at this timestamp |
 | 2026-09-20T18:42:49Z | `5c0dac5` | verified | Overnight opportunity audiences streamed. Three customer-state scans keyset-paged; fingerprints byte-identical to the materialised form, verified against the database; retained heap 0 MB at 20,000 customers. Also fixed my own memory tests, which measured uncollected garbage because the runner never passed `--expose-gc`. | Order-driven scans (repurchase, win-back, cross-sell) still build unbounded id arrays |
 | 2026-09-20T18:42:49Z | `2117bc9` | verified | `automations.duplicate` refuses a journey containing steps public v1 cannot run, naming each one. Was the only ungated write path. | none |
 | 2026-09-20T18:42:49Z | `e064f3e` | verified | Integration suites refuse a non-disposable database: managed hosts rejected outright, host must be local without an explicit opt-in, database name must say it is a test database. Exits 1 on this machine's real database and on a realistic RDS URL. | none |
