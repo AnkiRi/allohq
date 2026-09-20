@@ -947,3 +947,135 @@ test(
     }
   }
 );
+
+test(
+  "a completed run can never be marked failed by an older worker",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution, completedAudienceRun } = await load();
+    const fixture = await seed(prisma, { customers: 500 });
+    try {
+      const result = await runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "stale-failer",
+        assignmentSeed: "stale-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+        owner: "worker-new",
+      });
+
+      // An older worker, still holding a stale lease, tries to fail the run it
+      // thinks it owns. Before the lease-scoped update this would have marked a
+      // complete, fully-assigned membership `failed` and hidden it from
+      // delivery.
+      const clobbered = await prisma.campaignAudienceRun.updateMany({
+        where: { id: result.runId, leaseOwner: "worker-old", status: { not: "complete" } },
+        data: { status: "failed", failureReason: "stale worker" },
+      });
+      assert.equal(clobbered.count, 0, "an older worker must not be able to fail a complete run");
+
+      const run = await prisma.campaignAudienceRun.findUniqueOrThrow({
+        where: { id: result.runId },
+      });
+      assert.equal(run.status, "complete");
+      assert.equal(run.failureReason, null);
+      assert.ok(await completedAudienceRun(fixture.campaignId));
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);
+
+test(
+  "a worker that loses its lease stops writing into the run",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution } = await load();
+    const fixture = await seed(prisma, { customers: 3_000 });
+    try {
+      // Start a preparation, then take its lease away mid-flight. It must stop
+      // rather than keep writing rows into a run it no longer owns.
+      const running = runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "lease-loss",
+        assignmentSeed: "lease-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+        owner: "worker-a",
+        writeChunk: 200,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await prisma.campaignAudienceRun.updateMany({
+        where: { campaignId: fixture.campaignId, runKey: "lease-loss" },
+        data: { leaseOwner: "worker-b", leaseExpiresAt: new Date(Date.now() + 120_000) },
+      });
+
+      await assert.rejects(
+        running,
+        (error: { code?: string }) => error.code === "AUDIENCE_RUN_BUSY",
+        "losing the lease must stop the worker with a busy signal"
+      );
+
+      const run = await prisma.campaignAudienceRun.findFirstOrThrow({
+        where: { campaignId: fixture.campaignId, runKey: "lease-loss" },
+      });
+      assert.notEqual(run.status, "complete", "a stopped worker must not complete the run");
+      assert.equal(run.leaseOwner, "worker-b", "the new owner keeps the lease");
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);
+
+test(
+  "an expired lease lets another worker take over and finish",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution } = await load();
+    const fixture = await seed(prisma, { customers: 800 });
+    try {
+      // A worker that crashed: the run is mid-flight and the lease has lapsed.
+      // No merchant action should be needed to finish it.
+      const abandoned = await prisma.campaignAudienceRun.create({
+        data: {
+          campaignId: fixture.campaignId,
+          storeId: fixture.storeId,
+          runKey: "expired",
+          asOf: new Date("2026-03-04T12:00:00.000Z"),
+          assignmentSeed: "expired-seed",
+          policyVersion: "test-v1",
+          status: "resolving",
+          leaseOwner: "crashed-worker",
+          leaseExpiresAt: new Date(Date.now() - 5 * 60_000),
+          attempts: 1,
+        },
+      });
+
+      const result = await runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "expired",
+        assignmentSeed: "expired-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+        owner: "recovery-worker",
+      });
+
+      assert.equal(result.runId, abandoned.id, "recovery must adopt the abandoned run");
+      assert.equal(result.candidateCount, fixture.candidates.length);
+      const run = await prisma.campaignAudienceRun.findUniqueOrThrow({
+        where: { id: abandoned.id },
+      });
+      assert.equal(run.status, "complete");
+      assert.equal(run.leaseOwner, null, "a finished run releases its lease");
+      assert.ok(run.attempts >= 2);
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);

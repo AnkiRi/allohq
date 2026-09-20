@@ -34,8 +34,10 @@ import {
   streamCampaignAudience,
   campaignAudienceSnapshot,
   type AudienceStreamDecision,
+  type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
+import { prepareCampaignAudience } from "./prepare-audience";
 import {
   frozenCohortSize,
   pageCohortByEngagement,
@@ -163,11 +165,25 @@ async function deliverChunk(data: DeliverChunkData) {
 }
 
 export const sendWorker = new Worker<
-  SendJobData | DeliverOneData | DeliverChunkData | FinalizeData
+  SendJobData | DeliverOneData | DeliverChunkData | FinalizeData | CampaignPreparationRequest
 >(
   QUEUE_NAMES.EMAIL_SEND,
   async (job) => {
-    const data = job.data as SendJobData | DeliverOneData | DeliverChunkData | FinalizeData;
+    const data = job.data as
+      | SendJobData
+      | DeliverOneData
+      | DeliverChunkData
+      | FinalizeData
+      | CampaignPreparationRequest;
+    if ((data as CampaignPreparationRequest).prepareAudience) {
+      return prepareCampaignAudience(data as CampaignPreparationRequest, async (campaignId, forceImmediate) => {
+        await emailSendQueue.add(
+          "campaign-send",
+          { campaignId, forceImmediate },
+          { jobId: `campaign-send-${campaignId}` }
+        );
+      });
+    }
     if ((data as DeliverOneData).deliverOne) return deliverOne(data as DeliverOneData);
     if ((data as DeliverChunkData).deliverChunk) return deliverChunk(data as DeliverChunkData);
     if ((data as FinalizeData).finalize)

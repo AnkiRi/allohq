@@ -9,7 +9,7 @@ import {
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
 import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema } from "@allohq/email-builder";
-import { ensureEmailVersion } from "../lib/email-versions";
+import { ensureEmailVersion } from "@allohq/campaign-engine";
 import {
   createEmailAssetUpload,
   inspectUploadedEmailAsset,

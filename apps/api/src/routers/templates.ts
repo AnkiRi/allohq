@@ -6,7 +6,7 @@ import { renderBrandedEmail, complete } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
 import { emailBlocksSchema } from "@allohq/email-builder";
 import { emailDocumentSchema } from "@allohq/email-builder";
-import { ensureEmailVersion } from "../lib/email-versions";
+import { ensureEmailVersion } from "@allohq/campaign-engine";
 
 export const templatesRouter = router({
   list: workspaceProcedure

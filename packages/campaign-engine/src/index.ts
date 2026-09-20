@@ -100,3 +100,19 @@ export { findBannedTerms } from "./content-policy";
 
 // Benchmark Comparison
 export { getBenchmarkComparison } from "./benchmark-comparison";
+
+// Approval mechanics, shared by the API and the preparation worker. These
+// lived in apps/api/src/lib and could not be reached from a worker, which is
+// what kept campaign approval inside a request.
+export { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "./approval-claim";
+export { buildHumanDecision } from "./human-decision";
+export { ensureEmailVersion } from "./email-versions";
+export { collectEmailAssetManifest } from "./email-asset-manifest";
+export type { EmailAssetReceipt } from "./email-asset-manifest";
+export {
+  finalizeCampaignApproval,
+  AudienceRunNotCompleteError,
+  CampaignApprovalConflictError,
+} from "./approval-finalize";
+export type { FinalizeApprovalInput } from "./approval-finalize";
+export type { CampaignPreparationRequest } from "./preparation-request";
