@@ -322,6 +322,42 @@ export function normalizeStratum(stratum: string | null | undefined): string {
   return stratum?.trim() || "Unscored";
 }
 
+/**
+ * The arm for one candidate, given its stratum's cut line.
+ *
+ * Identical to what {@link assignStratifiedCohortArms} and
+ * {@link StratifiedControlSelector} produce, because it applies the same
+ * ranking: control is everything at or ahead of the cut line. Pure, so a
+ * streaming write pass needs no per-customer state at all.
+ */
+export function armForCandidate(input: {
+  assignmentSeed: string;
+  assignmentStratum: string;
+  customerId: string;
+  threshold: { customerId: string; value: number } | null | undefined;
+}): Arm {
+  if (!input.threshold) return "TREATMENT";
+  const candidate = {
+    customerId: input.customerId,
+    value: assignmentValue(`${input.assignmentSeed}:${input.assignmentStratum}`, input.customerId),
+  };
+  // At or ahead of the cut line is control; strictly behind it is treatment.
+  return ranksAhead(input.threshold, candidate) ? "TREATMENT" : "CONTROL";
+}
+
+/** Assignment stratum for one candidate under a planned set of quotas. */
+export function assignmentStratumFor(
+  plan: StratifiedControlPlan,
+  stratum: string | null | undefined
+): string {
+  const normalized = normalizeStratum(stratum);
+  const assignmentStratum = plan.assignmentStratum.get(normalized);
+  if (!assignmentStratum) {
+    throw new Error(`Stratum ${normalized} was not counted before control quotas were planned`);
+  }
+  return assignmentStratum;
+}
+
 export interface StratifiedControlPlan {
   /** Assignment stratum for each counted stratum, after small-stratum pooling. */
   assignmentStratum: Map<string, string>;
@@ -401,6 +437,16 @@ class ControlQuotaHeap {
 
   customerIds(): string[] {
     return this.retained.map((candidate) => candidate.customerId);
+  }
+
+  /**
+   * The worst candidate still inside the quota — the k-th best overall, where k
+   * is the quota. Everything ranking at or ahead of it is control. Returning
+   * this one pair lets a caller decide every arm later without holding the
+   * control set: the heap root *is* the cut line.
+   */
+  threshold(): RankedCandidate | null {
+    return this.retained[0] ?? null;
   }
 
   private siftUp(start: number): void {
@@ -483,6 +529,23 @@ export class StratifiedControlSelector {
       customerId,
       value: assignmentValue(`${this.assignmentSeed}:${assignmentStratum}`, customerId),
     });
+  }
+
+  /**
+   * One cut line per assignment stratum, after every candidate has been offered.
+   *
+   * Retaining this instead of the control set turns arm assignment into a pure
+   * function of (seed, stratum, customerId, cut line), so a second streaming
+   * pass can decide arms while holding only one pair per stratum rather than a
+   * Set proportional to the audience. A stratum whose quota is zero has no cut
+   * line and yields no control.
+   */
+  controlThresholds(): Map<string, RankedCandidate | null> {
+    const thresholds = new Map<string, RankedCandidate | null>();
+    for (const [stratum] of Object.entries(this.plan.strata)) {
+      thresholds.set(stratum, this.heaps.get(stratum)?.threshold() ?? null);
+    }
+    return thresholds;
   }
 
   /** The frozen control set. Call only after every candidate has been offered. */

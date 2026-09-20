@@ -127,11 +127,46 @@ export function shouldExcludeGovernorDecision(decision: {
   return !decision.allowed && decision.rule !== "quiet_hours";
 }
 
-export async function resolveCampaignAudience(
+/** One customer's resolved decision, emitted as the audience is paged. */
+export type AudienceStreamDecision =
+  | { kind: "eligible"; customer: AudienceResolution["eligible"][number] }
+  | {
+      kind: "deliberately_left_alone";
+      customer: { id: string; email: string; firstName: string | null; lastName: string | null };
+      decision: CandidateDecision;
+    }
+  | {
+      kind: "excluded";
+      reason: AudienceExclusionReason;
+      customer: { id: string; email: string; firstName: string | null; lastName: string | null };
+    };
+
+/** Counts and bounded samples. Never grows with the audience. */
+export interface AudienceStreamSummary {
+  requested: number;
+  exclusions: Record<AudienceExclusionReason, number>;
+  samples: AudienceResolution["samples"];
+}
+
+/**
+ * Resolve a campaign audience in bounded keyset pages, emitting one decision per
+ * customer instead of accumulating the whole audience.
+ *
+ * This is the single source of truth for campaign eligibility.
+ * `resolveCampaignAudience` is a thin accumulator over it, so the rules cannot
+ * drift between the streaming and materialised forms. Only counts and at most
+ * three samples per reason are retained here; everything else is handed to the
+ * caller and forgotten.
+ *
+ * Callers relying on ascending customer id (the deterministic control
+ * assignment does) can: the scan is ordered by primary key.
+ */
+export async function streamCampaignAudience(
   campaignId: string,
+  onDecision: (decision: AudienceStreamDecision) => void | Promise<void>,
   now = new Date(),
   options: { enforceDeliveryPauses?: boolean } = {}
-): Promise<AudienceResolution> {
+): Promise<AudienceStreamSummary> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: {
@@ -151,41 +186,19 @@ export async function resolveCampaignAudience(
   const proposal = (campaign.agentProposal ?? {}) as Record<string, unknown>;
   const hasDiscount =
     typeof proposal["discountPercent"] === "number" || typeof proposal["discountCode"] === "string";
-  const merchantIncluded = new Set(
-    Array.isArray(proposal["includeLeftAloneCustomerIds"])
-      ? (proposal["includeLeftAloneCustomerIds"] as unknown[]).filter(
-          (value): value is string => typeof value === "string"
-        )
-      : []
-  );
-  const recentPurchaseOverrides = new Set(
-    Array.isArray(proposal["overrideRecentPurchaseCustomerIds"])
-      ? (proposal["overrideRecentPurchaseCustomerIds"] as unknown[]).filter(
-          (value): value is string => typeof value === "string"
-        )
-      : []
-  );
-  const fatigueOverrides = new Set(
-    Array.isArray(proposal["overrideFatigueCustomerIds"])
-      ? (proposal["overrideFatigueCustomerIds"] as unknown[]).filter(
-          (value): value is string => typeof value === "string"
-        )
-      : []
-  );
-  const collisionOverrides = new Set(
-    Array.isArray(proposal["overrideCollisionCustomerIds"])
-      ? (proposal["overrideCollisionCustomerIds"] as unknown[]).filter(
-          (value): value is string => typeof value === "string"
-        )
-      : []
-  );
-  const cooldownOverrides = new Set(
-    Array.isArray(proposal["overrideCooldownCustomerIds"])
-      ? (proposal["overrideCooldownCustomerIds"] as unknown[]).filter(
-          (value): value is string => typeof value === "string"
-        )
-      : []
-  );
+  const idSet = (key: string) =>
+    new Set(
+      Array.isArray(proposal[key])
+        ? (proposal[key] as unknown[]).filter((value): value is string => typeof value === "string")
+        : []
+    );
+  // Merchant override lists are bounded by what a merchant selected, not by the
+  // audience, and are a locked Pass 1 capability.
+  const merchantIncluded = idSet("includeLeftAloneCustomerIds");
+  const recentPurchaseOverrides = idSet("overrideRecentPurchaseCustomerIds");
+  const fatigueOverrides = idSet("overrideFatigueCustomerIds");
+  const collisionOverrides = idSet("overrideCollisionCustomerIds");
+  const cooldownOverrides = idSet("overrideCooldownCustomerIds");
   const groupOverrides = new Set(
     campaign.audienceOverridePolicies.map((policy) => policy.reasonCode)
   );
@@ -223,31 +236,21 @@ export async function resolveCampaignAudience(
     AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
   ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
-  const excludedCustomers: AudienceResolution["excludedCustomers"] = {};
-  const eligible: AudienceResolution["eligible"] = [];
-  const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
-  const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
-  const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
-  const collisionExcluded: AudienceResolution["collisionExcluded"] = [];
-  const cooldownExcluded: AudienceResolution["cooldownExcluded"] = [];
-  const exclude = (
+  const emitExcluded = async (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
   ) => {
     exclusions[reason]++;
-    (excludedCustomers[reason] ??= []).push({
+    const brief = {
       id: customer.id,
       email: customer.email,
       firstName: customer.firstName,
       lastName: customer.lastName,
-    });
-    if ((samples[reason]?.length ?? 0) < 3)
-      (samples[reason] ??= []).push({
-        id: customer.id,
-        email: customer.email,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-      });
+    };
+    // At most three per reason: the campaign page shows no more than three
+    // representative customers, and the full list is paged from the database.
+    if ((samples[reason]?.length ?? 0) < 3) (samples[reason] ??= []).push(brief);
+    await onDecision({ kind: "excluded", reason, customer: brief });
   };
 
   let requested = 0;
@@ -296,7 +299,7 @@ export async function resolveCampaignAudience(
             : process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
       });
       if (staticReason) {
-        exclude(staticReason, customer);
+        await emitExcluded(staticReason, customer);
         continue;
       }
       if (
@@ -310,13 +313,7 @@ export async function resolveCampaignAudience(
           discountHours: governorConfig.recentPurchase?.discountHours,
         })
       ) {
-        recentPurchaseExcluded.push({
-          id: customer.id,
-          email: customer.email,
-          firstName: customer.firstName,
-          lastName: customer.lastName,
-        });
-        exclude("recent_purchase", customer);
+        await emitExcluded("recent_purchase", customer);
         continue;
       }
       const candidateDecision = evaluateCampaignCandidate({
@@ -326,11 +323,14 @@ export async function resolveCampaignAudience(
           groupOverrides.has("deliberately_left_alone") || merchantIncluded.has(customer.id),
       });
       if (!candidateDecision.candidate) {
-        deliberatelyLeftAlone.push({
-          id: customer.id,
-          email: customer.email,
-          firstName: customer.firstName,
-          lastName: customer.lastName,
+        await onDecision({
+          kind: "deliberately_left_alone",
+          customer: {
+            id: customer.id,
+            email: customer.email,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+          },
           decision: candidateDecision,
         });
         continue;
@@ -346,43 +346,71 @@ export async function resolveCampaignAudience(
           (reason === "fatigue" && fatigueOverrides.has(customer.id)) ||
           (reason === "collision" && collisionOverrides.has(customer.id)) ||
           (reason === "cooldown" && cooldownOverrides.has(customer.id));
-        if (overridden) {
-          eligible.push({
-            id: customer.id,
-            email: customer.email,
-            firstName: customer.firstName,
-            lastName: customer.lastName,
-            rfmStratum: customer.rfmScore?.segment ?? null,
-          });
+        if (!overridden) {
+          await emitExcluded(reason, customer);
           continue;
         }
-        if (reason === "fatigue") {
-          fatigueExcluded.push({
-            id: customer.id,
-            email: customer.email,
-            firstName: customer.firstName,
-            lastName: customer.lastName,
-          });
-        }
-        if (reason === "collision") collisionExcluded.push(customer);
-        if (reason === "cooldown") cooldownExcluded.push(customer);
-        exclude(reason, customer);
-        continue;
       }
-      eligible.push({
-        id: customer.id,
-        email: customer.email,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        rfmStratum: customer.rfmScore?.segment ?? null,
+      await onDecision({
+        kind: "eligible",
+        customer: {
+          id: customer.id,
+          email: customer.email,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          rfmStratum: customer.rfmScore?.segment ?? null,
+        },
       });
     }
   }
+  return { requested, exclusions, samples };
+}
+
+/**
+ * Materialised audience. Accumulates {@link streamCampaignAudience}, so the
+ * eligibility rules live in exactly one place.
+ *
+ * This retains the whole audience by design and is for surfaces that need it —
+ * the dry-run preview and the override paths, which operate on a merchant's
+ * current screen. The approval and send paths must use the streaming form.
+ */
+export async function resolveCampaignAudience(
+  campaignId: string,
+  now = new Date(),
+  options: { enforceDeliveryPauses?: boolean } = {}
+): Promise<AudienceResolution> {
+  const excludedCustomers: AudienceResolution["excludedCustomers"] = {};
+  const eligible: AudienceResolution["eligible"] = [];
+  const deliberatelyLeftAlone: AudienceResolution["deliberatelyLeftAlone"] = [];
+  const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
+  const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
+  const collisionExcluded: AudienceResolution["collisionExcluded"] = [];
+  const cooldownExcluded: AudienceResolution["cooldownExcluded"] = [];
+  const summary = await streamCampaignAudience(
+    campaignId,
+    (decision) => {
+      if (decision.kind === "eligible") {
+        eligible.push(decision.customer);
+        return;
+      }
+      if (decision.kind === "deliberately_left_alone") {
+        deliberatelyLeftAlone.push({ ...decision.customer, decision: decision.decision });
+        return;
+      }
+      (excludedCustomers[decision.reason] ??= []).push(decision.customer);
+      if (decision.reason === "recent_purchase") recentPurchaseExcluded.push(decision.customer);
+      if (decision.reason === "fatigue") fatigueExcluded.push(decision.customer);
+      if (decision.reason === "collision") collisionExcluded.push(decision.customer);
+      if (decision.reason === "cooldown") cooldownExcluded.push(decision.customer);
+    },
+    now,
+    options
+  );
   return {
-    requested,
+    requested: summary.requested,
     eligible,
-    exclusions,
-    samples,
+    exclusions: summary.exclusions,
+    samples: summary.samples,
     excludedCustomers,
     deliberatelyLeftAlone,
     recentPurchaseExcluded,
