@@ -3,7 +3,7 @@ import { router, workspaceProcedure } from "../trpc";
 import { verifyWorkspaceObjectAccess } from "../lib/storeAccess";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
-import { assertV1EmailAutomation } from "@allohq/release-gate";
+import { assertV1EmailAutomation, findV1AutomationViolations } from "@allohq/release-gate";
 import { getStoreSenderIdentity } from "@allohq/database";
 import { selectedEmailProvider } from "@allohq/messaging";
 import {
@@ -376,6 +376,23 @@ export const automationsRouter = router({
         where: { id: input.id, workspaceId: ctx.workspaceId },
       });
       if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Every other write path is gated, but duplicate was not, so a legacy
+      // journey containing a step public email v1 does not support could be
+      // copied into a new draft. That draft could never activate or resume -
+      // both are gated - so nothing could ever send, but the merchant would
+      // only discover it at approval.
+      //
+      // Refused rather than silently stripped: removing steps would change a
+      // journey's meaning without saying so. The message names exactly what is
+      // unsupported so the merchant knows what to remove from the original.
+      const unsupported = findV1AutomationViolations(automation);
+      if (unsupported.length > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `This journey can't be duplicated because it uses ${unsupported.join(", ")}. Public v1 journeys send email only, with wait and condition steps. Remove those steps from the original, then duplicate it.`,
+        });
+      }
 
       return ctx.prisma.automation.create({
         data: {
