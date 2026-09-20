@@ -284,6 +284,23 @@ function gatedSchedule(
   });
 }
 
+// Recover campaign audience preparation abandoned by a crashed or restarted
+// worker. Preparation holds a lease that it renews while it works, so a run
+// whose lease has lapsed is being advanced by nobody. Re-enqueuing it resumes
+// from durable rows rather than restarting, and it is what makes recovery
+// automatic: a merchant never re-clicks approve because a worker died.
+const preparationRecoveryQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, {
+  connection: redisConnection,
+});
+gatedSchedule(
+  preparationRecoveryQueue,
+  "preparation-recovery-schedule",
+  { every: 2 * 60 * 1000 },
+  { name: "recover-preparation", data: { recoverPreparation: true } }
+).catch((err) => {
+  console.error("Failed to set up preparation recovery schedule:", err.message);
+});
+
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
 gatedSchedule(

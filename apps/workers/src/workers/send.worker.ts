@@ -37,7 +37,7 @@ import {
   type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
-import { prepareCampaignAudience } from "./prepare-audience";
+import { prepareCampaignAudience, recoverStalePreparationRuns } from "./prepare-audience";
 import {
   frozenCohortSize,
   pageCohortByEngagement,
@@ -165,7 +165,12 @@ async function deliverChunk(data: DeliverChunkData) {
 }
 
 export const sendWorker = new Worker<
-  SendJobData | DeliverOneData | DeliverChunkData | FinalizeData | CampaignPreparationRequest
+  | SendJobData
+  | DeliverOneData
+  | DeliverChunkData
+  | FinalizeData
+  | CampaignPreparationRequest
+  | { recoverPreparation: true }
 >(
   QUEUE_NAMES.EMAIL_SEND,
   async (job) => {
@@ -174,7 +179,19 @@ export const sendWorker = new Worker<
       | DeliverOneData
       | DeliverChunkData
       | FinalizeData
-      | CampaignPreparationRequest;
+      | CampaignPreparationRequest
+      | { recoverPreparation: true };
+    if ((data as { recoverPreparation?: boolean }).recoverPreparation) {
+      return recoverStalePreparationRuns(async (request) => {
+        await emailSendQueue.add("prepare-audience", request, {
+          jobId: `prepare-audience-${request.campaignId}-${request.experimentId}`,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 5_000 },
+          removeOnComplete: { age: 24 * 60 * 60, count: 1_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 1_000 },
+        });
+      });
+    }
     if ((data as CampaignPreparationRequest).prepareAudience) {
       return prepareCampaignAudience(data as CampaignPreparationRequest, async (campaignId, forceImmediate) => {
         await emailSendQueue.add(
