@@ -73,11 +73,20 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
   const client = capacityRedis();
   const now = new Date();
   const policy = emailCapacityPolicy(installedAt, now);
-  const warmup = await prisma.sesWarmupState.upsert({
-    where: { storeId },
-    create: { storeId, startedAt: now },
-    update: {},
-  });
+  // Prisma's upsert is a read-then-write here, not INSERT ... ON CONFLICT, so
+  // concurrent sends for a store with no warm-up row raced and one of them
+  // threw `Unique constraint failed on (storeId)` — a send failing outright
+  // rather than being admitted or cleanly refused. The insert is made
+  // conflict-tolerant and the row is then read back; a loser of the race reads
+  // the winner's row.
+  let warmup = await prisma.sesWarmupState.findUnique({ where: { storeId } });
+  if (!warmup) {
+    await prisma.sesWarmupState.createMany({
+      data: [{ storeId, startedAt: now }],
+      skipDuplicates: true,
+    });
+    warmup = await prisma.sesWarmupState.findUniqueOrThrow({ where: { storeId } });
+  }
   if (warmup.pausedAt || (warmup.heldUntil && warmup.heldUntil > now)) {
     return { allowed: false, reason: "daily_cap", release: async () => undefined };
   }
