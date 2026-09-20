@@ -1,6 +1,7 @@
-import { prisma } from "@allohq/database";
+import { prisma, type Prisma } from "@allohq/database";
 import type { CampaignOpportunity } from "./types";
 import { estimateRevenue } from "./revenue-estimator";
+import { OpportunityAudienceDigest } from "./opportunity-dedupe";
 import { getUpcomingEvents } from "./calendar-awareness";
 
 /**
@@ -30,33 +31,69 @@ export async function scanOpportunities(storeId: string): Promise<CampaignOpport
   return opportunities;
 }
 
+/**
+ * Page a store's customer states by primary key, streaming the audience digest
+ * instead of collecting ids.
+ *
+ * These scans were unbounded: a store with hundreds of thousands of matching
+ * customers loaded every row, then built an array of that many ids purely so
+ * the dedupe fingerprint could hash it. The digest is byte-identical to hashing
+ * the array, so fingerprints are unchanged and nothing is re-created.
+ */
+async function streamCustomerStateAudience(
+  where: Prisma.CustomerStateWhereInput,
+  base: Pick<CampaignOpportunity, "storeId" | "type">,
+  onRow?: (row: { customerId: string; churnRisk: number | null; vipLevel: string | null }) => void
+): Promise<{ digest: OpportunityAudienceDigest; count: number }> {
+  const digest = new OpportunityAudienceDigest(base);
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await prisma.customerState.findMany({
+      where: cursor ? { AND: [where, { customerId: { gt: cursor } }] } : where,
+      select: { customerId: true, churnRisk: true, vipLevel: true },
+      orderBy: { customerId: "asc" },
+      take: 2_000,
+    });
+    if (page.length === 0) break;
+    for (const row of page) {
+      digest.add(row.customerId);
+      onRow?.(row);
+    }
+    cursor = page[page.length - 1]!.customerId;
+    if (page.length < 2_000) break;
+  }
+  return { digest, count: digest.count };
+}
+
 async function scanAtRiskCustomers(storeId: string, results: CampaignOpportunity[]): Promise<void> {
-  const atRiskStates = await prisma.customerState.findMany({
-    where: {
-      storeId,
-      OR: [{ lifecycleStage: "at_risk" }, { churnRisk: { gt: 0.6 } }],
-    },
-    select: { customerId: true, churnRisk: true },
-  });
+  const base = { storeId, type: "at_risk_winback" as const };
+  let churnRiskTotal = 0;
+  const { digest, count } = await streamCustomerStateAudience(
+    { storeId, OR: [{ lifecycleStage: "at_risk" }, { churnRisk: { gt: 0.6 } }] },
+    base,
+    (row) => {
+      churnRiskTotal += row.churnRisk ?? 0.7;
+    }
+  );
 
-  if (atRiskStates.length === 0) return;
+  if (count === 0) return;
 
-  const customerIds = atRiskStates.map((s) => s.customerId);
-  const avgChurnRisk =
-    atRiskStates.reduce((sum, s) => sum + (s.churnRisk ?? 0.7), 0) / atRiskStates.length;
+  const avgChurnRisk = churnRiskTotal / count;
+  const estimate = await estimateRevenue(storeId, count, "at_risk_winback");
 
-  const estimate = await estimateRevenue(storeId, customerIds.length, "at_risk_winback");
-
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "at_risk_winback",
     storeId,
     segmentName: "At Risk",
-    customerIds,
-    customerCount: customerIds.length,
-    reasoning: `${customerIds.length} customers at risk of churning (avg risk ${(avgChurnRisk * 100).toFixed(0)}%). Win-back campaign recommended.`,
+    customerCount: count,
+    reasoning: `${count} customers at risk of churning (avg risk ${(avgChurnRisk * 100).toFixed(0)}%). Win-back campaign recommended.`,
     urgency: Math.min(95, Math.round(avgChurnRisk * 100)),
     estimatedRevenue: estimate,
-  });
+  };
+  // Byte-identical to hashing the id array this used to build, so rescans
+  // still dedupe against opportunities recorded before the change.
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }
 
 async function scanRepurchaseWindows(
@@ -141,55 +178,50 @@ async function scanNewArrivals(storeId: string, results: CampaignOpportunity[]):
 }
 
 async function scanReEngagement(storeId: string, results: CampaignOpportunity[]): Promise<void> {
-  const lostStates = await prisma.customerState.findMany({
-    where: {
-      storeId,
-      lifecycleStage: { in: ["lost", "inactive"] },
-    },
-    select: { customerId: true },
-  });
+  const base = { storeId, type: "re_engagement" as const };
+  const { digest, count } = await streamCustomerStateAudience(
+    { storeId, lifecycleStage: { in: ["lost", "inactive"] } },
+    base
+  );
 
-  if (lostStates.length < 5) return;
+  if (count < 5) return;
 
-  const customerIds = lostStates.map((s) => s.customerId);
-  const estimate = await estimateRevenue(storeId, customerIds.length, "re_engagement");
+  const estimate = await estimateRevenue(storeId, count, "re_engagement");
 
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "re_engagement",
     storeId,
     segmentName: "Lost/Inactive",
-    customerIds,
-    customerCount: customerIds.length,
-    reasoning: `${customerIds.length} customers have gone inactive. Re-engagement campaign with incentive recommended.`,
+    customerCount: count,
+    reasoning: `${count} customers have gone inactive. Re-engagement campaign with incentive recommended.`,
     urgency: 40,
     estimatedRevenue: estimate,
-  });
+  };
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }
 
 async function scanVipMilestones(storeId: string, results: CampaignOpportunity[]): Promise<void> {
-  const vipStates = await prisma.customerState.findMany({
-    where: {
-      storeId,
-      vipLevel: { in: ["gold", "platinum"] },
-    },
-    select: { customerId: true, vipLevel: true },
-  });
+  const base = { storeId, type: "vip_milestone" as const };
+  const { digest, count } = await streamCustomerStateAudience(
+    { storeId, vipLevel: { in: ["gold", "platinum"] } },
+    base
+  );
 
-  if (vipStates.length === 0) return;
+  if (count === 0) return;
+  const estimate = await estimateRevenue(storeId, count, "vip_milestone");
 
-  const customerIds = vipStates.map((s) => s.customerId);
-  const estimate = await estimateRevenue(storeId, customerIds.length, "vip_milestone");
-
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "vip_milestone",
     storeId,
     segmentName: "VIP",
-    customerIds,
-    customerCount: customerIds.length,
-    reasoning: `${customerIds.length} VIP customers eligible for milestone recognition and exclusive offers.`,
+    customerCount: count,
+    reasoning: `${count} VIP customers eligible for milestone recognition and exclusive offers.`,
     urgency: 35,
     estimatedRevenue: estimate,
-  });
+  };
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }
 
 async function scanLowStock(storeId: string, results: CampaignOpportunity[]): Promise<void> {

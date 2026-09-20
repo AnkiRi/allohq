@@ -77,6 +77,17 @@ async function seed(prisma: any, customers: number, optOutEvery = 7): Promise<Fi
 
 const skip = databaseUrl ? false : "TEST_DATABASE_URL is not set";
 
+/**
+ * Retained-heap measurement needs a real collector. Without --expose-gc,
+ * `settle()` cannot collect and the reading is uncollected garbage rather than
+ * retention — which passes or fails by luck. Skip loudly instead.
+ */
+const heapMeasurable = typeof (globalThis as any).gc === "function";
+const heapSkip = heapMeasurable
+  ? false
+  : "run with NODE_OPTIONS=--expose-gc to measure retained heap";
+
+
 test("the paged automation audience matches the materialised one exactly", { skip }, async () => {
   const { prisma, countAutomationAudience, resolveAutomationAudience } = await load();
   const fixture = await seed(prisma, 2_000);
@@ -101,7 +112,7 @@ test("the paged automation audience matches the materialised one exactly", { ski
   }
 });
 
-test("evaluating a larger store does not cost more Node memory", { skip }, async () => {
+test("evaluating a larger store does not cost more Node memory", { skip: skip || heapSkip }, async () => {
   const { prisma, countAutomationAudience } = await load();
   const settle = async () => {
     for (let i = 0; i < 3; i += 1) {

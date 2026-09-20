@@ -47,10 +47,17 @@ const selected = process.env.RUN_LOAD_TESTS
   : tests.filter((file) => !file.endsWith(".load.integration.ts"));
 
 console.log(`Running ${selected.length} integration test files`);
+// Suites that measure retained heap need a real collector; without it they
+// would silently measure uncollected garbage and pass or fail by luck. They
+// skip themselves when it is missing, so this makes them run rather than
+// quietly vanish.
+const env = { ...process.env };
+env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --expose-gc`.trim();
+
 const result = spawnSync(
   "pnpm",
   ["--filter", "@allohq/api", "exec", "tsx", "--test", ...selected],
-  { cwd: root, env: process.env, stdio: "inherit" },
+  { cwd: root, env, stdio: "inherit" },
 );
 
 if (result.error) throw result.error;
