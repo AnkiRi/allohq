@@ -146,6 +146,8 @@ export interface AudienceStreamSummary {
   requested: number;
   exclusions: Record<AudienceExclusionReason, number>;
   samples: AudienceResolution["samples"];
+  /** Keyset pages read. Each page issues a bounded, constant number of queries. */
+  pages: number;
 }
 
 /**
@@ -254,6 +256,7 @@ export async function streamCampaignAudience(
   };
 
   let requested = 0;
+  let pages = 0;
   let cursor: string | undefined;
   while (true) {
     const customers = await prisma.customer.findMany({
@@ -263,6 +266,7 @@ export async function streamCampaignAudience(
       take: 200,
     });
     if (customers.length === 0) break;
+    pages += 1;
     requested += customers.length;
     cursor = customers[customers.length - 1]!.id;
     const processed = await prisma.messageLog.findMany({
@@ -363,7 +367,7 @@ export async function streamCampaignAudience(
       });
     }
   }
-  return { requested, exclusions, samples };
+  return { requested, exclusions, samples, pages };
 }
 
 /**
