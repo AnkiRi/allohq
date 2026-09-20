@@ -23,7 +23,9 @@ import {
   withCampaignAudienceSnapshot,
 } from "@allohq/campaign-engine";
 import {
-  assignStratifiedCohortArms,
+  normalizeStratum,
+  planStratifiedControlQuotas,
+  StratifiedControlSelector,
   campaignMeasurementPolicy,
   getOrCreateExperiment,
   holdoutRateFor,
@@ -142,15 +144,35 @@ function planCampaignHoldout(
 ) {
   const family = campaignFamily(proposal);
   const decision = holdoutRateFor(storeId, family, "all", evidence);
-  const assignment = assignStratifiedCohortArms({
-    assignmentSeed,
-    customers: eligible.map((customer) => ({
-      customerId: customer.id,
-      stratum: customer.rfmStratum,
-    })),
-    rateForStratum: (stratum) => holdoutRateFor(storeId, family, stratum, evidence).rate,
-  });
-  return { family, decision, assignment };
+  const rateForStratum = (stratum: string) => holdoutRateFor(storeId, family, stratum, evidence).rate;
+
+  // Streaming assignment. The in-memory form materialised a unique map, per
+  // stratum ranked arrays, an arm map and a record of four fields per customer
+  // — measured at +58.5 MB of heap for 100k candidates. Small strata are pooled
+  // below ten, so quotas cannot be fixed until everyone has been counted: count
+  // first, plan the quotas, then retain only each stratum's control set
+  // (+6.5 MB), which the campaign control rate bounds to a fraction of the
+  // cohort. Arms are identical either way, which `experiments.test.ts` pins.
+  const census = new Map<string, number>();
+  for (const customer of eligible) {
+    const stratum = normalizeStratum(customer.rfmStratum);
+    census.set(stratum, (census.get(stratum) ?? 0) + 1);
+  }
+  const plan = planStratifiedControlQuotas({ census, rateForStratum });
+  const selector = new StratifiedControlSelector({ assignmentSeed, plan });
+  // resolveCampaignAudience pages with `orderBy: { id: "asc" }`, so candidates
+  // already arrive in ascending id order; the selector fails closed if that
+  // ever stops being true rather than silently consuming a second control slot.
+  for (const customer of eligible) selector.offer(customer.id, customer.rfmStratum);
+  const controls = selector.controlIds();
+  return {
+    family,
+    decision,
+    strata: plan.strata,
+    controls,
+    assignmentFor: (customerId: string, stratum: string | null) =>
+      selector.assignmentFor(customerId, stratum, controls),
+  };
 }
 
 async function campaignEvidence(prisma: PrismaClient, storeId: string, family: string) {
@@ -1068,7 +1090,7 @@ export const campaignsRouter = router({
       audience.eligible,
       evidence
     );
-    const control = Object.values(holdout.assignment.strata).reduce(
+    const control = Object.values(holdout.strata).reduce(
       (sum, stratum) => sum + stratum.controlCount,
       0
     );
@@ -1082,14 +1104,14 @@ export const campaignsRouter = router({
       policyRate: holdout.decision.rate,
       policyReason: holdout.decision.reason,
       family: holdout.family,
-      strata: holdout.assignment.strata,
+      strata: holdout.strata,
     };
     const previewAssignments = audience.eligible.map((customer) => ({
       id: customer.id,
       firstName: customer.firstName,
       lastName: customer.lastName,
       email: customer.email,
-      arm: holdout.assignment.assignments[customer.id]?.arm ?? "TREATMENT",
+      arm: holdout.assignmentFor(customer.id, customer.rfmStratum).arm,
     }));
     const latestEvaluation = await ctx.prisma.campaignAudienceEvaluation.findFirst({
       where: {
@@ -1109,7 +1131,7 @@ export const campaignsRouter = router({
         storeId: campaign.storeId,
         campaignUpdatedAt: campaign.updatedAt,
         audience,
-        assignments: holdout.assignment.assignments,
+        assignmentFor: holdout.assignmentFor,
       });
     }
     const currency = campaign.store.currency === "INR" ? ("INR" as const) : ("USD" as const);
@@ -1725,7 +1747,7 @@ export const campaignsRouter = router({
           experimentId: experiment.id,
           splitRatio: policy.rate,
           policyReason: policy.reason,
-          strata: holdout.assignment.strata,
+          strata: holdout.strata,
           // No per-customer data is written into this JSON column any more.
           // customerIds, assignments and assignmentDetails together measured
           // 17.97 MB at 100k, inside a column every reader of agentProposal
@@ -1774,7 +1796,7 @@ export const campaignsRouter = router({
           : approvedAt);
       const windowEndsAt =
         existingAssignment?.windowEndsAt ?? new Date(windowStartsAt.getTime() + 7 * 86_400_000);
-      const controlCount = Object.values(holdout.assignment.strata).reduce(
+      const controlCount = Object.values(holdout.strata).reduce(
         (sum, stratum) => sum + stratum.controlCount,
         0
       );
@@ -1790,7 +1812,7 @@ export const campaignsRouter = router({
         storeId: campaign.storeId,
         campaignUpdatedAt: campaign.updatedAt,
         audience,
-        assignments: holdout.assignment.assignments,
+        assignmentFor: holdout.assignmentFor,
       });
       // Frozen measurement rows are written before the approval claim, in
       // bounded chunks. They are idempotent through the
@@ -1799,8 +1821,10 @@ export const campaignsRouter = router({
       // claim that fails leaves inert rows rather than phantom arms. The
       // campaign stays in draft in that case, so the merchant's next approval
       // rewrites them identically and completes.
-      const assignmentRows = Object.entries(holdout.assignment.assignments).map(
-        ([customerId, detail]) => ({
+      const assignmentRows = audience.eligible.map((customer) => {
+        const customerId = customer.id;
+        const detail = holdout.assignmentFor(customerId, customer.rfmStratum);
+        return ({
           storeId: campaign.storeId,
           experimentId: experiment.id,
           campaignId: campaign.id,
@@ -1819,8 +1843,8 @@ export const campaignsRouter = router({
             policyReason: policy.reason,
             originalStratum: detail.stratum,
           },
-        })
-      );
+        });
+      });
       for (let offset = 0; offset < assignmentRows.length; offset += APPROVAL_WRITE_CHUNK) {
         await ctx.prisma.measurementAssignment.createMany({
           data: assignmentRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
@@ -1916,7 +1940,10 @@ export const campaignsRouter = router({
           reconsiderAt: customer.decision.reconsiderAt ?? null,
           reconsiderOn: customer.decision.reconsiderOn ?? null,
         })),
-        ...Object.entries(holdout.assignment.assignments).map(([customerId, detail]) => ({
+        ...audience.eligible.map((customer) => {
+        const customerId = customer.id;
+        const detail = holdout.assignmentFor(customerId, customer.rfmStratum);
+        return ({
           storeId: campaign.storeId,
           customerId,
           campaignId: campaign.id,
@@ -1933,7 +1960,8 @@ export const campaignsRouter = router({
             assignmentStratum: detail.assignmentStratum,
             controlRate: detail.holdoutRate,
           },
-        })),
+        });
+        }),
       ];
       for (let offset = 0; offset < decisionRows.length; offset += APPROVAL_WRITE_CHUNK) {
         await ctx.prisma.customerAudienceDecision.createMany({

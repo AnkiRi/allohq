@@ -9,7 +9,12 @@ export async function persistCampaignAudienceEvaluation(
     storeId: string;
     campaignUpdatedAt: Date;
     audience: AudienceResolution;
-    assignments?: Record<string, Assignment>;
+    /**
+     * Arm lookup rather than a materialised map: approval no longer builds a
+     * record of every customer's assignment, it streams the control set and
+     * derives each arm on demand.
+     */
+    assignmentFor?: (customerId: string, stratum: string | null) => Assignment | undefined;
   },
 ) {
   const rows = new Map<string, {
@@ -22,7 +27,7 @@ export async function persistCampaignAudienceEvaluation(
   let treatmentCount = 0;
   let controlCount = 0;
   for (const customer of input.audience.eligible) {
-    const arm = input.assignments?.[customer.id]?.arm;
+    const arm = input.assignmentFor?.(customer.id, customer.rfmStratum)?.arm;
     if (arm === "CONTROL") controlCount += 1;
     else if (arm === "TREATMENT") treatmentCount += 1;
     rows.set(customer.id, {
@@ -55,7 +60,7 @@ export async function persistCampaignAudienceEvaluation(
   }
 
   const decisionCounts = {
-    candidate: input.assignments ? 0 : input.audience.eligible.length,
+    candidate: input.assignmentFor ? 0 : input.audience.eligible.length,
     treatment: treatmentCount,
     control: controlCount,
     deliberately_left_alone: input.audience.deliberatelyLeftAlone.length,
