@@ -143,6 +143,120 @@ still loads every store customer in one unpaged `findMany` — **open, not in th
   `ALTER TABLE "form_incentive_grants" ALTER COLUMN "updatedAt" DROP DEFAULT` and five index
   renames. Unrelated to this work; the drift check stays non-blocking until it is cleared.
 
+## Pass 8 operational audit — 2026-09-20T18:15:20Z
+
+_Status: **verified** (measurement only; no code changed by this audit). Every number below was
+measured on a disposable local Postgres seeded for the purpose and dropped afterwards. Where a
+statement is inference it says so. Two intermediate readings of mine were wrong and are corrected
+in place rather than quietly dropped._
+
+### A1. Approval is synchronous inside one API request — not a resumable job
+
+`campaigns.ts` `sendNow` is a tRPC mutation that calls `runCampaignAudienceResolution` inline.
+There is no worker job, no checkpoint, and no resume. Node's default `requestTimeout` is
+**300,000 ms** and `apps/api/src/index.ts` never overrides it, so a 100k approval fits today —
+measured **34.6 s** on a warm local database — but nothing bounds the next size up, and any proxy
+in front of the API typically defaults far lower than five minutes. A process restart mid-approval
+strands the run.
+
+**Limitation:** the 34.6 s figure is a warm single-store local database with no competing load. A
+production database with other traffic will be slower; that is inference, not measurement.
+
+### A2. Where the queries at 100k come from
+
+6,169 queries in 27 distinct shapes. Time inside queries was **17.2 s, 50% of the 34.6 s wall** —
+the other half is Node-side policy evaluation.
+
+| Count | Total ms | p50 | p95 | max | Statement |
+| --- | --- | --- | --- | --- | --- |
+| 50 | **8,690** | 167 | 201 | 398 | `INSERT INTO campaign_audience_members` (2,000 rows each) |
+| 1 | **5,668** | — | — | 5,668 | the control-selection window-function `UPDATE` |
+| 500 | 1,893 | 2 | 9 | 15 | `SELECT … rfm_scores` (one per resolver page) |
+| 501 | 740 | 0 | 11 | 18 | `SELECT … customers` (the keyset page) |
+| 50 | 64 | 1 | 3 | 11 | `COMMIT` |
+| ~4,500 | <90 total | 0 | 0 | 14 | nine further per-page reads: consents, orders, fatigue logs, customer states ×2, conversations, message logs, suppressions |
+
+Overall **p50 0 ms / p95 2 ms / p99 12 ms / max 5,668 ms**. The distribution is thousands of
+sub-millisecond reads plus two heavy operations.
+
+### A3. Concurrent approval loses work — measured, not theorised
+
+Two simultaneous approvals of the same campaign, 3/3 trials: one succeeds, the other throws a raw
+`PrismaClientKnownRequestError` on the `(campaignId, runKey)` unique index. The merchant sees a
+database error. The frozen membership itself stayed correct — 4,000 rows, 4,000 armed.
+
+Staggered by 900 ms, which is the realistic shape of a double-click or a client retry, it is
+worse. The second approval calls `restartRun`, which **deletes the first attempt's in-flight
+member rows**. The first then fails its own invariant — observed verbatim: `Audience run … left
+2000 of 4000 candidates unassigned` — and writes `status: failed` onto **the same run row the
+second attempt is still using**. In the observed interleaving the second's `complete` landed last
+and the data survived. The two attempts share one mutable run row with no lease, so the opposite
+ordering marks a correct, fully-assigned membership `failed`, which `completedAudienceRun` then
+hides from delivery: the campaign becomes silently un-sendable with a perfectly good audience
+underneath it.
+
+Staggered by 300 ms, both attempts returned success with `reused: false` for the same run id, each
+believing it owned the resolution.
+
+**This is the operational hole. A run needs an owner, not just a unique key.**
+
+### A4. Index reality
+
+- The control-selection statement does **not** use the purpose-built
+  `(runId, assignmentStratum, assignmentHash, customerId)` index added in `ba71e12`. With four
+  runs in the table the planner takes a Bitmap Index Scan on `campaign_audience_members_runId_arm_idx`
+  and sorts 25,000 rows in memory. **That commit message claimed the index "supports" the
+  selection; it does not, and the claim is corrected here.**
+- Dropping it does **not** speed up writes: 100k member rows took 8.97 s with all five indexes,
+  9.08 s without the ranking index, 8.76 s without both it and `(runId, arm)` — −1% and 2%, which
+  is noise. The 9 s is the row writes themselves, not index maintenance. **So it is not dropped:
+  there is no measured benefit, and it may help once tables hold many runs.**
+- The worker cohort page correctly uses `campaign_audience_members_runId_customerId_key`.
+
+### A5. Customer paging scans the whole table, and it matters as stores multiply
+
+`customers` has no index on `(storeId, id)`, so the resolver's keyset page uses `customers_pkey`
+with a **Filter** on `storeId` rather than an index condition. Per-page cost, 100,000 customers
+total in every row:
+
+| Shape | Without index | With `(storeId, id)` | Improvement |
+| --- | --- | --- | --- |
+| 4 stores × 25,000 | 1.3 ms/page | 1.0 ms/page | 1.3x |
+| 16 stores × 6,250 | 2.7 ms/page | 2.1 ms/page | 1.3x |
+| 40 stores × 2,500 | 5.8 ms/page | **0.7 ms/page** | **8.4x** |
+
+The indexed cost is flat; the unindexed cost grows with the size of the whole table rather than
+the store's own share of it. This is the scan that both campaign approval and overnight automation
+depend on.
+
+**Correction:** an intermediate reading of mine recorded 80.8 ms for a single page and implied a
+catastrophic regression. That was a cold-cache first page, not steady state. The steady-state
+numbers above are the real ones.
+
+### A6. Stale runs are invisible but immortal
+
+A run left `resolving` by a crash or a cancellation is correctly hidden from delivery,
+attribution, controls and billing by `completedAudienceRun`, but nothing ever cleans it up and its
+member rows persist. If `campaign.updatedAt` changes, the next approval derives a different
+`runKey` and the old run is orphaned permanently.
+
+### What the audit proves is necessary
+
+1. **A lease on the run**, so two approvals cannot share one mutable row (A3). Correctness.
+2. **Resumable, idempotent preparation** that continues from what is already written rather than
+   deleting it (A1, A3, A6).
+3. **Merchant-meaningful progress** — evaluated, left alone, candidates, control, treatment.
+4. **An index on `customers(storeId, id)`** (A5).
+5. **Superseded and failed runs stay invisible** to delivery, attribution, controls, billing and
+   causal reporting.
+
+### What the audit proves is NOT necessary
+
+- Dropping either member-table index. Measured at −1% and 2%; no benefit exists.
+- Re-tuning the window-function statement. At 973 ms under `EXPLAIN ANALYZE` on a warm cache it is
+  one statement for the whole audience; the 5,668 ms cold figure is dominated by first-touch
+  buffer traffic, not plan choice.
+
 ## Findings outside Pass 8 — 2026-09-20T15:40Z
 
 Three defects were found while doing the Pass 8 work. All three are fixed; the second is a visible
