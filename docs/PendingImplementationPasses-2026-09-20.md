@@ -1,9 +1,107 @@
-# Joon pending implementation passes — 2026-09-19
+# Joon pending implementation passes — 2026-09-20
 
-Status: canonical implementation and external-readiness backlog after the 2026-09-17
-design-partner demo. Audited and extended on 2026-09-19.
+Status: canonical implementation and external-readiness backlog. Renamed from
+`PendingImplementationPasses-2026-09-19.md` on 2026-09-20; git history is preserved through the
+rename.
 
 This document is the single reference point for these passes. Later implementation summaries must map completed commits and remaining work back to the numbered passes below. New design decisions should update this document rather than creating another disconnected list.
+
+**Every change to this document carries a UTC timestamp and an entry in the change log below.**
+
+## Locked facts — do not contradict these anywhere in this document
+
+_Recorded 2026-09-20T11:57Z._
+
+- **Billing is 5% of Joon-attributed, non-cancelled order revenue.** Shadow invoices also compute
+  6% and 8%; 5% is what is displayed. Billing stays disabled during early access until cap
+  evidence and production acceptance are complete.
+- **Lift and control-group evidence are pooled proof and learning only. They are never a billing
+  basis.** Do not reintroduce lift billing, COGS, gross margin, contribution, store revenue, or
+  any merchant-entered financial input.
+- **Journeys have no random holdout.** Control groups are campaign-only, drawn after state-based
+  exclusions.
+- **Public v1 is email only. WhatsApp, SMS and RCS are outside public v1.** Code for those
+  channels exists in the repository and predates this work (`formatForWhatsApp` arrives in
+  `53c4c83`), but it is not v1 scope and defects in it are recorded, not scheduled.
+- **Fixed audience vocabulary:** subscribed audience, campaign candidate, deliberately left
+  alone, control group, treatment group, deferred, sent.
+- **Not implemented — do not imply otherwise anywhere in this document:** asset OCR, malware
+  scanning, EXIF/metadata stripping, asset moderation, and real email-client rendering evidence
+  (Litmus / Email on Acid). Each is audited in "Email IDE audit" below with the evidence that it
+  is absent.
+
+## Pass 8 — measured results so far
+
+_Audited 2026-09-20T11:57Z. Every figure below was measured, not estimated._
+
+| Fix | Commit | Measured |
+| --- | --- | --- |
+| ~200k approval rows left one `Serializable` transaction under Prisma's 5s default | `6fb411e` | Approval could not previously finish at 100k |
+| Quadratic snapshot validation (`customerIds.includes` inside a scan of every assignment) | `ca3620c` | 20k cohort: **1547ms → 3.5ms** |
+| Per-customer maps removed from the `agentProposal` JSON column | `ca3620c`, `77a0386` | 100k snapshot: **17.97 MB → 662 B** |
+| Streaming control assignment wired into approval | `61efbfe`, `07acad3` | 100k: heap **+45.1 MB → +11.9 MB**, 199ms → 102ms, **arms identical, 0 mismatches of 100,000** |
+| Send planner cohort reads paged; control/skipped inserts batched | `091171d` | Whole-cohort `IN` clauses and ~15,000 sequential inserts removed |
+| Attribution and causal ledger ignore arms of unapproved campaigns | `416e6a2` | Closed a pre-existing hole |
+| Approval writes made idempotent | `e0ca152` | `writeKey`, additive, backfill-free |
+
+## Pass 8 — remaining structural work
+
+_Audited 2026-09-20T11:57Z against the structural acceptance criteria. **Pass 8 is not complete.**
+Criterion 1 is "no full audience-sized eligible/suppressed/exclusion arrays, Maps or Sets in the
+approval or send paths". The following violate it. Each is verified at file and line; none is an
+inference._
+
+**`packages/campaign-engine/src/audience-resolver.ts`** — `resolveCampaignAudience` pages
+customers in keyset batches of 200 but accumulates the whole audience before returning:
+
+- `:227` `eligible` — one object per candidate
+- `:226` `excludedCustomers` — one object per excluded customer, grouped by reason
+- `:228` `deliberatelyLeftAlone` — one object per left-alone customer
+- `:229`–`:232` `recentPurchaseExcluded`, `fatigueExcluded`, `collisionExcluded`,
+  `cooldownExcluded` — four further audience-sized arrays that **duplicate rows already held in
+  `excludedCustomers`**
+- `:225` `samples` is correctly bounded to three per reason and is not a violation
+- `resolveAutomationAudience` (`:432`–`:438`) repeats the same shape and additionally loads every
+  store customer in a single unpaged `findMany`
+
+**`apps/api/src/routers/campaigns.ts`** — approval and dry-run:
+
+- `:305` `audience.eligible.map((customer) => customer.id)` — audience-sized id array
+- `:167` `selector.controlIds()` — a Set proportional to the audience (~15–20% of it)
+- `:1066` `new Set(audience.eligible.map(...))` in the dry-run path
+- `:1109` `previewAssignments = audience.eligible.map(...)` — one object per candidate
+- `assignmentRows` and `decisionRows` are materialised in full before being chunk-written
+
+**`apps/workers/src/workers/send.worker.ts`** — explicitly violates criterion 4, "the worker
+pages approved assignments rather than loading an entire cohort into a Map/Set":
+
+- `:77` `loadFrozenCohort` pages the query but assembles a Map of the **entire** cohort
+- `:307` `approvedIds = new Set(frozenArms.keys())`
+- `:341` `customers` — every recipient object with RFM and LTV
+- `:467` `processedCustomerIds` — a Set of every already-processed customer
+- `:490` `plannedDeliveries` — every recipient's delivery payload buffered before enqueue
+- `:495` `plannedLogs` is correctly bounded by its flush and is not a violation
+
+**`packages/campaign-engine/src/audience-snapshot.ts`** — **no violation.** The snapshot is now
+counts, strata and the experiment id: 662 B measured at 100k.
+
+### What completing Pass 8 requires
+
+1. A two-pass, keyset-paged execution path: first pass yields deterministic counts, strata and
+   control quotas; second pass streams decisions and assignments into bounded chunk writes.
+2. The send worker pages approved assignments rather than materialising the cohort.
+3. Exact deterministic treatment/control assignment, merchant overrides, frozen approved
+   membership and delivery-time consent/suppression rechecks all preserved.
+4. Campaign UI capabilities preserved: grouped reasons, searchable left-alone review, control and
+   treatment counts, decision history, audit receipts.
+5. A 100k integration/load proof on an **isolated disposable** Postgres and Redis — never a
+   production database — recording peak memory, duration and query/chunk counts.
+
+## Change log
+
+| UTC timestamp | Change |
+| --- | --- |
+| 2026-09-20T11:57Z | Renamed from `…-2026-09-19.md`. Added this change log and the locked-facts block. **Corrected Pass 8 from "complete in code" to materially improved but NOT complete** — it fails the structural acceptance criteria below. Removed contradictory historical status entries. |
 
 ## Active scope — 19 Sep
 
@@ -103,12 +201,12 @@ and `85e6d4b` carry the audits, corrections and withdrawn proposals behind those
 
 **Still open**, in rough order of value:
 
-1. ~~Wire the streaming assignment into approval.~~ **DONE — `07acad3`.** Measured over 100,000
-   candidates in the shape approval sees: heap +45.1 MB to +11.9 MB, 199ms to 102ms, arms
-   identical with zero mismatches. **Pass 8 is now complete in code.** What remains for Pass 8
-   is the 100k proof against a real database, which is infrastructure. A later, separate item:
-   `resolveCampaignAudience` still returns eight arrays, so the candidate list itself is held in
-   memory — smaller than the assignment record was, and not a hard failure.
+1. **Pass 8 — materially improved, NOT complete.** Corrected 2026-09-20T11:57Z. Every hard
+   failure found in the 19–20 Sep audit is fixed and measured (see "Pass 8 measured results"),
+   but the pass does **not** meet its structural acceptance criteria: audience-sized arrays,
+   Maps and Sets still exist in both the approval and send paths. The specific violations are
+   enumerated under "Pass 8 — remaining structural work". An earlier revision of this document
+   claimed Pass 8 was "complete in code"; that claim was wrong and is withdrawn.
 2. **Implement or strike** the OCR, malware-scanning, metadata-stripping and asset-moderation
    claims. The document currently asserts four safety properties the code does not have.
 3. **Email canvas accessibility** — keyboard and ARIA operation, and honour reduced motion.
@@ -157,7 +255,7 @@ delivery before any service can run against partner data.
 | 5 — Full email IDE, conversational creator and brand/asset system | Complete in code | `2e93e90`, `95b0824`, `6b1f88c` | Deploy migration/config; real Gmail/Outlook/Apple render evidence through Litmus/Email on Acid; merchant acceptance |
 | 6 — Scalable customer-state intelligence and explorer | Complete | `19b25a5`, `caedcff`, `1c80beb`, `2dcf258`, `3c411b7` | Deploy migrations; production event acceptance; representative million-profile load proof |
 | 7 — Store-specific product graph | Complete | `2e93e90` | Deploy migration; real-order evidence acceptance; representative large-catalog rebuild benchmark |
-| 8 — Campaign-specific customer decision context | Every hard failure closed; one heap item remains | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386` | Wire the streaming assignment into approval — it is built and parity-proven but referenced only by its own tests, so approval still accumulates the full cohort in memory; that needs `resolveCampaignAudience` to stream. Then the 100k production/load proof |
+| 8 — Campaign-specific customer decision context | **Materially improved, NOT complete** (corrected 2026-09-20T11:57Z) | `5dbdb7a`, `2332e7d`, `95b0824`, `61efbfe`, `416e6a2`, `6fb411e`, `091171d`, `e0ca152`, `ca3620c`, `77a0386`, `07acad3` | Every hard failure is fixed and measured, but audience-sized arrays/Maps/Sets remain in the approval and send paths. See "Pass 8 — remaining structural work". Then the 100k integration/load proof on an isolated disposable database |
 | 9 — Provider-neutral domain reputation and warm-up | Core gate complete; assessment/migration hardening remains | `aeec41f`, `664cbe7`, `534efc6`, `d5a54ef`, `95b0824` | Authenticated prior-history assessment, automatic healthy-day reconciliation, provider migration workflow, SES production/event acceptance |
 | 10 — High-scale commerce ingestion and state evaluation | Shopify code path bounded; external proof remains | `2332e7d`, `95b0824` | Founder-owned representative 100k deployment/load proof; 45-million mobile architecture explicitly deferred |
 | 11 — Product-wide UX simplification | 11A–11P implemented in code | `782b5aa`, `465368b` and intervening route commits | Deployed-data acceptance, representative large-data verification and merchant usability testing without removing any product capability |
