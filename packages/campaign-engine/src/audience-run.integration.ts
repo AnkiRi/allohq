@@ -403,3 +403,203 @@ test(
     }
   }
 );
+
+test(
+  "approval tables are projected from the frozen membership",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const {
+      prisma,
+      runCampaignAudienceResolution,
+      materialiseMeasurementAssignments,
+      materialiseAudienceEvaluation,
+      materialiseAudienceDecisions,
+      leftAloneActivitySummary,
+    } = await load();
+    const fixture = await seed(prisma, { customers: 900, optOutEvery: 6, smallStrata: 3 });
+    try {
+      const run = await runCampaignAudienceResolution({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        runKey: "materialise",
+        assignmentSeed: "materialise-seed",
+        policyVersion: "test-v1",
+        rateForStratum,
+        asOf: new Date("2026-03-04T12:00:00.000Z"),
+      });
+      // The real helper rather than a fabricated row, so the fixture cannot
+      // drift from what approval actually creates.
+      const { getOrCreateExperiment } = await import("@allohq/customer-state");
+      const experiment = await getOrCreateExperiment(
+        fixture.storeId,
+        {
+          label: `campaign:${fixture.campaignId}:stratified:v1`,
+          source: "campaign",
+          family: "winback",
+          campaignId: fixture.campaignId,
+          segmentId: null,
+          segmentName: null,
+        },
+        RATE
+      );
+      const approvedAt = new Date("2026-03-04T12:05:00.000Z");
+      const windowEndsAt = new Date(approvedAt.getTime() + 7 * 86_400_000);
+
+      const written = await materialiseMeasurementAssignments({
+        runId: run.runId,
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        experimentId: experiment.id,
+        assignedAt: approvedAt,
+        windowStartsAt: approvedAt,
+        windowEndsAt,
+        assignmentData: { tier: "directional", family: "winback", policyReason: "new_family" },
+      });
+      assert.equal(written, run.candidateCount);
+
+      const assignments = await prisma.measurementAssignment.findMany({
+        where: { unitType: "campaign", unitId: fixture.campaignId },
+        select: {
+          customerId: true,
+          arm: true,
+          stratum: true,
+          holdoutRate: true,
+          assignmentData: true,
+        },
+        orderBy: { customerId: "asc" },
+      });
+      assert.equal(assignments.length, run.candidateCount);
+      assert.equal(
+        assignments.filter((row: any) => row.arm === "CONTROL").length,
+        run.controlCount
+      );
+
+      // Every assignment must carry the run's stratum and that stratum's rate.
+      const members = await prisma.campaignAudienceMember.findMany({
+        where: { runId: run.runId, decision: "campaign_candidate" },
+        select: { customerId: true, arm: true, stratum: true, assignmentStratum: true },
+        orderBy: { customerId: "asc" },
+      });
+      for (let index = 0; index < members.length; index += 1) {
+        const member = members[index]!;
+        const assignment = assignments[index]!;
+        assert.equal(assignment.customerId, member.customerId);
+        assert.equal(assignment.arm, member.arm);
+        assert.equal(assignment.stratum, member.assignmentStratum);
+        assert.equal(assignment.holdoutRate, RATE);
+        assert.equal((assignment.assignmentData as any).originalStratum, member.stratum);
+        assert.equal((assignment.assignmentData as any).family, "winback");
+      }
+
+      // Re-running is a true no-op rather than a second set of rows.
+      assert.equal(
+        await materialiseMeasurementAssignments({
+          runId: run.runId,
+          campaignId: fixture.campaignId,
+          storeId: fixture.storeId,
+          experimentId: experiment.id,
+          assignedAt: approvedAt,
+          windowStartsAt: approvedAt,
+          windowEndsAt,
+          assignmentData: { tier: "directional", family: "winback", policyReason: "new_family" },
+        }),
+        0
+      );
+      assert.equal(
+        await prisma.measurementAssignment.count({
+          where: { unitType: "campaign", unitId: fixture.campaignId },
+        }),
+        run.candidateCount
+      );
+
+      const evaluation = await materialiseAudienceEvaluation({
+        runId: run.runId,
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        campaignUpdatedAt: new Date("2026-03-04T11:00:00.000Z"),
+        requested: run.requested,
+        candidateCount: run.candidateCount,
+        controlCount: run.controlCount,
+        treatmentCount: run.treatmentCount,
+        leftAloneCount: run.leftAloneCount,
+        excludedCount: run.excludedCount,
+        exclusions: run.exclusions,
+      });
+      assert.equal(evaluation.rows, run.requested);
+
+      // The review drawer's vocabulary is unchanged.
+      const byDecision = await prisma.campaignAudienceEvaluationRow.groupBy({
+        by: ["decision"],
+        where: { evaluationId: evaluation.evaluationId },
+        _count: { _all: true },
+      });
+      const counts = Object.fromEntries(
+        byDecision.map((row: any) => [row.decision, row._count._all])
+      );
+      assert.equal(counts["control"], run.controlCount);
+      assert.equal(counts["treatment"], run.treatmentCount);
+      assert.equal(counts["excluded"], run.excludedCount);
+      assert.equal(counts["candidate"], undefined, "an approved run leaves no unassigned candidate");
+
+      // Grouped reasons still reach the drawer.
+      const excludedReasons = await prisma.campaignAudienceEvaluationRow.groupBy({
+        by: ["reasonCode"],
+        where: { evaluationId: evaluation.evaluationId, decision: "excluded" },
+        _count: { _all: true },
+      });
+      assert.ok(excludedReasons.length > 0, "exclusion reasons must survive the projection");
+      for (const row of excludedReasons) {
+        assert.equal(row._count._all, run.exclusions[row.reasonCode as keyof typeof run.exclusions]);
+      }
+
+      const decisions = await materialiseAudienceDecisions({
+        runId: run.runId,
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        contextKey: "winback",
+        approvedAt,
+      });
+      assert.equal(decisions, run.candidateCount + run.leftAloneCount);
+      // A retried approval writes the same keys and records nothing new.
+      assert.equal(
+        await materialiseAudienceDecisions({
+          runId: run.runId,
+          campaignId: fixture.campaignId,
+          storeId: fixture.storeId,
+          contextKey: "winback",
+          approvedAt,
+        }),
+        0
+      );
+
+      const ledger = await prisma.customerAudienceDecision.findMany({
+        where: { campaignId: fixture.campaignId },
+        select: {
+          decision: true,
+          reasonCode: true,
+          evidence: true,
+          merchantOverride: true,
+          writeKey: true,
+        },
+      });
+      assert.equal(ledger.length, run.candidateCount + run.leftAloneCount);
+      assert.equal(
+        ledger.filter((row: any) => row.decision === "control").length,
+        run.controlCount
+      );
+      assert.ok(
+        ledger.every((row: any) => row.merchantOverride === false && row.writeKey !== null),
+        "approval rows carry a write key and are not merchant overrides"
+      );
+      const armed = ledger.find((row: any) => row.decision === "treatment");
+      assert.equal(armed?.reasonCode, "experiment_assignment");
+      assert.equal((armed?.evidence as any).controlRate, RATE);
+
+      const leftAlone = await leftAloneActivitySummary(run.runId);
+      assert.equal(leftAlone.total, run.leftAloneCount);
+      assert.ok(leftAlone.customerIds.length <= 100);
+    } finally {
+      await teardown(prisma, fixture);
+    }
+  }
+);

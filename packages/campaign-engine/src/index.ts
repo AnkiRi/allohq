@@ -70,8 +70,18 @@ export {
   pageApprovedAssignments,
   CANDIDATE_DECISION,
 } from "./audience-run";
+export {
+  materialiseMeasurementAssignments,
+  materialiseAudienceEvaluation,
+  materialiseAudienceDecisions,
+  leftAloneActivitySummary,
+} from "./audience-run";
 export type { AudienceRunInput, AudienceRunResult, AudienceRunStatus } from "./audience-run";
-export { withCampaignAudienceSnapshot, campaignAudienceSnapshot } from "./audience-snapshot";
+export {
+  withCampaignAudienceSnapshot,
+  withCampaignAudienceSnapshotCounts,
+  campaignAudienceSnapshot,
+} from "./audience-snapshot";
 export type { CampaignAudienceSnapshot } from "./audience-snapshot";
 export type { AudienceResolution, AudienceExclusionReason } from "./audience-resolver";
 export { evaluateCampaignCandidate } from "./candidate-policy";

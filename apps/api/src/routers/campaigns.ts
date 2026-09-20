@@ -20,7 +20,12 @@ import {
   campaignApprovalChecksum,
   findBannedTerms,
   resolveCampaignAudience,
-  withCampaignAudienceSnapshot,
+  runCampaignAudienceResolution,
+  materialiseMeasurementAssignments,
+  materialiseAudienceEvaluation,
+  materialiseAudienceDecisions,
+  leftAloneActivitySummary,
+  withCampaignAudienceSnapshotCounts,
 } from "@allohq/campaign-engine";
 import {
   normalizeStratum,
@@ -126,14 +131,6 @@ function replaceDiscountPercent(value: unknown, fromPercent: number, toPercent: 
   }
   return value;
 }
-
-/**
- * Rows per statement when approval writes its per-customer tables. A 100k
- * campaign wrote roughly 200,000 rows in two unchunked statements inside one
- * Serializable transaction, which Prisma's default five-second limit cancelled
- * long before it finished.
- */
-const APPROVAL_WRITE_CHUNK = 2_000;
 
 function planCampaignHoldout(
   storeId: string,
@@ -1716,7 +1713,6 @@ export const campaignsRouter = router({
         validatedAt: new Date().toISOString(),
       };
 
-      const audience = await resolveCampaignAudience(campaign.id);
       const family = campaignFamily(campaign.agentProposal);
       const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
       const policy = holdoutRateFor(campaign.storeId, family, "all", evidence);
@@ -1732,22 +1728,38 @@ export const campaignsRouter = router({
         },
         policy.rate
       );
-      const holdout = planCampaignHoldout(
-        campaign.storeId,
-        experiment.assignmentSeed,
+      // Resolve the audience into Postgres and let it draw the control group.
+      // Approval holds no eligible list, no assignment map and no control set:
+      // the frozen membership is `campaign_audience_members`, and every table
+      // written below is projected from it in a single statement.
+      //
+      // The run key is deterministic per approval attempt, so retrying the same
+      // approval reuses the same frozen membership rather than drawing a second
+      // control group.
+      const audienceRun = await runCampaignAudienceResolution({
+        campaignId: campaign.id,
+        storeId: campaign.storeId,
+        runKey: `approval:${campaign.updatedAt.toISOString()}:${experiment.id}`,
+        assignmentSeed: experiment.assignmentSeed,
+        policyVersion: "campaign-stratified-v1",
+        policy: { family, policyRate: policy.rate, policyReason: policy.reason },
+        rateForStratum: (stratum: string) =>
+          holdoutRateFor(campaign.storeId, family, stratum, evidence).rate,
+      });
+      const approvedProposal = withCampaignAudienceSnapshotCounts(
         campaign.agentProposal,
-        audience.eligible,
-        evidence
-      );
-      const approvedProposal = withCampaignAudienceSnapshot(
-        campaign.agentProposal,
-        audience,
+        {
+          requested: audienceRun.requested,
+          eligible: audienceRun.candidateCount,
+          deliberatelyLeftAlone: audienceRun.leftAloneCount,
+          exclusions: audienceRun.exclusions,
+        },
         new Date(),
         {
           experimentId: experiment.id,
           splitRatio: policy.rate,
           policyReason: policy.reason,
-          strata: holdout.strata,
+          strata: audienceRun.strata,
           // No per-customer data is written into this JSON column any more.
           // customerIds, assignments and assignmentDetails together measured
           // 17.97 MB at 100k, inside a column every reader of agentProposal
@@ -1796,23 +1808,27 @@ export const campaignsRouter = router({
           : approvedAt);
       const windowEndsAt =
         existingAssignment?.windowEndsAt ?? new Date(windowStartsAt.getTime() + 7 * 86_400_000);
-      const controlCount = Object.values(holdout.strata).reduce(
-        (sum, stratum) => sum + stratum.controlCount,
-        0
-      );
-      const effectiveRate = audience.eligible.length
-        ? controlCount / audience.eligible.length
+      const controlCount = audienceRun.controlCount;
+      const effectiveRate = audienceRun.candidateCount
+        ? controlCount / audienceRun.candidateCount
         : policy.rate;
-      const measurement = campaignMeasurementPolicy(audience.eligible.length, effectiveRate);
+      const measurement = campaignMeasurementPolicy(audienceRun.candidateCount, effectiveRate);
       // Persist the exact approval-time decision tree before freezing delivery.
       // The immutable measurement assignments remain the delivery authority;
-      // this indexed snapshot is the merchant-readable review/audit surface.
-      await persistCampaignAudienceEvaluation(ctx.prisma, {
+      // this indexed snapshot is the merchant-readable review/audit surface,
+      // projected from the frozen membership rather than reassembled in memory.
+      await materialiseAudienceEvaluation({
+        runId: audienceRun.runId,
         campaignId: campaign.id,
         storeId: campaign.storeId,
         campaignUpdatedAt: campaign.updatedAt,
-        audience,
-        assignmentFor: holdout.assignmentFor,
+        requested: audienceRun.requested,
+        candidateCount: audienceRun.candidateCount,
+        controlCount: audienceRun.controlCount,
+        treatmentCount: audienceRun.treatmentCount,
+        leftAloneCount: audienceRun.leftAloneCount,
+        excludedCount: audienceRun.excludedCount,
+        exclusions: audienceRun.exclusions,
       });
       // Frozen measurement rows are written before the approval claim, in
       // bounded chunks. They are idempotent through the
@@ -1821,36 +1837,16 @@ export const campaignsRouter = router({
       // claim that fails leaves inert rows rather than phantom arms. The
       // campaign stays in draft in that case, so the merchant's next approval
       // rewrites them identically and completes.
-      const assignmentRows = audience.eligible.map((customer) => {
-        const customerId = customer.id;
-        const detail = holdout.assignmentFor(customerId, customer.rfmStratum);
-        return ({
-          storeId: campaign.storeId,
-          experimentId: experiment.id,
-          campaignId: campaign.id,
-          unitType: "campaign",
-          unitId: campaign.id,
-          customerId,
-          arm: detail.arm,
-          stratum: detail.assignmentStratum,
-          holdoutRate: detail.holdoutRate,
-          assignedAt: approvedAt,
-          windowStartsAt,
-          windowEndsAt,
-          assignmentData: {
-            tier: measurement.tier,
-            family,
-            policyReason: policy.reason,
-            originalStratum: detail.stratum,
-          },
-        });
+      await materialiseMeasurementAssignments({
+        runId: audienceRun.runId,
+        campaignId: campaign.id,
+        storeId: campaign.storeId,
+        experimentId: experiment.id,
+        assignedAt: approvedAt,
+        windowStartsAt,
+        windowEndsAt,
+        assignmentData: { tier: measurement.tier, family, policyReason: policy.reason },
       });
-      for (let offset = 0; offset < assignmentRows.length; offset += APPROVAL_WRITE_CHUNK) {
-        await ctx.prisma.measurementAssignment.createMany({
-          data: assignmentRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
-          skipDuplicates: true,
-        });
-      }
 
       await ctx.prisma.$transaction(
         async (tx) => {
@@ -1916,82 +1912,37 @@ export const campaignsRouter = router({
         { isolationLevel: "Serializable", timeout: 15_000 }
       );
 
-      // The audience-decision ledger follows the claim, in bounded chunks. It is
-      // read by the merchant's decision history, never by delivery or
-      // measurement, so an interruption here costs audit detail rather than
-      // corrupting a number.
+      // The audience-decision ledger follows the claim, in one statement over
+      // the frozen membership. It is read by the merchant's decision history,
+      // never by delivery or measurement, so an interruption here costs audit
+      // detail rather than corrupting a number.
       // Deterministic per approval attempt. A retry of the same approval writes
       // the same keys and is skipped; a genuine re-approval that changes a
       // customer's decision produces a different key and is recorded. Merchant
       // overrides leave writeKey null so none of their audit rows collapse.
-      const decisionWriteKey = (customerId: string, decision: string) =>
-        `approval:${campaign.id}:${approvedAt.toISOString()}:${customerId}:${decision}`;
-      const decisionRows = [
-        ...audience.deliberatelyLeftAlone.map((customer) => ({
-          storeId: campaign.storeId,
-          customerId: customer.id,
-          campaignId: campaign.id,
-          contextKey: family,
-          decision: "deliberately_left_alone",
-          writeKey: decisionWriteKey(customer.id, "deliberately_left_alone"),
-          reasonCode: customer.decision.reasonCode ?? null,
-          reasonText: customer.decision.reasonText ?? null,
-          evidence: customer.decision.evidence as any,
-          reconsiderAt: customer.decision.reconsiderAt ?? null,
-          reconsiderOn: customer.decision.reconsiderOn ?? null,
-        })),
-        ...audience.eligible.map((customer) => {
-        const customerId = customer.id;
-        const detail = holdout.assignmentFor(customerId, customer.rfmStratum);
-        return ({
-          storeId: campaign.storeId,
-          customerId,
-          campaignId: campaign.id,
-          contextKey: family,
-          decision: detail.arm === "CONTROL" ? "control" : "treatment",
-          writeKey: decisionWriteKey(customerId, detail.arm === "CONTROL" ? "control" : "treatment"),
-          reasonCode: "experiment_assignment",
-          reasonText:
-            detail.arm === "CONTROL"
-              ? "Randomly placed in this campaign's control group."
-              : "Assigned to receive this campaign.",
-          evidence: {
-            stratum: detail.stratum,
-            assignmentStratum: detail.assignmentStratum,
-            controlRate: detail.holdoutRate,
-          },
-        });
-        }),
-      ];
-      for (let offset = 0; offset < decisionRows.length; offset += APPROVAL_WRITE_CHUNK) {
-        await ctx.prisma.customerAudienceDecision.createMany({
-          data: decisionRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
-          skipDuplicates: true,
-        });
-      }
-      if (audience.deliberatelyLeftAlone.length > 0) {
-        const reasonCounts = audience.deliberatelyLeftAlone.reduce<Record<string, number>>(
-          (counts, customer) => {
-            const reason = customer.decision.reasonCode ?? "state_policy";
-            counts[reason] = (counts[reason] ?? 0) + 1;
-            return counts;
-          },
-          {}
-        );
+      await materialiseAudienceDecisions({
+        runId: audienceRun.runId,
+        campaignId: campaign.id,
+        storeId: campaign.storeId,
+        contextKey: family,
+        approvedAt,
+      });
+      if (audienceRun.leftAloneCount > 0) {
+        // Reason counts and a bounded id sample, read back from the frozen
+        // membership rather than kept from a left-alone array.
+        const leftAlone = await leftAloneActivitySummary(audienceRun.runId);
         await ctx.prisma.agentActivityLog.create({
           data: {
             storeId: campaign.storeId,
             activityType: "customers_left_alone",
-            summary: `Joon left ${audience.deliberatelyLeftAlone.length.toLocaleString("en-IN")} customers out of ${campaign.name} because their current state suggested a different action.`,
+            summary: `Joon left ${leftAlone.total.toLocaleString("en-IN")} customers out of ${campaign.name} because their current state suggested a different action.`,
             category: "campaign",
             actionTaken: "deliberately_left_alone",
             entityId: campaign.id,
             entityType: "campaign",
             metadata: {
-              reasonCounts,
-              customerIds: audience.deliberatelyLeftAlone
-                .map((customer) => customer.id)
-                .slice(0, 100),
+              reasonCounts: leftAlone.reasonCounts,
+              customerIds: leftAlone.customerIds,
             },
           },
         });

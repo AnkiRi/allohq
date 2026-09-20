@@ -1190,8 +1190,13 @@ model CampaignAudienceMember {
   decision         String
   reasonCode       String?
   reasonText       String?
-  evidence         Json    @default("{}")
-  merchantOverride Boolean @default(false)
+  evidence         Json      @default("{}")
+  merchantOverride Boolean   @default(false)
+  /// When a deliberately-left-alone decision asks to be revisited. Carried on
+  /// the member row so the decision ledger can be projected from the durable
+  /// membership without the API process re-deriving it.
+  reconsiderAt     DateTime?
+  reconsiderOn     String?
 
   /// RFM stratum as resolved during the single policy pass.
   stratum           String

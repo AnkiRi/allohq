@@ -88,6 +88,8 @@ interface PendingMember {
   stratum: string;
   assignmentStratum: string | null;
   assignmentHash: number | null;
+  reconsiderAt: Date | null;
+  reconsiderOn: string | null;
 }
 
 /**
@@ -209,6 +211,8 @@ async function resolveAndAssign(
           // than ten customers each, so the fixup below is bounded and tiny.
           assignmentStratum: stratum,
           assignmentHash: assignmentValue(`${run.assignmentSeed}:${stratum}`, decision.customer.id),
+          reconsiderAt: null,
+          reconsiderOn: null,
         });
       } else if (decision.kind === "deliberately_left_alone") {
         leftAloneCount += 1;
@@ -225,6 +229,8 @@ async function resolveAndAssign(
           stratum: normalizeStratum(null),
           assignmentStratum: null,
           assignmentHash: null,
+          reconsiderAt: decision.decision.reconsiderAt ?? null,
+          reconsiderOn: decision.decision.reconsiderOn ?? null,
         });
       } else {
         excludedCount += 1;
@@ -239,6 +245,8 @@ async function resolveAndAssign(
           stratum: normalizeStratum(null),
           assignmentStratum: null,
           assignmentHash: null,
+          reconsiderAt: null,
+          reconsiderOn: null,
         });
       }
       if (buffer.length >= writeChunk) await flush();
@@ -486,4 +494,247 @@ export async function pageApprovedAssignments(
       }
     },
   };
+}
+
+/**
+ * Materialise the frozen measurement assignments from a completed run.
+ *
+ * One `INSERT ... SELECT` over the durable rows: the approval path never builds
+ * an array of assignments, and the whole cohort lands or none of it does, so an
+ * interrupted approval cannot leave a half-written delivery authority.
+ *
+ * Row ids are derived from the member row's id rather than generated randomly,
+ * so re-running this for the same run is a true no-op rather than a second set
+ * of rows racing the unique key.
+ */
+export async function materialiseMeasurementAssignments(input: {
+  runId: string;
+  campaignId: string;
+  storeId: string;
+  experimentId: string;
+  assignedAt: Date;
+  windowStartsAt: Date;
+  windowEndsAt: Date;
+  assignmentData: Record<string, unknown>;
+}): Promise<number> {
+  return prisma.$executeRaw`
+    INSERT INTO "measurement_assignments" (
+      "id", "storeId", "experimentId", "campaignId", "unitType", "unitId",
+      "customerId", "arm", "stratum", "holdoutRate", "assignedAt",
+      "windowStartsAt", "windowEndsAt", "assignmentData", "createdAt"
+    )
+    SELECT
+      'ma_' || m."id",
+      ${input.storeId},
+      ${input.experimentId},
+      ${input.campaignId},
+      'campaign',
+      ${input.campaignId},
+      m."customerId",
+      m."arm",
+      COALESCE(m."assignmentStratum", m."stratum"),
+      COALESCE((run."diagnostics" #>> ARRAY['strata', COALESCE(m."assignmentStratum", m."stratum"), 'holdoutRate'])::double precision, 0),
+      ${input.assignedAt},
+      ${input.windowStartsAt},
+      ${input.windowEndsAt},
+      ${JSON.stringify(input.assignmentData)}::jsonb || jsonb_build_object('originalStratum', m."stratum"),
+      NOW()
+    FROM "campaign_audience_members" m
+    JOIN "campaign_audience_runs" run ON run."id" = m."runId"
+    WHERE m."runId" = ${input.runId}
+      AND m."decision" = ${CANDIDATE_DECISION}
+      AND m."arm" IS NOT NULL
+      AND run."status" = 'complete'
+    ON CONFLICT ("unitType", "unitId", "customerId") DO NOTHING
+  `;
+}
+
+/**
+ * Rebuild the merchant-readable audience evaluation from a completed run.
+ *
+ * The evaluation tables back the campaign review drawer — grouped reasons, the
+ * searchable left-alone list, treatment counts and decision history — so they
+ * keep their shape and their vocabulary. Only the writer changes: the rows are
+ * projected from the durable membership in one statement instead of being
+ * assembled in the API process.
+ */
+export async function materialiseAudienceEvaluation(input: {
+  runId: string;
+  campaignId: string;
+  storeId: string;
+  campaignUpdatedAt: Date;
+  requested: number;
+  candidateCount: number;
+  controlCount: number;
+  treatmentCount: number;
+  leftAloneCount: number;
+  excludedCount: number;
+  exclusions: Record<string, number>;
+  retainEvaluations?: number;
+}): Promise<{ evaluationId: string; rows: number }> {
+  const evaluation = await prisma.campaignAudienceEvaluation.create({
+    data: {
+      campaignId: input.campaignId,
+      storeId: input.storeId,
+      campaignUpdatedAt: input.campaignUpdatedAt,
+      requested: input.requested,
+      candidateCount: input.candidateCount,
+      treatmentCount: input.treatmentCount,
+      controlCount: input.controlCount,
+      decisionCounts: {
+        candidate: 0,
+        treatment: input.treatmentCount,
+        control: input.controlCount,
+        deliberately_left_alone: input.leftAloneCount,
+        excluded: input.excludedCount,
+        reasons: input.exclusions,
+      } as Prisma.InputJsonValue,
+    },
+  });
+  const rows = await prisma.$executeRaw`
+    INSERT INTO "campaign_audience_evaluation_rows" (
+      "id", "evaluationId", "customerId", "decision", "reasonCode", "reasonText",
+      "evidence", "createdAt"
+    )
+    SELECT
+      'ev_' || m."id",
+      ${evaluation.id},
+      m."customerId",
+      CASE
+        WHEN m."decision" = ${CANDIDATE_DECISION} AND m."arm" = 'CONTROL' THEN 'control'
+        WHEN m."decision" = ${CANDIDATE_DECISION} AND m."arm" = 'TREATMENT' THEN 'treatment'
+        WHEN m."decision" = ${CANDIDATE_DECISION} THEN 'candidate'
+        ELSE m."decision"
+      END,
+      CASE
+        WHEN m."decision" = ${CANDIDATE_DECISION} AND m."arm" IS NOT NULL THEN 'experiment_assignment'
+        ELSE m."reasonCode"
+      END,
+      CASE
+        WHEN m."decision" = ${CANDIDATE_DECISION} AND m."arm" = 'CONTROL'
+          THEN 'Randomly held back for campaign measurement.'
+        WHEN m."decision" = ${CANDIDATE_DECISION} AND m."arm" = 'TREATMENT'
+          THEN 'Assigned to receive this campaign.'
+        WHEN m."decision" = ${CANDIDATE_DECISION}
+          THEN 'Candidate before the campaign control is drawn.'
+        ELSE m."reasonText"
+      END,
+      m."evidence",
+      NOW()
+    FROM "campaign_audience_members" m
+    WHERE m."runId" = ${input.runId}
+    ON CONFLICT ("evaluationId", "customerId") DO NOTHING
+  `;
+
+  // Keep the most recent evaluations only; the older ones are superseded review
+  // surfaces, not measurement or delivery authority.
+  const retain = input.retainEvaluations ?? 3;
+  const retained = await prisma.campaignAudienceEvaluation.findMany({
+    where: { campaignId: input.campaignId },
+    select: { id: true },
+    orderBy: { evaluatedAt: "desc" },
+    take: retain,
+  });
+  await prisma.campaignAudienceEvaluation.deleteMany({
+    where: { campaignId: input.campaignId, id: { notIn: retained.map((row) => row.id) } },
+  });
+  return { evaluationId: evaluation.id, rows };
+}
+
+/**
+ * Append the approval's audience-decision ledger from a completed run.
+ *
+ * This is the merchant's decision history. It is read by nobody in delivery or
+ * measurement, so it follows the approval claim. `writeKey` keeps a retried
+ * approval idempotent while still recording a genuinely changed decision, and
+ * merchant overrides keep a null key so none of their rows collapse.
+ */
+export async function materialiseAudienceDecisions(input: {
+  runId: string;
+  campaignId: string;
+  storeId: string;
+  contextKey: string;
+  approvedAt: Date;
+}): Promise<number> {
+  const keyPrefix = `approval:${input.campaignId}:${input.approvedAt.toISOString()}`;
+  return prisma.$executeRaw`
+    INSERT INTO "customer_audience_decisions" (
+      "id", "storeId", "customerId", "campaignId", "contextKey", "decision",
+      "writeKey", "reasonCode", "reasonText", "evidence", "reconsiderAt",
+      "reconsiderOn", "merchantOverride", "createdAt"
+    )
+    SELECT
+      'ad_' || m."id",
+      ${input.storeId},
+      m."customerId",
+      ${input.campaignId},
+      ${input.contextKey},
+      decided."decision",
+      ${keyPrefix} || ':' || m."customerId" || ':' || decided."decision",
+      CASE WHEN m."decision" = ${CANDIDATE_DECISION} THEN 'experiment_assignment' ELSE m."reasonCode" END,
+      CASE
+        WHEN m."arm" = 'CONTROL' THEN 'Randomly placed in this campaign''s control group.'
+        WHEN m."arm" = 'TREATMENT' THEN 'Assigned to receive this campaign.'
+        ELSE m."reasonText"
+      END,
+      CASE
+        WHEN m."decision" = ${CANDIDATE_DECISION}
+          THEN jsonb_build_object(
+            'stratum', m."stratum",
+            'assignmentStratum', m."assignmentStratum",
+            'controlRate', COALESCE(
+              (run."diagnostics" #>> ARRAY['strata', COALESCE(m."assignmentStratum", m."stratum"), 'holdoutRate'])::double precision,
+              0
+            )
+          )
+        ELSE m."evidence"
+      END,
+      m."reconsiderAt",
+      m."reconsiderOn",
+      false,
+      NOW()
+    FROM "campaign_audience_members" m
+    JOIN "campaign_audience_runs" run ON run."id" = m."runId"
+    CROSS JOIN LATERAL (
+      SELECT CASE
+        WHEN m."arm" = 'CONTROL' THEN 'control'
+        WHEN m."arm" = 'TREATMENT' THEN 'treatment'
+        ELSE m."decision"
+      END AS "decision"
+    ) decided
+    WHERE m."runId" = ${input.runId}
+      AND run."status" = 'complete'
+      AND (m."decision" = 'deliberately_left_alone' OR m."arm" IS NOT NULL)
+    ON CONFLICT ("writeKey") DO NOTHING
+  `;
+}
+
+/**
+ * Bounded summary of a run's deliberately-left-alone decisions, for the
+ * merchant's activity feed: reason counts, and at most `sampleSize` customer
+ * ids. Both come from the database, so the feed no longer depends on approval
+ * having held the left-alone list in memory.
+ */
+export async function leftAloneActivitySummary(
+  runId: string,
+  options: { sampleSize?: number } = {}
+): Promise<{ total: number; reasonCounts: Record<string, number>; customerIds: string[] }> {
+  const grouped = await prisma.campaignAudienceMember.groupBy({
+    by: ["reasonCode"],
+    where: { runId, decision: "deliberately_left_alone" },
+    _count: { _all: true },
+  });
+  const reasonCounts: Record<string, number> = {};
+  let total = 0;
+  for (const row of grouped) {
+    reasonCounts[row.reasonCode ?? "state_policy"] = row._count._all;
+    total += row._count._all;
+  }
+  const sample = await prisma.campaignAudienceMember.findMany({
+    where: { runId, decision: "deliberately_left_alone" },
+    select: { customerId: true },
+    orderBy: { customerId: "asc" },
+    take: options.sampleSize ?? 100,
+  });
+  return { total, reasonCounts, customerIds: sample.map((row) => row.customerId) };
 }
