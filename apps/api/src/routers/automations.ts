@@ -9,7 +9,7 @@ import { selectedEmailProvider } from "@allohq/messaging";
 import {
   automationActivationChecksum,
   loadAutomationActivationSnapshot,
-  resolveAutomationAudience,
+  countAutomationAudience,
   findBannedTerms,
 } from "@allohq/campaign-engine";
 
@@ -42,15 +42,17 @@ export const automationsRouter = router({
       });
       if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
       const senderIdentity = await getStoreSenderIdentity(automation.storeId, selectedEmailProvider());
-      const audience = await resolveAutomationAudience(automation.id);
+      // Counts and bounded samples only. This preview never needed every
+      // customer object, and materialising them loaded the whole store.
+      const audience = await countAutomationAudience(automation.id);
       return {
         providerCalled: false,
         scope: "current_sendable_store_pool" as const,
         requested: audience.requested,
-        eligibleBeforeHoldout: audience.eligible.length,
+        eligibleBeforeHoldout: audience.eligible,
         // Journeys are operational flows, not randomized campaign experiments.
         // Every customer who remains eligible receives the journey step.
-        estimatedTreatment: audience.eligible.length,
+        estimatedTreatment: audience.eligible,
         estimatedControl: 0,
         exclusions: audience.exclusions,
         exclusionSamples: audience.samples,

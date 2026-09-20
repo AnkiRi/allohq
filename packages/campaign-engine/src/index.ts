@@ -61,6 +61,8 @@ export {
   resolveCampaignAudience,
   streamCampaignAudience,
   resolveAutomationAudience,
+  streamAutomationAudience,
+  countAutomationAudience,
   AUDIENCE_EXCLUSION_REASONS,
   staticAudienceExclusion,
 } from "./audience-resolver";

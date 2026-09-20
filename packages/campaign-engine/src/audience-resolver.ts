@@ -1,9 +1,5 @@
 import { prisma, resolveSegmentWhere, type Prisma } from "@allohq/database";
-import {
-  checkAllRules,
-  checkCampaignRulesBatch,
-  loadStoreGovernorConfig,
-} from "@allohq/communication-governor";
+import { checkCampaignRulesBatch, loadStoreGovernorConfig } from "@allohq/communication-governor";
 import { evaluateCampaignCandidate, type CandidateDecision } from "./candidate-policy";
 
 export const AUDIENCE_EXCLUSION_REASONS = [
@@ -449,119 +445,206 @@ export async function resolveCampaignAudience(
  * not a promise that every store customer will enter the journey: the trigger
  * still selects one customer and the runner rechecks these rules at send time.
  */
-export async function resolveAutomationAudience(
+/**
+ * Resolve an automation audience in bounded keyset pages, emitting one decision
+ * per customer.
+ *
+ * This replaces a single unpaged `findMany` that loaded every customer in the
+ * store — with their consents, suppressions and RFM rows — into the process
+ * before evaluating any of them. At a hundred thousand customers that is a
+ * multi-hundred-megabyte result set; at a million it does not complete.
+ *
+ * Each page's governor checks run as one batched evaluation rather than one
+ * round trip per customer. `governor-equivalence.integration.ts` pins that the
+ * batch returns the same verdicts and the same reasons as the per-customer
+ * form, so exclusion counts are unchanged.
+ */
+export async function streamAutomationAudience(
   automationId: string,
+  onDecision: (decision: AudienceStreamDecision) => void | Promise<void>,
   now = new Date()
-): Promise<AudienceResolution> {
+): Promise<AudienceStreamSummary> {
   const automation = await prisma.automation.findUnique({
     where: { id: automationId },
     include: { store: { select: { id: true, emailSendingPausedAt: true, timezone: true } } },
   });
   if (!automation) throw new Error(`Automation ${automationId} not found`);
-  const [customers, governorConfig] = await Promise.all([
-    prisma.customer.findMany({
-      where: { storeId: automation.storeId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        acceptsMarketing: true,
-        rfmScore: { select: { segment: true } },
-        contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
-        contactSuppressions: {
-          where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-          take: 1,
-          select: { reason: true },
-        },
-      },
-    }),
-    loadStoreGovernorConfig(automation.storeId),
-  ]);
+  const governorConfig = await loadStoreGovernorConfig(automation.storeId);
   const exclusions = Object.fromEntries(
     AUDIENCE_EXCLUSION_REASONS.map((reason) => [reason, 0])
   ) as Record<AudienceExclusionReason, number>;
   const samples: AudienceResolution["samples"] = {};
-  const excludedCustomers: AudienceResolution["excludedCustomers"] = {};
-  const eligible: AudienceResolution["eligible"] = [];
-  const recentPurchaseExcluded: AudienceResolution["recentPurchaseExcluded"] = [];
-  const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
-  const collisionExcluded: AudienceResolution["collisionExcluded"] = [];
-  const cooldownExcluded: AudienceResolution["cooldownExcluded"] = [];
-  const exclude = (
+  const emitExcluded = async (
     reason: AudienceExclusionReason,
     customer: { id: string; email: string; firstName: string | null; lastName: string | null }
   ) => {
     exclusions[reason]++;
-    (excludedCustomers[reason] ??= []).push({
+    const brief = {
       id: customer.id,
       email: customer.email,
       firstName: customer.firstName,
       lastName: customer.lastName,
-    });
-    if ((samples[reason]?.length ?? 0) < 3)
-      (samples[reason] ??= []).push({
-        id: customer.id,
-        email: customer.email,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-      });
+    };
+    if ((samples[reason]?.length ?? 0) < 3) (samples[reason] ??= []).push(brief);
+    await onDecision({ kind: "excluded", reason, customer: brief });
   };
-  for (const customer of customers) {
-    const reason = staticAudienceExclusion({
-      email: customer.email,
-      consentStatus: customer.contactConsents[0]?.status,
-      acceptsMarketing: customer.acceptsMarketing,
-      suppressionReason: customer.contactSuppressions[0]?.reason,
-      alreadyProcessed: false,
-      storePaused: Boolean(automation.store.emailSendingPausedAt),
-      globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
+
+  const automationSelect = {
+    id: true,
+    email: true,
+    firstName: true,
+    lastName: true,
+    acceptsMarketing: true,
+    rfmScore: { select: { segment: true } },
+    contactConsents: { where: { channel: "email" }, take: 1, select: { status: true } },
+    contactSuppressions: {
+      where: { channel: "email", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      take: 1,
+      select: { reason: true },
+    },
+  } satisfies Prisma.CustomerSelect;
+  type AutomationCustomer = Prisma.CustomerGetPayload<{ select: typeof automationSelect }>;
+
+  let requested = 0;
+  let pages = 0;
+  let cursor: string | undefined;
+  while (true) {
+    const customers: AutomationCustomer[] = await prisma.customer.findMany({
+      where: cursor
+        ? { AND: [{ storeId: automation.storeId }, { id: { gt: cursor } }] }
+        : { storeId: automation.storeId },
+      select: automationSelect,
+      orderBy: { id: "asc" },
+      take: 200,
     });
-    if (reason) {
-      exclude(reason, customer);
-      continue;
+    if (customers.length === 0) break;
+    pages += 1;
+    requested += customers.length;
+    cursor = customers[customers.length - 1]!.id;
+
+    // Static exclusions first, so the governor is only asked about customers
+    // who could still receive the journey step.
+    const needsGovernor: AutomationCustomer[] = [];
+    for (const customer of customers) {
+      const reason = staticAudienceExclusion({
+        email: customer.email,
+        consentStatus: customer.contactConsents[0]?.status,
+        acceptsMarketing: customer.acceptsMarketing,
+        suppressionReason: customer.contactSuppressions[0]?.reason,
+        alreadyProcessed: false,
+        storePaused: Boolean(automation.store.emailSendingPausedAt),
+        globalPaused: process.env["GLOBAL_EMAIL_KILL_SWITCH"] === "true",
+      });
+      if (reason) await emitExcluded(reason, customer);
+      else needsGovernor.push(customer);
     }
-    const decision = await checkAllRules({
-      customerId: customer.id,
-      storeId: automation.storeId,
-      channel: "email",
-      messageType: "automation",
-      timezone: governorConfig.timezone ?? automation.store.timezone ?? "UTC",
-      quietHours: governorConfig.quietHours,
-      maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
-      now,
-    });
-    if (shouldExcludeGovernorDecision(decision)) {
-      const governorExclusion = governorReason(decision.rule);
-      if (governorExclusion === "fatigue") {
-        fatigueExcluded.push({
+    // One batched evaluation per page rather than one round trip per customer.
+    // The per-customer form issued 5.2 queries each — 103,357 for a 20,000
+    // customer store — because every rule re-queried that customer's history.
+    // `governor-equivalence.integration.ts` pins that the batch returns
+    // identical verdicts and identical reasons, with fatigue, support and
+    // conversation rules all firing, so this is a cost change and not a policy
+    // change.
+    const decisions = await checkCampaignRulesBatch(
+      needsGovernor.map((customer) => customer.id),
+      automation.storeId,
+      {
+        now,
+        timezone: governorConfig.timezone ?? automation.store.timezone ?? "UTC",
+        quietHours: governorConfig.quietHours,
+        maxEmailsPerWeek: governorConfig.maxEmailsPerWeek,
+      }
+    );
+    for (const customer of needsGovernor) {
+      const decision = decisions.get(customer.id);
+      if (!decision) throw new Error(`Journey governor decision missing for ${customer.id}`);
+      if (shouldExcludeGovernorDecision(decision)) {
+        await emitExcluded(governorReason(decision.rule), customer);
+        continue;
+      }
+      await onDecision({
+        kind: "eligible",
+        customer: {
           id: customer.id,
           email: customer.email,
           firstName: customer.firstName,
           lastName: customer.lastName,
-        });
-      }
-      if (governorExclusion === "collision") collisionExcluded.push(customer);
-      if (governorExclusion === "cooldown") cooldownExcluded.push(customer);
-      exclude(governorExclusion, customer);
-      continue;
+          rfmStratum: customer.rfmScore?.segment ?? null,
+        },
+      });
     }
-    eligible.push({
-      id: customer.id,
-      email: customer.email,
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      rfmStratum: customer.rfmScore?.segment ?? null,
-    });
   }
+  return { requested, exclusions, samples, pages };
+}
+
+/**
+ * Counts and bounded samples for an automation audience, with nothing retained
+ * that grows with the store. This is what the journey dry run needs: it shows
+ * how many customers are found, how many would receive the step, and why the
+ * rest would not.
+ */
+export async function countAutomationAudience(
+  automationId: string,
+  now = new Date()
+): Promise<{
+  requested: number;
+  eligible: number;
+  exclusions: Record<AudienceExclusionReason, number>;
+  samples: AudienceResolution["samples"];
+  pages: number;
+}> {
+  let eligible = 0;
+  const summary = await streamAutomationAudience(
+    automationId,
+    (decision) => {
+      if (decision.kind === "eligible") eligible += 1;
+    },
+    now
+  );
+  return { ...summary, eligible };
+}
+
+/**
+ * Materialised automation audience. Accumulates
+ * {@link streamAutomationAudience}, so the rules live in one place.
+ *
+ * This retains the whole audience by design. Prefer
+ * {@link countAutomationAudience} unless every customer object is genuinely
+ * needed.
+ */
+export async function resolveAutomationAudience(
+  automationId: string,
+  now = new Date()
+): Promise<AudienceResolution> {
+  const excludedCustomers: AudienceResolution["excludedCustomers"] = {};
+  const eligible: AudienceResolution["eligible"] = [];
+  const fatigueExcluded: AudienceResolution["fatigueExcluded"] = [];
+  const collisionExcluded: AudienceResolution["collisionExcluded"] = [];
+  const cooldownExcluded: AudienceResolution["cooldownExcluded"] = [];
+  const summary = await streamAutomationAudience(
+    automationId,
+    (decision) => {
+      if (decision.kind === "eligible") {
+        eligible.push(decision.customer);
+        return;
+      }
+      if (decision.kind === "excluded") {
+        (excludedCustomers[decision.reason] ??= []).push(decision.customer);
+        if (decision.reason === "fatigue") fatigueExcluded.push(decision.customer);
+        if (decision.reason === "collision") collisionExcluded.push(decision.customer);
+        if (decision.reason === "cooldown") cooldownExcluded.push(decision.customer);
+      }
+    },
+    now
+  );
   return {
-    requested: customers.length,
+    requested: summary.requested,
     eligible,
-    exclusions,
-    samples,
+    exclusions: summary.exclusions,
+    samples: summary.samples,
     excludedCustomers,
     deliberatelyLeftAlone: [],
-    recentPurchaseExcluded,
+    recentPurchaseExcluded: [],
     fatigueExcluded,
     collisionExcluded,
     cooldownExcluded,
