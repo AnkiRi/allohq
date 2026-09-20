@@ -3,7 +3,14 @@ import type { AudienceResolution } from "./audience-resolver";
 export interface CampaignAudienceSnapshot {
   capturedAt: string;
   deliveryProvider?: "resend" | "ses";
-  customerIds: string[];
+  /**
+   * Legacy only. Approval no longer writes the per-customer membership here:
+   * at 100k it was 2.67 MB inside a JSON column that every reader of
+   * agentProposal parses and the approval checksum hashes whole. The frozen
+   * membership lives on MeasurementAssignment, which is indexed. Snapshots
+   * written before that change still carry it and still validate.
+   */
+  customerIds?: string[];
   requested: number;
   eligible: number;
   deliberatelyLeftAlone: number;
@@ -11,7 +18,8 @@ export interface CampaignAudienceSnapshot {
   holdout?: {
     experimentId: string;
     splitRatio: number;
-    assignments: Record<string, "CONTROL" | "TREATMENT">;
+    /** Legacy only, for the same reason as customerIds. Arms live on MeasurementAssignment. */
+    assignments?: Record<string, "CONTROL" | "TREATMENT">;
     policyReason?: string;
     strata?: Record<string, { customerCount: number; controlCount: number; holdoutRate: number }>;
     assignmentDetails?: Record<
@@ -42,7 +50,6 @@ export function withCampaignAudienceSnapshot(
     audienceSnapshot: {
       capturedAt: capturedAt.toISOString(),
       ...(deliveryProvider ? { deliveryProvider } : {}),
-      customerIds: audience.eligible.map((customer) => customer.id).sort(),
       requested: audience.requested,
       eligible: audience.eligible.length,
       deliberatelyLeftAlone: audience.deliberatelyLeftAlone?.length ?? 0,
@@ -57,9 +64,12 @@ export function campaignAudienceSnapshot(proposal: unknown): CampaignAudienceSna
   const value = (proposal as Record<string, unknown>).audienceSnapshot;
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const snapshot = value as Partial<CampaignAudienceSnapshot>;
+  // customerIds is optional now. When a legacy snapshot carries it, it must
+  // still be well formed; a new snapshot simply omits it.
   if (
-    !Array.isArray(snapshot.customerIds) ||
-    !snapshot.customerIds.every((id) => typeof id === "string")
+    snapshot.customerIds !== undefined &&
+    (!Array.isArray(snapshot.customerIds) ||
+      !snapshot.customerIds.every((id) => typeof id === "string"))
   )
     return null;
   if (snapshot.deliveryProvider && snapshot.deliveryProvider !== "resend" && snapshot.deliveryProvider !== "ses")
@@ -72,29 +82,32 @@ export function campaignAudienceSnapshot(proposal: unknown): CampaignAudienceSna
     return null;
   if (snapshot.holdout) {
     const h = snapshot.holdout;
-    if (
-      typeof h.experimentId !== "string" ||
-      typeof h.splitRatio !== "number" ||
-      !h.assignments ||
-      typeof h.assignments !== "object"
-    )
+    if (typeof h.experimentId !== "string" || typeof h.splitRatio !== "number") return null;
+    if (h.assignments !== undefined && (!h.assignments || typeof h.assignments !== "object"))
       return null;
     // Membership is checked against a Set. These were `customerIds.includes(id)`
     // inside a scan of every assignment, so validating a 100k cohort cost on the
     // order of ten billion comparisons, on a function the send path calls before
     // every dispatch.
-    const approvedIds = new Set(snapshot.customerIds);
-    if (
-      Object.keys(h.assignments).some((id) => !approvedIds.has(id)) ||
-      Object.values(h.assignments).some((arm) => arm !== "CONTROL" && arm !== "TREATMENT")
-    )
-      return null;
+    // A legacy snapshot carries both the membership and the arm map, and the
+    // two must agree. A current snapshot carries neither. An arm map with no
+    // membership to check it against is a shape approval never writes, so it is
+    // rejected rather than accepted unverified.
+    if ((h.assignments || h.assignmentDetails) && snapshot.customerIds === undefined) return null;
+    const approvedIds = new Set(snapshot.customerIds ?? []);
+    if (h.assignments) {
+      if (
+        Object.keys(h.assignments).some((id) => !approvedIds.has(id)) ||
+        Object.values(h.assignments).some((arm) => arm !== "CONTROL" && arm !== "TREATMENT")
+      )
+        return null;
+    }
     if (h.assignmentDetails) {
       if (Object.keys(h.assignmentDetails).some((id) => !approvedIds.has(id))) return null;
       for (const [id, detail] of Object.entries(h.assignmentDetails)) {
         if (!detail || typeof detail !== "object") return null;
         if (
-          detail.arm !== h.assignments[id] ||
+          (h.assignments && detail.arm !== h.assignments[id]) ||
           typeof detail.stratum !== "string" ||
           typeof detail.assignmentStratum !== "string" ||
           typeof detail.holdoutRate !== "number" ||

@@ -92,10 +92,16 @@ export async function persistClosedCampaignLedgers(now = new Date()): Promise<nu
     // a re-approval with a narrower audience leaves earlier rows in place.
     const frozenCohort = campaignAudienceSnapshot(first.campaign?.agentProposal ?? null);
     if (frozenCohort) {
-      const missing = missingAssignedCustomers(frozenCohort.customerIds, customerIds);
-      if (missing.length > 0) {
+      // A legacy snapshot carries the exact membership and is checked against
+      // it. A current one carries only the approved count, because the
+      // membership now lives on these very rows, so a shortfall is the signal.
+      const expected = frozenCohort.customerIds?.length ?? frozenCohort.eligible;
+      const shortfall = frozenCohort.customerIds
+        ? missingAssignedCustomers(frozenCohort.customerIds, customerIds).length
+        : Math.max(0, frozenCohort.eligible - customerIds.length);
+      if (shortfall > 0) {
         console.error(
-          `[causal-ledger] Skipping ${unitId}: ${missing.length} of ${frozenCohort.customerIds.length} frozen customers have no assignment row`
+          `[causal-ledger] Skipping ${unitId}: ${shortfall} of ${expected} frozen customers have no assignment row`
         );
         continue;
       }

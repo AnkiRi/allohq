@@ -58,6 +58,44 @@ const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (secon
 const RECIPIENT_QUERY_CHUNK = 5_000;
 /** Rows per statement when the planner records control and skipped recipients. */
 const RECIPIENT_WRITE_CHUNK = 2_000;
+
+/**
+ * The frozen cohort: who was approved, and which arm each of them is in.
+ *
+ * Approval used to write both into `campaign.agentProposal` as a customerId
+ * list plus an arm map — measured at 6.5 MB of JSON for a 100k campaign, parsed
+ * on every dispatch and hashed whole into the approval checksum.
+ * MeasurementAssignment already holds exactly this, keyed
+ * (unitType, unitId, customerId), so it is read in bounded keyset pages
+ * instead. Campaigns approved before that change carry the old map and fall
+ * back to it, so work already in flight keeps sending.
+ */
+async function loadFrozenCohort(
+  campaignId: string,
+  legacyAssignments?: Record<string, "CONTROL" | "TREATMENT">
+): Promise<Map<string, "CONTROL" | "TREATMENT">> {
+  const arms = new Map<string, "CONTROL" | "TREATMENT">();
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await prisma.measurementAssignment.findMany({
+      where: {
+        unitType: "campaign",
+        unitId: campaignId,
+        ...(cursor ? { customerId: { gt: cursor } } : {}),
+      },
+      select: { customerId: true, arm: true },
+      orderBy: { customerId: "asc" },
+      take: RECIPIENT_QUERY_CHUNK,
+    });
+    if (page.length === 0) break;
+    for (const row of page) arms.set(row.customerId, row.arm as "CONTROL" | "TREATMENT");
+    cursor = page[page.length - 1]!.customerId;
+    if (page.length < RECIPIENT_QUERY_CHUNK) break;
+  }
+  if (arms.size > 0) return arms;
+  if (legacyAssignments) return new Map(Object.entries(legacyAssignments));
+  return arms;
+}
 type BrandKit = Awaited<ReturnType<typeof loadBrandKit>>;
 
 function frozenEmailDocument(campaign: {
@@ -254,7 +292,19 @@ export async function planCampaignSend(
   if ((approvedAudience.deliveryProvider ?? "resend") !== selectedEmailProvider()) {
     throw new Error(`Campaign ${campaignId} is pinned to ${approvedAudience.deliveryProvider ?? "resend"}; current worker uses ${selectedEmailProvider()}`);
   }
-  const approvedIds = new Set(approvedAudience.customerIds);
+  // Frozen membership and arms, read once and used for both the audience filter
+  // and the per-recipient arm lookup further down.
+  const frozenArms = await loadFrozenCohort(campaignId, approvedAudience.holdout?.assignments);
+  if (frozenArms.size === 0 || frozenArms.size < approvedAudience.eligible) {
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: "draft", approvalChecksum: null, approvedAt: null },
+    });
+    throw new Error(
+      `Campaign cohort is incomplete: ${frozenArms.size} frozen assignments for ${approvedAudience.eligible} approved recipients; merchant re-approval is required`
+    );
+  }
+  const approvedIds = new Set(frozenArms.keys());
   const audience = {
     ...currentAudience,
     eligible: currentAudience.eligible.filter((customer) => approvedIds.has(customer.id)),
@@ -333,10 +383,7 @@ export async function planCampaignSend(
   // Every campaign is a fresh randomized trial. Reusing a segment-level seed
   // would leave the same customer permanently held out across campaigns.
   const frozenHoldout = approvedAudience.holdout;
-  if (
-    !frozenHoldout ||
-    Object.keys(frozenHoldout.assignments).length !== approvedAudience.customerIds.length
-  ) {
+  if (!frozenHoldout) {
     await prisma.campaign.update({
       where: { id: campaignId },
       data: { status: "draft", approvalChecksum: null, approvedAt: null },
@@ -434,7 +481,7 @@ export async function planCampaignSend(
     store: 0,
     default: 0,
   };
-  const campaignArms = new Map(Object.entries(frozenHoldout.assignments));
+  const campaignArms = frozenArms;
   const planningGovernorConfig = await loadStoreGovernorConfig(campaign.storeId);
   const timingProfiles = await getTimingProfiles(
     campaign.storeId,

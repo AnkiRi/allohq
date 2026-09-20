@@ -1724,15 +1724,15 @@ export const campaignsRouter = router({
         {
           experimentId: experiment.id,
           splitRatio: policy.rate,
-          assignments: Object.fromEntries(holdout.assignment.arms),
           policyReason: policy.reason,
           strata: holdout.assignment.strata,
-          // assignmentDetails is deliberately no longer written. Nothing ever
-          // read it, yet it was 11.51 MB of the measured 17.97 MB this snapshot
-          // occupied at 100k, inside a JSON column every reader of the proposal
-          // parses. The same per-customer stratum and rate live on
-          // MeasurementAssignment, which is queryable. Existing approved
-          // campaigns keep theirs and still validate.
+          // No per-customer data is written into this JSON column any more.
+          // customerIds, assignments and assignmentDetails together measured
+          // 17.97 MB at 100k, inside a column every reader of agentProposal
+          // parses and the approval checksum hashes whole. All three live on
+          // MeasurementAssignment, which is indexed and paged. The counts and
+          // strata that remain are O(1). Campaigns approved before this keep
+          // their maps and still validate.
         },
         selectedEmailProvider()
       );
