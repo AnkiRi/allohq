@@ -10,7 +10,7 @@ This document is the single reference point for these passes. Later implementati
 
 ## Locked facts — do not contradict these anywhere in this document
 
-_Recorded 2026-09-20T11:57Z._
+_Recorded 2026-09-20T11:57Z. Scale and testing boundaries added 2026-09-21T05:09:18Z._
 
 - **Billing is 5% of Joon-attributed, non-cancelled order revenue.** Shadow invoices also compute
   6% and 8%; 5% is what is displayed. Billing stays disabled during early access until cap
@@ -30,59 +30,112 @@ _Recorded 2026-09-20T11:57Z._
   (Litmus / Email on Acid). Each is audited in "Email IDE audit" below with the evidence that it
   is absent.
 
-## Current status — 2026-09-20T19:24:18Z
+### Scale claims — what is measured and what is not
+
+- **100,000-customer results are measured.** Every figure attributed to 100k in this document
+  came from an actual run against a disposable Postgres, and the figures have now been
+  reproduced on a GitHub runner.
+- **Any one-million-customer figure is an inference until actually measured.** No 1M run has
+  been performed. Extrapolations appear in this document and are labelled as such; none may be
+  quoted as a measurement.
+- **Healthify's 4.5 crore (45,000,000) customer environment is a future architecture problem,
+  not a current performance target and not a test target.** Nothing in this pass is sized, tuned
+  or claimed against it, and no test approximates it.
+
+### Testing boundary — non-negotiable
+
+- **The 100k proof runs against a synthetic store in a disposable Postgres and Redis.** It seeds
+  synthetic customers, orders, consent, fatigue, customer state and campaign data directly; runs
+  Joon's actual audience-resolution, approval, assignment, retry and send-planning logic; uses a
+  simulated provider only; and drops the database afterwards.
+- **It is never pointed at production Railway, production Postgres, production Redis, Shopify,
+  Resend or SES.** `scripts/assert-disposable-database.mjs` enforces this: managed database
+  hosts are rejected outright and the database name must declare itself disposable.
+- **`allo-test-5` (account uast23@gmail.com) is a manual deployed-app acceptance store only.**
+  It has no authenticated Joon sender domain, so sending is blocked. **Missing DNS is an extra
+  safety net, not the safety mechanism.** Do not run 99k/100k performance preparation there, do
+  not queue mass sends, do not generate fake bounces, and do not call a live email provider for
+  its fake recipients. It is for validating UI, campaign drafts, audience explanation, controls,
+  overrides, blocked-delivery messaging and normal API behaviour.
+- **Real email is never sent autonomously.** Real-delivery acceptance is run manually against a
+  small number of explicitly opted-in, already allowlisted inboxes. See the manual acceptance
+  checklist near the end of this document.
+
+## Current status — 2026-09-21T05:09:51Z
 
 _This is the single canonical status section. Anything below it is history,
 evidence or detail; where an older section states a status, this one wins._
 
-### Pass 8 in one paragraph
+### Pass 8, split
 
-**Pass 8 is structurally memory-safe, concurrency-safe and operationally
-durable.** The approval and send paths retain nothing that grows with the
-audience, Postgres performs the exact control selection, concurrent approvals
-cannot corrupt one another, preparation runs as a leased background job that
-resumes itself after a crash, and every overnight scan is bounded.
+Pass 8 is tracked as two halves, because they have different risk profiles and
+different completion criteria.
 
-**What is not done:** CI has never executed on GitHub, and the migrations are
-undeployed. Both are gates rather than code.
-
-### Blocking items — all three closed this pass
-
-| Blocker | Status | Evidence |
+| | Scope | Status |
 | --- | --- | --- |
-| Preparation ran synchronously in tRPC | **closed** `ad467ac` `dd84939` | approval enqueues and returns; the worker prepares, finalises and dispatches; a lapsed lease is re-enqueued every two minutes, so no second merchant click |
-| Three order-driven opportunity scans unbounded | **closed** `c064889` | repurchase, low-stock and cross-sell all keyset-paged; cross-sell is now a SQL anti-join; decisions match an independently computed reference set |
-| Governor injected-time inconsistency (P0) | **closed** `dbee4b4` | every rule measures its window from the injected instant; 5 boundary tests fail against the old code and pass against the new |
+| **Pass 8A — structural large-audience safety** | Nothing audience-sized retained in Node; Postgres performs exact control selection; bounded overnight scans | **implemented and measured** |
+| **Pass 8B — operational reliability** | Frozen-time policy correctness, preparation out of synchronous tRPC, bounded order-driven scans, and the evidence to prove all three | **pending** |
+| **CI** | Verification and integration workflows on GitHub | **implemented and verified on GitHub** |
+
+### Pass 8A — implemented and measured
+
+100,000 customers, disposable Postgres, reproduced on a GitHub runner:
+
+| Measure | Local | GitHub runner |
+| --- | --- | --- |
+| Duration | 36.5 s | 36.7 s |
+| Peak heap above baseline | 65.49 MB | 66.41 MB |
+| Retained heap (instrumented) | 2.15 MB | 2.15 MB |
+| Postgres transactions | 6,083 | 6,078 |
+| Queries / shapes | 6,340 / 33 | 6,343 / 33 |
+| Query p50 / p95 / p99 / max | 0 / 2 / 14 / 9,255 ms | 0 / 1 / 10 / 4,319 ms |
+| Duplicate rows | 0 | 0 |
+| Arm parity | 0 of 90,909 | 0 of 90,909 |
+
+**Measured**, not inferred. Retained heap is only meaningful under
+`node --expose-gc`; see the constraint below.
+
+### Pass 8B — pending
+
+| Item | Status | Note |
+| --- | --- | --- |
+| A. Frozen-time policy correctness | pending | four governor rules were fixed in `dbee4b4`; this pass re-audits the full list the order names, including recent purchase, quiet hours, scheduling and deferral windows |
+| B. Preparation out of synchronous tRPC | pending | a durable job exists (`ad467ac`, `dd84939`); this pass verifies run id, merchant-readable progress, reload safety, heartbeat, expiry, stale recovery and crash resume against the order's full requirement list |
+| C. Bounded order-driven scans | pending | converted in `c064889`; this pass verifies them at 100k synthetic customers rather than at the smaller fixtures used so far |
+| D. Evidence | pending | the 100k profile exists; retry/resume behaviour is not yet part of the reported figures |
+
+### CI — implemented and verified on GitHub
+
+Every job has executed green on a GitHub runner. Three first-run defects were
+found and fixed; the third was invisible to a clean-clone rehearsal because it
+was a property of the runner, not the repository.
 
 ### Constraint on the memory evidence
 
-Every retained-heap figure here is valid **only in a GC-enabled runner**: the
+Every retained-heap figure is valid **only in a GC-enabled runner**. The
 measurements settle the heap with `globalThis.gc()` before reading, which needs
 `node --expose-gc`. Without it the reading is uncollected garbage — the same
 opportunity scan measured 0 MB standalone and appeared to grow 2.47 MB to
-7.38 MB under a runner without a collector. **The proofs now fail rather than
-skip when no collector is present**, because a skipped memory proof reported
-among passes looks like coverage. `ALLOW_UNMEASURED_HEAP=1` excludes one
-explicitly.
+7.38 MB under a runner without a collector. **The proofs fail rather than skip
+when no collector is present: a skipped memory proof is not a passing memory
+proof.** `ALLOW_UNMEASURED_HEAP=1` excludes one explicitly.
 
-A second honest caveat: instrumenting the Prisma client to capture query
-latency costs the harness its own memory. The same 100k run measures **0.12 MB
-retained uninstrumented and 2.15 MB with query capture on**. Both are reported;
-the difference is the harness, not the engine.
+A second caveat: instrumenting the Prisma client to capture query latency costs
+the harness its own memory. The same 100k run measures **0.12 MB retained
+uninstrumented and 2.15 MB with query capture on**. Both are reported.
 
 ### Area status
 
 | Area | Status | Evidence | Remaining limitation |
 | --- | --- | --- | --- |
-| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k: 36.5 s, peak heap 65.49 MB, 0 duplicates, 0 arm mismatches of 90,909 | GC-enabled runner only, above |
-| Pass 8 — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run; a losing caller gets AUDIENCE_RUN_BUSY | a losing caller is refused, not queued |
-| Pass 8 — durable preparation | **verified** `ad467ac` `dd84939` | leased job; lease loss stops a worker; expired lease is adopted and finished; a completed run cannot be failed by an older worker | recovery sweep interval is 2 minutes, not tuned under load |
-| Pass 8 — merchant progress | **implemented** `b08eeba` | evaluated = candidates + left alone + not receiving, reconciles exactly | **not surfaced in any UI** |
-| Policy clock consistency | **verified** `dbee4b4` | 5 boundary tests; all fail against the previous governor | — |
-| Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count | — |
-| Overnight opportunity scale | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical; retained heap 0 MB at 20,000 | — |
+| Pass 8A — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k measured, table above | GC-enabled runner only |
+| Pass 8A — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run | a losing caller is refused, not queued |
+| Pass 8A — overnight scans | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical | not yet verified at 100k |
+| Pass 8B — frozen-time correctness | **pending** | `dbee4b4` fixed four governor rules with 5 boundary tests | full audit of the order's list not yet done |
+| Pass 8B — durable preparation | **pending** | `ad467ac` `dd84939` implement and test the job | not yet verified against the order's full requirement list |
+| Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
+| CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
-| CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | every job executed green on GitHub: typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; the 100k load proof 2m8s, 0 duplicates and 0 arm mismatches of 90,909 | Node 20 unverified; action versions target deprecated Node 20 |
 | Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named | — |
 | Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
 | WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
@@ -91,15 +144,16 @@ the difference is the harness, not the engine.
 
 | Defect | Evidence | Why it is still open |
 | --- | --- | --- |
-| Control selection is one long statement at scale | 9,255 ms for 90,909 candidates; ~90 s extrapolated at 900,000 | rows belong to one run and no other writer touches them, so it is a long statement rather than contention — but it is the first thing to need attention at a million |
+| Control selection is one long statement at scale | 4,319 ms for 90,909 candidates on the runner (9,255 ms locally) | inference at 1M, not measured; the first component likely to need attention there |
 | Pre-existing migration drift on main | one `DROP DEFAULT`, five index renames | unrelated to this work; CI reports without gating |
-| `campaign_audience_members` ranking index unused | bitmap scan on `(runId, arm)` chosen instead | dropping it measured −1% on writes; no benefit either way |
+| `campaign_audience_members` ranking index unused | bitmap scan on `(runId, arm)` chosen instead | dropping it measured −1% on writes |
 | Five migrations undeployed | `…090000`, `…140000`, `…150000`, `…190000` | deployment is a separate gate |
-| Preparation progress has no UI | `campaignPreparationProgress` exists and is tested | the API returns it; nothing renders it yet |
+| Preparation progress has no UI | `campaignPreparationProgress` exists and is tested | the API returns it; nothing renders it |
+| Node 20 unverified | `engines` permits it; CI pinned to 24 | nothing has been run on 20 |
 
-### Order of work after this pass
+### Order of work
 
-1. CI.
+1. **Pass 8B** — in progress.
 2. Pass 9 delivery health and provider-switch safety.
 3. Migration deployment plan and external load proof.
 4. Email editor safety and accessibility.
@@ -648,6 +702,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T05:10:08Z | pending | pending | Register renamed `…-2026-09-20.md` → `…-2026-09-21.md` via `git mv`; the one inbound link in `ExternalAcceptancePlan-2026-09-10.md` updated. Locked facts extended with the scale boundary (100k measured, 1M inference-only, Healthify's 4.5 crore a future architecture problem and not a target) and the testing boundary (disposable Postgres/Redis with a simulated provider; `allo-test-5` manual acceptance only; no autonomous real email). Canonical status split into Pass 8A (implemented and measured) and Pass 8B (pending). | Pass 8B items A–D all open at this timestamp |
 | 2026-09-21T04:11:27Z | `bb4dda2` | verified | 100k load proof executed on a GitHub runner (run 35558319666, 2m8s): 36.7 s, peak heap 66.41 MB, 6,078 transactions, 6,343 queries, p50 0 / p95 1 / p99 10 / max 4,319 ms, 0 duplicate rows, 0 arm mismatches of 90,909. Agrees with the local figures within 0.2 s and 5 transactions. | Control-selection worst case is 4,319 ms on the runner against 9,255 ms locally, so the local 1M extrapolation was pessimistic; re-read it against the runner number |
 | 2026-09-21T03:41:15Z | `bb4dda2` | verified | **CI executed green for the first time.** typecheck/test/build pass in 4m2s; integration reports `tests 36, pass 36, fail 0, skipped 0` on pgvector/pgvector:pg16 and redis:7 service containers, with heap measurements printing so `--expose-gc` demonstrably reached them. Third first-run defect fixed: migrations need pgvector, which stock postgres:16 does not ship - invisible to a clean-clone rehearsal because this machine has the extension installed. | Node 20 unverified; action versions target deprecated Node 20; the workflows' own concurrency group cancels a run when pushed over |
 | 2026-09-21T03:18:31Z | `5a71682` | implemented | Ran CI's exact sequence against a clean clone before pushing and found two first-run failures: the build cannot complete without a Clerk publishable key (local .env was masking it), and one of my own tests was time-of-day dependent, failing at 03:00 UTC inside default quiet hours. Both fixed; CI pinned to Node 24. Opened PR #25 so both workflows execute on the `pull_request` trigger. | Execution not yet observed; Node 20 remains unverified |

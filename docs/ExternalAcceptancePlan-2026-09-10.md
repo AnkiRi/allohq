@@ -6,7 +6,7 @@ Current restart point: **Stage 0 — production safety and observability**
 Delivery posture: **disabled until Stage 8 explicitly moves it to allowlist**
 
 This is the durable working plan for external acceptance. The later locked product decisions
-and current implementation status live in [PendingImplementationPasses-2026-09-20.md](./PendingImplementationPasses-2026-09-20.md);
+and current implementation status live in [PendingImplementationPasses-2026-09-21.md](./PendingImplementationPasses-2026-09-21.md);
 where an older acceptance line conflicts, the dated implementation plan wins. If
 implementation work interrupts testing, record the interruption in the session log below
 and resume from the first incomplete gate. Do not skip a failed gate because a later feature
