@@ -60,6 +60,21 @@ function scriptedFetcher(sequence: PreparationStatus[]) {
   };
 }
 
+/**
+ * Sending and scheduling are the same gate on the real campaign page: one
+ * control opens the approval dialog, and the dialog is where "Joon picks the
+ * time" and "Send now" live. So the proof that neither can be started is that
+ * the preparation surface offers no enabled control that leads to a dispatch.
+ * The recovery button is not one — it re-runs preparation, it does not send.
+ */
+function assertNoEnabledDispatchControl(because: string) {
+  const enabled = Array.from(document.querySelectorAll("button"))
+    .filter((button) => !(button as HTMLButtonElement).disabled)
+    .filter((button) => button.getAttribute("data-testid") !== "preparation-retry")
+    .map((button) => button.getAttribute("data-testid") ?? button.textContent);
+  assert.deepEqual(enabled, [], `a dispatch control was still enabled while ${because}`);
+}
+
 const preparing = (over: Partial<PreparationProgress> = {}): PreparationStatus => ({
   preparation: progress(over),
   sendable: false,
@@ -145,6 +160,8 @@ describe("campaign preparation, client-rendered", () => {
   const button = (await screen.findByTestId("approve-delivery")) as HTMLButtonElement;
   await waitFor(() => assert.equal(button.disabled, true));
   assert.match(button.textContent ?? "", /Preparing audience/);
+
+  assertNoEnabledDispatchControl("preparation is incomplete");
 });
 
   it("5. a remount restores progress from the API, not from client state", async () => {
@@ -237,5 +254,7 @@ describe("campaign preparation, client-rendered", () => {
     /Delivery disabled/,
     "a paused store or unverified domain must still block a ready audience"
   );
+
+  assertNoEnabledDispatchControl("delivery is paused or the sender domain is unverified");
 });
 });

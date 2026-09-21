@@ -382,3 +382,89 @@ test("10. a failed run is recoverable and not silently abandoned", { skip }, asy
     await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
   }
 });
+
+test(
+  "a ready audience leaves a durable in-app notification, and no email",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, runCampaignAudienceResolution, recordAudienceReadyActivity } = await load();
+    const fixture = await seed(prisma, 900);
+    try {
+      const run = await runCampaignAudienceResolution(runInput(fixture, { runKey: "notify" }));
+      const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: fixture.campaignId } });
+      await recordAudienceReadyActivity({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        campaignName: campaign.name,
+        control: run.controlCount,
+        treatment: run.treatmentCount,
+        deliberatelyLeftAlone: run.leftAloneCount,
+      });
+
+      const entries = await prisma.agentActivityLog.findMany({
+        where: { storeId: fixture.storeId, activityType: "audience_ready" },
+      });
+      assert.equal(entries.length, 1);
+      const entry = entries[0]!;
+
+      // The merchant may be anywhere when preparation finishes, so this has to
+      // survive the session that started it.
+      assert.match(entry.summary, /Campaign audience ready for review\./);
+      // Counts the merchant needs, in the summary and machine-readable.
+      assert.ok(entry.summary.includes(run.treatmentCount.toLocaleString("en-IN")));
+      assert.ok(entry.summary.includes(run.controlCount.toLocaleString("en-IN")));
+      assert.match(entry.summary, /held back as a control group/);
+      assert.match(entry.summary, /deliberately left alone/);
+      assert.equal((entry.metadata as any).treatment, run.treatmentCount);
+      assert.equal((entry.metadata as any).control, run.controlCount);
+      assert.equal((entry.metadata as any).deliberatelyLeftAlone, run.leftAloneCount);
+      // Clicking it must open this campaign.
+      assert.equal(entry.entityType, "campaign");
+      assert.equal(entry.entityId, fixture.campaignId);
+
+      // v1 sends no external notification for this.
+      assert.equal(
+        await prisma.messageLog.count({ where: { storeId: fixture.storeId } }),
+        0,
+        "the completion notification must be in-app only"
+      );
+    } finally {
+      await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
+    }
+  }
+);
+
+test(
+  "a failed preparation leaves safe wording, not a silent dead end",
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set" },
+  async () => {
+    const { prisma, recordAudienceNeedsAttentionActivity } = await load();
+    const fixture = await seed(prisma, 200);
+    try {
+      const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: fixture.campaignId } });
+      await recordAudienceNeedsAttentionActivity({
+        campaignId: fixture.campaignId,
+        storeId: fixture.storeId,
+        campaignName: campaign.name,
+      });
+
+      const entry = await prisma.agentActivityLog.findFirstOrThrow({
+        where: { storeId: fixture.storeId, activityType: "audience_needs_attention" },
+      });
+      assert.ok(entry.summary.includes("Nothing has been sent."), "it must say nothing was sent");
+      assert.match(entry.summary, /try again on its own/);
+      assert.equal((entry.metadata as any).recoverable, true);
+      assert.equal(entry.entityId, fixture.campaignId);
+      // No infrastructure language reaches the merchant.
+      for (const leak of ["lease", "worker", "queue", "Postgres", "chunk", "resolving", "RangeError"]) {
+        assert.ok(
+          !entry.summary.toLowerCase().includes(leak.toLowerCase()),
+          `activity summary leaked "${leak}"`
+        );
+      }
+      assert.equal(await prisma.messageLog.count({ where: { storeId: fixture.storeId } }), 0);
+    } finally {
+      await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
+    }
+  }
+);

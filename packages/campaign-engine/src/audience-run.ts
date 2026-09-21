@@ -939,3 +939,64 @@ export async function leftAloneActivitySummary(
   });
   return { total, reasonCounts, customerIds: sample.map((row) => row.customerId) };
 }
+
+/**
+ * Tell the merchant their audience is ready, durably.
+ *
+ * Preparation outlives the page, so the merchant may be anywhere — or nowhere —
+ * when it finishes. This writes an in-app activity entry they will find when
+ * they come back. It is deliberately in-app only: no external email is sent for
+ * this in v1.
+ *
+ * `entityId`/`entityType` are what let the notification open the campaign.
+ */
+export async function recordAudienceReadyActivity(input: {
+  campaignId: string;
+  storeId: string;
+  campaignName: string;
+  control: number;
+  treatment: number;
+  deliberatelyLeftAlone: number;
+}): Promise<void> {
+  const group = (count: number) => count.toLocaleString("en-IN");
+  await prisma.agentActivityLog.create({
+    data: {
+      storeId: input.storeId,
+      activityType: "audience_ready",
+      summary: `Campaign audience ready for review. ${group(input.treatment)} would receive ${input.campaignName}, ${group(input.control)} are held back as a control group, and ${group(input.deliberatelyLeftAlone)} were deliberately left alone.`,
+      category: "campaign",
+      actionTaken: "queued_for_review",
+      entityId: input.campaignId,
+      entityType: "campaign",
+      metadata: {
+        treatment: input.treatment,
+        control: input.control,
+        deliberatelyLeftAlone: input.deliberatelyLeftAlone,
+      },
+    },
+  });
+}
+
+/**
+ * Tell the merchant preparation needs another go, in language that does not
+ * read as lost work — because it is not: the run is queued for another attempt
+ * and nothing has been sent.
+ */
+export async function recordAudienceNeedsAttentionActivity(input: {
+  campaignId: string;
+  storeId: string;
+  campaignName: string;
+}): Promise<void> {
+  await prisma.agentActivityLog.create({
+    data: {
+      storeId: input.storeId,
+      activityType: "audience_needs_attention",
+      summary: `Joon stopped partway through working out who should receive ${input.campaignName} and will try again on its own. Nothing has been sent.`,
+      category: "campaign",
+      actionTaken: "queued_for_review",
+      entityId: input.campaignId,
+      entityType: "campaign",
+      metadata: { recoverable: true },
+    },
+  });
+}

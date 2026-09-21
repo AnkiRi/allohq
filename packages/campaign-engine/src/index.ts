@@ -81,6 +81,8 @@ export {
   materialiseAudienceEvaluation,
   materialiseAudienceDecisions,
   leftAloneActivitySummary,
+  recordAudienceReadyActivity,
+  recordAudienceNeedsAttentionActivity,
 } from "./audience-run";
 export type {
   AudienceRunInput,

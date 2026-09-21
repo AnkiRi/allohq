@@ -17,6 +17,7 @@ import {
   materialiseAudienceDecisions,
   materialiseAudienceEvaluation,
   materialiseMeasurementAssignments,
+  recordAudienceReadyActivity,
   type AudienceRunResult,
 } from "./audience-run";
 
@@ -250,6 +251,17 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
       },
     });
   }
+
+  // The merchant may be anywhere when this finishes; leave something durable
+  // for them to come back to. In-app only — no external email in v1.
+  await recordAudienceReadyActivity({
+    campaignId: campaign.id,
+    storeId: campaign.storeId,
+    campaignName: campaign.name,
+    control: input.run.controlCount,
+    treatment: input.run.treatmentCount,
+    deliberatelyLeftAlone: input.run.leftAloneCount,
+  });
 
   return {
     approvedAt,
