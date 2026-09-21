@@ -32,15 +32,27 @@ _Recorded 2026-09-20T11:57Z. Scale and testing boundaries added 2026-09-21T05:09
 
 ### Scale claims — what is measured and what is not
 
-- **100,000-customer results are measured.** Every figure attributed to 100k in this document
-  came from an actual run against a disposable Postgres, and the figures have now been
+- **100,000-customer single-tenant preparation is measured.** Every figure attributed to 100k in
+  this document came from an actual run against a disposable Postgres, and the figures have been
   reproduced on a GitHub runner.
-- **Any one-million-customer figure is an inference until actually measured.** No 1M run has
-  been performed. Extrapolations appear in this document and are labelled as such; none may be
-  quoted as a measurement.
-- **Healthify's 4.5 crore (45,000,000) customer environment is a future architecture problem,
-  not a current performance target and not a test target.** Nothing in this pass is sized, tuned
-  or claimed against it, and no test approximates it.
+- **One-million single-tenant readiness is a pending proof.** Until that proof runs, every 1M
+  figure in this document is extrapolation from the 100k shape and is labelled as such. None may
+  be quoted as a measurement.
+- **Multi-tenant concurrency readiness is a pending proof.** Nothing here establishes how
+  several large tenants behave sharing one database and one worker pool. Fairness, noisy
+  neighbours and per-tenant concurrency limits are unproven.
+- **Healthify's 4.5 crore (45,000,000) customer mobile-app environment is a separate future
+  architecture programme.** It is not supported by these tests, not implied by them, and not a
+  current performance target. No timing in this document may be presented as evidence for it.
+
+### Scale-testing boundary — non-negotiable
+
+- **All scale tests use synthetic tenants in disposable infrastructure only**, created for the
+  test and dropped afterwards.
+- **No scale test may call Shopify, Resend, SES, Railway production Postgres, Railway production
+  Redis, or real recipients.** Providers are simulated. `scripts/assert-disposable-database.mjs`
+  enforces the database half in code: managed hosts are rejected outright and the database name
+  must declare itself disposable.
 
 ### Testing boundary — non-negotiable
 
@@ -1051,6 +1063,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T08:03:00Z | pending | pending | Recorded the scale boundary: 100k single-tenant preparation measured; 1M single-tenant and multi-tenant concurrency both **pending readiness proofs**; Healthify's 4.5 crore mobile-app environment is a **separate future architecture programme**, not supported or implied. Scale tests are synthetic tenants in disposable infrastructure only, with no calls to Shopify, Resend, SES, Railway production Postgres or Redis, or real recipients. | The three proofs named — client-rendered UI, 1M single tenant, 5-tenant concurrency — are all open at this timestamp |
 | 2026-09-21T07:45:03Z | `15d9c50` | verified | **Item D complete, and the cross-sell cause found and fixed.** A null-guard pattern of mine prevented Postgres restricting the scan: 155.2 s guarded against 8.2 s composed, identical results. Overnight scanning at 100k went 135.4 s → **4.3 s**, cross-sell 145.7 s → 4.1 s. Two other hypotheses were tested and rejected first. Evidence consolidated: three measured 100k results, the ~6,000 transaction breakdown, per-scanner durations, the inference boundary, and code-complete versus external. | Five migrations, real-delivery acceptance and an authenticated sender domain remain external |
 | 2026-09-21T07:35:03Z | `39a95f5` `643d384` | verified | Both evidence gaps closed. repurchase_window fires at 100k with its count checked against a SQL reference; per-scanner telemetry added. Rendered-component tests through React cover all seven UI points. Manual acceptance checklist written. Fixed a discovery defect: the unit runner ignored `.test.tsx`, so the component tests ran zero times — suite went 337 to 345. | Cross-sell accounts for 145.7 s of 148.6 s; two hypotheses tested and rejected, the null-guard hypothesis under measurement |
 | 2026-09-21T06:37:48Z | `3100465` | verified | **Pass 8B item C verified at 100k**: 124.7 s, 0.24 MB retained, 166 transactions, cross-sell anti-join exact at 37,500 of 50,000, zero sends. A fixture defect of mine looked like a code defect first — [A, lowStock] co-occurred more than [A, B], so the scanner correctly picked a different pair. | `repurchase_window` not exercised at 100k; the fixture seeds no repurchase cycles |
