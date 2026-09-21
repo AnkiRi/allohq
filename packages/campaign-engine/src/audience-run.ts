@@ -48,8 +48,22 @@ export class AudienceRunBusyError extends Error {
   }
 }
 
-/** Merchant-meaningful preparation progress. No database mechanics. */
+/**
+ * What preparation is doing, in the merchant's terms.
+ *
+ * `state` is deliberately not the run's internal status. A merchant has no use
+ * for "resolving" versus "assigning" — both mean Joon is still working — and
+ * "failed" reads as lost work when the run is in fact queued for another
+ * attempt. The internal status stays available as `status` for operators and
+ * logs; the UI shows `state` and `detail`.
+ */
+export type AudienceRunState = "preparing" | "ready" | "needs_attention";
+
 export interface AudienceRunProgress {
+  /** Stable across retries, resumes and takeovers. */
+  runId: string;
+  state: AudienceRunState;
+  /** Internal run status. Operator-facing; not for merchant UI. */
   status: AudienceRunStatus;
   evaluated: number;
   candidates: number;
@@ -60,6 +74,14 @@ export interface AudienceRunProgress {
   startedAt: Date;
   completedAt: Date | null;
   attempts: number;
+  /**
+   * Whether another attempt will happen on its own. A stalled or failed run is
+   * picked up by the recovery sweep, so it is recoverable without the merchant
+   * approving again — which is what stops it reading as abandoned.
+   */
+  recoverable: boolean;
+  /** One sentence in merchant language, or null while simply working. */
+  detail: string | null;
 }
 
 /** Members whose decision makes them eligible for an arm. */
@@ -590,9 +612,14 @@ export async function campaignPreparationProgress(
     orderBy: { startedAt: "desc" },
   });
   if (!run) return null;
+  const status = run.status as AudienceRunStatus;
   const evaluated = run.candidateCount + run.leftAloneCount + run.excludedCount;
+  const state: AudienceRunState =
+    status === "complete" ? "ready" : status === "failed" ? "needs_attention" : "preparing";
   return {
-    status: run.status as AudienceRunStatus,
+    runId: run.id,
+    state,
+    status,
     evaluated,
     candidates: run.candidateCount,
     deliberatelyLeftAlone: run.leftAloneCount,
@@ -602,6 +629,17 @@ export async function campaignPreparationProgress(
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     attempts: run.attempts,
+    // A failed run is queued for another attempt by the recovery sweep, so it
+    // is never abandoned; the merchant does not have to approve again.
+    recoverable: status !== "complete",
+    detail:
+      status === "failed"
+        ? "Joon stopped partway through working out this audience and will try again on its own. Nothing has been sent."
+        : status === "complete"
+          ? null
+          : run.attempts > 1
+            ? "Joon is picking this up again after an interruption. Work already done has been kept."
+            : null,
   };
 }
 

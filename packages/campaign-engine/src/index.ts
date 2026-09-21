@@ -86,6 +86,7 @@ export type {
   AudienceRunResult,
   AudienceRunStatus,
   AudienceRunProgress,
+  AudienceRunState,
 } from "./audience-run";
 export {
   withCampaignAudienceSnapshot,
