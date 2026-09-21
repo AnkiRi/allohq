@@ -1540,6 +1540,93 @@ overall.** The adoption rests on the controlled comparison — both arms, one
 runner, one fixture, back to back — and on the WAL reduction, which is
 structural rather than timing-dependent.
 
+## Two decisions: the stored hash, and the removed index — 2026-09-21T13:28:53Z
+
+_Status: **decided**. Both are the merchant-side owner's calls, recorded here
+as settled rather than open._
+
+### The stored assignment hash — left unchanged
+
+> **Intermediate stored hash is not byte-identical to the mathematical
+> reference at the final digits, but the representation has a proven 35x safety
+> margin against collision or reordering. It cannot affect an assignment
+> outcome.**
+
+The evidence behind that sentence:
+
+- Assignment values are `k / 2^48`, so two distinct values are always at least
+  **3.5527e-15** apart. Storage keeps sixteen significant digits, a grid no
+  coarser than **1e-16**, so it moves a value by at most **5e-17** — thirty-five
+  times less than half the gap. Rounding is monotone, so it cannot invert an
+  order either.
+- Checked against the worst case rather than a sample: **2,999,999 adjacent
+  pairs** at the top of the range where the grid is coarsest relative to the
+  gap, plus **1,715,519** across every binade. Zero collisions, zero
+  inversions. A cutoff test draws the control group at eight different quotas
+  and compares rank by rank.
+- The frozen authority is `MeasurementAssignment.arm`, not this intermediate.
+  That table has **no hash column**; the stored hash is an ordering key on the
+  member row.
+- Measured at a million: **193,053 of 772,938** stored hashes differ from the
+  exact value, and **0 arms differed**.
+
+`packages/customer-state/src/assignment-hash-precision.test.ts` makes the
+margin explicit. One test asserts that **fourteen significant digits would
+collide** — so if a future representation falls below the safe threshold, that
+test fails rather than someone silently moving between arms.
+
+**Deferred, not dropped.** No BIGINT column and no versioned hash
+representation is being added. **Revisit only if a future audit requirement
+demands byte-exact reproducibility of intermediate values.** The work is
+understood — an additive nullable `BIGINT` holding the exact 48-bit integer,
+written for new runs and ordered on, with existing frozen campaigns untouched —
+and it is not justified by anything measured so far.
+
+### The removed index — kept
+
+Every production query on `campaign_audience_members`, and what serves it now:
+
+| Where | Filters / order | Needed the removed index? |
+| --- | --- | --- |
+| `deleteMany` on a superseded run | `runId` | No — prefix only; three surviving indexes lead with `runId` |
+| `createMany` chunks | write | No |
+| `groupBy decision` | `runId` | No — `runId_decision_reasonCode_idx` |
+| `groupBy stratum` (census) | `runId`, `decision` | No — filters `stratum`, not `assignmentStratum` |
+| Pooled fixup `findMany` | `runId`, `decision`, **`stratum`**, order `customerId` | No — original stratum, not the assignment one |
+| `update` during fixup | `id` | No — primary key |
+| `groupBy arm` | `runId`, `decision` | No — `runId_arm_idx` |
+| **Control-selection ranking** | `runId`, `decision`, `assignmentStratum IS NOT NULL`, order `assignmentHash`, `customerId` | **The only query matching its shape** |
+| `pageApprovedAssignments` | `runId`, `decision`, `arm?`, keyset on `customerId` | No — the removed index cannot give a global `customerId` order, since `customerId` sits behind two other columns |
+| `materialiseMeasurementAssignments` | `runId`, `decision`, `arm IS NOT NULL` | No — `runId_arm_idx` |
+| Evaluation-row and decision projections | `runId` | No — prefix only |
+| `groupBy reasonCode` (left-alone) | `runId`, `decision` | No — `runId_decision_reasonCode_idx` matches exactly |
+| Left-alone sample | `runId`, `decision`, order `customerId`, take 100 | No — same reason as the paging query |
+
+One query matched its shape, and that is the one that was measured.
+
+**On the planner: its exact index choice varied between runs, so no claim is
+made that it never used this index.** The full plan in run `35595088570` shows
+sequential scans and no index scan; the variants run reported an index scan
+somewhere in the baseline plan after a table rewrite, and the harness records
+only whether an index was used, not which. The decision does not rest on that
+question.
+
+**The measured facts, and only these:**
+
+- Controlled comparison at 1,000,000 candidates, both arms on one runner
+  against one fixture, each from a freshly rewritten table: the targeted
+  statement went from **80,565 ms to 53,252 ms**, and WAL from **3,370.8 MB to
+  1,710.2 MB**.
+- In the full proof, control selection improved from **58,649 ms to
+  43,152 ms**.
+- **End-to-end recovery varied from 484 s to 496 s**, because independent
+  bulk-insert timings on other tables moved **11–15% across hosted runners**.
+  No overall speed-up is claimed.
+
+**Kept** because it has no semantic impact — nothing about which customers are
+chosen changes — and it materially reduces write amplification and the recovery
+burden that comes with it.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -1773,6 +1860,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T13:28:53Z | `1fdb179` `199abda` | **decided** | Stored hash left unchanged: proven 35x margin against collision or reordering, verified on 2,999,999 worst-case adjacent pairs and 1,715,519 across every binade, zero collisions and zero inversions; the frozen authority is `MeasurementAssignment.arm`, which holds no hash. Regression tests pin the margin and fail below the safe threshold. Index removal kept: every production query audited and none needs it; controlled 1M comparison 80,565 ms to 53,252 ms and 3,370.8 MB to 1,710.2 MB of WAL; full proof 58,649 ms to 43,152 ms. | The intermediate stored hash is not byte-identical to the mathematical reference at the final digits. **Deferred — revisit only if a future audit requirement demands byte-exact intermediate reproducibility.** No BIGINT column or versioned representation added. End-to-end recovery varied 484 s to 496 s because independent bulk-insert timings moved 11-15% across hosted runners; no overall speed-up is claimed. The planner's exact index choice varied between runs, so no claim is made that it never used the index |
 | 2026-09-21T13:16:40Z | `9a23061` `199abda` | **one adopted, one rejected** | Control-only draw measured at 11,064 ms against 63,679 ms and 180 MB of WAL against 4,230 MB — **rejected**: it requires candidates to arrive marked TREATMENT, which makes an interrupted run indistinguishable from a completed one and fails toward sending. Two integration tests caught it. Dropping the ordering index **adopted**: 53,252 ms against 80,565 ms and 1,710 MB of WAL against 3,371 MB at 1M, both arms on one runner; 4,881 against 5,539 ms at 100k. Proof re-run 35602634482 passed 25 of 25 with the statement at 43,152 ms against 58,649 ms. Integration suite 50/50. | **Total recovery went 484 s to 496 s — slightly slower.** Three inserts on other tables, which this change cannot affect, moved 11-15% between runners, so end-to-end timing across runs is noise-dominated and no overall speed-up is claimed. Adoption rests on the controlled same-runner comparison and the structural WAL reduction. Earlier claim that the planner "never uses" the index is **corrected**: the harness records whether an index was used, not which one |
 | 2026-09-21T12:01:01Z | `9fff4ee` | **diagnosed** | Control-selection measured at 1M on a hosted runner (run 35595088570). Statement 63,679 ms; ranking alone 1,178 ms (1.85%); update applies 94.3%. WAL 8,043,044 records, 669,592 full-page images, 3,995 MB. Pages read 2,991,661 and written 2,802,425 against 1,482 and 155 at 100k. Table 1,334 MB against 128 MB shared_buffers. Writing only the control rows: 11,064 ms and 180 MB of WAL — 5.8x faster, 23x less WAL. The 338 MB index built for this ORDER BY is not used by the planner at either size. | Run 35593544874 before it was **inconclusive**: seeding and real 1M preparation succeeded, but the measurement failed on Docker's default 64 MB /dev/shm, not disk (79 GB free) and not preparation. The rerun raises only the container shared-memory limit — no Postgres setting and no query changed — so the numbers hold for a properly provisioned Postgres and must not be read as performance under a 64 MB /dev/shm. **Nothing here establishes Railway's shared memory, page cache or I/O; that remains an external environment fact.** Lock wait was not separately instrumented |
 | 2026-09-21T11:18:48Z | `7db1e9c` `8c9484d` | **pass** | 1M attempt 4, GitHub Actions run 35591808109: **25 of 25 checks passed** against the independent oracle. 1,000,000 customers, 772,938 candidates, 115,938 control, 657,000 treatment; 0 arm, hash, pooling or quota mismatches; pooling exercised (8 sparse strata → 40 candidates, 6 control); 0 duplicates; crash at 200,000 rows and recovery in 484 s; 0 live-provider calls and 0 rows in billing, Results, causal proof, warm-up and reputation. Preparation retained 17.54 MB, peak 147.9 MB; verifier measured separately at 0.06 MB retained, 296.5 MB peak. | **Correction:** the control-selection statement took 58,649 ms here against 468,127 ms in attempt 3, on identical Postgres settings. The 468 s figure came from a memory-starved laptop and does not reproduce; the "twelve times worse than linear" claim is withdrawn. The statement is 12% of recovery here. The 1M EXPLAIN has still not been run, and no optimisation is adopted |
