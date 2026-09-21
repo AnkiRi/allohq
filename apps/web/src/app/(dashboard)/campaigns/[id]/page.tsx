@@ -3,12 +3,18 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
+  canApproveDelivery,
+  preparationView,
+  type PreparationProgress,
+} from "@/lib/campaign-preparation";
+import {
   ArrowLeft,
   Send,
   Mail,
   Users,
   MousePointerClick,
   XCircle,
+  RefreshCw,
   CheckCircle,
   Loader2,
   Eye,
@@ -68,6 +74,16 @@ export default function CampaignDetailPage() {
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
   const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
+  // Approval hands the audience to a background job, so the page has to follow
+  // it. Polling stops as soon as the run settles.
+  const { data: preparationStatus } = (trpc.campaigns.preparationStatus as any).useQuery(
+    { id: campaignId },
+    {
+      refetchInterval: (query: { state: { data?: { preparation?: PreparationProgress | null } } }) =>
+        preparationView(query.state.data?.preparation).poll ? 2_000 : false,
+    }
+  ) as { data?: { preparation: PreparationProgress | null; sendable: boolean } };
+  const preparation = preparationView(preparationStatus?.preparation);
   const {
     data: dryRun,
     isLoading: dryRunLoading,
@@ -517,6 +533,18 @@ export default function CampaignDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {preparation.kind === "preparing" && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-sans font-bold text-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Preparing audience
+            </span>
+          )}
+          {preparation.kind === "needs_attention" && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-sans font-bold text-warning">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Needs another go
+            </span>
+          )}
           {campaign.status === "sent" && (
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))] border border-[hsl(var(--success)/0.25)] rounded-lg text-xs font-sans font-bold">
               <CheckCircle className="w-3.5 h-3.5" />
@@ -602,11 +630,20 @@ export default function CampaignDetailPage() {
           {campaign.status === "draft" && (
             <button
               onClick={() => setShowApproval(true)}
-              disabled={sendMut.isPending || dryRun?.deliveryGate?.blocked}
+              disabled={
+                sendMut.isPending ||
+                !canApproveDelivery({
+                  campaignStatus: campaign.status,
+                  progress: preparationStatus?.preparation,
+                  deliveryBlocked: Boolean(dryRun?.deliveryGate?.blocked),
+                })
+              }
               title={
-                dryRun?.deliveryGate?.blocked
-                  ? (dryRun.deliveryGate.reason ?? "Delivery is disabled")
-                  : undefined
+                preparation.sendingBlocked
+                  ? "Joon is still working out who should receive this."
+                  : dryRun?.deliveryGate?.blocked
+                    ? (dryRun.deliveryGate.reason ?? "Delivery is disabled")
+                    : undefined
               }
               className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
@@ -617,9 +654,13 @@ export default function CampaignDetailPage() {
               )}
               {sendMut.isPending
                 ? "Approving…"
-                : dryRun?.deliveryGate?.blocked
-                  ? "Delivery disabled"
-                  : "Approve delivery"}
+                : preparation.kind === "preparing"
+                  ? "Preparing audience…"
+                  : preparation.kind === "needs_attention"
+                    ? "Audience not ready"
+                    : dryRun?.deliveryGate?.blocked
+                      ? "Delivery disabled"
+                      : "Approve delivery"}
             </button>
           )}
           {campaign.status === "scheduled" && !awaitingDelivery && (
@@ -640,6 +681,67 @@ export default function CampaignDetailPage() {
         {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className="app-workspace-tab capitalize">{section}</button>)}
       </nav>
 
+      {preparation.kind === "preparing" && (
+        <section
+          className="app-surface mb-4 p-5 sm:p-6"
+          aria-live="polite"
+          aria-label="Audience preparation"
+        >
+          <div className="flex items-start gap-3">
+            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[15px] font-medium text-foreground">{preparation.headline}</h2>
+              <p className="mt-1 text-[13px] text-muted-foreground">{preparation.note}</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">{preparation.reassurance}</p>
+              {preparation.counts.length > 0 && (
+                <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3">
+                  {preparation.counts.map((count) => (
+                    <div key={count.label}>
+                      <dt className="text-[12px] text-muted-foreground">{count.label}</dt>
+                      <dd className="mt-0.5 font-mono text-[18px] text-foreground">
+                        {count.value.toLocaleString("en-IN")}
+                      </dd>
+                      <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                        {count.hint}
+                      </p>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+      {preparation.kind === "needs_attention" && (
+        <section
+          className="app-surface mb-4 border-warning/30 p-5 sm:p-6"
+          aria-live="polite"
+          aria-label="Audience preparation needs attention"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[15px] font-medium text-foreground">{preparation.headline}</h2>
+              <p className="mt-1 text-[13px] text-muted-foreground">{preparation.reason}</p>
+              <p className="mt-1 text-[13px] font-medium text-foreground">
+                {preparation.reassurance}
+              </p>
+              <button
+                onClick={() => setShowApproval(true)}
+                disabled={sendMut.isPending}
+                className="mt-4 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-sans text-foreground transition-all hover:border-primary/50 disabled:opacity-50"
+              >
+                {sendMut.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {preparation.retryLabel}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
       {activeSection === "overview" && <section className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Campaign summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Status</p><p className="mt-1 text-[20px] font-medium capitalize">{campaign.status.replaceAll("_", " ")}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Would receive</p><p className="mt-1 font-mono text-[20px]">{(stats?.holdout.treatmentAssigned ?? dryRun?.estimatedTreatment ?? 0).toLocaleString("en-IN")}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Attributed orders</p><p className="mt-1 font-mono text-[20px]">{stats?.attributedOrders.toLocaleString() ?? "0"}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Attributed revenue</p><p className="mt-1 font-mono text-[20px]">{money(stats?.attributedRevenue ?? 0)}</p></div></section>}
 
       <Dialog.Root open={showApproval} onOpenChange={setShowApproval}>
