@@ -82,7 +82,7 @@ the difference is the harness, not the engine.
 | Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count | — |
 | Overnight opportunity scale | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical; retained heap 0 MB at 20,000 | — |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
-| CI | **implemented** `3c86497` `e064f3e` | workflows and the disposable-database step exist | **never executed on GitHub; no run observed** |
+| CI | **implemented** `3c86497` `e064f3e` `5a71682` | workflows verified step by step against a clean clone; two first-run failures found and fixed before pushing | execution on a GitHub runner not yet observed; Node 20 unverified |
 | Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named | — |
 | Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
 | WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
@@ -332,6 +332,71 @@ member rows persist. If `campaign.updatedAt` changes, the next approval derives 
   one statement for the whole audience; the 5,668 ms cold figure is dominated by first-touch
   buffer traffic, not plan choice.
 
+## CI — first execution and what it found — 2026-09-21T03:18:12Z
+
+_Status: **implemented, execution in progress**. The two defects below are
+measured; they were found by running CI's exact sequence against a clean clone
+of this repository before pushing._
+
+The workflows had existed since `3c86497` and had never run. "Implemented but
+never executed" hid two failures that would have made the first run red.
+
+### 1. The build cannot complete on a clean checkout
+
+`@allohq/web#build` exits 1 during Next.js prerendering:
+
+```
+Error: @clerk/clerk-react: Missing publishableKey
+Export encountered an error on /(dashboard)/intelligence/products/page
+```
+
+Local builds pass only because a local `.env` supplies the key. CI now sets a
+syntactically valid placeholder. **Clerk publishable keys are public by
+design** — they ship inside the browser bundle — and this one points at a
+domain that does not exist. No secret key is required: verified by building
+with only the publishable key set, 6/6 tasks.
+
+### 2. One of my own tests was time-of-day dependent
+
+`the frozen approval decision and the live delivery recheck are different
+operations` asserted that the live recheck allows. That is only true outside
+quiet hours, which default to 22:00–07:00 UTC. It passed on every afternoon run
+and failed at 03:00 UTC.
+
+A test written to catch time-dependent policy, which was itself time-of-day
+dependent. It now asserts on the rule — the frozen decision is a fatigue hold,
+and the live decision cannot be, because that send history is a month old —
+which holds at any hour. Verified at 03:00 UTC, the hour that broke it.
+
+### Node version
+
+CI is pinned to **Node 24**, the version this repository is developed and
+verified against. `engines` permits `>=20`, but nothing has ever been run on
+20 here, and a job on an unverified runtime would be red from its first run and
+stop meaning anything. **Node 20 remains unverified** — recorded as a gap
+rather than papered over by a green badge.
+
+### Clean-clone verification, in CI's own order
+
+| Step | Result |
+| --- | --- |
+| `pnpm install --frozen-lockfile` | satisfied |
+| `prisma validate` | valid |
+| `prisma generate` | generated |
+| `pnpm typecheck` | 19/19 |
+| `pnpm test` | 329/329 |
+| `pnpm build` | 6/6 |
+| `prisma migrate deploy` | all applied |
+| disposable-database guard | accepted `127.0.0.1` service-container URL |
+| `pnpm test:integration` | 36/36 |
+
+### What execution still has to prove
+
+A clean clone is not a GitHub runner. Ubuntu rather than macOS, service
+containers rather than a local Postgres, and a cold pnpm cache. Those are the
+differences the first real run tests, and until it completes, CI's status here
+stays **implemented**, not verified.
+
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
 _Status: **verified**. Investigated rather than optimised: the point is to know
@@ -514,6 +579,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T03:18:31Z | `5a71682` | implemented | Ran CI's exact sequence against a clean clone before pushing and found two first-run failures: the build cannot complete without a Clerk publishable key (local .env was masking it), and one of my own tests was time-of-day dependent, failing at 03:00 UTC inside default quiet hours. Both fixed; CI pinned to Node 24. Opened PR #25 so both workflows execute on the `pull_request` trigger. | Execution not yet observed; Node 20 remains unverified |
 | 2026-09-20T19:24:18Z | `81a1df8` | verified | One 100k run now reports duration, peak/retained heap, query count and shapes, transactions, p50/p95/p99/max, duplicates and arm parity. Retained-heap proofs fail rather than skip without a collector. | Instrumentation costs the harness 2.03 MB; both instrumented and uninstrumented figures are recorded |
 | 2026-09-20T19:24:18Z | `c064889` | verified | Repurchase, low-stock and cross-sell scans keyset-paged; cross-sell became a SQL anti-join. Decisions checked against an independently computed reference set; rescans produce identical job ids. | — |
 | 2026-09-20T19:24:18Z | `dd84939` | verified | Stale preparation recovery scheduled every two minutes and classified in the v1 release gate. | Interval not tuned under load |
