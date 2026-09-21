@@ -1234,9 +1234,13 @@ model CampaignAudienceMember {
 
   @@unique([runId, customerId])
   @@index([runId, decision, reasonCode])
-  /// Supports the ROW_NUMBER() OVER (PARTITION BY assignment_stratum
-  /// ORDER BY assignment_hash, customer_id) control selection.
-  @@index([runId, assignmentStratum, assignmentHash, customerId])
+  /// No index supports the control-selection ORDER BY. One was added for it
+  /// and removed again: measured at a million candidates, carrying it made the
+  /// statement 80,565 ms against 53,252 ms and 3,370.8 MB of WAL against
+  /// 1,710.2 MB, because the draw updates every candidate row and each row
+  /// then costs an entry in every index on the table. The planner satisfies
+  /// the ordering with a sequential scan and an external sort at both 100,000
+  /// and 1,000,000.
   @@index([runId, arm])
   @@index([customerId, createdAt])
   @@map("campaign_audience_members")

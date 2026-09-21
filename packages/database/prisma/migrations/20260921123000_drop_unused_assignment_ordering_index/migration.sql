@@ -1,0 +1,26 @@
+-- Drop the index added to support the control-selection ORDER BY.
+--
+-- Measured at a million candidates on a hosted runner, the same statement over
+-- the same rows, with and without this index:
+--
+--            with        without      change
+--   time     80,565 ms   53,252 ms    -33.9%
+--   WAL      3,370.8 MB  1,710.2 MB   -49.3%
+--   FPIs     398,762     140,769      -64.7%
+--   indexes  576 MB      383 MB
+--
+-- The saving is write-side. The control draw updates every candidate row, and
+-- changing `arm` cannot be a HOT update, so each row costs an entry in every
+-- index on the table. This one is the largest — 338 MB at a million — and
+-- maintaining it through that update costs roughly 258,000 full-page images.
+--
+-- At 100,000 candidates the same comparison is 4,881 ms against 5,539 ms and
+-- 87.2 MB of WAL against 109.5 MB, so the direction holds at both sizes.
+--
+-- No production query filters or orders on `assignmentStratum` except the
+-- control-selection statement itself, which the planner satisfies with a
+-- sequential scan and an external sort.
+--
+-- Nothing about which customers are chosen changes. This removes an index, not
+-- data, and re-creating it is one statement.
+DROP INDEX IF EXISTS "campaign_audience_members_runId_assignmentStratum_assignmen_idx";
