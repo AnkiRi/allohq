@@ -95,8 +95,55 @@ model Workspace {
   aiChats                 AiChat[]
   brandAssets             BrandAsset[]
   notificationPreferences NotificationPreference[]
+  invitations             Invitation[]
 
   @@map("workspaces")
+}
+
+/// A single invitation to join Joon during closed beta.
+///
+/// The token is never stored. Only its SHA-256 hash is, so a database read
+/// cannot produce a working invitation link — the plaintext exists once, in
+/// the response that created it, and is the operator's to pass on.
+///
+/// One invitation, one acceptance. `acceptedAt` is the single-use latch;
+/// `revokedAt` and `expiresAt` are the two ways it can stop working without
+/// being used. All three are kept rather than deleted, because "this
+/// invitation was revoked on the 4th" is a different audit answer from "no
+/// such invitation".
+model Invitation {
+  id          String @id @default(cuid())
+  /// The address the invitation is for. Acceptance requires an authenticated
+  /// identity whose verified email matches this, so forwarding the link to
+  /// someone else does not let them in.
+  email       String
+  workspaceId String
+  /// Role granted on acceptance: owner | admin | member | viewer.
+  role        String @default("admin")
+
+  /// SHA-256 of the opaque token. Unique so a hash collision or a replayed
+  /// token cannot match two rows.
+  tokenHash String @unique
+
+  expiresAt DateTime
+  /// Set once, on acceptance. A second attempt finds it non-null and fails.
+  acceptedAt DateTime?
+  /// The user who accepted, for the audit trail.
+  acceptedByUserId String?
+  revokedAt        DateTime?
+  revokedByClerkId String?
+
+  /// Clerk id of the platform admin who issued it.
+  invitedByClerkId String
+  createdAt        DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Answering "does this address already have an invitation" is an operator
+  /// question, never a public one — no unauthenticated surface reads by email.
+  @@index([email])
+  @@index([workspaceId])
+  @@map("invitations")
 }
 
 /// Durable audit trail for Shopify's mandatory privacy webhooks. Requests are

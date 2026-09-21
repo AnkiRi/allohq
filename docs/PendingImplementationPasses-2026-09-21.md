@@ -1627,6 +1627,158 @@ question.
 chosen changes — and it materially reduces write amplification and the recovery
 burden that comes with it.
 
+## Closed beta — Joon becomes invite-only — 2026-09-21T16:58:44Z
+
+_Status: **implemented**, pending review. Branch `invite-only-closed-beta`.
+The public landing site is untouched; the application is closed._
+
+### The audit, before any edit
+
+Five paths created a user, a workspace or a membership. Not one of them asked
+whether the person was meant to be there:
+
+| Path | What it did |
+| --- | --- |
+| `apps/api/src/trpc.ts` `createContext` | **The main one.** The first authenticated Clerk request auto-created a User, a Workspace and an `admin` membership. Sign up, and you were an admin of your own workspace. |
+| `auth/resolve-shopify-identity.ts` | upserts a user from a Shopify embedded token — requires an already-installed shop |
+| `routes/shopify-bootstrap.ts` | creates a workspace for an App Store managed install |
+| `routes/shopify-handoff.ts` | upserts a user and creates a membership, on an existing store, role `pending` |
+| `routes/shopify-install.ts` | creates a workspace and user on standalone OAuth connect |
+
+The middleware already treated 24 app path roots as renderable without a Clerk
+cookie, for Shopify-embedded installs, with a comment stating that the API is
+the real gate. That is correct, and it is why the gate below is at the API and
+not in middleware. Client-side hiding was never an option here.
+
+### Found while auditing: the merchant-agent endpoint lacked authorisation
+
+`apps/api/src/routes/agent-stream.ts` did not resolve a caller. The dispatcher
+routes `/v1/agent/*` behind CORS only, so the endpoint — which runs model calls
+— performed no authentication or authorisation of its own, despite a comment
+saying otherwise.
+
+Fixed separately and ahead of this work, in its own security pull request, so
+it did not wait on closed beta. It is independent of invite-only: invitations
+would not have helped, because there was no identity to gate.
+
+The endpoint now resolves a Clerk caller and requires membership of the
+workspace owning the requested store, both settled before the request body is
+used, the store is read, the history is loaded, or the agent runs. An unknown
+store and a store belonging to another workspace answer identically.
+Conversation history is scoped to the authorised store. With no Clerk secret
+configured it refuses rather than attempting verification, so an unconfigured
+deployment fails closed. The agent runner is injected and lazily imported, so a
+refused request does not load the agent stack — and the tests assert that no
+model, tool or provider work occurs on any refused path.
+
+Details of what the previous shape permitted are deliberately not recorded
+here.
+
+**Closed beta adds nothing to that endpoint, on purpose.** Its authorisation is
+membership of the workspace owning the store, and membership is exactly what
+closed beta withholds — anyone who passes that check is already a member and
+would pass the closed-beta check too. A second gate there would be code that
+can never refuse anything.
+
+### The gate
+
+`INVITE_ONLY_MODE=true`, read server-side. Three ways in and no others:
+
+- already a member of a workspace;
+- a platform admin, named by `PLATFORM_ADMIN_CLERK_IDS` — **Clerk ids, never
+  email addresses, and no personal address in source**;
+- accepted an invitation addressed to a **verified** email.
+
+The gate is at the **provisioning boundary**, not the door. Anyone may hold a
+Clerk session — Clerk is an identity provider, not an authorisation one. What
+closed beta withholds is a **workspace**, and without one `workspaceProcedure`
+refuses with FORBIDDEN before any resolver runs. That is what puts every
+cost-bearing path behind it at once — model calls, image generation, provider
+sends, campaign preparation, store connection, billing work and background jobs
+— rather than a per-endpoint checklist, which is how holes appear.
+
+Off unless the value is literally `true`. `1`, `yes` and `on` do not turn it on:
+a typo that silently closed the app to everyone is its own outage.
+
+### The invitation
+
+| Property | How |
+| --- | --- |
+| Opaque token | 256 bits, url-safe, returned **once** |
+| Storage | SHA-256 hash only, unique index. A database read cannot reconstruct a working link |
+| Single use | `acceptedAt` latched by a conditional `updateMany`, so two simultaneous attempts cannot both win |
+| Expiry | required, 1–30 days |
+| Revocable | yes, until accepted |
+| Audit | invited / accepted / revoked / expired, with who issued, who accepted, who revoked |
+| Identity | acceptance requires a Clerk-**verified** email matching the invitation, so forwarding the link does not transfer it |
+
+**Issuing is restricted to platform admins.** A workspace owner cannot invite
+anyone during closed beta — who gets into the beta is a decision about the beta,
+not about a tenant. To a non-admin the invitation surface returns `NOT_FOUND`,
+not `FORBIDDEN`: there is no reason to tell someone it exists.
+
+**No email is sent.** Sending would take a dependency on sender-domain
+authentication and warm-up work that is not finished, so the operator copies the
+link. That was a deliberate constraint, not an omission.
+
+**No enumeration.** Every refusal — expired, revoked, already used, wrong
+address, token nobody issued — returns the same sentence. The reason is logged
+server-side and never returned. The in-app screen says the same thing to
+everyone.
+
+### What stays open
+
+The public landing site, `/sign-in`, and every path that authenticates by
+signature or token rather than identity: `/webhooks/shopify|resend|twilio|gupshup`,
+`/unsubscribe`, the `/v1/*` widget API, `/api/public/forms/*` and
+`/api/public/landing-events`. None of them are gated, and none of them create a
+tenant.
+
+`shopify-handoff` is also left ungated, deliberately: it links a Clerk account
+to an **existing** staff identity on an **already-installed** store, using a
+single-use bound handoff, and grants the `pending` role — which
+`canUseWorkspacePath` denies everything. It cannot create a new tenant.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx turbo run typecheck` | 19 of 19 tasks |
+| Unit | **366 pass**, 0 fail (358 before) |
+| `closed-beta.test.ts` | 5 — mode default, admin parsing, token shape, hash identity, malformed hash |
+| `closed-beta.integration.ts` | 9 — member allowed, uninvited refused, unaccepted invitation is not access, admin by env only, mode off, accept-once, expired/revoked/wrong-email/unknown all refused, unverified address refused, token absent from the stored row |
+| `agent-auth.test.ts` | 3 — no credentials, malformed header, no Clerk secret |
+
+The deployment checklist is `docs/ClosedBetaDeployment-2026-09-21.md`:
+environment variables, the Clerk dashboard change, how to bootstrap the first
+platform admin safely, how to create, share and revoke an invitation, twelve
+manual acceptance steps, and rollback.
+
+### Remaining external setup
+
+**Deploying this changes nothing.** `INVITE_ONLY_MODE` defaults off, which makes
+the code deploy safe on its own. Closed beta becomes real only when that
+variable is set to `true` in the deployed **API and web** environments and a
+first platform admin is configured.
+
+The activation order is in `docs/ClosedBetaDeployment-2026-09-21.md` § 0, and
+each step exists so the next cannot lock the operator out:
+
+1. deploy the code with the mode off;
+2. configure the first platform admin (`PLATFORM_ADMIN_CLERK_IDS`, API);
+3. **verify existing admin sign-in still works**;
+4. create and accept one invitation end to end, **while the gate is still off**;
+5. set `INVITE_ONLY_MODE=true` on the API **and** web, redeploy both;
+6. verify an uninvited account is blocked — screen *and* a direct API call;
+7. retain the one-variable rollback.
+
+Steps 3 and 4 are the ones that make step 5 safe. Everything before step 5 is
+reversible by doing nothing.
+
+Also outstanding, and not something a deploy can do: Clerk's **Sign-up mode →
+Restricted** in the dashboard. Defence in depth — an account created outside the
+app still gets no workspace.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -1860,6 +2012,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T16:58:44Z | _(branch `invite-only-closed-beta`)_ | **implemented, pending review** | Joon is invite-only behind `INVITE_ONLY_MODE`, enforced at the provisioning boundary: no workspace, so `workspaceProcedure` refuses before any resolver, which puts every cost-bearing path behind it at once. Invitations are single-use, expiring, revocable, stored as SHA-256 only, and require a Clerk-verified email match. Issuing restricted to platform admins named by Clerk id in env. **Found while auditing and fixed in a separate security PR: the merchant-agent endpoint lacked authentication and workspace authorisation.** typecheck 19/19, unit 366/366, 17 new tests. | `INVITE_ONLY_MODE` and `PLATFORM_ADMIN_CLERK_IDS` are not set anywhere yet, so nothing changes until they are. Clerk's sign-up mode must be set to Restricted in the dashboard — defence in depth, not the gate. No invitation email is sent: the operator copies the link, because sending would depend on unfinished sender-domain and warm-up work |
 | 2026-09-21T13:28:53Z | `1fdb179` `199abda` | **decided** | Stored hash left unchanged: proven 35x margin against collision or reordering, verified on 2,999,999 worst-case adjacent pairs and 1,715,519 across every binade, zero collisions and zero inversions; the frozen authority is `MeasurementAssignment.arm`, which holds no hash. Regression tests pin the margin and fail below the safe threshold. Index removal kept: every production query audited and none needs it; controlled 1M comparison 80,565 ms to 53,252 ms and 3,370.8 MB to 1,710.2 MB of WAL; full proof 58,649 ms to 43,152 ms. | The intermediate stored hash is not byte-identical to the mathematical reference at the final digits. **Deferred — revisit only if a future audit requirement demands byte-exact intermediate reproducibility.** No BIGINT column or versioned representation added. End-to-end recovery varied 484 s to 496 s because independent bulk-insert timings moved 11-15% across hosted runners; no overall speed-up is claimed. The planner's exact index choice varied between runs, so no claim is made that it never used the index |
 | 2026-09-21T13:16:40Z | `9a23061` `199abda` | **one adopted, one rejected** | Control-only draw measured at 11,064 ms against 63,679 ms and 180 MB of WAL against 4,230 MB — **rejected**: it requires candidates to arrive marked TREATMENT, which makes an interrupted run indistinguishable from a completed one and fails toward sending. Two integration tests caught it. Dropping the ordering index **adopted**: 53,252 ms against 80,565 ms and 1,710 MB of WAL against 3,371 MB at 1M, both arms on one runner; 4,881 against 5,539 ms at 100k. Proof re-run 35602634482 passed 25 of 25 with the statement at 43,152 ms against 58,649 ms. Integration suite 50/50. | **Total recovery went 484 s to 496 s — slightly slower.** Three inserts on other tables, which this change cannot affect, moved 11-15% between runners, so end-to-end timing across runs is noise-dominated and no overall speed-up is claimed. Adoption rests on the controlled same-runner comparison and the structural WAL reduction. Earlier claim that the planner "never uses" the index is **corrected**: the harness records whether an index was used, not which one |
 | 2026-09-21T12:01:01Z | `9fff4ee` | **diagnosed** | Control-selection measured at 1M on a hosted runner (run 35595088570). Statement 63,679 ms; ranking alone 1,178 ms (1.85%); update applies 94.3%. WAL 8,043,044 records, 669,592 full-page images, 3,995 MB. Pages read 2,991,661 and written 2,802,425 against 1,482 and 155 at 100k. Table 1,334 MB against 128 MB shared_buffers. Writing only the control rows: 11,064 ms and 180 MB of WAL — 5.8x faster, 23x less WAL. The 338 MB index built for this ORDER BY is not used by the planner at either size. | Run 35593544874 before it was **inconclusive**: seeding and real 1M preparation succeeded, but the measurement failed on Docker's default 64 MB /dev/shm, not disk (79 GB free) and not preparation. The rerun raises only the container shared-memory limit — no Postgres setting and no query changed — so the numbers hold for a properly provisioned Postgres and must not be read as performance under a 64 MB /dev/shm. **Nothing here establishes Railway's shared memory, page cache or I/O; that remains an external environment fact.** Lock wait was not separately instrumented |

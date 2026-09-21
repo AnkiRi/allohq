@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { Queue } from "bullmq";
 import { encryptSecret, prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
+import { closedBetaVerdict, CLOSED_BETA_MESSAGE } from "../auth/closed-beta";
 
 const redisConnection = {
   host: process.env.REDIS_HOST ?? "localhost",
@@ -114,6 +115,19 @@ export async function handleShopifyInstall(req: IncomingMessage, res: ServerResp
       where: { clerkId: initiatingUserId },
       include: { workspaceMembers: { take: 1, select: { workspaceId: true } } },
     });
+
+    // Connecting a store is a cost-bearing act: it enqueues a sync, pulls
+    // customers and orders, and puts a tenant in front of the engine. Closed
+    // beta refuses it for anyone who is not already a member, a platform admin
+    // or an accepted invitee — here, before the token is stored, rather than
+    // after a workspace has been conjured for them.
+    if (!user || user.workspaceMembers.length === 0) {
+      const verdict = await closedBetaVerdict({ clerkUserId: initiatingUserId });
+      if (!verdict.allowed) {
+        json(res, 403, { error: "closed_beta", message: CLOSED_BETA_MESSAGE });
+        return;
+      }
+    }
 
     if (!user) {
       // Auto-provision user + default workspace on first Shopify connect. The

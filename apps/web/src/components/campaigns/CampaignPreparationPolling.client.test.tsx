@@ -2,7 +2,7 @@ import "global-jsdom/register";
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import {
   CampaignPreparationSection,
   type PreparationStatus,
@@ -12,12 +12,19 @@ import { type PreparationProgress } from "../../lib/campaign-preparation";
 /**
  * Polling must stop once the audience is ready.
  *
- * Its own file, and deliberately without an `afterEach` hook. jsdom's document
- * is process-global, and this is the one test that asserts the *absence* of
- * activity across a real interval. Run alongside siblings it failed with no
- * error at all; the cause was node:test interleaving top-level tests so one
- * test's cleanup landed inside this one's observation window. A single test
- * with no hook has nothing to interleave with.
+ * Its own file, holding one test, and unmounting in its own `finally` rather
+ * than an `afterEach`.
+ *
+ * jsdom's document is process-global, and this is the one test that asserts the
+ * *absence* of activity across a real interval. Run alongside siblings it
+ * failed with no error at all: node:test interleaved the top-level tests, so a
+ * sibling's `afterEach` cleanup landed inside this one's observation window.
+ * One test in one file has nothing to interleave with.
+ *
+ * Unmounting still matters, and doing it in the body rather than a hook is the
+ * point. Left mounted, the component outlived the test and the file
+ * intermittently failed to finish — 19 s locally, 43 s on a hosted runner, with
+ * no assertion error and no result reported for the test itself.
  *
  * The server-rendered tests prove what the markup says for a given state. They
  * cannot prove that mounting starts a poll, that the poll repeats, that counts
@@ -83,21 +90,8 @@ const ready = (): PreparationStatus => ({
   sendable: true,
 });
 
-// Unmount between tests. Left mounted, a previous test's polling component
-// keeps its timer and its nodes in the document, and `screen` queries match
-// the stale render.
-/**
- * One describe, so these run one after another. node:test interleaved the
- * top-level tests, and they share a single jsdom document: one test's cleanup
- * wiped another's DOM mid-assertion, which surfaced as the whole file failing
- * with no error at all.
- */
-/**
- * Its own file on purpose. jsdom's document is process-global, and this test
- * asserts the absence of activity over a real interval — a sibling test's
- * cleanup landing in that window makes it fail for the wrong reason.
- */
 test("6. reaching ready stops polling and restores the normal action", async () => {
+try {
 const script = scriptedFetcher([preparing({ evaluated: 5_000 }), ready()]);
 render(
   React.createElement(CampaignPreparationSection, {
@@ -124,4 +118,15 @@ assert.equal(script.calls, settled, `polling continued after ready: ${settled} -
 const button = screen.getByTestId("approve-delivery") as HTMLButtonElement;
 assert.equal(button.disabled, false, "a ready audience must restore the normal action");
 assert.match(button.textContent ?? "", /Approve delivery/);
+} finally {
+  // Unmount before the test returns, which runs the effect cleanup and clears
+  // any timer still scheduled. Left mounted, the component outlives the test
+  // and the file intermittently failed to finish — 19 s locally, 43 s on a
+  // hosted runner, with no assertion error and no test result reported.
+  //
+  // In the body rather than an `afterEach`: the hook is what made this file
+  // interleave with its siblings in the first place, and this file holds one
+  // test, so a hook buys nothing.
+  cleanup();
+}
 });
