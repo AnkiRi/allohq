@@ -1,12 +1,42 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { prisma } from "@allohq/database";
-import { runMerchantAgent } from "@allohq/agent-core";
+import { authenticateAgentRequest, authoriseStore } from "./agent-auth";
+
+/**
+ * What running the agent looks like to this handler.
+ *
+ * Injectable, and imported lazily below, for two reasons: a refused request
+ * must not even load the agent stack, and a test can pass a spy to prove that
+ * no model, tool or provider work happens on the paths that refuse.
+ */
+export interface AgentRunner {
+  (input: {
+    storeId: string;
+    message: string;
+    conversationHistory: Array<{ role: string; content: string }>;
+  }): Promise<{
+    response: string;
+    toolCalls: Array<{ name: string; output: unknown }>;
+    inputTokens: number;
+    outputTokens: number;
+  }>;
+}
+
+const defaultRunner: AgentRunner = async (input) => {
+  const { runMerchantAgent } = await import("@allohq/agent-core");
+  return runMerchantAgent(input);
+};
 
 /**
  * Merchant agent chat endpoint (tRPC-adjacent, but uses SSE for streaming).
- * Auth: same Clerk token as tRPC (Bearer token).
  *
  * POST /v1/agent/chat — Send message to merchant agent, stream response
+ *
+ * Authorisation is performed here rather than by the dispatcher, which routes
+ * `/v1/agent/*` behind CORS only. Every request must resolve to a Clerk caller
+ * who is a member of the workspace owning the requested store, and that is
+ * settled BEFORE the body is used, the store is read, the history is loaded, or
+ * the agent runs.
  */
 
 function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -29,7 +59,12 @@ function json(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
-export async function handleAgentStream(req: IncomingMessage, res: ServerResponse) {
+export async function handleAgentStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: { runAgent?: AgentRunner } = {}
+) {
+  const runAgent = deps.runAgent ?? defaultRunner;
   const method = req.method ?? "GET";
 
   if (method === "OPTIONS") {
@@ -44,6 +79,14 @@ export async function handleAgentStream(req: IncomingMessage, res: ServerRespons
   }
 
   try {
+    // Before the body is used, and long before the agent runs: no caller, no
+    // work.
+    const caller = await authenticateAgentRequest(req);
+    if ("error" in caller) {
+      json(res, caller.status, { error: caller.error });
+      return;
+    }
+
     const body = await parseBody(req);
     const { storeId, message, chatId } = body as {
       storeId?: string;
@@ -56,11 +99,10 @@ export async function handleAgentStream(req: IncomingMessage, res: ServerRespons
       return;
     }
 
-    // Verify store exists
-    const store = await prisma.store.findUnique({
-      where: { id: storeId },
-      select: { id: true },
-    });
+    // The store must exist AND belong to a workspace this caller is a member
+    // of. Both failures answer identically, so the response does not
+    // distinguish a store that is not theirs from one that does not exist.
+    const store = await authoriseStore({ clerkUserId: caller.clerkUserId, storeId });
 
     if (!store) {
       json(res, 404, { error: "Store not found" });
@@ -70,8 +112,10 @@ export async function handleAgentStream(req: IncomingMessage, res: ServerRespons
     // Get conversation history from AiChat if chatId provided
     let conversationHistory: Array<{ role: string; content: string }> = [];
     if (chatId) {
+      // Scoped to a chat belonging to the authorised store, so a chatId from
+      // another workspace yields nothing rather than its conversation.
       const messages = await prisma.aiChatMessage.findMany({
-        where: { chatId },
+        where: { chatId, chat: { storeId: store.id } },
         orderBy: { createdAt: "asc" },
         take: 30,
         select: { role: true, content: true },
@@ -88,7 +132,7 @@ export async function handleAgentStream(req: IncomingMessage, res: ServerRespons
 
     res.write(`event: thinking\ndata: {}\n\n`);
 
-    const result = await runMerchantAgent({
+    const result = await runAgent({
       storeId,
       message,
       conversationHistory,
