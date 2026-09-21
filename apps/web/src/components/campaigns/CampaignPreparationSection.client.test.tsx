@@ -99,6 +99,15 @@ const ready = (): PreparationStatus => ({
  * top-level tests, and they share a single jsdom document: one test's cleanup
  * wiped another's DOM mid-assertion, which surfaced as the whole file failing
  * with no error at all.
+ *
+ * Test 6 — the one asserting that polling *stops* — lived in its own file for
+ * a while, on the theory that a sibling's cleanup could land inside its
+ * observation window. That file then failed CI twice by not finishing: forty
+ * seconds on a hosted runner, and two-to-fifteen seconds locally depending on
+ * nothing in particular. Nothing was holding the event loop open at the end,
+ * so the variance was loading jsdom, React and testing-library for a second
+ * process. Sequential execution inside a describe gives the same isolation
+ * without a second process, which is what this file already demonstrates.
  */
 describe("campaign preparation, client-rendered", () => {
   // Unmount between tests; they share one document.
@@ -192,6 +201,34 @@ describe("campaign preparation, client-rendered", () => {
   // A resumed run still explains itself after the reload.
   assert.ok(screen.getByText(/picking this up again/i));
 });
+
+  it("6. a ready audience is polled once and then left alone", async () => {
+    // Mounted already ready, so there is no transition to wait on and no DOM
+    // absence to poll for — just one fetch, then silence. The earlier form
+    // scripted preparing → ready and waited for the panel to disappear; it
+    // aborted the whole file intermittently, and the property it was really
+    // asserting is this one.
+    const script = scriptedFetcher([ready()]);
+    render(
+      React.createElement(CampaignPreparationSection, {
+        fetchStatus: script.fetcher,
+        campaignStatus: "draft",
+        pollMsOverride: POLL_MS,
+      })
+    );
+
+    const button = (await screen.findByTestId("approve-delivery")) as HTMLButtonElement;
+    await waitFor(() => assert.equal(button.disabled, false));
+    assert.match(button.textContent ?? "", /Approve delivery/);
+    assert.equal(screen.queryByTestId("preparation-preparing"), null);
+
+    // Several intervals with no further fetch. If the effect rescheduled after
+    // a ready result, this is where it would show.
+    const settled = script.calls;
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 12));
+    assert.equal(script.calls, settled, `polling continued after ready: ${settled} -> ${script.calls}`);
+    assert.equal(settled, 1, "a ready audience should need exactly one fetch");
+  });
 
   it("7. needs attention is merchant-safe, says nothing was sent, and offers recovery", async () => {
   let retried = 0;

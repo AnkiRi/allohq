@@ -4,6 +4,7 @@ import {
   canApproveDelivery,
   preparationView,
   type PreparationProgress,
+  preparationPollInterval,
 } from "./campaign-preparation";
 
 /**
@@ -143,4 +144,17 @@ test("reloading mid-run reproduces the same view from the same progress", () => 
   // to lose. The same payload must therefore produce the same view.
   const payload = progress({ evaluated: 40_000, notReceiving: 3_600, candidates: 36_400, attempts: 2 });
   assert.deepEqual(preparationView(payload), preparationView({ ...payload }));
+});
+
+test("polling stops the moment a run settles, whichever way it settles", () => {
+  // The transition is the point: a run that is still working must be polled,
+  // and the instant it reaches a terminal state it must not be. The component
+  // only honours this answer — it does not decide it — so the transition is
+  // pinned here and the component test covers the ready case end to end.
+  assert.equal(typeof preparationPollInterval(progress({ state: "preparing" })), "number");
+  assert.equal(preparationPollInterval(progress({ state: "ready" })), false);
+  assert.equal(preparationPollInterval(progress({ state: "needs_attention" })), false);
+  // No run at all is not something to poll for either.
+  assert.equal(preparationPollInterval(null), false);
+  assert.equal(preparationPollInterval(undefined), false);
 });
