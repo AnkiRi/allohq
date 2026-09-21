@@ -989,6 +989,113 @@ to dispatch a campaign, so it currently flips a status label and nothing sends
 from it. Recorded here rather than changed: it is outside this pass, and
 removing or gating an exposed mutation is a product decision.
 
+## The 1M verifier, rebuilt as an independent oracle — 2026-09-21T10:47:19Z
+
+_Status: **implemented and verified at 20,000 customers**, commit `7db1e9c`.
+The million-customer run using it is a separate result and is recorded
+separately. Nothing here is a scale claim._
+
+### What was wrong with the old verifier
+
+It called `assignStratifiedCohortArms` — the product's own assignment
+function — to check the product's own assignment. If that function were wrong,
+the check would have agreed with it. Three of the four things the proof claimed
+to establish were therefore unestablished:
+
+- hash parity was tautological;
+- ranking and quota were compared against the same implementation that produced
+  them;
+- pooled small strata were never exercised at a million, because the fixture's
+  sparse strata were all excluded by other rules before they reached assignment.
+
+### What the oracle does now
+
+It re-derives the documented rules and imports none of the product's assignment
+code:
+
+| Rule | How the oracle derives it | Deliberately different from production |
+| --- | --- | --- |
+| assignment value | `sha256("seed:stratum:customer")`, first six bytes big-endian, divided by 2^48 | the integer is accumulated byte by byte, not read with `readUIntBE` |
+| pooling | census of **original** strata; anything under ten candidates becomes `pooled_small` | derived from the original stratum, never read back from `assignmentStratum` |
+| control quota | `min(floor(n x rate), n - 1)` per assignment stratum | computed from the oracle's own census, not from the run's stored plan |
+| ranking | ascending by value, ties broken by customer id in **byte order** | `Buffer.compare`, not `localeCompare`, which is what `COLLATE "C"` means |
+
+Memory stays bounded to the largest single stratum, and the verifier is
+measured on its own baseline. "Does the product hold a million customers in
+memory" and "does the checker hold a million customers in memory" are different
+questions, and conflating them is what made the first two attempts
+inconclusive.
+
+### Proof that the oracle can fail
+
+A verifier that always passes proves nothing. Three mutations at 20,000
+customers, each reverted after:
+
+| Mutation | Checks that failed | Checks that did not |
+| --- | --- | --- |
+| oracle rate 0.15 → 0.16 | arms (155 of 15,467), quota (5 strata) | the other 23 |
+| pooling threshold 10 → 3 | pooling exercised, pooled quota, quota (8 strata), candidates compared (15,427 of 15,467) | the other 21 |
+| oracle hashes `seed:customer:stratum` | hashes (15,467 of 15,467), arms (3,942) | the other 23 |
+
+Each mutation failed the checks that name it, and no others.
+
+### The fixture now exercises pooling
+
+Forty customers in eight strata of five are reserved at the head of the cohort
+and exempted from every exclusion rule, so they survive to assignment. They
+pool into one `pooled_small` stratum of forty, which draws a real quota of six
+controls. Measured at 20,000: `8 sparse strata -> 40 candidates, 6 control`.
+
+### Measured finding: stored assignment hashes lose precision
+
+Writing a double through Prisma keeps **sixteen significant digits**. A value
+whose shortest exact decimal needs seventeen comes back one or two units in the
+last place away from what was computed. Measured at 20,000 customers: **3,941
+of 15,467** stored hashes differ from the exact documented value.
+
+Isolated rather than assumed. A value needing only sixteen digits round-trips
+exactly; a value needing seventeen does not, and it loses precision on **write**
+through every path tried — `create`, `createMany` and raw `$executeRaw` alike —
+so it is not a read-side artifact:
+
+```
+value                0.10444994167183097   (17 significant digits)
+ORM create -> ORM    0.104449941671831     same? false
+createMany -> ORM    0.104449941671831     same? false
+raw write -> ORM     0.104449941671831     same? false
+createMany -> raw    0.104449941671831     same? false
+```
+
+**Why it does not change an arm.** The column is an ordering key, not a
+decision. Rounding to a fixed number of significant digits is monotone
+non-decreasing, so it can create a tie between two neighbouring values but
+cannot invert their order, and a tie falls through to `customerId COLLATE "C"`.
+Two hashes would have to land within about 1e-16 of each other — against a mean
+spacing of roughly 6.5e-6 across a stratum — and the tie would then have to fall
+exactly on the quota boundary. Measured at 20,000: **0 arm mismatches** while
+3,941 hashes differed.
+
+**Recorded, not changed.** Storing the hash exactly would mean changing the
+column type and the assignment write path, which is a change to deterministic
+assignment behaviour and is explicitly out of scope. The oracle checks the
+stored column against the documented value *at storage precision*, ranks on the
+exact value, and reports the precision gap as an observation. If storage
+precision ever did change an arm, the arm check is what would catch it.
+
+### Verdict discipline
+
+The old harness printed its measurement block **before** the assertions ran, so
+a printed block looked like a result when it was not one. Now every check is
+collected, the block is headed `PASS` or `FAIL` with the count, and the
+assertion runs last. A harness error that is not an assertion failure prints
+`INCONCLUSIVE` with the last checkpoint reached, because a run that did not
+finish is neither a pass nor a fail.
+
+Checkpoints print as the run progresses — seed complete, preparation started,
+crash injected, recovery started, preparation complete, verification started,
+verification complete. They say where the harness got to. They never say it
+passed.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -1222,6 +1329,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T10:47:19Z | `7db1e9c` | **implemented and verified at 20,000** | The 1M verifier no longer calls the product's assignment code. It re-derives the documented hash, pooling, quota and ranking independently, measures its own memory separately, prints structured checkpoints, and prints the verdict after the checks rather than before. Proven able to fail: three mutations each failed exactly the checks that name them. Fixture now reserves 8 strata of 5, exempt from every exclusion, so pooling is exercised — 40 candidates, 6 control. 25 of 25 checks passed at 20,000. | Not yet run at a million with this oracle; that is a separate result. Measured: storing a double through Prisma keeps 16 significant digits, so 3,941 of 15,467 stored hashes differ from the exact value by one or two ULP — recorded, not changed, because fixing it would alter deterministic assignment storage |
 | 2026-09-21T10:33:04Z | `8dde4c6` | **implemented and verified** | Part 1 preparation UI proof completed. Approval and genuine failure each write one durable in-app Activity entry with treatment, control and deliberately-left-alone counts and a campaign link; `messageLog` asserted at 0 rows on both paths. Client tests strengthened from "the approve button is disabled" to "no enabled control in the preparation surface can start or schedule a dispatch", verified by mutation (3 of 6 fail with the gate removed). typecheck 19/19, unit 352/352, integration 50/50. | The campaign page passes `showApproveAction={false}` and renders its own approve control, so the client tests drive the shared gate function, not the page's own button. A fabricated "Schedule for later" button was removed before commit; scheduling is proved through the single gated dialog entry and the timing-independent `AUDIENCE_RUN_NOT_COMPLETE` refusal |
 | 2026-09-21T09:58:22Z | `fccb542` | **functional pass, performance pending** | 1M attempt 3: 1,000,000 customers, 772,929 candidates, 115,936 control, 656,993 treatment, 0 duplicate members, 0 duplicate assignments, 0 arm mismatches, 0 live-provider calls, 0 downstream side effects, forced crash and recovery succeeded. API 4 ms. | Control-selection UPDATE measured **468,127 ms**; verifier memory not separately measured; hash parity partly tautological; pooling not independently exercised at 1M |
 | 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 2: verifier still used unbounded whole-cohort reference behaviour; threw RangeError inside the reference at a ~154,000 stratum. | No readiness conclusion |
