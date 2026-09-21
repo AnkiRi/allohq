@@ -13,7 +13,14 @@ import { createHash, randomUUID } from "node:crypto";
  * here may be presented as evidence for that environment.
  *
  *   NODE_OPTIONS=--expose-gc MILLION_SIZE=1000000 TEST_DATABASE_URL=... \
- *     npx tsx --test apps/workers/src/workers/prepare-audience.million.integration.ts
+ *     npx tsx --test apps/workers/src/workers/prepare-audience.million.load.integration.ts
+ *
+ * Named `.load.integration.ts` so the default integration run skips it, the
+ * same way the 100k approval proof is skipped. It was `.integration.ts` at
+ * first, which quietly put a million-customer run inside every pull request —
+ * roughly fifteen minutes, on every branch, to re-prove something that has its
+ * own workflow. It still runs on demand and on a `proof/**` branch, which is
+ * where it was always meant to run.
  */
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 const SIZE = Number(process.env["MILLION_SIZE"] ?? 1_000_000);
