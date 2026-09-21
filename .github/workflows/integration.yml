@@ -21,7 +21,12 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # pgvector, not stock postgres:16. A migration creates the `vector`
+        # extension, and the stock image does not ship it — the first real CI
+        # run failed with `extension "vector" is not available`. Local Postgres
+        # had it installed, which is why a clean-clone rehearsal could not
+        # catch this.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: joon
           POSTGRES_PASSWORD: joon
@@ -105,7 +110,12 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # pgvector, not stock postgres:16. A migration creates the `vector`
+        # extension, and the stock image does not ship it — the first real CI
+        # run failed with `extension "vector" is not available`. Local Postgres
+        # had it installed, which is why a clean-clone rehearsal could not
+        # catch this.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: joon
           POSTGRES_PASSWORD: joon
