@@ -103,7 +103,7 @@ different completion criteria.
 | B.1 Durable preparation backend | **implemented and verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
 | B.2 Campaign preparation UI and progress | **implemented and verified** `8c31c5e` | "Preparing audience" replaces the Draft dead-end; polls while active and stops when settled; merchant-language counts; reload guidance; sending disabled until ready; needs-attention shows the reason, "Nothing has been sent" and a retry. 8 tests |
 | C. Bounded order-driven scans | **verified** `c064889` `3100465` | verified at 100k: 124.7 s, 0.24 MB retained, 166 transactions, anti-join exact against a SQL reference, and no sends |
-| D. Evidence | pending | the 100k profile exists; retry/resume behaviour is not yet part of the reported figures |
+| D. Evidence | **verified** `15d9c50` | consolidated 100k evidence including retry/resume; transaction sources explained; scan duration broken down by scanner; 1M labelled inference; code-complete versus external stated |
 
 ### CI — implemented and verified on GitHub
 
@@ -135,7 +135,8 @@ uninstrumented and 2.15 MB with query capture on**. Both are reported.
 | Pass 8B — frozen-time correctness | **verified** `dbee4b4` `63f38f2` | 5 per-rule boundary tests plus 3 end-to-end: two executions at one asOf agree on every customer; frozen and live genuinely disagree; a resumed run matches an uninterrupted one | scheduling and deferral windows are delivery-time by design and deliberately current-time |
 | Pass 8B.1 — durable preparation backend | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | — |
 | Pass 8B.2 — preparation UI and progress | **verified** `8c31c5e` `39a95f5` | 8 view-model tests plus 8 rendered-component tests through React covering all seven acceptance points | server-rendered component testing, not a browser harness; stated rather than implied |
-| Pass 8B.C — order-driven scans at 100k | **verified** `3100465` `39a95f5` | all three fire at 100k on a fresh database: 135.4 s, no retained heap growth, 23.99 MB peak, 228 transactions. Cross-sell anti-join exact at 37,500 of 50,000; repurchase window exact against a SQL reference; zero sends | cross-sell accounts for 145.7 s of the 148.6 s sequential total — cause under investigation, see below |
+| Pass 8B.C — order-driven scans at 100k | **verified** `3100465` `39a95f5` `15d9c50` | all three fire at 100k on a fresh database: **4.3 s**, 0.26 MB retained, 157 transactions. Cross-sell anti-join exact at 37,500 of 50,000; repurchase window exact against a SQL reference; zero sends | — |
+| Pass 8B.D — consolidated evidence | **verified** | the three measured 100k results, the transaction breakdown, the scan breakdown, and the inference boundary, all in one section | — |
 | Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
 | CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
@@ -699,6 +700,124 @@ where it lives — as a pure function the page hands to `refetchInterval`.
 so the new `.test.tsx` file existed and looked like coverage while running zero
 times. The runner now matches both; the suite went 337 to 345.
 
+## Pass 8B item D — consolidated evidence — 2026-09-21T07:45:03Z
+
+_Status: **verified**. Every figure below was measured on a synthetic store in
+a disposable Postgres with a simulated provider, and the database was dropped
+afterwards. **No figure here is extrapolated.** Statements about a million
+customers appear only in the clearly marked inference section._
+
+### The three measured 100k results
+
+| | Campaign approval preparation | Overnight opportunity scan |
+| --- | --- | --- |
+| Path exercised | `prepareCampaignAudience`, the function the queue invokes | `scanOpportunities` |
+| Audience | 100,000 customers | 100,000 customers, 50,000 with orders |
+| Duration | 68.9 s (including a forced crash and recovery) | **4.3 s** |
+| API-side work | **6 ms** | n/a — no request involved |
+| Retained heap | no growth detected; 8.09 MB below baseline | 0.26 MB |
+| Peak heap above baseline | 62.36 MB | 57.94 MB |
+| Postgres transactions | 5,396 | 157 |
+| Queries / shapes | 6,343 / 33 | — |
+| Query p50 / p95 / p99 / max | 0 / 1 / 10 / 4,319 ms | — |
+| Duplicate rows | **0** | n/a |
+| Arm parity | **0 mismatches of 90,909** | n/a |
+| Retry / resume | crash at 14,000 rows, resumed, 2 attempts recorded | rescan produces identical job ids |
+| Live provider calls, real deliveries | **0 / 0** | **0 / 0** |
+
+Retained heap is meaningful **only under `node --expose-gc`**; the proofs fail
+rather than skip without a collector. And instrumenting the client to capture
+query latency costs the harness its own memory: the same run measures 0.12 MB
+retained uninstrumented against 2.15 MB with capture on. Both are reported.
+
+### Where the ~6,000 approval transactions come from
+
+6,343 queries in 33 shapes for 100,000 customers, of which two statements
+account for most of the time:
+
+| Source | Count | Share of time | What it is |
+| --- | --- | --- | --- |
+| Resolver pages | 500 pages x ~11 queries ≈ 5,500 | small | Each page of 200 customers reads customers, RFM scores, consents, orders, fatigue logs, two customer-state selections, conversations, message logs and suppressions. This is the eligibility policy itself. |
+| Member writes | 50 | largest | 2,000 durable audience rows per statement. This is the product data the pass exists to produce. |
+| Control selection | 1 | second largest | One window-function UPDATE over every candidate. |
+| Run bookkeeping | ~550 | negligible | Lease renewal and resume-cursor advance, one per write chunk, plus status updates and final counts. |
+| Pooled-stratum fixup | 10 | negligible | Bounded by definition: strata with fewer than ten candidates. |
+
+**Nothing here is being optimised, and the reasons are specific.** The
+per-page reads *are* the policy — removing them means not checking consent,
+fatigue, collision, cooldown or recent purchase. The member writes are the
+deliverable. The control selection is deliberately one statement; splitting it
+would reintroduce the in-process selection this pass removed. Dropping either
+member-table index to speed the writes measured −1% and 2%, which is noise.
+
+The batching win that was available has already been taken: the journey path
+went from 5.2 queries per customer to 0.045 by replacing a per-customer
+governor round trip with a batched one.
+
+### Where the opportunity-scan duration went
+
+Originally 135.4 s at 100k. Per-scanner attribution, sequential mode:
+
+| Scanner | Before | After | Transactions (after) |
+| --- | --- | --- | --- |
+| cross_sell | **145.7 s** | **4.1 s** | 155 |
+| repurchase_window | 1.3 s | 1.6 s | 30 |
+| low_stock | 0.6 s | 0.6 s | 51 |
+| at_risk_winback | 0.4 s | 0.4 s | 23 |
+| re_engagement | 0.3 s | 0.3 s | 0 |
+| vip_milestone | 0.2 s | 0.2 s | 0 |
+| new_arrival, seasonal | 0.0 s | 0.0 s | 22 |
+| **Total (sequential)** | **148.6 s** | **7.4 s** | **281** |
+
+Concurrent: **135.4 s → 4.3 s**, a 31x improvement with identical results.
+
+The cause was a null-guard pattern of mine — `(param IS NULL OR condition)` —
+that let one query serve every caller and prevented Postgres from restricting
+the scan. Measured at 155.2 s guarded against 8.2 s composed, identical
+results. Two other hypotheses were tested and rejected first: a missing
+`order_items` index (3.7 s to 2.3 s isolated, 0.9x at 40k) and table bloat or
+CPU contention (still 145.7 s on a fresh database).
+
+### One-million-customer statements — inference, not measurement
+
+**No 1M run has been performed.** Everything in this block is extrapolation
+from the measured 100k shape and must not be quoted as a measurement.
+
+| Measure | 100k (measured) | 1M (inference) |
+| --- | --- | --- |
+| Resolver pages | 500 | ~5,000 |
+| Queries | 6,343 | ~63,000 |
+| Transactions | 5,396 | ~54,000 |
+| Member write statements | 50 | 500 |
+| Preparation duration | 68.9 s | ~10 minutes |
+| Retained heap | no growth detected | unchanged — nothing scales with audience size |
+
+**The component least likely to hold:** the control selection is a single
+`UPDATE` over every candidate, measured at 4,319 ms for 90,909 on a GitHub
+runner. At roughly 900,000 candidates that is inference on the order of 40
+seconds in one statement, holding row locks on the whole membership. Those rows
+belong to one run and no other writer touches them, so it is a long statement
+rather than contention — but it is the first thing to need attention at that
+size.
+
+**Healthify's 4.5 crore environment is a future architecture problem, not a
+current target.** Nothing in this pass is sized or claimed against it.
+
+### Code-complete versus external
+
+| Item | State |
+| --- | --- |
+| Pass 8A structural safety | **code-complete and measured** |
+| Pass 8B.1 durable preparation backend | **code-complete and measured** |
+| Pass 8B.2 preparation UI | **code-complete**; rendered-component tested, not browser tested |
+| Pass 8B item C bounded scans | **code-complete and measured at 100k** |
+| Pass 8B item D evidence | **complete** — this section |
+| CI | **verified on GitHub**; Node 20 unverified; action versions target a deprecated Node 20 runtime |
+| **Five migrations** | **external** — written and applied to disposable databases; not deployed |
+| **Real-delivery acceptance** | **external** — manual, 2–3 opted-in allowlisted inboxes; checklist below; nothing automated |
+| **Authenticated sender domain** | **external** — `allo-test-5` has none, so its sending stays blocked |
+| Pass 9 delivery health, provider-switch safety | not started, out of scope for this pass |
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -932,6 +1051,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T07:45:03Z | `15d9c50` | verified | **Item D complete, and the cross-sell cause found and fixed.** A null-guard pattern of mine prevented Postgres restricting the scan: 155.2 s guarded against 8.2 s composed, identical results. Overnight scanning at 100k went 135.4 s → **4.3 s**, cross-sell 145.7 s → 4.1 s. Two other hypotheses were tested and rejected first. Evidence consolidated: three measured 100k results, the ~6,000 transaction breakdown, per-scanner durations, the inference boundary, and code-complete versus external. | Five migrations, real-delivery acceptance and an authenticated sender domain remain external |
 | 2026-09-21T07:35:03Z | `39a95f5` `643d384` | verified | Both evidence gaps closed. repurchase_window fires at 100k with its count checked against a SQL reference; per-scanner telemetry added. Rendered-component tests through React cover all seven UI points. Manual acceptance checklist written. Fixed a discovery defect: the unit runner ignored `.test.tsx`, so the component tests ran zero times — suite went 337 to 345. | Cross-sell accounts for 145.7 s of 148.6 s; two hypotheses tested and rejected, the null-guard hypothesis under measurement |
 | 2026-09-21T06:37:48Z | `3100465` | verified | **Pass 8B item C verified at 100k**: 124.7 s, 0.24 MB retained, 166 transactions, cross-sell anti-join exact at 37,500 of 50,000, zero sends. A fixture defect of mine looked like a code defect first — [A, lowStock] co-occurred more than [A, B], so the scanner correctly picked a different pair. | `repurchase_window` not exercised at 100k; the fixture seeds no repurchase cycles |
 | 2026-09-21T06:37:48Z | `8c31c5e` | verified | **Pass 8B.2 complete.** "Preparing audience" replaces the Draft dead-end; polls while active, stops when settled; merchant-language counts with zeroes hidden in flight; reload guidance; sending disabled until ready; needs-attention shows reason, "Nothing has been sent" and a retry. 8 tests, one asserting the wording leaks no infrastructure terms. | No browser-level test; the view model is tested as a pure function |
