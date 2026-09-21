@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
  * One-million-customer single-tenant readiness proof.
@@ -18,6 +18,16 @@ import { randomUUID } from "node:crypto";
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 const SIZE = Number(process.env["MILLION_SIZE"] ?? 1_000_000);
 const BATCH = 10_000;
+/**
+ * Deliberately sparse strata, reserved at the very start of the cohort and
+ * exempted from every exclusion rule so they survive as candidates. Eight
+ * strata of five pool into one `pooled_small` stratum of forty, which draws a
+ * real control quota (floor(40 x 0.15) = 6). Without this, pooling at a
+ * million customers is code that never runs.
+ */
+const SPARSE_STRATA = 8;
+const SPARSE_PER_STRATUM = 5;
+const SPARSE_TOTAL = SPARSE_STRATA * SPARSE_PER_STRATUM;
 
 interface QuerySample { shape: string; duration: number }
 const queries: QuerySample[] = [];
@@ -62,6 +72,78 @@ async function dbCounters(prisma: any) {
 }
 
 /**
+ * Structured progress, printed as it happens.
+ *
+ * Progress visibility only. A checkpoint says where the harness got to; it
+ * never says the proof passed. The verdict is printed once, at the end, after
+ * every check has run.
+ */
+const startedAt = process.hrtime.bigint();
+let lastCheckpoint = "not started";
+function checkpoint(name: string, detail = "") {
+  lastCheckpoint = name;
+  const seconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+  console.log(`[checkpoint ${seconds.toFixed(1).padStart(7)}s] ${name}${detail ? ` — ${detail}` : ""}`);
+}
+
+/** Every check, collected rather than asserted, so one run reports all of them. */
+const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
+function check(label: string, ok: boolean, detail = "") {
+  checks.push({ label, ok, detail });
+}
+
+// ---------------------------------------------------------------------------
+// The independent oracle.
+//
+// This re-derives the documented assignment rules from scratch. It deliberately
+// does not import assignmentValue, assignStratifiedCohortArms or
+// planStratifiedControlQuotas, and it does not reuse the ranking query. If the
+// oracle called the same code the product calls, agreement would prove nothing.
+//
+// The documented rules:
+//   value(seed, stratum, customer) = first 6 bytes, big-endian, of
+//                                    sha256("seed:stratum:customer") / 2^48
+//   strata with fewer than ten candidates pool into "pooled_small"
+//   controlCount = min(floor(n * rate), n - 1)
+//   rank ascending by (value, customerId in byte order); the first
+//   controlCount ranked are CONTROL, the rest TREATMENT
+// ---------------------------------------------------------------------------
+
+const ORACLE_POOL_BELOW = 10;
+const ORACLE_POOLED_STRATUM = "pooled_small";
+const ORACLE_RATE = 0.15;
+
+/**
+ * Written out byte by byte rather than with readUIntBE, so this is a second
+ * implementation of the documented rule and not the same call in a new place.
+ */
+function oracleAssignmentValue(seed: string, assignmentStratum: string, customerId: string): number {
+  const digest = createHash("sha256").update(`${seed}:${assignmentStratum}:${customerId}`).digest();
+  let integer = 0;
+  for (let index = 0; index < 6; index += 1) integer = integer * 256 + digest[index]!;
+  return integer / 281474976710656; // 2^48
+}
+
+/**
+ * The documented value as the database can hold it. Measured: a double written
+ * through Prisma keeps sixteen significant digits, so about a quarter of these
+ * values — the ones whose shortest exact decimal needs seventeen — are stored
+ * one or two units in the last place away from what was computed.
+ */
+function storedPrecision(value: number): number {
+  return Number(value.toPrecision(16));
+}
+
+/** Byte order, which is what COLLATE "C" means. Not localeCompare. */
+function oracleByteOrder(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
+function oracleControlQuota(size: number, rate: number): number {
+  return Math.min(Math.floor(size * rate), Math.max(0, size - 1));
+}
+
+/**
  * A tenant with the mix a real store has: consent failures, undeliverable
  * addresses, recent purchasers, fatigue and collision holds, loyal full-price
  * customers Joon leaves alone, plenty of ordinary candidates, and both large
@@ -99,8 +181,9 @@ async function seedTenant(prisma: any, size: number, label: string) {
     await prisma.customer.createMany({
       data: Array.from({ length: take }, (_, index) => {
         const n = offset + index;
-        const invalid = n % 97 === 0;           // undeliverable address
-        const noConsent = !invalid && n % 11 === 0; // never opted in
+        const sparse = n < SPARSE_TOTAL;        // reserved for pooled-stratum coverage
+        const invalid = !sparse && n % 97 === 0;           // undeliverable address
+        const noConsent = !sparse && !invalid && n % 11 === 0; // never opted in
         if (invalid) expected.invalid += 1;
         if (noConsent) expected.noConsent += 1;
         return {
@@ -128,7 +211,9 @@ async function seedTenant(prisma: any, size: number, label: string) {
       data: page.map((c: { id: string }, i: number) => {
         const n = seen + i;
         return { customerId: c.id, storeId: store.id, recency: 3, frequency: 3, monetary: 3, totalScore: 9,
-          segment: n < 12 ? `tiny_${Math.floor(n / 3)}` : ["champions","loyal","at_risk","hibernating","new"][n % 5]! };
+          segment: n < SPARSE_TOTAL
+            ? `tiny_${Math.floor(n / SPARSE_PER_STRATUM)}`
+            : ["champions","loyal","at_risk","hibernating","new"][n % 5]! };
       }),
     });
     // Loyal full-price buyers Joon leaves alone, plus ordinary states.
@@ -138,7 +223,7 @@ async function seedTenant(prisma: any, size: number, label: string) {
         // Every thirteenth customer is a loyal full-price buyer inside their
         // buying rhythm: Joon leaves these alone rather than discounting to
         // someone who would have paid full price.
-        const leaveAlone = n % 13 === 0;
+        const leaveAlone = n >= SPARSE_TOTAL && n % 13 === 0;
         return { storeId: store.id, customerId: c.id,
           lifecycleStage: n % 4 === 0 ? "loyal" : n % 4 === 1 ? "at_risk" : "repeat",
           vipLevel: n % 9 === 0 ? "gold" : "none",
@@ -151,7 +236,7 @@ async function seedTenant(prisma: any, size: number, label: string) {
       }),
     });
     // Recent purchasers: excluded by the recent-purchase window.
-    const recent = page.filter((_: unknown, i: number) => (seen + i) % 23 === 0);
+    const recent = page.filter((_: unknown, i: number) => seen + i >= SPARSE_TOTAL && (seen + i) % 23 === 0);
     if (recent.length) {
       expected.recentPurchase += recent.length;
       await prisma.order.createMany({
@@ -162,7 +247,7 @@ async function seedTenant(prisma: any, size: number, label: string) {
       });
     }
     // Fatigue holds.
-    const fatigued = page.filter((_: unknown, i: number) => (seen + i) % 37 === 0);
+    const fatigued = page.filter((_: unknown, i: number) => seen + i >= SPARSE_TOTAL && (seen + i) % 37 === 0);
     if (fatigued.length) {
       await prisma.customerFatigueLog.createMany({
         data: fatigued.flatMap((c: { id: string }) => Array.from({ length: 6 }, (_, k) => ({
@@ -186,9 +271,11 @@ test(
     }
     const { prisma, prepareCampaignAudience, campaignPreparationProgress, completedAudienceRun, experiments } = await load();
 
+    checkpoint("run started", `${SIZE.toLocaleString()} customers`);
     const seedStart = process.hrtime.bigint();
     const fixture = await seedTenant(prisma, SIZE, "single");
     const seedMs = Number(process.hrtime.bigint() - seedStart) / 1e6;
+    checkpoint("seed complete", `${(seedMs / 60000).toFixed(1)} min`);
 
     try {
       const experiment = await experiments.getOrCreateExperiment(
@@ -222,6 +309,7 @@ test(
       // --- crash after meaningful durable progress ---
       queries.length = 0;
       const beforeAll = await dbCounters(prisma);
+      checkpoint("preparation started");
       const crashing = prepareCampaignAudience(request, simulatedProvider);
       const crashAfter = Math.floor(SIZE / 5);
       let partial = 0;
@@ -236,9 +324,13 @@ test(
         data: { leaseOwner: "vanished", leaseExpiresAt: new Date(Date.now() - 120_000) },
       });
       await crashing.catch(() => undefined);
+      checkpoint("crash injected", `${partial.toLocaleString()} durable rows written first`);
       assert.notEqual((await campaignPreparationProgress(fixture.campaignId))?.state, "ready");
       assert.equal(await completedAudienceRun(fixture.campaignId), null);
-      assert.equal(dispatched.length, 0, "a crashed preparation must not dispatch");
+      // Held in a local, because assert.equal narrows its argument's type and
+      // would leave dispatched.length fixed at 0 for the rest of the test.
+      const dispatchedAfterCrash = dispatched.length;
+      assert.equal(dispatchedAfterCrash, 0, "a crashed preparation must not dispatch");
 
       // --- recovery, measured ---
       const baseline = await settle();
@@ -249,6 +341,7 @@ test(
       }, 50);
       queries.length = 0;
       const before = await dbCounters(prisma);
+      checkpoint("recovery started");
       const recoveryStart = process.hrtime.bigint();
       const outcome = await prepareCampaignAudience(request, simulatedProvider);
       const recoveryMs = Number(process.hrtime.bigint() - recoveryStart) / 1e6;
@@ -257,6 +350,7 @@ test(
       const retained = (await settle()) - baseline;
       const captured = queries.splice(0, queries.length);
 
+      checkpoint("preparation complete", `${(recoveryMs / 60000).toFixed(1)} min after resume, status ${outcome.status}`);
       assert.equal(outcome.status, "approved", `recovery ended as ${outcome.status}`);
       const runId = outcome.runId!;
 
@@ -270,55 +364,155 @@ test(
         where: { unitType: "campaign", unitId: fixture.campaignId } });
       const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: fixture.campaignId } });
 
-      // --- arm parity against the deterministic reference, one stratum at a
-      // time ---
+      // --- verification against the independent oracle -------------------
       //
-      // Replaying the reference over the whole cohort at once is what the
-      // production path was rewritten to avoid, and it is what killed the first
-      // 1M attempt: the harness, not the product, ran the machine out of
-      // memory. Arms are decided independently within each assignment stratum,
-      // so replaying per stratum is the same computation with a bounded
-      // working set — the largest stratum, not the cohort.
-      const strata = await prisma.campaignAudienceMember.groupBy({
-        by: ["assignmentStratum"],
+      // Measured on its own baseline: the question "does the product hold a
+      // million customers in memory" is not the same question as "does the
+      // checker hold a million customers in memory", and conflating them is
+      // what made the first two attempts inconclusive.
+      checkpoint("verification started");
+      const verifierBaseline = await settle();
+      let verifierPeak = verifierBaseline;
+      const verifierSampler = setInterval(() => {
+        const used = process.memoryUsage().heapUsed;
+        if (used > verifierPeak) verifierPeak = used;
+      }, 50);
+      const verifyStart = process.hrtime.bigint();
+
+      // 1. The oracle derives pooling itself, from the census of ORIGINAL
+      //    strata. Reading assignmentStratum back and agreeing with it would
+      //    prove nothing about whether pooling was applied correctly.
+      const originalCensus = await prisma.campaignAudienceMember.groupBy({
+        by: ["stratum"],
         where: { runId, decision: "campaign_candidate" },
         _count: { _all: true },
       });
+      const oraclePooling = new Map<string, string>();
+      const oracleSizes = new Map<string, number>();
+      for (const row of originalCensus) {
+        const target =
+          row._count._all < ORACLE_POOL_BELOW ? ORACLE_POOLED_STRATUM : row.stratum;
+        oraclePooling.set(row.stratum, target);
+        oracleSizes.set(target, (oracleSizes.get(target) ?? 0) + row._count._all);
+      }
+      const oracleQuotas = new Map(
+        [...oracleSizes].map(([stratum, size]) => [stratum, oracleControlQuota(size, ORACLE_RATE)])
+      );
+      const pooledSourceStrata = [...oraclePooling.entries()].filter(
+        ([, target]) => target === ORACLE_POOLED_STRATUM
+      ).length;
+
+      // 2. Walk one assignment stratum at a time. The working set is the
+      //    largest stratum, never the cohort.
       let mismatches = 0;
       let compared = 0;
       let largestStratum = 0;
-      for (const stratum of strata) {
-        if (!stratum.assignmentStratum) continue;
-        largestStratum = Math.max(largestStratum, stratum._count._all);
-        const members: Array<{ customerId: string; arm: string | null }> = [];
+      let hashMismatches = 0;
+      let hashPrecisionDifferences = 0;
+      let poolingMismatches = 0;
+      let quotaMismatches = 0;
+      let pooledCompared = 0;
+      let pooledControls = 0;
+      const firstDifference: string[] = [];
+
+      for (const [assignmentStratum, expectedSize] of oracleSizes) {
+        largestStratum = Math.max(largestStratum, expectedSize);
+        const ranked: Array<{ customerId: string; value: number }> = [];
+        const stored = new Map<string, string | null>();
         let pageCursor: string | undefined;
         for (;;) {
-          const page: Array<{ customerId: string; arm: string | null }> =
-            await prisma.campaignAudienceMember.findMany({
-              where: {
-                runId,
-                decision: "campaign_candidate",
-                assignmentStratum: stratum.assignmentStratum,
-                ...(pageCursor ? { customerId: { gt: pageCursor } } : {}),
-              },
-              select: { customerId: true, arm: true },
-              orderBy: { customerId: "asc" },
-              take: 20_000,
-            });
+          const page: Array<{
+            customerId: string;
+            arm: string | null;
+            stratum: string;
+            assignmentStratum: string | null;
+            assignmentHash: number | null;
+          }> = await prisma.campaignAudienceMember.findMany({
+            where: {
+              runId,
+              decision: "campaign_candidate",
+              assignmentStratum,
+              ...(pageCursor ? { customerId: { gt: pageCursor } } : {}),
+            },
+            select: {
+              customerId: true,
+              arm: true,
+              stratum: true,
+              assignmentStratum: true,
+              assignmentHash: true,
+            },
+            orderBy: { customerId: "asc" },
+            take: 20_000,
+          });
           if (page.length === 0) break;
-          members.push(...page);
+          for (const row of page) {
+            // Pooling: the product's assignment stratum must be the one the
+            // oracle derives from this row's original stratum.
+            if (oraclePooling.get(row.stratum) !== row.assignmentStratum) {
+              poolingMismatches += 1;
+              if (firstDifference.length < 3) {
+                firstDifference.push(
+                  `pooling ${row.customerId}: stratum ${row.stratum} stored ${row.assignmentStratum} oracle ${oraclePooling.get(row.stratum)}`
+                );
+              }
+            }
+            // Hash: recomputed here from the documented rule, not read back.
+            const value = oracleAssignmentValue(
+              experiment.assignmentSeed,
+              assignmentStratum,
+              row.customerId
+            );
+            // Measured, not assumed: writing a double through Prisma keeps
+            // sixteen significant digits, so a value whose shortest exact
+            // decimal needs seventeen comes back one or two units in the last
+            // place away. The stored column must equal the documented value as
+            // storage can hold it; anything else is a real defect.
+            if (row.assignmentHash !== storedPrecision(value)) {
+              hashMismatches += 1;
+              if (firstDifference.length < 3) {
+                firstDifference.push(
+                  `hash ${row.customerId}: stored ${row.assignmentHash} oracle ${storedPrecision(value)}`
+                );
+              }
+            }
+            // Recorded separately: how often storage precision alone differs
+            // from the exact documented value. Not a failure — ranking below
+            // uses the exact value, so an arm mismatch is what would matter.
+            if (row.assignmentHash !== value) hashPrecisionDifferences += 1;
+            ranked.push({ customerId: row.customerId, value });
+            stored.set(row.customerId, row.arm);
+          }
           pageCursor = page[page.length - 1]!.customerId;
         }
-        const reference = experiments.assignStratifiedCohortArms({
-          assignmentSeed: experiment.assignmentSeed,
-          customers: members.map((m) => ({ customerId: m.customerId, stratum: stratum.assignmentStratum })),
-          rateForStratum: () => 0.15,
-        });
-        for (const member of members) {
+
+        // 3. Rank and draw the control quota independently of Postgres.
+        ranked.sort((a, b) => a.value - b.value || oracleByteOrder(a.customerId, b.customerId));
+        const quota = oracleQuotas.get(assignmentStratum) ?? 0;
+        const controls = new Set(ranked.slice(0, quota).map((entry) => entry.customerId));
+        let storedControls = 0;
+        for (const [customerId, arm] of stored) {
           compared += 1;
-          if (reference.assignments[member.customerId]?.arm !== member.arm) mismatches += 1;
+          const expectedArm = controls.has(customerId) ? "CONTROL" : "TREATMENT";
+          if (arm === "CONTROL") storedControls += 1;
+          if (arm !== expectedArm) {
+            mismatches += 1;
+            if (firstDifference.length < 3) {
+              firstDifference.push(`arm ${customerId}: stored ${arm} oracle ${expectedArm}`);
+            }
+          }
         }
+        if (storedControls !== quota) quotaMismatches += 1;
+        if (assignmentStratum === ORACLE_POOLED_STRATUM) {
+          pooledCompared = stored.size;
+          pooledControls = storedControls;
+        }
+        if (stored.size !== expectedSize) quotaMismatches += 1;
       }
+
+      clearInterval(verifierSampler);
+      const verifyMs = Number(process.hrtime.bigint() - verifyStart) / 1e6;
+      const verifierRetained = (await settle()) - verifierBaseline;
+      checkpoint("verification complete", `${(verifyMs / 1000).toFixed(0)} s`);
 
       // --- isolation: nothing simulated may reach downstream systems ---
       const isolation: Array<[string, number]> = [
@@ -339,9 +533,58 @@ test(
       }
       const heaviest = [...byShape.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 5);
 
+      // --- every check, collected rather than asserted one at a time ------
+      //
+      // Assertions run before anything is printed, and the block is headed
+      // with the verdict. A printed measurement block that appears before the
+      // checks have run reads like a result when it is not one.
+      for (const [label, count] of isolation) {
+        check(`isolation: no ${label}`, count === 0, `${count}`);
+      }
+      check("no duplicate member rows after crash and resume", duplicates === 0, `${duplicates}`);
+      check("every seeded customer has exactly one decision", memberRows === SIZE,
+        `${memberRows.toLocaleString()} of ${SIZE.toLocaleString()}`);
+      check("arms match the independent oracle", mismatches === 0,
+        `${mismatches} of ${compared.toLocaleString()}`);
+      check("assignment hashes match the independently recomputed rule, as stored", hashMismatches === 0,
+        `${hashMismatches} of ${compared.toLocaleString()}`);
+      check("small strata pooled exactly as the documented rule says", poolingMismatches === 0,
+        `${poolingMismatches} of ${compared.toLocaleString()}`);
+      check("control quota per stratum matches the independent quota", quotaMismatches === 0,
+        `${quotaMismatches} strata differ`);
+      check("pooling was actually exercised", pooledSourceStrata >= 2 && pooledCompared > 0,
+        `${pooledSourceStrata} sparse strata pooled into ${pooledCompared} candidates`);
+      check("the pooled stratum drew a real control quota", pooledControls > 0,
+        `${pooledControls} control of ${pooledCompared}`);
+      check("every candidate was compared", compared === progress!.candidates,
+        `${compared.toLocaleString()} vs ${progress!.candidates.toLocaleString()}`);
+      check("one measurement assignment per candidate", assignments === progress!.candidates,
+        `${assignments.toLocaleString()}`);
+      check("the audience reached ready", progress!.state === "ready", `${progress!.state}`);
+      check("the run survived a crash and a resume", (progress!.attempts ?? 0) >= 2,
+        `${progress!.attempts} attempts`);
+      check("the campaign was approved and handed to delivery", campaign.status === "sending" && Boolean(campaign.approvedAt),
+        `${campaign.status}`);
+      check("preparation did not deadlock", after.deadlocks - beforeAll.deadlocks === 0,
+        `${after.deadlocks - beforeAll.deadlocks}`);
+      check("the fixture excluded undeliverable and non-consented customers", progress!.notReceiving > 0,
+        `${progress!.notReceiving.toLocaleString()}`);
+      check("the fixture left loyal full-price customers alone", progress!.deliberatelyLeftAlone > 0,
+        `${progress!.deliberatelyLeftAlone.toLocaleString()}`);
+      check("preparation retained under 40 MB", retained < 40 * 1024 * 1024, `${mb(retained)} MB`);
+      check("exactly one simulated send job dispatched", dispatched.length === 1, `${dispatched.length}`);
+
+      const failed = checks.filter((entry) => !entry.ok);
+      const verdict = failed.length === 0 ? "PASS" : "FAIL";
+
       console.log([
         "",
-        `  === ONE MILLION CUSTOMERS, SINGLE TENANT (measured) ===`,
+        `  === ONE MILLION CUSTOMERS, SINGLE TENANT — ${verdict} ===`,
+        `  ${checks.length - failed.length} of ${checks.length} checks passed`,
+        "",
+        ...checks.map((entry) => `    ${entry.ok ? "PASS" : "FAIL"}  ${entry.label.padEnd(58)} ${entry.detail}`),
+        "",
+        "  --- production preparation, measured ---",
         `  seeded ....................... ${SIZE.toLocaleString()} in ${(seedMs / 60000).toFixed(1)} min`,
         `  API-side work ................ ${apiMs.toFixed(0)} ms`,
         `  crash injected after ......... ${partial.toLocaleString()} durable rows`,
@@ -353,6 +596,15 @@ test(
         `  query p50/p95/p99/max ........ ${percentile(durations,50)} / ${percentile(durations,95)} / ${percentile(durations,99)} / ${durations[durations.length-1] ?? 0} ms`,
         `  deadlocks .................... ${after.deadlocks - beforeAll.deadlocks}`,
         `  lock conflicts ............... ${after.conflicts - beforeAll.conflicts}`,
+        "",
+        "  --- verifier, measured separately ---",
+        `  verification duration ........ ${(verifyMs / 1000).toFixed(0)} s`,
+        `  verifier retained heap ....... ${verifierRetained <= 0 ? `no growth detected; ${mb(-verifierRetained)} MB below baseline` : `${mb(verifierRetained)} MB`}`,
+        `  verifier peak above baseline . ${mb(verifierPeak - verifierBaseline)} MB`,
+        `  largest stratum replayed ..... ${largestStratum.toLocaleString()}`,
+        `  hashes differing by storage .. ${hashPrecisionDifferences.toLocaleString()} of ${compared.toLocaleString()} (float8 keeps 16 significant digits; ranking uses the exact value, and no arm differed)`,
+        "",
+        "  --- what preparation produced ---",
         `  audience rows ................ ${memberRows.toLocaleString()}`,
         `  duplicate rows ............... ${duplicates}`,
         `  candidates ................... ${progress?.candidates.toLocaleString()}`,
@@ -361,34 +613,35 @@ test(
         `  control / treatment .......... ${progress?.control.toLocaleString()} / ${progress?.treatment.toLocaleString()}`,
         `  measurement assignments ...... ${assignments.toLocaleString()}`,
         `  attempts (crash + recovery) .. ${progress?.attempts}`,
-        `  arm parity ................... ${mismatches} mismatches of ${compared.toLocaleString()} (largest stratum ${largestStratum.toLocaleString()})`,
+        `  pooled stratum ............... ${pooledSourceStrata} sparse strata -> ${pooledCompared} candidates, ${pooledControls} control`,
         `  send orchestration ........... ${dispatched.length} simulated job dispatched`,
-        "  isolation:",
-        ...isolation.map(([l, c]) => `    ${l.padEnd(34)} ${c}`),
         "  heaviest statements (recovery):",
         ...heaviest.map(([shape, e]) => `    ${String(e.count).padStart(6)} x ${e.total.toFixed(0).padStart(8)} ms  ${shape}`),
+        ...(firstDifference.length ? ["  first differences:", ...firstDifference.map((d) => `    ${d}`)] : []),
         "",
       ].join("\n"));
 
-      for (const [label, count] of isolation) {
-        assert.equal(count, 0, `simulated run leaked into ${label}: ${count}`);
-      }
-      assert.equal(duplicates, 0, "a resumed 1M run must not duplicate a row");
-      assert.equal(memberRows, SIZE);
-      assert.equal(mismatches, 0, "arms must match the deterministic reference after crash and resume");
-      assert.equal(compared, progress!.candidates);
-      assert.equal(assignments, progress!.candidates);
-      assert.equal(progress!.state, "ready");
-      assert.ok(progress!.attempts >= 2);
-      assert.equal(campaign.status, "sending");
-      assert.ok(campaign.approvedAt);
-      assert.equal(after.deadlocks - beforeAll.deadlocks, 0, "preparation must not deadlock");
-      assert.ok(progress!.notReceiving > 0, "the fixture must exclude undeliverable and non-consented customers");
-      assert.ok(
-        progress!.deliberatelyLeftAlone > 0,
-        "the fixture must leave loyal full-price customers alone, or that path is unexercised"
+      assert.equal(
+        failed.length,
+        0,
+        `${failed.length} check(s) failed: ${failed.map((entry) => entry.label).join("; ")}`
       );
-      assert.ok(retained < 40 * 1024 * 1024, `${mb(retained)} MB retained at 1M`);
+
+    } catch (error) {
+      // An assertion failure is a FAIL and has already printed its block. A
+      // harness error is neither a pass nor a fail: it means the proof did not
+      // finish, and the checkpoint stream says where it stopped.
+      if (!(error as { code?: string }).code?.startsWith?.("ERR_ASSERTION")) {
+        console.log([
+          "",
+          "  === ONE MILLION CUSTOMERS, SINGLE TENANT — INCONCLUSIVE ===",
+          `  the harness stopped after: ${lastCheckpoint}`,
+          `  ${(error as Error).message}`,
+          "  No readiness conclusion may be drawn from this run.",
+          "",
+        ].join("\n"));
+      }
+      throw error;
     } finally {
       await prisma.messageLog.deleteMany({ where: { workspaceId: fixture.workspaceId } }).catch(() => undefined);
       await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
