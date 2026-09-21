@@ -15,6 +15,7 @@
  *   MODE=seed    ... build the fixture and prepare it, leaving it in place
  *   MODE=explain ... EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS) one run
  *   MODE=reset   ... set arm back to NULL and VACUUM, ready for another trial
+ *   MODE=breakdown . the component costs, each from the same reset state
  *   MODE=status  ... what is in the disposable database right now
  *
  *   MODE=explain TEST_DATABASE_URL=... npx tsx apps/workers/src/workers/control-selection.diagnostic.ts
@@ -101,6 +102,59 @@ async function main() {
     return;
   }
 
+  if (MODE === "breakdown") {
+    const quotas = quotaValuesFrom(run.diagnostics);
+    if (quotas.length === 0) {
+      console.error("the run has no stored quota plan; cannot reproduce the statement");
+      process.exit(1);
+    }
+    // Each variant starts from the same state — arms cleared, table vacuumed
+    // and analysed — so the numbers are comparable to each other and to the
+    // same run at a different size.
+    const variants: Array<{ name: string; sql: string }> = [
+      { name: "ranking only, no write", sql: rankingOnlySql(run.id) },
+      { name: "the statement as it is today, every candidate written", sql: statementSql(run.id, quotas) },
+      { name: "only the control rows written", sql: controlOnlySql(run.id, quotas) },
+    ];
+    const results: Array<Record<string, string>> = [];
+    for (const variant of variants) {
+      await resetArms(prisma, run.id);
+      const before = await ioCounters(prisma);
+      const plan = await prisma.$queryRawUnsafe<Array<Record<string, string>>>(
+        `EXPLAIN (ANALYZE, BUFFERS, WAL, TIMING) ${variant.sql}`
+      );
+      const after = await ioCounters(prisma);
+      const text = plan.map((row) => Object.values(row)[0]).join("\n");
+      results.push({
+        variant: variant.name,
+        ms: match(text, /Execution Time: ([\d.]+) ms/) ?? "?",
+        walRecords: match(text, /WAL: records=(\d+)/) ?? "0",
+        walBytes: match(text, /WAL:[^\n]*bytes=(\d+)/) ?? "0",
+        buffers: match(text, /Buffers: shared hit=(\d+)/) ?? "0",
+        sort: match(text, /Sort Method: ([^\n]+?)\s*$/m) ?? "none",
+        tempBytes: String(after.tempBytes - before.tempBytes),
+      });
+      console.log(`  measured: ${variant.name}`);
+    }
+
+    const candidates = await prisma.campaignAudienceMember.count({
+      where: { runId: run.id, decision: "campaign_candidate" },
+    });
+    console.log(`\n=== CONTROL SELECTION, COMPONENT COSTS — ${candidates.toLocaleString()} candidates ===\n`);
+    for (const row of results) {
+      console.log(`  ${row["variant"]}`);
+      console.log(`    execution ............ ${Number(row["ms"]).toLocaleString()} ms`);
+      console.log(`    WAL .................. ${Number(row["walRecords"]).toLocaleString()} records, ${(Number(row["walBytes"]) / 1048576).toFixed(1)} MB`);
+      console.log(`    shared buffer hits ... ${Number(row["buffers"]).toLocaleString()}`);
+      console.log(`    sort ................. ${row["sort"]}`);
+      console.log(`    temp bytes ........... ${Number(row["tempBytes"]).toLocaleString()}`);
+      console.log("");
+    }
+    // Left in the assigned state is wrong for a later trial; leave it clean.
+    await resetArms(prisma, run.id);
+    return;
+  }
+
   if (MODE === "explain") {
     const quotas = quotaValuesFrom(run.diagnostics);
     if (quotas.length === 0) {
@@ -136,6 +190,66 @@ async function main() {
     console.log("\n--- EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS) ---");
     for (const row of plan) console.log("  " + Object.values(row)[0]);
   }
+}
+
+function match(text: string, pattern: RegExp): string | undefined {
+  return pattern.exec(text)?.[1];
+}
+
+async function resetArms(prisma: any, runId: string): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `UPDATE "campaign_audience_members" SET "arm" = NULL WHERE "runId" = $1 AND "arm" IS NOT NULL`,
+    runId
+  );
+  await prisma.$executeRawUnsafe(`VACUUM (ANALYZE) "campaign_audience_members"`);
+}
+
+/** The ranking on its own. Aggregated by max so the window function cannot be
+ *  optimised away, which is what happens with a plain count. */
+function rankingOnlySql(runId: string): string {
+  return `
+    WITH ranked AS (
+      SELECT
+        m."id",
+        m."assignmentStratum" AS stratum,
+        row_number() OVER (
+          PARTITION BY m."assignmentStratum"
+          ORDER BY m."assignmentHash" ASC, m."customerId" COLLATE "C" ASC
+        ) AS rank
+      FROM "campaign_audience_members" m
+      WHERE m."runId" = ${literal(runId)}
+        AND m."decision" = 'campaign_candidate'
+        AND m."assignmentStratum" IS NOT NULL
+    )
+    SELECT max(rank), max(stratum) FROM ranked`;
+}
+
+/** The same ranking, writing only the rows that become CONTROL. A measurement,
+ *  not a proposal: the product still writes every candidate. */
+function controlOnlySql(runId: string, quotas: Array<[string, number]>): string {
+  const values = quotas
+    .map(([stratum, quota]) => `(${literal(stratum)}::text, ${Math.trunc(quota)}::int)`)
+    .join(",");
+  return `
+    WITH quotas(stratum, quota) AS (VALUES ${values}),
+    ranked AS (
+      SELECT
+        m."id",
+        m."assignmentStratum" AS stratum,
+        row_number() OVER (
+          PARTITION BY m."assignmentStratum"
+          ORDER BY m."assignmentHash" ASC, m."customerId" COLLATE "C" ASC
+        ) AS rank
+      FROM "campaign_audience_members" m
+      WHERE m."runId" = ${literal(runId)}
+        AND m."decision" = 'campaign_candidate'
+        AND m."assignmentStratum" IS NOT NULL
+    )
+    UPDATE "campaign_audience_members" AS target
+    SET "arm" = 'CONTROL'::"TreatmentArm"
+    FROM ranked
+    JOIN quotas ON quotas."stratum" = ranked."stratum"
+    WHERE target."id" = ranked."id" AND ranked."rank" <= quotas."quota"`;
 }
 
 /** The statement the engine runs, reproduced so EXPLAIN describes the real plan. */
