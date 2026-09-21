@@ -1304,6 +1304,133 @@ different machines, so even that comparison is not sound.
 bottleneck this size without the 1M plan.** That measurement
 (`.github/workflows/control-selection.yml`) has not been run.
 
+## Control-selection diagnosis at one million — 2026-09-21T12:01:01Z
+
+_Status: **diagnosed**. GitHub Actions runs `35593544874` (inconclusive) and
+`35595088570` (complete), branch `diag/control-selection-1m`, commits `7822338`
+`5ed07dc` `9fff4ee`. Measurement only — the statement the product runs was not
+changed to obtain these numbers._
+
+### Run 35593544874 — inconclusive
+
+Fixture seeding and the real million-customer preparation **both succeeded**:
+1,000,000 customers seeded in 3.5 min, prepared through the real job path in
+9.9 min, status `approved`. The diagnostic measurement then failed at its first
+reset:
+
+```
+ERROR: could not resize shared memory segment "/PostgreSQL.2022276388"
+to 67145376 bytes: No space left on device      (SQLSTATE 53100)
+```
+
+**This was not disk exhaustion and not a campaign-preparation failure.** The
+device is `/dev/shm`, which a Docker service container caps at 64 MB by
+default; Postgres asked for 67,145,376 bytes of dynamic shared memory for a
+parallel operation. The runner had **79 GB of disk free** and 4.5 GB of memory
+free at that moment.
+
+No measurement was produced, so **no conclusion about control-selection cost
+may be drawn from this run**.
+
+### Run 35595088570 — the rerun, and exactly what changed
+
+The rerun sets Docker `--shm-size=2g` on the Postgres service container.
+
+- This changes **the Docker container runtime shared-memory limit**, and
+  nothing else.
+- It does **not** change Postgres `work_mem`, `shared_buffers`,
+  `maintenance_work_mem`, `random_page_cost`, parallelism, or any query. The
+  settings printed by the run are the defaults: `work_mem` 4 MB,
+  `shared_buffers` 128 MB, `maintenance_work_mem` 64 MB,
+  `max_parallel_workers_per_gather` 2.
+- The numbers below are therefore valid **for a properly provisioned Postgres
+  environment** — one whose container is not capped at 64 MB of shared memory.
+- They must **not** be described as performance on the default 64 MB Docker
+  shared-memory configuration. On that configuration this statement did not
+  complete at all.
+- They do **not** establish anything about Railway. **Whether the deployed
+  database has comparable shared memory, page cache or I/O is an external
+  environment fact and has not been checked.**
+
+### Component costs at 1,000,000 candidates
+
+Each variant measured from the same state — arms cleared, table vacuumed and
+analysed — by the same code that measured 100,000.
+
+| Variant | Execution | WAL records | WAL | Shared buffer hits | Sort |
+| --- | --- | --- | --- | --- | --- |
+| Ranking only, no write | **1,178 ms** | 0 | 0 MB | 490 | external merge, 15,024 kB |
+| **The statement as it is today** | **63,679 ms** | 8,098,580 | **4,230 MB** | 23,463,380 | external merge, 79,512 kB |
+| Only the control rows written | **11,064 ms** | 1,203,846 | **180 MB** | 3,488,920 | external merge, 79,512 kB |
+
+**The ranking is 1.85% of the statement.** The rest is the write.
+
+### The full plan
+
+`EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS)`, execution time **62,616 ms**:
+
+| Node | Actual | Note |
+| --- | --- | --- |
+| Seq Scan on members (for ranking) | 304 ms, 71,431 pages read | **no index used** |
+| Sort | 1,412 ms | external merge, **Disk 79,512 kB** |
+| WindowAgg (`row_number`) | 1,686 ms | |
+| Seq Scan on members (target side) | 209 ms | **no index used** |
+| Hash (target ctid, id) | 389 ms | **Batches 16**, 4,930 kB — spilled |
+| Hash Join | 3,241 ms | |
+| Hash Join with quotas | 3,571 ms | the whole read side finishes here |
+| **Update** | **62,607 ms** | shared hit 23,272,804, **read 2,991,661, dirtied 2,843,463, written 2,802,425** |
+| WAL | | **records 8,043,044, fpi 669,592, bytes 3,994,554,973** |
+
+**94.3% of the statement is applying the update** — 62,607 ms total against a
+read side that finishes at 3,571 ms.
+
+Temp I/O: 31 temp files, 249,984,486 bytes. Planning 0.486 ms. JIT 11.7 ms.
+
+**Lock wait was not separately instrumented.** `EXPLAIN` does not report it.
+What is measured is that the 1M proof recorded **0 deadlocks and 0 lock
+conflicts** across the whole recovery, so there is no evidence of lock waiting,
+but neither is there a direct measurement of it in this statement.
+
+### 100,000 against 1,000,000 — what changes with size
+
+| | 100k | 1M | Ratio |
+| --- | --- | --- | --- |
+| Candidates | 100,000 | 1,000,000 | 10x |
+| Whole statement | 4,816 ms | 63,679 ms | **13.2x** |
+| Ranking only | 98 ms | 1,178 ms | 12.0x |
+| Sort spill | 7,968 kB | 79,512 kB | 10.0x |
+| Temp files / bytes | 1 / 8.2 MB | 31 / 250.0 MB | 30.6x |
+| Hash build for the target side | **Batches 1**, 7,274 kB | **Batches 16**, 4,930 kB | spills |
+| Update: shared hits | 2,429,973 | 23,272,804 | 9.6x |
+| Update: pages **read** | 1,482 | **2,991,661** | **2,019x** |
+| Update: pages **written** | 155 | **2,802,425** | **18,080x** |
+| WAL records | 811,083 | 8,043,044 | 9.9x |
+| WAL **full-page images** | 1,494 | **669,592** | **448x** |
+| WAL bytes | 91.2 MB | 3,995 MB | **43.8x** |
+| WAL bytes per updated row | ~956 B | ~3,995 B | 4.2x |
+
+**Buffer touches, WAL records and the sort all scale linearly with rows.** Two
+things do not: **physical page reads and writes**, and **full-page images**.
+
+The cause is in the sizes. At a million the table is 580 MB of heap and 753 MB
+of indexes — **1,334 MB against 128 MB of `shared_buffers`**, a ratio of 10.4
+to 1. At 100,000 the same table is 110 MB, which the cache holds comfortably.
+So the same work is cache-resident at one size and physical I/O at the other,
+and the first touch of each page after a checkpoint writes a full 8 KB image
+into WAL.
+
+### The index built for this statement is not used by it
+
+`campaign_audience_members_runId_assignmentStratum_assignmentHash_customerId`
+exists specifically to support
+`ORDER BY "assignmentHash", "customerId" COLLATE "C"`. At a million it is
+**338 MB**, the largest index on the table, and the planner **chose a Seq Scan
+and an external sort instead of using it** — at both sizes. It is maintained on
+every insert and on every non-HOT update, and it earns nothing here.
+
+Recorded as an observation. Removing an index is a separate decision with its
+own evidence requirement, and no other query was checked for dependence on it.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -1537,6 +1664,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T12:01:01Z | `9fff4ee` | **diagnosed** | Control-selection measured at 1M on a hosted runner (run 35595088570). Statement 63,679 ms; ranking alone 1,178 ms (1.85%); update applies 94.3%. WAL 8,043,044 records, 669,592 full-page images, 3,995 MB. Pages read 2,991,661 and written 2,802,425 against 1,482 and 155 at 100k. Table 1,334 MB against 128 MB shared_buffers. Writing only the control rows: 11,064 ms and 180 MB of WAL — 5.8x faster, 23x less WAL. The 338 MB index built for this ORDER BY is not used by the planner at either size. | Run 35593544874 before it was **inconclusive**: seeding and real 1M preparation succeeded, but the measurement failed on Docker's default 64 MB /dev/shm, not disk (79 GB free) and not preparation. The rerun raises only the container shared-memory limit — no Postgres setting and no query changed — so the numbers hold for a properly provisioned Postgres and must not be read as performance under a 64 MB /dev/shm. **Nothing here establishes Railway's shared memory, page cache or I/O; that remains an external environment fact.** Lock wait was not separately instrumented |
 | 2026-09-21T11:18:48Z | `7db1e9c` `8c9484d` | **pass** | 1M attempt 4, GitHub Actions run 35591808109: **25 of 25 checks passed** against the independent oracle. 1,000,000 customers, 772,938 candidates, 115,938 control, 657,000 treatment; 0 arm, hash, pooling or quota mismatches; pooling exercised (8 sparse strata → 40 candidates, 6 control); 0 duplicates; crash at 200,000 rows and recovery in 484 s; 0 live-provider calls and 0 rows in billing, Results, causal proof, warm-up and reputation. Preparation retained 17.54 MB, peak 147.9 MB; verifier measured separately at 0.06 MB retained, 296.5 MB peak. | **Correction:** the control-selection statement took 58,649 ms here against 468,127 ms in attempt 3, on identical Postgres settings. The 468 s figure came from a memory-starved laptop and does not reproduce; the "twelve times worse than linear" claim is withdrawn. The statement is 12% of recovery here. The 1M EXPLAIN has still not been run, and no optimisation is adopted |
 | 2026-09-21T11:08:46Z | `7822338` `8c9484d` | **diagnosis in progress** | 100k control-selection baseline measured. Whole statement 5,027 ms; ranking alone 193 ms, so ~96% is the write. 2,427,846 buffers and 805,948 WAL records for 100,000 updated rows. Proven not HOT: removing the only index containing `arm` and giving pages 10% free space still wrote 5.8 WAL records per row. Writing only the 14,996 control rows measured 1,272 ms and 14 MB of WAL — 3.9x faster, 7x less WAL. Behaviour frozen; nothing adopted. | Does not explain the million-customer statement: 5.0 s at 100k scales linearly to ~38 s at 772,929 candidates, but 468 s was measured. The 1M EXPLAIN is still pending, and no candidate will be prototyped before it. The 1M work moved to a hosted runner after the local run was killed with 0.05 GB free and 2.42 GB held by Chrome |
 | 2026-09-21T10:47:19Z | `7db1e9c` | **implemented and verified at 20,000** | The 1M verifier no longer calls the product's assignment code. It re-derives the documented hash, pooling, quota and ranking independently, measures its own memory separately, prints structured checkpoints, and prints the verdict after the checks rather than before. Proven able to fail: three mutations each failed exactly the checks that name them. Fixture now reserves 8 strata of 5, exempt from every exclusion, so pooling is exercised — 40 candidates, 6 control. 25 of 25 checks passed at 20,000. | Not yet run at a million with this oracle; that is a separate result. Measured: storing a double through Prisma keeps 16 significant digits, so 3,941 of 15,467 stored hashes differ from the exact value by one or two ULP — recorded, not changed, because fixing it would alter deterministic assignment storage |
