@@ -1421,6 +1421,12 @@ into WAL.
 
 ### The index built for this statement is not used by it
 
+> **Corrected 2026-09-21T13:16:40Z.** "The planner chose a Seq Scan ... at both
+> sizes" holds for the plan captured in this run, but the variants run later
+> reported an index scan somewhere in the baseline plan after a table rewrite,
+> and the harness does not record which index. The index was dropped on
+> write-side evidence, not on this claim.
+
 `campaign_audience_members_runId_assignmentStratum_assignmentHash_customerId`
 exists specifically to support
 `ORDER BY "assignmentHash", "customerId" COLLATE "C"`. At a million it is
@@ -1430,6 +1436,109 @@ every insert and on every non-HOT update, and it earns nothing here.
 
 Recorded as an observation. Removing an index is a separate decision with its
 own evidence requirement, and no other query was checked for dependence on it.
+
+## Control selection — one change adopted, one rejected — 2026-09-21T13:16:40Z
+
+_Status: **diagnosed; one change adopted**. Commits `9a23061` (rejection and
+the quota guard) and `199abda` (the index). Proof rerun: GitHub Actions
+`35602634482`, **25 of 25 checks passed**._
+
+### Rejected: writing only the control rows
+
+Measured at a million candidates: **11,064 ms against 63,679 ms, and 180 MB of
+WAL against 4,230 MB** — 5.8x faster, 23x less WAL. Implemented, then reverted.
+
+It requires candidates to arrive already marked TREATMENT so the draw only
+updates the ones that change. But `materialiseMeasurementAssignments` uses
+`arm IS NOT NULL` to refuse delivery authority to a member that was never
+assigned. Under the change every candidate carries an arm from the moment the
+row is written, so an interrupted run becomes indistinguishable from a
+completed one — and it fails in the wrong direction: everyone reads as
+treatment rather than as unassigned.
+
+Two integration tests failed on exactly that property, which is what surfaced
+it: *a failed run stays invisible to anything downstream* and *an interrupted
+run resumes from durable work instead of discarding it*.
+
+The gain was roughly eleven per cent of a background job's wall time. That is
+not a trade worth making on the path that decides who is withheld. The
+reasoning sits next to the statement in the source so the measurement is not
+rediscovered and mistaken for an oversight.
+
+**Kept from the attempt:** a stronger completion guard. "No candidate is still
+null" proves every row was written; it does not prove the right number were
+withheld. The run now also asserts the drawn control count equals the plan's.
+
+### Adopted: drop the index added for the control-selection ORDER BY
+
+Both arms back to back on one runner, same fixture, each from a freshly
+rewritten table:
+
+| Arm, 1,000,000 candidates | Time | WAL | Full-page images | Indexes |
+| --- | --- | --- | --- | --- |
+| As it was | 80,565 ms | 3,370.8 MB | 398,762 | 576 MB |
+| **Without the ordering index** | **53,252 ms** | **1,710.2 MB** | **140,769** | 383 MB |
+| fillfactor 90, all indexes | 74,253 ms | 3,333.5 MB | 405,138 | 580 MB |
+| fillfactor 90, without it | 56,992 ms | 1,821.1 MB | 161,243 | 387 MB |
+
+**−33.9% time, −49.3% WAL.** At 100,000 the same comparison is 4,881 ms against
+5,539 ms and 87.2 MB against 109.5 MB, so the direction holds at both sizes.
+Leaving free space on each page does nothing on its own, which is expected when
+every row is rewritten and HOT cannot apply.
+
+The saving is write-side: the draw updates every candidate row, changing `arm`
+cannot be a HOT update, so each row costs an entry in every index on the table.
+This was the largest of six — 338 MB at a million — and carrying it through
+that update costs roughly 258,000 full-page images.
+
+No production query filters or orders on `assignmentStratum` except the control
+selection itself. Nothing about which customers are chosen changes, and
+re-creating the index is one statement.
+
+**Correction.** An earlier entry said the planner "never uses it at either
+size." That is not supported. The full plan captured in run `35595088570` shows
+sequential scans and no index scan, but the variants run reported an index scan
+somewhere in the baseline plan after the table was rewritten, and the harness
+records only whether an index was used, not which one. The decision does not
+rest on the scan question — the saving is index maintenance during the update,
+not reading.
+
+### The proof, re-run with the index gone
+
+`35602634482`, **25 of 25 checks passed**: 1,000,000 customers, 772,938
+candidates, 115,938 control, 657,000 treatment, **0 arm, hash, pooling and
+quota mismatches** against the independent oracle, pooling exercised (8 sparse
+strata → 40 candidates, 6 control), 0 duplicates, crash at 200,000 rows and
+recovery in 496 s, preparation retained 17.55 MB, verifier measured separately
+at 0.06 MB retained and 296.51 MB peak, and 0 rows in billing, Results, causal
+proof, warm-up and reputation.
+
+The control-selection statement fell from **58,649 ms to 43,152 ms (−26%)** in
+the real preparation path.
+
+### What this did not do, stated plainly
+
+Total recovery went from **484 s to 496 s** — slightly *slower*, not faster.
+Statements this change cannot touch moved as much or more:
+
+| Heaviest statement | Before | After | |
+| --- | --- | --- | --- |
+| Control selection | 58,649 ms | **43,152 ms** | −26% |
+| Insert `customer_audience_decisions` | 55,197 ms | 63,072 ms | +14% |
+| Insert `measurement_assignments` | 48,841 ms | 56,317 ms | +15% |
+| Insert `campaign_audience_evaluation_rows` | 43,406 ms | 48,137 ms | +11% |
+| Insert `campaign_audience_members` | 33,766 ms | 32,529 ms | −4% |
+
+Those three inserts write to different tables and cannot be affected by
+dropping an index on `campaign_audience_members`. They moved by 11 to 15 per
+cent between two runs on different hosted runners, which is the noise floor for
+an end-to-end comparison of this kind.
+
+**So the end-to-end run neither confirms nor refutes a change of a few per cent
+in total preparation time, and no claim is made that preparation got faster
+overall.** The adoption rests on the controlled comparison — both arms, one
+runner, one fixture, back to back — and on the WAL reduction, which is
+structural rather than timing-dependent.
 
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
@@ -1664,6 +1773,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T13:16:40Z | `9a23061` `199abda` | **one adopted, one rejected** | Control-only draw measured at 11,064 ms against 63,679 ms and 180 MB of WAL against 4,230 MB — **rejected**: it requires candidates to arrive marked TREATMENT, which makes an interrupted run indistinguishable from a completed one and fails toward sending. Two integration tests caught it. Dropping the ordering index **adopted**: 53,252 ms against 80,565 ms and 1,710 MB of WAL against 3,371 MB at 1M, both arms on one runner; 4,881 against 5,539 ms at 100k. Proof re-run 35602634482 passed 25 of 25 with the statement at 43,152 ms against 58,649 ms. Integration suite 50/50. | **Total recovery went 484 s to 496 s — slightly slower.** Three inserts on other tables, which this change cannot affect, moved 11-15% between runners, so end-to-end timing across runs is noise-dominated and no overall speed-up is claimed. Adoption rests on the controlled same-runner comparison and the structural WAL reduction. Earlier claim that the planner "never uses" the index is **corrected**: the harness records whether an index was used, not which one |
 | 2026-09-21T12:01:01Z | `9fff4ee` | **diagnosed** | Control-selection measured at 1M on a hosted runner (run 35595088570). Statement 63,679 ms; ranking alone 1,178 ms (1.85%); update applies 94.3%. WAL 8,043,044 records, 669,592 full-page images, 3,995 MB. Pages read 2,991,661 and written 2,802,425 against 1,482 and 155 at 100k. Table 1,334 MB against 128 MB shared_buffers. Writing only the control rows: 11,064 ms and 180 MB of WAL — 5.8x faster, 23x less WAL. The 338 MB index built for this ORDER BY is not used by the planner at either size. | Run 35593544874 before it was **inconclusive**: seeding and real 1M preparation succeeded, but the measurement failed on Docker's default 64 MB /dev/shm, not disk (79 GB free) and not preparation. The rerun raises only the container shared-memory limit — no Postgres setting and no query changed — so the numbers hold for a properly provisioned Postgres and must not be read as performance under a 64 MB /dev/shm. **Nothing here establishes Railway's shared memory, page cache or I/O; that remains an external environment fact.** Lock wait was not separately instrumented |
 | 2026-09-21T11:18:48Z | `7db1e9c` `8c9484d` | **pass** | 1M attempt 4, GitHub Actions run 35591808109: **25 of 25 checks passed** against the independent oracle. 1,000,000 customers, 772,938 candidates, 115,938 control, 657,000 treatment; 0 arm, hash, pooling or quota mismatches; pooling exercised (8 sparse strata → 40 candidates, 6 control); 0 duplicates; crash at 200,000 rows and recovery in 484 s; 0 live-provider calls and 0 rows in billing, Results, causal proof, warm-up and reputation. Preparation retained 17.54 MB, peak 147.9 MB; verifier measured separately at 0.06 MB retained, 296.5 MB peak. | **Correction:** the control-selection statement took 58,649 ms here against 468,127 ms in attempt 3, on identical Postgres settings. The 468 s figure came from a memory-starved laptop and does not reproduce; the "twelve times worse than linear" claim is withdrawn. The statement is 12% of recovery here. The 1M EXPLAIN has still not been run, and no optimisation is adopted |
 | 2026-09-21T11:08:46Z | `7822338` `8c9484d` | **diagnosis in progress** | 100k control-selection baseline measured. Whole statement 5,027 ms; ranking alone 193 ms, so ~96% is the write. 2,427,846 buffers and 805,948 WAL records for 100,000 updated rows. Proven not HOT: removing the only index containing `arm` and giving pages 10% free space still wrote 5.8 WAL records per row. Writing only the 14,996 control rows measured 1,272 ms and 14 MB of WAL — 3.9x faster, 7x less WAL. Behaviour frozen; nothing adopted. | Does not explain the million-customer statement: 5.0 s at 100k scales linearly to ~38 s at 772,929 candidates, but 468 s was measured. The 1M EXPLAIN is still pending, and no candidate will be prototyped before it. The 1M work moved to a hosted runner after the local run was killed with 0.05 GB free and 2.42 GB held by Chrome |
