@@ -10,6 +10,7 @@ export type {
 
 // Opportunity Scanner
 export { scanOpportunities } from "./opportunity-scanner";
+export type { OpportunityScanTelemetry } from "./opportunity-scanner";
 export { opportunityFingerprint, opportunityJobId } from "./opportunity-dedupe";
 
 // Campaign Factory
@@ -80,12 +81,15 @@ export {
   materialiseAudienceEvaluation,
   materialiseAudienceDecisions,
   leftAloneActivitySummary,
+  recordAudienceReadyActivity,
+  recordAudienceNeedsAttentionActivity,
 } from "./audience-run";
 export type {
   AudienceRunInput,
   AudienceRunResult,
   AudienceRunStatus,
   AudienceRunProgress,
+  AudienceRunState,
 } from "./audience-run";
 export {
   withCampaignAudienceSnapshot,

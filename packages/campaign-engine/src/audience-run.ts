@@ -48,8 +48,22 @@ export class AudienceRunBusyError extends Error {
   }
 }
 
-/** Merchant-meaningful preparation progress. No database mechanics. */
+/**
+ * What preparation is doing, in the merchant's terms.
+ *
+ * `state` is deliberately not the run's internal status. A merchant has no use
+ * for "resolving" versus "assigning" — both mean Joon is still working — and
+ * "failed" reads as lost work when the run is in fact queued for another
+ * attempt. The internal status stays available as `status` for operators and
+ * logs; the UI shows `state` and `detail`.
+ */
+export type AudienceRunState = "preparing" | "ready" | "needs_attention";
+
 export interface AudienceRunProgress {
+  /** Stable across retries, resumes and takeovers. */
+  runId: string;
+  state: AudienceRunState;
+  /** Internal run status. Operator-facing; not for merchant UI. */
   status: AudienceRunStatus;
   evaluated: number;
   candidates: number;
@@ -60,6 +74,14 @@ export interface AudienceRunProgress {
   startedAt: Date;
   completedAt: Date | null;
   attempts: number;
+  /**
+   * Whether another attempt will happen on its own. A stalled or failed run is
+   * picked up by the recovery sweep, so it is recoverable without the merchant
+   * approving again — which is what stops it reading as abandoned.
+   */
+  recoverable: boolean;
+  /** One sentence in merchant language, or null while simply working. */
+  detail: string | null;
 }
 
 /** Members whose decision makes them eligible for an arm. */
@@ -447,6 +469,19 @@ async function resolveAndAssign(
       `Audience run ${run.id} left ${unassigned} of ${candidateCount} candidates unassigned`
     );
   }
+  // Candidates are inserted as TREATMENT, so "no candidate is still null" no
+  // longer distinguishes a run whose control group was drawn from one where
+  // the draw never ran. The quota does: it is the number of rows the plan said
+  // to withhold, and only the draw can produce it.
+  const plannedControl = Object.values(plan.strata).reduce(
+    (total, stratum) => total + stratum.controlCount,
+    0
+  );
+  if (controlCount !== plannedControl) {
+    throw new Error(
+      `Audience run ${run.id} drew ${controlCount} control of a planned ${plannedControl}`
+    );
+  }
 
   const diagnostics = {
     memberWriteStatements,
@@ -495,6 +530,16 @@ async function resolveAndAssign(
  * Exact per-stratum control selection, performed by Postgres over the durable
  * rows. One statement for the whole audience: each candidate is ranked inside
  * its assignment stratum and the first `controlCount` are marked CONTROL.
+ *
+ * Every candidate's arm is written, including the ones that end up TREATMENT,
+ * and that is deliberate. Writing only the control rows was measured at a
+ * million candidates as 11,064 ms against 63,679 ms, with 180 MB of WAL
+ * against 4,230 MB — but it requires candidates to arrive already marked
+ * TREATMENT, which makes "this member was deliberately assigned" unreadable
+ * from the row. `materialiseMeasurementAssignments` uses exactly that
+ * (`arm IS NOT NULL`) to refuse to grant delivery authority to an unassigned
+ * member. Trading that for eleven per cent of a background job's wall time is
+ * not a trade worth making on the path that decides who is withheld.
  *
  * `customerId` is compared with the C collation so the tiebreak is byte order
  * regardless of database locale, matching the in-memory reference ranking for
@@ -590,9 +635,14 @@ export async function campaignPreparationProgress(
     orderBy: { startedAt: "desc" },
   });
   if (!run) return null;
+  const status = run.status as AudienceRunStatus;
   const evaluated = run.candidateCount + run.leftAloneCount + run.excludedCount;
+  const state: AudienceRunState =
+    status === "complete" ? "ready" : status === "failed" ? "needs_attention" : "preparing";
   return {
-    status: run.status as AudienceRunStatus,
+    runId: run.id,
+    state,
+    status,
     evaluated,
     candidates: run.candidateCount,
     deliberatelyLeftAlone: run.leftAloneCount,
@@ -602,6 +652,19 @@ export async function campaignPreparationProgress(
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     attempts: run.attempts,
+    // A failed run is queued for another attempt by the recovery sweep, so it
+    // is never abandoned; the merchant does not have to approve again.
+    recoverable: status !== "complete",
+    // The reason only. "Nothing has been sent" is reassurance the surface adds
+    // alongside it; carrying it here too made the merchant read it twice.
+    detail:
+      status === "failed"
+        ? "Joon stopped partway through working out this audience and will try again on its own."
+        : status === "complete"
+          ? null
+          : run.attempts > 1
+            ? "Joon is picking this up again after an interruption. Work already done has been kept."
+            : null,
   };
 }
 
@@ -898,4 +961,65 @@ export async function leftAloneActivitySummary(
     take: options.sampleSize ?? 100,
   });
   return { total, reasonCounts, customerIds: sample.map((row) => row.customerId) };
+}
+
+/**
+ * Tell the merchant their audience is ready, durably.
+ *
+ * Preparation outlives the page, so the merchant may be anywhere — or nowhere —
+ * when it finishes. This writes an in-app activity entry they will find when
+ * they come back. It is deliberately in-app only: no external email is sent for
+ * this in v1.
+ *
+ * `entityId`/`entityType` are what let the notification open the campaign.
+ */
+export async function recordAudienceReadyActivity(input: {
+  campaignId: string;
+  storeId: string;
+  campaignName: string;
+  control: number;
+  treatment: number;
+  deliberatelyLeftAlone: number;
+}): Promise<void> {
+  const group = (count: number) => count.toLocaleString("en-IN");
+  await prisma.agentActivityLog.create({
+    data: {
+      storeId: input.storeId,
+      activityType: "audience_ready",
+      summary: `Campaign audience ready for review. ${group(input.treatment)} would receive ${input.campaignName}, ${group(input.control)} are held back as a control group, and ${group(input.deliberatelyLeftAlone)} were deliberately left alone.`,
+      category: "campaign",
+      actionTaken: "queued_for_review",
+      entityId: input.campaignId,
+      entityType: "campaign",
+      metadata: {
+        treatment: input.treatment,
+        control: input.control,
+        deliberatelyLeftAlone: input.deliberatelyLeftAlone,
+      },
+    },
+  });
+}
+
+/**
+ * Tell the merchant preparation needs another go, in language that does not
+ * read as lost work — because it is not: the run is queued for another attempt
+ * and nothing has been sent.
+ */
+export async function recordAudienceNeedsAttentionActivity(input: {
+  campaignId: string;
+  storeId: string;
+  campaignName: string;
+}): Promise<void> {
+  await prisma.agentActivityLog.create({
+    data: {
+      storeId: input.storeId,
+      activityType: "audience_needs_attention",
+      summary: `Joon stopped partway through working out who should receive ${input.campaignName} and will try again on its own. Nothing has been sent.`,
+      category: "campaign",
+      actionTaken: "queued_for_review",
+      entityId: input.campaignId,
+      entityType: "campaign",
+      metadata: { recoverable: true },
+    },
+  });
 }

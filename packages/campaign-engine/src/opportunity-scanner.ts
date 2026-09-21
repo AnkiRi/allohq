@@ -8,19 +8,85 @@ import { getUpcomingEvents } from "./calendar-awareness";
  * Scan a store for actionable campaign opportunities.
  * Returns a prioritised list sorted by urgency × estimated revenue.
  */
-export async function scanOpportunities(storeId: string): Promise<CampaignOpportunity[]> {
-  const opportunities: CampaignOpportunity[] = [];
+/** What one scanner cost. Attribution is only exact in sequential mode. */
+export interface OpportunityScanTelemetry {
+  scanner: string;
+  durationMs: number;
+  /** Postgres transactions attributable to this scanner. */
+  transactions: number;
+  opportunities: number;
+  /**
+   * Heap still held after this scanner settled, in bytes. Null when the
+   * process has no collector, because without one the reading would be
+   * uncollected garbage rather than retention.
+   */
+  retainedHeapBytes: number | null;
+}
 
-  await Promise.all([
-    scanAtRiskCustomers(storeId, opportunities),
-    scanRepurchaseWindows(storeId, opportunities),
-    scanNewArrivals(storeId, opportunities),
-    scanReEngagement(storeId, opportunities),
-    scanVipMilestones(storeId, opportunities),
-    scanLowStock(storeId, opportunities),
-    scanSeasonal(storeId, opportunities),
-    scanCrossSell(storeId, opportunities),
-  ]);
+async function transactionCounter(): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ total: bigint }>>`
+    SELECT (xact_commit + xact_rollback)::bigint AS total
+    FROM pg_stat_database WHERE datname = current_database()
+  `;
+  return Number(rows[0]?.total ?? 0);
+}
+
+export async function scanOpportunities(
+  storeId: string,
+  options: {
+    /**
+     * Collect per-scanner cost. Supplying this runs the scanners one after
+     * another rather than together, because concurrent scans interleave their
+     * queries and per-scanner attribution would be guesswork. Wall-clock
+     * durations therefore differ from a normal concurrent run; the query and
+     * transaction counts are the same work either way.
+     */
+    telemetry?: OpportunityScanTelemetry[];
+  } = {}
+): Promise<CampaignOpportunity[]> {
+  const opportunities: CampaignOpportunity[] = [];
+  const scanners: Array<[string, (storeId: string, into: CampaignOpportunity[]) => Promise<void>]> = [
+    ["at_risk_winback", scanAtRiskCustomers],
+    ["repurchase_window", scanRepurchaseWindows],
+    ["new_arrival", scanNewArrivals],
+    ["re_engagement", scanReEngagement],
+    ["vip_milestone", scanVipMilestones],
+    ["low_stock", scanLowStock],
+    ["seasonal", scanSeasonal],
+    ["cross_sell", scanCrossSell],
+  ];
+
+  if (options.telemetry) {
+    const collector = (globalThis as Record<string, unknown>)["gc"];
+    const settle = async (): Promise<number | null> => {
+      if (typeof collector !== "function") return null;
+      for (let i = 0; i < 2; i += 1) {
+        (collector as () => void)();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      return process.memoryUsage().heapUsed;
+    };
+    for (const [scanner, run] of scanners) {
+      const before = opportunities.length;
+      const heapBefore = await settle();
+      const txBefore = await transactionCounter();
+      const startedAt = process.hrtime.bigint();
+      await run(storeId, opportunities);
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+      const transactions = (await transactionCounter()) - txBefore;
+      const heapAfter = await settle();
+      options.telemetry.push({
+        scanner,
+        durationMs,
+        transactions,
+        opportunities: opportunities.length - before,
+        retainedHeapBytes:
+          heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
+      });
+    }
+  } else {
+    await Promise.all(scanners.map(([, run]) => run(storeId, opportunities)));
+  }
 
   // Sort by urgency descending
   opportunities.sort((a, b) => b.urgency - a.urgency);
@@ -120,28 +186,43 @@ async function streamProductBuyers(
 ): Promise<{ digest: OpportunityAudienceDigest; count: number }> {
   const digest = new OpportunityAudienceDigest(base);
   if (productIds.length === 0) return { digest, count: 0 };
+
+  // Conditions are composed, not guarded with `(param IS NULL OR condition)`.
+  // That pattern reads tidily and costs enormously: measured at 100k, the
+  // guarded form of this exact query took 155.2 s against 8.2 s composed —
+  // 18.8x, for identical results. Postgres cannot use the null-guarded
+  // predicates to restrict the scan, so the anti-join is re-evaluated far more
+  // often than it needs to be.
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`o."storeId" = ${storeId}`,
+    Prisma.sql`oi."productId" IN (${Prisma.join(productIds)})`,
+  ];
+  if (options.orderedAfter) {
+    conditions.push(Prisma.sql`o."createdAt" >= ${options.orderedAfter}`);
+  }
+  if (options.orderedBefore) {
+    conditions.push(Prisma.sql`o."createdAt" <= ${options.orderedBefore}`);
+  }
+  if (options.excludeProductId) {
+    conditions.push(Prisma.sql`
+      NOT EXISTS (
+        SELECT 1
+        FROM "order_items" oi2
+        JOIN "orders" o2 ON o2."id" = oi2."orderId"
+        WHERE o2."customerId" = o."customerId"
+          AND o2."storeId" = ${storeId}
+          AND oi2."productId" = ${options.excludeProductId}
+      )`);
+  }
+
   let cursor = "";
   for (;;) {
     const page = await prisma.$queryRaw<Array<{ customerId: string }>>`
       SELECT DISTINCT o."customerId"
       FROM "order_items" oi
       JOIN "orders" o ON o."id" = oi."orderId"
-      WHERE o."storeId" = ${storeId}
-        AND oi."productId" IN (${Prisma.join(productIds)})
+      WHERE ${Prisma.join(conditions, " AND ")}
         AND o."customerId" > ${cursor}
-        AND (${options.orderedAfter ?? null}::timestamp IS NULL OR o."createdAt" >= ${options.orderedAfter ?? null})
-        AND (${options.orderedBefore ?? null}::timestamp IS NULL OR o."createdAt" <= ${options.orderedBefore ?? null})
-        AND (
-          ${options.excludeProductId ?? null}::text IS NULL
-          OR NOT EXISTS (
-            SELECT 1
-            FROM "order_items" oi2
-            JOIN "orders" o2 ON o2."id" = oi2."orderId"
-            WHERE o2."customerId" = o."customerId"
-              AND o2."storeId" = ${storeId}
-              AND oi2."productId" = ${options.excludeProductId ?? null}
-          )
-        )
       ORDER BY o."customerId" ASC
       LIMIT 2000
     `;

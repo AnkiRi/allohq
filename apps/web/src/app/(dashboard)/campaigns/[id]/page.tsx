@@ -3,6 +3,12 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
+  canApproveDelivery,
+  preparationView,
+  type PreparationProgress,
+} from "@/lib/campaign-preparation";
+import { CampaignPreparationSection } from "@/components/campaigns/CampaignPreparationSection";
+import {
   ArrowLeft,
   Send,
   Mail,
@@ -68,6 +74,15 @@ export default function CampaignDetailPage() {
   // The nested causal-statistics payload exceeds TypeScript's practical tRPC
   // inference depth in this already-large page; the server procedure remains typed.
   const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
+  // Approval hands the audience to a background job, so the page has to follow
+  // it. Polling stops as soon as the run settles.
+  // Polling lives in CampaignPreparationSection, which is what the
+  // client-rendered tests drive, so what ships is what is proven.
+  const [preparationStatus, setPreparationStatus] = useState<{
+    preparation: PreparationProgress | null;
+    sendable: boolean;
+  } | null>(null);
+  const preparation = preparationView(preparationStatus?.preparation);
   const {
     data: dryRun,
     isLoading: dryRunLoading,
@@ -517,6 +532,18 @@ export default function CampaignDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {preparation.kind === "preparing" && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-sans font-bold text-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Preparing audience
+            </span>
+          )}
+          {preparation.kind === "needs_attention" && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-sans font-bold text-warning">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Needs another go
+            </span>
+          )}
           {campaign.status === "sent" && (
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))] border border-[hsl(var(--success)/0.25)] rounded-lg text-xs font-sans font-bold">
               <CheckCircle className="w-3.5 h-3.5" />
@@ -602,11 +629,20 @@ export default function CampaignDetailPage() {
           {campaign.status === "draft" && (
             <button
               onClick={() => setShowApproval(true)}
-              disabled={sendMut.isPending || dryRun?.deliveryGate?.blocked}
+              disabled={
+                sendMut.isPending ||
+                !canApproveDelivery({
+                  campaignStatus: campaign.status,
+                  progress: preparationStatus?.preparation,
+                  deliveryBlocked: Boolean(dryRun?.deliveryGate?.blocked),
+                })
+              }
               title={
-                dryRun?.deliveryGate?.blocked
-                  ? (dryRun.deliveryGate.reason ?? "Delivery is disabled")
-                  : undefined
+                preparation.sendingBlocked
+                  ? "Joon is still working out who should receive this."
+                  : dryRun?.deliveryGate?.blocked
+                    ? (dryRun.deliveryGate.reason ?? "Delivery is disabled")
+                    : undefined
               }
               className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-sans hover:bg-secondary/90 disabled:opacity-50 transition-all"
             >
@@ -617,9 +653,13 @@ export default function CampaignDetailPage() {
               )}
               {sendMut.isPending
                 ? "Approving…"
-                : dryRun?.deliveryGate?.blocked
-                  ? "Delivery disabled"
-                  : "Approve delivery"}
+                : preparation.kind === "preparing"
+                  ? "Preparing audience…"
+                  : preparation.kind === "needs_attention"
+                    ? "Audience not ready"
+                    : dryRun?.deliveryGate?.blocked
+                      ? "Delivery disabled"
+                      : "Approve delivery"}
             </button>
           )}
           {campaign.status === "scheduled" && !awaitingDelivery && (
@@ -640,6 +680,14 @@ export default function CampaignDetailPage() {
         {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className="app-workspace-tab capitalize">{section}</button>)}
       </nav>
 
+      <CampaignPreparationSection
+        fetchStatus={() => utils.campaigns.preparationStatus.fetch({ id: campaignId })}
+        campaignStatus={campaign.status}
+        onStatusChange={setPreparationStatus}
+        onRetry={() => setShowApproval(true)}
+        approvePending={sendMut.isPending}
+        showApproveAction={false}
+      />
       {activeSection === "overview" && <section className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Campaign summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Status</p><p className="mt-1 text-[20px] font-medium capitalize">{campaign.status.replaceAll("_", " ")}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Would receive</p><p className="mt-1 font-mono text-[20px]">{(stats?.holdout.treatmentAssigned ?? dryRun?.estimatedTreatment ?? 0).toLocaleString("en-IN")}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Attributed orders</p><p className="mt-1 font-mono text-[20px]">{stats?.attributedOrders.toLocaleString() ?? "0"}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Attributed revenue</p><p className="mt-1 font-mono text-[20px]">{money(stats?.attributedRevenue ?? 0)}</p></div></section>}
 
       <Dialog.Root open={showApproval} onOpenChange={setShowApproval}>

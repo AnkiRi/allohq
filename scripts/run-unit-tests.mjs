@@ -19,7 +19,9 @@ function collectTests(relativeDirectory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const relative = join(relativeDirectory, entry.name);
     if (entry.isDirectory()) tests.push(...collectTests(relative));
-    else if (entry.isFile() && entry.name.endsWith(".test.ts")) tests.push(join(root, relative));
+    // .tsx too: a rendered-component test that is never discovered looks like
+    // coverage without being any.
+    else if (entry.isFile() && /\.test\.tsx?$/.test(entry.name)) tests.push(join(root, relative));
   }
   return tests;
 }

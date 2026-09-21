@@ -4,6 +4,7 @@ import {
   CampaignApprovalConflictError,
   finalizeCampaignApproval,
   runCampaignAudienceResolution,
+  recordAudienceNeedsAttentionActivity,
   type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
 import { holdoutRateFor } from "@allohq/customer-state";
@@ -47,10 +48,23 @@ export async function prepareCampaignAudience(
     },
     rateForStratum: (stratum: string) =>
       holdoutRateFor(request.storeId, request.family, stratum, request.evidence ?? null).rate,
-  }).catch((error) => {
+  }).catch(async (error) => {
     // Another worker holds the lease. That worker will finish and dispatch, so
     // this attempt stops rather than competing for the same rows.
     if (error instanceof AudienceRunBusyError) return null;
+    // Preparation genuinely failed. Leave the merchant something durable that
+    // says so safely; the recovery sweep will try again on its own.
+    const failed = await prisma.campaign.findUnique({
+      where: { id: request.campaignId },
+      select: { name: true },
+    });
+    if (failed) {
+      await recordAudienceNeedsAttentionActivity({
+        campaignId: request.campaignId,
+        storeId: request.storeId,
+        campaignName: failed.name,
+      }).catch(() => undefined);
+    }
     throw error;
   });
   if (!run) return { status: "busy" };

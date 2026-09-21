@@ -10,7 +10,7 @@ This document is the single reference point for these passes. Later implementati
 
 ## Locked facts — do not contradict these anywhere in this document
 
-_Recorded 2026-09-20T11:57Z._
+_Recorded 2026-09-20T11:57Z. Scale and testing boundaries added 2026-09-21T05:09:18Z._
 
 - **Billing is 5% of Joon-attributed, non-cancelled order revenue.** Shadow invoices also compute
   6% and 8%; 5% is what is displayed. Billing stays disabled during early access until cap
@@ -30,59 +30,128 @@ _Recorded 2026-09-20T11:57Z._
   (Litmus / Email on Acid). Each is audited in "Email IDE audit" below with the evidence that it
   is absent.
 
-## Current status — 2026-09-20T19:24:18Z
+### Scale claims — what is measured and what is not
+
+- **100,000-customer single-tenant preparation is measured.** Every figure attributed to 100k in
+  this document came from an actual run against a disposable Postgres, and the figures have been
+  reproduced on a GitHub runner.
+- **One-million single-tenant readiness is a pending proof.** Until that proof runs, every 1M
+  figure in this document is extrapolation from the 100k shape and is labelled as such. None may
+  be quoted as a measurement.
+- **Multi-tenant concurrency readiness is a pending proof.** Nothing here establishes how
+  several large tenants behave sharing one database and one worker pool. Fairness, noisy
+  neighbours and per-tenant concurrency limits are unproven.
+- **Healthify's 4.5 crore (45,000,000) customer mobile-app environment is a separate future
+  architecture programme.** It is not supported by these tests, not implied by them, and not a
+  current performance target. No timing in this document may be presented as evidence for it.
+
+### Scale-testing boundary — non-negotiable
+
+- **All scale tests use synthetic tenants in disposable infrastructure only**, created for the
+  test and dropped afterwards.
+- **No scale test may call Shopify, Resend, SES, Railway production Postgres, Railway production
+  Redis, or real recipients.** Providers are simulated. `scripts/assert-disposable-database.mjs`
+  enforces the database half in code: managed hosts are rejected outright and the database name
+  must declare itself disposable.
+
+### Testing boundary — non-negotiable
+
+- **The 100k proof runs against a synthetic store in a disposable Postgres and Redis.** It seeds
+  synthetic customers, orders, consent, fatigue, customer state and campaign data directly; runs
+  Joon's actual audience-resolution, approval, assignment, retry and send-planning logic; uses a
+  simulated provider only; and drops the database afterwards.
+- **It is never pointed at production Railway, production Postgres, production Redis, Shopify,
+  Resend or SES.** `scripts/assert-disposable-database.mjs` enforces this: managed database
+  hosts are rejected outright and the database name must declare itself disposable.
+- **`allo-test-5` (account uast23@gmail.com) is a manual deployed-app acceptance store only.**
+  It has no authenticated Joon sender domain, so sending is blocked. **Missing DNS is an extra
+  safety net, not the safety mechanism.** Do not run 99k/100k performance preparation there, do
+  not queue mass sends, do not generate fake bounces, and do not call a live email provider for
+  its fake recipients. It is for validating UI, campaign drafts, audience explanation, controls,
+  overrides, blocked-delivery messaging and normal API behaviour.
+- **Real email is never sent autonomously.** Real-delivery acceptance is run manually against a
+  small number of explicitly opted-in, already allowlisted inboxes. See the manual acceptance
+  checklist near the end of this document.
+
+## Current status — 2026-09-21T05:09:51Z
 
 _This is the single canonical status section. Anything below it is history,
 evidence or detail; where an older section states a status, this one wins._
 
-### Pass 8 in one paragraph
+### Pass 8, split
 
-**Pass 8 is structurally memory-safe, concurrency-safe and operationally
-durable.** The approval and send paths retain nothing that grows with the
-audience, Postgres performs the exact control selection, concurrent approvals
-cannot corrupt one another, preparation runs as a leased background job that
-resumes itself after a crash, and every overnight scan is bounded.
+Pass 8 is tracked as two halves, because they have different risk profiles and
+different completion criteria.
 
-**What is not done:** CI has never executed on GitHub, and the migrations are
-undeployed. Both are gates rather than code.
-
-### Blocking items — all three closed this pass
-
-| Blocker | Status | Evidence |
+| | Scope | Status |
 | --- | --- | --- |
-| Preparation ran synchronously in tRPC | **closed** `ad467ac` `dd84939` | approval enqueues and returns; the worker prepares, finalises and dispatches; a lapsed lease is re-enqueued every two minutes, so no second merchant click |
-| Three order-driven opportunity scans unbounded | **closed** `c064889` | repurchase, low-stock and cross-sell all keyset-paged; cross-sell is now a SQL anti-join; decisions match an independently computed reference set |
-| Governor injected-time inconsistency (P0) | **closed** `dbee4b4` | every rule measures its window from the injected instant; 5 boundary tests fail against the old code and pass against the new |
+| **Pass 8A — structural large-audience safety** | Nothing audience-sized retained in Node; Postgres performs exact control selection; bounded overnight scans | **implemented and measured** |
+| **Pass 8B — operational reliability** | Frozen-time policy correctness, preparation out of synchronous tRPC, bounded order-driven scans, and the evidence to prove all three | **pending** |
+| **CI** | Verification and integration workflows on GitHub | **implemented and verified on GitHub** |
+
+### Pass 8A — implemented and measured
+
+100,000 customers, disposable Postgres, reproduced on a GitHub runner:
+
+| Measure | Local | GitHub runner |
+| --- | --- | --- |
+| Duration | 36.5 s | 36.7 s |
+| Peak heap above baseline | 65.49 MB | 66.41 MB |
+| Retained heap (instrumented) | 2.15 MB | 2.15 MB |
+| Postgres transactions | 6,083 | 6,078 |
+| Queries / shapes | 6,340 / 33 | 6,343 / 33 |
+| Query p50 / p95 / p99 / max | 0 / 2 / 14 / 9,255 ms | 0 / 1 / 10 / 4,319 ms |
+| Duplicate rows | 0 | 0 |
+| Arm parity | 0 of 90,909 | 0 of 90,909 |
+
+**Measured**, not inferred. Retained heap is only meaningful under
+`node --expose-gc`; see the constraint below.
+
+### Pass 8B — pending
+
+| Item | Status | Note |
+| --- | --- | --- |
+| A. Frozen-time policy correctness | **verified** `dbee4b4` `63f38f2` | full path re-audited; every remaining wall-clock read is a default parameter or an operational timestamp. Three end-to-end tests prove determinism across execution, re-execution and resume |
+| B.1 Durable preparation backend | **implemented and verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
+| B.2 Campaign preparation UI and progress | **implemented and verified** `8c31c5e` `f7b38df` `8dde4c6` | "Preparing audience" replaces the Draft dead-end; polls while active and stops when settled; merchant-language counts; reload guidance; sending disabled until ready; needs-attention shows the reason, "Nothing has been sent" and a retry. Client-rendered proof that the poll actually runs, repeats, stops when ready and restores on remount, with the gate verified by mutation. Approval and genuine failure each leave one durable in-app Activity entry, counts included, no external email. 8 rendered + 6 client + 10 acceptance tests |
+| C. Bounded order-driven scans | **verified** `c064889` `3100465` | verified at 100k: 124.7 s, 0.24 MB retained, 166 transactions, anti-join exact against a SQL reference, and no sends |
+| D. Evidence | **verified** `15d9c50` | consolidated 100k evidence including retry/resume; transaction sources explained; scan duration broken down by scanner; 1M labelled inference; code-complete versus external stated |
+
+### CI — implemented and verified on GitHub
+
+Every job has executed green on a GitHub runner. Three first-run defects were
+found and fixed; the third was invisible to a clean-clone rehearsal because it
+was a property of the runner, not the repository.
 
 ### Constraint on the memory evidence
 
-Every retained-heap figure here is valid **only in a GC-enabled runner**: the
+Every retained-heap figure is valid **only in a GC-enabled runner**. The
 measurements settle the heap with `globalThis.gc()` before reading, which needs
 `node --expose-gc`. Without it the reading is uncollected garbage — the same
 opportunity scan measured 0 MB standalone and appeared to grow 2.47 MB to
-7.38 MB under a runner without a collector. **The proofs now fail rather than
-skip when no collector is present**, because a skipped memory proof reported
-among passes looks like coverage. `ALLOW_UNMEASURED_HEAP=1` excludes one
-explicitly.
+7.38 MB under a runner without a collector. **The proofs fail rather than skip
+when no collector is present: a skipped memory proof is not a passing memory
+proof.** `ALLOW_UNMEASURED_HEAP=1` excludes one explicitly.
 
-A second honest caveat: instrumenting the Prisma client to capture query
-latency costs the harness its own memory. The same 100k run measures **0.12 MB
-retained uninstrumented and 2.15 MB with query capture on**. Both are reported;
-the difference is the harness, not the engine.
+A second caveat: instrumenting the Prisma client to capture query latency costs
+the harness its own memory. The same 100k run measures **0.12 MB retained
+uninstrumented and 2.15 MB with query capture on**. Both are reported.
 
 ### Area status
 
 | Area | Status | Evidence | Remaining limitation |
 | --- | --- | --- | --- |
-| Pass 8 — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k: 36.5 s, peak heap 65.49 MB, 0 duplicates, 0 arm mismatches of 90,909 | GC-enabled runner only, above |
-| Pass 8 — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run; a losing caller gets AUDIENCE_RUN_BUSY | a losing caller is refused, not queued |
-| Pass 8 — durable preparation | **verified** `ad467ac` `dd84939` | leased job; lease loss stops a worker; expired lease is adopted and finished; a completed run cannot be failed by an older worker | recovery sweep interval is 2 minutes, not tuned under load |
-| Pass 8 — merchant progress | **implemented** `b08eeba` | evaluated = candidates + left alone + not receiving, reconciles exactly | **not surfaced in any UI** |
-| Policy clock consistency | **verified** `dbee4b4` | 5 boundary tests; all fail against the previous governor | — |
-| Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count | — |
-| Overnight opportunity scale | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical; retained heap 0 MB at 20,000 | — |
+| Pass 8A — memory safety | **verified** `4d2267f` `1378827` `0a54404` `826f69f` | 100k measured, table above | GC-enabled runner only |
+| Pass 8A — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run | a losing caller is refused, not queued |
+| Pass 8A — overnight scans | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical | not yet verified at 100k |
+| Pass 8B — frozen-time correctness | **verified** `dbee4b4` `63f38f2` | 5 per-rule boundary tests plus 3 end-to-end: two executions at one asOf agree on every customer; frozen and live genuinely disagree; a resumed run matches an uninterrupted one | scheduling and deferral windows are delivery-time by design and deliberately current-time |
+| Pass 8B.1 — durable preparation backend | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | — |
+| Pass 8B.2 — preparation UI and progress | **verified** `8c31c5e` `39a95f5` | 8 view-model tests plus 8 rendered-component tests through React covering all seven acceptance points | server-rendered component testing, not a browser harness; stated rather than implied |
+| Pass 8B.C — order-driven scans at 100k | **verified** `3100465` `39a95f5` `15d9c50` | all three fire at 100k on a fresh database: **4.3 s**, 0.26 MB retained, 157 transactions. Cross-sell anti-join exact at 37,500 of 50,000; repurchase window exact against a SQL reference; zero sends | — |
+| Pass 8B.D — consolidated evidence | **verified** | the three measured 100k results, the transaction breakdown, the scan breakdown, and the inference boundary, all in one section | — |
+| Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
+| CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
-| CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | every job executed green on GitHub: typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; the 100k load proof 2m8s, 0 duplicates and 0 arm mismatches of 90,909 | Node 20 unverified; action versions target deprecated Node 20 |
 | Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named | — |
 | Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
 | WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
@@ -91,15 +160,16 @@ the difference is the harness, not the engine.
 
 | Defect | Evidence | Why it is still open |
 | --- | --- | --- |
-| Control selection is one long statement at scale | 9,255 ms for 90,909 candidates; ~90 s extrapolated at 900,000 | rows belong to one run and no other writer touches them, so it is a long statement rather than contention — but it is the first thing to need attention at a million |
+| Control selection is one long statement at scale | 4,319 ms for 90,909 candidates on the runner (9,255 ms locally) | inference at 1M, not measured; the first component likely to need attention there |
 | Pre-existing migration drift on main | one `DROP DEFAULT`, five index renames | unrelated to this work; CI reports without gating |
-| `campaign_audience_members` ranking index unused | bitmap scan on `(runId, arm)` chosen instead | dropping it measured −1% on writes; no benefit either way |
+| `campaign_audience_members` ranking index unused | bitmap scan on `(runId, arm)` chosen instead | dropping it measured −1% on writes |
 | Five migrations undeployed | `…090000`, `…140000`, `…150000`, `…190000` | deployment is a separate gate |
-| Preparation progress has no UI | `campaignPreparationProgress` exists and is tested | the API returns it; nothing renders it yet |
+| Preparation progress has no UI | `campaignPreparationProgress` exists and is tested | the API returns it; nothing renders it |
+| Node 20 unverified | `engines` permits it; CI pinned to 24 | nothing has been run on 20 |
 
-### Order of work after this pass
+### Order of work
 
-1. CI.
+1. **Pass 8B** — in progress.
 2. Pass 9 delivery health and provider-switch safety.
 3. Migration deployment plan and external load proof.
 4. Email editor safety and accessibility.
@@ -466,6 +536,1148 @@ the component most likely to need attention first at that scale.
   flight supersedes it — two run pairs were cancelled that way before the green
   one. Correct behaviour, but rapid pushes supersede their own verification.
 
+## Pass 8B item B — preparation acceptance, measured — 2026-09-21T05:45:39Z
+
+_Status: **verified**. 100k figures measured through the real background-job
+path against a disposable Postgres with a simulated provider. No 1M claim._
+
+### The ten scenarios
+
+| # | Scenario | Evidence |
+| --- | --- | --- |
+| 1 | Approving twice starts one run; the second joins | one run row mid-flight, stable run id, second attempt refused with `AUDIENCE_RUN_BUSY` |
+| 2 | Reload or close leaves progress available | progress read from the run row after completion; run id stable; accounting reconciles |
+| 3 | Worker dies mid-run, resumed with no merchant action | lease removed mid-write, partial rows confirmed, same run key finishes it |
+| 4 | Stale lease taken over safely | expired lease adopted; run completes; lease released |
+| 5 | Old worker cannot fail the newer run | update matches 0 rows against both a complete run and one owned by a newer worker |
+| 6 | API returns quickly | **6 ms of API-side work at 100k** |
+| 7 | Not sendable until complete | approval refuses with `AUDIENCE_RUN_NOT_COMPLETE`; campaign stays draft; 0 arms exist |
+| 8 | Merchant language, not job language | `state` is preparing/ready/needs_attention; a test asserts the sentence leaks no internals |
+| 9 | Delivery-time live checks remain | pinned by the scoped-recheck test: later opt-outs and already-sent recipients are dropped at delivery |
+| 10 | Failed run recoverable, not abandoned | `needs_attention` with `recoverable: true`; operators keep the real reason; the same run key finishes it |
+
+### 100k through the real job path, with a forced crash
+
+| Measure | Result |
+| --- | --- |
+| API-side work | **6 ms** |
+| Crash injected after | 14,000 durable rows |
+| Recovery duration | 59.1 s |
+| Retained heap | **no growth detected**; post-run heap 8.09 MB below baseline |
+| Peak heap above baseline | 59.52 MB |
+| Postgres transactions | 5,384 |
+| Audience rows | 100,000 |
+| Duplicate rows | **0** |
+| Candidates | 90,909 |
+| Control / treatment | 13,635 / 77,274 |
+| Measurement assignments | 90,909 |
+| Attempts (crash + recovery) | 2 |
+| Arm parity | **0 mismatches of 90,909** |
+| Send orchestration | 1 simulated job dispatched |
+| Live provider calls | **0** |
+| Real deliveries | **0** |
+| Billing, Results, warm-up, reputation, causal proof | **0 rows** in each |
+
+The arm parity figure is the one that matters: the arms match the in-memory
+reference exactly **after** a crash and resume. A resumed run that silently
+drew a different control group would otherwise be invisible.
+
+**Measured**, on a synthetic store in a disposable database that is dropped
+afterwards. Nothing here is extrapolated.
+
+Two labels are stated carefully because the loose versions would overclaim:
+
+- **"No retained heap growth detected"**, not "zero retention". The post-run
+  heap sat 8.09 MB below baseline. A negative delta reflects collector timing
+  and baseline noise; it is evidence of no detectable growth, not proof that
+  nothing at all is retained.
+- **"One simulated send-orchestration job dispatched"**, not "one send". The
+  callback records that orchestration was asked to run. It performs no network
+  call. Seven assertions check the isolation rather than assume it: zero live
+  provider calls, zero real deliveries, and zero rows in shadow invoices, the
+  caused-revenue ledger, measurement outcomes, warm-up state and reputation
+  assessments. No synthetic data reaches billing, Results, warm-up, reputation
+  or causal proof.
+
+## Pass 8B items B.2 and C — measured — 2026-09-21T06:37:48Z
+
+_Status: **verified**. All figures measured against a disposable Postgres. No
+1M claim._
+
+### B.2 — campaign preparation UI
+
+Making approval a background job left the page behind: the request returned in
+milliseconds and the campaign sat in Draft with nothing to explain itself.
+
+`campaigns.preparationStatus` is polled every two seconds while work is in
+flight and stops the moment it settles. While preparing, a "Preparing audience"
+chip replaces the Draft dead-end and a panel says what Joon is doing, that the
+merchant can leave or reload safely, and shows looked at / not receiving /
+deliberately left alone / candidates / control / treatment. Zeroes are hidden
+while in flight, because "0 left alone" three seconds in means "not counted
+yet". Approve is disabled throughout, and the existing delivery gate still
+wins. Needs-attention shows the reason, "Nothing has been sent", and a retry.
+
+The view model is a pure function so the wording lives in one place and is
+testable without a DOM. One test asserts it leaks none of run, job, queue,
+worker, lease, database, row, resolving, assigning, chunk or Postgres.
+
+### C — order-driven scans at 100k
+
+| Measure | Result |
+| --- | --- |
+| Store | 100,000 customers, 50,000 with orders |
+| Scan duration | 124.7 s |
+| Retained heap | 0.24 MB |
+| Peak heap above baseline | 18.65 MB |
+| Postgres transactions | **166** |
+| Opportunities produced | 5 |
+| Cross-sell anti-join | 37,500 of 50,000, exact against a SQL reference |
+| Sends, assignments, campaigns moved to sending | **0** |
+
+166 transactions for a 100k store is the point: the scans sample and aggregate
+rather than walking customers, so they are query-cheap even though slow in wall
+time.
+
+**Limitation:** `repurchase_window` did not fire, because the fixture seeds no
+`ProductRepurchaseCycle` rows. Low stock and cross-sell are verified at 100k;
+repurchase window remains verified only at the smaller fixture.
+
+## Pass 8B — the two evidence gaps closed — 2026-09-21T07:35:03Z
+
+_Status: **verified**. Measured on a fresh disposable database._
+
+### 100k repurchase-window coverage
+
+The scanner returns before touching an order when no `ProductRepurchaseCycle`
+exists, which is why it never fired at scale. The fixture now seeds one, and
+the scanner's result is checked against an independently written SQL reference
+rather than merely being present.
+
+Per-scanner attribution is now real rather than inferred. `scanOpportunities`
+accepts an optional telemetry array; supplying it runs the scanners
+sequentially, because concurrent scans interleave their queries and attribution
+would be guesswork. Wall-clock durations therefore differ from a concurrent
+run; the work is the same.
+
+**Fresh database, 100,000 customers, 50,000 with orders:**
+
+| Scanner | Duration | Transactions | Retained heap | Found |
+| --- | --- | --- | --- | --- |
+| cross_sell | **145.7 s** | 49 | 0.02 MB | 1 |
+| repurchase_window | 1.3 s | 65 | 0.03 MB | 1 |
+| low_stock | 0.6 s | 56 | 0.01 MB | 1 |
+| at_risk_winback | 0.4 s | 20 | −0.01 MB | 1 |
+| re_engagement | 0.3 s | 24 | 0.02 MB | 1 |
+| vip_milestone | 0.2 s | 0 | 0 MB | 1 |
+| new_arrival / seasonal | 0.0 s | 0 | 0 MB | 0 |
+| **Total (sequential)** | **148.6 s** | **214** | 0.04 MB | 6 |
+
+Concurrent run on the same fixture: **135.4 s**, 228 transactions, 23.99 MB
+peak, no retained heap growth.
+
+**Cross-sell is effectively the entire cost of overnight scanning.** Everything
+else together is under 3 seconds. Two hypotheses have already been tested and
+rejected rather than assumed:
+
+- **Missing index on `order_items`.** The table has no indexes at all, which
+  looked like the obvious cause. Measured: adding `productId` and `orderId`
+  indexes changed the anti-join from 3.7 s to 2.3 s at this shape — real but
+  nowhere near the gap, and 0.9x at 40k. **Not the cause.**
+- **Table bloat or CPU contention.** The first 100k measurement ran on a
+  database that had just held a 20k fixture, alongside concurrent builds. Re-run
+  on a freshly created database: 145.7 s. **Not the cause.**
+
+The isolated anti-join at the same 100k shape takes **3.7 s**, so the remaining
+40x is inside `scanCrossSell` and not in the anti-join as written in the
+reproduction. The difference between the two is the `(param IS NULL OR
+condition)` null guards the production query carries and the reproduction
+omitted — a known plan-killer. That is being measured rather than asserted.
+
+### Rendered component coverage for the preparation UI
+
+The panel is extracted into `CampaignPreparationPanel` and rendered through
+React, with assertions on the markup it produces. Eight tests cover the seven
+points: polling starts while active and stops when ready, counts render with
+Indian grouping, sending is disabled, a reload renders identically from the
+same payload, needs-attention renders the reason and "Nothing has been sent"
+and a recovery action, and a ready audience still respects the delivery pause
+and domain gates.
+
+**This is server-rendered component testing, not a browser harness.** There is
+no browser in this repository's test setup, and the polling policy is asserted
+where it lives — as a pure function the page hands to `refetchInterval`.
+
+**A discovery defect worth naming:** the unit runner matched only `.test.ts`,
+so the new `.test.tsx` file existed and looked like coverage while running zero
+times. The runner now matches both; the suite went 337 to 345.
+
+## Pass 8B item D — consolidated evidence — 2026-09-21T07:45:03Z
+
+_Status: **verified**. Every figure below was measured on a synthetic store in
+a disposable Postgres with a simulated provider, and the database was dropped
+afterwards. **No figure here is extrapolated.** Statements about a million
+customers appear only in the clearly marked inference section._
+
+### The three measured 100k results
+
+| | Campaign approval preparation | Overnight opportunity scan |
+| --- | --- | --- |
+| Path exercised | `prepareCampaignAudience`, the function the queue invokes | `scanOpportunities` |
+| Audience | 100,000 customers | 100,000 customers, 50,000 with orders |
+| Duration | 68.9 s (including a forced crash and recovery) | **4.3 s** |
+| API-side work | **6 ms** | n/a — no request involved |
+| Retained heap | no growth detected; 8.09 MB below baseline | 0.26 MB |
+| Peak heap above baseline | 62.36 MB | 57.94 MB |
+| Postgres transactions | 5,396 | 157 |
+| Queries / shapes | 6,343 / 33 | — |
+| Query p50 / p95 / p99 / max | 0 / 1 / 10 / 4,319 ms | — |
+| Duplicate rows | **0** | n/a |
+| Arm parity | **0 mismatches of 90,909** | n/a |
+| Retry / resume | crash at 14,000 rows, resumed, 2 attempts recorded | rescan produces identical job ids |
+| Live provider calls, real deliveries | **0 / 0** | **0 / 0** |
+
+Retained heap is meaningful **only under `node --expose-gc`**; the proofs fail
+rather than skip without a collector. And instrumenting the client to capture
+query latency costs the harness its own memory: the same run measures 0.12 MB
+retained uninstrumented against 2.15 MB with capture on. Both are reported.
+
+### Where the ~6,000 approval transactions come from
+
+6,343 queries in 33 shapes for 100,000 customers, of which two statements
+account for most of the time:
+
+| Source | Count | Share of time | What it is |
+| --- | --- | --- | --- |
+| Resolver pages | 500 pages x ~11 queries ≈ 5,500 | small | Each page of 200 customers reads customers, RFM scores, consents, orders, fatigue logs, two customer-state selections, conversations, message logs and suppressions. This is the eligibility policy itself. |
+| Member writes | 50 | largest | 2,000 durable audience rows per statement. This is the product data the pass exists to produce. |
+| Control selection | 1 | second largest | One window-function UPDATE over every candidate. |
+| Run bookkeeping | ~550 | negligible | Lease renewal and resume-cursor advance, one per write chunk, plus status updates and final counts. |
+| Pooled-stratum fixup | 10 | negligible | Bounded by definition: strata with fewer than ten candidates. |
+
+**Nothing here is being optimised, and the reasons are specific.** The
+per-page reads *are* the policy — removing them means not checking consent,
+fatigue, collision, cooldown or recent purchase. The member writes are the
+deliverable. The control selection is deliberately one statement; splitting it
+would reintroduce the in-process selection this pass removed. Dropping either
+member-table index to speed the writes measured −1% and 2%, which is noise.
+
+The batching win that was available has already been taken: the journey path
+went from 5.2 queries per customer to 0.045 by replacing a per-customer
+governor round trip with a batched one.
+
+### Where the opportunity-scan duration went
+
+Originally 135.4 s at 100k. Per-scanner attribution, sequential mode:
+
+| Scanner | Before | After | Transactions (after) |
+| --- | --- | --- | --- |
+| cross_sell | **145.7 s** | **4.1 s** | 155 |
+| repurchase_window | 1.3 s | 1.6 s | 30 |
+| low_stock | 0.6 s | 0.6 s | 51 |
+| at_risk_winback | 0.4 s | 0.4 s | 23 |
+| re_engagement | 0.3 s | 0.3 s | 0 |
+| vip_milestone | 0.2 s | 0.2 s | 0 |
+| new_arrival, seasonal | 0.0 s | 0.0 s | 22 |
+| **Total (sequential)** | **148.6 s** | **7.4 s** | **281** |
+
+Concurrent: **135.4 s → 4.3 s**, a 31x improvement with identical results.
+
+The cause was a null-guard pattern of mine — `(param IS NULL OR condition)` —
+that let one query serve every caller and prevented Postgres from restricting
+the scan. Measured at 155.2 s guarded against 8.2 s composed, identical
+results. Two other hypotheses were tested and rejected first: a missing
+`order_items` index (3.7 s to 2.3 s isolated, 0.9x at 40k) and table bloat or
+CPU contention (still 145.7 s on a fresh database).
+
+### One-million-customer statements — inference, not measurement
+
+**No 1M run has been performed.** Everything in this block is extrapolation
+from the measured 100k shape and must not be quoted as a measurement.
+
+| Measure | 100k (measured) | 1M (inference) |
+| --- | --- | --- |
+| Resolver pages | 500 | ~5,000 |
+| Queries | 6,343 | ~63,000 |
+| Transactions | 5,396 | ~54,000 |
+| Member write statements | 50 | 500 |
+| Preparation duration | 68.9 s | ~10 minutes |
+| Retained heap | no growth detected | unchanged — nothing scales with audience size |
+
+**Withdrawn.** This block previously inferred "on the order of 40 seconds" for
+the control selection at roughly 900,000 candidates, from 4,319 ms measured at
+90,909 on a GitHub runner. The **measured** value at 772,929 candidates is
+**468,127 ms** — about eleven times that inference. The extrapolation was
+wrong. See "One-million single-tenant readiness" above for the measurement.
+
+**Healthify's 4.5 crore environment is a future architecture problem, not a
+current target.** Nothing in this pass is sized or claimed against it.
+
+### Code-complete versus external
+
+| Item | State |
+| --- | --- |
+| Pass 8A structural safety | **code-complete and measured** |
+| Pass 8B.1 durable preparation backend | **code-complete and measured** |
+| Pass 8B.2 preparation UI | **code-complete**; rendered-component tested, not browser tested |
+| Pass 8B item C bounded scans | **code-complete and measured at 100k** |
+| Pass 8B item D evidence | **complete** — this section |
+| CI | **verified on GitHub**; Node 20 unverified; action versions target a deprecated Node 20 runtime |
+| **Five migrations** | **external** — written and applied to disposable databases; not deployed |
+| **Real-delivery acceptance** | **external** — manual, 2–3 opted-in allowlisted inboxes; checklist below; nothing automated |
+| **Authenticated sender domain** | **external** — `allo-test-5` has none, so its sending stays blocked |
+| Pass 9 delivery health, provider-switch safety | not started, out of scope for this pass |
+
+## One-million single-tenant readiness — three attempts — 2026-09-21T09:58:22Z
+
+_All runs: synthetic tenant, disposable Postgres and Redis on a local machine,
+simulated provider. No Shopify, Resend, SES, Railway production database,
+Railway Redis, `allo-test-5`, or real recipients were involved, and no billing,
+Results, causal-proof, warm-up or reputation rows were written._
+
+### Attempt classifications
+
+| Attempt | Commit | Classification |
+| --- | --- | --- |
+| 1 | `042fdeb` harness | **inconclusive** — preparation completed, verification harness did not complete; no readiness conclusion |
+| 2 | `042fdeb` harness | **inconclusive** — verifier still used unbounded whole-cohort reference behaviour |
+| 3 | `fccb542` | **functional pass** — preparation, crash/recovery, membership and assignment correctness passed; performance and verifier independence remain pending |
+
+Attempt 1 was stopped under memory pressure while verifying. Attempt 2 threw
+`RangeError: Maximum call stack size exceeded` inside the reference
+implementation. **Neither produced a readiness conclusion.** Both failures were
+in the verification harness, not in the product.
+
+Attempt 2 did surface a real latent defect: `assignStratifiedCohortArms` used
+`push(...customers)`, which exceeds the call-argument limit at roughly 150,000
+and throws. Fixed in `fccb542`. The function is exported but **no production
+path calls it** — it is the in-memory reference the proofs compare against, so
+this was a defect in a verification tool, not a live failure.
+
+### Attempt 3 — functional pass, measured
+
+| Field | Measured |
+| --- | --- |
+| Total customers | 1,000,000 |
+| Candidates / control / treatment | 772,929 / 115,936 / 656,993 |
+| Not receiving / deliberately left alone | 160,871 / 66,200 |
+| Duplicate members / duplicate assignments | **0 / 0** |
+| Arm mismatches | **0 of 772,929** |
+| Largest stratum | 154,586 |
+| API response time | **4 ms** |
+| Seed | 4.4 min |
+| Crash injected at | 200,000 durable rows |
+| Recovery duration | **17.3 min (1,040 s)**, attempts = 2 |
+| Queries / transactions (recovery) | 50,563 in 53 shapes / 49,287 |
+| Query p50 / p95 / p99 / max | 1 / 7 / 25 / **468,127 ms** |
+| Deadlocks / lock conflicts | 0 / 0 |
+| Live-provider calls / real deliveries | **0 / 0** |
+| Billing, Results, causal proof, warm-up, reputation | **0 rows in each** |
+
+### Why this is not a performance pass
+
+**The control-selection `ROW_NUMBER()` UPDATE took 468,127 ms — 7.8 minutes in
+a single statement**, 45% of the entire recovery. Running preparation in the
+background improves what the merchant experiences; it does not make avoidable
+backend cost acceptable.
+
+An earlier extrapolation in this document put that statement "on the order of
+40 seconds at ~900,000 candidates", inferred from a GitHub-runner measurement
+at 90,909. **The measured value is roughly eleven times that inference.** The
+inference was wrong and is withdrawn. No extrapolated timing in this document
+may be quoted as a measured result.
+
+### Open verifier quality gaps
+
+| Gap | Detail |
+| --- | --- |
+| Verifier memory not measured separately | The reported 17.59 MB retained / 95.31 MB peak covers the **production recovery window**; the sampler stops before verification begins. The verifier's own footprint — the thing that ended attempts 1 and 2 — was never instrumented. |
+| Hash parity is partly tautological | Both the production path and the oracle call the same `assignmentValue`. Ranking (SQL window function versus JS sort) and quota (separate code paths) *are* independently cross-checked; the hash is not. |
+| Pooling not exercised independently at 1M | The per-stratum oracle receives already-pooled `assignmentStratum` values, so its pooling branch is a no-op. Pooling is independently proven at 100k, where the oracle receives raw RFM segments. |
+
+### Standing boundary
+
+**Healthify's 4.5 crore customer environment is a future dedicated architecture
+programme.** Nothing in this work supports or implies it.
+
+**Five simultaneous 1M tenants have not been tested.**
+
+## Preparation UI proof and the completion notification — 2026-09-21T10:33:04Z
+
+_Status: **implemented and verified**, commits `f7b38df` `8dde4c6`. Tests only;
+no email was sent and no provider was contacted._
+
+### The eight preparation points, and where each is proved
+
+| # | Point | Proved by | Kind |
+| --- | --- | --- | --- |
+| 1 | Headline reads "Joon is preparing who should receive this." | `CampaignPreparationPanel.test.tsx` | rendered markup |
+| 2 | Polls on a fixed interval while preparation is active | `CampaignPreparationSection.client.test.tsx` test 1 & 2 | real timer in jsdom |
+| 3 | Evaluated / unavailable / deliberately left alone / candidates / control / treatment update on screen between ticks | same file, test 3 | real re-render, stale count asserted gone |
+| 4 | No enabled control can start or schedule a dispatch while preparing | same file, test 4 | every rendered button asserted disabled |
+| 5 | A remount restores progress from the API, not from client state | same file, test 5 | unmount, assert gone, remount, assert re-fetched |
+| 6 | Polling stops once the audience is ready | `CampaignPreparationPolling.client.test.tsx` | call count stops rising |
+| 7 | Needs-attention says "Nothing has been sent.", gives a reason and a recovery action | same file, test 7 | rendered text plus a wired retry |
+| 8 | A ready audience still respects the delivery pause and the sender-domain gate | same file, test 8 | every rendered button asserted disabled |
+
+Points 4 and 8 were verified by mutation: removing `!canApprove` from the
+gate makes tests 4, 7 and 8 fail (3 of 6), and restoring it makes them pass.
+A green assertion that cannot fail is not evidence.
+
+### Sending and scheduling are one gate, not two
+
+On the campaign page there is a single draft action. It opens the approval
+dialog, and that dialog is where **"Joon picks the time"** (the scheduled path)
+and **"Send now"** both live
+(`apps/web/src/app/(dashboard)/campaigns/[id]/page.tsx:629`,
+`:705`, `:754`). So "send and schedule are both disabled" is one property: the
+only control that leads to either is disabled while preparation is incomplete.
+
+The backend refuses independently of timing. `campaigns.sendNow` takes
+`timing: "joon" | "now"`, but timing only reaches the send job **after**
+approval; `finalizeCampaignApproval` throws `AUDIENCE_RUN_NOT_COMPLETE` before
+either timing is consulted (acceptance scenario 7).
+
+I first added a separate "Schedule for later" button to
+`CampaignPreparationSection` so a test could assert it was disabled. That
+button existed nowhere in the product — it would have been a surface invented
+to be tested. It was removed before commit and the assertion was replaced with
+the stronger property above.
+
+**Limitation, stated plainly:** `CampaignPreparationSection` renders its own
+approve control only when `showApproveAction` is true, and the campaign page
+passes `false` — it renders its own equivalent. The client-rendered tests
+therefore prove the shared gate function `canApproveDelivery` wired through a
+real React effect and a real timer; they do not drive the page's own button.
+Proving that requires mounting the page with tRPC, which is not done.
+
+### Durable completion notification
+
+Approval writes one `agentActivityLog` row when the audience is ready
+(`packages/campaign-engine/src/approval-finalize.ts:257`):
+
+- summary: "Campaign audience ready for review." followed by the treatment,
+  control and deliberately-left-alone counts in Indian digit grouping;
+- `entityId` / `entityType` carry the campaign, so the entry opens it;
+- the same counts are repeated in `metadata` for any surface that wants the
+  numbers rather than the sentence.
+
+A genuine preparation failure writes the attention entry instead
+(`apps/workers/src/workers/prepare-audience.ts:55`): merchant language, the
+reason, and "Nothing has been sent." An `AudienceRunBusyError` does not write
+one — another worker holds the lease and will finish.
+
+**In-app only.** Both acceptance tests assert `messageLog` stays at zero rows
+across the ready and the attention path. No external email in v1.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx turbo run typecheck` | 19 of 19 tasks successful |
+| `pnpm test` (unit) | 352 pass, 0 fail |
+| `node scripts/run-integration-tests.mjs` against `joon_test` | 50 pass, 0 fail, 0 skipped |
+| Preparation acceptance suite | 10 of 10, including the two notification scenarios |
+| Client-rendered preparation suite | 6 of 6 |
+
+### Observation recorded, not acted on
+
+`campaigns.schedule` (`apps/api/src/routers/campaigns.ts:1595`) sets a campaign
+to `status: "scheduled"` with no approval, no frozen audience and no
+preparation check. No web surface calls it, and no worker polls `scheduledAt`
+to dispatch a campaign, so it currently flips a status label and nothing sends
+from it. Recorded here rather than changed: it is outside this pass, and
+removing or gating an exposed mutation is a product decision.
+
+## The 1M verifier, rebuilt as an independent oracle — 2026-09-21T10:47:19Z
+
+_Status: **implemented and verified at 20,000 customers**, commit `7db1e9c`.
+The million-customer run using it is a separate result and is recorded
+separately. Nothing here is a scale claim._
+
+### What was wrong with the old verifier
+
+It called `assignStratifiedCohortArms` — the product's own assignment
+function — to check the product's own assignment. If that function were wrong,
+the check would have agreed with it. Three of the four things the proof claimed
+to establish were therefore unestablished:
+
+- hash parity was tautological;
+- ranking and quota were compared against the same implementation that produced
+  them;
+- pooled small strata were never exercised at a million, because the fixture's
+  sparse strata were all excluded by other rules before they reached assignment.
+
+### What the oracle does now
+
+It re-derives the documented rules and imports none of the product's assignment
+code:
+
+| Rule | How the oracle derives it | Deliberately different from production |
+| --- | --- | --- |
+| assignment value | `sha256("seed:stratum:customer")`, first six bytes big-endian, divided by 2^48 | the integer is accumulated byte by byte, not read with `readUIntBE` |
+| pooling | census of **original** strata; anything under ten candidates becomes `pooled_small` | derived from the original stratum, never read back from `assignmentStratum` |
+| control quota | `min(floor(n x rate), n - 1)` per assignment stratum | computed from the oracle's own census, not from the run's stored plan |
+| ranking | ascending by value, ties broken by customer id in **byte order** | `Buffer.compare`, not `localeCompare`, which is what `COLLATE "C"` means |
+
+Memory stays bounded to the largest single stratum, and the verifier is
+measured on its own baseline. "Does the product hold a million customers in
+memory" and "does the checker hold a million customers in memory" are different
+questions, and conflating them is what made the first two attempts
+inconclusive.
+
+### Proof that the oracle can fail
+
+A verifier that always passes proves nothing. Three mutations at 20,000
+customers, each reverted after:
+
+| Mutation | Checks that failed | Checks that did not |
+| --- | --- | --- |
+| oracle rate 0.15 → 0.16 | arms (155 of 15,467), quota (5 strata) | the other 23 |
+| pooling threshold 10 → 3 | pooling exercised, pooled quota, quota (8 strata), candidates compared (15,427 of 15,467) | the other 21 |
+| oracle hashes `seed:customer:stratum` | hashes (15,467 of 15,467), arms (3,942) | the other 23 |
+
+Each mutation failed the checks that name it, and no others.
+
+### The fixture now exercises pooling
+
+Forty customers in eight strata of five are reserved at the head of the cohort
+and exempted from every exclusion rule, so they survive to assignment. They
+pool into one `pooled_small` stratum of forty, which draws a real quota of six
+controls. Measured at 20,000: `8 sparse strata -> 40 candidates, 6 control`.
+
+### Measured finding: stored assignment hashes lose precision
+
+Writing a double through Prisma keeps **sixteen significant digits**. A value
+whose shortest exact decimal needs seventeen comes back one or two units in the
+last place away from what was computed. Measured at 20,000 customers: **3,941
+of 15,467** stored hashes differ from the exact documented value.
+
+Isolated rather than assumed. A value needing only sixteen digits round-trips
+exactly; a value needing seventeen does not, and it loses precision on **write**
+through every path tried — `create`, `createMany` and raw `$executeRaw` alike —
+so it is not a read-side artifact:
+
+```
+value                0.10444994167183097   (17 significant digits)
+ORM create -> ORM    0.104449941671831     same? false
+createMany -> ORM    0.104449941671831     same? false
+raw write -> ORM     0.104449941671831     same? false
+createMany -> raw    0.104449941671831     same? false
+```
+
+**Why it does not change an arm.** The column is an ordering key, not a
+decision. Rounding to a fixed number of significant digits is monotone
+non-decreasing, so it can create a tie between two neighbouring values but
+cannot invert their order, and a tie falls through to `customerId COLLATE "C"`.
+Two hashes would have to land within about 1e-16 of each other — against a mean
+spacing of roughly 6.5e-6 across a stratum — and the tie would then have to fall
+exactly on the quota boundary. Measured at 20,000: **0 arm mismatches** while
+3,941 hashes differed.
+
+**Recorded, not changed.** Storing the hash exactly would mean changing the
+column type and the assignment write path, which is a change to deterministic
+assignment behaviour and is explicitly out of scope. The oracle checks the
+stored column against the documented value *at storage precision*, ranks on the
+exact value, and reports the precision gap as an observation. If storage
+precision ever did change an arm, the arm check is what would catch it.
+
+### Verdict discipline
+
+The old harness printed its measurement block **before** the assertions ran, so
+a printed block looked like a result when it was not one. Now every check is
+collected, the block is headed `PASS` or `FAIL` with the count, and the
+assertion runs last. A harness error that is not an assertion failure prints
+`INCONCLUSIVE` with the last checkpoint reached, because a run that did not
+finish is neither a pass nor a fail.
+
+Checkpoints print as the run progresses — seed complete, preparation started,
+crash injected, recovery started, preparation complete, verification started,
+verification complete. They say where the harness got to. They never say it
+passed.
+
+## Control-selection bottleneck — the 100k baseline — 2026-09-21T11:08:46Z
+
+_Status: **diagnosis in progress**, commit `7822338`. The 100,000-candidate
+half of the measurement is complete. **The million-candidate half is not**, and
+nothing here explains the measured 468-second statement on its own — see the
+gap at the end. Behaviour is frozen: no candidate has been adopted._
+
+Measured on an isolated disposable Postgres, local, as actually configured:
+`work_mem` 4 MB, `shared_buffers` 128 MB, `maintenance_work_mem` 64 MB,
+`max_parallel_workers_per_gather` 2, default fillfactor. Nothing was tuned
+before measuring.
+
+### Where the time goes at 100,000 candidates
+
+| Measurement | Value |
+| --- | --- |
+| Whole statement | **5,027 ms** (4,954 ms on a second run after restoring config — reproducible within 1.5%) |
+| Ranking alone — the window function, no write | **193 ms** |
+| Everything else — applying the update | **~4,830 ms, about 96%** |
+| Sort method | external merge, **Disk 7,960 kB** |
+| Temp files / bytes | 1 / 8,151,040 |
+| Buffers touched | **2,427,846 shared hits for 100,000 updated rows — about 24 per row** |
+| WAL | **805,948 records, 105,143,434 bytes — about 1,051 bytes per updated row** |
+| Table | heap 39 MB, six indexes 71 MB, total 110 MB |
+
+**The ranking is not the bottleneck.** The sort spills to disk and still costs
+under 200 ms. The cost is writing.
+
+### Why the write costs so much
+
+Changing `arm` cannot be a HOT update. The row is about 410 bytes, so a page
+holds roughly nineteen of them, and the statement updates **every** row — a
+new version of every row cannot fit beside the old one whatever the free space
+is. Each non-HOT update writes a new heap tuple and a new entry in all six
+indexes.
+
+Measured rather than assumed, by removing each cause in turn:
+
+| Variant | Time | Buffers | WAL records | WAL bytes |
+| --- | --- | --- | --- | --- |
+| Baseline | 4,954 ms | 2,427,846 | 809,851 | 103 MB |
+| Without the `(runId, arm)` index | 3,958 ms | 2,088,329 | 691,466 | 84 MB |
+| Without that index **and** fillfactor 90 | 3,629 ms | 1,751,902 | 577,683 | 69 MB |
+
+Even with the only index containing `arm` removed and 10% free space on every
+page, the statement still wrote **5.8 WAL records per row**. It did not go HOT,
+which is the direct evidence for the paragraph above.
+
+### The candidate this points at — measured, not adopted
+
+Only 14,996 of 100,000 candidates become CONTROL. Writing just those:
+
+| Variant | Time | WAL records | WAL bytes |
+| --- | --- | --- | --- |
+| Update every candidate (current) | 4,954 ms | 809,851 | 103 MB |
+| Update only the control rows | **1,272 ms** | **121,579** | **14 MB** |
+
+**3.9x faster, 7x less WAL**, at 100,000.
+
+For the product to do this, `TREATMENT` would have to be the provisional value
+written when the candidate row is inserted — which is the pattern the engine
+already uses for `assignmentStratum` and `assignmentHash`, both written
+provisionally and fixed up for pooled strata once the census closes.
+
+**Not adopted, and not proposed yet.** It changes what a non-null `arm` means
+on a run that has not finished, which is a change to the durable state machine
+and needs its own crash-and-resume proof, not just a faster number. It also has
+to clear the full battery before it could be retained: exact arm parity,
+sparse-stratum pooling parity, crash and recovery, duplicates, isolation and
+zero side effects, with plan, WAL, temp I/O, locks and memory compared against
+this baseline.
+
+### What this does not explain
+
+> **Withdrawn 2026-09-21T11:18:48Z.** This paragraph was computed against the
+> 468-second figure from attempt 3. That figure does not reproduce: the same
+> statement took 58,649 ms on a hosted runner with identical Postgres settings.
+> See the attempt-4 section. The paragraph is left in place rather than deleted
+> so the correction is visible.
+
+At 100,000 candidates the statement takes 5.0 s. Scaled linearly to the 772,929
+candidates measured at a million, that is about **38 s**. The measured value
+was **468 s** — roughly **twelve times worse than linear**.
+
+So the 100k profile does not explain the million-customer bottleneck. Something
+changes with size that is not visible here. The shapes worth checking in the
+1M plan, stated as hypotheses rather than conclusions:
+
+- the hash join's build side is 100,000 rows at 7,274 kB in one batch here; at
+  772,929 rows it would be roughly 56 MB against a 4 MB `work_mem`, so it would
+  have to spill across many batches;
+- the sort spills 8 MB here and would spill roughly 60 MB there;
+- the table is 39 MB here and about 400 MB there, against 128 MB of
+  `shared_buffers`, so index writes would stop being cache hits.
+
+**None of these is established.** The million-candidate
+`EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS)` is the next measurement, and no
+candidate will be prototyped against a bottleneck that has not been measured at
+the size it appears at.
+
+### Infrastructure note
+
+The million-customer work does not fit on the laptop while a browser is open.
+Measured at the moment the local run was killed: **0.05 GB of system memory
+free**, with **2.42 GB held by Chrome** on an 8 GB machine; the run stopped at
+387 s during recovery, before its verifier ran. Disk was never the constraint —
+57 GB free, and the disposable database had reached 3.6 GB. The same workload
+completed on this machine before, so this is memory availability, not capacity.
+The proof now runs on a hosted runner (16 GB) via
+`.github/workflows/million.yml`, on demand or on a `proof/**` branch. No paid
+infrastructure was provisioned.
+
+## One million customers — attempt 4, verified by an independent oracle — 2026-09-21T11:18:48Z
+
+_Status: **pass**. GitHub Actions run `35591808109`, branch `proof/million-oracle`,
+commits `7db1e9c` (oracle) and `8c9484d` (runner). Synthetic tenant, disposable
+Postgres, simulated provider. **25 of 25 checks passed.**_
+
+This is the first million-customer result where the checker does not call the
+code it is checking. Attempts 1 and 2 were inconclusive; attempt 3 was a
+functional pass whose hash parity was tautological and whose pooling was never
+exercised. Both of those gaps are now closed.
+
+### Measured
+
+| Field | Measured |
+| --- | --- |
+| Total customers | 1,000,000 |
+| Candidates / control / treatment | 772,938 / 115,938 / 657,000 |
+| Not receiving / deliberately left alone | 160,865 / 66,197 |
+| Duplicate members / duplicate assignments | **0 / 0** |
+| Arm mismatches **against the independent oracle** | **0 of 772,938** |
+| Hash mismatches against the independently recomputed rule | **0 of 772,938** |
+| Pooling mismatches against the independently derived pooling | **0 of 772,938** |
+| Control quota mismatches | **0 strata** |
+| Pooled small stratum | 8 sparse strata → 40 candidates, **6 control** |
+| Largest stratum | 154,583 |
+| API response time | **3 ms** |
+| Seed | 4.2 min |
+| Crash injected at | 200,000 durable rows |
+| Recovery duration | **8.1 min (484 s)**, attempts = 2 |
+| Queries / transactions (recovery) | 50,590 in 53 shapes / 49,248 |
+| Query p50 / p95 / p99 / max | 0 / 3 / 4 / **58,649 ms** |
+| Deadlocks / lock conflicts | 0 / 0 |
+| Preparation retained heap / peak | 17.54 MB / 147.9 MB |
+| **Verifier** retained heap / peak, measured separately | **0.06 MB / 296.5 MB** |
+| Verification duration | 12 s |
+| Live-provider calls / real deliveries | **0 / 0** |
+| Billing, Results, causal proof, warm-up, reputation | **0 rows in each** |
+
+**The verifier used twice the memory the product did** — 296.5 MB against
+147.9 MB. That is exactly why the two are now measured against separate
+baselines: reported as one number it would have been read as the product's
+cost, and it is not.
+
+Storage precision at a million: **193,310 of 772,938 stored hashes (25.0%)**
+differ from the exact computed value, which is the expected share of doubles
+whose shortest exact decimal needs seventeen significant digits. **0 arms
+differed.**
+
+### Correction: the 468-second statement does not reproduce
+
+The control-selection statement was recorded at **468,127 ms** in attempt 3.
+The same statement, at the same size, on this run took **58,649 ms** — about
+**eight times faster**.
+
+| | Attempt 3 | Attempt 4 |
+| --- | --- | --- |
+| Machine | 8 GB laptop | hosted runner, 15 GB, 0 B swap used |
+| Free memory at the time | starved — the next run on it was killed at 0.05 GB free | 9.2 GB free, 5.1 GB page cache at start |
+| `shared_buffers` / `work_mem` | 128 MB / 4 MB | 128 MB / 4 MB — **identical** |
+| Recovery duration | 1,040 s | 484 s |
+| Control-selection statement | 468,127 ms | **58,649 ms** |
+
+Postgres was configured identically, so the difference is not tuning.
+
+**Inference, labelled as such:** the members table and its six indexes are
+roughly 400 MB at a million rows, against 128 MB of `shared_buffers`. On the
+runner there was 5–10 GB of operating-system page cache to hold the rest; on
+the laptop there was effectively none, so index writes that were cache hits on
+one machine were physical reads on the other. This is consistent with every
+figure above, but it was not measured directly and no attempt was made to
+reproduce the starved state.
+
+**What follows from this.** The premise of the optimisation order — a measured
+468-second control-selection bottleneck — does not hold on hardware that is not
+memory-starved. On this run the statement is **12% of the 484-second recovery**.
+The three bulk inserts together are larger:
+
+| Statement | Time | Share of recovery |
+| --- | --- | --- |
+| Control selection | 58,649 ms | 12.1% |
+| Insert `customer_audience_decisions` | 55,197 ms | 11.4% |
+| Insert `measurement_assignments` | 48,841 ms | 10.1% |
+| Insert `campaign_audience_evaluation_rows` | 43,406 ms | 9.0% |
+| Insert `campaign_audience_members` (400 statements) | 33,766 ms | 7.0% |
+
+The 100,000-candidate diagnosis above stands on its own terms — the ranking is
+2% of the statement and the write is the rest — but the claim that it was
+"twelve times worse than linear at a million" was computed against the 468-second
+figure and is **withdrawn**. Against 58,649 ms it is about 1.6x worse than a
+linear scaling of the local 100k measurement, and those two numbers come from
+different machines, so even that comparison is not sound.
+
+**No optimisation has been adopted, and none should be adopted against a
+bottleneck this size without the 1M plan.** That measurement
+(`.github/workflows/control-selection.yml`) has not been run.
+
+## Control-selection diagnosis at one million — 2026-09-21T12:01:01Z
+
+_Status: **diagnosed**. GitHub Actions runs `35593544874` (inconclusive) and
+`35595088570` (complete), branch `diag/control-selection-1m`, commits `7822338`
+`5ed07dc` `9fff4ee`. Measurement only — the statement the product runs was not
+changed to obtain these numbers._
+
+### Run 35593544874 — inconclusive
+
+Fixture seeding and the real million-customer preparation **both succeeded**:
+1,000,000 customers seeded in 3.5 min, prepared through the real job path in
+9.9 min, status `approved`. The diagnostic measurement then failed at its first
+reset:
+
+```
+ERROR: could not resize shared memory segment "/PostgreSQL.2022276388"
+to 67145376 bytes: No space left on device      (SQLSTATE 53100)
+```
+
+**This was not disk exhaustion and not a campaign-preparation failure.** The
+device is `/dev/shm`, which a Docker service container caps at 64 MB by
+default; Postgres asked for 67,145,376 bytes of dynamic shared memory for a
+parallel operation. The runner had **79 GB of disk free** and 4.5 GB of memory
+free at that moment.
+
+No measurement was produced, so **no conclusion about control-selection cost
+may be drawn from this run**.
+
+### Run 35595088570 — the rerun, and exactly what changed
+
+The rerun sets Docker `--shm-size=2g` on the Postgres service container.
+
+- This changes **the Docker container runtime shared-memory limit**, and
+  nothing else.
+- It does **not** change Postgres `work_mem`, `shared_buffers`,
+  `maintenance_work_mem`, `random_page_cost`, parallelism, or any query. The
+  settings printed by the run are the defaults: `work_mem` 4 MB,
+  `shared_buffers` 128 MB, `maintenance_work_mem` 64 MB,
+  `max_parallel_workers_per_gather` 2.
+- The numbers below are therefore valid **for a properly provisioned Postgres
+  environment** — one whose container is not capped at 64 MB of shared memory.
+- They must **not** be described as performance on the default 64 MB Docker
+  shared-memory configuration. On that configuration this statement did not
+  complete at all.
+- They do **not** establish anything about Railway. **Whether the deployed
+  database has comparable shared memory, page cache or I/O is an external
+  environment fact and has not been checked.**
+
+### Component costs at 1,000,000 candidates
+
+Each variant measured from the same state — arms cleared, table vacuumed and
+analysed — by the same code that measured 100,000.
+
+| Variant | Execution | WAL records | WAL | Shared buffer hits | Sort |
+| --- | --- | --- | --- | --- | --- |
+| Ranking only, no write | **1,178 ms** | 0 | 0 MB | 490 | external merge, 15,024 kB |
+| **The statement as it is today** | **63,679 ms** | 8,098,580 | **4,230 MB** | 23,463,380 | external merge, 79,512 kB |
+| Only the control rows written | **11,064 ms** | 1,203,846 | **180 MB** | 3,488,920 | external merge, 79,512 kB |
+
+**The ranking is 1.85% of the statement.** The rest is the write.
+
+### The full plan
+
+`EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS)`, execution time **62,616 ms**:
+
+| Node | Actual | Note |
+| --- | --- | --- |
+| Seq Scan on members (for ranking) | 304 ms, 71,431 pages read | **no index used** |
+| Sort | 1,412 ms | external merge, **Disk 79,512 kB** |
+| WindowAgg (`row_number`) | 1,686 ms | |
+| Seq Scan on members (target side) | 209 ms | **no index used** |
+| Hash (target ctid, id) | 389 ms | **Batches 16**, 4,930 kB — spilled |
+| Hash Join | 3,241 ms | |
+| Hash Join with quotas | 3,571 ms | the whole read side finishes here |
+| **Update** | **62,607 ms** | shared hit 23,272,804, **read 2,991,661, dirtied 2,843,463, written 2,802,425** |
+| WAL | | **records 8,043,044, fpi 669,592, bytes 3,994,554,973** |
+
+**94.3% of the statement is applying the update** — 62,607 ms total against a
+read side that finishes at 3,571 ms.
+
+Temp I/O: 31 temp files, 249,984,486 bytes. Planning 0.486 ms. JIT 11.7 ms.
+
+**Lock wait was not separately instrumented.** `EXPLAIN` does not report it.
+What is measured is that the 1M proof recorded **0 deadlocks and 0 lock
+conflicts** across the whole recovery, so there is no evidence of lock waiting,
+but neither is there a direct measurement of it in this statement.
+
+### 100,000 against 1,000,000 — what changes with size
+
+| | 100k | 1M | Ratio |
+| --- | --- | --- | --- |
+| Candidates | 100,000 | 1,000,000 | 10x |
+| Whole statement | 4,816 ms | 63,679 ms | **13.2x** |
+| Ranking only | 98 ms | 1,178 ms | 12.0x |
+| Sort spill | 7,968 kB | 79,512 kB | 10.0x |
+| Temp files / bytes | 1 / 8.2 MB | 31 / 250.0 MB | 30.6x |
+| Hash build for the target side | **Batches 1**, 7,274 kB | **Batches 16**, 4,930 kB | spills |
+| Update: shared hits | 2,429,973 | 23,272,804 | 9.6x |
+| Update: pages **read** | 1,482 | **2,991,661** | **2,019x** |
+| Update: pages **written** | 155 | **2,802,425** | **18,080x** |
+| WAL records | 811,083 | 8,043,044 | 9.9x |
+| WAL **full-page images** | 1,494 | **669,592** | **448x** |
+| WAL bytes | 91.2 MB | 3,995 MB | **43.8x** |
+| WAL bytes per updated row | ~956 B | ~3,995 B | 4.2x |
+
+**Buffer touches, WAL records and the sort all scale linearly with rows.** Two
+things do not: **physical page reads and writes**, and **full-page images**.
+
+The cause is in the sizes. At a million the table is 580 MB of heap and 753 MB
+of indexes — **1,334 MB against 128 MB of `shared_buffers`**, a ratio of 10.4
+to 1. At 100,000 the same table is 110 MB, which the cache holds comfortably.
+So the same work is cache-resident at one size and physical I/O at the other,
+and the first touch of each page after a checkpoint writes a full 8 KB image
+into WAL.
+
+### The index built for this statement is not used by it
+
+> **Corrected 2026-09-21T13:16:40Z.** "The planner chose a Seq Scan ... at both
+> sizes" holds for the plan captured in this run, but the variants run later
+> reported an index scan somewhere in the baseline plan after a table rewrite,
+> and the harness does not record which index. The index was dropped on
+> write-side evidence, not on this claim.
+
+`campaign_audience_members_runId_assignmentStratum_assignmentHash_customerId`
+exists specifically to support
+`ORDER BY "assignmentHash", "customerId" COLLATE "C"`. At a million it is
+**338 MB**, the largest index on the table, and the planner **chose a Seq Scan
+and an external sort instead of using it** — at both sizes. It is maintained on
+every insert and on every non-HOT update, and it earns nothing here.
+
+Recorded as an observation. Removing an index is a separate decision with its
+own evidence requirement, and no other query was checked for dependence on it.
+
+## Control selection — one change adopted, one rejected — 2026-09-21T13:16:40Z
+
+_Status: **diagnosed; one change adopted**. Commits `9a23061` (rejection and
+the quota guard) and `199abda` (the index). Proof rerun: GitHub Actions
+`35602634482`, **25 of 25 checks passed**._
+
+### Rejected: writing only the control rows
+
+Measured at a million candidates: **11,064 ms against 63,679 ms, and 180 MB of
+WAL against 4,230 MB** — 5.8x faster, 23x less WAL. Implemented, then reverted.
+
+It requires candidates to arrive already marked TREATMENT so the draw only
+updates the ones that change. But `materialiseMeasurementAssignments` uses
+`arm IS NOT NULL` to refuse delivery authority to a member that was never
+assigned. Under the change every candidate carries an arm from the moment the
+row is written, so an interrupted run becomes indistinguishable from a
+completed one — and it fails in the wrong direction: everyone reads as
+treatment rather than as unassigned.
+
+Two integration tests failed on exactly that property, which is what surfaced
+it: *a failed run stays invisible to anything downstream* and *an interrupted
+run resumes from durable work instead of discarding it*.
+
+The gain was roughly eleven per cent of a background job's wall time. That is
+not a trade worth making on the path that decides who is withheld. The
+reasoning sits next to the statement in the source so the measurement is not
+rediscovered and mistaken for an oversight.
+
+**Kept from the attempt:** a stronger completion guard. "No candidate is still
+null" proves every row was written; it does not prove the right number were
+withheld. The run now also asserts the drawn control count equals the plan's.
+
+### Adopted: drop the index added for the control-selection ORDER BY
+
+Both arms back to back on one runner, same fixture, each from a freshly
+rewritten table:
+
+| Arm, 1,000,000 candidates | Time | WAL | Full-page images | Indexes |
+| --- | --- | --- | --- | --- |
+| As it was | 80,565 ms | 3,370.8 MB | 398,762 | 576 MB |
+| **Without the ordering index** | **53,252 ms** | **1,710.2 MB** | **140,769** | 383 MB |
+| fillfactor 90, all indexes | 74,253 ms | 3,333.5 MB | 405,138 | 580 MB |
+| fillfactor 90, without it | 56,992 ms | 1,821.1 MB | 161,243 | 387 MB |
+
+**−33.9% time, −49.3% WAL.** At 100,000 the same comparison is 4,881 ms against
+5,539 ms and 87.2 MB against 109.5 MB, so the direction holds at both sizes.
+Leaving free space on each page does nothing on its own, which is expected when
+every row is rewritten and HOT cannot apply.
+
+The saving is write-side: the draw updates every candidate row, changing `arm`
+cannot be a HOT update, so each row costs an entry in every index on the table.
+This was the largest of six — 338 MB at a million — and carrying it through
+that update costs roughly 258,000 full-page images.
+
+No production query filters or orders on `assignmentStratum` except the control
+selection itself. Nothing about which customers are chosen changes, and
+re-creating the index is one statement.
+
+**Correction.** An earlier entry said the planner "never uses it at either
+size." That is not supported. The full plan captured in run `35595088570` shows
+sequential scans and no index scan, but the variants run reported an index scan
+somewhere in the baseline plan after the table was rewritten, and the harness
+records only whether an index was used, not which one. The decision does not
+rest on the scan question — the saving is index maintenance during the update,
+not reading.
+
+### The proof, re-run with the index gone
+
+`35602634482`, **25 of 25 checks passed**: 1,000,000 customers, 772,938
+candidates, 115,938 control, 657,000 treatment, **0 arm, hash, pooling and
+quota mismatches** against the independent oracle, pooling exercised (8 sparse
+strata → 40 candidates, 6 control), 0 duplicates, crash at 200,000 rows and
+recovery in 496 s, preparation retained 17.55 MB, verifier measured separately
+at 0.06 MB retained and 296.51 MB peak, and 0 rows in billing, Results, causal
+proof, warm-up and reputation.
+
+The control-selection statement fell from **58,649 ms to 43,152 ms (−26%)** in
+the real preparation path.
+
+### What this did not do, stated plainly
+
+Total recovery went from **484 s to 496 s** — slightly *slower*, not faster.
+Statements this change cannot touch moved as much or more:
+
+| Heaviest statement | Before | After | |
+| --- | --- | --- | --- |
+| Control selection | 58,649 ms | **43,152 ms** | −26% |
+| Insert `customer_audience_decisions` | 55,197 ms | 63,072 ms | +14% |
+| Insert `measurement_assignments` | 48,841 ms | 56,317 ms | +15% |
+| Insert `campaign_audience_evaluation_rows` | 43,406 ms | 48,137 ms | +11% |
+| Insert `campaign_audience_members` | 33,766 ms | 32,529 ms | −4% |
+
+Those three inserts write to different tables and cannot be affected by
+dropping an index on `campaign_audience_members`. They moved by 11 to 15 per
+cent between two runs on different hosted runners, which is the noise floor for
+an end-to-end comparison of this kind.
+
+**So the end-to-end run neither confirms nor refutes a change of a few per cent
+in total preparation time, and no claim is made that preparation got faster
+overall.** The adoption rests on the controlled comparison — both arms, one
+runner, one fixture, back to back — and on the WAL reduction, which is
+structural rather than timing-dependent.
+
+## Two decisions: the stored hash, and the removed index — 2026-09-21T13:28:53Z
+
+_Status: **decided**. Both are the merchant-side owner's calls, recorded here
+as settled rather than open._
+
+### The stored assignment hash — left unchanged
+
+> **Intermediate stored hash is not byte-identical to the mathematical
+> reference at the final digits, but the representation has a proven 35x safety
+> margin against collision or reordering. It cannot affect an assignment
+> outcome.**
+
+The evidence behind that sentence:
+
+- Assignment values are `k / 2^48`, so two distinct values are always at least
+  **3.5527e-15** apart. Storage keeps sixteen significant digits, a grid no
+  coarser than **1e-16**, so it moves a value by at most **5e-17** — thirty-five
+  times less than half the gap. Rounding is monotone, so it cannot invert an
+  order either.
+- Checked against the worst case rather than a sample: **2,999,999 adjacent
+  pairs** at the top of the range where the grid is coarsest relative to the
+  gap, plus **1,715,519** across every binade. Zero collisions, zero
+  inversions. A cutoff test draws the control group at eight different quotas
+  and compares rank by rank.
+- The frozen authority is `MeasurementAssignment.arm`, not this intermediate.
+  That table has **no hash column**; the stored hash is an ordering key on the
+  member row.
+- Measured at a million: **193,053 of 772,938** stored hashes differ from the
+  exact value, and **0 arms differed**.
+
+`packages/customer-state/src/assignment-hash-precision.test.ts` makes the
+margin explicit. One test asserts that **fourteen significant digits would
+collide** — so if a future representation falls below the safe threshold, that
+test fails rather than someone silently moving between arms.
+
+**Deferred, not dropped.** No BIGINT column and no versioned hash
+representation is being added. **Revisit only if a future audit requirement
+demands byte-exact reproducibility of intermediate values.** The work is
+understood — an additive nullable `BIGINT` holding the exact 48-bit integer,
+written for new runs and ordered on, with existing frozen campaigns untouched —
+and it is not justified by anything measured so far.
+
+### The removed index — kept
+
+Every production query on `campaign_audience_members`, and what serves it now:
+
+| Where | Filters / order | Needed the removed index? |
+| --- | --- | --- |
+| `deleteMany` on a superseded run | `runId` | No — prefix only; three surviving indexes lead with `runId` |
+| `createMany` chunks | write | No |
+| `groupBy decision` | `runId` | No — `runId_decision_reasonCode_idx` |
+| `groupBy stratum` (census) | `runId`, `decision` | No — filters `stratum`, not `assignmentStratum` |
+| Pooled fixup `findMany` | `runId`, `decision`, **`stratum`**, order `customerId` | No — original stratum, not the assignment one |
+| `update` during fixup | `id` | No — primary key |
+| `groupBy arm` | `runId`, `decision` | No — `runId_arm_idx` |
+| **Control-selection ranking** | `runId`, `decision`, `assignmentStratum IS NOT NULL`, order `assignmentHash`, `customerId` | **The only query matching its shape** |
+| `pageApprovedAssignments` | `runId`, `decision`, `arm?`, keyset on `customerId` | No — the removed index cannot give a global `customerId` order, since `customerId` sits behind two other columns |
+| `materialiseMeasurementAssignments` | `runId`, `decision`, `arm IS NOT NULL` | No — `runId_arm_idx` |
+| Evaluation-row and decision projections | `runId` | No — prefix only |
+| `groupBy reasonCode` (left-alone) | `runId`, `decision` | No — `runId_decision_reasonCode_idx` matches exactly |
+| Left-alone sample | `runId`, `decision`, order `customerId`, take 100 | No — same reason as the paging query |
+
+One query matched its shape, and that is the one that was measured.
+
+**On the planner: its exact index choice varied between runs, so no claim is
+made that it never used this index.** The full plan in run `35595088570` shows
+sequential scans and no index scan; the variants run reported an index scan
+somewhere in the baseline plan after a table rewrite, and the harness records
+only whether an index was used, not which. The decision does not rest on that
+question.
+
+**The measured facts, and only these:**
+
+- Controlled comparison at 1,000,000 candidates, both arms on one runner
+  against one fixture, each from a freshly rewritten table: the targeted
+  statement went from **80,565 ms to 53,252 ms**, and WAL from **3,370.8 MB to
+  1,710.2 MB**.
+- In the full proof, control selection improved from **58,649 ms to
+  43,152 ms**.
+- **End-to-end recovery varied from 484 s to 496 s**, because independent
+  bulk-insert timings on other tables moved **11–15% across hosted runners**.
+  No overall speed-up is claimed.
+
+**Kept** because it has no semantic impact — nothing about which customers are
+chosen changes — and it materially reduces write amplification and the recovery
+burden that comes with it.
+
+## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
+
+_For a human to run. **Nothing in this pass sends email, and no step here is
+automated.** Joon must not add recipients or trigger a send on its own._
+
+### Before you start
+
+- **Recipients:** 2–3 inboxes you own, each explicitly opted in and already on
+  the allowlist. Do not add new addresses for this test.
+- **Store:** a store with an **authenticated sender domain**. `allo-test-5`
+  has none, so sending is blocked there by design — use it for the UI and
+  blocked-delivery steps only, not for steps 5 onward.
+- **Confirm before sending:** the campaign audience is 2–3 people, not a
+  segment that could expand.
+- Missing DNS is a safety net, not the safety mechanism. Check the recipient
+  list yourself.
+
+### The run
+
+| # | Step | What to confirm |
+| --- | --- | --- |
+| 1 | Create a narrowly targeted campaign for the 2–3 allowlisted addresses | The audience count is exactly what you intended, before approving anything |
+| 2 | Open the audience review | Left-alone reasons are grouped and readable; the control and treatment split is shown; an override can be applied and its reason is recorded |
+| 3 | Approve delivery | The page shows **"Preparing audience"**, not an apparent Draft dead-end. Counts appear in merchant language |
+| 3a | Reload the page mid-preparation | Progress is still there and still updating. Nothing is lost |
+| 3b | Close the tab, reopen the campaign | Same — the work continued without the page |
+| 3c | Watch it finish | The panel disappears and the campaign returns to its normal state. Approve is disabled the whole time preparation is in flight |
+| 4 | Check the delivery timing plan | The send time matches what the timing preview said; quiet hours are respected |
+| 5 | Send through the authenticated domain | The provider is the one you expect. **This is the only step that sends.** |
+| 6 | Check delivery events | Delivered, then open, then click, each appearing against the right recipient |
+| 7 | Place a real Shopify order from one tracked email | Use an address that received the campaign |
+| 8 | Check attribution | The order is attributed to this campaign; **currency is the store's own**, not dollars; the billing preview shows 5% of attributed non-cancelled revenue |
+| 9 | Cancel or refund that order | Attributed revenue drops accordingly. **Cancelled orders are excluded from billing** — confirm the preview reflects that |
+| 10 | Refresh the customer | Order history and customer state update; audit receipts show the decision trail |
+| 10a | Re-approve or retry the same campaign | **No duplicate send.** The recipient receives nothing a second time |
+
+### What "good" looks like at the end
+
+- Each recipient received **exactly one** email.
+- The control recipient, if one was drawn, received **none** — and is recorded
+  as withheld rather than missing.
+- Attributed revenue and the billing preview agree with what you actually
+  ordered and cancelled, in the store's currency.
+- Nothing in the audit trail contradicts what you saw on screen.
+
+### If something looks wrong
+
+Stop before re-sending. A duplicate send is the one failure this test cannot
+take back. Capture the campaign id, the run id shown in preparation, and the
+message ids, and hand those over rather than retrying blind.
+
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
 _Status: **verified**. Investigated rather than optimised: the point is to know
@@ -648,6 +1860,27 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T13:28:53Z | `1fdb179` `199abda` | **decided** | Stored hash left unchanged: proven 35x margin against collision or reordering, verified on 2,999,999 worst-case adjacent pairs and 1,715,519 across every binade, zero collisions and zero inversions; the frozen authority is `MeasurementAssignment.arm`, which holds no hash. Regression tests pin the margin and fail below the safe threshold. Index removal kept: every production query audited and none needs it; controlled 1M comparison 80,565 ms to 53,252 ms and 3,370.8 MB to 1,710.2 MB of WAL; full proof 58,649 ms to 43,152 ms. | The intermediate stored hash is not byte-identical to the mathematical reference at the final digits. **Deferred — revisit only if a future audit requirement demands byte-exact intermediate reproducibility.** No BIGINT column or versioned representation added. End-to-end recovery varied 484 s to 496 s because independent bulk-insert timings moved 11-15% across hosted runners; no overall speed-up is claimed. The planner's exact index choice varied between runs, so no claim is made that it never used the index |
+| 2026-09-21T13:16:40Z | `9a23061` `199abda` | **one adopted, one rejected** | Control-only draw measured at 11,064 ms against 63,679 ms and 180 MB of WAL against 4,230 MB — **rejected**: it requires candidates to arrive marked TREATMENT, which makes an interrupted run indistinguishable from a completed one and fails toward sending. Two integration tests caught it. Dropping the ordering index **adopted**: 53,252 ms against 80,565 ms and 1,710 MB of WAL against 3,371 MB at 1M, both arms on one runner; 4,881 against 5,539 ms at 100k. Proof re-run 35602634482 passed 25 of 25 with the statement at 43,152 ms against 58,649 ms. Integration suite 50/50. | **Total recovery went 484 s to 496 s — slightly slower.** Three inserts on other tables, which this change cannot affect, moved 11-15% between runners, so end-to-end timing across runs is noise-dominated and no overall speed-up is claimed. Adoption rests on the controlled same-runner comparison and the structural WAL reduction. Earlier claim that the planner "never uses" the index is **corrected**: the harness records whether an index was used, not which one |
+| 2026-09-21T12:01:01Z | `9fff4ee` | **diagnosed** | Control-selection measured at 1M on a hosted runner (run 35595088570). Statement 63,679 ms; ranking alone 1,178 ms (1.85%); update applies 94.3%. WAL 8,043,044 records, 669,592 full-page images, 3,995 MB. Pages read 2,991,661 and written 2,802,425 against 1,482 and 155 at 100k. Table 1,334 MB against 128 MB shared_buffers. Writing only the control rows: 11,064 ms and 180 MB of WAL — 5.8x faster, 23x less WAL. The 338 MB index built for this ORDER BY is not used by the planner at either size. | Run 35593544874 before it was **inconclusive**: seeding and real 1M preparation succeeded, but the measurement failed on Docker's default 64 MB /dev/shm, not disk (79 GB free) and not preparation. The rerun raises only the container shared-memory limit — no Postgres setting and no query changed — so the numbers hold for a properly provisioned Postgres and must not be read as performance under a 64 MB /dev/shm. **Nothing here establishes Railway's shared memory, page cache or I/O; that remains an external environment fact.** Lock wait was not separately instrumented |
+| 2026-09-21T11:18:48Z | `7db1e9c` `8c9484d` | **pass** | 1M attempt 4, GitHub Actions run 35591808109: **25 of 25 checks passed** against the independent oracle. 1,000,000 customers, 772,938 candidates, 115,938 control, 657,000 treatment; 0 arm, hash, pooling or quota mismatches; pooling exercised (8 sparse strata → 40 candidates, 6 control); 0 duplicates; crash at 200,000 rows and recovery in 484 s; 0 live-provider calls and 0 rows in billing, Results, causal proof, warm-up and reputation. Preparation retained 17.54 MB, peak 147.9 MB; verifier measured separately at 0.06 MB retained, 296.5 MB peak. | **Correction:** the control-selection statement took 58,649 ms here against 468,127 ms in attempt 3, on identical Postgres settings. The 468 s figure came from a memory-starved laptop and does not reproduce; the "twelve times worse than linear" claim is withdrawn. The statement is 12% of recovery here. The 1M EXPLAIN has still not been run, and no optimisation is adopted |
+| 2026-09-21T11:08:46Z | `7822338` `8c9484d` | **diagnosis in progress** | 100k control-selection baseline measured. Whole statement 5,027 ms; ranking alone 193 ms, so ~96% is the write. 2,427,846 buffers and 805,948 WAL records for 100,000 updated rows. Proven not HOT: removing the only index containing `arm` and giving pages 10% free space still wrote 5.8 WAL records per row. Writing only the 14,996 control rows measured 1,272 ms and 14 MB of WAL — 3.9x faster, 7x less WAL. Behaviour frozen; nothing adopted. | Does not explain the million-customer statement: 5.0 s at 100k scales linearly to ~38 s at 772,929 candidates, but 468 s was measured. The 1M EXPLAIN is still pending, and no candidate will be prototyped before it. The 1M work moved to a hosted runner after the local run was killed with 0.05 GB free and 2.42 GB held by Chrome |
+| 2026-09-21T10:47:19Z | `7db1e9c` | **implemented and verified at 20,000** | The 1M verifier no longer calls the product's assignment code. It re-derives the documented hash, pooling, quota and ranking independently, measures its own memory separately, prints structured checkpoints, and prints the verdict after the checks rather than before. Proven able to fail: three mutations each failed exactly the checks that name them. Fixture now reserves 8 strata of 5, exempt from every exclusion, so pooling is exercised — 40 candidates, 6 control. 25 of 25 checks passed at 20,000. | Not yet run at a million with this oracle; that is a separate result. Measured: storing a double through Prisma keeps 16 significant digits, so 3,941 of 15,467 stored hashes differ from the exact value by one or two ULP — recorded, not changed, because fixing it would alter deterministic assignment storage |
+| 2026-09-21T10:33:04Z | `8dde4c6` | **implemented and verified** | Part 1 preparation UI proof completed. Approval and genuine failure each write one durable in-app Activity entry with treatment, control and deliberately-left-alone counts and a campaign link; `messageLog` asserted at 0 rows on both paths. Client tests strengthened from "the approve button is disabled" to "no enabled control in the preparation surface can start or schedule a dispatch", verified by mutation (3 of 6 fail with the gate removed). typecheck 19/19, unit 352/352, integration 50/50. | The campaign page passes `showApproveAction={false}` and renders its own approve control, so the client tests drive the shared gate function, not the page's own button. A fabricated "Schedule for later" button was removed before commit; scheduling is proved through the single gated dialog entry and the timing-independent `AUDIENCE_RUN_NOT_COMPLETE` refusal |
+| 2026-09-21T09:58:22Z | `fccb542` | **functional pass, performance pending** | 1M attempt 3: 1,000,000 customers, 772,929 candidates, 115,936 control, 656,993 treatment, 0 duplicate members, 0 duplicate assignments, 0 arm mismatches, 0 live-provider calls, 0 downstream side effects, forced crash and recovery succeeded. API 4 ms. | Control-selection UPDATE measured **468,127 ms**; verifier memory not separately measured; hash parity partly tautological; pooling not independently exercised at 1M |
+| 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 2: verifier still used unbounded whole-cohort reference behaviour; threw RangeError inside the reference at a ~154,000 stratum. | No readiness conclusion |
+| 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 1: preparation completed, verification harness did not complete. | No readiness conclusion |
+| 2026-09-21T08:03:00Z | pending | pending | Recorded the scale boundary: 100k single-tenant preparation measured; 1M single-tenant and multi-tenant concurrency both **pending readiness proofs**; Healthify's 4.5 crore mobile-app environment is a **separate future architecture programme**, not supported or implied. Scale tests are synthetic tenants in disposable infrastructure only, with no calls to Shopify, Resend, SES, Railway production Postgres or Redis, or real recipients. | The three proofs named — client-rendered UI, 1M single tenant, 5-tenant concurrency — are all open at this timestamp |
+| 2026-09-21T07:45:03Z | `15d9c50` | verified | **Item D complete, and the cross-sell cause found and fixed.** A null-guard pattern of mine prevented Postgres restricting the scan: 155.2 s guarded against 8.2 s composed, identical results. Overnight scanning at 100k went 135.4 s → **4.3 s**, cross-sell 145.7 s → 4.1 s. Two other hypotheses were tested and rejected first. Evidence consolidated: three measured 100k results, the ~6,000 transaction breakdown, per-scanner durations, the inference boundary, and code-complete versus external. | Five migrations, real-delivery acceptance and an authenticated sender domain remain external |
+| 2026-09-21T07:35:03Z | `39a95f5` `643d384` | verified | Both evidence gaps closed. repurchase_window fires at 100k with its count checked against a SQL reference; per-scanner telemetry added. Rendered-component tests through React cover all seven UI points. Manual acceptance checklist written. Fixed a discovery defect: the unit runner ignored `.test.tsx`, so the component tests ran zero times — suite went 337 to 345. | Cross-sell accounts for 145.7 s of 148.6 s; two hypotheses tested and rejected, the null-guard hypothesis under measurement |
+| 2026-09-21T06:37:48Z | `3100465` | verified | **Pass 8B item C verified at 100k**: 124.7 s, 0.24 MB retained, 166 transactions, cross-sell anti-join exact at 37,500 of 50,000, zero sends. A fixture defect of mine looked like a code defect first — [A, lowStock] co-occurred more than [A, B], so the scanner correctly picked a different pair. | `repurchase_window` not exercised at 100k; the fixture seeds no repurchase cycles |
+| 2026-09-21T06:37:48Z | `8c31c5e` | verified | **Pass 8B.2 complete.** "Preparing audience" replaces the Draft dead-end; polls while active, stops when settled; merchant-language counts with zeroes hidden in flight; reload guidance; sending disabled until ready; needs-attention shows reason, "Nothing has been sent" and a retry. 8 tests, one asserting the wording leaks no infrastructure terms. | No browser-level test; the view model is tested as a pure function |
+| 2026-09-21T06:11:29Z | pending | pending | Pass 8B item B split into **B.1 durable preparation backend (verified)** and **B.2 preparation UI (pending)**. Two measurement labels corrected: a negative heap delta now reads "no retained heap growth detected", not proof of zero retention; "sends dispatched" now reads "one simulated send-orchestration job dispatched", with seven new assertions proving zero live provider calls, zero real deliveries and zero rows in billing, Results, warm-up, reputation and causal proof. | B.2 not started at this timestamp |
+| 2026-09-21T05:45:39Z | `042fdeb` | verified | **Pass 8B item B complete.** All ten acceptance scenarios covered by named tests. Three real gaps closed: progress had no run id, no failure reason or recoverability, and no query for a reloaded page. 100k through the real job path with a forced crash and automatic recovery: API-side work 6 ms, 0 duplicate rows, 0 arm mismatches of 90,909, 1 simulated dispatch. Integration 47/47. | Progress is returned by the API but not yet rendered in the campaign UI |
+| 2026-09-21T05:14:53Z | `63f38f2` | verified | **Pass 8B item A complete.** Re-audited every wall-clock read reachable from the frozen evaluation path; all that remain are default parameters or operational timestamps (run asOf, lease expiry, assignedAt/completedAt). Three end-to-end tests on a fixture where frozen and wall-clock evaluation cannot agree by accident: identical decisions across two executions, genuine divergence from live evaluation, and a resumed run matching an uninterrupted one. Integration 39/39. | Delivery-time rechecks remain deliberately current-time; that separation is pinned separately |
+| 2026-09-21T05:14:53Z | `5c7777e` | verified | Register renamed to `…-2026-09-21.md` via `git mv`; inbound link updated. Locked facts extended with the scale boundary and the testing boundary. Canonical status split into Pass 8A (implemented and measured) and Pass 8B (pending). | — |
+| 2026-09-21T05:14:53Z | `793bb58` | verified | **PR #25 merged to main.** All three checks green on `d697a569`, the exact head: CI typecheck/test/build (35560054169), Postgres+Redis integration `tests 36 pass 36 fail 0` (35560054164), and the 100k load proof (35563484911), dispatched on the head so the coverage claim is exact. | The originally-named load run 35558319666 covered `bb4dda2`, one docs-only commit earlier; a fresh run was dispatched rather than claim it covered the head |
+| 2026-09-21T05:10:08Z | pending | pending | Register renamed `…-2026-09-20.md` → `…-2026-09-21.md` via `git mv`; the one inbound link in `ExternalAcceptancePlan-2026-09-10.md` updated. Locked facts extended with the scale boundary (100k measured, 1M inference-only, Healthify's 4.5 crore a future architecture problem and not a target) and the testing boundary (disposable Postgres/Redis with a simulated provider; `allo-test-5` manual acceptance only; no autonomous real email). Canonical status split into Pass 8A (implemented and measured) and Pass 8B (pending). | Pass 8B items A–D all open at this timestamp |
 | 2026-09-21T04:11:27Z | `bb4dda2` | verified | 100k load proof executed on a GitHub runner (run 35558319666, 2m8s): 36.7 s, peak heap 66.41 MB, 6,078 transactions, 6,343 queries, p50 0 / p95 1 / p99 10 / max 4,319 ms, 0 duplicate rows, 0 arm mismatches of 90,909. Agrees with the local figures within 0.2 s and 5 transactions. | Control-selection worst case is 4,319 ms on the runner against 9,255 ms locally, so the local 1M extrapolation was pessimistic; re-read it against the runner number |
 | 2026-09-21T03:41:15Z | `bb4dda2` | verified | **CI executed green for the first time.** typecheck/test/build pass in 4m2s; integration reports `tests 36, pass 36, fail 0, skipped 0` on pgvector/pgvector:pg16 and redis:7 service containers, with heap measurements printing so `--expose-gc` demonstrably reached them. Third first-run defect fixed: migrations need pgvector, which stock postgres:16 does not ship - invisible to a clean-clone rehearsal because this machine has the extension installed. | Node 20 unverified; action versions target deprecated Node 20; the workflows' own concurrency group cancels a run when pushed over |
 | 2026-09-21T03:18:31Z | `5a71682` | implemented | Ran CI's exact sequence against a clean clone before pushing and found two first-run failures: the build cannot complete without a Clerk publishable key (local .env was masking it), and one of my own tests was time-of-day dependent, failing at 03:00 UTC inside default quiet hours. Both fixed; CI pinned to Node 24. Opened PR #25 so both workflows execute on the `pull_request` trigger. | Execution not yet observed; Node 20 remains unverified |

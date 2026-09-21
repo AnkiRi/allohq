@@ -1,0 +1,121 @@
+name: Control-selection diagnosis
+
+# Measurement only. Nothing in this job changes how an arm is decided: it
+# prepares a synthetic tenant, then repeatedly clears `arm` and re-runs the
+# statement under EXPLAIN so the same statement can be measured at more than
+# one size with identical code.
+#
+# It runs here rather than locally because a million candidates does not fit on
+# an 8 GB laptop alongside a browser — the local run was killed with 0.05 GB of
+# system memory free.
+#
+# Synthetic tenant, disposable Postgres, no provider of any kind.
+on:
+  workflow_dispatch:
+    inputs:
+      size:
+        description: "Customers to seed"
+        required: false
+        default: "1000000"
+  push:
+    branches: ["diag/**"]
+
+jobs:
+  diagnose:
+    name: Control-selection cost at size
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_diag_test
+        ports: ["5432:5432"]
+        # A service container gets 64 MB of /dev/shm by default. A parallel
+        # operation over a million rows asked for 67,145,376 bytes of dynamic
+        # shared memory and failed with 53100, "could not resize shared memory
+        # segment ... No space left on device" — which is /dev/shm, not disk:
+        # the runner had 79 GB free at the time. This raises the segment so the
+        # default Postgres configuration can run; no Postgres setting is
+        # changed, so the plan being measured is still the default one.
+        options: >-
+          --shm-size=2g
+          --health-cmd "pg_isready -U joon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_diag_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_diag_test"
+      MILLION_SIZE: ${{ github.event.inputs.size || '1000000' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Resources before the run
+        run: |
+          echo "--- memory ---"; free -h
+          echo "--- disk ---"; df -h /
+          echo "--- cpus ---"; nproc
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Seed and prepare the fixture
+        run: MODE=seed pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
+
+      - name: Postgres configuration as actually set
+        run: |
+          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_diag_test -c \
+            "SELECT name, setting, unit FROM pg_settings WHERE name IN
+             ('work_mem','maintenance_work_mem','shared_buffers','effective_cache_size',
+              'max_parallel_workers_per_gather','random_page_cost','temp_buffers','wal_level')
+             ORDER BY name"
+
+      - name: Component costs
+        run: MODE=breakdown pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
+
+      - name: Full plan for the statement as it is today
+        run: |
+          MODE=reset pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
+          MODE=explain pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
+
+      - name: Storage variants that change no behaviour
+        run: MODE=variants pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
+
+      - name: Table and index sizes
+        if: always()
+        run: |
+          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_diag_test -c \
+            "SELECT c.relname AS index, pg_size_pretty(pg_relation_size(c.oid)) AS size
+             FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+             WHERE i.indrelid = 'campaign_audience_members'::regclass
+             ORDER BY pg_relation_size(c.oid) DESC"
+          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_diag_test -c \
+            "SELECT pg_size_pretty(pg_relation_size('campaign_audience_members')) AS heap,
+                    pg_size_pretty(pg_total_relation_size('campaign_audience_members')) AS total"
+
+      - name: Resources after the run
+        if: always()
+        run: |
+          echo "--- memory ---"; free -h
+          echo "--- disk ---"; df -h /

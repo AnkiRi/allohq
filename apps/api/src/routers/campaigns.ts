@@ -960,6 +960,30 @@ export const campaignsRouter = router({
       return { success: true, included: input.customerIds.length };
     }),
 
+  /**
+   * Preparation progress for a campaign, in merchant language.
+   *
+   * A separate query rather than only a mutation result, because the merchant
+   * may reload or close the page while Joon works. Progress lives on the run
+   * row, so it survives the session that started it.
+   */
+  preparationStatus: workspaceProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const campaign = await ctx.prisma.campaign.findFirst({
+        where: { id: input.id, workspaceId: ctx.workspaceId },
+        select: { id: true, status: true, approvedAt: true },
+      });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+      const preparation = await campaignPreparationProgress(campaign.id);
+      return {
+        preparation,
+        // A campaign is only sendable once its frozen audience and exact arms
+        // exist. Until then the send path refuses, and so does this.
+        sendable: Boolean(campaign.approvedAt) && preparation?.state === "ready",
+      };
+    }),
+
   dryRun: workspaceProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     const campaign = await ctx.prisma.campaign.findFirst({
       where: { id: input.id, workspaceId: ctx.workspaceId },
