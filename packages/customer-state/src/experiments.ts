@@ -278,7 +278,12 @@ export function assignStratifiedCohortArms(input: {
   for (const [stratum, customers] of originalGroups) {
     const key = customers.length < MIN_STRATUM_SIZE ? POOLED_SMALL_STRATUM : stratum;
     const group = assignmentGroups.get(key) ?? [];
-    group.push(...customers);
+    // Appended one at a time, not spread. `push(...customers)` passes every
+    // element as an argument, and a stratum of roughly 150,000 exceeds the
+    // call-argument limit and throws RangeError: Maximum call stack size
+    // exceeded. Measured at a million customers, where the largest stratum was
+    // about 154,000.
+    for (const customer of customers) group.push(customer);
     assignmentGroups.set(key, group);
   }
 
