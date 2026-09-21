@@ -134,8 +134,8 @@ uninstrumented and 2.15 MB with query capture on**. Both are reported.
 | Pass 8A — overnight scans | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical | not yet verified at 100k |
 | Pass 8B — frozen-time correctness | **verified** `dbee4b4` `63f38f2` | 5 per-rule boundary tests plus 3 end-to-end: two executions at one asOf agree on every customer; frozen and live genuinely disagree; a resumed run matches an uninterrupted one | scheduling and deferral windows are delivery-time by design and deliberately current-time |
 | Pass 8B.1 — durable preparation backend | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | — |
-| Pass 8B.2 — preparation UI and progress | **verified** `8c31c5e` | 8 tests: no-run, preparing, counts with hidden zeroes, resumed run, ready, needs-attention, the send gate, and reload reproducing the same view | wording is pinned by tests; no browser-level test exists |
-| Pass 8B.C — order-driven scans at 100k | **verified** `3100465` | 124.7 s, 0.24 MB retained, 18.65 MB peak, 166 transactions; cross-sell anti-join exact at 37,500 of 50,000; zero sends | `repurchase_window` did not fire — the fixture seeds no repurchase cycles, so it stays verified only at the smaller fixture |
+| Pass 8B.2 — preparation UI and progress | **verified** `8c31c5e` `39a95f5` | 8 view-model tests plus 8 rendered-component tests through React covering all seven acceptance points | server-rendered component testing, not a browser harness; stated rather than implied |
+| Pass 8B.C — order-driven scans at 100k | **verified** `3100465` `39a95f5` | all three fire at 100k on a fresh database: 135.4 s, no retained heap growth, 23.99 MB peak, 228 transactions. Cross-sell anti-join exact at 37,500 of 50,000; repurchase window exact against a SQL reference; zero sends | cross-sell accounts for 145.7 s of the 148.6 s sequential total — cause under investigation, see below |
 | Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
 | CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
@@ -630,6 +630,75 @@ time.
 `ProductRepurchaseCycle` rows. Low stock and cross-sell are verified at 100k;
 repurchase window remains verified only at the smaller fixture.
 
+## Pass 8B — the two evidence gaps closed — 2026-09-21T07:35:03Z
+
+_Status: **verified**. Measured on a fresh disposable database._
+
+### 100k repurchase-window coverage
+
+The scanner returns before touching an order when no `ProductRepurchaseCycle`
+exists, which is why it never fired at scale. The fixture now seeds one, and
+the scanner's result is checked against an independently written SQL reference
+rather than merely being present.
+
+Per-scanner attribution is now real rather than inferred. `scanOpportunities`
+accepts an optional telemetry array; supplying it runs the scanners
+sequentially, because concurrent scans interleave their queries and attribution
+would be guesswork. Wall-clock durations therefore differ from a concurrent
+run; the work is the same.
+
+**Fresh database, 100,000 customers, 50,000 with orders:**
+
+| Scanner | Duration | Transactions | Retained heap | Found |
+| --- | --- | --- | --- | --- |
+| cross_sell | **145.7 s** | 49 | 0.02 MB | 1 |
+| repurchase_window | 1.3 s | 65 | 0.03 MB | 1 |
+| low_stock | 0.6 s | 56 | 0.01 MB | 1 |
+| at_risk_winback | 0.4 s | 20 | −0.01 MB | 1 |
+| re_engagement | 0.3 s | 24 | 0.02 MB | 1 |
+| vip_milestone | 0.2 s | 0 | 0 MB | 1 |
+| new_arrival / seasonal | 0.0 s | 0 | 0 MB | 0 |
+| **Total (sequential)** | **148.6 s** | **214** | 0.04 MB | 6 |
+
+Concurrent run on the same fixture: **135.4 s**, 228 transactions, 23.99 MB
+peak, no retained heap growth.
+
+**Cross-sell is effectively the entire cost of overnight scanning.** Everything
+else together is under 3 seconds. Two hypotheses have already been tested and
+rejected rather than assumed:
+
+- **Missing index on `order_items`.** The table has no indexes at all, which
+  looked like the obvious cause. Measured: adding `productId` and `orderId`
+  indexes changed the anti-join from 3.7 s to 2.3 s at this shape — real but
+  nowhere near the gap, and 0.9x at 40k. **Not the cause.**
+- **Table bloat or CPU contention.** The first 100k measurement ran on a
+  database that had just held a 20k fixture, alongside concurrent builds. Re-run
+  on a freshly created database: 145.7 s. **Not the cause.**
+
+The isolated anti-join at the same 100k shape takes **3.7 s**, so the remaining
+40x is inside `scanCrossSell` and not in the anti-join as written in the
+reproduction. The difference between the two is the `(param IS NULL OR
+condition)` null guards the production query carries and the reproduction
+omitted — a known plan-killer. That is being measured rather than asserted.
+
+### Rendered component coverage for the preparation UI
+
+The panel is extracted into `CampaignPreparationPanel` and rendered through
+React, with assertions on the markup it produces. Eight tests cover the seven
+points: polling starts while active and stops when ready, counts render with
+Indian grouping, sending is disabled, a reload renders identically from the
+same payload, needs-attention renders the reason and "Nothing has been sent"
+and a recovery action, and a ready audience still respects the delivery pause
+and domain gates.
+
+**This is server-rendered component testing, not a browser harness.** There is
+no browser in this repository's test setup, and the polling policy is asserted
+where it lives — as a pure function the page hands to `refetchInterval`.
+
+**A discovery defect worth naming:** the unit runner matched only `.test.ts`,
+so the new `.test.tsx` file existed and looked like coverage while running zero
+times. The runner now matches both; the suite went 337 to 345.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -863,6 +932,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T07:35:03Z | `39a95f5` `643d384` | verified | Both evidence gaps closed. repurchase_window fires at 100k with its count checked against a SQL reference; per-scanner telemetry added. Rendered-component tests through React cover all seven UI points. Manual acceptance checklist written. Fixed a discovery defect: the unit runner ignored `.test.tsx`, so the component tests ran zero times — suite went 337 to 345. | Cross-sell accounts for 145.7 s of 148.6 s; two hypotheses tested and rejected, the null-guard hypothesis under measurement |
 | 2026-09-21T06:37:48Z | `3100465` | verified | **Pass 8B item C verified at 100k**: 124.7 s, 0.24 MB retained, 166 transactions, cross-sell anti-join exact at 37,500 of 50,000, zero sends. A fixture defect of mine looked like a code defect first — [A, lowStock] co-occurred more than [A, B], so the scanner correctly picked a different pair. | `repurchase_window` not exercised at 100k; the fixture seeds no repurchase cycles |
 | 2026-09-21T06:37:48Z | `8c31c5e` | verified | **Pass 8B.2 complete.** "Preparing audience" replaces the Draft dead-end; polls while active, stops when settled; merchant-language counts with zeroes hidden in flight; reload guidance; sending disabled until ready; needs-attention shows reason, "Nothing has been sent" and a retry. 8 tests, one asserting the wording leaks no infrastructure terms. | No browser-level test; the view model is tested as a pure function |
 | 2026-09-21T06:11:29Z | pending | pending | Pass 8B item B split into **B.1 durable preparation backend (verified)** and **B.2 preparation UI (pending)**. Two measurement labels corrected: a negative heap delta now reads "no retained heap growth detected", not proof of zero retention; "sends dispatched" now reads "one simulated send-orchestration job dispatched", with seven new assertions proving zero live provider calls, zero real deliveries and zero rows in billing, Results, warm-up, reputation and causal proof. | B.2 not started at this timestamp |
