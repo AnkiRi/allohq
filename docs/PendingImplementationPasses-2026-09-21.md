@@ -100,7 +100,7 @@ different completion criteria.
 | Item | Status | Note |
 | --- | --- | --- |
 | A. Frozen-time policy correctness | **verified** `dbee4b4` `63f38f2` | full path re-audited; every remaining wall-clock read is a default parameter or an operational timestamp. Three end-to-end tests prove determinism across execution, re-execution and resume |
-| B. Preparation out of synchronous tRPC | pending | a durable job exists (`ad467ac`, `dd84939`); this pass verifies run id, merchant-readable progress, reload safety, heartbeat, expiry, stale recovery and crash resume against the order's full requirement list |
+| B. Preparation out of synchronous tRPC | **verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
 | C. Bounded order-driven scans | pending | converted in `c064889`; this pass verifies them at 100k synthetic customers rather than at the smaller fixtures used so far |
 | D. Evidence | pending | the 100k profile exists; retry/resume behaviour is not yet part of the reported figures |
 
@@ -132,7 +132,7 @@ uninstrumented and 2.15 MB with query capture on**. Both are reported.
 | Pass 8A — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run | a losing caller is refused, not queued |
 | Pass 8A — overnight scans | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical | not yet verified at 100k |
 | Pass 8B — frozen-time correctness | **verified** `dbee4b4` `63f38f2` | 5 per-rule boundary tests plus 3 end-to-end: two executions at one asOf agree on every customer; frozen and live genuinely disagree; a resumed run matches an uninterrupted one | scheduling and deferral windows are delivery-time by design and deliberately current-time |
-| Pass 8B — durable preparation | **pending** | `ad467ac` `dd84939` implement and test the job | not yet verified against the order's full requirement list |
+| Pass 8B — durable preparation | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | progress is returned by the API but not yet rendered in the campaign UI |
 | Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
 | CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
@@ -520,6 +520,52 @@ the component most likely to need attention first at that scale.
   flight supersedes it — two run pairs were cancelled that way before the green
   one. Correct behaviour, but rapid pushes supersede their own verification.
 
+## Pass 8B item B — preparation acceptance, measured — 2026-09-21T05:45:39Z
+
+_Status: **verified**. 100k figures measured through the real background-job
+path against a disposable Postgres with a simulated provider. No 1M claim._
+
+### The ten scenarios
+
+| # | Scenario | Evidence |
+| --- | --- | --- |
+| 1 | Approving twice starts one run; the second joins | one run row mid-flight, stable run id, second attempt refused with `AUDIENCE_RUN_BUSY` |
+| 2 | Reload or close leaves progress available | progress read from the run row after completion; run id stable; accounting reconciles |
+| 3 | Worker dies mid-run, resumed with no merchant action | lease removed mid-write, partial rows confirmed, same run key finishes it |
+| 4 | Stale lease taken over safely | expired lease adopted; run completes; lease released |
+| 5 | Old worker cannot fail the newer run | update matches 0 rows against both a complete run and one owned by a newer worker |
+| 6 | API returns quickly | **6 ms of API-side work at 100k** |
+| 7 | Not sendable until complete | approval refuses with `AUDIENCE_RUN_NOT_COMPLETE`; campaign stays draft; 0 arms exist |
+| 8 | Merchant language, not job language | `state` is preparing/ready/needs_attention; a test asserts the sentence leaks no internals |
+| 9 | Delivery-time live checks remain | pinned by the scoped-recheck test: later opt-outs and already-sent recipients are dropped at delivery |
+| 10 | Failed run recoverable, not abandoned | `needs_attention` with `recoverable: true`; operators keep the real reason; the same run key finishes it |
+
+### 100k through the real job path, with a forced crash
+
+| Measure | Result |
+| --- | --- |
+| API-side work | **6 ms** |
+| Crash injected after | 14,000 durable rows |
+| Recovery duration | 59.1 s |
+| Retained heap | −8.07 MB |
+| Peak heap above baseline | 59.52 MB |
+| Postgres transactions | 5,384 |
+| Audience rows | 100,000 |
+| Duplicate rows | **0** |
+| Candidates | 90,909 |
+| Control / treatment | 13,635 / 77,274 |
+| Measurement assignments | 90,909 |
+| Attempts (crash + recovery) | 2 |
+| Arm parity | **0 mismatches of 90,909** |
+| Sends dispatched | 1, simulated provider |
+
+The arm parity figure is the one that matters: the arms match the in-memory
+reference exactly **after** a crash and resume. A resumed run that silently
+drew a different control group would otherwise be invisible.
+
+**Measured**, on a synthetic store in a disposable database that is dropped
+afterwards. Nothing here is extrapolated, and no real provider was called.
+
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
 _Status: **verified**. Investigated rather than optimised: the point is to know
@@ -702,6 +748,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T05:45:39Z | `042fdeb` | verified | **Pass 8B item B complete.** All ten acceptance scenarios covered by named tests. Three real gaps closed: progress had no run id, no failure reason or recoverability, and no query for a reloaded page. 100k through the real job path with a forced crash and automatic recovery: API-side work 6 ms, 0 duplicate rows, 0 arm mismatches of 90,909, 1 simulated dispatch. Integration 47/47. | Progress is returned by the API but not yet rendered in the campaign UI |
 | 2026-09-21T05:14:53Z | `63f38f2` | verified | **Pass 8B item A complete.** Re-audited every wall-clock read reachable from the frozen evaluation path; all that remain are default parameters or operational timestamps (run asOf, lease expiry, assignedAt/completedAt). Three end-to-end tests on a fixture where frozen and wall-clock evaluation cannot agree by accident: identical decisions across two executions, genuine divergence from live evaluation, and a resumed run matching an uninterrupted one. Integration 39/39. | Delivery-time rechecks remain deliberately current-time; that separation is pinned separately |
 | 2026-09-21T05:14:53Z | `5c7777e` | verified | Register renamed to `…-2026-09-21.md` via `git mv`; inbound link updated. Locked facts extended with the scale boundary and the testing boundary. Canonical status split into Pass 8A (implemented and measured) and Pass 8B (pending). | — |
 | 2026-09-21T05:14:53Z | `793bb58` | verified | **PR #25 merged to main.** All three checks green on `d697a569`, the exact head: CI typecheck/test/build (35560054169), Postgres+Redis integration `tests 36 pass 36 fail 0` (35560054164), and the 100k load proof (35563484911), dispatched on the head so the coverage claim is exact. | The originally-named load run 35558319666 covered `bb4dda2`, one docs-only commit earlier; a fresh run was dispatched rather than claim it covered the head |
