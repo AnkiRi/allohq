@@ -82,7 +82,7 @@ the difference is the harness, not the engine.
 | Journey audience scale | **verified** `a158bd8` | 20,000 customers: 103,357 queries → 905, 8.3 s → 2.0 s, identical eligible count | — |
 | Overnight opportunity scale | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical; retained heap 0 MB at 20,000 | — |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
-| CI | **implemented** `3c86497` `e064f3e` `5a71682` | workflows verified step by step against a clean clone; two first-run failures found and fixed before pushing | execution on a GitHub runner not yet observed; Node 20 unverified |
+| CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | every job executed green on GitHub: typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; the 100k load proof 2m8s, 0 duplicates and 0 arm mismatches of 90,909 | Node 20 unverified; action versions target deprecated Node 20 |
 | Journey duplicate gate | **verified** `2117bc9` | refuses with unsupported nodes named | — |
 | Journey webhook nodes | **out of scope** | no public UI can create one; every server write path refuses | revisit only for a scoped partner requirement |
 | WhatsApp / SMS / RCS | **out of scope** | locked: public v1 is email only | — |
@@ -390,12 +390,81 @@ rather than papered over by a green badge.
 | disposable-database guard | accepted `127.0.0.1` service-container URL |
 | `pnpm test:integration` | 36/36 |
 
-### What execution still has to prove
+### 3. Migrations need pgvector, which stock postgres:16 does not ship
 
-A clean clone is not a GitHub runner. Ubuntu rather than macOS, service
-containers rather than a local Postgres, and a cold pnpm cache. Those are the
-differences the first real run tests, and until it completes, CI's status here
-stays **implemented**, not verified.
+Found only by the real run — a clean clone could not have caught it:
+
+```
+ERROR: extension "vector" is not available
+Could not open extension control file ".../vector.control"
+```
+
+`20260304142830_add_agent_system` creates the `vector` extension. This
+machine's Postgres has pgvector installed, so the clean-clone rehearsal applied
+all migrations and passed. Both service containers now use
+`pgvector/pgvector:pg16`.
+
+**This is the point of executing CI rather than reasoning about it.** A clean
+checkout tests the repository; it does not test the runner.
+
+### Executed and green — 2026-09-21T03:40:55Z
+
+First successful run, PR #25, commit `bb4dda2`:
+
+| Check | Result | Duration |
+| --- | --- | --- |
+| `typecheck, test, build` | **pass** | 4m 2s |
+| `postgres + redis` integration | **pass** | 1m 16s |
+
+The integration job reported `tests 36, pass 36, fail 0, skipped 0` on
+`pgvector/pgvector:pg16` and `redis:7` service containers. The retained-heap
+measurements printed, which confirms `--expose-gc` reached them rather than the
+proofs silently failing. The disposable-database guard ran on the runner and
+accepted the service-container URL.
+
+One annotation reads `Process completed with exit code 1`: that is the
+**Report migration drift** step, which is `continue-on-error: true` by design.
+It reports main's pre-existing drift without gating, as intended.
+
+### The 100k load proof, executed on a GitHub runner — 2026-09-21T04:11:27Z
+
+Dispatched manually, because the load job is push/dispatch-only and would
+otherwise have shipped unexecuted. Run `35558319666`, job green in 2m 8s:
+
+| Measure | Local (macOS, local Postgres) | GitHub runner (Ubuntu, pgvector container) |
+| --- | --- | --- |
+| Duration | 36.5 s | **36.7 s** |
+| Peak heap above baseline | 65.49 MB | 66.41 MB |
+| Retained heap (instrumented) | 2.15 MB | 2.15 MB |
+| Postgres transactions | 6,083 | 6,078 |
+| Queries / shapes | 6,340 / 33 | 6,343 / 33 |
+| Query p50 / p95 / p99 / max | 0 / 2 / 14 / 9,255 ms | 0 / 1 / 10 / **4,319 ms** |
+| Member write statements | 50 | 50 |
+| Duplicate rows | 0 | **0** |
+| Arm parity | 0 of 90,909 | **0 of 90,909** |
+
+The two environments agree closely enough to treat the local figures as
+representative — duration within 0.2 s, transactions within 5, identical
+retained heap, identical arms. The one real difference is the control
+selection's worst-case latency: 4,319 ms on the runner against 9,255 ms
+locally, so the earlier local figure was pessimistic. **The extrapolated
+one-million implication recorded above should be read against the runner
+number** — on the order of 40 s rather than 90 s for a single statement, still
+the component most likely to need attention first at that scale.
+
+### Runner warnings, recorded not ignored
+
+- `actions/checkout@v4`, `actions/setup-node@v4` and `pnpm/action-setup@v4`
+  target Node 20, which GitHub has deprecated; the runner forces them onto
+  Node 24. Harmless today, but these action versions will need bumping.
+- `ubuntu-latest` migrates to Ubuntu 26 from 19 October 2026.
+
+### Still unverified
+
+- **Node 20.** `engines` permits it; nothing has run on it; CI is pinned to 24.
+- **My own concurrency group cancels runs.** Pushing again while a run is in
+  flight supersedes it — two run pairs were cancelled that way before the green
+  one. Correct behaviour, but rapid pushes supersede their own verification.
 
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
@@ -579,6 +648,8 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T04:11:27Z | `bb4dda2` | verified | 100k load proof executed on a GitHub runner (run 35558319666, 2m8s): 36.7 s, peak heap 66.41 MB, 6,078 transactions, 6,343 queries, p50 0 / p95 1 / p99 10 / max 4,319 ms, 0 duplicate rows, 0 arm mismatches of 90,909. Agrees with the local figures within 0.2 s and 5 transactions. | Control-selection worst case is 4,319 ms on the runner against 9,255 ms locally, so the local 1M extrapolation was pessimistic; re-read it against the runner number |
+| 2026-09-21T03:41:15Z | `bb4dda2` | verified | **CI executed green for the first time.** typecheck/test/build pass in 4m2s; integration reports `tests 36, pass 36, fail 0, skipped 0` on pgvector/pgvector:pg16 and redis:7 service containers, with heap measurements printing so `--expose-gc` demonstrably reached them. Third first-run defect fixed: migrations need pgvector, which stock postgres:16 does not ship - invisible to a clean-clone rehearsal because this machine has the extension installed. | Node 20 unverified; action versions target deprecated Node 20; the workflows' own concurrency group cancels a run when pushed over |
 | 2026-09-21T03:18:31Z | `5a71682` | implemented | Ran CI's exact sequence against a clean clone before pushing and found two first-run failures: the build cannot complete without a Clerk publishable key (local .env was masking it), and one of my own tests was time-of-day dependent, failing at 03:00 UTC inside default quiet hours. Both fixed; CI pinned to Node 24. Opened PR #25 so both workflows execute on the `pull_request` trigger. | Execution not yet observed; Node 20 remains unverified |
 | 2026-09-20T19:24:18Z | `81a1df8` | verified | One 100k run now reports duration, peak/retained heap, query count and shapes, transactions, p50/p95/p99/max, duplicates and arm parity. Retained-heap proofs fail rather than skip without a collector. | Instrumentation costs the harness 2.03 MB; both instrumented and uninstrumented figures are recorded |
 | 2026-09-20T19:24:18Z | `c064889` | verified | Repurchase, low-stock and cross-sell scans keyset-paged; cross-sell became a SQL anti-join. Decisions checked against an independently computed reference set; rescans produce identical job ids. | — |
