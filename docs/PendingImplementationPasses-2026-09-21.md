@@ -113,7 +113,7 @@ different completion criteria.
 | --- | --- | --- |
 | A. Frozen-time policy correctness | **verified** `dbee4b4` `63f38f2` | full path re-audited; every remaining wall-clock read is a default parameter or an operational timestamp. Three end-to-end tests prove determinism across execution, re-execution and resume |
 | B.1 Durable preparation backend | **implemented and verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
-| B.2 Campaign preparation UI and progress | **implemented and verified** `8c31c5e` | "Preparing audience" replaces the Draft dead-end; polls while active and stops when settled; merchant-language counts; reload guidance; sending disabled until ready; needs-attention shows the reason, "Nothing has been sent" and a retry. 8 tests |
+| B.2 Campaign preparation UI and progress | **implemented and verified** `8c31c5e` `f7b38df` `8dde4c6` | "Preparing audience" replaces the Draft dead-end; polls while active and stops when settled; merchant-language counts; reload guidance; sending disabled until ready; needs-attention shows the reason, "Nothing has been sent" and a retry. Client-rendered proof that the poll actually runs, repeats, stops when ready and restores on remount, with the gate verified by mutation. Approval and genuine failure each leave one durable in-app Activity entry, counts included, no external email. 8 rendered + 6 client + 10 acceptance tests |
 | C. Bounded order-driven scans | **verified** `c064889` `3100465` | verified at 100k: 124.7 s, 0.24 MB retained, 166 transactions, anti-join exact against a SQL reference, and no sends |
 | D. Evidence | **verified** `15d9c50` | consolidated 100k evidence including retry/resume; transaction sources explained; scan duration broken down by scanner; 1M labelled inference; code-complete versus external stated |
 
@@ -902,6 +902,93 @@ programme.** Nothing in this work supports or implies it.
 
 **Five simultaneous 1M tenants have not been tested.**
 
+## Preparation UI proof and the completion notification — 2026-09-21T10:33:04Z
+
+_Status: **implemented and verified**, commits `f7b38df` `8dde4c6`. Tests only;
+no email was sent and no provider was contacted._
+
+### The eight preparation points, and where each is proved
+
+| # | Point | Proved by | Kind |
+| --- | --- | --- | --- |
+| 1 | Headline reads "Joon is preparing who should receive this." | `CampaignPreparationPanel.test.tsx` | rendered markup |
+| 2 | Polls on a fixed interval while preparation is active | `CampaignPreparationSection.client.test.tsx` test 1 & 2 | real timer in jsdom |
+| 3 | Evaluated / unavailable / deliberately left alone / candidates / control / treatment update on screen between ticks | same file, test 3 | real re-render, stale count asserted gone |
+| 4 | No enabled control can start or schedule a dispatch while preparing | same file, test 4 | every rendered button asserted disabled |
+| 5 | A remount restores progress from the API, not from client state | same file, test 5 | unmount, assert gone, remount, assert re-fetched |
+| 6 | Polling stops once the audience is ready | `CampaignPreparationPolling.client.test.tsx` | call count stops rising |
+| 7 | Needs-attention says "Nothing has been sent.", gives a reason and a recovery action | same file, test 7 | rendered text plus a wired retry |
+| 8 | A ready audience still respects the delivery pause and the sender-domain gate | same file, test 8 | every rendered button asserted disabled |
+
+Points 4 and 8 were verified by mutation: removing `!canApprove` from the
+gate makes tests 4, 7 and 8 fail (3 of 6), and restoring it makes them pass.
+A green assertion that cannot fail is not evidence.
+
+### Sending and scheduling are one gate, not two
+
+On the campaign page there is a single draft action. It opens the approval
+dialog, and that dialog is where **"Joon picks the time"** (the scheduled path)
+and **"Send now"** both live
+(`apps/web/src/app/(dashboard)/campaigns/[id]/page.tsx:629`,
+`:705`, `:754`). So "send and schedule are both disabled" is one property: the
+only control that leads to either is disabled while preparation is incomplete.
+
+The backend refuses independently of timing. `campaigns.sendNow` takes
+`timing: "joon" | "now"`, but timing only reaches the send job **after**
+approval; `finalizeCampaignApproval` throws `AUDIENCE_RUN_NOT_COMPLETE` before
+either timing is consulted (acceptance scenario 7).
+
+I first added a separate "Schedule for later" button to
+`CampaignPreparationSection` so a test could assert it was disabled. That
+button existed nowhere in the product — it would have been a surface invented
+to be tested. It was removed before commit and the assertion was replaced with
+the stronger property above.
+
+**Limitation, stated plainly:** `CampaignPreparationSection` renders its own
+approve control only when `showApproveAction` is true, and the campaign page
+passes `false` — it renders its own equivalent. The client-rendered tests
+therefore prove the shared gate function `canApproveDelivery` wired through a
+real React effect and a real timer; they do not drive the page's own button.
+Proving that requires mounting the page with tRPC, which is not done.
+
+### Durable completion notification
+
+Approval writes one `agentActivityLog` row when the audience is ready
+(`packages/campaign-engine/src/approval-finalize.ts:257`):
+
+- summary: "Campaign audience ready for review." followed by the treatment,
+  control and deliberately-left-alone counts in Indian digit grouping;
+- `entityId` / `entityType` carry the campaign, so the entry opens it;
+- the same counts are repeated in `metadata` for any surface that wants the
+  numbers rather than the sentence.
+
+A genuine preparation failure writes the attention entry instead
+(`apps/workers/src/workers/prepare-audience.ts:55`): merchant language, the
+reason, and "Nothing has been sent." An `AudienceRunBusyError` does not write
+one — another worker holds the lease and will finish.
+
+**In-app only.** Both acceptance tests assert `messageLog` stays at zero rows
+across the ready and the attention path. No external email in v1.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx turbo run typecheck` | 19 of 19 tasks successful |
+| `pnpm test` (unit) | 352 pass, 0 fail |
+| `node scripts/run-integration-tests.mjs` against `joon_test` | 50 pass, 0 fail, 0 skipped |
+| Preparation acceptance suite | 10 of 10, including the two notification scenarios |
+| Client-rendered preparation suite | 6 of 6 |
+
+### Observation recorded, not acted on
+
+`campaigns.schedule` (`apps/api/src/routers/campaigns.ts:1595`) sets a campaign
+to `status: "scheduled"` with no approval, no frozen audience and no
+preparation check. No web surface calls it, and no worker polls `scheduledAt`
+to dispatch a campaign, so it currently flips a status label and nothing sends
+from it. Recorded here rather than changed: it is outside this pass, and
+removing or gating an exposed mutation is a product decision.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -1135,6 +1222,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T10:33:04Z | `8dde4c6` | **implemented and verified** | Part 1 preparation UI proof completed. Approval and genuine failure each write one durable in-app Activity entry with treatment, control and deliberately-left-alone counts and a campaign link; `messageLog` asserted at 0 rows on both paths. Client tests strengthened from "the approve button is disabled" to "no enabled control in the preparation surface can start or schedule a dispatch", verified by mutation (3 of 6 fail with the gate removed). typecheck 19/19, unit 352/352, integration 50/50. | The campaign page passes `showApproveAction={false}` and renders its own approve control, so the client tests drive the shared gate function, not the page's own button. A fabricated "Schedule for later" button was removed before commit; scheduling is proved through the single gated dialog entry and the timing-independent `AUDIENCE_RUN_NOT_COMPLETE` refusal |
 | 2026-09-21T09:58:22Z | `fccb542` | **functional pass, performance pending** | 1M attempt 3: 1,000,000 customers, 772,929 candidates, 115,936 control, 656,993 treatment, 0 duplicate members, 0 duplicate assignments, 0 arm mismatches, 0 live-provider calls, 0 downstream side effects, forced crash and recovery succeeded. API 4 ms. | Control-selection UPDATE measured **468,127 ms**; verifier memory not separately measured; hash parity partly tautological; pooling not independently exercised at 1M |
 | 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 2: verifier still used unbounded whole-cohort reference behaviour; threw RangeError inside the reference at a ~154,000 stratum. | No readiness conclusion |
 | 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 1: preparation completed, verification harness did not complete. | No readiness conclusion |
