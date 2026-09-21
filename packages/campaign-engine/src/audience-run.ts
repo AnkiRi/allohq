@@ -632,9 +632,11 @@ export async function campaignPreparationProgress(
     // A failed run is queued for another attempt by the recovery sweep, so it
     // is never abandoned; the merchant does not have to approve again.
     recoverable: status !== "complete",
+    // The reason only. "Nothing has been sent" is reassurance the surface adds
+    // alongside it; carrying it here too made the merchant read it twice.
     detail:
       status === "failed"
-        ? "Joon stopped partway through working out this audience and will try again on its own. Nothing has been sent."
+        ? "Joon stopped partway through working out this audience and will try again on its own."
         : status === "complete"
           ? null
           : run.attempts > 1

@@ -4,11 +4,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   canApproveDelivery,
-  preparationPollInterval,
   preparationView,
   type PreparationProgress,
 } from "@/lib/campaign-preparation";
-import { CampaignPreparationPanel } from "@/components/campaigns/CampaignPreparationPanel";
+import { CampaignPreparationSection } from "@/components/campaigns/CampaignPreparationSection";
 import {
   ArrowLeft,
   Send,
@@ -77,13 +76,12 @@ export default function CampaignDetailPage() {
   const { data: stats } = (trpc.campaigns.stats as any).useQuery({ id: campaignId });
   // Approval hands the audience to a background job, so the page has to follow
   // it. Polling stops as soon as the run settles.
-  const { data: preparationStatus } = (trpc.campaigns.preparationStatus as any).useQuery(
-    { id: campaignId },
-    {
-      refetchInterval: (query: { state: { data?: { preparation?: PreparationProgress | null } } }) =>
-        preparationPollInterval(query.state.data?.preparation),
-    }
-  ) as { data?: { preparation: PreparationProgress | null; sendable: boolean } };
+  // Polling lives in CampaignPreparationSection, which is what the
+  // client-rendered tests drive, so what ships is what is proven.
+  const [preparationStatus, setPreparationStatus] = useState<{
+    preparation: PreparationProgress | null;
+    sendable: boolean;
+  } | null>(null);
   const preparation = preparationView(preparationStatus?.preparation);
   const {
     data: dryRun,
@@ -682,10 +680,13 @@ export default function CampaignDetailPage() {
         {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className="app-workspace-tab capitalize">{section}</button>)}
       </nav>
 
-      <CampaignPreparationPanel
-        progress={preparationStatus?.preparation}
+      <CampaignPreparationSection
+        fetchStatus={() => utils.campaigns.preparationStatus.fetch({ id: campaignId })}
+        campaignStatus={campaign.status}
+        onStatusChange={setPreparationStatus}
         onRetry={() => setShowApproval(true)}
-        retryPending={sendMut.isPending}
+        approvePending={sendMut.isPending}
+        showApproveAction={false}
       />
       {activeSection === "overview" && <section className="grid grid-cols-2 border-y border-border sm:grid-cols-4" aria-label="Campaign summary"><div className="py-4"><p className="text-[12px] text-muted-foreground">Status</p><p className="mt-1 text-[20px] font-medium capitalize">{campaign.status.replaceAll("_", " ")}</p></div><div className="border-l border-border py-4 pl-5"><p className="text-[12px] text-muted-foreground">Would receive</p><p className="mt-1 font-mono text-[20px]">{(stats?.holdout.treatmentAssigned ?? dryRun?.estimatedTreatment ?? 0).toLocaleString("en-IN")}</p></div><div className="border-t border-border py-4 sm:border-l sm:border-t-0 sm:pl-5"><p className="text-[12px] text-muted-foreground">Attributed orders</p><p className="mt-1 font-mono text-[20px]">{stats?.attributedOrders.toLocaleString() ?? "0"}</p></div><div className="border-l border-t border-border py-4 pl-5 sm:border-t-0"><p className="text-[12px] text-muted-foreground">Attributed revenue</p><p className="mt-1 font-mono text-[20px]">{money(stats?.attributedRevenue ?? 0)}</p></div></section>}
 

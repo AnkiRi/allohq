@@ -336,7 +336,14 @@ test("8. progress reads in merchant language, not job or database language", { s
         `merchant detail leaked "${leak}": ${failed!.detail}`
       );
     }
-    assert.ok(failed!.detail!.includes("Nothing has been sent"), "it must say nothing was sent");
+    // The reason carries no reassurance of its own; the surface renders
+    // "Nothing has been sent" alongside it. Carrying it in both places made
+    // the merchant read the same sentence twice.
+    assert.ok(
+      !failed!.detail!.includes("Nothing has been sent"),
+      "the reason must not duplicate the surface's reassurance"
+    );
+    assert.match(failed!.detail!, /try again on its own/);
   } finally {
     await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
   }
