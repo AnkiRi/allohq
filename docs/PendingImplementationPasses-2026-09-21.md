@@ -100,7 +100,8 @@ different completion criteria.
 | Item | Status | Note |
 | --- | --- | --- |
 | A. Frozen-time policy correctness | **verified** `dbee4b4` `63f38f2` | full path re-audited; every remaining wall-clock read is a default parameter or an operational timestamp. Three end-to-end tests prove determinism across execution, re-execution and resume |
-| B. Preparation out of synchronous tRPC | **verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
+| B.1 Durable preparation backend | **implemented and verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
+| B.2 Campaign preparation UI and progress | **pending** | the API returns progress; nothing renders it. After approval the merchant currently sees the campaign sitting in Draft |
 | C. Bounded order-driven scans | pending | converted in `c064889`; this pass verifies them at 100k synthetic customers rather than at the smaller fixtures used so far |
 | D. Evidence | pending | the 100k profile exists; retry/resume behaviour is not yet part of the reported figures |
 
@@ -132,7 +133,8 @@ uninstrumented and 2.15 MB with query capture on**. Both are reported.
 | Pass 8A — approval concurrency | **verified** `b08eeba` | simultaneous and staggered approvals leave one complete run | a losing caller is refused, not queued |
 | Pass 8A — overnight scans | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical | not yet verified at 100k |
 | Pass 8B — frozen-time correctness | **verified** `dbee4b4` `63f38f2` | 5 per-rule boundary tests plus 3 end-to-end: two executions at one asOf agree on every customer; frozen and live genuinely disagree; a resumed run matches an uninterrupted one | scheduling and deferral windows are delivery-time by design and deliberately current-time |
-| Pass 8B — durable preparation | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | progress is returned by the API but not yet rendered in the campaign UI |
+| Pass 8B.1 — durable preparation backend | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | — |
+| Pass 8B.2 — preparation UI and progress | **pending** | — | after approval the merchant sees an apparent Draft dead-end; progress exists in the API but is not rendered |
 | Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
 | CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
@@ -547,7 +549,7 @@ path against a disposable Postgres with a simulated provider. No 1M claim._
 | API-side work | **6 ms** |
 | Crash injected after | 14,000 durable rows |
 | Recovery duration | 59.1 s |
-| Retained heap | −8.07 MB |
+| Retained heap | **no growth detected**; post-run heap 8.09 MB below baseline |
 | Peak heap above baseline | 59.52 MB |
 | Postgres transactions | 5,384 |
 | Audience rows | 100,000 |
@@ -557,14 +559,31 @@ path against a disposable Postgres with a simulated provider. No 1M claim._
 | Measurement assignments | 90,909 |
 | Attempts (crash + recovery) | 2 |
 | Arm parity | **0 mismatches of 90,909** |
-| Sends dispatched | 1, simulated provider |
+| Send orchestration | 1 simulated job dispatched |
+| Live provider calls | **0** |
+| Real deliveries | **0** |
+| Billing, Results, warm-up, reputation, causal proof | **0 rows** in each |
 
 The arm parity figure is the one that matters: the arms match the in-memory
 reference exactly **after** a crash and resume. A resumed run that silently
 drew a different control group would otherwise be invisible.
 
 **Measured**, on a synthetic store in a disposable database that is dropped
-afterwards. Nothing here is extrapolated, and no real provider was called.
+afterwards. Nothing here is extrapolated.
+
+Two labels are stated carefully because the loose versions would overclaim:
+
+- **"No retained heap growth detected"**, not "zero retention". The post-run
+  heap sat 8.09 MB below baseline. A negative delta reflects collector timing
+  and baseline noise; it is evidence of no detectable growth, not proof that
+  nothing at all is retained.
+- **"One simulated send-orchestration job dispatched"**, not "one send". The
+  callback records that orchestration was asked to run. It performs no network
+  call. Seven assertions check the isolation rather than assume it: zero live
+  provider calls, zero real deliveries, and zero rows in shadow invoices, the
+  caused-revenue ledger, measurement outcomes, warm-up state and reputation
+  assessments. No synthetic data reaches billing, Results, warm-up, reputation
+  or causal proof.
 
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
@@ -748,6 +767,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T06:11:29Z | pending | pending | Pass 8B item B split into **B.1 durable preparation backend (verified)** and **B.2 preparation UI (pending)**. Two measurement labels corrected: a negative heap delta now reads "no retained heap growth detected", not proof of zero retention; "sends dispatched" now reads "one simulated send-orchestration job dispatched", with seven new assertions proving zero live provider calls, zero real deliveries and zero rows in billing, Results, warm-up, reputation and causal proof. | B.2 not started at this timestamp |
 | 2026-09-21T05:45:39Z | `042fdeb` | verified | **Pass 8B item B complete.** All ten acceptance scenarios covered by named tests. Three real gaps closed: progress had no run id, no failure reason or recoverability, and no query for a reloaded page. 100k through the real job path with a forced crash and automatic recovery: API-side work 6 ms, 0 duplicate rows, 0 arm mismatches of 90,909, 1 simulated dispatch. Integration 47/47. | Progress is returned by the API but not yet rendered in the campaign UI |
 | 2026-09-21T05:14:53Z | `63f38f2` | verified | **Pass 8B item A complete.** Re-audited every wall-clock read reachable from the frozen evaluation path; all that remain are default parameters or operational timestamps (run asOf, lease expiry, assignedAt/completedAt). Three end-to-end tests on a fixture where frozen and wall-clock evaluation cannot agree by accident: identical decisions across two executions, genuine divergence from live evaluation, and a resumed run matching an uninterrupted one. Integration 39/39. | Delivery-time rechecks remain deliberately current-time; that separation is pinned separately |
 | 2026-09-21T05:14:53Z | `5c7777e` | verified | Register renamed to `…-2026-09-21.md` via `git mv`; inbound link updated. Locked facts extended with the scale boundary and the testing boundary. Canonical status split into Pass 8A (implemented and measured) and Pass 8B (pending). | — |

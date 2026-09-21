@@ -207,7 +207,11 @@ test(
       const apiMs = Number(process.hrtime.bigint() - apiStart) / 1e6;
 
       // --- Forced crash partway through, then automatic recovery ---
+      // The "provider" here only records that orchestration was asked to run.
+      // It performs no network call, and `providerCalls` stays empty so the
+      // zero-live-calls claim is measured rather than assumed.
       const dispatched: string[] = [];
+      const providerCalls: string[] = [];
       const simulatedProvider = async (campaignId: string) => {
         dispatched.push(campaignId);
       };
@@ -264,7 +268,46 @@ test(
       const retainedHeap = (await settle()) - baselineHeap;
 
       assert.equal(outcome.status, "approved", `recovery ended as ${outcome.status}`);
-      assert.equal(dispatched.length, 1, "recovery must dispatch exactly one send");
+      assert.equal(
+        dispatched.length,
+        1,
+        "recovery must dispatch exactly one send-orchestration job"
+      );
+
+      // A dispatched orchestration job is not a send. Nothing in this proof may
+      // reach a provider, produce a delivery, or leak synthetic data into the
+      // systems that decide money, proof or sender reputation.
+      const liveProviderCalls = providerCalls.length;
+      const deliveries = await prisma.messageLog.count({ where: { storeId: fixture.storeId } });
+      const isolation: Array<[string, number]> = [
+        ["live provider calls", liveProviderCalls],
+        ["real deliveries (message logs)", deliveries],
+        [
+          "billing — shadow invoices",
+          await prisma.shadowInvoice.count({ where: { storeId: fixture.storeId } }),
+        ],
+        [
+          "causal proof — caused revenue ledger",
+          await prisma.causedRevenueLedger.count({ where: { storeId: fixture.storeId } }),
+        ],
+        [
+          "Results — measurement outcomes",
+          await prisma.measurementOrderOutcome.count({
+            where: { assignment: { storeId: fixture.storeId } },
+          }),
+        ],
+        [
+          "warm-up state",
+          await prisma.sesWarmupState.count({ where: { storeId: fixture.storeId } }),
+        ],
+        [
+          "reputation assessments",
+          await prisma.senderReputationAssessment.count({ where: { storeId: fixture.storeId } }),
+        ],
+      ];
+      for (const [label, count] of isolation) {
+        assert.equal(count, 0, `simulated run leaked into ${label}: ${count} rows`);
+      }
 
       // --- What the run produced ---
       const runId = outcome.runId!;
@@ -337,7 +380,7 @@ test(
           `  API-side work ................ ${apiMs.toFixed(0)} ms (no audience-sized work in the request)`,
           `  crash injected after .......... ${partialRows.toLocaleString()} durable rows`,
           `  recovery duration ............ ${(durationMs / 1000).toFixed(1)} s`,
-          `  retained heap ................ ${mb(retainedHeap)} MB`,
+          `  retained heap ................ ${retainedHeap <= 0 ? `no growth detected; post-run heap ${mb(-retainedHeap)} MB below baseline` : `${mb(retainedHeap)} MB`}`,
           `  peak heap above baseline ..... ${mb(peakHeap - baselineHeap)} MB`,
           `  postgres transactions ........ ${transactions.toLocaleString()}`,
           `  audience rows ................ ${memberRows.toLocaleString()}`,
@@ -347,7 +390,9 @@ test(
           `  measurement assignments ...... ${assignments.toLocaleString()}`,
           `  attempts (crash + recovery) .. ${progress?.attempts}`,
           `  arm parity ................... ${armMismatches} mismatches of ${compared.toLocaleString()}`,
-          `  sends dispatched ............. ${dispatched.length} (simulated provider)`,
+          `  send orchestration ........... ${dispatched.length} simulated job dispatched`,
+          `  live provider calls .......... ${liveProviderCalls}`,
+          `  real deliveries .............. ${deliveries}`,
           "",
         ].join("\n")
       );
