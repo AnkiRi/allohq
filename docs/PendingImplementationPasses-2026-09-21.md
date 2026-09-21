@@ -630,6 +630,57 @@ time.
 `ProductRepurchaseCycle` rows. Low stock and cross-sell are verified at 100k;
 repurchase window remains verified only at the smaller fixture.
 
+## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
+
+_For a human to run. **Nothing in this pass sends email, and no step here is
+automated.** Joon must not add recipients or trigger a send on its own._
+
+### Before you start
+
+- **Recipients:** 2–3 inboxes you own, each explicitly opted in and already on
+  the allowlist. Do not add new addresses for this test.
+- **Store:** a store with an **authenticated sender domain**. `allo-test-5`
+  has none, so sending is blocked there by design — use it for the UI and
+  blocked-delivery steps only, not for steps 5 onward.
+- **Confirm before sending:** the campaign audience is 2–3 people, not a
+  segment that could expand.
+- Missing DNS is a safety net, not the safety mechanism. Check the recipient
+  list yourself.
+
+### The run
+
+| # | Step | What to confirm |
+| --- | --- | --- |
+| 1 | Create a narrowly targeted campaign for the 2–3 allowlisted addresses | The audience count is exactly what you intended, before approving anything |
+| 2 | Open the audience review | Left-alone reasons are grouped and readable; the control and treatment split is shown; an override can be applied and its reason is recorded |
+| 3 | Approve delivery | The page shows **"Preparing audience"**, not an apparent Draft dead-end. Counts appear in merchant language |
+| 3a | Reload the page mid-preparation | Progress is still there and still updating. Nothing is lost |
+| 3b | Close the tab, reopen the campaign | Same — the work continued without the page |
+| 3c | Watch it finish | The panel disappears and the campaign returns to its normal state. Approve is disabled the whole time preparation is in flight |
+| 4 | Check the delivery timing plan | The send time matches what the timing preview said; quiet hours are respected |
+| 5 | Send through the authenticated domain | The provider is the one you expect. **This is the only step that sends.** |
+| 6 | Check delivery events | Delivered, then open, then click, each appearing against the right recipient |
+| 7 | Place a real Shopify order from one tracked email | Use an address that received the campaign |
+| 8 | Check attribution | The order is attributed to this campaign; **currency is the store's own**, not dollars; the billing preview shows 5% of attributed non-cancelled revenue |
+| 9 | Cancel or refund that order | Attributed revenue drops accordingly. **Cancelled orders are excluded from billing** — confirm the preview reflects that |
+| 10 | Refresh the customer | Order history and customer state update; audit receipts show the decision trail |
+| 10a | Re-approve or retry the same campaign | **No duplicate send.** The recipient receives nothing a second time |
+
+### What "good" looks like at the end
+
+- Each recipient received **exactly one** email.
+- The control recipient, if one was drawn, received **none** — and is recorded
+  as withheld rather than missing.
+- Attributed revenue and the billing preview agree with what you actually
+  ordered and cancelled, in the store's currency.
+- Nothing in the audit trail contradicts what you saw on screen.
+
+### If something looks wrong
+
+Stop before re-sending. A duplicate send is the one failure this test cannot
+take back. Capture the campaign id, the run id shown in preparation, and the
+message ids, and hand those over rather than retrying blind.
+
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
 _Status: **verified**. Investigated rather than optimised: the point is to know
