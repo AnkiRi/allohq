@@ -1,0 +1,88 @@
+name: One-million-customer readiness proof
+
+# Never on a pull request, and never on a push to main. This job seeds a
+# million synthetic customers and takes the better part of an hour, so it runs
+# only when someone asks for it, or on a proof branch pushed for that purpose.
+#
+# It exists because the proof does not fit on an 8 GB laptop alongside a
+# browser: the run was killed by the local memory guard at 387 seconds with
+# 0.05 GB of system memory free. A GitHub-hosted runner has 16 GB.
+#
+# Synthetic tenant, disposable Postgres, simulated provider. No Shopify, no
+# Resend, no SES, no Railway, no real recipients, and no provider-event side
+# effects.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["proof/**"]
+
+jobs:
+  million:
+    name: 1M single-tenant preparation, crash, recovery and independent verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+
+    services:
+      postgres:
+        # pgvector, not stock postgres:16 — a migration creates the `vector`
+        # extension and the stock image does not ship it.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_million_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_million_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_million_test"
+      MILLION_SIZE: "1000000"
+      # The proof measures retained heap and fails without a collector.
+      NODE_OPTIONS: "--expose-gc"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Resources before the run
+        run: |
+          echo "--- memory ---"; free -h
+          echo "--- disk ---"; df -h /
+          echo "--- cpus ---"; nproc
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: One-million-customer proof
+        run: pnpm --filter @allohq/workers exec tsx --test src/workers/prepare-audience.million.integration.ts
+
+      - name: Resources after the run
+        # Runs even on failure: if the proof is killed, the reason is usually
+        # here, and a killed run must be reported as inconclusive rather than
+        # guessed at.
+        if: always()
+        run: |
+          echo "--- memory ---"; free -h
+          echo "--- disk ---"; df -h /
+          echo "--- database size ---"
+          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_million_test \
+            -c "SELECT pg_size_pretty(pg_database_size(current_database()))" || true
