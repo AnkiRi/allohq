@@ -1170,6 +1170,12 @@ this baseline.
 
 ### What this does not explain
 
+> **Withdrawn 2026-09-21T11:18:48Z.** This paragraph was computed against the
+> 468-second figure from attempt 3. That figure does not reproduce: the same
+> statement took 58,649 ms on a hosted runner with identical Postgres settings.
+> See the attempt-4 section. The paragraph is left in place rather than deleted
+> so the correction is visible.
+
 At 100,000 candidates the statement takes 5.0 s. Scaled linearly to the 772,929
 candidates measured at a million, that is about **38 s**. The measured value
 was **468 s** — roughly **twelve times worse than linear**.
@@ -1201,6 +1207,102 @@ completed on this machine before, so this is memory availability, not capacity.
 The proof now runs on a hosted runner (16 GB) via
 `.github/workflows/million.yml`, on demand or on a `proof/**` branch. No paid
 infrastructure was provisioned.
+
+## One million customers — attempt 4, verified by an independent oracle — 2026-09-21T11:18:48Z
+
+_Status: **pass**. GitHub Actions run `35591808109`, branch `proof/million-oracle`,
+commits `7db1e9c` (oracle) and `8c9484d` (runner). Synthetic tenant, disposable
+Postgres, simulated provider. **25 of 25 checks passed.**_
+
+This is the first million-customer result where the checker does not call the
+code it is checking. Attempts 1 and 2 were inconclusive; attempt 3 was a
+functional pass whose hash parity was tautological and whose pooling was never
+exercised. Both of those gaps are now closed.
+
+### Measured
+
+| Field | Measured |
+| --- | --- |
+| Total customers | 1,000,000 |
+| Candidates / control / treatment | 772,938 / 115,938 / 657,000 |
+| Not receiving / deliberately left alone | 160,865 / 66,197 |
+| Duplicate members / duplicate assignments | **0 / 0** |
+| Arm mismatches **against the independent oracle** | **0 of 772,938** |
+| Hash mismatches against the independently recomputed rule | **0 of 772,938** |
+| Pooling mismatches against the independently derived pooling | **0 of 772,938** |
+| Control quota mismatches | **0 strata** |
+| Pooled small stratum | 8 sparse strata → 40 candidates, **6 control** |
+| Largest stratum | 154,583 |
+| API response time | **3 ms** |
+| Seed | 4.2 min |
+| Crash injected at | 200,000 durable rows |
+| Recovery duration | **8.1 min (484 s)**, attempts = 2 |
+| Queries / transactions (recovery) | 50,590 in 53 shapes / 49,248 |
+| Query p50 / p95 / p99 / max | 0 / 3 / 4 / **58,649 ms** |
+| Deadlocks / lock conflicts | 0 / 0 |
+| Preparation retained heap / peak | 17.54 MB / 147.9 MB |
+| **Verifier** retained heap / peak, measured separately | **0.06 MB / 296.5 MB** |
+| Verification duration | 12 s |
+| Live-provider calls / real deliveries | **0 / 0** |
+| Billing, Results, causal proof, warm-up, reputation | **0 rows in each** |
+
+**The verifier used twice the memory the product did** — 296.5 MB against
+147.9 MB. That is exactly why the two are now measured against separate
+baselines: reported as one number it would have been read as the product's
+cost, and it is not.
+
+Storage precision at a million: **193,310 of 772,938 stored hashes (25.0%)**
+differ from the exact computed value, which is the expected share of doubles
+whose shortest exact decimal needs seventeen significant digits. **0 arms
+differed.**
+
+### Correction: the 468-second statement does not reproduce
+
+The control-selection statement was recorded at **468,127 ms** in attempt 3.
+The same statement, at the same size, on this run took **58,649 ms** — about
+**eight times faster**.
+
+| | Attempt 3 | Attempt 4 |
+| --- | --- | --- |
+| Machine | 8 GB laptop | hosted runner, 15 GB, 0 B swap used |
+| Free memory at the time | starved — the next run on it was killed at 0.05 GB free | 9.2 GB free, 5.1 GB page cache at start |
+| `shared_buffers` / `work_mem` | 128 MB / 4 MB | 128 MB / 4 MB — **identical** |
+| Recovery duration | 1,040 s | 484 s |
+| Control-selection statement | 468,127 ms | **58,649 ms** |
+
+Postgres was configured identically, so the difference is not tuning.
+
+**Inference, labelled as such:** the members table and its six indexes are
+roughly 400 MB at a million rows, against 128 MB of `shared_buffers`. On the
+runner there was 5–10 GB of operating-system page cache to hold the rest; on
+the laptop there was effectively none, so index writes that were cache hits on
+one machine were physical reads on the other. This is consistent with every
+figure above, but it was not measured directly and no attempt was made to
+reproduce the starved state.
+
+**What follows from this.** The premise of the optimisation order — a measured
+468-second control-selection bottleneck — does not hold on hardware that is not
+memory-starved. On this run the statement is **12% of the 484-second recovery**.
+The three bulk inserts together are larger:
+
+| Statement | Time | Share of recovery |
+| --- | --- | --- |
+| Control selection | 58,649 ms | 12.1% |
+| Insert `customer_audience_decisions` | 55,197 ms | 11.4% |
+| Insert `measurement_assignments` | 48,841 ms | 10.1% |
+| Insert `campaign_audience_evaluation_rows` | 43,406 ms | 9.0% |
+| Insert `campaign_audience_members` (400 statements) | 33,766 ms | 7.0% |
+
+The 100,000-candidate diagnosis above stands on its own terms — the ranking is
+2% of the statement and the write is the rest — but the claim that it was
+"twelve times worse than linear at a million" was computed against the 468-second
+figure and is **withdrawn**. Against 58,649 ms it is about 1.6x worse than a
+linear scaling of the local 100k measurement, and those two numbers come from
+different machines, so even that comparison is not sound.
+
+**No optimisation has been adopted, and none should be adopted against a
+bottleneck this size without the 1M plan.** That measurement
+(`.github/workflows/control-selection.yml`) has not been run.
 
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
@@ -1435,6 +1537,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T11:18:48Z | `7db1e9c` `8c9484d` | **pass** | 1M attempt 4, GitHub Actions run 35591808109: **25 of 25 checks passed** against the independent oracle. 1,000,000 customers, 772,938 candidates, 115,938 control, 657,000 treatment; 0 arm, hash, pooling or quota mismatches; pooling exercised (8 sparse strata → 40 candidates, 6 control); 0 duplicates; crash at 200,000 rows and recovery in 484 s; 0 live-provider calls and 0 rows in billing, Results, causal proof, warm-up and reputation. Preparation retained 17.54 MB, peak 147.9 MB; verifier measured separately at 0.06 MB retained, 296.5 MB peak. | **Correction:** the control-selection statement took 58,649 ms here against 468,127 ms in attempt 3, on identical Postgres settings. The 468 s figure came from a memory-starved laptop and does not reproduce; the "twelve times worse than linear" claim is withdrawn. The statement is 12% of recovery here. The 1M EXPLAIN has still not been run, and no optimisation is adopted |
 | 2026-09-21T11:08:46Z | `7822338` `8c9484d` | **diagnosis in progress** | 100k control-selection baseline measured. Whole statement 5,027 ms; ranking alone 193 ms, so ~96% is the write. 2,427,846 buffers and 805,948 WAL records for 100,000 updated rows. Proven not HOT: removing the only index containing `arm` and giving pages 10% free space still wrote 5.8 WAL records per row. Writing only the 14,996 control rows measured 1,272 ms and 14 MB of WAL — 3.9x faster, 7x less WAL. Behaviour frozen; nothing adopted. | Does not explain the million-customer statement: 5.0 s at 100k scales linearly to ~38 s at 772,929 candidates, but 468 s was measured. The 1M EXPLAIN is still pending, and no candidate will be prototyped before it. The 1M work moved to a hosted runner after the local run was killed with 0.05 GB free and 2.42 GB held by Chrome |
 | 2026-09-21T10:47:19Z | `7db1e9c` | **implemented and verified at 20,000** | The 1M verifier no longer calls the product's assignment code. It re-derives the documented hash, pooling, quota and ranking independently, measures its own memory separately, prints structured checkpoints, and prints the verdict after the checks rather than before. Proven able to fail: three mutations each failed exactly the checks that name them. Fixture now reserves 8 strata of 5, exempt from every exclusion, so pooling is exercised — 40 candidates, 6 control. 25 of 25 checks passed at 20,000. | Not yet run at a million with this oracle; that is a separate result. Measured: storing a double through Prisma keeps 16 significant digits, so 3,941 of 15,467 stored hashes differ from the exact value by one or two ULP — recorded, not changed, because fixing it would alter deterministic assignment storage |
 | 2026-09-21T10:33:04Z | `8dde4c6` | **implemented and verified** | Part 1 preparation UI proof completed. Approval and genuine failure each write one durable in-app Activity entry with treatment, control and deliberately-left-alone counts and a campaign link; `messageLog` asserted at 0 rows on both paths. Client tests strengthened from "the approve button is disabled" to "no enabled control in the preparation surface can start or schedule a dispatch", verified by mutation (3 of 6 fail with the gate removed). typecheck 19/19, unit 352/352, integration 50/50. | The campaign page passes `showApproveAction={false}` and renders its own approve control, so the client tests drive the shared gate function, not the page's own button. A fabricated "Schedule for later" button was removed before commit; scheduling is proved through the single gated dialog entry and the timing-independent `AUDIENCE_RUN_NOT_COMPLETE` refusal |
