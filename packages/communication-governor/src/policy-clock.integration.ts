@@ -248,16 +248,19 @@ test(
 
       // Delivery: deliberately current-time, and free to disagree. That is the
       // point of a recheck — it sees what has happened since approval.
+      //
+      // Asserted on the rule rather than on `allowed`, deliberately. An earlier
+      // version of this test asserted the live check allows, which made its
+      // outcome depend on the hour it ran: quiet hours default to 22:00–07:00
+      // UTC, so it passed in the afternoon and failed overnight. A test for
+      // time-dependent policy that is itself time-of-day dependent is the same
+      // defect it is meant to catch.
       const atDelivery = await checkAllRules(base);
-      assert.equal(
-        atDelivery.allowed,
-        true,
-        "the live recheck evaluates today, where that history is a month old"
-      );
+      assert.equal(first.rule, "fatigue_weekly", "the frozen decision is a fatigue hold");
       assert.notEqual(
-        atDelivery.allowed,
-        first.allowed,
-        "this fixture must actually distinguish the two, or it proves nothing"
+        atDelivery.rule,
+        "fatigue_weekly",
+        "evaluated today that send history is a month old, so fatigue cannot be the reason"
       );
     } finally {
       await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
