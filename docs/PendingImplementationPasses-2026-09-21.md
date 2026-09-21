@@ -804,13 +804,11 @@ from the measured 100k shape and must not be quoted as a measurement.
 | Preparation duration | 68.9 s | ~10 minutes |
 | Retained heap | no growth detected | unchanged — nothing scales with audience size |
 
-**The component least likely to hold:** the control selection is a single
-`UPDATE` over every candidate, measured at 4,319 ms for 90,909 on a GitHub
-runner. At roughly 900,000 candidates that is inference on the order of 40
-seconds in one statement, holding row locks on the whole membership. Those rows
-belong to one run and no other writer touches them, so it is a long statement
-rather than contention — but it is the first thing to need attention at that
-size.
+**Withdrawn.** This block previously inferred "on the order of 40 seconds" for
+the control selection at roughly 900,000 candidates, from 4,319 ms measured at
+90,909 on a GitHub runner. The **measured** value at 772,929 candidates is
+**468,127 ms** — about eleven times that inference. The extrapolation was
+wrong. See "One-million single-tenant readiness" above for the measurement.
 
 **Healthify's 4.5 crore environment is a future architecture problem, not a
 current target.** Nothing in this pass is sized or claimed against it.
@@ -829,6 +827,80 @@ current target.** Nothing in this pass is sized or claimed against it.
 | **Real-delivery acceptance** | **external** — manual, 2–3 opted-in allowlisted inboxes; checklist below; nothing automated |
 | **Authenticated sender domain** | **external** — `allo-test-5` has none, so its sending stays blocked |
 | Pass 9 delivery health, provider-switch safety | not started, out of scope for this pass |
+
+## One-million single-tenant readiness — three attempts — 2026-09-21T09:58:22Z
+
+_All runs: synthetic tenant, disposable Postgres and Redis on a local machine,
+simulated provider. No Shopify, Resend, SES, Railway production database,
+Railway Redis, `allo-test-5`, or real recipients were involved, and no billing,
+Results, causal-proof, warm-up or reputation rows were written._
+
+### Attempt classifications
+
+| Attempt | Commit | Classification |
+| --- | --- | --- |
+| 1 | `042fdeb` harness | **inconclusive** — preparation completed, verification harness did not complete; no readiness conclusion |
+| 2 | `042fdeb` harness | **inconclusive** — verifier still used unbounded whole-cohort reference behaviour |
+| 3 | `fccb542` | **functional pass** — preparation, crash/recovery, membership and assignment correctness passed; performance and verifier independence remain pending |
+
+Attempt 1 was stopped under memory pressure while verifying. Attempt 2 threw
+`RangeError: Maximum call stack size exceeded` inside the reference
+implementation. **Neither produced a readiness conclusion.** Both failures were
+in the verification harness, not in the product.
+
+Attempt 2 did surface a real latent defect: `assignStratifiedCohortArms` used
+`push(...customers)`, which exceeds the call-argument limit at roughly 150,000
+and throws. Fixed in `fccb542`. The function is exported but **no production
+path calls it** — it is the in-memory reference the proofs compare against, so
+this was a defect in a verification tool, not a live failure.
+
+### Attempt 3 — functional pass, measured
+
+| Field | Measured |
+| --- | --- |
+| Total customers | 1,000,000 |
+| Candidates / control / treatment | 772,929 / 115,936 / 656,993 |
+| Not receiving / deliberately left alone | 160,871 / 66,200 |
+| Duplicate members / duplicate assignments | **0 / 0** |
+| Arm mismatches | **0 of 772,929** |
+| Largest stratum | 154,586 |
+| API response time | **4 ms** |
+| Seed | 4.4 min |
+| Crash injected at | 200,000 durable rows |
+| Recovery duration | **17.3 min (1,040 s)**, attempts = 2 |
+| Queries / transactions (recovery) | 50,563 in 53 shapes / 49,287 |
+| Query p50 / p95 / p99 / max | 1 / 7 / 25 / **468,127 ms** |
+| Deadlocks / lock conflicts | 0 / 0 |
+| Live-provider calls / real deliveries | **0 / 0** |
+| Billing, Results, causal proof, warm-up, reputation | **0 rows in each** |
+
+### Why this is not a performance pass
+
+**The control-selection `ROW_NUMBER()` UPDATE took 468,127 ms — 7.8 minutes in
+a single statement**, 45% of the entire recovery. Running preparation in the
+background improves what the merchant experiences; it does not make avoidable
+backend cost acceptable.
+
+An earlier extrapolation in this document put that statement "on the order of
+40 seconds at ~900,000 candidates", inferred from a GitHub-runner measurement
+at 90,909. **The measured value is roughly eleven times that inference.** The
+inference was wrong and is withdrawn. No extrapolated timing in this document
+may be quoted as a measured result.
+
+### Open verifier quality gaps
+
+| Gap | Detail |
+| --- | --- |
+| Verifier memory not measured separately | The reported 17.59 MB retained / 95.31 MB peak covers the **production recovery window**; the sampler stops before verification begins. The verifier's own footprint — the thing that ended attempts 1 and 2 — was never instrumented. |
+| Hash parity is partly tautological | Both the production path and the oracle call the same `assignmentValue`. Ranking (SQL window function versus JS sort) and quota (separate code paths) *are* independently cross-checked; the hash is not. |
+| Pooling not exercised independently at 1M | The per-stratum oracle receives already-pooled `assignmentStratum` values, so its pooling branch is a no-op. Pooling is independently proven at 100k, where the oracle receives raw RFM segments. |
+
+### Standing boundary
+
+**Healthify's 4.5 crore customer environment is a future dedicated architecture
+programme.** Nothing in this work supports or implies it.
+
+**Five simultaneous 1M tenants have not been tested.**
 
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
@@ -1063,6 +1135,9 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T09:58:22Z | `fccb542` | **functional pass, performance pending** | 1M attempt 3: 1,000,000 customers, 772,929 candidates, 115,936 control, 656,993 treatment, 0 duplicate members, 0 duplicate assignments, 0 arm mismatches, 0 live-provider calls, 0 downstream side effects, forced crash and recovery succeeded. API 4 ms. | Control-selection UPDATE measured **468,127 ms**; verifier memory not separately measured; hash parity partly tautological; pooling not independently exercised at 1M |
+| 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 2: verifier still used unbounded whole-cohort reference behaviour; threw RangeError inside the reference at a ~154,000 stratum. | No readiness conclusion |
+| 2026-09-21T09:58:22Z | `042fdeb` | **inconclusive** | 1M attempt 1: preparation completed, verification harness did not complete. | No readiness conclusion |
 | 2026-09-21T08:03:00Z | pending | pending | Recorded the scale boundary: 100k single-tenant preparation measured; 1M single-tenant and multi-tenant concurrency both **pending readiness proofs**; Healthify's 4.5 crore mobile-app environment is a **separate future architecture programme**, not supported or implied. Scale tests are synthetic tenants in disposable infrastructure only, with no calls to Shopify, Resend, SES, Railway production Postgres or Redis, or real recipients. | The three proofs named — client-rendered UI, 1M single tenant, 5-tenant concurrency — are all open at this timestamp |
 | 2026-09-21T07:45:03Z | `15d9c50` | verified | **Item D complete, and the cross-sell cause found and fixed.** A null-guard pattern of mine prevented Postgres restricting the scan: 155.2 s guarded against 8.2 s composed, identical results. Overnight scanning at 100k went 135.4 s → **4.3 s**, cross-sell 145.7 s → 4.1 s. Two other hypotheses were tested and rejected first. Evidence consolidated: three measured 100k results, the ~6,000 transaction breakdown, per-scanner durations, the inference boundary, and code-complete versus external. | Five migrations, real-delivery acceptance and an authenticated sender domain remain external |
 | 2026-09-21T07:35:03Z | `39a95f5` `643d384` | verified | Both evidence gaps closed. repurchase_window fires at 100k with its count checked against a SQL reference; per-scanner telemetry added. Rendered-component tests through React cover all seven UI points. Manual acceptance checklist written. Fixed a discovery defect: the unit runner ignored `.test.tsx`, so the component tests ran zero times — suite went 337 to 345. | Cross-sell accounts for 145.7 s of 148.6 s; two hypotheses tested and rejected, the null-guard hypothesis under measurement |
