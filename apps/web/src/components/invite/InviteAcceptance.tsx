@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -18,6 +18,9 @@ import { trpc } from "@/lib/trpc";
  */
 export function InviteAcceptance({ token }: { token: string }) {
   const router = useRouter();
+  // Authentication returns here, token and all. Built from the token rather
+  // than read from `window`, so it is the same on the server render.
+  const here = `/invite/${token}`;
   const [error, setError] = React.useState<string | null>(null);
   const accept = trpc.invitations.accept.useMutation({
     onSuccess: () => router.push("/dashboard"),
@@ -35,19 +38,31 @@ export function InviteAcceptance({ token }: { token: string }) {
 
       <SignedOut>
         <p className="mt-4 text-[14px] leading-6 text-muted-foreground">
-          Sign in with the address this invitation was sent to, and it will take
-          you into the workspace.
+          Use the address this invitation was sent to. If you already have a
+          Joon account, sign in; if not, create one with that address.
         </p>
-        <div className="mt-8">
-          <SignInButton mode="modal">
+        <div className="mt-8 flex flex-wrap gap-3">
+          {/* Both return to this URL, so the token survives authentication and
+              the invitation is still there to accept afterwards. The token is
+              never sent anywhere until a session exists. */}
+          <SignInButton mode="modal" forceRedirectUrl={here} signUpForceRedirectUrl={here}>
             <button
               type="button"
               className="rounded-lg bg-secondary px-4 py-2 text-xs font-sans text-secondary-foreground transition-colors hover:bg-secondary/90"
               data-testid="invite-sign-in"
             >
-              Sign in to continue
+              Sign in
             </button>
           </SignInButton>
+          <SignUpButton mode="modal" forceRedirectUrl={here} signInForceRedirectUrl={here}>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-4 py-2 text-xs font-sans text-foreground transition-colors hover:border-foreground"
+              data-testid="invite-sign-up"
+            >
+              Create an account
+            </button>
+          </SignUpButton>
         </div>
       </SignedOut>
 

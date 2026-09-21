@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "../trpc";
+import { platformAdminProcedure, protectedProcedure, publicProcedure, router } from "../trpc";
 import {
   CLOSED_BETA_MESSAGE,
   closedBetaVerdict,
@@ -23,16 +23,6 @@ import { getVerifiedClerkEmails } from "../auth/clerk-profile";
  * Acceptance is the only path from "signed in" to "has a workspace" for someone
  * who is not already a member.
  */
-
-/** Only platform admins may issue, revoke or list invitations. */
-const platformAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  if (!isPlatformAdmin(ctx.userId)) {
-    // NOT_FOUND rather than FORBIDDEN: a non-admin should not learn that an
-    // invitation surface exists, let alone probe it.
-    throw new TRPCError({ code: "NOT_FOUND" });
-  }
-  return next({ ctx });
-});
 
 const normaliseEmail = (email: string) => email.trim().toLowerCase();
 

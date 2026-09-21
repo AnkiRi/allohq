@@ -1779,6 +1779,106 @@ Also outstanding, and not something a deploy can do: Clerk's **Sign-up mode →
 Restricted** in the dashboard. Defence in depth — an account created outside the
 app still gets no workspace.
 
+## Request an invite — the public half of closed beta — 2026-09-21T18:37:56Z
+
+_Status: **implemented**, pending review, on branch `closed-beta-invite-only`
+(PR #28). One product flow with the gate above: asking, deciding, inviting,
+accepting._
+
+### The public call to action changed
+
+Every call to action on the live landing page now reads **"Request an invite"**
+and points at `/request-invite`. There were three, all in
+`apps/web/src/app/options/v2/V2Landing.tsx` — the nav, the hero and the closing
+section — and the constant they shared is now `requestInvite` rather than
+`signUp`. `/sign-up` still exists for anyone who reaches it directly and
+refuses under `INVITE_ONLY_MODE`, but nothing public points there.
+
+### Submitting creates one row and nothing else
+
+`AccessRequest` is **platform-level on purpose**: no `workspaceId`, no relation
+to one. The person asking has no tenant, and creating one to hold their request
+would be precisely what closed beta withholds.
+
+The test that matters is the negative one. Submitting is asserted to leave
+unchanged the count of: users, workspaces, memberships, invitations, stores,
+message logs and agent chats. No Clerk identity, no model call, no provider
+call, no billing work.
+
+### Nothing the form does reveals anything
+
+| Case | What the caller sees |
+| --- | --- |
+| New request | the acknowledgement |
+| Repeat from the same address | the acknowledgement; the row is updated, not queued twice |
+| Rate-limited | the acknowledgement; the submission is dropped |
+| Honeypot filled | the acknowledgement; nothing is stored |
+| Address that already has an account, invitation or membership | the acknowledgement |
+
+One sentence, always: *"Thanks—we're opening Joon with a small number of design
+partners. We'll review your request and be in touch."* A form that answered
+differently for a known address would be an enumeration oracle on the public
+internet.
+
+Anti-spam is strict schema validation, a hidden honeypot, and two windows —
+five per hour per source address, three per day per normalised email. **No
+Turnstile.** Recorded as a later optional layer if public abuse appears, rather
+than a dependency taken before there is evidence of need.
+
+### The operator path
+
+`/admin/access-requests`, platform admins only. Every query and mutation behind
+it answers `NOT_FOUND` to anyone else, so the page is not protected by being
+hard to find.
+
+Mark reviewed, decline, or **Approve & create invite** — choose a role, and
+either name a new workspace (prefilled from the company they gave) or paste an
+existing workspace id. The invitation and the status change happen in one
+transaction, so a request cannot end up marked `invited` with no invitation
+behind it. The link appears **once**, with a copy button.
+
+### The Healthify-shaped flow, proven end to end
+
+One integration test walks it: a design partner submits; the operator approves
+into a new workspace named from the company; an owner invitation is issued; the
+stored row holds only the hash and the plaintext token appears nowhere in it;
+the request becomes `invited` and records which invitation came from it; a
+second approval of the same request is refused; **a forwarded link used by
+another address is refused**; the intended address accepts and becomes an owner;
+and closed beta then lets that person through because they are a member.
+
+### A conflict in my own checklist, now resolved
+
+The earlier checklist said to set Clerk's sign-up mode to **Restricted** as
+defence in depth. That would also stop an **invited** person creating the Clerk
+account they need — the invitation page's "Create an account" button goes
+through Clerk like any other sign-up.
+
+The checklist now presents it as a decision with both costs stated:
+
+- **Option A, recommended** — leave Clerk sign-up public. An uninvited account
+  is an empty identity that reaches nothing, because no workspace is
+  provisioned. Invited people sign up with no extra step.
+- **Option B** — Restricted, plus adding each invited address to Clerk's
+  allowlist when the invitation is issued. No stray accounts, at the cost of a
+  second manual step per invitation and a Clerk-side error if one is missed.
+
+Neither is the gate.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `access-requests.integration.ts` | 6 of 6 |
+| Submitting creates no user, workspace, membership, invitation, store, message or chat | asserted by count, before and after |
+| Honeypot, repeat, rate limit all read identically | asserted as one distinct response |
+| Platform-admin-only on list, setStatus and approveAndInvite | `NOT_FOUND` for everyone else |
+| Healthify-style new-workspace first-owner flow | end to end, including a forwarded link being refused |
+| Existing-workspace approval | creates no second workspace |
+
+One migration, additive: `20260921180000_add_access_requests`. One new table,
+no change to any existing one, inert unless the admin surface is used.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -2012,6 +2112,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T18:37:56Z | _(branch `closed-beta-invite-only`, PR #28)_ | **implemented, pending review** | Public "Request an invite" flow added to the closed-beta gate as one product flow. All three landing CTAs changed; `/request-invite` writes one platform-level `AccessRequest` and is asserted to create no user, workspace, membership, invitation, store, message log or agent chat. Honeypot, repeat and rate-limited submissions all return the one acknowledgement, so the form is not an enumeration oracle. Platform-admin console at `/admin/access-requests` approves into a new or existing workspace and issues the invitation in one transaction. 6 of 6 integration tests including the Healthify-shaped flow end to end. | No Turnstile — recorded as a later optional layer rather than a dependency taken before evidence of abuse. **Corrected an earlier conflict in the deployment checklist:** setting Clerk sign-up to Restricted would also block invited people from creating the account they need; the checklist now states both options and their costs, and recommends leaving Clerk public because an uninvited account reaches nothing |
 | 2026-09-21T16:58:44Z | _(branch `invite-only-closed-beta`)_ | **implemented, pending review** | Joon is invite-only behind `INVITE_ONLY_MODE`, enforced at the provisioning boundary: no workspace, so `workspaceProcedure` refuses before any resolver, which puts every cost-bearing path behind it at once. Invitations are single-use, expiring, revocable, stored as SHA-256 only, and require a Clerk-verified email match. Issuing restricted to platform admins named by Clerk id in env. **Found while auditing and fixed in a separate security PR: the merchant-agent endpoint lacked authentication and workspace authorisation.** typecheck 19/19, unit 366/366, 17 new tests. | `INVITE_ONLY_MODE` and `PLATFORM_ADMIN_CLERK_IDS` are not set anywhere yet, so nothing changes until they are. Clerk's sign-up mode must be set to Restricted in the dashboard — defence in depth, not the gate. No invitation email is sent: the operator copies the link, because sending would depend on unfinished sender-domain and warm-up work |
 | 2026-09-21T13:28:53Z | `1fdb179` `199abda` | **decided** | Stored hash left unchanged: proven 35x margin against collision or reordering, verified on 2,999,999 worst-case adjacent pairs and 1,715,519 across every binade, zero collisions and zero inversions; the frozen authority is `MeasurementAssignment.arm`, which holds no hash. Regression tests pin the margin and fail below the safe threshold. Index removal kept: every production query audited and none needs it; controlled 1M comparison 80,565 ms to 53,252 ms and 3,370.8 MB to 1,710.2 MB of WAL; full proof 58,649 ms to 43,152 ms. | The intermediate stored hash is not byte-identical to the mathematical reference at the final digits. **Deferred — revisit only if a future audit requirement demands byte-exact intermediate reproducibility.** No BIGINT column or versioned representation added. End-to-end recovery varied 484 s to 496 s because independent bulk-insert timings moved 11-15% across hosted runners; no overall speed-up is claimed. The planner's exact index choice varied between runs, so no claim is made that it never used the index |
 | 2026-09-21T13:16:40Z | `9a23061` `199abda` | **one adopted, one rejected** | Control-only draw measured at 11,064 ms against 63,679 ms and 180 MB of WAL against 4,230 MB — **rejected**: it requires candidates to arrive marked TREATMENT, which makes an interrupted run indistinguishable from a completed one and fails toward sending. Two integration tests caught it. Dropping the ordering index **adopted**: 53,252 ms against 80,565 ms and 1,710 MB of WAL against 3,371 MB at 1M, both arms on one runner; 4,881 against 5,539 ms at 100k. Proof re-run 35602634482 passed 25 of 25 with the statement at 43,152 ms against 58,649 ms. Integration suite 50/50. | **Total recovery went 484 s to 496 s — slightly slower.** Three inserts on other tables, which this change cannot affect, moved 11-15% between runners, so end-to-end timing across runs is noise-dominated and no overall speed-up is claimed. Adoption rests on the controlled same-runner comparison and the structural WAL reduction. Earlier claim that the planner "never uses" the index is **corrected**: the harness records whether an index was used, not which one |

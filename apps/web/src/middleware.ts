@@ -15,6 +15,8 @@ const isPublicRoute = createRouteMatcher([
   "/subprocessors(.*)",
   "/support(.*)",
   "/join(.*)",
+  // The public request-access page. Creates nothing but one access-request row.
+  "/request-invite(.*)",
   // Invitation acceptance must render signed out so Clerk can present
   // sign-in. The token is only redeemed by an authenticated mutation, which
   // matches it against the caller's verified email.

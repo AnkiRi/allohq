@@ -63,7 +63,11 @@ const PAL_INIT = `
 
 // Relative so they resolve to the current origin (prod, preview, or local), never
 // a hardcoded localhost. On the landing domain these route to agent.<apex> via middleware.
-const signUp = "/sign-up";
+// Closed beta: the public call to action asks for an invitation rather than
+// offering an account. `/sign-up` still exists for anyone who reaches it
+// directly, and refuses under INVITE_ONLY_MODE — but nothing public points
+// there any more.
+const requestInvite = "/request-invite";
 const signIn = "/sign-in";
 
 type PalId = "drenched" | "light" | "dark";
@@ -147,8 +151,8 @@ export function V2Landing({
             </nav>
             <div className="v2-nav__right">
               <PaletteSwitcher enhanced={enhanced} />
-              <a className="v2-btn v2-btn--primary" href={signUp}>
-                Start free
+              <a className="v2-btn v2-btn--primary" href={requestInvite}>
+                Request an invite
               </a>
             </div>
           </div>
@@ -171,8 +175,8 @@ export function V2Landing({
                     : "joon connects to Shopify, learns your brand, and helps you send fewer, better emails—with an explicit approval before anything leaves and a held-out control to measure what followed."}
                 </p>
                 <div className="v2-hero__cta">
-                  <a className="v2-btn v2-btn--primary v2-btn--lg" href={signUp}>
-                    Start free <span aria-hidden="true">→</span>
+                  <a className="v2-btn v2-btn--primary v2-btn--lg" href={requestInvite}>
+                    Request an invite <span aria-hidden="true">→</span>
                   </a>
                   <span className="v2-hero__cta-note mono">
                     connect Shopify in one click
@@ -716,8 +720,8 @@ export function V2Landing({
                   and writes your first campaign before you finish your coffee.
                 </p>
                 <div className="v2-final__cta">
-                  <a className="v2-btn v2-btn--primary v2-btn--lg" href={signUp}>
-                    Start free <span aria-hidden="true">→</span>
+                  <a className="v2-btn v2-btn--primary v2-btn--lg" href={requestInvite}>
+                    Request an invite <span aria-hidden="true">→</span>
                   </a>
                   {!enhanced && <a className="v2-final__signin mono" href={signIn}>or sign in</a>}
                 </div>

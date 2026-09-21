@@ -100,6 +100,46 @@ model Workspace {
   @@map("workspaces")
 }
 
+/// Someone asking to be let into the closed beta.
+///
+/// Platform-level on purpose: it carries no `workspaceId` and no relation to
+/// one, because the person asking has no tenant yet and creating one to hold
+/// their request would be the very thing closed beta withholds. Submitting
+/// this creates nothing else — no Clerk identity, no user, no workspace, no
+/// membership, no invitation, no store, no agent task, no provider call.
+///
+/// An operator reads it, decides, and issues an invitation separately. The
+/// link between the two is recorded here once that happens.
+model AccessRequest {
+  id      String @id @default(cuid())
+  /// Lower-cased on write so one address cannot queue under several spellings.
+  email   String
+  name    String
+  company String
+  /// Website or storefront URL, if they gave one.
+  website String?
+  /// shopify | custom_storefront | mobile_app
+  platform String
+  /// A range, not a number: "under_10k", "10k_100k", "100k_1m", "over_1m".
+  customerRange String
+  note          String?
+
+  /// pending | reviewed | declined | invited
+  status String @default("pending")
+  /// Set when an operator acts, for the audit trail.
+  reviewedAt        DateTime?
+  reviewedByClerkId String?
+  /// The invitation issued from this request, once one is.
+  invitationId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("access_requests")
+}
+
 /// A single invitation to join Joon during closed beta.
 ///
 /// The token is never stored. Only its SHA-256 hash is, so a database read

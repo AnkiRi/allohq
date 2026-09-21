@@ -75,21 +75,44 @@ either way, so it is recoverable — but it is avoidable.
 
 ---
 
-## 3. Clerk dashboard configuration
+## 3. Clerk dashboard configuration — and a trade-off to decide
 
-The app stops rendering the sign-up component under `INVITE_ONLY_MODE`, but
-Clerk is a separate system and will still accept sign-ups at its own hosted
-pages if you let it.
+The app stops rendering the sign-up component under `INVITE_ONLY_MODE`, and no
+public page links to `/sign-up` any more. Clerk is a separate system and will
+still accept sign-ups at its own hosted pages if you let it.
 
-In the Clerk dashboard, for the **production instance**:
+**There is a real tension here, so decide deliberately rather than by default.**
+An invited person who has never used Joon has to create a Clerk account — that
+is what the "Create an account" button on the invitation page does. Anything
+that stops account creation stops them too.
 
-- **User & Authentication → Restrictions → Sign-up mode**: set to
-  **Restricted**. This stops Clerk creating new accounts outside your control.
-- Leave sign-**in** enabled. Existing members must be able to get back in.
+**Option A — leave Clerk sign-up Public (recommended).**
 
-**This is defence in depth, not the gate.** Someone who creates a Clerk account
-by any means still gets no workspace, and therefore reaches nothing. Do it
-anyway: an account that cannot be created cannot be a loose end.
+Nothing to change in the dashboard. An uninvited person can create a Clerk
+account and it buys them nothing: no workspace is provisioned, so every
+workspace procedure refuses before a resolver runs. The account is an empty
+identity.
+
+- Invited people sign up with no extra step.
+- The cost is stray Clerk accounts that reach nothing.
+
+**Option B — Clerk sign-up Restricted, with an allowlist.**
+
+**User & Authentication → Restrictions → Sign-up mode → Restricted**, then add
+each invited address to Clerk's allowlist **at the moment you issue their
+invitation**.
+
+- No stray accounts at all.
+- The cost is a second manual step per invitation, and an invited person whose
+  address you forgot to allowlist cannot sign up — they will see a Clerk error,
+  not a Joon one, which is harder to diagnose.
+
+Leave sign-**in** enabled either way. Existing members must be able to get back
+in.
+
+**Neither option is the gate.** Someone who creates a Clerk account by any means
+still gets no workspace and therefore reaches nothing. This decides how much
+stray-account tidiness is worth one more step per invitation.
 
 ---
 
@@ -105,6 +128,34 @@ Only after steps 1 to 4 above have each been confirmed.
    - `/sign-up` shows "Joon is currently available by invitation.";
    - a signed-in account with no membership sees the same sentence in-app, not
      an error.
+
+---
+
+## 4b. The request-and-approve flow
+
+Public visitors no longer see "Start free". Every call to action on the landing
+page now reads **"Request an invite"** and leads to `/request-invite`.
+
+Submitting that form writes **one row** and nothing else — no Clerk identity, no
+user, no workspace, no membership, no invitation, no store connection, no agent
+task, no provider call, no billing work. Everyone sees the same acknowledgement
+whatever happened, including a repeat submission or a rate-limited one, so the
+page cannot be used to find out whether an address is already known to Joon.
+
+As a platform admin, review them at **`/admin/access-requests`**:
+
+- **Mark reviewed** or **Decline** to triage.
+- **Approve & create invite** to issue one: choose a role, and either name a new
+  workspace (prefilled from the company they gave) or paste an existing
+  workspace id.
+- The invitation link appears **once**, with a copy button. Nothing stores it.
+- The request becomes `invited` and records which invitation came from it.
+
+Anti-spam today is strict schema validation, a hidden honeypot field, and two
+rate-limit windows — five per hour per source address, three per day per
+normalised email. **Turnstile or a similar challenge is not wired in**, on
+purpose: it is a dependency worth adding if public abuse actually appears, and
+not before.
 
 ---
 
@@ -174,8 +225,8 @@ on. Invitations already accepted stay accepted, because acceptance creates a
 normal workspace membership and nothing about a membership depends on closed
 beta.
 
-If you also set Clerk's sign-up mode to Restricted, set it back to Public in the
-Clerk dashboard — that part is not controlled by the variable.
+If you chose Option B and set Clerk's sign-up mode to Restricted, set it back to
+Public in the Clerk dashboard — that part is not controlled by the variable.
 
 **What rollback does not undo:** the `invitations` table stays (empty or not;
 it is inert when the mode is off), and `/v1/agent/*` stays authenticated. That

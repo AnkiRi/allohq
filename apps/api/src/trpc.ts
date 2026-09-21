@@ -7,7 +7,7 @@ import { verifyStoreAccess } from "./lib/storeAccess";
 import { verifyShopifyIdToken } from "./auth/shopify-id-token";
 import { resolveShopifyIdentity } from "./auth/resolve-shopify-identity";
 import { isProtectedDataRoute, protectedDataAuditRecord } from "./lib/protected-data-audit";
-import { closedBetaVerdict, CLOSED_BETA_MESSAGE } from "./auth/closed-beta";
+import { closedBetaVerdict, isPlatformAdmin, CLOSED_BETA_MESSAGE } from "./auth/closed-beta";
 
 /**
  * Context creation for tRPC
@@ -247,6 +247,23 @@ const DEMO_LLM_PATHS = new Set<string>([
   "emails.promptEdit", // delight chips make a live LLM call — cap it (renderPreview is render-only, no cost)
   "templates.suggestSubjects", // subject suggestions make a live LLM call
 ]);
+
+/**
+ * Platform admin — the operator of the closed beta, not of a tenant.
+ *
+ * Deliberately NOT a workspace procedure: issuing invitations and reading
+ * access requests are platform acts, and requiring a workspace would mean an
+ * operator had to belong to one of the tenants they are letting in.
+ *
+ * Refuses with NOT_FOUND rather than FORBIDDEN. Someone who is not an operator
+ * has no business learning that this surface exists.
+ */
+export const platformAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!isPlatformAdmin(ctx.userId)) {
+    throw new TRPCError({ code: "NOT_FOUND" });
+  }
+  return next({ ctx });
+});
 
 /**
  * Workspace procedure - requires authentication + workspace access + rate limiting

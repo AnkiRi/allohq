@@ -1,6 +1,7 @@
 import { router } from "../trpc";
 import { healthRouter } from "./health";
 import { invitationsRouter } from "./invitations";
+import { accessRequestsRouter } from "./access-requests";
 import { customersRouter } from "./customers";
 import { segmentsRouter } from "./segments";
 import { rfmRouter } from "./rfm";
@@ -35,6 +36,7 @@ import { workspacesRouter } from "./workspaces";
 export const appRouter = router({
   health: healthRouter,
   invitations: invitationsRouter,
+  accessRequests: accessRequestsRouter,
   customers: customersRouter,
   segments: segmentsRouter,
   rfm: rfmRouter,
