@@ -118,8 +118,15 @@ export const shopifyTools: ToolDefinition[] = [
         },
       });
 
+      // The storefront card formats prices with this; without it the widget
+      // has no way to know a store is not in dollars.
+      const store = await prisma.store.findUnique({
+        where: { id: ctx.storeId },
+        select: { currency: true },
+      });
       return {
         count: products.length,
+        currency: store?.currency ?? null,
         selectionBasis:
           mode === "newest"
             ? "Newest active products by synchronized Shopify creation date"

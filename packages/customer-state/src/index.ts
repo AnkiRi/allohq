@@ -43,6 +43,8 @@ export {
   normalizeStratum,
   planStratifiedControlQuotas,
   StratifiedControlSelector,
+  armForCandidate,
+  assignmentStratumFor,
 } from "./experiments";
 export type {
   Arm,

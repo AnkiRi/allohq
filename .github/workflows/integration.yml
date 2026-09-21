@@ -1,0 +1,156 @@
+name: Integration
+
+# Integration tests against real Postgres and Redis. Both are disposable
+# service containers created for this job and destroyed with it — no test here
+# may ever be pointed at a production database.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: postgres + redis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        # pgvector, not stock postgres:16. A migration creates the `vector`
+        # extension, and the stock image does not ship it — the first real CI
+        # run failed with `extension "vector" is not available`. Local Postgres
+        # had it installed, which is why a clean-clone rehearsal could not
+        # catch this.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_integration
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_integration"
+      # The runner refuses a URL that does not look disposable: a managed
+      # database host is rejected outright, and the database name must say it
+      # is a test database. This one is a service container created for this
+      # job and destroyed with it.
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_integration"
+      REDIS_URL: "redis://127.0.0.1:6379"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Refuse a non-disposable database
+        # Fails the job before any suite runs if TEST_DATABASE_URL could be
+        # real. `pnpm test:integration` performs the same check; this makes the
+        # guarantee visible as its own step.
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Report migration drift
+        # `migrate diff --from-migrations` applies the migration history to a
+        # shadow database, so it needs a real one and belongs here rather than
+        # in the database-free job.
+        #
+        # Reported, not enforced: main already carries drift this would flag —
+        # one DROP DEFAULT on form_incentive_grants.updatedAt and five index
+        # renames, none of them from a recent change. Turn this into a gate once
+        # that backlog is cleared, or it will be red from its first run and
+        # stop meaning anything.
+        continue-on-error: true
+        run: |
+          pnpm --filter @allohq/database exec prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "postgresql://joon:joon@127.0.0.1:5432/joon_shadow" \
+            --script
+
+  load:
+    name: 100k approval load proof
+    # The load proof seeds 125,000 customers, so it runs on main and on demand
+    # rather than on every pull request.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        # pgvector, not stock postgres:16. A migration creates the `vector`
+        # extension, and the stock image does not ship it — the first real CI
+        # run failed with `extension "vector" is not available`. Local Postgres
+        # had it installed, which is why a clean-clone rehearsal could not
+        # catch this.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_load_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_load_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_load_test"
+      RUN_LOAD_TESTS: "1"
+      # --expose-gc lets the proof settle the heap before measuring retention.
+      NODE_OPTIONS: "--expose-gc"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Approval load proof
+        run: pnpm --filter @allohq/api exec tsx --test ../../packages/campaign-engine/src/audience-run.load.integration.ts

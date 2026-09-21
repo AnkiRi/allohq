@@ -138,3 +138,25 @@ test("every classified schedule maps to a real capability", () => {
     );
   }
 });
+
+test("a legacy journey's unsupported parts are named, not just rejected", () => {
+  // `automations.duplicate` refuses using exactly this list, so the merchant is
+  // told what to remove rather than being stopped with no explanation.
+  const violations = findV1AutomationViolations({
+    nodes: [{ type: "send_email" }, { type: "send_whatsapp" }, { type: "webhook" }],
+    whatsappTemplateIds: ["wa_1"],
+  });
+  assert.ok(violations.includes("WhatsApp templates"));
+  assert.ok(violations.includes("workflow node: send_whatsapp"));
+  assert.ok(violations.includes("workflow node: webhook"));
+  assert.ok(!violations.some((entry) => entry.includes("send_email")));
+});
+
+test("a journey that is already email-only duplicates cleanly", () => {
+  assert.deepEqual(
+    findV1AutomationViolations({
+      nodes: [{ type: "send_email" }, { type: "wait" }, { type: "condition" }],
+    }),
+    [],
+  );
+});

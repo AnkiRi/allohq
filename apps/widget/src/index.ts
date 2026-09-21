@@ -26,6 +26,7 @@ export function init(options: WidgetConfig): void {
       apiUrl,
       storeName: options.storeName,
       storeDomain: options.storeDomain,
+      currency: options.currency,
       debug: options.debug,
       visitorSession,
     });

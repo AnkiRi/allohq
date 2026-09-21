@@ -577,6 +577,7 @@ model Customer {
   customerProductRecommendations CustomerProductRecommendation[]
   proactiveOutreachLogs          ProactiveOutreachLog[]
   audienceEvaluationRows         CampaignAudienceEvaluationRow[]
+  audienceMembers                CampaignAudienceMember[]
   segmentMemberships             CustomerSegmentMember[]
   contactConsents                ContactConsent[]
   measurementAssignments         MeasurementAssignment[]
@@ -587,6 +588,11 @@ model Customer {
   @@unique([storeId, externalId])
   @@index([email])
   @@index([identityId])
+  /// Keyset paging of one store's customers. Without it the scan walks the
+  /// primary key across every store and filters, so the cost grows with the
+  /// whole table rather than the store: measured 1.3 ms/page at 4 stores,
+  /// 5.8 ms at 40, against a flat 0.7 ms with this index.
+  @@index([storeId, id])
   @@map("customers")
 }
 
@@ -1074,6 +1080,7 @@ model Campaign {
   causedRevenueLedgers     CausedRevenueLedger[]
   audienceOverridePolicies CampaignAudienceOverridePolicy[]
   audienceEvaluations      CampaignAudienceEvaluation[]
+  audienceRuns             CampaignAudienceRun[]
 
   @@index([workspaceId])
   @@index([storeId])
@@ -1122,6 +1129,117 @@ model CampaignAudienceEvaluationRow {
   @@index([evaluationId, decision, reasonCode])
   @@index([customerId, createdAt])
   @@map("campaign_audience_evaluation_rows")
+}
+
+/// Durable approval-resolution run. One paged policy evaluation writes a row per
+/// customer into `CampaignAudienceMember`, then Postgres performs the exact
+/// per-stratum control selection over those rows. Nothing audience-sized is
+/// retained in the API process, and the frozen membership is inspectable after
+/// the fact rather than existing only as a transient in-memory structure.
+///
+/// A run is only visible to attribution, causal evidence, delivery and billing
+/// once `status = "complete"`.
+model CampaignAudienceRun {
+  id         String @id @default(cuid())
+  campaignId String
+  storeId    String
+  /// Deterministic per-attempt key. A retried approval of the same campaign
+  /// state reuses the same run instead of creating a second frozen membership.
+  runKey     String
+
+  /// Fixed evaluation instant. Every customer in this run is evaluated against
+  /// this timestamp, so time-based eligibility cannot drift between the
+  /// resolve, assign and finalise phases.
+  asOf           DateTime
+  assignmentSeed String
+  policyVersion  String
+  policy         Json     @default("{}")
+
+  /// resolving | assigning | complete | failed
+  status        String  @default("resolving")
+  failureReason String?
+
+  /// Exactly one worker may advance a run at a time. Without this, a second
+  /// approval arriving mid-resolution deleted the first attempt's rows and
+  /// wrote `failed` onto the run the first was still finishing. The lease is
+  /// held by id, renewed while work continues, and expires so a crashed worker
+  /// cannot strand the run forever.
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  /// Highest customer id already evaluated in this run. A resumed attempt
+  /// continues from here instead of discarding durable work.
+  resumeCursor   String?
+  /// How many times preparation has been started or resumed, for the operator.
+  attempts       Int       @default(0)
+
+  requested      Int  @default(0)
+  candidateCount Int  @default(0)
+  controlCount   Int  @default(0)
+  treatmentCount Int  @default(0)
+  leftAloneCount Int  @default(0)
+  excludedCount  Int  @default(0)
+  /// Exclusion reason counts plus bounded samples. Never a full audience list.
+  diagnostics    Json @default("{}")
+
+  startedAt   DateTime  @default(now())
+  assignedAt  DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  campaign Campaign                 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  members  CampaignAudienceMember[]
+
+  @@unique([campaignId, runKey])
+  @@index([campaignId, status, startedAt])
+  @@index([storeId, startedAt])
+  @@index([status, leaseExpiresAt])
+  @@map("campaign_audience_runs")
+}
+
+/// One durable audience decision per customer per resolution run. This is
+/// intentional product and audit data, not a cache: it is the frozen approved
+/// membership, the merchant-readable review surface, and the table Postgres
+/// ranks to pick the exact control group.
+model CampaignAudienceMember {
+  id         String @id @default(cuid())
+  runId      String
+  customerId String
+
+  /// campaign_candidate | deliberately_left_alone | excluded
+  decision         String
+  reasonCode       String?
+  reasonText       String?
+  evidence         Json      @default("{}")
+  merchantOverride Boolean   @default(false)
+  /// When a deliberately-left-alone decision asks to be revisited. Carried on
+  /// the member row so the decision ledger can be projected from the durable
+  /// membership without the API process re-deriving it.
+  reconsiderAt     DateTime?
+  reconsiderOn     String?
+
+  /// RFM stratum as resolved during the single policy pass.
+  stratum           String
+  /// Stratum actually used for assignment after small strata are pooled.
+  /// Written during the assigning phase, once the census is known.
+  assignmentStratum String?
+  /// Deterministic assignment value in [0, 1) derived from the run seed, the
+  /// assignment stratum and the customer id. Ordering key for control selection.
+  assignmentHash    Float?
+  arm               TreatmentArm?
+
+  createdAt DateTime @default(now())
+
+  run      CampaignAudienceRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  customer Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, customerId])
+  @@index([runId, decision, reasonCode])
+  /// Supports the ROW_NUMBER() OVER (PARTITION BY assignment_stratum
+  /// ORDER BY assignment_hash, customer_id) control selection.
+  @@index([runId, assignmentStratum, assignmentHash, customerId])
+  @@index([runId, arm])
+  @@index([customerId, createdAt])
+  @@map("campaign_audience_members")
 }
 
 /// Compact, campaign-scoped merchant instruction that overrides one current

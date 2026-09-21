@@ -6,6 +6,8 @@ import {
   campaignMeasurementPolicy,
   estimateStratifiedCausedRevenue,
   holdoutRateFor,
+  armForCandidate,
+  assignmentStratumFor,
   normalizeStratum,
   planStratifiedControlQuotas,
   POOLED_SMALL_STRATUM,
@@ -257,4 +259,81 @@ test("streaming selection fails closed on a repeated, reordered or uncounted can
   assert.throws(() => selector.offer("cust-000002", "Champions"), /ascending id order/);
   assert.throws(() => selector.offer("cust-000001", "Champions"), /ascending id order/);
   assert.throws(() => selector.offer("cust-000009", "Unseen"), /was not counted/);
+});
+
+test("threshold-derived arms are identical to the control set and the in-memory function", () => {
+  // The streaming write pass holds one cut line per stratum instead of a control
+  // Set proportional to the audience. That is only sound if the cut line
+  // reproduces the same arms exactly, so this pins all three against each other.
+  const sizes: Array<[string | null, number]> = [
+    ["Champions", 140],
+    ["Loyal", 90],
+    ["At risk", 55],
+    ["Tiny", 3],
+    ["Rare", 7],
+    [null, 25],
+  ];
+  const labels: Array<string | null> = [];
+  for (const [stratum, count] of sizes) for (let i = 0; i < count; i++) labels.push(stratum);
+  let seed = 424242;
+  for (let i = labels.length - 1; i > 0; i--) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const j = seed % (i + 1);
+    [labels[i], labels[j]] = [labels[j]!, labels[i]!];
+  }
+  const customers: StratifiedCustomer[] = labels.map((stratum, index) => ({
+    customerId: `cust-${String(index).padStart(6, "0")}`,
+    stratum,
+  }));
+  const assignmentSeed = "threshold-parity";
+  const rateForStratum = (stratum: string) =>
+    stratum === "Champions" ? 0.3 : stratum === POOLED_SMALL_STRATUM ? 0.25 : 0.15;
+
+  const reference = assignStratifiedCohortArms({ assignmentSeed, customers, rateForStratum });
+
+  const census = new Map<string, number>();
+  for (const customer of customers) {
+    const stratum = normalizeStratum(customer.stratum);
+    census.set(stratum, (census.get(stratum) ?? 0) + 1);
+  }
+  const plan = planStratifiedControlQuotas({ census, rateForStratum });
+  const selector = new StratifiedControlSelector({ assignmentSeed, plan });
+  for (const customer of customers) selector.offer(customer.customerId, customer.stratum);
+  const controls = selector.controlIds();
+  const thresholds = selector.controlThresholds();
+
+  let viaThreshold = 0;
+  for (const customer of customers) {
+    const assignmentStratum = assignmentStratumFor(plan, customer.stratum);
+    const arm = armForCandidate({
+      assignmentSeed,
+      assignmentStratum,
+      customerId: customer.customerId,
+      threshold: thresholds.get(assignmentStratum),
+    });
+    assert.equal(arm, reference.arms.get(customer.customerId), `arm differs for ${customer.customerId}`);
+    assert.equal(arm === "CONTROL", controls.has(customer.customerId));
+    if (arm === "CONTROL") viaThreshold++;
+  }
+  assert.equal(viaThreshold, controls.size);
+  // The cut lines are the entire retained state: one pair per stratum, not a
+  // structure that grows with the audience.
+  assert.ok(thresholds.size <= Object.keys(plan.strata).length);
+});
+
+test("a stratum with no control quota yields no control through the threshold path", () => {
+  const census = new Map([["Solo", 1]]);
+  const plan = planStratifiedControlQuotas({ census, rateForStratum: () => 0.3 });
+  const selector = new StratifiedControlSelector({ assignmentSeed: "solo", plan });
+  selector.offer("only-customer", "Solo");
+  const thresholds = selector.controlThresholds();
+  assert.equal(
+    armForCandidate({
+      assignmentSeed: "solo",
+      assignmentStratum: assignmentStratumFor(plan, "Solo"),
+      customerId: "only-customer",
+      threshold: thresholds.get(assignmentStratumFor(plan, "Solo")),
+    }),
+    "TREATMENT"
+  );
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "./campaign-approval";
+import { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "./approval-claim";
 
 test("dispatch failure stays retryable without clearing approval or assignments", () => {
   const update = campaignDispatchFailureUpdate();

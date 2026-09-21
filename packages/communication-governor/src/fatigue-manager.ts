@@ -11,8 +11,14 @@ export async function checkFatigue(
   storeId: string,
   channel: string,
   config?: Partial<FatigueConfig>,
+  /**
+   * Evaluation instant. Approval freezes one `asOf` for a whole audience, and
+   * every policy window must be measured from it — otherwise a retry or a
+   * resumed run reaches a different verdict than the attempt it continues.
+   * Defaults to now for live delivery-time checks.
+   */
+  now: Date = new Date(),
 ): Promise<GovernorDecision> {
-  const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 

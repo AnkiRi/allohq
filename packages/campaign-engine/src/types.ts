@@ -14,7 +14,13 @@ export interface CampaignOpportunity {
   type: OpportunityType;
   storeId: string;
   segmentName?: string;
+  /**
+   * Present only for opportunities small enough to enumerate. Large audiences
+   * carry `audienceFingerprint` instead, so a scan never holds the list.
+   */
   customerIds?: string[];
+  /** Streamed digest of the audience, byte-identical to hashing the array. */
+  audienceFingerprint?: string;
   customerCount: number;
   productIds?: string[];
   reasoning: string;

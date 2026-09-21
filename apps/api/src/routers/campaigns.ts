@@ -1,13 +1,10 @@
 import { z } from "zod";
-import { createHash } from "node:crypto";
 import { router, workspaceProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
-import { buildHumanDecision } from "../lib/human-decision";
 import {
-  campaignApprovalClaimWhere,
   campaignDispatchFailureUpdate,
-} from "../lib/campaign-approval";
+} from "@allohq/campaign-engine";
 import {
   DEMO_STORE_DOMAIN,
   emailMessagingCostForCurrency,
@@ -17,10 +14,10 @@ import {
 import { selectedEmailProvider, warmupDailyCap } from "@allohq/messaging";
 import {
   AUDIENCE_EXCLUSION_REASONS,
-  campaignApprovalChecksum,
   findBannedTerms,
   resolveCampaignAudience,
-  withCampaignAudienceSnapshot,
+  campaignPreparationProgress,
+  type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
 import {
   normalizeStratum,
@@ -30,13 +27,12 @@ import {
   getOrCreateExperiment,
   holdoutRateFor,
 } from "@allohq/customer-state";
-import { DELIVERY_WINDOWS, getTimingProfiles, loadBrandKit, localHour } from "@allohq/customer-intelligence";
+import { DELIVERY_WINDOWS, getTimingProfiles, localHour } from "@allohq/customer-intelligence";
 import {
   checkQuietHours,
   loadStoreGovernorConfig,
   nextLocalHour,
 } from "@allohq/communication-governor";
-import { ensureEmailVersion } from "../lib/email-versions";
 import { preflightEmailDocument, type EmailBlock } from "@allohq/email-builder";
 import { persistCampaignAudienceEvaluation } from "../lib/campaign-audience-evaluation";
 
@@ -46,43 +42,7 @@ const redisConnection = {
   password: process.env["REDIS_PASSWORD"],
 };
 
-type EmailAssetReceipt = {
-  blockId: string;
-  blockType: string;
-  field: string;
-  url: string;
-};
 
-function collectEmailAssetManifest(blocks: unknown): EmailAssetReceipt[] {
-  const receipts = new Map<string, EmailAssetReceipt>();
-  const visit = (value: unknown) => {
-    if (!value || typeof value !== "object") return;
-    const block = value as {
-      id?: unknown;
-      type?: unknown;
-      props?: Record<string, unknown>;
-    };
-    const blockId = typeof block.id === "string" ? block.id : "unknown";
-    const blockType = typeof block.type === "string" ? block.type : "unknown";
-    const props = block.props;
-    if (props && typeof props === "object") {
-      for (const field of ["src", "bgImageSrc", "logoSrc", "imageUrl", "avatarUrl"] as const) {
-        const url = props[field];
-        if (typeof url !== "string" || !url.trim()) continue;
-        const key = `${blockId}:${field}:${url}`;
-        receipts.set(key, { blockId, blockType, field, url });
-      }
-      const columns = props["columns"];
-      if (Array.isArray(columns)) {
-        for (const column of columns) {
-          if (Array.isArray(column)) column.forEach(visit);
-        }
-      }
-    }
-  };
-  if (Array.isArray(blocks)) blocks.forEach(visit);
-  return [...receipts.values()];
-}
 
 const emailSendQueue = new Queue("email-send", { connection: redisConnection });
 
@@ -126,14 +86,6 @@ function replaceDiscountPercent(value: unknown, fromPercent: number, toPercent: 
   }
   return value;
 }
-
-/**
- * Rows per statement when approval writes its per-customer tables. A 100k
- * campaign wrote roughly 200,000 rows in two unchunked statements inside one
- * Serializable transaction, which Prisma's default five-second limit cancelled
- * long before it finished.
- */
-const APPROVAL_WRITE_CHUNK = 2_000;
 
 function planCampaignHoldout(
   storeId: string,
@@ -1708,15 +1660,12 @@ export const campaignsRouter = router({
           message: `Email preflight failed: ${emailPreflight.blockingFailures.map((check) => check.detail).join(" ")}`,
         });
       }
-      const emailAssetManifest = collectEmailAssetManifest(campaign.template.blocks);
-      const approvedBrandKit = await loadBrandKit(campaign.storeId);
       const emailPreflightReceipt = {
         ...emailPreflight,
         blockCount: Array.isArray(campaign.template.blocks) ? campaign.template.blocks.length : 0,
         validatedAt: new Date().toISOString(),
       };
 
-      const audience = await resolveCampaignAudience(campaign.id);
       const family = campaignFamily(campaign.agentProposal);
       const evidence = await campaignEvidence(ctx.prisma, campaign.storeId, family);
       const policy = holdoutRateFor(campaign.storeId, family, "all", evidence);
@@ -1732,281 +1681,52 @@ export const campaignsRouter = router({
         },
         policy.rate
       );
-      const holdout = planCampaignHoldout(
-        campaign.storeId,
-        experiment.assignmentSeed,
-        campaign.agentProposal,
-        audience.eligible,
-        evidence
-      );
-      const approvedProposal = withCampaignAudienceSnapshot(
-        campaign.agentProposal,
-        audience,
-        new Date(),
-        {
-          experimentId: experiment.id,
-          splitRatio: policy.rate,
-          policyReason: policy.reason,
-          strata: holdout.strata,
-          // No per-customer data is written into this JSON column any more.
-          // customerIds, assignments and assignmentDetails together measured
-          // 17.97 MB at 100k, inside a column every reader of agentProposal
-          // parses and the approval checksum hashes whole. All three live on
-          // MeasurementAssignment, which is indexed and paged. The counts and
-          // strata that remain are O(1). Campaigns approved before this keep
-          // their maps and still validate.
-        },
-        selectedEmailProvider()
-      );
-      const approvalChecksum = campaignApprovalChecksum({
+      // Preparation is a durable background job, not part of this request.
+      // Resolving a 100k audience measured 34.6 s; holding an API request open
+      // for that has no headroom, and a process restart mid-request used to
+      // strand the run until the merchant clicked approve again.
+      //
+      // This creates or joins one durable run and returns. The worker prepares
+      // it, finalises the approval, and dispatches the send — no second click.
+      const runKey = `approval:${campaign.updatedAt.toISOString()}:${experiment.id}`;
+      const request: CampaignPreparationRequest = {
+        prepareAudience: true,
         campaignId: campaign.id,
         storeId: campaign.storeId,
-        name: campaign.name,
-        scheduledAt: campaign.scheduledAt,
-        template: {
-          id: campaign.template.id,
-          subject: campaign.template.subject,
-          previewText: campaign.template.previewText,
-          blocks: campaign.template.blocks,
-          // Blocks are the canonical artifact. Cached HTML is deliberately not
-          // part of new approvals because preview and delivery share one renderer.
-          html: null,
-        },
-        segment: campaign.segment
-          ? {
-              id: campaign.segment.id,
-              kind: campaign.segment.kind,
-              customerIds: campaign.segment.customerIds,
-              conditions: campaign.segment.conditions,
-              name: campaign.segment.name,
-            }
-          : null,
-        agentProposal: approvedProposal,
-      });
+        runKey,
+        experimentId: experiment.id,
+        assignmentSeed: experiment.assignmentSeed,
+        family,
+        policyRate: policy.rate,
+        policyReason: policy.reason,
+        evidence,
+        deliveryProvider: selectedEmailProvider(),
+        emailPreflightReceipt,
+        forceImmediate: input.timing === "now",
+        approvedBy: (ctx as any).userId ?? null,
+      };
 
-      const existingAssignment = await ctx.prisma.measurementAssignment.findFirst({
-        where: { unitType: "campaign", unitId: campaign.id },
-        orderBy: { assignedAt: "asc" },
+      // An approval already finished for this exact campaign state is a no-op,
+      // so a merchant re-clicking or reloading cannot draw a second cohort.
+      const alreadyComplete = await ctx.prisma.campaignAudienceRun.findUnique({
+        where: { campaignId_runKey: { campaignId: campaign.id, runKey } },
+        select: { status: true },
       });
-      const approvedAt = existingAssignment?.assignedAt ?? new Date();
-      const windowStartsAt =
-        existingAssignment?.windowStartsAt ??
-        (campaign.scheduledAt && campaign.scheduledAt > approvedAt
-          ? campaign.scheduledAt
-          : approvedAt);
-      const windowEndsAt =
-        existingAssignment?.windowEndsAt ?? new Date(windowStartsAt.getTime() + 7 * 86_400_000);
-      const controlCount = Object.values(holdout.strata).reduce(
-        (sum, stratum) => sum + stratum.controlCount,
-        0
-      );
-      const effectiveRate = audience.eligible.length
-        ? controlCount / audience.eligible.length
-        : policy.rate;
-      const measurement = campaignMeasurementPolicy(audience.eligible.length, effectiveRate);
-      // Persist the exact approval-time decision tree before freezing delivery.
-      // The immutable measurement assignments remain the delivery authority;
-      // this indexed snapshot is the merchant-readable review/audit surface.
-      await persistCampaignAudienceEvaluation(ctx.prisma, {
-        campaignId: campaign.id,
-        storeId: campaign.storeId,
-        campaignUpdatedAt: campaign.updatedAt,
-        audience,
-        assignmentFor: holdout.assignmentFor,
-      });
-      // Frozen measurement rows are written before the approval claim, in
-      // bounded chunks. They are idempotent through the
-      // (unitType, unitId, customerId) unique key, and both attribution and the
-      // causal ledger ignore assignments whose campaign has no approvedAt, so a
-      // claim that fails leaves inert rows rather than phantom arms. The
-      // campaign stays in draft in that case, so the merchant's next approval
-      // rewrites them identically and completes.
-      const assignmentRows = audience.eligible.map((customer) => {
-        const customerId = customer.id;
-        const detail = holdout.assignmentFor(customerId, customer.rfmStratum);
-        return ({
-          storeId: campaign.storeId,
-          experimentId: experiment.id,
-          campaignId: campaign.id,
-          unitType: "campaign",
-          unitId: campaign.id,
-          customerId,
-          arm: detail.arm,
-          stratum: detail.assignmentStratum,
-          holdoutRate: detail.holdoutRate,
-          assignedAt: approvedAt,
-          windowStartsAt,
-          windowEndsAt,
-          assignmentData: {
-            tier: measurement.tier,
-            family,
-            policyReason: policy.reason,
-            originalStratum: detail.stratum,
-          },
-        });
-      });
-      for (let offset = 0; offset < assignmentRows.length; offset += APPROVAL_WRITE_CHUNK) {
-        await ctx.prisma.measurementAssignment.createMany({
-          data: assignmentRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
-          skipDuplicates: true,
-        });
-      }
-
-      await ctx.prisma.$transaction(
-        async (tx) => {
-          const approvedEmailVersion = await ensureEmailVersion(tx, {
-            workspaceId: campaign.workspaceId,
-            templateId: campaign.template!.id,
-            storeId: campaign.storeId,
-            template: campaign.template!,
-            source: "approval",
-            note: `Frozen for campaign approval · ${campaign.name}`,
-            createdBy: (ctx as any).userId,
-          });
-          const releaseRenderHash = createHash("sha256")
-            .update(JSON.stringify({
-              documentHash: approvedEmailVersion.contentHash,
-              brandKit: approvedBrandKit,
-            }))
-            .digest("hex");
-          const claimed = await tx.campaign.updateMany({
-            where: campaignApprovalClaimWhere(input.id),
-            // Capture agent_proposed → human_final at approval (can't-backfill CAM signal).
-            data: {
-              status: "sending",
-              humanDecision: buildHumanDecision(campaign) as object,
-              agentProposal: approvedProposal as object,
-              approvalChecksum,
-              approvedAt,
-              approvedEmailVersionId: approvedEmailVersion.id,
-            },
-          });
-          if (claimed.count !== 1) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Campaign was approved concurrently; retry to dispatch its frozen cohort",
-            });
-          }
-          await tx.emailApproval.upsert({
-            where: { campaignId: campaign.id },
-            create: {
-              campaignId: campaign.id,
-              emailVersionId: approvedEmailVersion.id,
-              renderHash: releaseRenderHash,
-              assetManifest: emailAssetManifest as any,
-              renderContext: { brandKit: approvedBrandKit } as any,
-              preflight: emailPreflightReceipt as any,
-              approvedBy: (ctx as any).userId,
-              approvedAt,
-            },
-            update: {
-              emailVersionId: approvedEmailVersion.id,
-              renderHash: releaseRenderHash,
-              assetManifest: emailAssetManifest as any,
-              renderContext: { brandKit: approvedBrandKit } as any,
-              preflight: emailPreflightReceipt as any,
-              approvedBy: (ctx as any).userId,
-              approvedAt,
-            },
-          });
-        },
-        // The claim now performs only constant work. Keeping it small is what
-        // lets a large campaign approve at all; the explicit timeout replaces
-        // reliance on Prisma's five-second default.
-        { isolationLevel: "Serializable", timeout: 15_000 }
-      );
-
-      // The audience-decision ledger follows the claim, in bounded chunks. It is
-      // read by the merchant's decision history, never by delivery or
-      // measurement, so an interruption here costs audit detail rather than
-      // corrupting a number.
-      // Deterministic per approval attempt. A retry of the same approval writes
-      // the same keys and is skipped; a genuine re-approval that changes a
-      // customer's decision produces a different key and is recorded. Merchant
-      // overrides leave writeKey null so none of their audit rows collapse.
-      const decisionWriteKey = (customerId: string, decision: string) =>
-        `approval:${campaign.id}:${approvedAt.toISOString()}:${customerId}:${decision}`;
-      const decisionRows = [
-        ...audience.deliberatelyLeftAlone.map((customer) => ({
-          storeId: campaign.storeId,
-          customerId: customer.id,
-          campaignId: campaign.id,
-          contextKey: family,
-          decision: "deliberately_left_alone",
-          writeKey: decisionWriteKey(customer.id, "deliberately_left_alone"),
-          reasonCode: customer.decision.reasonCode ?? null,
-          reasonText: customer.decision.reasonText ?? null,
-          evidence: customer.decision.evidence as any,
-          reconsiderAt: customer.decision.reconsiderAt ?? null,
-          reconsiderOn: customer.decision.reconsiderOn ?? null,
-        })),
-        ...audience.eligible.map((customer) => {
-        const customerId = customer.id;
-        const detail = holdout.assignmentFor(customerId, customer.rfmStratum);
-        return ({
-          storeId: campaign.storeId,
-          customerId,
-          campaignId: campaign.id,
-          contextKey: family,
-          decision: detail.arm === "CONTROL" ? "control" : "treatment",
-          writeKey: decisionWriteKey(customerId, detail.arm === "CONTROL" ? "control" : "treatment"),
-          reasonCode: "experiment_assignment",
-          reasonText:
-            detail.arm === "CONTROL"
-              ? "Randomly placed in this campaign's control group."
-              : "Assigned to receive this campaign.",
-          evidence: {
-            stratum: detail.stratum,
-            assignmentStratum: detail.assignmentStratum,
-            controlRate: detail.holdoutRate,
-          },
-        });
-        }),
-      ];
-      for (let offset = 0; offset < decisionRows.length; offset += APPROVAL_WRITE_CHUNK) {
-        await ctx.prisma.customerAudienceDecision.createMany({
-          data: decisionRows.slice(offset, offset + APPROVAL_WRITE_CHUNK),
-          skipDuplicates: true,
-        });
-      }
-      if (audience.deliberatelyLeftAlone.length > 0) {
-        const reasonCounts = audience.deliberatelyLeftAlone.reduce<Record<string, number>>(
-          (counts, customer) => {
-            const reason = customer.decision.reasonCode ?? "state_policy";
-            counts[reason] = (counts[reason] ?? 0) + 1;
-            return counts;
-          },
-          {}
-        );
-        await ctx.prisma.agentActivityLog.create({
-          data: {
-            storeId: campaign.storeId,
-            activityType: "customers_left_alone",
-            summary: `Joon left ${audience.deliberatelyLeftAlone.length.toLocaleString("en-IN")} customers out of ${campaign.name} because their current state suggested a different action.`,
-            category: "campaign",
-            actionTaken: "deliberately_left_alone",
-            entityId: campaign.id,
-            entityType: "campaign",
-            metadata: {
-              reasonCounts,
-              customerIds: audience.deliberatelyLeftAlone
-                .map((customer) => customer.id)
-                .slice(0, 100),
-            },
-          },
-        });
+      if (alreadyComplete?.status === "complete" && campaign.approvedAt) {
+        return { status: "sending" as const, preparation: null };
       }
 
       try {
-        await emailSendQueue.add(
-          "campaign-send",
-          { campaignId: input.id, forceImmediate: input.timing === "now" },
-          { jobId: `campaign-send-${input.id}` }
-        );
+        await emailSendQueue.add("prepare-audience", request, {
+          // Deterministic per campaign state: a second click joins the job
+          // already running rather than starting a competing one.
+          jobId: `prepare-audience-${campaign.id}-${experiment.id}`,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 5_000 },
+          removeOnComplete: { age: 24 * 60 * 60, count: 1_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 1_000 },
+        });
       } catch (error) {
-        // Approval truth and frozen assignments are immutable. A queue outage
-        // moves the campaign to scheduled so the same approved snapshot can be
-        // retried without allowing edits or drawing a new control.
         await ctx.prisma.campaign.update({
           where: { id: input.id },
           data: campaignDispatchFailureUpdate(),
@@ -2014,7 +1734,10 @@ export const campaignsRouter = router({
         throw error;
       }
 
-      return { status: "sending" as const };
+      return {
+        status: "preparing" as const,
+        preparation: await campaignPreparationProgress(campaign.id),
+      };
     }),
 
   /** Merchant timing override: preserve the frozen audience/content and promote

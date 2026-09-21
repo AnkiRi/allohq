@@ -23,6 +23,11 @@ export async function checkAllRules(
   params: GovernorCheckParams,
 ): Promise<GovernorDecision> {
   const { customerId, storeId, channel, messageType } = params;
+  // One evaluation instant for every rule below. Approval freezes an `asOf`
+  // for the whole audience; a rule that reads the wall clock instead would let
+  // a retry or a resumed run reach a different verdict than the attempt it
+  // continues. Live delivery-time checks simply pass the current time.
+  const now = params.now ?? new Date();
 
   // Merchant overrides → the leaf checks (Phase 5). A per-week cap maps to the
   // channel being checked (keeps default monthly); quiet window + timezone pass
@@ -40,7 +45,7 @@ export async function checkAllRules(
 
   // Transactional messages only check quiet hours
   if (messageType === "transactional") {
-    return checkQuietHours(params.timezone, quietCfg, params.now);
+    return checkQuietHours(params.timezone, quietCfg, now);
   }
 
   // 1. Support suppression
@@ -48,25 +53,25 @@ export async function checkAllRules(
   if (!supportCheck.allowed) return supportCheck;
 
   // 2. Fatigue limits
-  const fatigueCheck = await checkFatigue(customerId, storeId, channel, fatigueOverride);
+  const fatigueCheck = await checkFatigue(customerId, storeId, channel, fatigueOverride, now);
   if (!fatigueCheck.allowed) return fatigueCheck;
 
   // 3. Collision detection (campaigns only)
   if (params.campaignId) {
-    const collisionCheck = await checkCollision(customerId, storeId);
+    const collisionCheck = await checkCollision(customerId, storeId, undefined, now);
     if (!collisionCheck.allowed) return collisionCheck;
   }
 
   // 4. Channel arbitration
-  const channelCheck = await checkChannelCollision(customerId, storeId, channel);
+  const channelCheck = await checkChannelCollision(customerId, storeId, channel, undefined, now);
   if (!channelCheck.allowed) return channelCheck;
 
   // 5. Cooldown periods
-  const cooldownCheck = await checkCooldown(customerId, storeId, messageType);
+  const cooldownCheck = await checkCooldown(customerId, storeId, messageType, now);
   if (!cooldownCheck.allowed) return cooldownCheck;
 
   // 6. Quiet hours
-  const quietCheck = checkQuietHours(params.timezone, quietCfg, params.now);
+  const quietCheck = checkQuietHours(params.timezone, quietCfg, now);
   if (!quietCheck.allowed) return quietCheck;
 
   return { allowed: true };

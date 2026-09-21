@@ -16,7 +16,7 @@ import {
   type DeliveryWindow,
 } from "@allohq/customer-intelligence";
 import { emailDocumentSchema, type EmailBlock, type ProductData } from "@allohq/email-builder";
-import { sendEmail, selectedEmailProvider, sesSafeTag, engagementRank } from "@allohq/messaging";
+import { sendEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
 import { DEMO_STORE_DOMAIN } from "@allohq/database";
@@ -31,10 +31,19 @@ import {
   recordConversion,
   getActiveTestForStore,
   campaignApprovalChecksum,
-  resolveCampaignAudience,
+  streamCampaignAudience,
   campaignAudienceSnapshot,
+  type AudienceStreamDecision,
+  type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
+import { prepareCampaignAudience, recoverStalePreparationRuns } from "./prepare-audience";
+import {
+  frozenCohortSize,
+  pageCohortByEngagement,
+  pageFrozenCohort,
+  type FrozenArm,
+} from "./send-cohort";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
 import { acquireEmailCapacity } from "../utils/email-capacity";
@@ -50,12 +59,6 @@ const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: r
 const emailSendQueue = new Queue(QUEUE_NAMES.EMAIL_SEND, { connection: redisConnection });
 
 const DEMO_MAX_DELAY_MS = 8_000; // demo store: keep it walkable/testable (seconds, not hours)
-/**
- * Ids per query when the planner reads an approved cohort back out of Postgres.
- * A 100k campaign previously passed every id in one `IN (...)`. Mirrors the
- * bound `getTimingProfiles` already applies.
- */
-const RECIPIENT_QUERY_CHUNK = 5_000;
 /** Rows per statement when the planner records control and skipped recipients. */
 const RECIPIENT_WRITE_CHUNK = 2_000;
 
@@ -70,32 +73,6 @@ const RECIPIENT_WRITE_CHUNK = 2_000;
  * instead. Campaigns approved before that change carry the old map and fall
  * back to it, so work already in flight keeps sending.
  */
-async function loadFrozenCohort(
-  campaignId: string,
-  legacyAssignments?: Record<string, "CONTROL" | "TREATMENT">
-): Promise<Map<string, "CONTROL" | "TREATMENT">> {
-  const arms = new Map<string, "CONTROL" | "TREATMENT">();
-  let cursor: string | undefined;
-  for (;;) {
-    const page = await prisma.measurementAssignment.findMany({
-      where: {
-        unitType: "campaign",
-        unitId: campaignId,
-        ...(cursor ? { customerId: { gt: cursor } } : {}),
-      },
-      select: { customerId: true, arm: true },
-      orderBy: { customerId: "asc" },
-      take: RECIPIENT_QUERY_CHUNK,
-    });
-    if (page.length === 0) break;
-    for (const row of page) arms.set(row.customerId, row.arm as "CONTROL" | "TREATMENT");
-    cursor = page[page.length - 1]!.customerId;
-    if (page.length < RECIPIENT_QUERY_CHUNK) break;
-  }
-  if (arms.size > 0) return arms;
-  if (legacyAssignments) return new Map(Object.entries(legacyAssignments));
-  return arms;
-}
 type BrandKit = Awaited<ReturnType<typeof loadBrandKit>>;
 
 function frozenEmailDocument(campaign: {
@@ -188,11 +165,42 @@ async function deliverChunk(data: DeliverChunkData) {
 }
 
 export const sendWorker = new Worker<
-  SendJobData | DeliverOneData | DeliverChunkData | FinalizeData
+  | SendJobData
+  | DeliverOneData
+  | DeliverChunkData
+  | FinalizeData
+  | CampaignPreparationRequest
+  | { recoverPreparation: true }
 >(
   QUEUE_NAMES.EMAIL_SEND,
   async (job) => {
-    const data = job.data as SendJobData | DeliverOneData | DeliverChunkData | FinalizeData;
+    const data = job.data as
+      | SendJobData
+      | DeliverOneData
+      | DeliverChunkData
+      | FinalizeData
+      | CampaignPreparationRequest
+      | { recoverPreparation: true };
+    if ((data as { recoverPreparation?: boolean }).recoverPreparation) {
+      return recoverStalePreparationRuns(async (request) => {
+        await emailSendQueue.add("prepare-audience", request, {
+          jobId: `prepare-audience-${request.campaignId}-${request.experimentId}`,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 5_000 },
+          removeOnComplete: { age: 24 * 60 * 60, count: 1_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 1_000 },
+        });
+      });
+    }
+    if ((data as CampaignPreparationRequest).prepareAudience) {
+      return prepareCampaignAudience(data as CampaignPreparationRequest, async (campaignId, forceImmediate) => {
+        await emailSendQueue.add(
+          "campaign-send",
+          { campaignId, forceImmediate },
+          { jobId: `campaign-send-${campaignId}` }
+        );
+      });
+    }
     if ((data as DeliverOneData).deliverOne) return deliverOne(data as DeliverOneData);
     if ((data as DeliverChunkData).deliverChunk) return deliverChunk(data as DeliverChunkData);
     if ((data as FinalizeData).finalize)
@@ -272,10 +280,6 @@ export async function planCampaignSend(
 
   const isDemo = campaign.store?.shopDomain === DEMO_STORE_DOMAIN;
 
-  // Resolve the same eligibility contract shown in the merchant dry run.
-  // Permission/governor checks still run again immediately before delivery,
-  // because delayed jobs can outlive an unsubscribe or complaint.
-  const currentAudience = await resolveCampaignAudience(campaignId);
   const proposal = (campaign.agentProposal ?? {}) as Record<string, any>;
   const approvedAudience = campaignAudienceSnapshot(proposal);
   if (!approvedAudience) {
@@ -292,23 +296,21 @@ export async function planCampaignSend(
   if ((approvedAudience.deliveryProvider ?? "resend") !== selectedEmailProvider()) {
     throw new Error(`Campaign ${campaignId} is pinned to ${approvedAudience.deliveryProvider ?? "resend"}; current worker uses ${selectedEmailProvider()}`);
   }
-  // Frozen membership and arms, read once and used for both the audience filter
-  // and the per-recipient arm lookup further down.
-  const frozenArms = await loadFrozenCohort(campaignId, approvedAudience.holdout?.assignments);
-  if (frozenArms.size === 0 || frozenArms.size < approvedAudience.eligible) {
+  // Completeness is a count, not a cohort. The frozen rows are read one page at
+  // a time inside the planning loop below.
+  const frozenCohortCount = await frozenCohortSize(
+    campaignId,
+    approvedAudience.holdout?.assignments
+  );
+  if (frozenCohortCount === 0 || frozenCohortCount < approvedAudience.eligible) {
     await prisma.campaign.update({
       where: { id: campaignId },
       data: { status: "draft", approvalChecksum: null, approvedAt: null },
     });
     throw new Error(
-      `Campaign cohort is incomplete: ${frozenArms.size} frozen assignments for ${approvedAudience.eligible} approved recipients; merchant re-approval is required`
+      `Campaign cohort is incomplete: ${frozenCohortCount} frozen assignments for ${approvedAudience.eligible} approved recipients; merchant re-approval is required`
     );
   }
-  const approvedIds = new Set(frozenArms.keys());
-  const audience = {
-    ...currentAudience,
-    eligible: currentAudience.eligible.filter((customer) => approvedIds.has(customer.id)),
-  };
   const loadRecipientChunk = (ids: string[]) =>
     prisma.customer.findMany({
       where: { id: { in: ids } },
@@ -335,49 +337,28 @@ export async function planCampaignSend(
         },
       },
     });
-  // Read the approved cohort back in bounded pages. The whole audience used to
-  // arrive as one `IN (...)` of every approved id.
-  const eligibleIds = audience.eligible.map((customer) => customer.id);
-  const customers: Awaited<ReturnType<typeof loadRecipientChunk>> = [];
-  for (let index = 0; index < eligibleIds.length; index += RECIPIENT_QUERY_CHUNK) {
-    customers.push(
-      ...(await loadRecipientChunk(eligibleIds.slice(index, index + RECIPIENT_QUERY_CHUNK)))
+  /**
+   * Re-run the approval-time eligibility rules over one bounded page of the
+   * frozen cohort. This is `streamCampaignAudience` itself, scoped to the
+   * page's ids, so the delivery-time check cannot drift from the approval-time
+   * one: consent, suppression, complaint, fatigue, collision, cooldown,
+   * recent purchase and already-processed are all re-evaluated here, because a
+   * delayed job can outlive any of them.
+   */
+  const recheckPage = async (ids: string[]) => {
+    const eligible = new Set<string>();
+    const summary = await streamCampaignAudience(
+      campaignId,
+      (decision: AudienceStreamDecision) => {
+        if (decision.kind === "eligible") eligible.add(decision.customer.id);
+      },
+      new Date(),
+      { customerIds: ids }
     );
-  }
-  if (selectedEmailProvider() === "ses") {
-    const rankedAt = new Date();
-    const recipientIds = customers.map((customer) => customer.id);
-    const clicks: Array<{ customerId: string | null; _max: { clickedAt: Date | null } }> = [];
-    for (let index = 0; index < recipientIds.length; index += RECIPIENT_QUERY_CHUNK) {
-      clicks.push(
-        ...(await prisma.messageLog.groupBy({
-          by: ["customerId"],
-          where: {
-            customerId: { in: recipientIds.slice(index, index + RECIPIENT_QUERY_CHUNK) },
-            clickedAt: { not: null },
-          },
-          _max: { clickedAt: true },
-        }))
-      );
-    }
-    const latestClick = new Map(clicks.map((row) => [row.customerId, row._max.clickedAt]));
-    const signal = (customer: (typeof customers)[number]) => {
-      const click = latestClick.get(customer.id);
-      const purchase = customer.rfmScore?.lastOrderAt;
-      return click && (!purchase || click > purchase) ? click : purchase;
-    };
-    customers.sort(
-      (a, b) =>
-        engagementRank({ clickedOrBoughtAt: signal(a) }, rankedAt) -
-        engagementRank({ clickedOrBoughtAt: signal(b) }, rankedAt)
-    );
-  }
+    return { eligible, exclusions: summary.exclusions };
+  };
 
   const activeSubjectTest = await getActiveTestForStore(campaign.storeId, "subject_line");
-  console.log(
-    `Audience resolved for ${campaign.name}: ${audience.requested} requested, ${customers.length} eligible`,
-    audience.exclusions
-  );
 
   // Causal-data moat: get (or create) the holdout experiment for this cohort.
   // Every campaign is a fresh randomized trial. Reusing a segment-level seed
@@ -463,12 +444,9 @@ export async function planCampaignSend(
   }
   const hasDiscount = !!discountCode;
 
-  // Idempotency: never re-process anyone who already has a MessageLog for this campaign.
-  const processedCustomerIds = new Set(
-    (await prisma.messageLog.findMany({ where: { campaignId }, select: { customerId: true } }))
-      .map((m) => m.customerId)
-      .filter((id): id is string => !!id)
-  );
+  // Idempotency is part of the per-page recheck: `streamCampaignAudience`
+  // excludes anyone who already has a MessageLog for this campaign as
+  // `already_processed`, over the page's ids rather than the whole campaign.
 
   let scheduledCount = 0;
   let controlCount = 0;
@@ -481,13 +459,7 @@ export async function planCampaignSend(
     store: 0,
     default: 0,
   };
-  const campaignArms = frozenArms;
   const planningGovernorConfig = await loadStoreGovernorConfig(campaign.storeId);
-  const timingProfiles = await getTimingProfiles(
-    campaign.storeId,
-    customers.map((customer) => customer.id)
-  );
-  const plannedDeliveries = new Map<number, DeliverOneData[]>();
   // Control and skipped recipients used to cost one round trip each, so a 100k
   // campaign performed roughly fifteen thousand sequential inserts before the
   // first email was enqueued. They are buffered and written in batches instead.
@@ -504,236 +476,271 @@ export async function planCampaignSend(
     }
   };
 
-  for (const customer of customers) {
-    if (processedCustomerIds.has(customer.id)) continue;
-
-    // Feature SNAPSHOT at DECISION time — frozen here and carried to the delayed
-    // delivery so decision_records reflects the state the decision was made against.
-    const rfm = customer.rfmScore;
-    const ltv = customer.lifetimeValue;
-    const stateSnap = {
-      capturedAt: new Date().toISOString(),
-      segment: rfm?.segment ?? null,
-      rfm: rfm
-        ? {
-            recency: rfm.recency,
-            frequency: rfm.frequency,
-            monetary: rfm.monetary,
-            totalScore: rfm.totalScore,
+  let chunkIndex = 0;
+  let recipientCount = 0;
+  const recheckExclusions: Record<string, number> = {};
+  /**
+   * Enqueue one page's planned deliveries, grouped into the 15-minute buckets
+   * the queue schedules on, then drop them. The planner never holds more than
+   * one page of delivery payloads. A bucket that spans pages simply produces
+   * more than one chunk, which the queue treats identically.
+   */
+  const enqueuePlannedDeliveries = async (planned: Map<number, DeliverOneData[]>) => {
+    for (const [deliveryTimestamp, deliveries] of planned) {
+      for (let index = 0; index < deliveries.length; index += 100) {
+        await emailSendQueue.add(
+          "deliver-chunk",
+          {
+            deliverChunk: true,
+            campaignId,
+            deliveries: deliveries.slice(index, index + 100),
+          } as DeliverChunkData,
+          {
+            delay: Math.max(0, deliveryTimestamp - Date.now()),
+            jobId: `deliver-chunk-${campaignId}-${chunkIndex++}`,
+            attempts: 5,
+            backoff: { type: "exponential", delay: 2_000 },
+            removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+            removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
           }
-        : null,
-      totalSpent: rfm?.totalSpent ?? null,
-      orderCount: rfm?.orderCount ?? null,
-      avgOrderValue: rfm?.avgOrderValue ?? null,
-      lastOrderAt: rfm?.lastOrderAt ? rfm.lastOrderAt.toISOString() : null,
-      historicalLtv: ltv?.historicalLtv ?? null,
-      predictedLtv: ltv?.predictedLtv ?? null,
-      churnProbability: ltv?.churnProbability ?? null,
-    };
-
-    // Read the frozen arm now, but apply it only after the pre-treatment policy
-    // eligibility decision below. CONTROL and TREATMENT must pass the same rule.
-    const arm = campaignArms.get(customer.id) ?? "TREATMENT";
-
-    // --- Per-customer plan (North Star #1) ---
-    const recencyDays = rfm?.lastOrderAt
-      ? Math.floor((Date.now() - rfm.lastOrderAt.getTime()) / 86400000)
-      : null;
-    const decision = planCustomerDelivery({
-      segment: rfm?.segment ?? null,
-      totalSpent: rfm?.totalSpent ?? null,
-      orderCount: rfm?.orderCount ?? null,
-      recencyDays,
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      hasDiscount,
-    });
-    const selectedChannel = "email" as const;
-    const timing = timingProfiles.get(customer.id);
-    const deliveryWindow = timing?.window ?? "morning";
-    let bestHour = DELIVERY_WINDOWS[deliveryWindow].startHour;
-    let timingSource: DeliveryPlan["timingSource"] = "default";
-    let timingConfidence = 0;
-    let deliveryTimezone = campaign.store.timezone ?? "UTC";
-    if (timing) {
-      timingSource = timing.source;
-      timingConfidence = timing.confidence;
-      deliveryTimezone = timing.timezone;
+        );
+      }
     }
+    planned.clear();
+  };
 
-    // SKIP (send-less): record the decision as a "skipped" row with treatmentArm
-    // NULL so it is excluded from EVERY lift reader (they all filter treatmentArm
-    // IS NOT NULL) — zero change to the causal math — while still capturing the
-    // held-back decision for the result page + decision-trace.
-    if (decision.skip) {
-      skippedCount++;
-      plannedLogs.push({
-        workspaceId: campaign.store.workspaceId,
-        storeId: campaign.storeId,
+  // SES warm-up reaches the most recently engaged recipients first, which
+  // Postgres orders; every other provider takes the cohort in customer-id order
+  // straight from the durable assignments.
+  const cohortPages = (): AsyncGenerator<FrozenArm[]> =>
+    selectedEmailProvider() === "ses"
+      ? pageCohortByEngagement(campaignId)
+      : pageFrozenCohort(campaignId, approvedAudience.holdout?.assignments);
+
+  for await (const cohortPage of cohortPages()) {
+    const pageIds = cohortPage.map((row) => row.customerId);
+    const campaignArms = new Map(cohortPage.map((row) => [row.customerId, row.arm]));
+    const { eligible: stillEligible, exclusions: pageExclusions } = await recheckPage(pageIds);
+    for (const [reason, count] of Object.entries(pageExclusions) as Array<[string, number]>) {
+      if (count > 0) recheckExclusions[reason] = (recheckExclusions[reason] ?? 0) + count;
+    }
+    const customers = await loadRecipientChunk(pageIds.filter((id) => stillEligible.has(id)));
+    recipientCount += customers.length;
+    const timingProfiles = await getTimingProfiles(
+      campaign.storeId,
+      customers.map((customer) => customer.id)
+    );
+    const plannedDeliveries = new Map<number, DeliverOneData[]>();
+
+    for (const customer of customers) {
+
+      // Feature SNAPSHOT at DECISION time — frozen here and carried to the delayed
+      // delivery so decision_records reflects the state the decision was made against.
+      const rfm = customer.rfmScore;
+      const ltv = customer.lifetimeValue;
+      const stateSnap = {
+        capturedAt: new Date().toISOString(),
+        segment: rfm?.segment ?? null,
+        rfm: rfm
+          ? {
+              recency: rfm.recency,
+              frequency: rfm.frequency,
+              monetary: rfm.monetary,
+              totalScore: rfm.totalScore,
+            }
+          : null,
+        totalSpent: rfm?.totalSpent ?? null,
+        orderCount: rfm?.orderCount ?? null,
+        avgOrderValue: rfm?.avgOrderValue ?? null,
+        lastOrderAt: rfm?.lastOrderAt ? rfm.lastOrderAt.toISOString() : null,
+        historicalLtv: ltv?.historicalLtv ?? null,
+        predictedLtv: ltv?.predictedLtv ?? null,
+        churnProbability: ltv?.churnProbability ?? null,
+      };
+
+      // Read the frozen arm now, but apply it only after the pre-treatment policy
+      // eligibility decision below. CONTROL and TREATMENT must pass the same rule.
+      const arm = campaignArms.get(customer.id) ?? "TREATMENT";
+
+      // --- Per-customer plan (North Star #1) ---
+      const recencyDays = rfm?.lastOrderAt
+        ? Math.floor((Date.now() - rfm.lastOrderAt.getTime()) / 86400000)
+        : null;
+      const decision = planCustomerDelivery({
+        segment: rfm?.segment ?? null,
+        totalSpent: rfm?.totalSpent ?? null,
+        orderCount: rfm?.orderCount ?? null,
+        recencyDays,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        hasDiscount,
+      });
+      const selectedChannel = "email" as const;
+      const timing = timingProfiles.get(customer.id);
+      const deliveryWindow = timing?.window ?? "morning";
+      let bestHour = DELIVERY_WINDOWS[deliveryWindow].startHour;
+      let timingSource: DeliveryPlan["timingSource"] = "default";
+      let timingConfidence = 0;
+      let deliveryTimezone = campaign.store.timezone ?? "UTC";
+      if (timing) {
+        timingSource = timing.source;
+        timingConfidence = timing.confidence;
+        deliveryTimezone = timing.timezone;
+      }
+
+      // SKIP (send-less): record the decision as a "skipped" row with treatmentArm
+      // NULL so it is excluded from EVERY lift reader (they all filter treatmentArm
+      // IS NOT NULL) — zero change to the causal math — while still capturing the
+      // held-back decision for the result page + decision-trace.
+      if (decision.skip) {
+        skippedCount++;
+        plannedLogs.push({
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          customerId: customer.id,
+          channel: "email",
+          to: customer.email,
+          subject: approvedEmail.envelope.subject,
+          campaignId,
+          status: "skipped",
+          treatmentArm: null,
+          experimentId: experiment.id,
+          customerStateSnap: stateSnap,
+          discountCode: discountCode ?? null,
+          offerId,
+          messageVariantId: decision.toneKey,
+          messageFeatures: {
+            channel: selectedChannel,
+            messageType: "campaign",
+            hasDiscount,
+            discountPercent,
+            segment: rfm?.segment ?? null,
+            decision: "skip",
+            skipReason: decision.skipReason,
+          },
+          metadata: {
+            skipped: true,
+            skipReason: decision.skipReason,
+            reasoning: decision.reasoning,
+            selectedChannel,
+            bestHour,
+            toneKey: decision.toneKey,
+          },
+        });
+        await flushPlannedLogs();
+        continue;
+      }
+
+      // Causal-data moat: only policy-eligible customers enter the experiment.
+      // The skip rule above is computed without looking at arm assignment, so the
+      // measured comparison remains symmetric and randomized.
+      if (arm === "CONTROL") {
+        controlCount++;
+        plannedLogs.push({
+          workspaceId: campaign.store.workspaceId,
+          storeId: campaign.storeId,
+          customerId: customer.id,
+          channel: "email",
+          to: customer.email,
+          subject: approvedEmail.envelope.subject,
+          campaignId,
+          status: "withheld",
+          treatmentArm: "CONTROL",
+          experimentId: experiment.id,
+          customerStateSnap: stateSnap,
+          metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
+        });
+        await flushPlannedLogs();
+        continue;
+      }
+
+      // A/B subject-line variant (decided at plan time, carried to delivery).
+      let effectiveSubject = approvedEmail.envelope.subject;
+      let abTestId: string | undefined;
+      let abVariant: "a" | "b" | undefined;
+      if (activeSubjectTest) {
+        abVariant = abAssignVariant(activeSubjectTest.id, customer.id, activeSubjectTest.splitRatio);
+        abTestId = activeSubjectTest.id;
+        const variantData =
+          abVariant === "a"
+            ? (activeSubjectTest.variantA as Record<string, unknown>)
+            : (activeSubjectTest.variantB as Record<string, unknown>);
+        if (variantData && typeof variantData["value"] === "string")
+          effectiveSubject = variantData["value"];
+      }
+
+      // Assign this recipient to an explainable broad delivery-window cohort.
+      const planningNow = new Date();
+      const windowDelay = deliveryWindowDelay({
         customerId: customer.id,
-        channel: "email",
-        to: customer.email,
-        subject: approvedEmail.envelope.subject,
+        window: deliveryWindow,
+        timezone: deliveryTimezone,
+        now: planningNow,
+        isDemo,
+      });
+      const windowDeliveryAt = new Date(planningNow.getTime() + windowDelay);
+      const quietDecision = checkQuietHours(
+        deliveryTimezone,
+        planningGovernorConfig.quietHours,
+        windowDeliveryAt
+      );
+      const deliveryDelay = forceImmediate
+        ? 0
+        : quietDecision.allowed
+          ? windowDelay
+          : isDemo
+            ? DEMO_MAX_DELAY_MS
+            : Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime());
+      const deliveryAt = new Date(planningNow.getTime() + deliveryDelay);
+      earliestDeliveryTimestamp =
+        earliestDeliveryTimestamp == null || deliveryAt.getTime() < earliestDeliveryTimestamp
+          ? deliveryAt.getTime()
+          : earliestDeliveryTimestamp;
+      latestDeliveryTimestamp =
+        latestDeliveryTimestamp == null || deliveryAt.getTime() > latestDeliveryTimestamp
+          ? deliveryAt.getTime()
+          : latestDeliveryTimestamp;
+      timingSources[timingSource] += 1;
+      if (!quietDecision.allowed) quietHoursDeferredCount += 1;
+      const deliveryData = {
+        deliverOne: true,
+        forceImmediate,
         campaignId,
-        status: "skipped",
-        treatmentArm: null,
+        customerId: customer.id,
         experimentId: experiment.id,
-        customerStateSnap: stateSnap,
+        effectiveSubject,
+        abTestId,
+        abVariant,
         discountCode: discountCode ?? null,
         offerId,
-        messageVariantId: decision.toneKey,
-        messageFeatures: {
+        discountPercent,
+        stateSnap,
+        plan: {
           channel: selectedChannel,
-          messageType: "campaign",
-          hasDiscount,
-          discountPercent,
-          segment: rfm?.segment ?? null,
-          decision: "skip",
-          skipReason: decision.skipReason,
-        },
-        metadata: {
-          skipped: true,
-          skipReason: decision.skipReason,
-          reasoning: decision.reasoning,
-          selectedChannel,
-          bestHour,
+          sendHour: bestHour,
+          deliveryWindow,
           toneKey: decision.toneKey,
+          greeting: decision.greeting,
+          emoji: decision.emoji,
+          signoff: decision.signoff,
+          reasoning: decision.reasoning,
+          timingSource,
+          timingConfidence,
+          timezone: deliveryTimezone,
         },
-      });
-      await flushPlannedLogs();
-      continue;
+      } as DeliverOneData;
+      const deliveryBucket = Math.floor(deliveryAt.getTime() / (15 * 60 * 1000)) * 15 * 60 * 1000;
+      const bucket = plannedDeliveries.get(deliveryBucket) ?? [];
+      bucket.push(deliveryData);
+      plannedDeliveries.set(deliveryBucket, bucket);
+      scheduledCount++;
     }
 
-    // Causal-data moat: only policy-eligible customers enter the experiment.
-    // The skip rule above is computed without looking at arm assignment, so the
-    // measured comparison remains symmetric and randomized.
-    if (arm === "CONTROL") {
-      controlCount++;
-      plannedLogs.push({
-        workspaceId: campaign.store.workspaceId,
-        storeId: campaign.storeId,
-        customerId: customer.id,
-        channel: "email",
-        to: customer.email,
-        subject: approvedEmail.envelope.subject,
-        campaignId,
-        status: "withheld",
-        treatmentArm: "CONTROL",
-        experimentId: experiment.id,
-        customerStateSnap: stateSnap,
-        metadata: { withheld: true, reason: "control_group", experimentId: experiment.id },
-      });
-      await flushPlannedLogs();
-      continue;
-    }
-
-    // A/B subject-line variant (decided at plan time, carried to delivery).
-    let effectiveSubject = approvedEmail.envelope.subject;
-    let abTestId: string | undefined;
-    let abVariant: "a" | "b" | undefined;
-    if (activeSubjectTest) {
-      abVariant = abAssignVariant(activeSubjectTest.id, customer.id, activeSubjectTest.splitRatio);
-      abTestId = activeSubjectTest.id;
-      const variantData =
-        abVariant === "a"
-          ? (activeSubjectTest.variantA as Record<string, unknown>)
-          : (activeSubjectTest.variantB as Record<string, unknown>);
-      if (variantData && typeof variantData["value"] === "string")
-        effectiveSubject = variantData["value"];
-    }
-
-    // Assign this recipient to an explainable broad delivery-window cohort.
-    const planningNow = new Date();
-    const windowDelay = deliveryWindowDelay({
-      customerId: customer.id,
-      window: deliveryWindow,
-      timezone: deliveryTimezone,
-      now: planningNow,
-      isDemo,
-    });
-    const windowDeliveryAt = new Date(planningNow.getTime() + windowDelay);
-    const quietDecision = checkQuietHours(
-      deliveryTimezone,
-      planningGovernorConfig.quietHours,
-      windowDeliveryAt
-    );
-    const deliveryDelay = forceImmediate
-      ? 0
-      : quietDecision.allowed
-        ? windowDelay
-        : isDemo
-          ? DEMO_MAX_DELAY_MS
-          : Math.max(0, quietDecision.delayUntil!.getTime() - planningNow.getTime());
-    const deliveryAt = new Date(planningNow.getTime() + deliveryDelay);
-    earliestDeliveryTimestamp =
-      earliestDeliveryTimestamp == null || deliveryAt.getTime() < earliestDeliveryTimestamp
-        ? deliveryAt.getTime()
-        : earliestDeliveryTimestamp;
-    latestDeliveryTimestamp =
-      latestDeliveryTimestamp == null || deliveryAt.getTime() > latestDeliveryTimestamp
-        ? deliveryAt.getTime()
-        : latestDeliveryTimestamp;
-    timingSources[timingSource] += 1;
-    if (!quietDecision.allowed) quietHoursDeferredCount += 1;
-    const deliveryData = {
-      deliverOne: true,
-      forceImmediate,
-      campaignId,
-      customerId: customer.id,
-      experimentId: experiment.id,
-      effectiveSubject,
-      abTestId,
-      abVariant,
-      discountCode: discountCode ?? null,
-      offerId,
-      discountPercent,
-      stateSnap,
-      plan: {
-        channel: selectedChannel,
-        sendHour: bestHour,
-        deliveryWindow,
-        toneKey: decision.toneKey,
-        greeting: decision.greeting,
-        emoji: decision.emoji,
-        signoff: decision.signoff,
-        reasoning: decision.reasoning,
-        timingSource,
-        timingConfidence,
-        timezone: deliveryTimezone,
-      },
-    } as DeliverOneData;
-    const deliveryBucket = Math.floor(deliveryAt.getTime() / (15 * 60 * 1000)) * 15 * 60 * 1000;
-    const bucket = plannedDeliveries.get(deliveryBucket) ?? [];
-    bucket.push(deliveryData);
-    plannedDeliveries.set(deliveryBucket, bucket);
-    scheduledCount++;
-  }
-
-  // Control and skipped rows must be durable before any delivery is enqueued,
-  // so the merchant's audience reconciliation is complete even if the process
-  // dies between planning and sending.
-  await flushPlannedLogs(true);
-
-  let chunkIndex = 0;
-  for (const [deliveryTimestamp, deliveries] of plannedDeliveries) {
-    for (let index = 0; index < deliveries.length; index += 100) {
-      await emailSendQueue.add(
-        "deliver-chunk",
-        {
-          deliverChunk: true,
-          campaignId,
-          deliveries: deliveries.slice(index, index + 100),
-        } as DeliverChunkData,
-        {
-          delay: Math.max(0, deliveryTimestamp - Date.now()),
-          jobId: `deliver-chunk-${campaignId}-${chunkIndex++}`,
-          attempts: 5,
-          backoff: { type: "exponential", delay: 2_000 },
-          removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
-          removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
-        }
-      );
-    }
+    // Control and skipped rows must be durable before this page's deliveries are
+    // enqueued, so the merchant's audience reconciliation stays complete even if
+    // the process dies between planning and sending.
+    await flushPlannedLogs(true);
+    await enqueuePlannedDeliveries(plannedDeliveries);
   }
 
   const hasDelayedDelivery = Boolean(
@@ -774,9 +781,11 @@ export async function planCampaignSend(
         ...proposal,
         offerId,
         dispatch: {
-          requested: audience.requested,
-          eligible: audience.eligible.length,
-          exclusions: audience.exclusions,
+          requested: approvedAudience.requested,
+          // Recipients that still passed every delivery-time check, and why the
+          // rest did not. The approved counts stay on the audience snapshot.
+          eligible: recipientCount,
+          exclusions: recheckExclusions,
           scheduled: scheduledCount,
           control: controlCount,
           skipped: skippedCount,

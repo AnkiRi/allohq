@@ -10,9 +10,11 @@ export async function checkChannelCollision(
   customerId: string,
   storeId: string,
   channel: string,
-  windowHours: number = 2,
+  windowHours: number | undefined = 2,
+  /** Evaluation instant; see checkFatigue. */
+  now: Date = new Date(),
 ): Promise<GovernorDecision> {
-  const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000);
+  const windowStart = new Date(now.getTime() - windowHours * 60 * 60 * 1000);
 
   // Check if any message was sent on a DIFFERENT channel in the window
   const recentCrossChannel = await prisma.customerFatigueLog.findFirst({
@@ -28,7 +30,7 @@ export async function checkChannelCollision(
   if (recentCrossChannel) {
     return {
       allowed: false,
-      reason: `Customer received ${recentCrossChannel.channel} message ${Math.round((Date.now() - recentCrossChannel.sentAt.getTime()) / 60000)} minutes ago. Wait ${windowHours}h between cross-channel sends.`,
+      reason: `Customer received ${recentCrossChannel.channel} message ${Math.round((now.getTime() - recentCrossChannel.sentAt.getTime()) / 60000)} minutes ago. Wait ${windowHours}h between cross-channel sends.`,
       rule: "channel_arbitration",
     };
   }

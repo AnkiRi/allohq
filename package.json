@@ -8,7 +8,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:integration": "pnpm --filter @allohq/workers test:integration",
+    "test:integration": "node scripts/run-integration-tests.mjs",
     "test:launch-readiness": "pnpm --filter @allohq/api exec tsx --test ../../scripts/launch-readiness.test.ts",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",

@@ -1,0 +1,67 @@
+name: CI
+
+# Typecheck, unit tests, build and Prisma validation. Everything here runs
+# without a database or a queue: integration tests live in integration.yml,
+# against disposable service containers.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The version this repository is actually developed and verified against.
+  # `engines` permits >=20, but nothing has been run on 20, and a CI job on an
+  # unverified runtime would be red on its first run and stop meaning anything.
+  NODE_VERSION: "24"
+  # Prisma reads a URL when validating and generating. Neither connects, and
+  # this must never be a real database. Anything that does connect - migration
+  # drift included - belongs in integration.yml, against a disposable service
+  # container.
+  DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/unused_by_this_job"
+  # Next.js prerenders dashboard pages at build time, and Clerk's provider
+  # refuses to initialise without a publishable key — so the build cannot
+  # complete on a clean checkout without one. Clerk publishable keys are public
+  # by design (they ship inside the browser bundle); this is a syntactically
+  # valid placeholder pointing at a domain that does not exist, and no secret
+  # key is needed. Verified on a clean clone: the build fails without it and
+  # passes with it.
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk"
+
+jobs:
+  verify:
+    name: typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate the Prisma schema
+        run: pnpm --filter @allohq/database exec prisma validate
+
+      - name: Generate the Prisma client
+        run: pnpm --filter @allohq/database exec prisma generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

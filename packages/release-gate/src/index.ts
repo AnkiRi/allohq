@@ -179,6 +179,9 @@ export function assertChannelAllowed(
 export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> = {
   // --- inside v1: treatment/control reporting + customer state upkeep -------
   "outcome-attribution-schedule": null,
+  // Recovers campaign audience preparation abandoned by a crashed worker. It
+  // resumes an approval the merchant already gave; it never starts one.
+  "preparation-recovery-schedule": null,
   "monthly-shadow-invoice-schedule": null,
   "state-decay-schedule": null,
   "privacy-retention-schedule": null,

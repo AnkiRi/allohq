@@ -59,10 +59,39 @@ export {
 export type { AutomationActivationSnapshot } from "./automation-activation-checksum";
 export {
   resolveCampaignAudience,
+  streamCampaignAudience,
   resolveAutomationAudience,
+  streamAutomationAudience,
+  countAutomationAudience,
   AUDIENCE_EXCLUSION_REASONS,
+  staticAudienceExclusion,
 } from "./audience-resolver";
-export { withCampaignAudienceSnapshot, campaignAudienceSnapshot } from "./audience-snapshot";
+export type { AudienceStreamDecision, AudienceStreamSummary } from "./audience-resolver";
+export {
+  runCampaignAudienceResolution,
+  completedAudienceRun,
+  campaignPreparationProgress,
+  pageApprovedAssignments,
+  AudienceRunBusyError,
+  CANDIDATE_DECISION,
+} from "./audience-run";
+export {
+  materialiseMeasurementAssignments,
+  materialiseAudienceEvaluation,
+  materialiseAudienceDecisions,
+  leftAloneActivitySummary,
+} from "./audience-run";
+export type {
+  AudienceRunInput,
+  AudienceRunResult,
+  AudienceRunStatus,
+  AudienceRunProgress,
+} from "./audience-run";
+export {
+  withCampaignAudienceSnapshot,
+  withCampaignAudienceSnapshotCounts,
+  campaignAudienceSnapshot,
+} from "./audience-snapshot";
 export type { CampaignAudienceSnapshot } from "./audience-snapshot";
 export type { AudienceResolution, AudienceExclusionReason } from "./audience-resolver";
 export { evaluateCampaignCandidate } from "./candidate-policy";
@@ -71,3 +100,19 @@ export { findBannedTerms } from "./content-policy";
 
 // Benchmark Comparison
 export { getBenchmarkComparison } from "./benchmark-comparison";
+
+// Approval mechanics, shared by the API and the preparation worker. These
+// lived in apps/api/src/lib and could not be reached from a worker, which is
+// what kept campaign approval inside a request.
+export { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "./approval-claim";
+export { buildHumanDecision } from "./human-decision";
+export { ensureEmailVersion } from "./email-versions";
+export { collectEmailAssetManifest } from "./email-asset-manifest";
+export type { EmailAssetReceipt } from "./email-asset-manifest";
+export {
+  finalizeCampaignApproval,
+  AudienceRunNotCompleteError,
+  CampaignApprovalConflictError,
+} from "./approval-finalize";
+export type { FinalizeApprovalInput } from "./approval-finalize";
+export type { CampaignPreparationRequest } from "./preparation-request";

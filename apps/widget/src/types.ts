@@ -10,6 +10,8 @@ export interface WidgetConfig {
   storeName?: string;
   /** Store domain for product links */
   storeDomain?: string;
+  /** ISO 4217 code for the store, so product cards are not priced in dollars. */
+  currency?: string;
   /** Enable chat widget (default: true) */
   chat?: boolean;
   /** Enable popup widget (default: true if storeId is provided) */

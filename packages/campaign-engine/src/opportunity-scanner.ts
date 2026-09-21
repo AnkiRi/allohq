@@ -1,6 +1,7 @@
-import { prisma } from "@allohq/database";
+import { prisma, Prisma } from "@allohq/database";
 import type { CampaignOpportunity } from "./types";
 import { estimateRevenue } from "./revenue-estimator";
+import { OpportunityAudienceDigest } from "./opportunity-dedupe";
 import { getUpcomingEvents } from "./calendar-awareness";
 
 /**
@@ -30,33 +31,126 @@ export async function scanOpportunities(storeId: string): Promise<CampaignOpport
   return opportunities;
 }
 
+/**
+ * Page a store's customer states by primary key, streaming the audience digest
+ * instead of collecting ids.
+ *
+ * These scans were unbounded: a store with hundreds of thousands of matching
+ * customers loaded every row, then built an array of that many ids purely so
+ * the dedupe fingerprint could hash it. The digest is byte-identical to hashing
+ * the array, so fingerprints are unchanged and nothing is re-created.
+ */
+async function streamCustomerStateAudience(
+  where: Prisma.CustomerStateWhereInput,
+  base: Pick<CampaignOpportunity, "storeId" | "type">,
+  onRow?: (row: { customerId: string; churnRisk: number | null; vipLevel: string | null }) => void
+): Promise<{ digest: OpportunityAudienceDigest; count: number }> {
+  const digest = new OpportunityAudienceDigest(base);
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await prisma.customerState.findMany({
+      where: cursor ? { AND: [where, { customerId: { gt: cursor } }] } : where,
+      select: { customerId: true, churnRisk: true, vipLevel: true },
+      orderBy: { customerId: "asc" },
+      take: 2_000,
+    });
+    if (page.length === 0) break;
+    for (const row of page) {
+      digest.add(row.customerId);
+      onRow?.(row);
+    }
+    cursor = page[page.length - 1]!.customerId;
+    if (page.length < 2_000) break;
+  }
+  return { digest, count: digest.count };
+}
+
 async function scanAtRiskCustomers(storeId: string, results: CampaignOpportunity[]): Promise<void> {
-  const atRiskStates = await prisma.customerState.findMany({
-    where: {
-      storeId,
-      OR: [{ lifecycleStage: "at_risk" }, { churnRisk: { gt: 0.6 } }],
-    },
-    select: { customerId: true, churnRisk: true },
-  });
+  const base = { storeId, type: "at_risk_winback" as const };
+  let churnRiskTotal = 0;
+  const { digest, count } = await streamCustomerStateAudience(
+    { storeId, OR: [{ lifecycleStage: "at_risk" }, { churnRisk: { gt: 0.6 } }] },
+    base,
+    (row) => {
+      churnRiskTotal += row.churnRisk ?? 0.7;
+    }
+  );
 
-  if (atRiskStates.length === 0) return;
+  if (count === 0) return;
 
-  const customerIds = atRiskStates.map((s) => s.customerId);
-  const avgChurnRisk =
-    atRiskStates.reduce((sum, s) => sum + (s.churnRisk ?? 0.7), 0) / atRiskStates.length;
+  const avgChurnRisk = churnRiskTotal / count;
+  const estimate = await estimateRevenue(storeId, count, "at_risk_winback");
 
-  const estimate = await estimateRevenue(storeId, customerIds.length, "at_risk_winback");
-
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "at_risk_winback",
     storeId,
     segmentName: "At Risk",
-    customerIds,
-    customerCount: customerIds.length,
-    reasoning: `${customerIds.length} customers at risk of churning (avg risk ${(avgChurnRisk * 100).toFixed(0)}%). Win-back campaign recommended.`,
+    customerCount: count,
+    reasoning: `${count} customers at risk of churning (avg risk ${(avgChurnRisk * 100).toFixed(0)}%). Win-back campaign recommended.`,
     urgency: Math.min(95, Math.round(avgChurnRisk * 100)),
     estimatedRevenue: estimate,
-  });
+  };
+  // Byte-identical to hashing the id array this used to build, so rescans
+  // still dedupe against opportunities recorded before the change.
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
+}
+
+/**
+ * Page the distinct customers who bought a product, in ascending customer id.
+ *
+ * The order-driven scans each loaded every matching order line for a store and
+ * deduplicated in Node, purely to count customers and hash their ids. Postgres
+ * does the distinct, the ordering and — for cross-sell — the exclusion, and the
+ * scan keeps only a digest and a count.
+ *
+ * `excludeProductId` makes it an anti-join: customers who bought the first
+ * product and have never bought the second. That was two full arrays and a Set
+ * difference in process.
+ */
+async function streamProductBuyers(
+  storeId: string,
+  productIds: string[],
+  base: Pick<CampaignOpportunity, "storeId" | "type">,
+  options: {
+    orderedAfter?: Date;
+    orderedBefore?: Date;
+    excludeProductId?: string;
+  } = {}
+): Promise<{ digest: OpportunityAudienceDigest; count: number }> {
+  const digest = new OpportunityAudienceDigest(base);
+  if (productIds.length === 0) return { digest, count: 0 };
+  let cursor = "";
+  for (;;) {
+    const page = await prisma.$queryRaw<Array<{ customerId: string }>>`
+      SELECT DISTINCT o."customerId"
+      FROM "order_items" oi
+      JOIN "orders" o ON o."id" = oi."orderId"
+      WHERE o."storeId" = ${storeId}
+        AND oi."productId" IN (${Prisma.join(productIds)})
+        AND o."customerId" > ${cursor}
+        AND (${options.orderedAfter ?? null}::timestamp IS NULL OR o."createdAt" >= ${options.orderedAfter ?? null})
+        AND (${options.orderedBefore ?? null}::timestamp IS NULL OR o."createdAt" <= ${options.orderedBefore ?? null})
+        AND (
+          ${options.excludeProductId ?? null}::text IS NULL
+          OR NOT EXISTS (
+            SELECT 1
+            FROM "order_items" oi2
+            JOIN "orders" o2 ON o2."id" = oi2."orderId"
+            WHERE o2."customerId" = o."customerId"
+              AND o2."storeId" = ${storeId}
+              AND oi2."productId" = ${options.excludeProductId ?? null}
+          )
+        )
+      ORDER BY o."customerId" ASC
+      LIMIT 2000
+    `;
+    if (page.length === 0) break;
+    for (const row of page) digest.add(row.customerId);
+    cursor = page[page.length - 1]!.customerId;
+    if (page.length < 2_000) break;
+  }
+  return { digest, count: digest.count };
 }
 
 async function scanRepurchaseWindows(
@@ -77,33 +171,26 @@ async function scanRepurchaseWindows(
     const windowStart = new Date(now.getTime() - (cycle.medianDays + windowDays) * 86400000);
     const windowEnd = new Date(now.getTime() - (cycle.medianDays - windowDays) * 86400000);
 
-    const eligibleOrders = await prisma.orderItem.findMany({
-      where: {
-        productId: cycle.productId,
-        order: {
-          storeId,
-          createdAt: { gte: windowStart, lte: windowEnd },
-        },
-      },
-      select: { order: { select: { customerId: true } } },
-      distinct: ["orderId"],
+    const base = { storeId, type: "repurchase_window" as const };
+    const { digest, count } = await streamProductBuyers(storeId, [cycle.productId], base, {
+      orderedAfter: windowStart,
+      orderedBefore: windowEnd,
     });
+    if (count < 2) continue;
 
-    const customerIds = [...new Set(eligibleOrders.map((o) => o.order.customerId))];
-    if (customerIds.length < 2) continue;
+    const estimate = await estimateRevenue(storeId, count, "repurchase_window");
 
-    const estimate = await estimateRevenue(storeId, customerIds.length, "repurchase_window");
-
-    results.push({
+    const opportunity: CampaignOpportunity = {
       type: "repurchase_window",
       storeId,
-      customerIds,
-      customerCount: customerIds.length,
+      customerCount: count,
       productIds: [cycle.productId],
-      reasoning: `${customerIds.length} customers are within the repurchase window for a product (median ${Math.round(cycle.medianDays)} day cycle).`,
+      reasoning: `${count} customers are within the repurchase window for a product (median ${Math.round(cycle.medianDays)} day cycle).`,
       urgency: 70,
       estimatedRevenue: estimate,
-    });
+    };
+    opportunity.audienceFingerprint = digest.finish(opportunity);
+    results.push(opportunity);
   }
 }
 
@@ -141,55 +228,50 @@ async function scanNewArrivals(storeId: string, results: CampaignOpportunity[]):
 }
 
 async function scanReEngagement(storeId: string, results: CampaignOpportunity[]): Promise<void> {
-  const lostStates = await prisma.customerState.findMany({
-    where: {
-      storeId,
-      lifecycleStage: { in: ["lost", "inactive"] },
-    },
-    select: { customerId: true },
-  });
+  const base = { storeId, type: "re_engagement" as const };
+  const { digest, count } = await streamCustomerStateAudience(
+    { storeId, lifecycleStage: { in: ["lost", "inactive"] } },
+    base
+  );
 
-  if (lostStates.length < 5) return;
+  if (count < 5) return;
 
-  const customerIds = lostStates.map((s) => s.customerId);
-  const estimate = await estimateRevenue(storeId, customerIds.length, "re_engagement");
+  const estimate = await estimateRevenue(storeId, count, "re_engagement");
 
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "re_engagement",
     storeId,
     segmentName: "Lost/Inactive",
-    customerIds,
-    customerCount: customerIds.length,
-    reasoning: `${customerIds.length} customers have gone inactive. Re-engagement campaign with incentive recommended.`,
+    customerCount: count,
+    reasoning: `${count} customers have gone inactive. Re-engagement campaign with incentive recommended.`,
     urgency: 40,
     estimatedRevenue: estimate,
-  });
+  };
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }
 
 async function scanVipMilestones(storeId: string, results: CampaignOpportunity[]): Promise<void> {
-  const vipStates = await prisma.customerState.findMany({
-    where: {
-      storeId,
-      vipLevel: { in: ["gold", "platinum"] },
-    },
-    select: { customerId: true, vipLevel: true },
-  });
+  const base = { storeId, type: "vip_milestone" as const };
+  const { digest, count } = await streamCustomerStateAudience(
+    { storeId, vipLevel: { in: ["gold", "platinum"] } },
+    base
+  );
 
-  if (vipStates.length === 0) return;
+  if (count === 0) return;
+  const estimate = await estimateRevenue(storeId, count, "vip_milestone");
 
-  const customerIds = vipStates.map((s) => s.customerId);
-  const estimate = await estimateRevenue(storeId, customerIds.length, "vip_milestone");
-
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "vip_milestone",
     storeId,
     segmentName: "VIP",
-    customerIds,
-    customerCount: customerIds.length,
-    reasoning: `${customerIds.length} VIP customers eligible for milestone recognition and exclusive offers.`,
+    customerCount: count,
+    reasoning: `${count} VIP customers eligible for milestone recognition and exclusive offers.`,
     urgency: 35,
     estimatedRevenue: estimate,
-  });
+  };
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }
 
 async function scanLowStock(storeId: string, results: CampaignOpportunity[]): Promise<void> {
@@ -209,32 +291,25 @@ async function scanLowStock(storeId: string, results: CampaignOpportunity[]): Pr
   const productIds = lowStockProducts.map((p) => p.id);
 
   // Find customers who previously bought these products
-  const buyers = await prisma.orderItem.findMany({
-    where: {
-      productId: { in: productIds },
-      order: { storeId },
-    },
-    select: { order: { select: { customerId: true } } },
-    distinct: ["orderId"],
-  });
+  const base = { storeId, type: "low_stock" as const };
+  const { digest, count } = await streamProductBuyers(storeId, productIds, base);
+  if (count < 2) return;
 
-  const customerIds = [...new Set(buyers.map((b) => b.order.customerId))];
-  if (customerIds.length < 2) return;
+  const estimate = await estimateRevenue(storeId, count, "low_stock");
 
-  const estimate = await estimateRevenue(storeId, customerIds.length, "low_stock");
-
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "low_stock",
     storeId,
     segmentName: "Low Stock Interest",
-    customerIds,
-    customerCount: customerIds.length,
+    customerCount: count,
     productIds,
-    reasoning: `${lowStockProducts.length} product(s) running low on stock. ${customerIds.length} past buyers may want to grab them before they're gone.`,
+    reasoning: `${lowStockProducts.length} product(s) running low on stock. ${count} past buyers may want to grab them before they're gone.`,
     urgency: 75,
     estimatedRevenue: estimate,
     metadata: { productTitles: lowStockProducts.map((p) => p.title) },
-  });
+  };
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }
 
 async function scanSeasonal(storeId: string, results: CampaignOpportunity[]): Promise<void> {
@@ -303,33 +378,27 @@ async function scanCrossSell(storeId: string, results: CampaignOpportunity[]): P
   if (!bestPair) return;
 
   // Find customers who bought A but not B
-  const boughtA = await prisma.orderItem.findMany({
-    where: { productId: bestPair.productA, order: { storeId } },
-    select: { order: { select: { customerId: true } } },
-  });
-  const boughtB = await prisma.orderItem.findMany({
-    where: { productId: bestPair.productB, order: { storeId } },
-    select: { order: { select: { customerId: true } } },
+  // Bought A and never bought B, as an anti-join. This was two store-wide
+  // arrays and a Set difference held in process.
+  const base = { storeId, type: "cross_sell" as const };
+  const { digest, count } = await streamProductBuyers(storeId, [bestPair.productA], base, {
+    excludeProductId: bestPair.productB,
   });
 
-  const boughtBSet = new Set(boughtB.map((b) => b.order.customerId));
-  const crossSellIds = [
-    ...new Set(boughtA.map((a) => a.order.customerId).filter((id) => !boughtBSet.has(id))),
-  ];
+  if (count < 3) return;
 
-  if (crossSellIds.length < 3) return;
+  const estimate = await estimateRevenue(storeId, count, "cross_sell");
 
-  const estimate = await estimateRevenue(storeId, crossSellIds.length, "cross_sell");
-
-  results.push({
+  const opportunity: CampaignOpportunity = {
     type: "cross_sell",
     storeId,
     segmentName: "Cross-Sell",
-    customerIds: crossSellIds,
-    customerCount: crossSellIds.length,
+    customerCount: count,
     productIds: [bestPair.productB],
-    reasoning: `${crossSellIds.length} customers bought a commonly paired product but not its complement. Cross-sell opportunity detected (${bestPair.count} co-purchases observed).`,
+    reasoning: `${count} customers bought a commonly paired product but not its complement. Cross-sell opportunity detected (${bestPair.count} co-purchases observed).`,
     urgency: 45,
     estimatedRevenue: estimate,
-  });
+  };
+  opportunity.audienceFingerprint = digest.finish(opportunity);
+  results.push(opportunity);
 }

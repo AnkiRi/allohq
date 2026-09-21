@@ -8,9 +8,11 @@ import type { GovernorDecision } from "./types";
 export async function checkCollision(
   customerId: string,
   storeId: string,
-  windowHours: number = 48,
+  windowHours: number | undefined = 48,
+  /** Evaluation instant; see checkFatigue. */
+  now: Date = new Date(),
 ): Promise<GovernorDecision> {
-  const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000);
+  const windowStart = new Date(now.getTime() - windowHours * 60 * 60 * 1000);
 
   const recentCampaignSend = await prisma.messageLog.findFirst({
     where: {
@@ -26,7 +28,7 @@ export async function checkCollision(
 
   if (recentCampaignSend) {
     const hoursAgo = Math.round(
-      (Date.now() - recentCampaignSend.sentAt!.getTime()) / (60 * 60 * 1000),
+      (now.getTime() - recentCampaignSend.sentAt!.getTime()) / (60 * 60 * 1000),
     );
     return {
       allowed: false,

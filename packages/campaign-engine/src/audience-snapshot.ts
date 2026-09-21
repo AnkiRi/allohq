@@ -41,6 +41,38 @@ export function withCampaignAudienceSnapshot(
   holdout?: CampaignAudienceSnapshot["holdout"],
   deliveryProvider?: CampaignAudienceSnapshot["deliveryProvider"]
 ): Record<string, unknown> {
+  return withCampaignAudienceSnapshotCounts(
+    proposal,
+    {
+      requested: audience.requested,
+      eligible: audience.eligible.length,
+      deliberatelyLeftAlone: audience.deliberatelyLeftAlone?.length ?? 0,
+      exclusions: audience.exclusions,
+    },
+    capturedAt,
+    holdout,
+    deliveryProvider
+  );
+}
+
+/**
+ * The snapshot has only ever recorded counts, and approval no longer holds the
+ * audience it would count. This takes those counts directly, so a caller that
+ * resolved into the database rather than into memory can write the identical
+ * snapshot.
+ */
+export function withCampaignAudienceSnapshotCounts(
+  proposal: unknown,
+  counts: {
+    requested: number;
+    eligible: number;
+    deliberatelyLeftAlone: number;
+    exclusions: AudienceResolution["exclusions"];
+  },
+  capturedAt = new Date(),
+  holdout?: CampaignAudienceSnapshot["holdout"],
+  deliveryProvider?: CampaignAudienceSnapshot["deliveryProvider"]
+): Record<string, unknown> {
   const base =
     proposal && typeof proposal === "object" && !Array.isArray(proposal)
       ? (proposal as Record<string, unknown>)
@@ -50,10 +82,10 @@ export function withCampaignAudienceSnapshot(
     audienceSnapshot: {
       capturedAt: capturedAt.toISOString(),
       ...(deliveryProvider ? { deliveryProvider } : {}),
-      requested: audience.requested,
-      eligible: audience.eligible.length,
-      deliberatelyLeftAlone: audience.deliberatelyLeftAlone?.length ?? 0,
-      exclusions: audience.exclusions,
+      requested: counts.requested,
+      eligible: counts.eligible,
+      deliberatelyLeftAlone: counts.deliberatelyLeftAlone,
+      exclusions: counts.exclusions,
       ...(holdout ? { holdout } : {}),
     } satisfies CampaignAudienceSnapshot,
   };
