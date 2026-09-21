@@ -62,19 +62,18 @@ const form = (email: string) => ({
 
 test("submitting creates one request and nothing else", { skip }, async () => {
   const { prisma, accessRequestsRouter } = await load();
-  const email = `asks-${randomUUID().slice(0, 8)}@example.test`;
-  const before = {
-    users: await prisma.user.count(),
-    workspaces: await prisma.workspace.count(),
-    memberships: await prisma.workspaceMember.count(),
-    invitations: await prisma.invitation.count(),
-    stores: await prisma.store.count(),
-    messages: await prisma.messageLog.count(),
-    chats: await prisma.aiChat.count(),
-  };
+  // Everything this submission could possibly have created is identifiable
+  // from what it was given. Counting whole tables instead would be racy: the
+  // integration files share one database and run concurrently, so a workspace
+  // another file created mid-test would read as one this form created.
+  const marker = randomUUID().slice(0, 8);
+  const email = `asks-${marker}@example.test`;
+  const company = `Example Brand ${marker}`;
 
-  const caller = accessRequestsRouter.createCaller(publicCaller(prisma, `1.2.3.${Math.floor(Math.random() * 250)}`));
-  const result = await caller.submit(form(email));
+  const caller = accessRequestsRouter.createCaller(
+    publicCaller(prisma, `1.2.3.${Math.floor(Math.random() * 250)}`)
+  );
+  const result = await caller.submit({ ...form(email), company });
   assert.match(result.acknowledged, /small number of design partners/);
 
   try {
@@ -82,22 +81,43 @@ test("submitting creates one request and nothing else", { skip }, async () => {
     assert.ok(created, "the request itself must be recorded");
     assert.equal(created.status, "pending");
 
-    // Nothing else moved. This is the whole point of a public form.
-    assert.equal(await prisma.user.count(), before.users, "no user may be created");
-    assert.equal(await prisma.workspace.count(), before.workspaces, "no workspace may be created");
+    // Nothing else exists that could have come from it. This is the whole
+    // point of a public form.
     assert.equal(
-      await prisma.workspaceMember.count(),
-      before.memberships,
+      await prisma.user.count({ where: { email } }),
+      0,
+      "no user may be created for the address that asked"
+    );
+    assert.equal(
+      await prisma.workspace.count({ where: { name: company } }),
+      0,
+      "no workspace may be created from the company they named"
+    );
+    assert.equal(
+      await prisma.workspaceMember.count({ where: { user: { email } } }),
+      0,
       "no membership may be created"
     );
     assert.equal(
-      await prisma.invitation.count(),
-      before.invitations,
+      await prisma.invitation.count({ where: { email } }),
+      0,
       "submitting must not invite anyone"
     );
-    assert.equal(await prisma.store.count(), before.stores, "no store connection");
-    assert.equal(await prisma.messageLog.count(), before.messages, "no provider send");
-    assert.equal(await prisma.aiChat.count(), before.chats, "no agent task");
+    assert.equal(
+      await prisma.store.count({ where: { workspace: { name: company } } }),
+      0,
+      "no store connection"
+    );
+    assert.equal(
+      await prisma.messageLog.count({ where: { workspace: { name: company } } }),
+      0,
+      "no provider send"
+    );
+    assert.equal(
+      await prisma.aiChat.count({ where: { store: { workspace: { name: company } } } }),
+      0,
+      "no agent task"
+    );
   } finally {
     await prisma.accessRequest.deleteMany({ where: { email } }).catch(() => undefined);
   }
@@ -190,13 +210,15 @@ test("approving a request creates the workspace, the invitation and the audit li
   const operator = `user_operator_${randomUUID().slice(0, 8)}`;
   const previous = process.env["PLATFORM_ADMIN_CLERK_IDS"];
   process.env["PLATFORM_ADMIN_CLERK_IDS"] = operator;
-  const email = `healthify-${randomUUID().slice(0, 8)}@example.test`;
+  const marker = randomUUID().slice(0, 8);
+  const email = `healthify-${marker}@example.test`;
+  const companyName = `Healthify ${marker}`;
   let workspaceId: string | undefined;
   try {
     // A design partner asks.
     await accessRequestsRouter
       .createCaller(publicCaller(prisma, `8.8.8.${Math.floor(Math.random() * 250)}`))
-      .submit({ ...form(email), company: "Healthify" });
+      .submit({ ...form(email), company: companyName });
     const request = await prisma.accessRequest.findFirstOrThrow({ where: { email } });
 
     // The operator approves into a brand-new workspace named from the company.
@@ -207,7 +229,7 @@ test("approving a request creates the workspace, the invitation and the audit li
 
     assert.equal(issued.email, email, "the invitation is for the address that asked");
     assert.equal(issued.role, "owner", "the first person in is an owner");
-    assert.equal(issued.workspaceName, "Healthify");
+    assert.equal(issued.workspaceName, companyName);
     assert.ok(issued.token.length >= 42, "a token comes back exactly once");
 
     const stored = await prisma.invitation.findUniqueOrThrow({ where: { id: issued.invitationId } });
@@ -234,15 +256,16 @@ test("approving a request creates the workspace, the invitation and the audit li
         customerRange: "under_10k",
       },
     });
-    const workspacesBefore = await prisma.workspace.count();
     const intoExisting = await accessRequestsRouter
       .createCaller(adminCaller(prisma, operator))
       .approveAndInvite({ id: second.id, role: "admin", workspaceId: issued.workspaceId });
     assert.equal(intoExisting.workspaceId, issued.workspaceId);
-    assert.equal(intoExisting.workspaceName, "Healthify");
+    assert.equal(intoExisting.workspaceName, companyName);
+    // Scoped rather than a whole-table count: other integration files are
+    // writing to this database at the same time.
     assert.equal(
-      await prisma.workspace.count(),
-      workspacesBefore,
+      await prisma.workspace.count({ where: { name: "Second Brand" } }),
+      0,
       "joining an existing workspace must not create another"
     );
     await prisma.accessRequest.delete({ where: { id: second.id } }).catch(() => undefined);
