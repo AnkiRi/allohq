@@ -101,8 +101,8 @@ different completion criteria.
 | --- | --- | --- |
 | A. Frozen-time policy correctness | **verified** `dbee4b4` `63f38f2` | full path re-audited; every remaining wall-clock read is a default parameter or an operational timestamp. Three end-to-end tests prove determinism across execution, re-execution and resume |
 | B.1 Durable preparation backend | **implemented and verified** `ad467ac` `dd84939` `042fdeb` | all ten acceptance scenarios covered; 100k through the real job path with a forced crash and automatic recovery. API-side work 6 ms; 0 duplicates; 0 arm mismatches of 90,909 after crash and resume |
-| B.2 Campaign preparation UI and progress | **pending** | the API returns progress; nothing renders it. After approval the merchant currently sees the campaign sitting in Draft |
-| C. Bounded order-driven scans | pending | converted in `c064889`; this pass verifies them at 100k synthetic customers rather than at the smaller fixtures used so far |
+| B.2 Campaign preparation UI and progress | **implemented and verified** `8c31c5e` | "Preparing audience" replaces the Draft dead-end; polls while active and stops when settled; merchant-language counts; reload guidance; sending disabled until ready; needs-attention shows the reason, "Nothing has been sent" and a retry. 8 tests |
+| C. Bounded order-driven scans | **verified** `c064889` `3100465` | verified at 100k: 124.7 s, 0.24 MB retained, 166 transactions, anti-join exact against a SQL reference, and no sends |
 | D. Evidence | pending | the 100k profile exists; retry/resume behaviour is not yet part of the reported figures |
 
 ### CI — implemented and verified on GitHub
@@ -134,7 +134,8 @@ uninstrumented and 2.15 MB with query capture on**. Both are reported.
 | Pass 8A — overnight scans | **verified** `5c0dac5` `c064889` | all six scans bounded; fingerprints byte-identical | not yet verified at 100k |
 | Pass 8B — frozen-time correctness | **verified** `dbee4b4` `63f38f2` | 5 per-rule boundary tests plus 3 end-to-end: two executions at one asOf agree on every customer; frozen and live genuinely disagree; a resumed run matches an uninterrupted one | scheduling and deferral windows are delivery-time by design and deliberately current-time |
 | Pass 8B.1 — durable preparation backend | **verified** `042fdeb` | ten acceptance tests, one per scenario; 100k crash-and-recover proof through `prepareCampaignAudience` | — |
-| Pass 8B.2 — preparation UI and progress | **pending** | — | after approval the merchant sees an apparent Draft dead-end; progress exists in the API but is not rendered |
+| Pass 8B.2 — preparation UI and progress | **verified** `8c31c5e` | 8 tests: no-run, preparing, counts with hidden zeroes, resumed run, ready, needs-attention, the send gate, and reload reproducing the same view | wording is pinned by tests; no browser-level test exists |
+| Pass 8B.C — order-driven scans at 100k | **verified** `3100465` | 124.7 s, 0.24 MB retained, 18.65 MB peak, 166 transactions; cross-sell anti-join exact at 37,500 of 50,000; zero sends | `repurchase_window` did not fire — the fixture seeds no repurchase cycles, so it stays verified only at the smaller fixture |
 | Pass 8B — evidence | **pending** | 100k profile measured | retry/resume not in the reported figures |
 | CI | **verified** `3c86497` `e064f3e` `5a71682` `bb4dda2` | typecheck/test/build 4m2s; integration `tests 36, pass 36, fail 0, skipped 0`; 100k load proof 2m8s | Node 20 unverified; action versions target deprecated Node 20 |
 | Test-database safety | **verified** `e064f3e` | guard exits 1 on this machine's real database and on a realistic RDS URL | — |
@@ -585,6 +586,50 @@ Two labels are stated carefully because the loose versions would overclaim:
   assessments. No synthetic data reaches billing, Results, warm-up, reputation
   or causal proof.
 
+## Pass 8B items B.2 and C — measured — 2026-09-21T06:37:48Z
+
+_Status: **verified**. All figures measured against a disposable Postgres. No
+1M claim._
+
+### B.2 — campaign preparation UI
+
+Making approval a background job left the page behind: the request returned in
+milliseconds and the campaign sat in Draft with nothing to explain itself.
+
+`campaigns.preparationStatus` is polled every two seconds while work is in
+flight and stops the moment it settles. While preparing, a "Preparing audience"
+chip replaces the Draft dead-end and a panel says what Joon is doing, that the
+merchant can leave or reload safely, and shows looked at / not receiving /
+deliberately left alone / candidates / control / treatment. Zeroes are hidden
+while in flight, because "0 left alone" three seconds in means "not counted
+yet". Approve is disabled throughout, and the existing delivery gate still
+wins. Needs-attention shows the reason, "Nothing has been sent", and a retry.
+
+The view model is a pure function so the wording lives in one place and is
+testable without a DOM. One test asserts it leaks none of run, job, queue,
+worker, lease, database, row, resolving, assigning, chunk or Postgres.
+
+### C — order-driven scans at 100k
+
+| Measure | Result |
+| --- | --- |
+| Store | 100,000 customers, 50,000 with orders |
+| Scan duration | 124.7 s |
+| Retained heap | 0.24 MB |
+| Peak heap above baseline | 18.65 MB |
+| Postgres transactions | **166** |
+| Opportunities produced | 5 |
+| Cross-sell anti-join | 37,500 of 50,000, exact against a SQL reference |
+| Sends, assignments, campaigns moved to sending | **0** |
+
+166 transactions for a 100k store is the point: the scans sample and aggregate
+rather than walking customers, so they are query-cheap even though slow in wall
+time.
+
+**Limitation:** `repurchase_window` did not fire, because the fixture seeds no
+`ProductRepurchaseCycle` rows. Low stock and cross-sell are verified at 100k;
+repurchase window remains verified only at the smaller fixture.
+
 ## Where the ~6,000 transactions at 100k come from — 2026-09-20T19:23:35Z
 
 _Status: **verified**. Investigated rather than optimised: the point is to know
@@ -767,6 +812,8 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T06:37:48Z | `3100465` | verified | **Pass 8B item C verified at 100k**: 124.7 s, 0.24 MB retained, 166 transactions, cross-sell anti-join exact at 37,500 of 50,000, zero sends. A fixture defect of mine looked like a code defect first — [A, lowStock] co-occurred more than [A, B], so the scanner correctly picked a different pair. | `repurchase_window` not exercised at 100k; the fixture seeds no repurchase cycles |
+| 2026-09-21T06:37:48Z | `8c31c5e` | verified | **Pass 8B.2 complete.** "Preparing audience" replaces the Draft dead-end; polls while active, stops when settled; merchant-language counts with zeroes hidden in flight; reload guidance; sending disabled until ready; needs-attention shows reason, "Nothing has been sent" and a retry. 8 tests, one asserting the wording leaks no infrastructure terms. | No browser-level test; the view model is tested as a pure function |
 | 2026-09-21T06:11:29Z | pending | pending | Pass 8B item B split into **B.1 durable preparation backend (verified)** and **B.2 preparation UI (pending)**. Two measurement labels corrected: a negative heap delta now reads "no retained heap growth detected", not proof of zero retention; "sends dispatched" now reads "one simulated send-orchestration job dispatched", with seven new assertions proving zero live provider calls, zero real deliveries and zero rows in billing, Results, warm-up, reputation and causal proof. | B.2 not started at this timestamp |
 | 2026-09-21T05:45:39Z | `042fdeb` | verified | **Pass 8B item B complete.** All ten acceptance scenarios covered by named tests. Three real gaps closed: progress had no run id, no failure reason or recoverability, and no query for a reloaded page. 100k through the real job path with a forced crash and automatic recovery: API-side work 6 ms, 0 duplicate rows, 0 arm mismatches of 90,909, 1 simulated dispatch. Integration 47/47. | Progress is returned by the API but not yet rendered in the campaign UI |
 | 2026-09-21T05:14:53Z | `63f38f2` | verified | **Pass 8B item A complete.** Re-audited every wall-clock read reachable from the frozen evaluation path; all that remain are default parameters or operational timestamps (run asOf, lease expiry, assignedAt/completedAt). Three end-to-end tests on a fixture where frozen and wall-clock evaluation cannot agree by accident: identical decisions across two executions, genuine divergence from live evaluation, and a resumed run matching an uninterrupted one. Integration 39/39. | Delivery-time rechecks remain deliberately current-time; that separation is pinned separately |
