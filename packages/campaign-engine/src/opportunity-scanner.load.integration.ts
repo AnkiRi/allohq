@@ -171,8 +171,29 @@ async function seedStore(prisma: any, customers: number) {
     seen += page.length;
     cursor = page[page.length - 1]!.id;
   }
+  // Without a repurchase cycle the repurchase-window scanner returns before it
+  // touches an order, so it was never exercised at scale. Orders sit 10 days
+  // back, and a 10-day median puts them inside the [median-7, median+7] window.
+  const repurchaseMedianDays = 10;
+  await prisma.productRepurchaseCycle.create({
+    data: {
+      productId: productA,
+      storeId: store.id,
+      medianDays: repurchaseMedianDays,
+      avgDays: repurchaseMedianDays,
+      sampleSize: 40,
+      confidence: 0.9,
+    },
+  });
   await prisma.$executeRawUnsafe("ANALYZE");
-  return { workspaceId: workspace.id, storeId: store.id, productA, productB, lowStock };
+  return {
+    workspaceId: workspace.id,
+    storeId: store.id,
+    productA,
+    productB,
+    lowStock,
+    repurchaseMedianDays,
+  };
 }
 
 test(
@@ -188,7 +209,7 @@ test(
           "A skipped memory proof is not a passing memory proof."
       );
     }
-    const { prisma, scanOpportunities, opportunityFingerprint, opportunityJobId } = await load();
+    const { prisma, scanOpportunities, opportunityJobId } = await load();
     const fixture = await seedStore(prisma, SIZE);
     try {
       const baselineHeap = await settle();
@@ -229,10 +250,76 @@ test(
         ].join("\n")
       );
 
-      // --- the three order-driven scans must have produced something ---
+      // --- all three order-driven scans must fire at this size ---
+      assert.deepEqual(
+        [...orderDriven].sort(),
+        ["cross_sell", "low_stock", "repurchase_window"],
+        `expected all three order-driven scans to fire, saw: ${orderDriven.join(", ") || "none"}`
+      );
+
+      // --- repurchase window must be exactly right, not merely present ---
+      const repurchase = byType.get("repurchase_window");
+      const windowStart = new Date(
+        Date.now() - (fixture.repurchaseMedianDays + 7) * 86_400_000
+      );
+      const windowEnd = new Date(Date.now() - (fixture.repurchaseMedianDays - 7) * 86_400_000);
+      const expectedRepurchase = await prisma.$queryRaw<Array<{ expected: bigint }>>`
+        SELECT COUNT(DISTINCT o."customerId")::bigint AS expected
+        FROM "order_items" oi
+        JOIN "orders" o ON o."id" = oi."orderId"
+        WHERE o."storeId" = ${fixture.storeId}
+          AND oi."productId" = ${fixture.productA}
+          AND o."createdAt" >= ${windowStart}
+          AND o."createdAt" <= ${windowEnd}
+      `;
+      assert.equal(
+        repurchase.customerCount,
+        Number(expectedRepurchase[0]?.expected ?? -1),
+        "the repurchase window must select exactly the customers inside it at 100k"
+      );
+      assert.equal(
+        repurchase.customerIds,
+        undefined,
+        "repurchase window still materialises a customer id array"
+      );
+
+      // --- per-scanner attribution, so no scanner hides inside the aggregate ---
+      const telemetry: Array<{
+        scanner: string;
+        durationMs: number;
+        transactions: number;
+        opportunities: number;
+        retainedHeapBytes: number | null;
+      }> = [];
+      const telemetryHeapBefore = await settle();
+      await scanOpportunities(fixture.storeId, { telemetry });
+      const telemetryHeapAfter = await settle();
+
+      console.log(
+        [
+          "",
+          "  per-scanner attribution (sequential mode; concurrent wall time above)",
+          `  ${"scanner".padEnd(20)} ${"duration".padStart(10)} ${"txns".padStart(6)} ${"retained".padStart(11)}  found`,
+          ...telemetry.map(
+            (entry) =>
+              `  ${entry.scanner.padEnd(20)} ${`${(entry.durationMs / 1000).toFixed(1)} s`.padStart(10)} ${String(entry.transactions).padStart(6)} ${(entry.retainedHeapBytes === null ? "n/a" : `${mb(entry.retainedHeapBytes)} MB`).padStart(11)}  ${entry.opportunities}`
+          ),
+          `  ${"TOTAL (sequential)".padEnd(20)} ${`${(telemetry.reduce((sum, e) => sum + e.durationMs, 0) / 1000).toFixed(1)} s`.padStart(10)} ${String(telemetry.reduce((sum, e) => sum + e.transactions, 0)).padStart(6)} ${`${mb(telemetryHeapAfter - telemetryHeapBefore)} MB`.padStart(11)}`,
+          "",
+        ].join("\n")
+      );
+
+      const repurchaseTelemetry = telemetry.find((e) => e.scanner === "repurchase_window");
+      assert.ok(repurchaseTelemetry, "repurchase window produced no telemetry");
+      assert.equal(
+        repurchaseTelemetry.opportunities,
+        1,
+        "repurchase window must produce its opportunity in telemetry mode too"
+      );
       assert.ok(
-        orderDriven.length >= 2,
-        `expected the order-driven scans to fire at this size, saw: ${orderDriven.join(", ")}`
+        repurchaseTelemetry.retainedHeapBytes === null ||
+          repurchaseTelemetry.retainedHeapBytes < 8 * 1024 * 1024,
+        `repurchase window retained ${mb(repurchaseTelemetry.retainedHeapBytes ?? 0)} MB`
       );
 
       // --- fingerprints stay deterministic and match the materialised form ---

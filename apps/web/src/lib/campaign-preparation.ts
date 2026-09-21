@@ -148,3 +148,17 @@ export function canApproveDelivery(input: {
   if (input.campaignStatus !== "draft") return false;
   return !preparationView(input.progress).sendingBlocked;
 }
+
+/**
+ * How often the campaign page should re-ask for preparation status, in ms, or
+ * false to stop. Kept here rather than inline in the page so the polling policy
+ * is provable: it must start while work is in flight and stop the moment the
+ * run settles, or a finished campaign would poll forever.
+ */
+export const PREPARATION_POLL_MS = 2_000;
+
+export function preparationPollInterval(
+  progress: PreparationProgress | null | undefined
+): number | false {
+  return preparationView(progress).poll ? PREPARATION_POLL_MS : false;
+}

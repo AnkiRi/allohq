@@ -10,6 +10,7 @@ export type {
 
 // Opportunity Scanner
 export { scanOpportunities } from "./opportunity-scanner";
+export type { OpportunityScanTelemetry } from "./opportunity-scanner";
 export { opportunityFingerprint, opportunityJobId } from "./opportunity-dedupe";
 
 // Campaign Factory
