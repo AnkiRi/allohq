@@ -1096,6 +1096,112 @@ crash injected, recovery started, preparation complete, verification started,
 verification complete. They say where the harness got to. They never say it
 passed.
 
+## Control-selection bottleneck — the 100k baseline — 2026-09-21T11:08:46Z
+
+_Status: **diagnosis in progress**, commit `7822338`. The 100,000-candidate
+half of the measurement is complete. **The million-candidate half is not**, and
+nothing here explains the measured 468-second statement on its own — see the
+gap at the end. Behaviour is frozen: no candidate has been adopted._
+
+Measured on an isolated disposable Postgres, local, as actually configured:
+`work_mem` 4 MB, `shared_buffers` 128 MB, `maintenance_work_mem` 64 MB,
+`max_parallel_workers_per_gather` 2, default fillfactor. Nothing was tuned
+before measuring.
+
+### Where the time goes at 100,000 candidates
+
+| Measurement | Value |
+| --- | --- |
+| Whole statement | **5,027 ms** (4,954 ms on a second run after restoring config — reproducible within 1.5%) |
+| Ranking alone — the window function, no write | **193 ms** |
+| Everything else — applying the update | **~4,830 ms, about 96%** |
+| Sort method | external merge, **Disk 7,960 kB** |
+| Temp files / bytes | 1 / 8,151,040 |
+| Buffers touched | **2,427,846 shared hits for 100,000 updated rows — about 24 per row** |
+| WAL | **805,948 records, 105,143,434 bytes — about 1,051 bytes per updated row** |
+| Table | heap 39 MB, six indexes 71 MB, total 110 MB |
+
+**The ranking is not the bottleneck.** The sort spills to disk and still costs
+under 200 ms. The cost is writing.
+
+### Why the write costs so much
+
+Changing `arm` cannot be a HOT update. The row is about 410 bytes, so a page
+holds roughly nineteen of them, and the statement updates **every** row — a
+new version of every row cannot fit beside the old one whatever the free space
+is. Each non-HOT update writes a new heap tuple and a new entry in all six
+indexes.
+
+Measured rather than assumed, by removing each cause in turn:
+
+| Variant | Time | Buffers | WAL records | WAL bytes |
+| --- | --- | --- | --- | --- |
+| Baseline | 4,954 ms | 2,427,846 | 809,851 | 103 MB |
+| Without the `(runId, arm)` index | 3,958 ms | 2,088,329 | 691,466 | 84 MB |
+| Without that index **and** fillfactor 90 | 3,629 ms | 1,751,902 | 577,683 | 69 MB |
+
+Even with the only index containing `arm` removed and 10% free space on every
+page, the statement still wrote **5.8 WAL records per row**. It did not go HOT,
+which is the direct evidence for the paragraph above.
+
+### The candidate this points at — measured, not adopted
+
+Only 14,996 of 100,000 candidates become CONTROL. Writing just those:
+
+| Variant | Time | WAL records | WAL bytes |
+| --- | --- | --- | --- |
+| Update every candidate (current) | 4,954 ms | 809,851 | 103 MB |
+| Update only the control rows | **1,272 ms** | **121,579** | **14 MB** |
+
+**3.9x faster, 7x less WAL**, at 100,000.
+
+For the product to do this, `TREATMENT` would have to be the provisional value
+written when the candidate row is inserted — which is the pattern the engine
+already uses for `assignmentStratum` and `assignmentHash`, both written
+provisionally and fixed up for pooled strata once the census closes.
+
+**Not adopted, and not proposed yet.** It changes what a non-null `arm` means
+on a run that has not finished, which is a change to the durable state machine
+and needs its own crash-and-resume proof, not just a faster number. It also has
+to clear the full battery before it could be retained: exact arm parity,
+sparse-stratum pooling parity, crash and recovery, duplicates, isolation and
+zero side effects, with plan, WAL, temp I/O, locks and memory compared against
+this baseline.
+
+### What this does not explain
+
+At 100,000 candidates the statement takes 5.0 s. Scaled linearly to the 772,929
+candidates measured at a million, that is about **38 s**. The measured value
+was **468 s** — roughly **twelve times worse than linear**.
+
+So the 100k profile does not explain the million-customer bottleneck. Something
+changes with size that is not visible here. The shapes worth checking in the
+1M plan, stated as hypotheses rather than conclusions:
+
+- the hash join's build side is 100,000 rows at 7,274 kB in one batch here; at
+  772,929 rows it would be roughly 56 MB against a 4 MB `work_mem`, so it would
+  have to spill across many batches;
+- the sort spills 8 MB here and would spill roughly 60 MB there;
+- the table is 39 MB here and about 400 MB there, against 128 MB of
+  `shared_buffers`, so index writes would stop being cache hits.
+
+**None of these is established.** The million-candidate
+`EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS)` is the next measurement, and no
+candidate will be prototyped against a bottleneck that has not been measured at
+the size it appears at.
+
+### Infrastructure note
+
+The million-customer work does not fit on the laptop while a browser is open.
+Measured at the moment the local run was killed: **0.05 GB of system memory
+free**, with **2.42 GB held by Chrome** on an 8 GB machine; the run stopped at
+387 s during recovery, before its verifier ran. Disk was never the constraint —
+57 GB free, and the disposable database had reached 3.6 GB. The same workload
+completed on this machine before, so this is memory availability, not capacity.
+The proof now runs on a hosted runner (16 GB) via
+`.github/workflows/million.yml`, on demand or on a `proof/**` branch. No paid
+infrastructure was provisioned.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -1329,6 +1435,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-21T11:08:46Z | `7822338` `8c9484d` | **diagnosis in progress** | 100k control-selection baseline measured. Whole statement 5,027 ms; ranking alone 193 ms, so ~96% is the write. 2,427,846 buffers and 805,948 WAL records for 100,000 updated rows. Proven not HOT: removing the only index containing `arm` and giving pages 10% free space still wrote 5.8 WAL records per row. Writing only the 14,996 control rows measured 1,272 ms and 14 MB of WAL — 3.9x faster, 7x less WAL. Behaviour frozen; nothing adopted. | Does not explain the million-customer statement: 5.0 s at 100k scales linearly to ~38 s at 772,929 candidates, but 468 s was measured. The 1M EXPLAIN is still pending, and no candidate will be prototyped before it. The 1M work moved to a hosted runner after the local run was killed with 0.05 GB free and 2.42 GB held by Chrome |
 | 2026-09-21T10:47:19Z | `7db1e9c` | **implemented and verified at 20,000** | The 1M verifier no longer calls the product's assignment code. It re-derives the documented hash, pooling, quota and ranking independently, measures its own memory separately, prints structured checkpoints, and prints the verdict after the checks rather than before. Proven able to fail: three mutations each failed exactly the checks that name them. Fixture now reserves 8 strata of 5, exempt from every exclusion, so pooling is exercised — 40 candidates, 6 control. 25 of 25 checks passed at 20,000. | Not yet run at a million with this oracle; that is a separate result. Measured: storing a double through Prisma keeps 16 significant digits, so 3,941 of 15,467 stored hashes differ from the exact value by one or two ULP — recorded, not changed, because fixing it would alter deterministic assignment storage |
 | 2026-09-21T10:33:04Z | `8dde4c6` | **implemented and verified** | Part 1 preparation UI proof completed. Approval and genuine failure each write one durable in-app Activity entry with treatment, control and deliberately-left-alone counts and a campaign link; `messageLog` asserted at 0 rows on both paths. Client tests strengthened from "the approve button is disabled" to "no enabled control in the preparation surface can start or schedule a dispatch", verified by mutation (3 of 6 fail with the gate removed). typecheck 19/19, unit 352/352, integration 50/50. | The campaign page passes `showApproveAction={false}` and renders its own approve control, so the client tests drive the shared gate function, not the page's own button. A fabricated "Schedule for later" button was removed before commit; scheduling is proved through the single gated dialog entry and the timing-independent `AUDIENCE_RUN_NOT_COMPLETE` refusal |
 | 2026-09-21T09:58:22Z | `fccb542` | **functional pass, performance pending** | 1M attempt 3: 1,000,000 customers, 772,929 candidates, 115,936 control, 656,993 treatment, 0 duplicate members, 0 duplicate assignments, 0 arm mismatches, 0 live-provider calls, 0 downstream side effects, forced crash and recovery succeeded. API 4 ms. | Control-selection UPDATE measured **468,127 ms**; verifier memory not separately measured; hash parity partly tautological; pooling not independently exercised at 1M |
