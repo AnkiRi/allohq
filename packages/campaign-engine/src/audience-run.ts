@@ -469,6 +469,19 @@ async function resolveAndAssign(
       `Audience run ${run.id} left ${unassigned} of ${candidateCount} candidates unassigned`
     );
   }
+  // Candidates are inserted as TREATMENT, so "no candidate is still null" no
+  // longer distinguishes a run whose control group was drawn from one where
+  // the draw never ran. The quota does: it is the number of rows the plan said
+  // to withhold, and only the draw can produce it.
+  const plannedControl = Object.values(plan.strata).reduce(
+    (total, stratum) => total + stratum.controlCount,
+    0
+  );
+  if (controlCount !== plannedControl) {
+    throw new Error(
+      `Audience run ${run.id} drew ${controlCount} control of a planned ${plannedControl}`
+    );
+  }
 
   const diagnostics = {
     memberWriteStatements,
@@ -517,6 +530,16 @@ async function resolveAndAssign(
  * Exact per-stratum control selection, performed by Postgres over the durable
  * rows. One statement for the whole audience: each candidate is ranked inside
  * its assignment stratum and the first `controlCount` are marked CONTROL.
+ *
+ * Every candidate's arm is written, including the ones that end up TREATMENT,
+ * and that is deliberate. Writing only the control rows was measured at a
+ * million candidates as 11,064 ms against 63,679 ms, with 180 MB of WAL
+ * against 4,230 MB — but it requires candidates to arrive already marked
+ * TREATMENT, which makes "this member was deliberately assigned" unreadable
+ * from the row. `materialiseMeasurementAssignments` uses exactly that
+ * (`arm IS NOT NULL`) to refuse to grant delivery authority to an unassigned
+ * member. Trading that for eleven per cent of a background job's wall time is
+ * not a trade worth making on the path that decides who is withheld.
  *
  * `customerId` is compared with the C collation so the tiebreak is byte order
  * regardless of database locale, matching the in-memory reference ranking for

@@ -99,6 +99,9 @@ jobs:
           MODE=reset pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
           MODE=explain pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
 
+      - name: Storage variants that change no behaviour
+        run: MODE=variants pnpm --filter @allohq/workers exec tsx src/workers/control-selection.diagnostic.ts
+
       - name: Table and index sizes
         if: always()
         run: |

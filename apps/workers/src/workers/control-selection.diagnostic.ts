@@ -16,6 +16,9 @@
  *   MODE=explain ... EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS) one run
  *   MODE=reset   ... set arm back to NULL and VACUUM, ready for another trial
  *   MODE=breakdown . the component costs, each from the same reset state
+ *   MODE=variants  . the same statement under storage variants that change no
+ *                    behaviour at all: the unused ordering index removed, and
+ *                    free space left on each page
  *   MODE=status  ... what is in the disposable database right now
  *
  *   MODE=explain TEST_DATABASE_URL=... npx tsx apps/workers/src/workers/control-selection.diagnostic.ts
@@ -99,6 +102,96 @@ async function main() {
     // a comparable starting state, and say so in the output.
     await prisma.$executeRawUnsafe(`VACUUM (ANALYZE) "campaign_audience_members"`);
     console.log(`reset ${cleared.toLocaleString()} rows in ${(Number(process.hrtime.bigint() - started) / 1e9).toFixed(1)}s, vacuumed and analyzed`);
+    return;
+  }
+
+  if (MODE === "variants") {
+    const quotas = quotaValuesFrom(run.diagnostics);
+    if (quotas.length === 0) {
+      console.error("the run has no stored quota plan; cannot reproduce the statement");
+      process.exit(1);
+    }
+    const ORDERING_INDEX = "campaign_audience_members_runId_assignmentStratum_assignmen_idx";
+    const createOrderingIndex =
+      `CREATE INDEX IF NOT EXISTS "${ORDERING_INDEX}" ON "campaign_audience_members"` +
+      `("runId","assignmentStratum","assignmentHash","customerId")`;
+
+    // Each arm starts from a freshly rewritten table. Repeated trials leave
+    // dead tuples behind, and measuring the fourth trial against the first
+    // measures bloat rather than the change: locally the same statement drifted
+    // from 4,954 ms to 7,252 ms across eight trials before a VACUUM FULL.
+    const arms: Array<{ name: string; before: string[]; after: string[] }> = [
+      { name: "as it is today", before: [], after: [] },
+      {
+        name: "without the ordering index the planner never uses",
+        before: [`DROP INDEX IF EXISTS "${ORDERING_INDEX}"`],
+        after: [createOrderingIndex],
+      },
+      {
+        name: "fillfactor 90, all indexes",
+        before: [`ALTER TABLE "campaign_audience_members" SET (fillfactor = 90)`],
+        after: [`ALTER TABLE "campaign_audience_members" SET (fillfactor = 100)`],
+      },
+      {
+        name: "fillfactor 90, without the ordering index",
+        before: [
+          `ALTER TABLE "campaign_audience_members" SET (fillfactor = 90)`,
+          `DROP INDEX IF EXISTS "${ORDERING_INDEX}"`,
+        ],
+        after: [
+          `ALTER TABLE "campaign_audience_members" SET (fillfactor = 100)`,
+          createOrderingIndex,
+        ],
+      },
+    ];
+
+    const results: Array<Record<string, string>> = [];
+    for (const arm of arms) {
+      for (const statement of arm.before) await prisma.$executeRawUnsafe(statement);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "campaign_audience_members" SET "arm" = NULL WHERE "runId" = $1 AND "arm" IS NOT NULL`,
+        run.id
+      );
+      await prisma.$executeRawUnsafe(`VACUUM FULL "campaign_audience_members"`);
+      await prisma.$executeRawUnsafe(`ANALYZE "campaign_audience_members"`);
+      const plan = await prisma.$queryRawUnsafe<Array<Record<string, string>>>(
+        `EXPLAIN (ANALYZE, BUFFERS, WAL, TIMING) ${statementSql(run.id, quotas)}`
+      );
+      const text = plan.map((row) => Object.values(row)[0]).join("\n");
+      const indexRows = await prisma.$queryRawUnsafe<Array<{ indexes: bigint }>>(
+        `SELECT COALESCE(SUM(pg_relation_size(i.indexrelid)), 0)::bigint AS indexes
+         FROM pg_index i WHERE i.indrelid = 'campaign_audience_members'::regclass`
+      );
+      const indexes = indexRows[0]?.indexes ?? 0n;
+      results.push({
+        arm: arm.name,
+        ms: match(text, /Execution Time: ([\d.]+) ms/) ?? "?",
+        walRecords: match(text, /WAL: records=(\d+)/) ?? "0",
+        walBytes: match(text, /WAL:[^\n]*bytes=(\d+)/) ?? "0",
+        fpi: match(text, /WAL:[^\n]*fpi=(\d+)/) ?? "0",
+        buffers: match(text, /Buffers: shared hit=(\d+)/) ?? "0",
+        indexBytes: String(indexes),
+        usedIndex: /Index (Only )?Scan/.test(text) ? "yes" : "no",
+      });
+      for (const statement of arm.after) await prisma.$executeRawUnsafe(statement);
+      console.log(`  measured: ${arm.name}`);
+    }
+
+    const candidates = await prisma.campaignAudienceMember.count({
+      where: { runId: run.id, decision: "campaign_candidate" },
+    });
+    console.log(`\n=== STORAGE VARIANTS — ${candidates.toLocaleString()} candidates ===`);
+    console.log("  Each arm changes storage only. None changes which customers are control.\n");
+    for (const row of results) {
+      console.log(`  ${row["arm"]}`);
+      console.log(`    execution ............ ${Number(row["ms"]).toLocaleString()} ms`);
+      console.log(`    WAL .................. ${Number(row["walRecords"]).toLocaleString()} records, ${(Number(row["walBytes"]) / 1048576).toFixed(1)} MB, ${Number(row["fpi"]).toLocaleString()} full-page images`);
+      console.log(`    shared buffer hits ... ${Number(row["buffers"]).toLocaleString()}`);
+      console.log(`    indexes on the table . ${(Number(row["indexBytes"]) / 1048576).toFixed(0)} MB`);
+      console.log(`    planner used an index  ${row["usedIndex"]}`);
+      console.log("");
+    }
+    await resetArms(prisma, run.id);
     return;
   }
 
