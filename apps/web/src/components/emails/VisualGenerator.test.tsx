@@ -30,17 +30,15 @@ const render = (overrides: Record<string, unknown> = {}) =>
 test("product-safe explains grounding by compositing, not by the model", () => {
   const markup = render({ mode: "product_safe" });
   assert.match(markup, /real Shopify product image/);
-  assert.match(markup, /stay exactly as they are/);
-  assert.match(markup, /composited rather than photographed/);
+  assert.match(markup, /composited over scenery/);
+  assert.match(markup, /not a photograph of the product being used in that setting/);
 });
 
 test("creative concept never implies the real product will appear", () => {
-  // Every provider is text-to-image only; no reference image is sent. Copy that
-  // implied product accuracy here would be a promise nothing can keep.
   const markup = render({ mode: "creative_concept" });
-  assert.match(markup, /never seen your product/);
-  assert.match(markup, /will not match what you sell/);
-  assert.match(markup, /No product reference is sent to the model/);
+  assert.match(markup, /Illustrative campaign art/);
+  assert.match(markup, /must not be presented as your actual product/);
+  assert.match(markup, /current image providers cannot take your product photo/);
   assert.doesNotMatch(markup, /product-grounded|accurate product|photograph of your product/i);
 });
 

@@ -123,21 +123,32 @@ test("each mode has a label a merchant can read on the asset", () => {
   assert.equal(modeLabel("creative_concept"), "Illustrative concept");
 });
 
-test("creative concept never claims to show the real product", () => {
-  // Every configured provider is text-to-image only — none accepts a reference
-  // image — so the model has never seen the merchant's product.
+test("creative concept never claims to depict the real product", () => {
   const promise = modePromise("creative_concept");
-  assert.match(promise, /never seen your product/);
-  assert.match(promise, /will not match what you sell/);
-  assert.match(promise, /never as a picture of the actual product/);
-  assert.doesNotMatch(promise, /photograph of your product|accurate|product-grounded/i);
+  assert.match(promise, /Illustrative campaign art/);
+  assert.match(promise, /invented/);
+  assert.match(promise, /must not be presented as your actual product/);
+  assert.doesNotMatch(promise, /photograph of your product|accurately depict|product-grounded/i);
 });
 
-test("product-safe is honest about what compositing can and cannot do", () => {
+test("creative concept blames the provider path, not the idea", () => {
+  // Reference-grounded generation is a deferred VisualProvider capability, so
+  // the wording must not read as though it were impossible.
+  const promise = modePromise("creative_concept");
+  assert.match(promise, /current image providers/, "the limit is stated as the path we have today");
+  assert.doesNotMatch(promise, /impossible|cannot ever|never possible/i);
+});
+
+test("product-safe says what compositing is, and what it is not", () => {
   const promise = modePromise("product_safe");
   assert.match(promise, /real Shopify product image/);
+  assert.match(promise, /composited over scenery/);
   assert.match(promise, /stay exactly as they are/);
-  assert.match(promise, /composited rather than photographed/, "placement is not claimed as photography");
+  assert.match(
+    promise,
+    /not a photograph of the product being used in that setting/,
+    "natural use is not claimed",
+  );
 });
 
 test("brand aesthetic is passed through when there is one", () => {

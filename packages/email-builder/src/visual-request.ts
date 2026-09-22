@@ -14,32 +14,45 @@
  */
 
 /**
- * IMPORTANT, and the reason the two modes differ so sharply: every configured
- * image provider is TEXT-TO-IMAGE ONLY. None of them accepts a reference
- * image, so no model here has ever seen the merchant's product.
+ * Why the two modes differ so sharply, and what would change that.
  *
- * That makes `product_safe` grounded by COMPOSITING, not by the model: the
- * generator paints an empty setting and the authoritative Shopify product
- * pixels are pasted over it afterwards. And it makes `creative_concept`
- * ungrounded entirely — anything product-shaped in that output is the model's
- * invention, not the merchant's product.
+ * The CURRENT provider path is text-to-image only: no configured provider
+ * receives the actual Shopify product image as a reference input. That is a
+ * property of the providers wired up today, NOT a limit of the idea.
+ *
+ * As things stand:
+ *
+ *   - `product_safe` is grounded by COMPOSITING, not by the model. The
+ *     generator paints scenery and the authoritative product pixels are placed
+ *     over it. The product is exact; the scene around it is assembled.
+ *   - `creative_concept` is ungrounded. Anything product-shaped in that output
+ *     is the model's invention.
+ *
+ * DEFERRED — reference-grounded generation. A `VisualProvider` implementation
+ * that accepts the real product image as an input/reference (image-to-image,
+ * or a model with reference conditioning) is a later capability, not a
+ * closed door. Before any claim such as "a person using this exact product"
+ * is allowed, that path must exist AND product fidelity must be proven —
+ * packaging, logo, colourway and proportions checked against the source
+ * image, not assumed from the provider's marketing.
  */
 export type VisualMode =
   /**
-   * The product stays itself, because its real pixels are composited in. The
-   * generator is told to paint the setting and nothing else.
+   * The real Shopify product image composited over generated scenery. The
+   * generator is told to paint the setting and nothing else, so packaging,
+   * shape, logo and any text on the product stay exactly as they are.
    *
-   * The product is exact; its PLACEMENT is a composite. Grip, contact shadows
-   * and perspective are approximate rather than photographed.
+   * It is NOT a photograph of the product being naturally used in that
+   * setting. Grip, contact shadows and perspective are assembled, not
+   * observed.
    */
   | "product_safe"
   /**
-   * Free interpretation — scenes, people, environments, moods.
+   * Illustrative generated campaign art — scenes, people, environments, moods.
    *
-   * No product reference reaches the model, so any product it draws is
-   * invented and will not match the real one. Output is illustrative concept
-   * artwork and must never be presented as product photography or as showing
-   * the merchant's actual product.
+   * The current provider path does not receive the actual product image as a
+   * reference, so this must not claim to accurately depict the merchant's
+   * product. Anything product-shaped in the output is invented.
    */
   | "creative_concept";
 
@@ -180,8 +193,8 @@ export function modeLabel(mode: VisualMode): string {
  */
 export function modePromise(mode: VisualMode): string {
   return mode === "product_safe"
-    ? "Joon paints the setting and places your real Shopify product image into it, so packaging, shape, logo and any text on the product stay exactly as they are. How it sits in the scene — grip, shadows, angle — is composited rather than photographed."
-    : "Joon invents the whole picture. It has never seen your product, so anything product-shaped in the result is made up and will not match what you sell. Use it for mood and backdrops, never as a picture of the actual product.";
+    ? "Your real Shopify product image, composited over scenery Joon generates. Packaging, shape, logo and any text on the product stay exactly as they are. It is not a photograph of the product being used in that setting — the scene around it is assembled."
+    : "Illustrative campaign art. Joon's current image providers do not receive your product image as a reference, so anything product-shaped here is invented and must not be presented as your actual product. Use it for mood, scenes and backdrops.";
 }
 
 /**

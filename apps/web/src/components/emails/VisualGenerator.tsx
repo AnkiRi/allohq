@@ -84,9 +84,9 @@ export function VisualGenerator({
         <p className="mt-1.5 text-[11px] text-muted-foreground">{modePromise(mode)}</p>
         {mode === "creative_concept" ? (
           <p className="mt-1.5 rounded-lg border border-[var(--attention,#C99116)]/40 bg-[var(--attention-soft,#FFF0B8)] p-2 text-[11px]">
-            No product reference is sent to the model, so a board, bottle or jar it
-            draws is invented. For the real product in a new setting, use
-            “{modeLabel("product_safe")}”.
+            Joon’s current image providers cannot take your product photo as a
+            reference, so a board, bottle or jar drawn here is invented. For the
+            real product in a new setting, use “{modeLabel("product_safe")}”.
           </p>
         ) : null}
       </div>

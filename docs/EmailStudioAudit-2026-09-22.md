@@ -273,9 +273,17 @@ can change them.
 
 A request is now a list of named slots, each generated separately. Offer text
 in a prompt is refused **before a paid call is made**, with the reason. Two
-modes mean specific things: `product_safe` composites the real Shopify product
-image and tells the generator not to draw the product at all; `creative_concept`
-is labelled as a concept and may never be presented as product photography.
+modes mean specific things, and the distinction is load-bearing:
+
+- **Product-safe** — the real Shopify product image composited over generated
+  scenery. The generator is told not to draw the product at all, so packaging,
+  shape, logo and on-product text stay exactly as they are. It is **not** a
+  photograph of the product being naturally used in that setting; the scene
+  around it is assembled.
+- **Creative concept** — illustrative generated campaign art. The current
+  provider path does not receive the actual product image as a reference, so it
+  **must not claim to accurately depict the merchant's product**. Anything
+  product-shaped in the output is invented.
 
 Preflight gained two checks: a token Joon cannot fill **blocks** approval; a
 known token with no written fallback **warns**.
@@ -286,6 +294,7 @@ known token with no written fallback **warns**.
 
 | Item | Status |
 |---|---|
+| **Reference-grounded generation** | **Deferred VisualProvider capability, not a dead end.** The provider path wired up today is text-to-image only: no provider receives the Shopify product image as an input. A later `VisualProvider` implementation that accepts the real product image as an input/reference — image-to-image, or a model with reference conditioning — would change this. Before any claim such as "a person using this exact product" is permitted, that path must exist **and** product fidelity must be proven: packaging, logo, colourway and proportions checked against the source image, not assumed from a provider's marketing. |
 | Collection binding | **Deliberately not built.** Nothing resolves a collection at render time — `resolveProduct`/the grid read `productIds` and `dynamicProducts` only. Offering it would have been a promise the renderer cannot keep. A collections API endpoint was written and then removed rather than left as dead code. |
 | Frozen vs live data, surfaced | Not built as merchant-visible state. Approval freezes the document and brand kit; the distinction is real but not shown. |
 | Contrast checking in preflight | Not built. |
