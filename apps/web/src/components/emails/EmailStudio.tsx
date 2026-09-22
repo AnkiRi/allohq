@@ -3,8 +3,7 @@
 import * as React from "react";
 import {
   Check, Code2, FileClock, ImagePlus, Inspect, Loader2,
-  MessageSquareText, Plus, Redo2, Save, Send, ShieldCheck, ShoppingBag, Sparkles,
-  Undo2, X,
+  MessageSquareText, Plus, Send, ShieldCheck, ShoppingBag, Sparkles, X,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import {
@@ -15,6 +14,7 @@ import type { BrandKit } from "@allohq/emails";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { BlockList } from "./BlockList";
+import { StudioTopBar } from "./StudioTopBar";
 import { ScopeChooser, type AskScope } from "./AskScope";
 import { ShopifyDataPanel } from "./ShopifyDataPanel";
 import { VisualGenerator, type GeneratedVisual, type VisualFailure, type VisualMode, type VisualSlotDraft } from "./VisualGenerator";
@@ -68,9 +68,13 @@ const preflightEmail = (subject: string, previewText: string, blocks: EmailBlock
   };
 };
 
-export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText, initialHtml, brandKit, previewVariables, reasoning, templateId, storeId }: {
+export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText, initialHtml, brandKit, previewVariables, templateId, storeId, templateName, reviewHref }: {
   initialBlocks: EmailBlock[]; initialSubject: string; initialPreviewText: string; initialHtml: string;
-  brandKit?: BrandKit; previewVariables: Record<string, string>; reasoning?: string; templateId?: string; storeId?: string;
+  brandKit?: BrandKit; previewVariables: Record<string, string>; templateId?: string; storeId?: string;
+  /** Shown in the Studio top bar. */
+  templateName?: string;
+  /** Where the existing review/delivery flow continues, when there is one. */
+  reviewHref?: string | null;
 }) {
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(() => cloneBlocks(initialBlocks));
   const [subject, setSubject] = React.useState(initialSubject);
@@ -79,6 +83,9 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [html, setHtml] = React.useState(initialHtml);
   const [activeTab, setActiveTab] = React.useState<StudioTab>("ask");
   const [compactPanelOpen, setCompactPanelOpen] = React.useState(false);
+  const [outlineOpen, setOutlineOpen] = React.useState(true);
+  const [toolsOpen, setToolsOpen] = React.useState(true);
+  const askInputRef = React.useRef<HTMLTextAreaElement>(null);
   const [instruction, setInstruction] = React.useState("");
   const [askScope, setAskScope] = React.useState<AskScope>("document");
   const [visualMode, setVisualMode] = React.useState<VisualMode>("creative_concept");
@@ -114,6 +121,27 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   // Selecting a block narrows the next request to it. Widening back out to the
   // whole email stays a deliberate choice, never an inherited one.
   React.useEffect(() => { setAskScope(selectedId ? "block" : "document"); }, [selectedId]);
+
+  /**
+   * Cmd/Ctrl+J opens the Studio's OWN Ask Joon.
+   *
+   * The dashboard binds the same chord to the global panel. On this route that
+   * panel does not exist — the Studio layout sits outside its provider — so
+   * the chord would otherwise do nothing. It now focuses the Ask Joon a
+   * merchant is actually looking at.
+   */
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || (event.key !== "j" && event.key !== "J")) return;
+      event.preventDefault();
+      setActiveTab("ask");
+      setToolsOpen(true);
+      setCompactPanelOpen(true);
+      window.requestAnimationFrame(() => askInputRef.current?.focus());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const creativeAssetsQuery = (trpc.ai as any).listBrandAssets.useQuery(
     { storeId: storeId ?? "" }, { enabled: !!storeId },
   ) as { data?: Array<{ id: string; fileName: string; type: string; url?: string }>; refetch: () => Promise<unknown> };
@@ -388,29 +416,62 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
 
   return (
     <div className="relative flex h-[calc(100vh-6.25rem)] min-h-[640px] flex-col overflow-hidden rounded-[13px] border border-border bg-[var(--surface,#FFFDF8)] text-foreground shadow-[0_10px_36px_rgba(23,23,23,0.06)]">
-      <header className="flex min-h-[68px] shrink-0 items-center justify-between gap-4 border-b border-border px-5 py-3">
-        <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-[15px] font-medium">Email studio</p><span className="rounded-full border border-border bg-[var(--surface-soft,#ECE9E1)] px-2 py-0.5 text-[12px] text-muted-foreground">{proposal ? "Proposal ready" : dirty ? "Unsaved draft" : "Saved"}</span></div><p className="mt-0.5 truncate text-[12px] text-muted-foreground">{reasoning ?? "Select the email itself, direct Joon, or tune any detail precisely."}</p></div>
-        <div className="flex shrink-0 items-center gap-2">
-          {savedAt ? <span className="hidden text-[12px] text-muted-foreground md:inline">Saved {savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : null}
-          <IconButton label="Undo to previous version" onClick={() => restoreVersion(Math.max(0, versionCursor - 1))} disabled={versionCursor <= 0}><Undo2 className="h-4 w-4" /></IconButton>
-          <IconButton label="Redo version" onClick={() => restoreVersion(Math.min(versions.length - 1, versionCursor + 1))} disabled={versionCursor >= versions.length - 1}><Redo2 className="h-4 w-4" /></IconButton>
-          <span className="xl:hidden"><IconButton label="Add email block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></span>
-          <button type="button" onClick={() => setCompactPanelOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-[var(--surface,#FFFDF8)] px-2.5 py-2 text-[12px] text-muted-foreground hover:text-foreground xl:hidden"><Inspect className="h-4 w-4" />Tools</button>
-          {templateId ? <button type="button" onClick={saveDraft} disabled={saveMut.isPending || !dirty || !!proposal} className="inline-flex items-center gap-2 rounded-lg bg-[#17204D] px-3.5 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-40">{saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save version</button> : null}
-        </div>
-      </header>
+      <StudioTopBar
+        name={templateName ?? "Untitled email"}
+        state={dirty ? "draft" : "saved"}
+        canUndo={versionCursor > 0}
+        canRedo={versionCursor < versions.length - 1}
+        onUndo={() => restoreVersion(Math.max(0, versionCursor - 1))}
+        onRedo={() => restoreVersion(Math.min(versions.length - 1, versionCursor + 1))}
+        onPreview={() => renderMut.mutate({ blocks: effectiveBlocks, subject: effectiveSubject, previewText: effectivePreviewText, variables: previewVariables, storeId })}
+        onSave={saveDraft}
+        saving={saveMut.isPending}
+        reviewHref={reviewHref ?? null}
+        onAddBlock={() => setShowAdd((value) => !value)}
+        onOpenTools={() => setCompactPanelOpen(true)}
+      />
       {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} /> : null}
       {showAdd ? <div className="absolute right-3 top-[68px] z-50 w-56 overflow-hidden rounded-xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl xl:hidden"><BlockPicker onAdd={add} /></div> : null}
 
-      <div className="relative grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[220px_minmax(420px,1fr)_370px]">
-        <aside className="hidden min-h-0 flex-col border-r border-border bg-[#F4F2EC] xl:flex">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3"><div><p className="text-[13px] font-medium">Content</p><p className="text-[12px] text-muted-foreground">{blocks.length} blocks</p></div><IconButton label="Add block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></div>
+      <div
+        className={cn(
+          "relative grid min-h-0 flex-1 grid-cols-1",
+          // The canvas takes every column the side panes give up, so collapsing
+          // a pane actually buys the email width rather than leaving a gap.
+          outlineOpen && toolsOpen && "xl:grid-cols-[220px_minmax(0,1fr)_360px]",
+          outlineOpen && !toolsOpen && "xl:grid-cols-[220px_minmax(0,1fr)]",
+          !outlineOpen && toolsOpen && "xl:grid-cols-[minmax(0,1fr)_360px]",
+          !outlineOpen && !toolsOpen && "xl:grid-cols-[minmax(0,1fr)]",
+        )}
+      >
+        <aside className={cn("hidden min-h-0 flex-col border-r border-border bg-[#F4F2EC]", outlineOpen && "xl:flex")}>
+          <div className="flex items-center justify-between border-b border-border px-3 py-2"><div><p className="text-[13px] font-medium">Content</p><p className="text-[12px] text-muted-foreground">{blocks.length} blocks</p></div><IconButton label="Add block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></div>
+          <button type="button" onClick={() => setOutlineOpen(false)} className="mx-3 mt-2 rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground outline-none hover:bg-[#FFFDF8] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]">Hide outline</button>
           {showAdd ? <BlockPicker onAdd={add} /> : null}
           <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { setSelectedId(blockId); setActiveTab("inspect"); }} onMove={move} onRemove={remove} blockTitle={blockTitle} /></div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col bg-[#F4F2EC] p-3 md:p-5">
-          <div className="mb-3 grid shrink-0 gap-2 rounded-xl border border-border bg-[var(--surface,#FFFDF8)] p-3 md:grid-cols-2">
+        {!outlineOpen ? (
+          <button
+            type="button"
+            onClick={() => setOutlineOpen(true)}
+            className="absolute left-2 top-2 z-20 hidden rounded-lg border border-border bg-[#FFFDF8] px-2 py-1 text-[11px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E] xl:block"
+          >
+            Show outline
+          </button>
+        ) : null}
+        {!toolsOpen ? (
+          <button
+            type="button"
+            onClick={() => setToolsOpen(true)}
+            className="absolute right-2 top-2 z-20 hidden rounded-lg border border-border bg-[#FFFDF8] px-2 py-1 text-[11px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E] xl:block"
+          >
+            Show tools
+          </button>
+        ) : null}
+
+        <main className="flex min-h-0 min-w-0 flex-col bg-[#F4F2EC] p-2">
+          <div className="mb-2 grid shrink-0 gap-2 rounded-lg border border-border bg-[#FFFDF8] p-2 md:grid-cols-2">
             <EnvelopeField label="Subject" value={effectiveSubject} readOnly={!!proposal} onChange={(value) => { setSubject(value); setDirty(true); }} />
             <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={!!proposal} placeholder="The line people see beside the subject" onChange={(value) => { setPreviewText(value); setDirty(true); }} />
           </div>
@@ -418,8 +479,9 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         </main>
 
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
-        <aside className={cn("min-h-0 flex-col border-l border-border bg-[var(--surface,#FFFDF8)]", compactPanelOpen ? "fixed inset-x-3 bottom-3 top-24 z-40 flex overflow-hidden rounded-xl border shadow-2xl" : "hidden", "xl:static xl:z-auto xl:flex xl:overflow-visible xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none")}>
-          <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[var(--surface,#FFFDF8)] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
+        <aside className={cn("min-h-0 flex-col border-l border-border bg-[#FFFDF8]", !toolsOpen && "xl:hidden", compactPanelOpen ? "fixed inset-x-3 bottom-3 top-24 z-40 flex overflow-hidden rounded-xl border shadow-2xl" : "hidden", "xl:static xl:z-auto xl:flex xl:overflow-visible xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none")}>
+          <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[#FFFDF8] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
+
           <div role="tablist" aria-label="Email tools" className="shrink-0 border-b border-border bg-[#ECE9E1] p-1">
             {/*
               Three primary tabs are the whole everyday loop: look at a block,
@@ -437,10 +499,11 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
               <SecondaryTab active={activeTab === "preflight"} label="Checks" icon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={() => setActiveTab("preflight")} />
               <SecondaryTab active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-3.5 w-3.5" />} onClick={() => setActiveTab("versions")} />
               <SecondaryTab active={activeTab === "code"} label="Code" icon={<Code2 className="h-3.5 w-3.5" />} onClick={() => setActiveTab("code")} />
+              <button type="button" onClick={() => setToolsOpen(false)} aria-label="Hide tools panel" title="Hide tools panel" className="ml-1 hidden rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[#2D4F9E] xl:inline-flex"><X className="h-3.5 w-3.5" /></button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {activeTab === "ask" ? <AskPanel selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
+            {activeTab === "ask" ? <AskPanel inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} assets={creativeAssets} products={productPage?.products ?? []} /> : null}
             {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /> : null}
             {activeTab === "visuals" ? <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={Boolean(blockProduct?.imageUrl)} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} onGenerate={generateVisuals} onUseAsset={useVisual} /> : null}
@@ -458,9 +521,9 @@ function ProposalBar({ proposal, view, setView, reject, accept, pending }: { pro
   return <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex min-w-0 items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="truncate text-[13px]"><span className="font-medium">Joon proposed:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} className={cn("rounded-md px-2.5 py-1 text-[12px] capitalize", view === item && "bg-white shadow-sm")}>{item}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>;
 }
 
-function AskPanel({ selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {
+function AskPanel({ inputRef, selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { inputRef: React.RefObject<HTMLTextAreaElement | null>; selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {
   const suggestions = selected ? ["Make this clearer", "Try a stronger visual", "Shorten this block", "Match our brand voice"] : ["Make the email more visual", "Tighten the whole email", "Try a warmer direction", "Create a fresh layout"];
-  return <div className="flex min-h-full flex-col"><div className="p-4"><PanelHeading eyebrow="Ask Joon" title={selected ? blockTitle(selected) : "This email"} description="Every result arrives as a proposal you accept or reject. Nothing changes until you do." /><ScopeChooser scope={scope} setScope={setScope} selectedTitle={selected ? blockTitle(selected) : null} />{history.length ? <div className="mt-5 space-y-2 border-l border-border pl-3">{history.slice(-8).map((item) => <div key={item.id} className="rounded-r-xl bg-[#F4F2EC] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-[12px] leading-5">{item.instruction}</p><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", item.status === "accepted" ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : item.status === "rejected" ? "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]" : "bg-[var(--attention-soft,#FFF0B8)] text-foreground")}>{item.status}</span></div><p className="mt-1 text-[10px] text-muted-foreground">Joon prepared a reviewable change · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div> : <div className="mt-5 rounded-xl border border-border bg-[#F4F2EC] p-3"><div className="flex gap-2.5"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#17204D] text-[11px] font-medium text-white">J</div><p className="text-[13px] leading-5">Tell me what should change. I’ll keep the current version intact and show you the proposal before anything is applied.</p></div></div>}<div className="mt-3 flex flex-wrap gap-1.5">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => onAsk(suggestion)} disabled={pending} className="rounded-full border border-border px-2.5 py-1 text-[12px] hover:border-[var(--attention,#C99116)] hover:bg-[var(--attention-soft,#FFF0B8)] disabled:opacity-40">{suggestion}</button>)}</div><div className="mt-5"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[12px] font-medium">Reference assets</p><label className="cursor-pointer rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-[#F4F2EC]"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.currentTarget.value = ""; }} />{uploading ? "Uploading…" : "+ Upload"}</label></div><div className="flex flex-wrap gap-1.5">{assets.map((asset) => { const active = selectedAssetIds.includes(asset.id); return <button key={asset.id} type="button" onClick={() => setSelectedAssetIds((current) => active ? current.filter((id) => id !== asset.id) : [...current, asset.id])} className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px]", active ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border")}><ImagePlus className="h-3.5 w-3.5" />{asset.fileName}</button>; })}{!assets.length ? <p className="text-[12px] text-muted-foreground">Upload a product or campaign reference, then ask Joon to use or transform it.</p> : null}</div></div></div><div className="sticky bottom-0 mt-auto border-t border-border bg-[var(--surface,#FFFDF8)] p-3"><div className="rounded-xl border border-border bg-white p-2 focus-within:border-[var(--evidence,#2D4F9E)]"><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onAsk(); } }} rows={4} placeholder={scope === "block" && selected ? `Ask Joon about “${blockTitle(selected)}”…` : scope === "envelope" ? "Ask Joon about the subject or inbox preview…" : "Ask Joon about the whole email…"} className="w-full resize-none bg-transparent px-1 text-[14px] leading-5 outline-none" /><div className="flex items-center justify-between"><span className="text-[11px] text-muted-foreground">Enter to propose · Shift Enter for a new line</span><button type="button" onClick={() => onAsk()} disabled={pending || !instruction.trim()} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17204D] text-white disabled:opacity-40" aria-label="Ask Joon">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div></div>{error ? <p className="mt-2 text-[12px] text-[var(--risk,#B95849)]">{error}</p> : null}</div></div>;
+  return <div className="flex min-h-full flex-col"><div className="p-4"><PanelHeading eyebrow="Ask Joon" title={selected ? blockTitle(selected) : "This email"} description="Every result arrives as a proposal you accept or reject. Nothing changes until you do." /><ScopeChooser scope={scope} setScope={setScope} selectedTitle={selected ? blockTitle(selected) : null} />{history.length ? <div className="mt-5 space-y-2 border-l border-border pl-3">{history.slice(-8).map((item) => <div key={item.id} className="rounded-r-xl bg-[#F4F2EC] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-[12px] leading-5">{item.instruction}</p><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", item.status === "accepted" ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : item.status === "rejected" ? "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]" : "bg-[var(--attention-soft,#FFF0B8)] text-foreground")}>{item.status}</span></div><p className="mt-1 text-[10px] text-muted-foreground">Joon prepared a reviewable change · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div> : <div className="mt-5 rounded-xl border border-border bg-[#F4F2EC] p-3"><div className="flex gap-2.5"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#17204D] text-[11px] font-medium text-white">J</div><p className="text-[13px] leading-5">Tell me what should change. I’ll keep the current version intact and show you the proposal before anything is applied.</p></div></div>}<div className="mt-3 flex flex-wrap gap-1.5">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => onAsk(suggestion)} disabled={pending} className="rounded-full border border-border px-2.5 py-1 text-[12px] hover:border-[var(--attention,#C99116)] hover:bg-[var(--attention-soft,#FFF0B8)] disabled:opacity-40">{suggestion}</button>)}</div><div className="mt-5"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[12px] font-medium">Reference assets</p><label className="cursor-pointer rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-[#F4F2EC]"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.currentTarget.value = ""; }} />{uploading ? "Uploading…" : "+ Upload"}</label></div><div className="flex flex-wrap gap-1.5">{assets.map((asset) => { const active = selectedAssetIds.includes(asset.id); return <button key={asset.id} type="button" onClick={() => setSelectedAssetIds((current) => active ? current.filter((id) => id !== asset.id) : [...current, asset.id])} className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px]", active ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border")}><ImagePlus className="h-3.5 w-3.5" />{asset.fileName}</button>; })}{!assets.length ? <p className="text-[12px] text-muted-foreground">Upload a product or campaign reference, then ask Joon to use or transform it.</p> : null}</div></div></div><div className="sticky bottom-0 mt-auto border-t border-border bg-[var(--surface,#FFFDF8)] p-3"><div className="rounded-xl border border-border bg-white p-2 focus-within:border-[var(--evidence,#2D4F9E)]"><textarea ref={inputRef} value={instruction} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onAsk(); } }} rows={4} placeholder={scope === "block" && selected ? `Ask Joon about “${blockTitle(selected)}”…` : scope === "envelope" ? "Ask Joon about the subject or inbox preview…" : "Ask Joon about the whole email…"} className="w-full resize-none bg-transparent px-1 text-[14px] leading-5 outline-none" /><div className="flex items-center justify-between"><span className="text-[11px] text-muted-foreground">Enter to propose · Shift Enter for a new line</span><button type="button" onClick={() => onAsk()} disabled={pending || !instruction.trim()} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17204D] text-white disabled:opacity-40" aria-label="Ask Joon">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div></div>{error ? <p className="mt-2 text-[12px] text-[var(--risk,#B95849)]">{error}</p> : null}</div></div>;
 }
 
 function InspectorPanel({ selected, updateBlock, assets, products }: { selected: EmailBlock | null; updateBlock: (block: EmailBlock) => void; assets: Array<{ id: string; fileName: string; type: string; url?: string }>; products: Array<{ id: string; title: string; description?: string | null; imageUrl?: string | null; price: number; handle: string }> }) {
