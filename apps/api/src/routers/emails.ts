@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import {
+  buildSlotPrompt,
   complete,
   generateImage,
   loadBrandKit,
+  modeLabel,
   renderBrandedEmail,
+  validateVisualRequest,
 } from "@allohq/customer-intelligence";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
@@ -564,6 +567,150 @@ export const emailsRouter = router({
       } catch (err: any) {
         return fail(err?.message ?? "joon is unavailable right now. Your email is unchanged.");
       }
+    }),
+
+  /**
+   * Generate several labelled email visuals from one merchant action.
+   *
+   * Each slot is generated SEPARATELY, so the merchant gets four selectable
+   * assets rather than one collage they have to crop apart. Nothing is applied
+   * to the email: the assets land in the library and the merchant chooses.
+   *
+   * Never called on its own — generation costs money, so it needs an explicit
+   * merchant action, and the workspace's daily image budget applies inside
+   * `generateImage`.
+   */
+  generateVisuals: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        templateId: z.string().optional(),
+        productId: z.string().optional(),
+        mode: z.enum(["product_safe", "creative_concept"]),
+        slots: z.array(z.object({
+          id: z.string().min(1).max(64),
+          label: z.string().min(1).max(120),
+          prompt: z.string().min(1).max(2000),
+          purpose: z.enum(["hero_banner", "product_lifestyle", "background", "card"]),
+        })).min(1).max(4),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      // Product-safe mode composites the REAL product image, so the product
+      // must be one of this store's and must actually have an image.
+      const product = input.productId
+        ? await ctx.prisma.product.findFirst({
+            where: { id: input.productId, storeId: input.storeId },
+            select: { id: true, title: true, imageUrl: true },
+          })
+        : null;
+      if (input.productId && !product) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "That product is not in this store." });
+      }
+
+      const validated = validateVisualRequest({
+        mode: input.mode,
+        slots: input.slots,
+        productImageUrl: product?.imageUrl ?? null,
+      });
+      if (!validated.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
+      }
+
+      const visual = await ctx.prisma.brandVisualProfile.findUnique({ where: { storeId: input.storeId } });
+      const aesthetic = visual?.aestheticClassification ?? visual?.visualTone ?? undefined;
+
+      const assets: Array<{
+        slotId: string; label: string; url: string; assetId: string;
+        provider: string; mode: string; modeLabel: string;
+      }> = [];
+      const failures: Array<{ slotId: string; reason: string }> = [
+        ...validated.refused.map((item) => ({ slotId: item.slotId, reason: item.reason })),
+      ];
+
+      for (const slot of validated.slots) {
+        try {
+          const generated = await generateImage({
+            purpose: slot.purpose,
+            prompt: buildSlotPrompt(slot, input.mode, aesthetic),
+            workspaceId: ctx.workspaceId,
+            fallbackToStock: false,
+          });
+          const persisted = input.mode === "product_safe" && product?.imageUrl
+            ? await persistProductSafeComposite({
+                workspaceId: ctx.workspaceId,
+                storeId: input.storeId,
+                backgroundUrl: generated.url,
+                productUrl: product.imageUrl,
+                fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
+              })
+            : await persistRemoteEmailImage({
+                workspaceId: ctx.workspaceId,
+                storeId: input.storeId,
+                remoteUrl: generated.url,
+                fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
+              });
+
+          await ctx.prisma.generatedImage.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              provider: generated.provider,
+              prompt: generated.prompt,
+              url: persisted.url,
+              purpose: slot.purpose,
+              cost: generated.cost,
+              width: persisted.width,
+              height: persisted.height,
+              templateId: input.templateId,
+              sourceAssetIds: [],
+            },
+          });
+          const asset = await ctx.prisma.brandAsset.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              storeId: input.storeId,
+              type: slot.purpose === "hero_banner" ? "hero" : "lifestyle",
+              url: persisted.url,
+              // The label is what the merchant sees on the tile, so a set of
+              // four is tellable apart at a glance.
+              fileName: `${slot.label}.png`,
+              mimeType: persisted.mimeType,
+              width: persisted.width,
+              height: persisted.height,
+              storageKey: persisted.key,
+              checksum: persisted.checksum,
+              source: "generated",
+              sourcePrompt: generated.prompt,
+              sourceAssetIds: [],
+              altText: slot.prompt,
+              status: "ready",
+            },
+          });
+          assets.push({
+            slotId: slot.id,
+            label: slot.label,
+            url: persisted.url,
+            assetId: asset.id,
+            provider: generated.provider,
+            mode: input.mode,
+            modeLabel: modeLabel(input.mode),
+          });
+        } catch (error) {
+          // One slot failing must not lose the others.
+          failures.push({
+            slotId: slot.id,
+            reason: error instanceof Error ? error.message : "Joon could not generate this visual.",
+          });
+        }
+      }
+
+      return { assets, failures, mode: input.mode, modeLabel: modeLabel(input.mode) };
     }),
 
   resolveProposal: workspaceProcedure
