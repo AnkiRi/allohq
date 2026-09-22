@@ -81,6 +81,8 @@ export interface ProductBlock {
   type: "product";
   props: {
     productId: string;
+    /** Chosen variant, where the store has more than one. */
+    variantId?: string;
     showPrice?: boolean;
     showDescription?: boolean;
     showImage?: boolean;
@@ -101,6 +103,9 @@ export interface ProductGridBlock {
   type: "product_grid";
   props: {
     productIds: string[];
+    /** LIVE binding — resolved from the store at render time, not frozen. */
+    collectionId?: string;
+    collectionLimit?: number;
     columns?: 2 | 3;
     showPrice?: boolean;
     showDescription?: boolean;

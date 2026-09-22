@@ -85,6 +85,7 @@ async function renderGeneratedEmail(content, brandKit, options = {}) {
         variables: options.variables ?? {},
         products: options.products ?? {},
         dynamicProducts: options.dynamicProducts,
+        collections: options.collections,
         previewMode: options.previewMode,
     };
     // The footer's unsubscribe link is renderer-controlled, so it never passed

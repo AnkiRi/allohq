@@ -27,6 +27,15 @@ export interface BlockRenderContext {
   products: Record<string, ProductData>;
   /** Dynamic recommendations resolved at send time. */
   dynamicProducts?: ProductData[];
+  /**
+   * Products of each bound collection, keyed by collection id.
+   *
+   * A collection binding is LIVE: the grid shows whatever the collection holds
+   * when the email renders. Preview, the approval snapshot and delivery all
+   * fill this from the same resolver, so a merchant cannot approve one set of
+   * products and have another sent.
+   */
+  collections?: Record<string, ProductData[]>;
   /** Show placeholders for missing data (editor preview). */
   previewMode?: boolean;
 }
@@ -437,6 +446,20 @@ function ProductGridBlockView({
   const { columns = 2, showPrice = true, showDescription = false } = block.props;
 
   let ids = block.props.productIds;
+
+  // A bound collection wins over a hand-picked list: it is what the merchant
+  // chose most recently, and it is explicitly labelled as live in the Studio.
+  const boundCollection = block.props.collectionId
+    ? ctx.collections?.[block.props.collectionId]
+    : undefined;
+  if (boundCollection?.length) {
+    const limited = boundCollection.slice(0, block.props.collectionLimit ?? 6);
+    for (const product of limited) {
+      if (!ctx.products[product.id]) ctx.products[product.id] = product;
+    }
+    ids = limited.map((product) => product.id);
+  }
+
   if (
     block.props.source &&
     block.props.source !== "manual" &&

@@ -88,6 +88,8 @@ export interface RenderBrandedEmailInput {
   products?: Record<string, ProductData>;
   dynamicProducts?: ProductData[];
   previewMode?: boolean;
+  /** Products of each bound collection, keyed by collection id. */
+  collections?: Record<string, ProductData[]>;
   tracking?: RenderGeneratedEmailOptions["tracking"];
   /** Pre-loaded kit (skips the DB round-trip). */
   brandKit?: BrandKit;
@@ -115,6 +117,7 @@ export async function renderBrandedEmail(
       variables: input.variables,
       products: input.products,
       dynamicProducts: input.dynamicProducts,
+      collections: input.collections,
       previewMode: input.previewMode,
       tracking: input.tracking,
     },

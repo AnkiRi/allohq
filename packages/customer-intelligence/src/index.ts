@@ -89,6 +89,15 @@ export type {
 
 // Image Generation
 export { generateImage } from "./images";
+export {
+  CAMPAIGN_IMAGE_BUDGET_USD,
+  DAILY_IMAGE_BUDGET_USD,
+  imageSpendRefusal,
+  referenceGenerationAvailable,
+  referenceProviderSetupHint,
+  selectVisualProvider,
+  visualProviders,
+} from "./images";
 export type { GenerateImageInput, GenerateImageOutput } from "./images";
 
 // Natural Language Instructions

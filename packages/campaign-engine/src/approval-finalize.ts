@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "@allohq/database";
 import { loadBrandKit } from "@allohq/customer-intelligence";
 import { collectEmailAssetManifest } from "./email-asset-manifest";
+import { resolveBlockData } from "./block-data";
 import {
   campaignMeasurementPolicy,
   type HoldoutRateDecision,
@@ -174,6 +175,19 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
   const approvedBrandKit = await loadBrandKit(campaign.storeId);
   const emailAssetManifest = collectEmailAssetManifest(campaign.template.blocks);
 
+  // Snapshot the store facts this email resolved to at the moment of approval.
+  //
+  // A collection binding is deliberately LIVE — the grid shows whatever the
+  // collection holds when the email is sent — so the approved document alone
+  // cannot say what a merchant was looking at when they approved it. Recording
+  // the resolution here keeps the approval reproducible for audit without
+  // freezing the binding and quietly turning it into a snapshot.
+  const approvedStoreFacts = await resolveBlockData(
+    prisma as never,
+    (campaign.template.blocks ?? []) as never,
+    campaign.storeId,
+  );
+
   await prisma.$transaction(
     async (tx) => {
       const approvedEmailVersion = await ensureEmailVersion(tx, {
@@ -208,7 +222,15 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
           emailVersionId: approvedEmailVersion.id,
           renderHash: releaseRenderHash,
           assetManifest: emailAssetManifest as never,
-          renderContext: { brandKit: approvedBrandKit } as never,
+          renderContext: {
+            brandKit: approvedBrandKit,
+            resolvedAt: approvedAt,
+            products: approvedStoreFacts.products,
+            // Live bindings: what each bound collection held at approval. The
+            // send resolves them again, so these are an audit record of what
+            // was shown, not the source delivery reads.
+            collectionsAtApproval: approvedStoreFacts.collections,
+          } as never,
           preflight: input.emailPreflightReceipt as never,
           approvedBy: input.approvedBy,
           approvedAt,
@@ -217,7 +239,15 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
           emailVersionId: approvedEmailVersion.id,
           renderHash: releaseRenderHash,
           assetManifest: emailAssetManifest as never,
-          renderContext: { brandKit: approvedBrandKit } as never,
+          renderContext: {
+            brandKit: approvedBrandKit,
+            resolvedAt: approvedAt,
+            products: approvedStoreFacts.products,
+            // Live bindings: what each bound collection held at approval. The
+            // send resolves them again, so these are an audit record of what
+            // was shown, not the source delivery reads.
+            collectionsAtApproval: approvedStoreFacts.collections,
+          } as never,
           preflight: input.emailPreflightReceipt as never,
           approvedBy: input.approvedBy,
           approvedAt,

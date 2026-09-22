@@ -205,12 +205,37 @@ function ButtonEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: 
 
 function ProductEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "product" }>; onUpdate: (b: EmailBlock) => void }) {
   const set = useSet(block, onUpdate);
+  const bound = Boolean(block.props.productId);
   return (
     <>
-      <Field><Label>Title</Label><TextInput value={block.props.title ?? ""} onChange={(title) => set({ title })} /></Field>
-      <Field><Label>Description</Label><TextArea value={block.props.description ?? ""} onChange={(description) => set({ description })} rows={2} /></Field>
-      <Field><Label>Image URL</Label><TextInput value={block.props.imageUrl ?? ""} onChange={(imageUrl) => set({ imageUrl })} mono placeholder="https://…" /></Field>
-      <Field><Label>Price (store currency)</Label><NumberInput value={block.props.price} onChange={(price) => set({ price })} min={0} /></Field>
+      {/*
+        When a product is bound, the renderer resolves title, description, image
+        and price from the store and IGNORES whatever is on the block. Leaving
+        these as text inputs invited a merchant to type a price that would never
+        be sent — so they read as facts, and the Shopify tab is where the product
+        is changed.
+      */}
+      {bound ? (
+        <div className="mb-3 rounded-lg border border-border bg-card p-3">
+          <p className="text-[10px] font-sans font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            From your store
+          </p>
+          <p className="mt-1 text-[13px] font-sans text-foreground">{block.props.title || "Untitled product"}</p>
+          {block.props.price !== undefined ? (
+            <p className="text-[12px] font-mono text-muted-foreground">{block.props.price}</p>
+          ) : null}
+          <p className="mt-2 text-[11px] font-sans text-muted-foreground">
+            Shopify supplies these at send time. Change the product in the Shopify tab.
+          </p>
+        </div>
+      ) : (
+        <>
+          <Field><Label>Title</Label><TextInput value={block.props.title ?? ""} onChange={(title) => set({ title })} /></Field>
+          <Field><Label>Description</Label><TextArea value={block.props.description ?? ""} onChange={(description) => set({ description })} rows={2} /></Field>
+          <Field><Label>Image URL</Label><TextInput value={block.props.imageUrl ?? ""} onChange={(imageUrl) => set({ imageUrl })} mono placeholder="https://…" /></Field>
+          <Field><Label>Price (store currency)</Label><NumberInput value={block.props.price} onChange={(price) => set({ price })} min={0} /></Field>
+        </>
+      )}
       <Field><Label>Button text</Label><TextInput value={block.props.buttonText ?? ""} onChange={(buttonText) => set({ buttonText })} /></Field>
       <Field><Label>Button link</Label><TextInput value={block.props.buttonHref ?? ""} onChange={(buttonHref) => set({ buttonHref })} mono placeholder="https://…" /></Field>
       <div className="space-y-2 pt-1">
@@ -226,7 +251,17 @@ function ProductGridEditor({ block, onUpdate }: { block: Extract<EmailBlock, { t
   const set = useSet(block, onUpdate);
   return (
     <>
-      <Field><Label>Product IDs (one per line)</Label><TextArea value={block.props.productIds.join("\n")} onChange={(value) => set({ productIds: value.split(/\n|,/).map((item) => item.trim()).filter(Boolean) })} rows={6} /></Field>
+      <div className="mb-3 rounded-lg border border-border bg-card p-3">
+        <p className="text-[13px] font-sans text-foreground">
+          {block.props.productIds.length
+            ? `${block.props.productIds.length} product${block.props.productIds.length === 1 ? "" : "s"} in this grid`
+            : "No products chosen yet"}
+        </p>
+        <p className="mt-1 text-[11px] font-sans text-muted-foreground">
+          Choose them in the Shopify tab — typing ids by hand is how a grid ends up
+          pointing at something that is not in your store.
+        </p>
+      </div>
       <Field><Label>Columns</Label><SelectInput value={String(block.props.columns ?? 2)} onChange={(columns) => set({ columns: Number(columns) })} options={[{ label: "Two", value: "2" }, { label: "Three", value: "3" }]} /></Field>
       <div className="space-y-2 pt-1">
         <Checkbox checked={block.props.showPrice ?? true} onChange={(showPrice) => set({ showPrice })} label="Show price" />

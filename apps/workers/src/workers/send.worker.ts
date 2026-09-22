@@ -16,6 +16,7 @@ import {
   type DeliveryWindow,
 } from "@allohq/customer-intelligence";
 import { parseEmailDocument, safeParseEmailDocument, type EmailBlock, type ProductData } from "@allohq/email-builder";
+
 import { sendEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
@@ -33,6 +34,7 @@ import {
   campaignApprovalChecksum,
   streamCampaignAudience,
   campaignAudienceSnapshot,
+  resolveBlockData,
   type AudienceStreamDecision,
   type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
@@ -1174,21 +1176,16 @@ export async function deliverOne(data: DeliverOneData) {
     if (block.type === "product" && block.props.productId) productIds.push(block.props.productId);
     if (block.type === "product_grid") productIds.push(...block.props.productIds);
   }
-  const productsMap: Record<string, ProductData> = {};
-  if (productIds.length > 0) {
-    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
-    for (const p of products) {
-      productsMap[p.id] = {
-        id: p.id,
-        title: p.title,
-        description: p.description ?? undefined,
-        imageUrl: p.imageUrl ?? undefined,
-        price: p.price,
-        compareAtPrice: p.compareAtPrice ?? undefined,
-        handle: p.handle,
-      };
-    }
-  }
+  // Same resolver the Studio preview and the approval snapshot use, so what a
+  // merchant approved is what gets rendered here — including the contents of a
+  // bound collection, which is live by design and must not be read twice in
+  // two different ways.
+  const { products: productsMap, collections: collectionsMap } = await resolveBlockData(
+    prisma as never,
+    blocks,
+    campaign.storeId,
+  );
+  void productIds;
   const hasDynamicProducts = blocks.some(
     (b) =>
       (b.type === "product" && b.props.source && b.props.source !== "manual") ||
@@ -1252,6 +1249,7 @@ export async function deliverOne(data: DeliverOneData) {
     variables,
     products: productsMap,
     dynamicProducts,
+    collections: collectionsMap,
     previewMode: false,
     tracking: {
       utmSource: "allo",
