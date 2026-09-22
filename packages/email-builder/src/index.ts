@@ -27,6 +27,23 @@ export type {
 export { createDefaultBlock } from "./types";
 export { preflightEmailDocument, type EmailPreflightCheck } from "./preflight";
 export {
+  PERSONALIZATION_TOKENS,
+  findTokens,
+  isKnownToken,
+  personalizationToken,
+  resolvePersonalization,
+  tokenText,
+  type PersonalizationToken,
+  type TokenUse,
+} from "./personalization";
+export {
+  normalizeLegacyEmailBlocks,
+  normalizeLegacyEmailDocument,
+  parseEmailBlocks,
+  parseEmailDocument,
+  safeParseEmailDocument,
+} from "./normalize";
+export {
   emailBlockSchema,
   emailBlocksSchema,
   emailDocumentSchema,

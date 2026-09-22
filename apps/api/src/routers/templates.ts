@@ -5,7 +5,7 @@ import { assertChannelAllowed } from "@allohq/release-gate";
 import { renderBrandedEmail, complete } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
 import { emailBlocksSchema } from "@allohq/email-builder";
-import { emailDocumentSchema } from "@allohq/email-builder";
+import { normalizeLegacyEmailBlocks, parseEmailDocument } from "@allohq/email-builder";
 import { ensureEmailVersion } from "@allohq/campaign-engine";
 
 export const templatesRouter = router({
@@ -41,7 +41,7 @@ export const templatesRouter = router({
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
 
       // Enrich product blocks with actual product data from DB
-      const blocks = template.blocks as any[];
+      const blocks = normalizeLegacyEmailBlocks(template.blocks) as any[];
       const productBlockIds = blocks
         .filter((b: any) => b.type === "product" && b.props?.productId)
         .map((b: any) => b.props.productId as string);
@@ -56,11 +56,17 @@ export const templatesRouter = router({
           if (block.type === "product" && block.props?.productId) {
             const product = productMap.get(block.props.productId);
             if (product) {
+              // `description` and `imageUrl` are nullable columns. Assigning
+              // null here (rather than omitting the key) is what failed the
+              // whole document with `invalid_union` and took the preview down,
+              // so absent stays absent.
               block.props.title = product.title;
               block.props.price = product.price;
-              block.props.description = product.description;
-              block.props.imageUrl = product.imageUrl;
               block.props.handle = product.handle;
+              if (product.description != null) block.props.description = product.description;
+              else delete block.props.description;
+              if (product.imageUrl != null) block.props.imageUrl = product.imageUrl;
+              else delete block.props.imageUrl;
             }
           }
         }
@@ -191,7 +197,7 @@ export const templatesRouter = router({
         },
       });
       if (!version) throw new TRPCError({ code: "NOT_FOUND" });
-      const document = emailDocumentSchema.parse(version.document);
+      const document = parseEmailDocument(version.document);
       return ctx.prisma.$transaction(async (tx) => {
         const updated = await tx.emailTemplate.update({
           where: { id: input.templateId },

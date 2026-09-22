@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { emailDocumentSchema, type EmailDocument } from "@allohq/email-builder";
+import { parseEmailDocument, type EmailDocument } from "@allohq/email-builder";
 
 export function emailDocumentFromTemplate(template: {
   subject: string;
   previewText?: string | null;
   blocks: unknown;
 }): EmailDocument {
-  return emailDocumentSchema.parse({
+  return parseEmailDocument({
     schemaVersion: 1,
     envelope: {
       subject: template.subject,
