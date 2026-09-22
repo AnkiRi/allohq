@@ -379,6 +379,20 @@
   align-items: center;
   gap: 14px;
 }
+/* A returning member's way back in. Deliberately a text link rather than a
+   second button: two buttons side by side read as a choice of equal weight,
+   and the choice is not equal — almost everyone arriving here is new. */
+.opt-v2 .v2-nav__signin {
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  color: var(--dim);
+  padding: 6px 0;
+  white-space: nowrap;
+  transition: color 0.16s ease;
+}
+.opt-v2 .v2-nav__signin:hover {
+  color: var(--ink);
+}
 
 /* ── two-world palette control ──────────────────────────────────────────── */
 /* Quiet by default, set off from the nav links by a faint rule. */
@@ -2088,7 +2102,9 @@
 }
 
 /* very narrow: the switcher (the deliverable) must stay reachable, so the
-   nav CTA steps aside, "Start free" is already prominent in the hero below. */
+   nav CTA steps aside — "Request an invite" is already prominent in the hero
+   below. The sign-in link stays: the hero does not carry one, and a returning
+   member on a phone would otherwise have nowhere to go. */
 @media (max-width: 440px) {
   .opt-v2 .v2-nav__right .v2-btn {
     display: none;

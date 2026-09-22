@@ -143,6 +143,13 @@ export function V2Landing({
             </nav>
             <div className="v2-nav__right">
               <PaletteSwitcher enhanced={enhanced} />
+              {/* Quiet, and only here. Someone who already has access looks in
+                  the nav for it; repeating "or sign in" under every call to
+                  action would crowd three places to serve the few people who
+                  need one. */}
+              <a className="v2-nav__signin" href="/sign-in">
+                Sign in
+              </a>
               <a className="v2-btn v2-btn--primary" href={requestInvite}>
                 Request an invite
               </a>
