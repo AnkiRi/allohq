@@ -218,41 +218,110 @@ made only of invented facts is refused with the picker to use instead.
 
 ---
 
-## 5. Honest status of what remains
+## 5. Pass 2 — personalization, Shopify truth, and visuals
 
-Not built in this pass, and **not claimed anywhere**:
+### Merge tags were reaching the inbox
+
+`interpolate` resolved an unknown token to the token itself:
+
+```ts
+variables[key] ?? `{{${key}}}`
+```
+
+So a tag the sender does not populate — a typo like `{{firstname}}`, or a
+field Joon never had, like `{{city}}` — arrived as the visible text
+"{{firstname}}". A token now resolves to its value, then a written fallback
+(`{{first_name|friend}}`), then the field's default, then nothing. Never to
+itself.
+
+The token catalogue is limited to keys `send.worker` actually populates, and a
+test asserts that, so Joon cannot offer personalization it has no value for.
+
+### The footer's unsubscribe link was broken
+
+Found while proving the above at the renderer. The footer is renderer-
+controlled, never passed through interpolation, and shipped as:
+
+```html
+<a href="{{unsubscribe_url}}">Unsubscribe</a>
+```
+
+The `List-Unsubscribe` header was always correct, so mail-client unsubscribe
+worked; **the visible link in the body went nowhere.** The older MJML path had
+it right (`variables.unsubscribe_url ?? "#"`), so this was a regression in the
+React path. Now resolved from the same variables, falling back to `#` in
+preview.
+
+### The editor was inviting the invention the server refuses
+
+The product inspector asked merchants to type a title, description, image URL
+and price; grids asked for "Product IDs (one per line)". Worse, those fields
+did nothing: `resolveProduct` prefers `ctx.products[productId]` and ignores
+block props, so a price typed there was silently overwritten before sending.
+
+A **Shopify tab** now sits beside Edit and Ask Joon. A product is picked from
+the store, only the reference is stored, and its facts read as facts with
+their source. Grids pick products too. Text blocks insert personalization from
+a list showing each field's sample and fallback.
+
+### Visuals: four labelled assets, not one collage
+
+`des/img/chatgenerated.png` is the failure being avoided — four good ideas
+fused into one bitmap with "25% OFF" and "OCEAN25" baked into the pixels,
+where no preflight can check them against the approved offer and no approval
+can change them.
+
+A request is now a list of named slots, each generated separately. Offer text
+in a prompt is refused **before a paid call is made**, with the reason. Two
+modes mean specific things: `product_safe` composites the real Shopify product
+image and tells the generator not to draw the product at all; `creative_concept`
+is labelled as a concept and may never be presented as product photography.
+
+Preflight gained two checks: a token Joon cannot fill **blocks** approval; a
+known token with no written fallback **warns**.
+
+---
+
+## 5b. Honest status of what still remains
 
 | Item | Status |
 |---|---|
-| `VisualProvider` provider-neutral abstraction | Not built. Generation still calls `generateImage` directly. |
-| Four labelled assets from one request | Not built. Current path produces one image per request. |
-| Product-safe vs creative-concept modes | Partially present — compositing over real product pixels exists when a source asset is given; the two modes are not a labelled merchant choice. |
-| Three-tab inspector (Edit / Shopify data / Ask Joon) | Not built. Tabs remain Ask / Inspect / Versions / Code / Preflight. |
-| Friendly Shopify data tokens | Not built. Merge tags remain raw (`{{first_name}}`). |
-| Frozen-vs-live data distinction, surfaced | Not built as merchant-visible state. Approval freezes the document; the distinction is not shown. |
-| Preflight expansion (contrast, personalization fallback, OCR flags) | Not built. Existing six checks unchanged. |
-| Asset OCR, malware scanning, EXIF stripping, moderation | **Absent, as the register already records** (`PendingImplementationPasses` lines 28–29, 4282–4285). No documentation correction was needed — the register was already honest. |
+| Collection binding | **Deliberately not built.** Nothing resolves a collection at render time — `resolveProduct`/the grid read `productIds` and `dynamicProducts` only. Offering it would have been a promise the renderer cannot keep. A collections API endpoint was written and then removed rather than left as dead code. |
+| Frozen vs live data, surfaced | Not built as merchant-visible state. Approval freezes the document and brand kit; the distinction is real but not shown. |
+| Contrast checking in preflight | Not built. |
+| Asset OCR, malware scanning, EXIF stripping, moderation | **Absent, as the register already records.** No documentation correction was needed. Embedded text in generated images is prevented at the prompt rather than detected afterwards. |
 | Real Gmail/Outlook/Apple Mail rendering evidence | Absent. Not claimed. |
+| Per-campaign spend limit | Not built. The per-workspace **daily** image budget applies (`image-budget.ts`), and a request is capped at four slots. |
 | Screenshots / visual walkthrough | **Not produced.** This repository has no browser in its test setup — component coverage is server-rendered markup via `renderToStaticMarkup`. Screenshots need manual verification against a running dev server. |
-
----
+| Drag-to-reorder blocks | Not built. Reordering remains the existing up/down controls. |
 
 ## 6. Evidence
 
 | Check | Result |
 |---|---|
 | Typecheck (19 tasks) | 19/19 pass |
-| Unit tests | 433 pass, 0 fail |
+| Unit tests | 498 pass, 0 fail |
+| Integration (disposable Postgres + Redis) | 81 pass, 0 fail |
 | Build | Green with CI's dummy Clerk key |
-| Email Studio integration (disposable Postgres) | 3/3 pass |
-| Normalizer regression | 11/11 pass |
-| Scope containment | 12/12 pass |
-| Change pipeline incl. fact guard | 20/20 pass |
-| Scope chooser (rendered markup) | 7/7 pass |
+| Normalizer regression | 11/11 |
+| Scope containment | 12/12 |
+| Change pipeline + fact guard | 20/20 |
+| Personalization | 14/14 |
+| Renderer personalization + footer | 7/7 |
+| Preflight | 10/10 |
+| Visual request core | 18/18 |
+| Visual generation (disposable Postgres) | 6/6 |
+| Shopify data panel markup | 11/11 |
+| Visual generator markup | 10/10 |
+| Scope chooser markup | 7/7 |
 
 The lifecycle integration test was verified non-vacuous: reverting the
 enrichment fix fails it on "an absent product description must be absent, not
 null".
+
+CI has no image-provider keys, and an integration test asserts the honest
+consequence rather than skipping: every slot fails, no asset is fabricated, no
+stock image is quietly substituted, and no spend row is written.
 
 All database work ran against a local disposable `joon_email_studio_test`
 database. No production database, no provider, no recipients, no real sends.
