@@ -179,10 +179,33 @@ function TextEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "t
   );
 }
 
-function ImageEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void }) {
+function ImageEditor({ block, onUpdate, onOpenVisuals }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void }) {
   const set = useSet(block, onUpdate);
+  const empty = !block.props.src?.trim();
   return (
     <>
+      {/*
+        An empty image block used to offer only a URL field, so the only way to
+        fill it was to already have a hosted image somewhere else. The way to
+        get a picture is now the first thing in the block.
+      */}
+      {empty ? (
+        <div className="mb-3 rounded-lg border border-dashed border-border bg-card p-3">
+          <p className="text-[13px] font-sans text-foreground">This image is empty</p>
+          <p className="mt-1 text-[11px] font-sans text-muted-foreground">
+            Ask Joon for a visual, or paste a link to one you already host.
+          </p>
+          {onOpenVisuals ? (
+            <button
+              type="button"
+              onClick={onOpenVisuals}
+              className="mt-2 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+            >
+              Generate a visual
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <Field><Label>Image URL</Label><TextInput value={block.props.src} onChange={(src) => set({ src })} mono placeholder="https://…" /></Field>
       <Field><Label>Alt text</Label><TextInput value={block.props.alt ?? ""} onChange={(alt) => set({ alt })} placeholder="Describe the image" /></Field>
       <Field><Label>Width (px)</Label><NumberInput value={block.props.width} onChange={(width) => set({ width })} min={0} /></Field>
@@ -337,9 +360,12 @@ function SpacerEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: 
 export function BlockEditor({
   block,
   onUpdate,
+  onOpenVisuals,
 }: {
   block: EmailBlock | null;
   onUpdate: (b: EmailBlock) => void;
+  /** Takes the merchant to the Visuals tab, where images are actually made. */
+  onOpenVisuals?: () => void;
 }) {
   if (!block) {
     return (
@@ -355,7 +381,7 @@ export function BlockEditor({
     switch (block.type) {
       case "hero": return <HeroEditor block={block} onUpdate={onUpdate} />;
       case "text": return <TextEditor block={block} onUpdate={onUpdate} />;
-      case "image": return <ImageEditor block={block} onUpdate={onUpdate} />;
+      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} />;
       case "button": return <ButtonEditor block={block} onUpdate={onUpdate} />;
       case "product": return <ProductEditor block={block} onUpdate={onUpdate} />;
       case "product_grid": return <ProductGridEditor block={block} onUpdate={onUpdate} />;

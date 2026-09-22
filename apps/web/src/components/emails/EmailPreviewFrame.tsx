@@ -158,7 +158,10 @@ export function EmailPreviewFrame({
       <div
         ref={stageRef}
         className={cn(
-          "flex-1 flex justify-center p-4",
+          // Padding at the BOTTOM as well as the top: a long email used to run
+          // flush into the edge of the pane, so there was no way to tell
+          // whether it had ended or was simply cut off.
+          "flex-1 flex justify-center px-4 pt-4 pb-10",
           view === "fit" ? "overflow-hidden items-start" : "overflow-auto items-start",
         )}
         style={{ background: theme === "dark" ? "#20211f" : "#ECE9E1" }}
@@ -175,7 +178,9 @@ export function EmailPreviewFrame({
             border: "none",
             borderRadius: 8,
             background: theme === "dark" ? "#14150F" : "#F7F4EC",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+            // A defined edge, so the end of the email is unmistakable.
+            boxShadow: "0 2px 6px rgba(23,23,23,0.06), 0 12px 40px rgba(23,23,23,0.10)",
+            outline: "1px solid rgba(23,23,23,0.08)",
             transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
             transformOrigin: "top center",
           }}
