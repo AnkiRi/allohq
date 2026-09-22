@@ -12,23 +12,52 @@ email or touches sending configuration.
 
 ---
 
+## Part 0a — Status of every item, as of 2026-09-22T08:24:06Z
+
+**Closed beta is live.** Deployed `main` `5129a31`, schema current,
+`INVITE_ONLY_MODE=true` on both the API and web, two platform admins
+configured. What remains is exercising the journey as a person, which is Parts
+2 to 7.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Request an invite from the landing | **deployed verified** — landing serves "Request an invite", no "Start free"; `/request-invite` returns 200 |
+| 2 | Generic response, and a repeat request reading identically | **CI verified** — asserted in `access-requests.integration.ts`. Needs a real submission to confirm end to end: **merchant manual test** |
+| 3 | Platform-admin access-requests console | **deployed verified** that the code and admins are live; whether the page lists a real request is **merchant manual test** |
+| 4 | Approve, and copy the invitation link | **CI verified** — issuing, the one-time link and the audit trail. **merchant manual test** for the real click-through |
+| 5 | Intended identity accepts | **CI verified** end to end, including role. **merchant manual test** with a real Clerk identity |
+| 6 | Wrong identity refused, with "use another account" | **CI verified** — the three-way decision. **merchant manual test** in a browser |
+| 7 | Reused, revoked, expired, malformed all refused | **CI verified**, each case. Expiry by hand needs a database edit: **merchant manual test**, optional |
+| 8 | Uninvited identity gets no workspace, agent, store or campaign | **CI verified** at the gate; **deployed verified** that the gate is enabled. Reaching a live API as an uninvited person is **merchant manual test** |
+| 9 | Existing member keeps access | **CI verified**; **merchant manual test** is the one that matters, since it is the way to be locked out |
+| 10 | Public paths still reachable | **deployed verified** for landing, `/request-invite` and `/sign-up`. Unsubscribe, webhooks, widget and public forms are **merchant manual test** — read delivery logs, do not send |
+| 11 | One-variable rollback | **deliberately not exercised**. Turning the gate off in production to prove it turns off is not worth the risk while nothing is wrong |
+
+**Deliberately deferred to the Email Studio and delivery passes**, and excluded
+from every part below: Email Studio, campaign creation, email generation,
+sending, delivery, open and click tracking, sender domains, provider
+configuration, and real-client rendering.
+
+---
+
 ## Part 0 — What is already true, and what is blocked
+
+> **Updated 2026-09-22.** This section described a deployment that had not
+> happened yet. It has. Everything below is done.
 
 | | |
 | --- | --- |
-| Code merged to `main` | `5e7ca24`, PR #28 |
-| Migrations included | `20260921140000_add_invitations`, `20260921180000_add_access_requests` |
-| Behaviour change on deploy | **None.** `INVITE_ONLY_MODE` defaults off; both tables are inert until used |
+| Deployed `main` | `5129a31` |
+| Migrations | **applied** — `prisma migrate status` reports the schema current; `Invitation` and `AccessRequest` confirmed in the live database |
+| `PLATFORM_ADMIN_CLERK_IDS` | set on the API, 2 well-formed ids |
+| `INVITE_ONLY_MODE` | `true` on the API **and** web |
+| Clerk sign-up | left public, per the recommendation in `ClosedBetaDeployment` § 3 |
 
-**One prerequisite is genuinely missing and only you can supply it: your Clerk
-user id.** `PLATFORM_ADMIN_CLERK_IDS` takes Clerk ids, not email addresses, and
-guessing one would either do nothing or name the wrong person. Setting
-`INVITE_ONLY_MODE=true` without it closes the door with nobody able to issue an
-invitation.
+**Part 1 below is therefore already complete.** It is kept as the record of what
+was done and the order it was done in, and as the sequence to follow if this is
+ever set up again — in a staging environment, for instance.
 
-I have not deployed, run a migration, or set a variable on production. Railway
-service management is gated in this environment, and the missing id above means
-the activation sequence could not be completed correctly even if it were not.
+Go to **Part 2**.
 
 ---
 
