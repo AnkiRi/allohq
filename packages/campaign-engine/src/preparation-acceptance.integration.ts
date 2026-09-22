@@ -89,9 +89,24 @@ const runInput = (fixture: { campaignId: string; storeId: string }, extra: objec
 test("1. approving twice starts one run; the second joins and never replaces it", { skip }, async () => {
   const { prisma, runCampaignAudienceResolution, campaignPreparationProgress } = await load();
   const fixture = await seed(prisma, 2_000);
+  // Held outside the try so the `finally` can settle it. If an assertion below
+  // throws while this is still writing, tearing the workspace down first
+  // leaves the run inserting members against a deleted parent — a foreign-key
+  // error raised after the test ended, which node:test reports as an
+  // unhandled rejection rather than as this test failing.
+  let first: ReturnType<typeof runCampaignAudienceResolution> | undefined;
   try {
-    const first = runCampaignAudienceResolution(runInput(fixture, { owner: "click-1", writeChunk: 150 }));
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Five rows per write, not a hundred and fifty: the second click has to
+    // arrive while the first is still going, and a fixed wait raced it.
+    first = runCampaignAudienceResolution(runInput(fixture, { owner: "click-1", writeChunk: 5 }));
+    for (let attempt = 0; attempt < 2_000; attempt += 1) {
+      const written = await prisma.campaignAudienceMember.count({
+        where: { run: { campaignId: fixture.campaignId } },
+      });
+      if (written > 0 && written < fixture.total) break;
+      if (written >= fixture.total) break;
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
 
     const runsMidFlight = await prisma.campaignAudienceRun.findMany({
       where: { campaignId: fixture.campaignId },
@@ -117,6 +132,7 @@ test("1. approving twice starts one run; the second joins and never replaces it"
     assert.equal(second, "joined", "a live lease must make the second click a no-op");
 
     const result = await first;
+    first = undefined;
     assert.equal(result.runId, runId, "the run id must be stable across both clicks");
     assert.equal(result.candidateCount, fixture.total);
     assert.equal(
@@ -124,6 +140,8 @@ test("1. approving twice starts one run; the second joins and never replaces it"
       1
     );
   } finally {
+    // Settle before the workspace goes, whatever happened above.
+    await first?.catch(() => undefined);
     await prisma.workspace.delete({ where: { id: fixture.workspaceId } }).catch(() => undefined);
   }
 });
@@ -185,15 +203,18 @@ test("3. a worker dying mid-run is resumed without any new merchant action", { s
       if (written >= fixture.total) break;
       await new Promise((resolve) => setTimeout(resolve, 2));
     }
-    assert.ok(
-      caughtMidRun,
-      "the run finished before it could be interrupted, so this test did not test anything"
-    );
     await prisma.campaignAudienceRun.updateMany({
       where: { campaignId: fixture.campaignId },
       data: { leaseOwner: "someone-else", leaseExpiresAt: new Date(Date.now() - 60_000) },
     });
+    // Settle the dying worker BEFORE asserting anything. An assertion that
+    // throws while it is still writing leaves it inserting against a workspace
+    // the teardown is about to delete.
     await dying.catch(() => undefined);
+    assert.ok(
+      caughtMidRun,
+      "the run finished before it could be interrupted, so this test did not test anything"
+    );
 
     const partial = await prisma.campaignAudienceMember.count({
       where: { run: { campaignId: fixture.campaignId } },
