@@ -10,6 +10,8 @@ import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
 import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
 import { ensureEmailVersion } from "@allohq/campaign-engine";
+import { describeScope, type EmailEditScope } from "../lib/email-scope";
+import { planEmailChange } from "../lib/email-changes";
 import {
   createEmailAssetUpload,
   inspectUploadedEmailAsset,
@@ -63,25 +65,6 @@ async function resolveBrandKit(
     brandKit: resolvedStoreId ? await loadBrandKit(resolvedStoreId) : buildBrandKit(null, null),
     storeId: resolvedStoreId,
   };
-}
-
-// LLMs (esp. Claude) often wrap JSON in ```fences``` or add a trailing note, so
-// JSON.parse(result.content) throws and the prompt-edit silently no-ops. Extract
-// the JSON payload before parsing. promptEdit's response is an OBJECT (which may
-// CONTAIN arrays like `add: [...]`), so take the outermost object — first "{" to
-// last "}". Prose brackets like "[Brand Name]" are "[", so starting at "{" skips
-// them; falls back to an array only if there's no object at all.
-function extractJsonPayload(s: string): string {
-  let t = s.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence && fence[1]) t = fence[1].trim();
-  const o = t.indexOf("{");
-  const lo = t.lastIndexOf("}");
-  if (o !== -1 && lo > o) return t.slice(o, lo + 1);
-  const a = t.indexOf("[");
-  const la = t.lastIndexOf("]");
-  if (a !== -1 && la > a) return t.slice(a, la + 1);
-  return t;
 }
 
 export const emailsRouter = router({
@@ -213,10 +196,30 @@ export const emailsRouter = router({
         // existing-block copy edits; "visual" → only structure (add/remove/reorder
         // + visual blocks). Omitted (free-text "tell joon") = no restriction.
         scope: z.enum(["subject", "copy", "visual", "tone"]).optional(),
+        // WHAT this request may touch. Block scope is the default whenever a
+        // block is selected; whole-email is never inferred, only asked for.
+        editScope: z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("block"), blockId: z.string().max(200) }),
+          z.object({ kind: z.literal("envelope") }),
+          z.object({ kind: z.literal("document") }),
+        ]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const original = input.blocks as any[];
+      const editScope: EmailEditScope =
+        input.editScope ??
+        (input.scope === "subject"
+          ? { kind: "envelope" }
+          : input.selectedBlockId
+          ? { kind: "block", blockId: input.selectedBlockId }
+          : { kind: "document" });
+      if (editScope.kind === "block" && !original.some((block) => block.id === editScope.blockId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That block is no longer part of this email.",
+        });
+      }
       const workspaceAiSettings = await ctx.prisma.workspace.findUnique({
         where: { id: ctx.workspaceId },
         select: { modelHarness: true },
@@ -324,9 +327,11 @@ export const emailsRouter = router({
       const prompt = [
         `INSTRUCTION: ${input.instruction}`,
         input.subject ? `\nCURRENT SUBJECT: ${input.subject}` : "",
-        input.selectedBlockId
-          ? `\nSELECTED BLOCK: ${input.selectedBlockId}. Unless the instruction explicitly says whole email, target this block.`
-          : "",
+        editScope.kind === "block"
+          ? `\nSCOPE: block ${editScope.blockId} ONLY. Return changes for that id and nothing else — edits to other blocks, additions, removals, reorderings and subject changes are discarded before they are applied.`
+          : editScope.kind === "envelope"
+          ? "\nSCOPE: the subject and inbox preview ONLY. Body blocks are discarded before they are applied."
+          : "\nSCOPE: the whole email. The merchant asked for this explicitly.",
         conversationHistory.length
           ? `\nRECENT STUDIO CONTEXT (oldest to newest):\n${conversationHistory
               .reverse()
@@ -475,6 +480,12 @@ export const emailsRouter = router({
               ...selectedBlock,
               props: { ...selectedBlock.props, imageUrl: persisted.url },
             };
+          } else if (editScope.kind === "block") {
+            // The merchant pointed at one block. Appending a new one would be
+            // a change they did not ask for, so say so instead.
+            return fail(
+              "That block cannot hold an image. Select an image, hero or product block, or switch the request to the whole email.",
+            );
           } else {
             nextBlocks.push(imageBlock);
           }
@@ -483,6 +494,7 @@ export const emailsRouter = router({
             input.subject ?? "",
             input.previewText ?? "",
             {
+              editScope,
               type: selectedBlock?.type === "image" || selectedBlock?.type === "hero" || selectedBlock?.type === "product"
                 ? "replaceAsset"
                 : "insertBlock",
@@ -516,103 +528,36 @@ export const emailsRouter = router({
           maxTokens: 2048,
         });
 
-        const parsed = JSON.parse(extractJsonPayload(result.content));
-        const changes: Record<string, Record<string, unknown>> = parsed &&
-        typeof parsed === "object" &&
-        parsed.blocks &&
-        typeof parsed.blocks === "object"
-          ? parsed.blocks
-          : {};
-        const removeIds = new Set(
-          Array.isArray(parsed?.remove)
-            ? parsed.remove.filter((x: unknown) => typeof x === "string")
-            : []
-        );
-        const addList: any[] = Array.isArray(parsed?.add) ? parsed.add : [];
-        const order: string[] | null = Array.isArray(parsed?.order)
-          ? parsed.order.filter((x: unknown) => typeof x === "string")
-          : null;
-        const newSubject =
-          typeof parsed?.subject === "string" && parsed.subject.trim()
-            ? parsed.subject.trim()
-            : undefined;
-        const newPreviewText =
-          typeof parsed?.previewText === "string"
-            ? parsed.previewText.trim()
-            : undefined;
+        let addCounter = 0;
+        const planned = planEmailChange({
+          content: result.content,
+          scope: editScope,
+          lane: input.scope,
+          original: original as any,
+          subject: input.subject,
+          previewText: input.previewText,
+          idSeed: () => `b-${Date.now()}-${addCounter++}`,
+        });
+        if (!planned.ok) return fail(planned.reason);
 
-        // Enforce the chip's lane — drop any out-of-scope changes the model returned,
-        // so Subject chips never touch the body, Copy/Tone never touch the subject or
-        // structure, and Visual never rewrites the subject. (Belt-and-suspenders over
-        // the SCOPE_RULE in the prompt.)
-        const sc = input.scope;
-        const editsAllowed = !sc || sc === "copy" || sc === "tone" || sc === "visual";
-        const structureAllowed = !sc || sc === "visual";
-        const subjectAllowed = !sc || sc === "subject";
-        const previewAllowed = !sc || sc === "subject" || sc === "copy" || sc === "tone";
-        const effChanges = editsAllowed ? changes : {};
-        const effRemove = structureAllowed ? removeIds : new Set<string>();
-        const effAdd = structureAllowed ? addList : [];
-        const effOrder = structureAllowed ? order : null;
-        const effSubject = subjectAllowed ? newSubject : undefined;
-        const effPreviewText = previewAllowed ? newPreviewText : undefined;
-
-        // 1. edit existing + drop removed
-        let next = original
-          .filter((b) => !effRemove.has(b.id))
-          .map((b) =>
-            effChanges[b.id] && typeof effChanges[b.id] === "object"
-              ? { ...b, props: { ...b.props, ...effChanges[b.id] } }
-              : b
-          );
-
-        // 2. add new blocks (server assigns ids; insert after afterId or append)
-        let addCount = 0;
-        for (const a of effAdd) {
-          if (!a || typeof a !== "object" || typeof a.type !== "string") continue;
-          const block = {
-            id: `b-${Date.now()}-${addCount}`,
-            type: a.type,
-            props: a.props && typeof a.props === "object" ? a.props : {},
-          };
-          const idx = a.afterId ? next.findIndex((b) => b.id === a.afterId) : -1;
-          if (idx >= 0) next.splice(idx + 1, 0, block);
-          else next.push(block);
-          addCount++;
-        }
-
-        // 3. reorder (known ids first in the given order, then any leftovers)
-        if (effOrder && effOrder.length) {
-          const byId = new Map(next.map((b) => [b.id, b]));
-          const ordered = effOrder.map((id) => byId.get(id)).filter(Boolean) as any[];
-          const rest = next.filter((b) => !effOrder!.includes(b.id));
-          if (ordered.length) next = [...ordered, ...rest];
-        }
-
-        const changedCount = Object.keys(effChanges).filter((id) =>
-          original.some((b) => b.id === id)
-        ).length;
-        const applied =
-          changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject || effPreviewText !== undefined;
-
-        if (!applied) {
-          return fail("joon didn't change anything — try rephrasing.");
-        }
-        const validatedBlocks = emailBlocksSchema.safeParse(next);
+        const validatedBlocks = emailBlocksSchema.safeParse(planned.change.blocks);
         if (!validatedBlocks.success) {
           return fail(`Joon proposed an invalid email change: ${validatedBlocks.error.issues[0]?.message ?? "validation failed"}`);
         }
+        const nextSubject = planned.change.subject ?? input.subject;
+        const nextPreviewText = planned.change.previewText ?? input.previewText;
         const proposal = await persistProposal(
           validatedBlocks.data,
-          effSubject ?? input.subject ?? "",
-          effPreviewText ?? input.previewText ?? "",
-          parsed,
+          nextSubject ?? "",
+          nextPreviewText ?? "",
+          { editScope, scopeLabel: describeScope(editScope), lane: input.scope ?? null },
         );
         return {
           applied: true,
           blocks: validatedBlocks.data,
-          subject: effSubject ?? input.subject,
-          previewText: effPreviewText ?? input.previewText,
+          subject: nextSubject,
+          previewText: nextPreviewText,
+          scope: describeScope(editScope),
           proposalId: proposal?.id,
           model: result.model,
         };
