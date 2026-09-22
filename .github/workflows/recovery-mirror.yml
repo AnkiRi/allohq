@@ -1,0 +1,89 @@
+  name: Recovery mirror
+
+  on:
+    push:
+    delete:
+    workflow_dispatch:
+    schedule:
+      - cron: "17 3 * * *"
+
+  permissions:
+    contents: read
+
+  jobs:
+    backup:
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Clone complete source history
+          env:
+            SOURCE_TOKEN: ${{ github.token }}
+          run: |
+            set -euo pipefail
+            git clone --mirror \
+              "https://x-access-token:${SOURCE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              source.git
+
+        - name: Sync recovery mirror
+          working-directory: source.git
+          env:
+            BACKUP_MIRROR_TOKEN: ${{ secrets.BACKUP_MIRROR_TOKEN }}
+            BACKUP_REPOSITORY: asthanau/joon
+          run: |
+            set -euo pipefail
+            export GIT_TERMINAL_PROMPT=0
+
+            askpass="${RUNNER_TEMP}/backup-askpass.sh"
+            trap 'rm -f "$askpass"' EXIT
+
+            cat > "$askpass" <<'EOF'
+            #!/usr/bin/env sh
+            case "$1" in
+              *Username*) printf '%s\n' 'x-access-token' ;;
+              *Password*) printf '%s\n' "$BACKUP_MIRROR_TOKEN" ;;
+              *) printf '\n' ;;
+            esac
+            EOF
+
+            chmod 700 "$askpass"
+            export GIT_ASKPASS="$askpass"
+
+            # Explicitly remove any persisted Actions credential.
+            git config --global --unset-all http.https://github.com/.extraheader || true
+            git config --local --unset-all http.https://github.com/.extraheader || true
+
+            git remote add recovery "https://github.com/${BACKUP_REPOSITORY}.git"
+
+            # Fetch existing backup branches. Empty target is fine.
+            git fetch recovery \
+              '+refs/heads/*:refs/remotes/recovery/*' \
+              '+refs/tags/*:refs/tags/*' || true
+
+            stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+
+            # Before a source force-push replaces a backup branch, preserve
+            # the prior backup head as a dated recovery tag.
+            while IFS=' ' read -r old_sha branch; do
+              new_sha="$(git rev-parse --verify "refs/heads/${branch}" 2>/dev/null || true)"
+
+              if [ -n "$new_sha" ] && [ "$old_sha" != "$new_sha" ]; then
+                git update-ref \
+                  "refs/tags/recovery/${stamp}/${branch}" \
+                  "$old_sha"
+              fi
+            done < <(
+              git for-each-ref \
+                --format='%(objectname) %(refname:strip=3)' \
+                refs/remotes/recovery/
+            )
+
+            # Update every current source branch and tag.
+            # Important: there is no --mirror and no --prune.
+            # A source deletion therefore remains recoverable in backup.
+            git push --force recovery \
+              'refs/heads/*:refs/heads/*'
+
+            git push --force recovery \
+              'refs/tags/*:refs/tags/*'
+
+            echo "Recovery mirror sync completed."
