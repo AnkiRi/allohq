@@ -13,16 +13,33 @@
  * text is never part of the prompt.
  */
 
+/**
+ * IMPORTANT, and the reason the two modes differ so sharply: every configured
+ * image provider is TEXT-TO-IMAGE ONLY. None of them accepts a reference
+ * image, so no model here has ever seen the merchant's product.
+ *
+ * That makes `product_safe` grounded by COMPOSITING, not by the model: the
+ * generator paints an empty setting and the authoritative Shopify product
+ * pixels are pasted over it afterwards. And it makes `creative_concept`
+ * ungrounded entirely — anything product-shaped in that output is the model's
+ * invention, not the merchant's product.
+ */
 export type VisualMode =
   /**
-   * The product must stay itself: packaging, shape, logo and any text on it
-   * are preserved. The generator makes the setting only, and the authoritative
-   * product pixels are composited in afterwards.
+   * The product stays itself, because its real pixels are composited in. The
+   * generator is told to paint the setting and nothing else.
+   *
+   * The product is exact; its PLACEMENT is a composite. Grip, contact shadows
+   * and perspective are approximate rather than photographed.
    */
   | "product_safe"
   /**
-   * Free interpretation — scenes, people, environments. Labelled as generated
-   * creative wherever it is shown, and never passed off as product photography.
+   * Free interpretation — scenes, people, environments, moods.
+   *
+   * No product reference reaches the model, so any product it draws is
+   * invented and will not match the real one. Output is illustrative concept
+   * artwork and must never be presented as product photography or as showing
+   * the merchant's actual product.
    */
   | "creative_concept";
 
@@ -154,7 +171,17 @@ export function buildSlotPrompt(
 
 /** How a generated asset is described wherever a merchant sees it. */
 export function modeLabel(mode: VisualMode): string {
-  return mode === "product_safe" ? "Your product, new setting" : "Generated concept";
+  return mode === "product_safe" ? "Your product, new setting" : "Illustrative concept";
+}
+
+/**
+ * What this mode can and cannot promise about the product, in the merchant's
+ * words. Shown next to the choice, not buried in a tooltip after the fact.
+ */
+export function modePromise(mode: VisualMode): string {
+  return mode === "product_safe"
+    ? "Joon paints the setting and places your real Shopify product image into it, so packaging, shape, logo and any text on the product stay exactly as they are. How it sits in the scene — grip, shadows, angle — is composited rather than photographed."
+    : "Joon invents the whole picture. It has never seen your product, so anything product-shaped in the result is made up and will not match what you sell. Use it for mood and backdrops, never as a picture of the actual product.";
 }
 
 /**
@@ -165,13 +192,3 @@ export function mayDepictRealProduct(mode: VisualMode): boolean {
   return mode === "product_safe";
 }
 
-/** Ready-made slots for the common email shapes, so nobody starts from blank. */
-export function presetSlots(subject: string): VisualSlot[] {
-  const thing = subject.trim() || "the product";
-  return [
-    { id: "hero", label: "Clean hero", prompt: `A clean, premium hero setting for ${thing}.`, purpose: "hero_banner" },
-    { id: "lifestyle", label: "In use", prompt: `${thing} being used, natural light, real setting.`, purpose: "product_lifestyle" },
-    { id: "crop", label: "Close crop", prompt: `A close, tactile crop for a secondary module featuring ${thing}.`, purpose: "card" },
-    { id: "backdrop", label: "Campaign backdrop", prompt: `An uncluttered backdrop with space for headline text, matching ${thing}.`, purpose: "background" },
-  ];
-}

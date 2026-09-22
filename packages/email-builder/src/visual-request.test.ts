@@ -5,7 +5,7 @@ import {
   buildSlotPrompt,
   mayDepictRealProduct,
   modeLabel,
-  presetSlots,
+  modePromise,
   validateVisualRequest,
   type VisualSlot,
 } from "./visual-request";
@@ -43,13 +43,6 @@ test("more than four at once is refused rather than silently trimmed", () => {
   assert.match(result.reason, /up to 4/);
 });
 
-test("presets give four distinct labelled starting points", () => {
-  const slots = presetSlots("the Hydrogen snowboard");
-  assert.equal(slots.length, 4);
-  assert.equal(new Set(slots.map((s) => s.id)).size, 4);
-  assert.equal(new Set(slots.map((s) => s.label)).size, 4);
-  for (const preset of slots) assert.match(preset.prompt, /Hydrogen snowboard/);
-});
 
 // --- offer text must never be baked into pixels ------------------------------
 
@@ -127,7 +120,24 @@ test("only product-safe output may be shown as the real product", () => {
 
 test("each mode has a label a merchant can read on the asset", () => {
   assert.equal(modeLabel("product_safe"), "Your product, new setting");
-  assert.equal(modeLabel("creative_concept"), "Generated concept");
+  assert.equal(modeLabel("creative_concept"), "Illustrative concept");
+});
+
+test("creative concept never claims to show the real product", () => {
+  // Every configured provider is text-to-image only — none accepts a reference
+  // image — so the model has never seen the merchant's product.
+  const promise = modePromise("creative_concept");
+  assert.match(promise, /never seen your product/);
+  assert.match(promise, /will not match what you sell/);
+  assert.match(promise, /never as a picture of the actual product/);
+  assert.doesNotMatch(promise, /photograph of your product|accurate|product-grounded/i);
+});
+
+test("product-safe is honest about what compositing can and cannot do", () => {
+  const promise = modePromise("product_safe");
+  assert.match(promise, /real Shopify product image/);
+  assert.match(promise, /stay exactly as they are/);
+  assert.match(promise, /composited rather than photographed/, "placement is not claimed as photography");
 });
 
 test("brand aesthetic is passed through when there is one", () => {

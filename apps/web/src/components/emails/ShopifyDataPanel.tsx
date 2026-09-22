@@ -191,7 +191,8 @@ function ProductBinding({
         )
       ) : (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Bind a collection and the grid renders whatever is in it at send time.
+          Choose the individual products this grid shows. Their titles, prices and
+          images are read from Shopify when the email renders.
         </p>
       )}
 

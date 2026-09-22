@@ -90,15 +90,6 @@ export type {
 // Image Generation
 export { generateImage } from "./images";
 export type { GenerateImageInput, GenerateImageOutput } from "./images";
-export {
-  MAX_SLOTS_PER_REQUEST,
-  buildSlotPrompt,
-  mayDepictRealProduct,
-  modeLabel,
-  presetSlots,
-  validateVisualRequest,
-} from "./images";
-export type { VisualMode, VisualRequest, VisualSlot } from "./images";
 
 // Natural Language Instructions
 export {

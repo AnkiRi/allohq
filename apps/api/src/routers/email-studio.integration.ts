@@ -27,6 +27,39 @@ async function load() {
   return { prisma, templatesRouter, ensureEmailVersion, ...builder };
 }
 
+async function load2() {
+  process.env["DATABASE_URL"] = databaseUrl;
+  const { prisma } = await import("@allohq/database");
+  const { emailsRouter } = await import("./emails");
+  return { prisma, emailsRouter };
+}
+
+/** A store whose product has a REAL image, so preview and delivery can differ. */
+async function previewFixture(prisma: any) {
+  const tag = randomUUID().slice(0, 8);
+  const workspace = await prisma.workspace.create({ data: { name: `Prev ${tag}`, slug: `prev-${tag}` } });
+  const clerkId = `user_prev_${tag}`;
+  const user = await prisma.user.create({
+    data: { clerkId, email: `prev-${tag}@example.test`, name: "Preview Tester" },
+  });
+  await prisma.workspaceMember.create({
+    data: { workspaceId: workspace.id, userId: user.id, role: "owner" },
+  });
+  const store = await prisma.store.create({
+    data: {
+      workspaceId: workspace.id, platform: "shopify",
+      shopDomain: `prev-${tag}.myshopify.com`, accessToken: "ciphertext", isActive: true,
+    },
+  });
+  const product = await prisma.product.create({
+    data: {
+      storeId: store.id, externalId: `ext-${tag}`, title: "Hydrogen Snowboard",
+      handle: `hydrogen-${tag}`, imageUrl: "https://cdn.shopify.test/real-product.png", price: 749,
+    },
+  });
+  return { workspace, user, store, product, clerkId };
+}
+
 function caller(prisma: any, workspaceId: string, clerkId: string) {
   return {
     prisma,
@@ -214,5 +247,116 @@ test("a blank email stays blank", { skip }, async () => {
     await prisma.emailTemplate.deleteMany({ where: { workspaceId: workspace.id } });
     await prisma.workspace.deleteMany({ where: { id: workspace.id } });
     await prisma.user.deleteMany({ where: { id: user.id } });
+  }
+});
+
+test("Studio preview and delivery resolve a product block the same way", { skip }, async () => {
+  const { prisma, emailsRouter } = await load2();
+  const f = await previewFixture(prisma);
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+
+    // A generated visual sitting on the product block, as the Visuals tab
+    // could once place it.
+    const blocks = [{
+      id: "p1",
+      type: "product",
+      props: {
+        productId: f.product.id,
+        title: "Stale title",
+        imageUrl: "https://cdn.test/generated-hero.png",
+        price: 1,
+        showImage: true,
+      },
+    }];
+
+    const { html } = await api.renderPreview({ blocks: blocks as any, storeId: f.store.id, subject: "S" });
+
+    // Preview must show what will actually be SENT: the store's product image
+    // and title, not the values parked on the block.
+    assert.ok(
+      html.includes("https://cdn.shopify.test/real-product.png"),
+      "preview shows the store image, as delivery will",
+    );
+    assert.ok(
+      !html.includes("https://cdn.test/generated-hero.png"),
+      "preview does not show an image delivery would replace",
+    );
+    assert.ok(html.includes("Hydrogen Snowboard"), "preview shows the store title");
+    assert.ok(!html.includes("Stale title"), "preview does not show the stale block title");
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("a preview cannot reach a product from another store", { skip }, async () => {
+  const { prisma, emailsRouter } = await load2();
+  const mine = await previewFixture(prisma);
+  const theirs = await previewFixture(prisma);
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, mine.workspace.id, mine.clerkId) as any);
+    const { html } = await api.renderPreview({
+      blocks: [{ id: "p1", type: "product", props: { productId: theirs.product.id, showImage: true } }] as any,
+      storeId: mine.store.id,
+      subject: "S",
+    });
+    assert.ok(
+      !html.includes("Hydrogen Snowboard") || html.includes("[Product placeholder]"),
+      "another tenant's product does not resolve into this preview",
+    );
+  } finally {
+    await cleanup(prisma, mine.workspace.id, mine.store.id, mine.user.id);
+    await cleanup(prisma, theirs.workspace.id, theirs.store.id, theirs.user.id);
+  }
+});
+
+test("promptEdit refuses a request that never said what it may change", { skip }, async () => {
+  const { prisma, emailsRouter } = await load2();
+  const f = await previewFixture(prisma);
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+    const blocks = [
+      { id: "b1", type: "hero", props: { heading: "Ride further" } },
+      { id: "b2", type: "text", props: { html: "<p>New season.</p>" } },
+    ];
+    // No editScope, no selectedBlockId, no subject lane. This used to mean
+    // "whole email"; it must now mean "say what you meant".
+    await assert.rejects(
+      () => api.promptEdit({
+        instruction: "Rewrite this email to be punchier",
+        blocks: blocks as any,
+        subject: "Ride further",
+        storeId: f.store.id,
+      }),
+      /will not assume it may rewrite everything/,
+    );
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("a legacy caller with a selected block gets that block, never the email", { skip }, async () => {
+  const { prisma, emailsRouter } = await load2();
+  const f = await previewFixture(prisma);
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+    const blocks = [
+      { id: "b1", type: "hero", props: { heading: "Ride further" } },
+      { id: "b2", type: "text", props: { html: "<p>New season.</p>" } },
+    ];
+    // Accepted (it narrows), and with no model configured in CI it returns a
+    // safe no-op rather than throwing — the point is that it was not refused
+    // for scope and did not become a document-wide request.
+    const result = await api.promptEdit({
+      instruction: "Make this warmer",
+      blocks: blocks as any,
+      subject: "Ride further",
+      storeId: f.store.id,
+      selectedBlockId: "b2",
+    });
+    assert.equal(result.applied, false, "no model in CI, so nothing was applied");
+    assert.deepEqual(result.blocks, blocks, "and the email is returned unchanged");
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }
 });

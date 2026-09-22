@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { containToScope, describeScope, scopeViolation } from "./email-scope";
+import { containToScope, describeScope, resolveEditScope, scopeViolation } from "./email-scope";
 
 const blocks = () => [
   { id: "b1", type: "hero", props: { heading: "Ride further" } },
@@ -114,4 +114,59 @@ test("scopes describe themselves for the UI label", () => {
   assert.equal(describeScope({ kind: "block", blockId: "b1" }), "this block");
   assert.equal(describeScope({ kind: "envelope" }), "the subject and inbox preview");
   assert.equal(describeScope({ kind: "document" }), "the whole email");
+});
+
+// --- whole-email scope is asked for, never inferred ----------------------------
+
+test("an omitted scope is refused, not treated as the whole email", () => {
+  // The dangerous default: a caller that forgets `editScope` must not thereby
+  // acquire permission to rewrite every block.
+  const result = resolveEditScope({});
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /will not assume it may rewrite everything/);
+});
+
+test("no combination of legacy fields can produce whole-email scope", () => {
+  const lanes = [undefined, "subject", "copy", "visual", "tone"] as const;
+  const blockIds = [undefined, "b1"];
+  for (const lane of lanes) {
+    for (const selectedBlockId of blockIds) {
+      const result = resolveEditScope({ lane, selectedBlockId });
+      if (result.ok) {
+        assert.notEqual(
+          result.scope.kind,
+          "document",
+          `lane=${lane} block=${selectedBlockId} widened to the whole email`,
+        );
+      }
+    }
+  }
+});
+
+test("document scope is reachable only by asking for it", () => {
+  const asked = resolveEditScope({ editScope: { kind: "document" } });
+  assert.ok(asked.ok);
+  assert.equal(asked.scope.kind, "document");
+});
+
+test("an explicit scope is honoured as given", () => {
+  const block = resolveEditScope({ editScope: { kind: "block", blockId: "b2" }, selectedBlockId: "b9" });
+  assert.ok(block.ok);
+  assert.deepEqual(block.scope, { kind: "block", blockId: "b2" }, "the explicit scope wins over the hint");
+});
+
+test("legacy callers narrow rather than broaden", () => {
+  const subject = resolveEditScope({ lane: "subject" });
+  assert.ok(subject.ok);
+  assert.equal(subject.scope.kind, "envelope");
+
+  const selected = resolveEditScope({ selectedBlockId: "b1" });
+  assert.ok(selected.ok);
+  assert.deepEqual(selected.scope, { kind: "block", blockId: "b1" });
+
+  // A copy/tone/visual chip with nothing selected says nothing about WHICH
+  // blocks, so it is refused rather than applied to all of them.
+  for (const lane of ["copy", "tone", "visual"] as const) {
+    assert.equal(resolveEditScope({ lane }).ok, false, `lane ${lane} must not widen`);
+  }
 });

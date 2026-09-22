@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@allohq/ui";
+import { modeLabel, modePromise } from "@allohq/email-builder";
 
 export type VisualMode = "product_safe" | "creative_concept";
 export type GeneratedVisual = {
@@ -76,15 +77,18 @@ export function VisualGenerator({
                   : "border-border hover:border-[var(--evidence,#2D4F9E)]",
               )}
             >
-              {option === "product_safe" ? "Your product, new setting" : "Generated concept"}
+              {modeLabel(option)}
             </button>
           ))}
         </div>
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          {mode === "product_safe"
-            ? "Joon makes the setting and places your real product image into it, so the packaging, shape and logo stay exactly as they are."
-            : "Joon invents the whole picture. It is labelled as a concept and must not be shown as a photograph of your product."}
-        </p>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{modePromise(mode)}</p>
+        {mode === "creative_concept" ? (
+          <p className="mt-1.5 rounded-lg border border-[var(--attention,#C99116)]/40 bg-[var(--attention-soft,#FFF0B8)] p-2 text-[11px]">
+            No product reference is sent to the model, so a board, bottle or jar it
+            draws is invented. For the real product in a new setting, use
+            “{modeLabel("product_safe")}”.
+          </p>
+        ) : null}
       </div>
 
       {productSafeBlocked ? (

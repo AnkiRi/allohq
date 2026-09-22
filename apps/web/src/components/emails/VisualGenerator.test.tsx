@@ -27,9 +27,25 @@ const render = (overrides: Record<string, unknown> = {}) =>
     } as never),
   );
 
-test("the two modes promise different things, in plain words", () => {
-  assert.match(render({ mode: "product_safe" }), /packaging, shape and logo stay exactly as they are/);
-  assert.match(render({ mode: "creative_concept" }), /must not be shown as a photograph of your product/);
+test("product-safe explains grounding by compositing, not by the model", () => {
+  const markup = render({ mode: "product_safe" });
+  assert.match(markup, /real Shopify product image/);
+  assert.match(markup, /stay exactly as they are/);
+  assert.match(markup, /composited rather than photographed/);
+});
+
+test("creative concept never implies the real product will appear", () => {
+  // Every provider is text-to-image only; no reference image is sent. Copy that
+  // implied product accuracy here would be a promise nothing can keep.
+  const markup = render({ mode: "creative_concept" });
+  assert.match(markup, /never seen your product/);
+  assert.match(markup, /will not match what you sell/);
+  assert.match(markup, /No product reference is sent to the model/);
+  assert.doesNotMatch(markup, /product-grounded|accurate product|photograph of your product/i);
+});
+
+test("creative concept points at the mode that can show the real product", () => {
+  assert.match(render({ mode: "creative_concept" }), /Your product, new setting/);
 });
 
 test("mode is a radio group, exposed to assistive tech", () => {
@@ -60,8 +76,8 @@ test("the offer-text rule is stated before generating, not after refusal", () =>
 test("results are separately labelled and selectable, not one image", () => {
   const markup = render({
     results: [
-      { slotId: "hero", label: "Clean hero", url: "https://cdn.test/1.png", assetId: "a1", modeLabel: "Generated concept" },
-      { slotId: "crop", label: "Close crop", url: "https://cdn.test/2.png", assetId: "a2", modeLabel: "Generated concept" },
+      { slotId: "hero", label: "Clean hero", url: "https://cdn.test/1.png", assetId: "a1", modeLabel: "Illustrative concept" },
+      { slotId: "crop", label: "Close crop", url: "https://cdn.test/2.png", assetId: "a2", modeLabel: "Illustrative concept" },
     ],
   });
   assert.match(markup, /2 visuals · choose one/);
@@ -72,9 +88,9 @@ test("results are separately labelled and selectable, not one image", () => {
 
 test("every generated asset carries its mode label", () => {
   const markup = render({
-    results: [{ slotId: "h", label: "Hero", url: "https://cdn.test/1.png", assetId: "a1", modeLabel: "Generated concept" }],
+    results: [{ slotId: "h", label: "Hero", url: "https://cdn.test/1.png", assetId: "a1", modeLabel: "Illustrative concept" }],
   });
-  assert.match(markup, /Generated concept/);
+  assert.match(markup, /Illustrative concept/);
 });
 
 test("failures are reported per slot, not as one dead end", () => {

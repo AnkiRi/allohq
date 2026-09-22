@@ -31,6 +31,46 @@ export type ModelChangeSet = {
 
 type Block = { id: string; type: string; props: Record<string, unknown> };
 
+/**
+ * Work out what a request is allowed to touch, WITHOUT ever widening it.
+ *
+ * The rule: whole-email scope can only be asked for. It is never the
+ * consequence of a field being absent. An earlier version defaulted to
+ * `{ kind: "document" }` whenever no block was selected, which meant a caller
+ * that simply forgot `editScope` got permission to rewrite the entire email —
+ * the exact opposite of a safe default.
+ *
+ * `editScope` is what current Studio callers send. The fallbacks below exist
+ * only for callers that predate it, and each one NARROWS:
+ *
+ *   - a "subject" chip → envelope scope (subject and preheader only)
+ *   - a selected block → that block only
+ *   - anything else    → refused, with what to send
+ *
+ * There is deliberately no branch that produces document scope.
+ */
+export type ScopeResolution =
+  | { ok: true; scope: EmailEditScope }
+  | { ok: false; reason: string };
+
+export function resolveEditScope(input: {
+  editScope?: EmailEditScope;
+  /** Legacy chip lane. Only "subject" implies a scope, and only a narrow one. */
+  lane?: "subject" | "copy" | "visual" | "tone";
+  selectedBlockId?: string;
+}): ScopeResolution {
+  if (input.editScope) return { ok: true, scope: input.editScope };
+  if (input.lane === "subject") return { ok: true, scope: { kind: "envelope" } };
+  if (input.selectedBlockId) {
+    return { ok: true, scope: { kind: "block", blockId: input.selectedBlockId } };
+  }
+  return {
+    ok: false,
+    reason:
+      "Say what this request may change. Select a block, or ask for the whole email explicitly — Joon will not assume it may rewrite everything.",
+  };
+}
+
 /** Human-readable scope, for the UI label and the proposal record. */
 export function describeScope(scope: EmailEditScope): string {
   switch (scope.kind) {

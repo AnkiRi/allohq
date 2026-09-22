@@ -27,6 +27,19 @@ export type {
 export { createDefaultBlock } from "./types";
 export { preflightEmailDocument, type EmailPreflightCheck } from "./preflight";
 export {
+  MAX_SLOTS_PER_REQUEST,
+  bakedTextRefusal,
+  buildSlotPrompt,
+  mayDepictRealProduct,
+  modeLabel,
+  modePromise,
+  validateVisualRequest,
+  type VisualMode,
+  type VisualPurpose,
+  type VisualRequest,
+  type VisualSlot,
+} from "./visual-request";
+export {
   PERSONALIZATION_TOKENS,
   findTokens,
   isKnownToken,

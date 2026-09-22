@@ -190,7 +190,17 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     );
   };
 
-  /** Put a chosen visual into the selected block. Never applied automatically. */
+  /**
+   * Put a chosen visual into the selected block. Never applied automatically.
+   *
+   * Product blocks are deliberately NOT offered. A product block's image is a
+   * Shopify fact: the renderer prefers the store's product map over anything on
+   * the block, and template enrichment rewrites `imageUrl` on every load. A
+   * generated visual placed there showed in preview and was replaced by the
+   * store image at delivery — the merchant would approve one picture and Joon
+   * would send another. Until there is a renderer-supported editorial image
+   * field that does not overwrite the product fact, the answer is no.
+   */
   const useVisual = (visual: GeneratedVisual) => {
     if (!selected) { toast("Select an image or hero block first.", "error"); return; }
     if (selected.type === "image") {
@@ -198,9 +208,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     } else if (selected.type === "hero") {
       updateBlock({ ...selected, props: { ...selected.props, bgImageSrc: visual.url } } as EmailBlock);
     } else if (selected.type === "product") {
-      updateBlock({ ...selected, props: { ...selected.props, imageUrl: visual.url } } as EmailBlock);
+      toast(
+        "A product block always shows the product's own Shopify image. Put this visual in an image or hero block instead.",
+        "error",
+      );
+      return;
     } else {
-      toast("That block cannot hold an image. Select an image, hero or product block.", "error");
+      toast("That block cannot hold an image. Select an image or hero block.", "error");
       return;
     }
     toast("Visual placed. Nothing is sent until you approve the campaign.", "success");
