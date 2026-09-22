@@ -16,10 +16,11 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { ScopeChooser, type AskScope } from "./AskScope";
 import { ShopifyDataPanel } from "./ShopifyDataPanel";
+import { VisualGenerator, type GeneratedVisual, type VisualFailure, type VisualMode, type VisualSlotDraft } from "./VisualGenerator";
 import { BlockEditor } from "./BlockEditor";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 
-type StudioTab = "ask" | "inspect" | "shopify" | "versions" | "code" | "preflight";
+type StudioTab = "ask" | "inspect" | "shopify" | "visuals" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
 type Proposal = { id?: string; blocks: EmailBlock[]; subject: string; previewText: string; instruction: string; createdAt: Date };
 type DurableVersion = { id: string; sequence: number; source: string; note?: string | null; createdAt: string | Date; document: unknown };
@@ -79,6 +80,15 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [compactPanelOpen, setCompactPanelOpen] = React.useState(false);
   const [instruction, setInstruction] = React.useState("");
   const [askScope, setAskScope] = React.useState<AskScope>("document");
+  const [visualMode, setVisualMode] = React.useState<VisualMode>("creative_concept");
+  const [visualSlots, setVisualSlots] = React.useState<VisualSlotDraft[]>([
+    { id: "hero", label: "Clean hero", prompt: "" },
+    { id: "lifestyle", label: "In use", prompt: "" },
+    { id: "crop", label: "Close crop", prompt: "" },
+    { id: "backdrop", label: "Campaign backdrop", prompt: "" },
+  ]);
+  const [visuals, setVisuals] = React.useState<GeneratedVisual[]>([]);
+  const [visualFailures, setVisualFailures] = React.useState<VisualFailure[]>([]);
   const [promptError, setPromptError] = React.useState<string | null>(null);
   const [showAdd, setShowAdd] = React.useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = React.useState<string[]>([]);
@@ -136,6 +146,65 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     const timer = window.setTimeout(() => renderRef.current.mutate({ blocks: effectiveBlocks, subject: effectiveSubject, previewText: effectivePreviewText, variables: previewVariables, brandKit, storeId }), 220);
     return () => window.clearTimeout(timer);
   }, [effectiveBlocks, effectiveSubject, effectivePreviewText, previewVariables, brandKit, storeId]);
+
+  const generateVisualsMut = (trpc.emails as any).generateVisuals.useMutation();
+
+  /** The product the selected block is about, if any — visuals are grounded in it. */
+  const blockProductId = selected && (selected.type === "product")
+    ? (selected.props.productId || null)
+    : (blocks.find((block) => block.type === "product") as any)?.props?.productId ?? null;
+  const blockProduct = blockProductId
+    ? (productPage?.products ?? []).find((product) => product.id === blockProductId) ?? null
+    : null;
+
+  const generateVisuals = () => {
+    if (!storeId || generateVisualsMut.isPending) return;
+    const slots = visualSlots
+      .filter((slot) => slot.prompt.trim())
+      .map((slot) => ({
+        id: slot.id,
+        label: slot.label,
+        prompt: slot.prompt,
+        purpose: slot.id === "hero" ? "hero_banner" as const
+          : slot.id === "lifestyle" ? "product_lifestyle" as const
+          : slot.id === "backdrop" ? "background" as const
+          : "card" as const,
+      }));
+    if (!slots.length) return;
+    setVisualFailures([]);
+    generateVisualsMut.mutate(
+      { storeId, templateId, productId: blockProductId ?? undefined, mode: visualMode, slots },
+      {
+        onSuccess: (data: { assets: GeneratedVisual[]; failures: VisualFailure[] }) => {
+          setVisuals(data.assets);
+          setVisualFailures(data.failures);
+          if (data.assets.length) {
+            toast(`${data.assets.length} visual${data.assets.length === 1 ? "" : "s"} ready to choose from.`, "success");
+            void creativeAssetsQuery.refetch();
+          }
+        },
+        onError: (error: { message?: string }) => {
+          setVisualFailures([{ slotId: "request", reason: error.message ?? "Joon could not generate those visuals." }]);
+        },
+      },
+    );
+  };
+
+  /** Put a chosen visual into the selected block. Never applied automatically. */
+  const useVisual = (visual: GeneratedVisual) => {
+    if (!selected) { toast("Select an image or hero block first.", "error"); return; }
+    if (selected.type === "image") {
+      updateBlock({ ...selected, props: { ...selected.props, src: visual.url, alt: visual.label } } as EmailBlock);
+    } else if (selected.type === "hero") {
+      updateBlock({ ...selected, props: { ...selected.props, bgImageSrc: visual.url } } as EmailBlock);
+    } else if (selected.type === "product") {
+      updateBlock({ ...selected, props: { ...selected.props, imageUrl: visual.url } } as EmailBlock);
+    } else {
+      toast("That block cannot hold an image. Select an image, hero or product block.", "error");
+      return;
+    }
+    toast("Visual placed. Nothing is sent until you approve the campaign.", "success");
+  };
 
   /**
    * Bind a product the merchant PICKED. Only the reference is stored — title,
@@ -300,10 +369,11 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
         <aside className={cn("min-h-0 flex-col border-l border-border bg-[var(--surface,#FFFDF8)]", compactPanelOpen ? "fixed inset-x-3 bottom-3 top-24 z-40 flex overflow-hidden rounded-xl border shadow-2xl" : "hidden", "xl:static xl:z-auto xl:flex xl:overflow-visible xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none")}>
           <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[var(--surface,#FFFDF8)] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
-          <div className="grid shrink-0 grid-cols-6 border-b border-border bg-[var(--surface-soft,#ECE9E1)] p-1">
+          <div className="grid shrink-0 grid-cols-7 border-b border-border bg-[var(--surface-soft,#ECE9E1)] p-1">
             <StudioTabButton active={activeTab === "ask"} label="Ask" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => setActiveTab("ask")} />
             <StudioTabButton active={activeTab === "inspect"} label="Edit" icon={<Inspect className="h-4 w-4" />} onClick={() => setActiveTab("inspect")} />
             <StudioTabButton active={activeTab === "shopify"} label="Shopify" icon={<ShoppingBag className="h-4 w-4" />} onClick={() => setActiveTab("shopify")} />
+            <StudioTabButton active={activeTab === "visuals"} label="Visuals" icon={<ImagePlus className="h-4 w-4" />} onClick={() => setActiveTab("visuals")} />
             <StudioTabButton active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-4 w-4" />} onClick={() => setActiveTab("versions")} />
             <StudioTabButton active={activeTab === "code"} label="Code" icon={<Code2 className="h-4 w-4" />} onClick={() => setActiveTab("code")} />
             <StudioTabButton active={activeTab === "preflight"} label="Check" icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setActiveTab("preflight")} />
@@ -312,6 +382,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
             {activeTab === "ask" ? <AskPanel selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} assets={creativeAssets} products={productPage?.products ?? []} /> : null}
             {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onToggleGridProduct={toggleGridProduct} onInsertToken={insertToken} /> : null}
+            {activeTab === "visuals" ? <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={Boolean(blockProduct?.imageUrl)} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} onGenerate={generateVisuals} onUseAsset={useVisual} /> : null}
             {activeTab === "versions" ? <VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /> : null}
             {activeTab === "code" ? <CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /> : null}
             {activeTab === "preflight" ? <PreflightPanel preflight={preflight} /> : null}
