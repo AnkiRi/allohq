@@ -17,14 +17,27 @@ const products = [
 const block = (type: string, props: Record<string, unknown> = {}) =>
   ({ id: "b1", type, props } as unknown as EmailBlock);
 
+const collections = [
+  { id: "c1", title: "Winter Picks", handle: "winter", productCount: 3 },
+  { id: "c2", title: "Clearance", handle: "clearance", productCount: 0 },
+];
+const variants = [
+  { id: "v1", title: "154cm", price: 749 },
+  { id: "v2", title: "158cm", price: 799 },
+];
+
 const render = (selected: EmailBlock | null, overrides: Record<string, unknown> = {}) =>
   renderToStaticMarkup(
     createElement(ShopifyDataPanel, {
       selected,
       products,
+      collections,
+      variants: [],
       storeConnected: true,
       onBindProduct: () => {},
+      onBindVariant: () => {},
       onToggleGridProduct: () => {},
+      onBindCollection: () => {},
       onInsertToken: () => {},
       ...overrides,
     } as never),
@@ -70,21 +83,38 @@ test("a grid picks products rather than asking for ids", () => {
   assert.doesNotMatch(markup, /one per line/i, "the raw-id textarea is gone");
 });
 
-test("the panel never promises collection binding, which the renderer cannot do", () => {
-  // `resolveProduct` and the grid renderer read `productIds` and
-  // `dynamicProducts` only — nothing resolves a collection at render time. An
-  // earlier draft of this panel said "Bind a collection and the grid renders
-  // whatever is in it at send time", which was simply untrue.
-  for (const type of ["product", "product_grid", "text", "divider"]) {
-    const markup = render(block(type, { productIds: [], productId: "p1" }));
-    assert.doesNotMatch(markup, /collection/i, `${type} must not mention collections`);
-  }
+test("a grid offers collections now that the renderer resolves them", () => {
+  const markup = render(block("product_grid", { productIds: [] }));
+  assert.match(markup, /Winter Picks/);
+  assert.match(markup, /Show a whole collection, or pick individual products/);
 });
 
-test("a grid describes what it actually does: individual products", () => {
-  const markup = render(block("product_grid", { productIds: [] }));
-  assert.match(markup, /Choose the individual products this grid shows/);
-  assert.match(markup, /read from Shopify when the email renders/);
+test("a bound collection is labelled live, with what it holds today", () => {
+  const markup = render(block("product_grid", { productIds: [], collectionId: "c1" }));
+  assert.match(markup, /Winter Picks/);
+  assert.match(markup, /Live at send/);
+  assert.match(markup, /3 products today/);
+  assert.match(markup, /can change after you approve/);
+});
+
+test("binding an empty collection warns that the grid would render empty", () => {
+  const markup = render(block("product_grid", { productIds: [], collectionId: "c2" }));
+  assert.match(markup, /0 products today/);
+  assert.match(markup, /would render empty/);
+});
+
+test("a bound product's facts are labelled live, not silently current", () => {
+  const markup = render(block("product", { productId: "p1", title: "Hydrogen Snowboard" }));
+  assert.match(markup, /Live at send/);
+});
+
+test("variants appear only when the product actually has a choice", () => {
+  const one = render(block("product", { productId: "p1" }), { variants: [variants[0]] });
+  assert.doesNotMatch(one, /id="shopify-variant"/, "a single variant is not a decision");
+  const many = render(block("product", { productId: "p1" }), { variants });
+  assert.match(many, /id="shopify-variant"/);
+  assert.match(many, /154cm/);
+  assert.match(many, /Whatever the product defaults to/);
 });
 
 test("an empty grid says it will render empty", () => {

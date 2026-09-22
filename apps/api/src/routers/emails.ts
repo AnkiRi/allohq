@@ -10,10 +10,10 @@ import { buildSlotPrompt, modeLabel, validateVisualRequest } from "@allohq/email
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
 import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
-import { ensureEmailVersion } from "@allohq/campaign-engine";
+import { ensureEmailVersion, resolveBlockData } from "@allohq/campaign-engine";
 import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/email-scope";
 import { planEmailChange } from "../lib/email-changes";
-import { resolveBlockProducts } from "../lib/resolve-block-products";
+
 import {
   createEmailAssetUpload,
   inspectUploadedEmailAsset,
@@ -167,7 +167,7 @@ export const emailsRouter = router({
       // Delivery resolves products from the store and the renderer prefers that
       // over anything on the block. Preview must do the same, or a merchant
       // approves one thing and Joon sends another.
-      const products = await resolveBlockProducts(ctx.prisma, input.blocks as any, storeId || undefined);
+      const { products, collections } = await resolveBlockData(ctx.prisma, input.blocks as any, storeId || undefined);
       const html = await renderBrandedEmail({
         storeId,
         brandKit,
@@ -176,6 +176,7 @@ export const emailsRouter = router({
         previewText: input.previewText,
         variables: input.variables ?? {},
         products,
+        collections,
         previewMode: true,
       });
       return { html };

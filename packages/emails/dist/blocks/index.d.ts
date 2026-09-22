@@ -9,6 +9,15 @@ export interface BlockRenderContext {
     products: Record<string, ProductData>;
     /** Dynamic recommendations resolved at send time. */
     dynamicProducts?: ProductData[];
+    /**
+     * Products of each bound collection, keyed by collection id.
+     *
+     * A collection binding is LIVE: the grid shows whatever the collection holds
+     * when the email renders. Preview, the approval snapshot and delivery all
+     * fill this from the same resolver, so a merchant cannot approve one set of
+     * products and have another sent.
+     */
+    collections?: Record<string, ProductData[]>;
     /** Show placeholders for missing data (editor preview). */
     previewMode?: boolean;
 }

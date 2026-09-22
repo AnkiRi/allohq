@@ -121,6 +121,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     { storeId: storeId ?? "", page: 1, limit: 24 },
     { enabled: !!storeId },
   ) as { data?: { products: Array<{ id: string; title: string; description?: string | null; imageUrl?: string | null; price: number; handle: string }> } };
+  const { data: storeCollections } = (trpc.products as any).collections.useQuery(
+    { storeId: storeId ?? "" }, { enabled: !!storeId },
+  ) as { data?: Array<{ id: string; title: string; handle: string; productCount: number }> };
+  const boundProductId = selected && selected.type === "product" ? (selected.props.productId || "") : "";
+  const { data: productVariants } = (trpc.products as any).variants.useQuery(
+    { storeId: storeId ?? "", productId: boundProductId },
+    { enabled: !!storeId && !!boundProductId },
+  ) as { data?: Array<{ id: string; title: string; price: number }> };
   const durableVersionsQuery = (trpc.templates as any).versions.useQuery(
     { id: templateId ?? "" },
     { enabled: !!templateId },
@@ -229,6 +237,31 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (!selected || selected.type !== "product") return;
     updateBlock({ ...selected, props: { ...selected.props, productId, source: "manual" } } as EmailBlock);
     toast("Product bound. Its details come from your store.", "success");
+  };
+
+  /** Bind a variant of the already-chosen product, or clear it. */
+  const bindVariant = (variantId: string | null) => {
+    if (!selected || selected.type !== "product") return;
+    const props = { ...selected.props } as Record<string, unknown>;
+    if (variantId) props["variantId"] = variantId;
+    else delete props["variantId"];
+    updateBlock({ ...selected, props } as EmailBlock);
+  };
+
+  /**
+   * Bind a collection to a grid, or clear it.
+   *
+   * This is a LIVE binding: the grid renders whatever the collection holds at
+   * send time. Preview, the approval snapshot and delivery all resolve it the
+   * same way, so what a merchant approves is what is sent.
+   */
+  const bindCollection = (collectionId: string | null) => {
+    if (!selected || selected.type !== "product_grid") return;
+    const props = { ...selected.props } as Record<string, unknown>;
+    if (collectionId) props["collectionId"] = collectionId;
+    else delete props["collectionId"];
+    updateBlock({ ...selected, props } as EmailBlock);
+    toast(collectionId ? "Collection bound. It stays live until send." : "Collection unbound.", "success");
   };
 
   /** Add or remove a product from a grid. Only ids are stored. */
@@ -395,7 +428,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="min-h-0 flex-1 overflow-y-auto">
             {activeTab === "ask" ? <AskPanel selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} assets={creativeAssets} products={productPage?.products ?? []} /> : null}
-            {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onToggleGridProduct={toggleGridProduct} onInsertToken={insertToken} /> : null}
+            {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /> : null}
             {activeTab === "visuals" ? <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={Boolean(blockProduct?.imageUrl)} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} onGenerate={generateVisuals} onUseAsset={useVisual} /> : null}
             {activeTab === "versions" ? <VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /> : null}
             {activeTab === "code" ? <CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /> : null}

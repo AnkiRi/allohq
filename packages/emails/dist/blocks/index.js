@@ -234,6 +234,19 @@ function ProductGridBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;
     const { columns = 2, showPrice = true, showDescription = false } = block.props;
     let ids = block.props.productIds;
+    // A bound collection wins over a hand-picked list: it is what the merchant
+    // chose most recently, and it is explicitly labelled as live in the Studio.
+    const boundCollection = block.props.collectionId
+        ? ctx.collections?.[block.props.collectionId]
+        : undefined;
+    if (boundCollection?.length) {
+        const limited = boundCollection.slice(0, block.props.collectionLimit ?? 6);
+        for (const product of limited) {
+            if (!ctx.products[product.id])
+                ctx.products[product.id] = product;
+        }
+        ids = limited.map((product) => product.id);
+    }
     if (block.props.source &&
         block.props.source !== "manual" &&
         block.props.dynamicProductCount &&

@@ -3,6 +3,15 @@
 import * as React from "react";
 import { cn } from "@allohq/ui";
 import { PERSONALIZATION_TOKENS, tokenText, type EmailBlock } from "@allohq/email-builder";
+import { FreshnessNote, FreshnessTag } from "./DataFreshness";
+
+export type StoreCollection = {
+  id: string;
+  title: string;
+  handle: string;
+  productCount: number;
+};
+export type StoreVariant = { id: string; title: string; price: number };
 
 export type StoreProduct = {
   id: string;
@@ -36,16 +45,24 @@ function formatPrice(value: number): string {
 export function ShopifyDataPanel({
   selected,
   products,
+  collections,
+  variants,
   storeConnected,
   onBindProduct,
+  onBindVariant,
   onToggleGridProduct,
+  onBindCollection,
   onInsertToken,
 }: {
   selected: EmailBlock | null;
   products: StoreProduct[];
+  collections: StoreCollection[];
+  variants: StoreVariant[];
   storeConnected: boolean;
   onBindProduct: (productId: string) => void;
+  onBindVariant: (variantId: string | null) => void;
   onToggleGridProduct: (productId: string) => void;
+  onBindCollection: (collectionId: string | null) => void;
   onInsertToken: (text: string) => void;
 }) {
   const [query, setQuery] = React.useState("");
@@ -84,10 +101,14 @@ export function ShopifyDataPanel({
         <ProductBinding
           selected={selected}
           products={filtered}
+          collections={collections}
+          variants={variants}
           query={query}
           setQuery={setQuery}
           onBindProduct={onBindProduct}
+          onBindVariant={onBindVariant}
           onToggleGridProduct={onToggleGridProduct}
+          onBindCollection={onBindCollection}
         />
       ) : null}
 
@@ -138,23 +159,35 @@ export function ShopifyDataPanel({
 function ProductBinding({
   selected,
   products,
+  collections,
+  variants,
   query,
   setQuery,
   onBindProduct,
+  onBindVariant,
   onToggleGridProduct,
+  onBindCollection,
 }: {
   selected: EmailBlock;
   products: StoreProduct[];
+  collections: StoreCollection[];
+  variants: StoreVariant[];
   query: string;
   setQuery: (value: string) => void;
   onBindProduct: (productId: string) => void;
+  onBindVariant: (variantId: string | null) => void;
   onToggleGridProduct: (productId: string) => void;
+  onBindCollection: (collectionId: string | null) => void;
 }) {
   const props = selected.props as Record<string, unknown>;
   const boundId = typeof props["productId"] === "string" ? props["productId"] : null;
   const bound = boundId ? products.find((product) => product.id === boundId) ?? null : null;
   const isGrid = selected.type === "product_grid";
   const gridIds = Array.isArray(props["productIds"]) ? (props["productIds"] as string[]) : [];
+  const boundCollectionId = typeof props["collectionId"] === "string" ? props["collectionId"] : null;
+  const boundCollection = boundCollectionId
+    ? collections.find((collection) => collection.id === boundCollectionId) ?? null
+    : null;
 
   return (
     <section>
@@ -165,9 +198,12 @@ function ProductBinding({
       {!isGrid ? (
         boundId ? (
           <div className="mt-2 rounded-xl border border-border p-3">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-              From your store
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                From your store
+              </p>
+              <FreshnessTag kind="live" />
+            </div>
             <p className="mt-1 text-[13px] font-medium">
               {bound?.title ?? (props["title"] as string) ?? "This product is no longer in your store"}
             </p>
@@ -182,6 +218,26 @@ function ProductBinding({
               Title, price, description and image come from Shopify at send time. Joon
               writes the wording around them, never the facts themselves.
             </p>
+            {variants.length > 1 ? (
+              <div className="mt-3">
+                <label className="mb-1 block text-[11px] font-medium" htmlFor="shopify-variant">
+                  Variant
+                </label>
+                <select
+                  id="shopify-variant"
+                  value={typeof props["variantId"] === "string" ? props["variantId"] : ""}
+                  onChange={(event) => onBindVariant(event.target.value || null)}
+                  className="w-full rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--evidence,#2D4F9E)]"
+                >
+                  <option value="">Whatever the product defaults to</option>
+                  {variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.title} · {formatPrice(variant.price)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="mt-2 rounded-xl border border-dashed border-border p-3 text-[12px] text-muted-foreground">
@@ -191,15 +247,60 @@ function ProductBinding({
         )
       ) : (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Choose the individual products this grid shows. Their titles, prices and
-          images are read from Shopify when the email renders.
+          Show a whole collection, or pick individual products. Either way, titles,
+          prices and images are read from Shopify when the email renders.
         </p>
       )}
 
       {isGrid ? (
         <div className="mt-3">
-          <label className="mb-1.5 block text-[11px] font-medium" htmlFor="shopify-grid-search">
-            Products in this grid
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-medium">Collection</p>
+            <FreshnessTag kind="live" />
+          </div>
+          {boundCollection ? (
+            <div className="rounded-xl border border-[#C99116]/40 bg-[#FFF0B8]/40 p-2.5">
+              <p className="text-[12px] font-medium">{boundCollection.title}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {boundCollection.productCount} product{boundCollection.productCount === 1 ? "" : "s"} today
+                {boundCollection.productCount === 0 ? " — this grid would render empty" : ""}
+              </p>
+              <FreshnessNote kind="live" />
+              <button
+                type="button"
+                onClick={() => onBindCollection(null)}
+                className="mt-2 rounded-lg border border-border bg-white/70 px-2 py-1 text-[11px]"
+              >
+                Unbind collection
+              </button>
+            </div>
+          ) : collections.length ? (
+            <div className="max-h-44 space-y-1 overflow-y-auto">
+              {collections.map((collection) => (
+                <button
+                  key={collection.id}
+                  type="button"
+                  onClick={() => onBindCollection(collection.id)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-2 text-left text-[12px] hover:border-[var(--evidence,#2D4F9E)]"
+                >
+                  <span className="truncate">{collection.title}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {collection.productCount}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground">
+              No collections have synced from your store yet.
+            </p>
+          )}
+
+          <p className="mt-4 mb-1.5 text-[11px] font-medium">
+            {boundCollection ? "Or pick products instead" : "Or pick individual products"}
+          </p>
+          <label className="sr-only" htmlFor="shopify-grid-search">
+            Search products for this grid
           </label>
           <input
             id="shopify-grid-search"

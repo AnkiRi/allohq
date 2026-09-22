@@ -360,3 +360,118 @@ test("a legacy caller with a selected block gets that block, never the email", {
     await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }
 });
+
+/** A store with a collection holding three ordered products. */
+async function collectionFixture(prisma: any) {
+  const base = await previewFixture(prisma);
+  const tag = randomUUID().slice(0, 6);
+  const collection = await prisma.collection.create({
+    data: { storeId: base.store.id, externalId: `coll-${tag}`, title: "Winter Picks", handle: `winter-${tag}` },
+  });
+  const extras = [];
+  for (const [index, title] of ["Liquid Board", "Powder Twin", "Park Rocker"].entries()) {
+    const product = await prisma.product.create({
+      data: {
+        storeId: base.store.id, externalId: `ext-${tag}-${index}`, title,
+        handle: `${title.toLowerCase().replace(/\s+/g, "-")}-${tag}`,
+        imageUrl: `https://cdn.shopify.test/${index}.png`, price: 500 + index,
+      },
+    });
+    await prisma.collectionProduct.create({
+      data: { collectionId: collection.id, productId: product.id, position: index },
+    });
+    extras.push(product);
+  }
+  return { ...base, collection, extras };
+}
+
+test("a bound collection resolves identically for preview and delivery", { skip }, async () => {
+  const { prisma, emailsRouter } = await load2();
+  const { resolveBlockData } = await import("@allohq/campaign-engine");
+  const f = await collectionFixture(prisma);
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+    const blocks = [{
+      id: "g1", type: "product_grid",
+      props: { productIds: [], collectionId: f.collection.id, collectionLimit: 3, columns: 3, showPrice: true },
+    }];
+
+    // Preview path
+    const { html } = await api.renderPreview({ blocks: blocks as any, storeId: f.store.id, subject: "S" });
+    for (const product of f.extras) {
+      assert.ok(html.includes(product.title), `preview shows ${product.title}`);
+    }
+
+    // Delivery path resolves through the same helper.
+    const resolved = await resolveBlockData(prisma as never, blocks as never, f.store.id);
+    assert.equal(resolved.collections[f.collection.id]?.length, 3, "delivery resolves the same three");
+    assert.deepEqual(
+      resolved.collections[f.collection.id]!.map((p: any) => p.title),
+      ["Liquid Board", "Powder Twin", "Park Rocker"],
+      "and in the collection's own order",
+    );
+  } finally {
+    await prisma.collectionProduct.deleteMany({ where: { collectionId: f.collection.id } });
+    await prisma.collection.deleteMany({ where: { id: f.collection.id } });
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("a collection limit is honoured rather than dumping everything", { skip }, async () => {
+  const { prisma } = await load2();
+  const { resolveBlockData } = await import("@allohq/campaign-engine");
+  const f = await collectionFixture(prisma);
+  try {
+    const resolved = await resolveBlockData(
+      prisma as never,
+      [{ id: "g", type: "product_grid", props: { productIds: [], collectionId: f.collection.id, collectionLimit: 2 } }] as never,
+      f.store.id,
+    );
+    assert.equal(resolved.collections[f.collection.id]?.length, 2);
+  } finally {
+    await prisma.collectionProduct.deleteMany({ where: { collectionId: f.collection.id } });
+    await prisma.collection.deleteMany({ where: { id: f.collection.id } });
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("a collection from another store never resolves into this email", { skip }, async () => {
+  const { prisma } = await load2();
+  const { resolveBlockData } = await import("@allohq/campaign-engine");
+  const mine = await previewFixture(prisma);
+  const theirs = await collectionFixture(prisma);
+  try {
+    const resolved = await resolveBlockData(
+      prisma as never,
+      [{ id: "g", type: "product_grid", props: { productIds: [], collectionId: theirs.collection.id } }] as never,
+      mine.store.id,
+    );
+    assert.deepEqual(resolved.collections[theirs.collection.id], [], "another tenant's collection resolves empty");
+  } finally {
+    await prisma.collectionProduct.deleteMany({ where: { collectionId: theirs.collection.id } });
+    await prisma.collection.deleteMany({ where: { id: theirs.collection.id } });
+    await cleanup(prisma, theirs.workspace.id, theirs.store.id, theirs.user.id);
+    await cleanup(prisma, mine.workspace.id, mine.store.id, mine.user.id);
+  }
+});
+
+test("an empty collection is reported as empty, not as never looked", { skip }, async () => {
+  const { prisma } = await load2();
+  const { resolveBlockData } = await import("@allohq/campaign-engine");
+  const f = await previewFixture(prisma);
+  const empty = await prisma.collection.create({
+    data: { storeId: f.store.id, externalId: `empty-${randomUUID().slice(0, 6)}`, title: "Empty", handle: "empty" },
+  });
+  try {
+    const resolved = await resolveBlockData(
+      prisma as never,
+      [{ id: "g", type: "product_grid", props: { productIds: [], collectionId: empty.id } }] as never,
+      f.store.id,
+    );
+    assert.ok(empty.id in resolved.collections, "the key exists");
+    assert.deepEqual(resolved.collections[empty.id], []);
+  } finally {
+    await prisma.collection.deleteMany({ where: { id: empty.id } });
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
