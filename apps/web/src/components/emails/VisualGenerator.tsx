@@ -132,7 +132,7 @@ export function VisualGenerator({
         type="button"
         onClick={onGenerate}
         disabled={pending || productSafeBlocked || nothingToDo}
-        className="mt-3 w-full rounded-lg bg-[var(--sidebar,#17204D)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"
+        className="mt-3 w-full rounded-lg bg-[#17204D] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"
       >
         {pending ? "Generating…" : "Generate visuals"}
       </button>
