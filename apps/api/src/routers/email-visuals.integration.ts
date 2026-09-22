@@ -132,46 +132,75 @@ test("a product from another store is refused", { skip }, async () => {
   }
 });
 
-test("with no provider reachable, every slot fails safely and nothing is invented", { skip }, async () => {
+test("with no provider configured, generation fails closed and names the variables", { skip }, async () => {
   const { prisma, emailsRouter } = await load();
   const f = await fixture(prisma, "https://cdn.test/board.png");
+  const saved = { r: process.env["REPLICATE_API_TOKEN"], o: process.env["OPENAI_API_KEY"] };
+  delete process.env["REPLICATE_API_TOKEN"];
+  delete process.env["OPENAI_API_KEY"];
   try {
     const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
-    const result = await api.generateVisuals({
-      storeId: f.store.id,
-      productId: f.product.id,
-      mode: "creative_concept",
-      slots: [slot("hero", "A clean premium hero"), slot("crop", "A close tactile crop")],
-    });
-    // CI has no image-provider keys. The request must come back describing what
-    // failed, rather than throwing or quietly substituting stock imagery.
-    assert.equal(result.assets.length, 0, "no asset is fabricated without a provider");
-    assert.equal(result.failures.length, 2, "each slot reports its own failure");
-    assert.deepEqual(result.failures.map((item: any) => item.slotId).sort(), ["crop", "hero"]);
+    // CI has no image-provider keys. The request must refuse and say what to
+    // configure, not throw an opaque error or quietly substitute stock imagery.
+    await assert.rejects(
+      () => api.generateVisuals({
+        storeId: f.store.id,
+        productId: f.product.id,
+        mode: "creative_concept",
+        slots: [slot("hero", "A clean premium hero")],
+      }),
+      (error: any) => {
+        assert.match(error.message, /No image provider is configured/);
+        assert.match(error.message, /REPLICATE_API_TOKEN|OPENAI_API_KEY/);
+        assert.doesNotMatch(error.message, /stock|unsplash/i);
+        return true;
+      },
+    );
     assert.equal(await prisma.brandAsset.count({ where: { workspaceId: f.workspace.id } }), 0);
     assert.equal(await prisma.generatedImage.count({ where: { workspaceId: f.workspace.id } }), 0);
   } finally {
+    if (saved.r) process.env["REPLICATE_API_TOKEN"] = saved.r;
+    if (saved.o) process.env["OPENAI_API_KEY"] = saved.o;
     await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }
 });
 
-test("a bad slot is refused while the others are still attempted", { skip }, async () => {
+test("capabilities report honestly when nothing is configured", { skip }, async () => {
+  const { prisma, emailsRouter } = await load();
+  const f = await fixture(prisma, "https://cdn.test/board.png");
+  const saved = { r: process.env["REPLICATE_API_TOKEN"], o: process.env["OPENAI_API_KEY"] };
+  delete process.env["REPLICATE_API_TOKEN"];
+  delete process.env["OPENAI_API_KEY"];
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+    const caps = await api.visualCapabilities({});
+    assert.equal(caps.generationAvailable, false);
+    assert.equal(caps.referenceGrounded, false, "no reference grounding without a provider");
+    assert.ok(caps.missingCredentials.length > 0);
+    // The limitation must read as configuration, not as impossible.
+    assert.ok(caps.referenceSetup.length >= 1);
+    assert.ok(caps.referenceSetup.every((hint: any) => hint.variables.length >= 2));
+  } finally {
+    if (saved.r) process.env["REPLICATE_API_TOKEN"] = saved.r;
+    if (saved.o) process.env["OPENAI_API_KEY"] = saved.o;
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("offer text is refused before the provider check, so it costs nothing", { skip }, async () => {
   const { prisma, emailsRouter } = await load();
   const f = await fixture(prisma, "https://cdn.test/board.png");
   try {
     const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
-    const result = await api.generateVisuals({
-      storeId: f.store.id,
-      mode: "creative_concept",
-      slots: [slot("good", "A clean premium hero"), slot("bad", "Banner reading 25% off")],
-    });
-    const refused = result.failures.find((item: any) => item.slotId === "bad");
-    assert.ok(refused, "the offer-text slot is reported");
-    assert.match(refused.reason, /discount percentage/);
-    assert.ok(
-      result.failures.some((item: any) => item.slotId === "good"),
-      "the good slot was attempted and failed only because no provider is configured",
+    await assert.rejects(
+      () => api.generateVisuals({
+        storeId: f.store.id,
+        mode: "creative_concept",
+        slots: [slot("bad", "Banner reading 25% off")],
+      }),
+      /discount percentage/,
     );
+    assert.equal(await prisma.generatedImage.count({ where: { workspaceId: f.workspace.id } }), 0);
   } finally {
     await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }

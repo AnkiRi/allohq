@@ -3,8 +3,12 @@ import { router, workspaceProcedure } from "../trpc";
 import {
   complete,
   generateImage,
+  imageSpendRefusal,
   loadBrandKit,
+  referenceGenerationAvailable,
+  referenceProviderSetupHint,
   renderBrandedEmail,
+  selectVisualProvider,
 } from "@allohq/customer-intelligence";
 import { buildSlotPrompt, modeLabel, validateVisualRequest } from "@allohq/email-builder";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
@@ -633,8 +637,35 @@ export const emailsRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
       }
 
+      // Fail closed, and say what to configure. Substituting stock imagery here
+      // would hand back something that looks like a result and is not one.
+      const selection = selectVisualProvider({
+        preferReference: input.mode === "product_safe" && Boolean(product?.imageUrl),
+      });
+      if (!selection.ok) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `${selection.reason} (${selection.missing.join(" or ")})`,
+        });
+      }
+
+      // Both ceilings: the workspace's day, and this email's lifetime.
+      const spendRefusal = await imageSpendRefusal({
+        workspaceId: ctx.workspaceId,
+        templateId: input.templateId,
+      });
+      if (spendRefusal) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: spendRefusal });
+      }
+
       const visual = await ctx.prisma.brandVisualProfile.findUnique({ where: { storeId: input.storeId } });
       const aesthetic = visual?.aestheticClassification ?? visual?.visualTone ?? undefined;
+
+      // A reference-capable provider works FROM the real product image, so the
+      // product in the scene is the merchant's. Without one, product-safe still
+      // preserves the product by compositing it over generated scenery after
+      // the fact — faithful either way, but assembled rather than photographed.
+      const useReference = selection.usesReference && Boolean(product?.imageUrl);
 
       const assets: Array<{
         slotId: string; label: string; url: string; assetId: string;
@@ -646,13 +677,26 @@ export const emailsRouter = router({
 
       for (const slot of validated.slots) {
         try {
-          const generated = await generateImage({
-            purpose: slot.purpose,
-            prompt: buildSlotPrompt(slot, input.mode, aesthetic),
-            workspaceId: ctx.workspaceId,
-            fallbackToStock: false,
-          });
-          const persisted = input.mode === "product_safe" && product?.imageUrl
+          const generated = useReference
+            ? await (async () => {
+                const url = await selection.provider.generate({
+                  prompt: buildSlotPrompt(slot, input.mode, aesthetic, { hasReference: true }),
+                  width: 1024,
+                  height: slot.purpose === "hero_banner" ? 683 : 1024,
+                  referenceImageUrls: [product!.imageUrl!],
+                });
+                if (!url) throw new Error("The image provider returned nothing for this visual.");
+                return { url, provider: selection.provider.id, prompt: slot.prompt, cost: selection.provider.costUsd };
+              })()
+            : await generateImage({
+                purpose: slot.purpose,
+                prompt: buildSlotPrompt(slot, input.mode, aesthetic),
+                workspaceId: ctx.workspaceId,
+                fallbackToStock: false,
+              });
+          // With a reference provider the product is already IN the image, so
+          // compositing it again would paste it over itself.
+          const persisted = !useReference && input.mode === "product_safe" && product?.imageUrl
             ? await persistProductSafeComposite({
                 workspaceId: ctx.workspaceId,
                 storeId: input.storeId,
@@ -720,7 +764,44 @@ export const emailsRouter = router({
         }
       }
 
-      return { assets, failures, mode: input.mode, modeLabel: modeLabel(input.mode) };
+      return {
+        assets,
+        failures,
+        mode: input.mode,
+        modeLabel: modeLabel(input.mode),
+        provider: selection.provider.label,
+        // True only when the real product image was an INPUT to the model,
+        // which is the sole condition under which "your actual product in this
+        // scene" is a truthful thing to show a merchant.
+        referenceGrounded: useReference,
+      };
+    }),
+
+  /**
+   * What image generation can actually do right now, for this workspace.
+   *
+   * The Studio uses this to say whether "your actual product in this scene" is
+   * available or whether product-safe will composite instead — rather than
+   * letting a merchant discover the difference in the output.
+   */
+  visualCapabilities: workspaceProcedure
+    .input(z.object({ templateId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const selection = selectVisualProvider({ preferReference: true });
+      const spendRefusal = await imageSpendRefusal({
+        workspaceId: ctx.workspaceId,
+        templateId: input?.templateId,
+      });
+      return {
+        generationAvailable: selection.ok,
+        provider: selection.ok ? selection.provider.label : null,
+        missingCredentials: selection.ok ? [] : selection.missing,
+        referenceGrounded: referenceGenerationAvailable(),
+        // How an operator would switch reference grounding on. Surfaced so the
+        // limitation reads as configuration rather than as a law of nature.
+        referenceSetup: referenceProviderSetupHint(),
+        spendRefusal,
+      };
     }),
 
   resolveProposal: workspaceProcedure

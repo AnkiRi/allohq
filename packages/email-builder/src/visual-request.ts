@@ -167,9 +167,17 @@ export function buildSlotPrompt(
   slot: VisualSlot,
   mode: VisualMode,
   brandAesthetic?: string,
+  options: { hasReference?: boolean } = {},
 ): string {
   const lines = [slot.prompt.trim()];
-  if (mode === "product_safe") {
+  if (mode === "product_safe" && options.hasReference) {
+    // The provider is working FROM the product image, so the instruction is
+    // the opposite of the composite path: keep the product exactly as given
+    // and change only what surrounds it.
+    lines.push(
+      "Keep the product in the reference image exactly as it is — its shape, packaging, colours, logo and any text on it must not change. Alter only the surroundings, lighting and setting.",
+    );
+  } else if (mode === "product_safe") {
     lines.push(
       "Generate only the setting, surface and background. Do not draw the product, packaging, labels, logos or any text; the real product image is composited in afterwards.",
     );

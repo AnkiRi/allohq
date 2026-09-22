@@ -14,6 +14,14 @@ export type GeneratedVisual = {
 };
 export type VisualFailure = { slotId: string; reason: string };
 export type VisualSlotDraft = { id: string; label: string; prompt: string };
+export type VisualCapabilities = {
+  generationAvailable: boolean;
+  provider: string | null;
+  missingCredentials: string[];
+  referenceGrounded: boolean;
+  referenceSetup: Array<{ provider: string; variables: string[] }>;
+  spendRefusal: string | null;
+};
 
 /**
  * Asking Joon for email artwork.
@@ -33,6 +41,7 @@ export function VisualGenerator({
   setSlots,
   productTitle,
   productHasImage,
+  capabilities,
   results,
   failures,
   pending,
@@ -45,6 +54,8 @@ export function VisualGenerator({
   setSlots: (slots: VisualSlotDraft[]) => void;
   productTitle: string | null;
   productHasImage: boolean;
+  /** What generation can do right now. Null while it is still being fetched. */
+  capabilities: VisualCapabilities | null;
   results: GeneratedVisual[];
   failures: VisualFailure[];
   pending: boolean;
@@ -53,6 +64,8 @@ export function VisualGenerator({
 }) {
   const productSafeBlocked = mode === "product_safe" && !productHasImage;
   const nothingToDo = slots.every((slot) => !slot.prompt.trim());
+  const unavailable = capabilities ? !capabilities.generationAvailable : false;
+  const spendBlocked = Boolean(capabilities?.spendRefusal);
 
   return (
     <section className="p-4">
@@ -82,6 +95,13 @@ export function VisualGenerator({
           ))}
         </div>
         <p className="mt-1.5 text-[11px] text-muted-foreground">{modePromise(mode)}</p>
+        {mode === "product_safe" && capabilities ? (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            {capabilities.referenceGrounded
+              ? `Your product image is sent to ${capabilities.provider} as a reference, so the product in the scene is yours.`
+              : "No reference-capable provider is configured, so Joon generates the setting and places your product image into it afterwards."}
+          </p>
+        ) : null}
         {mode === "creative_concept" ? (
           <p className="mt-1.5 rounded-lg border border-[var(--attention,#C99116)]/40 bg-[var(--attention-soft,#FFF0B8)] p-2 text-[11px]">
             Joon’s current image providers cannot take your product photo as a
@@ -90,6 +110,23 @@ export function VisualGenerator({
           </p>
         ) : null}
       </div>
+
+      {unavailable ? (
+        <p className="mt-3 rounded-lg border border-[#B95849]/40 bg-[#FAE8E4] p-2.5 text-[12px]">
+          Image generation is not switched on for this workspace, so Joon will not
+          produce a visual rather than hand you a stand-in. An operator needs to set{" "}
+          <span className="font-mono text-[11px]">
+            {capabilities?.missingCredentials.join(" or ")}
+          </span>
+          .
+        </p>
+      ) : null}
+
+      {spendBlocked ? (
+        <p className="mt-3 rounded-lg border border-[#C99116]/40 bg-[#FFF0B8] p-2.5 text-[12px]">
+          {capabilities?.spendRefusal}
+        </p>
+      ) : null}
 
       {productSafeBlocked ? (
         <p className="mt-3 rounded-lg border border-[var(--attention,#C99116)]/40 bg-[var(--attention-soft,#FFF0B8)] p-2.5 text-[12px]">
@@ -131,7 +168,7 @@ export function VisualGenerator({
       <button
         type="button"
         onClick={onGenerate}
-        disabled={pending || productSafeBlocked || nothingToDo}
+        disabled={pending || productSafeBlocked || nothingToDo || unavailable || spendBlocked}
         className="mt-3 w-full rounded-lg bg-[#17204D] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"
       >
         {pending ? "Generating…" : "Generate visuals"}

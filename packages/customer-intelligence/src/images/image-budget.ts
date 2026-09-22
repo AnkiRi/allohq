@@ -32,3 +32,55 @@ export async function dailyImageSpendUsd(workspaceId: string, now = new Date()):
   });
   return spend._sum.cost ?? 0;
 }
+
+/**
+ * Lifetime generated-image spend ceiling for one campaign, in US dollars.
+ *
+ * The daily workspace budget stops a runaway loop but says nothing about one
+ * campaign quietly consuming the whole day's allowance while a merchant
+ * iterates on a hero image. A per-campaign ceiling keeps one email's
+ * experimentation from starving every other email in the workspace.
+ */
+export const CAMPAIGN_IMAGE_BUDGET_USD = Number(process.env["IMAGE_CAMPAIGN_BUDGET_USD"] ?? 2);
+
+export function campaignImageBudgetExceeded(
+  spentUsd: number,
+  budgetUsd: number = CAMPAIGN_IMAGE_BUDGET_USD,
+): boolean {
+  if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) return true;
+  if (!Number.isFinite(spentUsd) || spentUsd < 0) return false;
+  return spentUsd >= budgetUsd;
+}
+
+/**
+ * Generated-image spend attributed to one email template, for its lifetime.
+ *
+ * Templates are the stable identity here: a campaign may be created, deleted
+ * and recreated around the same email while a merchant iterates.
+ */
+export async function templateImageSpendUsd(templateId: string): Promise<number> {
+  const spend = await prisma.generatedImage.aggregate({
+    where: { templateId },
+    _sum: { cost: true },
+  });
+  return spend._sum.cost ?? 0;
+}
+
+/** Both ceilings, checked together, with the reason the caller should show. */
+export async function imageSpendRefusal(input: {
+  workspaceId: string;
+  templateId?: string;
+  now?: Date;
+}): Promise<string | null> {
+  const daily = await dailyImageSpendUsd(input.workspaceId, input.now);
+  if (imageBudgetExceeded(daily)) {
+    return `This workspace has reached its daily image budget ($${DAILY_IMAGE_BUDGET_USD}). Generation resumes tomorrow, or an operator can raise IMAGE_DAILY_BUDGET_USD.`;
+  }
+  if (input.templateId) {
+    const perCampaign = await templateImageSpendUsd(input.templateId);
+    if (campaignImageBudgetExceeded(perCampaign)) {
+      return `This email has reached its image budget ($${CAMPAIGN_IMAGE_BUDGET_USD}). Other emails in the workspace are unaffected.`;
+    }
+  }
+  return null;
+}

@@ -18,6 +18,12 @@ const render = (overrides: Record<string, unknown> = {}) =>
       setSlots: () => {},
       productTitle: "Hydrogen Snowboard",
       productHasImage: true,
+      capabilities: {
+        generationAvailable: true, provider: "Flux 1.1 Pro (Replicate)", missingCredentials: [],
+        referenceGrounded: false,
+        referenceSetup: [{ provider: "Flux Kontext (Replicate)", variables: ["REPLICATE_API_TOKEN", "JOON_FLUX_KONTEXT_ENABLED=true"] }],
+        spendRefusal: null,
+      },
       results: [],
       failures: [],
       pending: false,
@@ -110,4 +116,47 @@ test("generation cannot be started with nothing described", () => {
 
 test("a run in progress says so", () => {
   assert.match(render({ pending: true }), /Generating…/);
+});
+
+test("with no provider configured, the panel refuses and names the variables", () => {
+  const markup = render({
+    capabilities: {
+      generationAvailable: false, provider: null,
+      missingCredentials: ["REPLICATE_API_TOKEN", "OPENAI_API_KEY"],
+      referenceGrounded: false, referenceSetup: [], spendRefusal: null,
+    },
+  });
+  assert.match(markup, /not switched on for this workspace/);
+  assert.match(markup, /REPLICATE_API_TOKEN or OPENAI_API_KEY/);
+  assert.match(markup, /rather than hand you a stand-in/);
+  assert.match(markup, /disabled=""/);
+});
+
+test("a spend ceiling stops generation and says which one", () => {
+  const markup = render({
+    capabilities: {
+      generationAvailable: true, provider: "Flux", missingCredentials: [],
+      referenceGrounded: false, referenceSetup: [],
+      spendRefusal: "This email has reached its image budget ($2). Other emails in the workspace are unaffected.",
+    },
+  });
+  assert.match(markup, /reached its image budget/);
+  assert.match(markup, /Other emails in the workspace are unaffected/);
+  assert.match(markup, /disabled=""/);
+});
+
+test("product-safe says whether the product is a reference or composited", () => {
+  const composited = render({ mode: "product_safe" });
+  assert.match(composited, /No reference-capable provider is configured/);
+  assert.match(composited, /places your product image into it afterwards/);
+
+  const grounded = render({
+    mode: "product_safe",
+    capabilities: {
+      generationAvailable: true, provider: "Flux Kontext (Replicate)", missingCredentials: [],
+      referenceGrounded: true, referenceSetup: [], spendRefusal: null,
+    },
+  });
+  assert.match(grounded, /sent to Flux Kontext \(Replicate\) as a reference/);
+  assert.match(grounded, /the product in the scene is yours/);
 });
