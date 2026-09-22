@@ -15,7 +15,7 @@ import {
   DELIVERY_WINDOWS,
   type DeliveryWindow,
 } from "@allohq/customer-intelligence";
-import { emailDocumentSchema, type EmailBlock, type ProductData } from "@allohq/email-builder";
+import { parseEmailDocument, safeParseEmailDocument, type EmailBlock, type ProductData } from "@allohq/email-builder";
 import { sendEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
@@ -76,15 +76,24 @@ const RECIPIENT_WRITE_CHUNK = 2_000;
 type BrandKit = Awaited<ReturnType<typeof loadBrandKit>>;
 
 function frozenEmailDocument(campaign: {
+  id: string;
   template: { subject: string; previewText: string | null; blocks: unknown } | null;
   approvedEmailVersion?: { document: unknown } | null;
 }) {
   if (!campaign.template) throw new Error("Campaign has no email template");
-  const frozen = campaign.approvedEmailVersion
-    ? emailDocumentSchema.safeParse(campaign.approvedEmailVersion.document)
-    : null;
-  if (frozen?.success) return frozen.data;
-  return emailDocumentSchema.parse({
+  if (campaign.approvedEmailVersion) {
+    // An approved version IS the send. If it cannot be read back, failing the
+    // job is the only safe outcome — falling through to the live template
+    // would deliver content the merchant never approved.
+    const frozen = safeParseEmailDocument(campaign.approvedEmailVersion.document);
+    if (!frozen.success) {
+      throw new Error(
+        `Approved email version for campaign ${campaign.id} could not be read back: ${frozen.error.issues[0]?.message ?? "invalid document"}`,
+      );
+    }
+    return frozen.data;
+  }
+  return parseEmailDocument({
     schemaVersion: 1,
     envelope: {
       subject: campaign.template.subject,

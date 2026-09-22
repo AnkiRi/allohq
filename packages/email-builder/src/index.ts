@@ -27,6 +27,13 @@ export type {
 export { createDefaultBlock } from "./types";
 export { preflightEmailDocument, type EmailPreflightCheck } from "./preflight";
 export {
+  normalizeLegacyEmailBlocks,
+  normalizeLegacyEmailDocument,
+  parseEmailBlocks,
+  parseEmailDocument,
+  safeParseEmailDocument,
+} from "./normalize";
+export {
   emailBlockSchema,
   emailBlocksSchema,
   emailDocumentSchema,
