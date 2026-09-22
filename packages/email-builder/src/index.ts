@@ -27,6 +27,13 @@ export type {
 export { createDefaultBlock } from "./types";
 export { preflightEmailDocument, type EmailPreflightCheck } from "./preflight";
 export {
+  MIN_BODY_CONTRAST,
+  MIN_LARGE_CONTRAST,
+  contrastRatio,
+  parseHexColor,
+  relativeLuminance,
+} from "./contrast";
+export {
   MAX_SLOTS_PER_REQUEST,
   bakedTextRefusal,
   buildSlotPrompt,
