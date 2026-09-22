@@ -49,3 +49,52 @@ test("studio preflight defers offer validation until campaign context exists", (
   const result = preflightEmailDocument({ subject: "Offer", previewText: "Preview", blocks });
   assert.equal(result.blockingFailures.some((check) => check.id === "offer"), false);
 });
+
+test("preflight blocks a token Joon cannot fill", () => {
+  const blocks = emailBlocksSchema.parse([
+    { id: "t", type: "text", props: { html: "<p>Hi {{firstname}}, your {{city}} order</p>" } },
+  ]);
+  const result = preflightEmailDocument({ subject: "Your order", previewText: "Inside", blocks });
+  const check = result.checks.find((item) => item.id === "personalization_known");
+  assert.equal(check?.passed, false);
+  assert.match(check?.detail ?? "", /\{\{firstname\}\}/);
+  assert.match(check?.detail ?? "", /\{\{city\}\}/);
+  assert.ok(result.blockingFailures.some((item) => item.id === "personalization_known"));
+});
+
+test("preflight accepts a token Joon populates", () => {
+  const blocks = emailBlocksSchema.parse([
+    { id: "t", type: "text", props: { html: "<p>Hi {{first_name|there}}, ready?</p>" } },
+  ]);
+  const result = preflightEmailDocument({ subject: "Ready?", previewText: "Inside", blocks });
+  assert.equal(result.checks.find((item) => item.id === "personalization_known")?.passed, true);
+  assert.equal(result.checks.find((item) => item.id === "personalization_fallback")?.passed, true);
+});
+
+test("preflight warns, but does not block, when a fallback is unwritten", () => {
+  const blocks = emailBlocksSchema.parse([
+    { id: "t", type: "text", props: { html: "<p>Hi {{first_name}}</p>" } },
+  ]);
+  const result = preflightEmailDocument({ subject: "Hello", previewText: "Inside", blocks });
+  const check = result.checks.find((item) => item.id === "personalization_fallback");
+  assert.equal(check?.passed, false);
+  assert.equal(check?.severity, "warning");
+  assert.ok(!result.blockingFailures.some((item) => item.id === "personalization_fallback"));
+});
+
+test("preflight checks the subject line too, not just the body", () => {
+  const blocks = emailBlocksSchema.parse([{ id: "t", type: "text", props: { html: "<p>Hello</p>" } }]);
+  const result = preflightEmailDocument({
+    subject: "{{firstname}}, your order is ready",
+    previewText: "Inside",
+    blocks,
+  });
+  assert.equal(result.checks.find((item) => item.id === "personalization_known")?.passed, false);
+});
+
+test("an email with no personalization passes both checks quietly", () => {
+  const blocks = emailBlocksSchema.parse([{ id: "t", type: "text", props: { html: "<p>Hello</p>" } }]);
+  const result = preflightEmailDocument({ subject: "Hello", previewText: "Inside", blocks });
+  assert.equal(result.checks.find((item) => item.id === "personalization_known")?.detail, "No personalization used.");
+  assert.equal(result.checks.find((item) => item.id === "personalization_fallback")?.passed, true);
+});

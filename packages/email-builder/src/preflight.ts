@@ -1,3 +1,4 @@
+import { findTokens } from "./personalization";
 import type { EmailBlock } from "./types";
 
 export type EmailPreflightCheck = {
@@ -46,6 +47,17 @@ export function preflightEmailDocument(input: {
 }) {
   const { links, missingAlt, unsafeHtml } = collectLinksAndImages(input.blocks);
   const artifactText = `${input.subject}\n${input.previewText ?? ""}\n${JSON.stringify(input.blocks)}`;
+
+  // Personalization is checked on the text a customer actually reads: the
+  // subject, the inbox preview, and the block copy. A token Joon cannot fill
+  // renders as nothing, which turns "Hi {{firstname}}," into "Hi ," — quieter
+  // than the old literal tag, and still wrong.
+  const personalizationText = `${input.subject}\n${input.previewText ?? ""}\n${JSON.stringify(input.blocks)}`;
+  const tokenUses = findTokens(personalizationText);
+  const unfillable = [...new Set(tokenUses.filter((use) => !use.known).map((use) => use.key))];
+  const withoutFallback = [...new Set(
+    tokenUses.filter((use) => use.known && (use.fallback === null || use.fallback === "")).map((use) => use.key),
+  )];
   const percentMatches = [...artifactText.matchAll(/\b(\d{1,2})\s*%/g)].map((match) => Number(match[1]));
   const uniquePercents = [...new Set(percentMatches)];
   const discountTerms = /\b(discount|coupon|promo code|use code|%\s*off|sale)\b/i.test(artifactText);
@@ -64,6 +76,26 @@ export function preflightEmailDocument(input: {
     { id: "image_alt", label: "Images have alt text", severity: "warning", passed: missingAlt.length === 0, detail: missingAlt.length ? `${missingAlt.length} image${missingAlt.length === 1 ? "" : "s"} need alt text.` : "All images are described." },
     { id: "links", label: "Links are structurally usable", severity: "error", passed: links.every((link) => /^(https?:\/\/|#|\{\{)/.test(link)), detail: `${links.length} link${links.length === 1 ? "" : "s"} checked.` },
     { id: "custom_html", label: "Custom code is safe", severity: "error", passed: !unsafeHtml, detail: unsafeHtml ? "Scripts, forms, frames and event handlers are not allowed." : "No unsafe markup detected." },
+    {
+      id: "personalization_known",
+      label: "Personalization can be filled",
+      severity: "error",
+      passed: unfillable.length === 0,
+      detail: unfillable.length
+        ? `Joon has no value for ${unfillable.map((key) => `{{${key}}}`).join(", ")} — it would render as nothing. Insert the field from the Shopify data tab.`
+        : tokenUses.length
+        ? `${tokenUses.length} personalization token${tokenUses.length === 1 ? "" : "s"} checked.`
+        : "No personalization used.",
+    },
+    {
+      id: "personalization_fallback",
+      label: "Personalization has a fallback",
+      severity: "warning",
+      passed: withoutFallback.length === 0,
+      detail: withoutFallback.length
+        ? `${withoutFallback.map((key) => `{{${key}}}`).join(", ")} has no written fallback. Customers missing that value see the default instead.`
+        : "Every token names what to show when the value is missing.",
+    },
     { id: "offer", label: "Offer matches the campaign", severity: "error", passed: !offerMismatch, detail: !hasOfferConstraint ? "Exact offer consistency runs when this version is attached to a campaign." : offerMismatch ? "The creative contains discount language or a percentage that does not match the approved offer." : expectedPercent == null ? "No unapproved discount language detected." : `${expectedPercent}% offer is consistent.` },
   ];
   return {

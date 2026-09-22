@@ -10,6 +10,7 @@ import {
   Section,
   Text,
 } from "@react-email/components";
+import { resolvePersonalization } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import type { BrandKit } from "../brand-kit";
 import { formatCurrency } from "../brand-kit";
@@ -34,9 +35,15 @@ export interface BlockRenderContext {
 // Small utilities
 // ---------------------------------------------------------------------------
 
-/** Interpolate merge tags like {{first_name}}. */
+/**
+ * Interpolate merge tags like {{first_name}} or {{first_name|there}}.
+ *
+ * This previously fell back to the tag itself, so a token the sender does not
+ * populate reached the inbox as the literal text "{{first_name}}". Resolution
+ * now ends at a fallback or at nothing — never at the tag.
+ */
 function interpolate(text: string, variables: Record<string, string>): string {
-  return text.replace(/\{\{(\w[\w.]*)\}\}/g, (_m, key: string) => variables[key] ?? `{{${key}}}`);
+  return resolvePersonalization(text, variables);
 }
 
 /** Strip HTML tags down to plain text (AI sometimes emits <p>...</p>). */
