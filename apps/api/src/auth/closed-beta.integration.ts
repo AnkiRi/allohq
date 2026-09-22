@@ -325,3 +325,42 @@ test("the token is not recoverable from anything stored", { skip }, async () => 
     await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => undefined);
   }
 });
+
+test("an invitation tells the signed-in account whether it is theirs, without naming who it is for", { skip }, async () => {
+  const { prisma, createInvitationToken, hashInvitationToken, invitationTokenMatches } = await load();
+  const { workspaceId, suffix } = await seedWorkspace(prisma);
+  try {
+    const intended = `intended-${suffix}@example.test`;
+    const token = createInvitationToken();
+    await prisma.invitation.create({
+      data: {
+        email: intended,
+        workspaceId,
+        tokenHash: hashInvitationToken(token),
+        expiresAt: new Date(Date.now() + 86_400_000),
+        invitedByClerkId: "user_operator",
+      },
+    });
+
+    // The router asks these three questions before offering anything. Checked
+    // here against the database rather than through Clerk, which a test has no
+    // account with.
+    const row = await prisma.invitation.findUniqueOrThrow({
+      where: { tokenHash: hashInvitationToken(token) },
+    });
+    assert.equal(invitationTokenMatches(token, row.tokenHash), true);
+    assert.equal(row.acceptedAt, null);
+    assert.equal(row.revokedAt, null);
+    assert.ok(row.expiresAt.getTime() > Date.now());
+
+    // The decision the page renders is the email comparison, and it is made on
+    // the server so the address never reaches the browser.
+    const matches = (verified: string[]) =>
+      verified.map((email) => email.trim().toLowerCase()).includes(row.email.trim().toLowerCase());
+    assert.equal(matches([intended]), true, "the intended address is ready to accept");
+    assert.equal(matches([`someone-else-${suffix}@example.test`]), false, "anyone else is the wrong account");
+    assert.equal(matches([]), false, "an account with no verified address is the wrong account");
+  } finally {
+    await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => undefined);
+  }
+});

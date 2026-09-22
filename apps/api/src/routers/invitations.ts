@@ -163,6 +163,43 @@ export const invitationsRouter = router({
     }),
 
   /**
+   * What this invitation means for whoever is signed in right now.
+   *
+   * Three answers, and deliberately only three. `wrong_account` is separated
+   * from `unusable` because the alternative is what happens today: the page
+   * says "you have been invited", the person clicks accept, and only then
+   * learns they are signed in as the wrong person.
+   *
+   * It does **not** return the invited address. Someone holding a forwarded
+   * link would otherwise learn who it was meant for. "A different address"
+   * is all they need and all they get.
+   *
+   * Everything that is not a live, matching invitation collapses to
+   * `unusable` — expired, revoked, already accepted, and never issued all read
+   * the same.
+   */
+  checkForCurrentUser: protectedProcedure
+    .input(z.object({ token: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const invitation = await ctx.prisma.invitation.findUnique({
+        where: { tokenHash: hashInvitationToken(input.token) },
+        select: { email: true, acceptedAt: true, revokedAt: true, expiresAt: true },
+      });
+      if (
+        !invitation ||
+        invitation.acceptedAt ||
+        invitation.revokedAt ||
+        invitation.expiresAt.getTime() <= Date.now()
+      ) {
+        return { state: "unusable" as const };
+      }
+
+      const verifiedEmails = await getVerifiedClerkEmails(ctx.userId);
+      const matches = verifiedEmails.includes(normaliseEmail(invitation.email));
+      return matches ? { state: "ready" as const } : { state: "wrong_account" as const };
+    }),
+
+  /**
    * Accept an invitation.
    *
    * Requires an authenticated identity whose VERIFIED email matches the address

@@ -124,11 +124,29 @@ export const accessRequestsRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.accessRequest.findMany({
+      const requests = await ctx.prisma.accessRequest.findMany({
         where: input?.status ? { status: input.status } : {},
         orderBy: [{ status: "asc" }, { createdAt: "desc" }],
         take: 200,
       });
+      if (requests.length === 0) return [];
+
+      // Flag addresses that already have a Joon account. Inviting one is not
+      // wrong — an existing member may legitimately be asked into a second
+      // workspace — but an operator should know before they do it, rather than
+      // discover it when someone lands somewhere they did not expect.
+      const existing = await ctx.prisma.user.findMany({
+        where: { email: { in: requests.map((request) => request.email) } },
+        select: { email: true, workspaceMembers: { select: { workspaceId: true } } },
+      });
+      const known = new Map(
+        existing.map((user) => [user.email, user.workspaceMembers.length])
+      );
+      return requests.map((request) => ({
+        ...request,
+        existingAccount: known.has(request.email),
+        existingWorkspaceCount: known.get(request.email) ?? 0,
+      }));
     }),
 
   setStatus: platformAdminProcedure

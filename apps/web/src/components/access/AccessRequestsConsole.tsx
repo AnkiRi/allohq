@@ -11,6 +11,18 @@ import { trpc } from "@/lib/trpc";
  */
 const ROLES = ["owner", "admin", "member", "viewer"] as const;
 
+/**
+ * Status colours, from the app's own semantic tokens rather than a new palette.
+ * `attention` is something waiting on you, `evidence` is something you have
+ * looked at, `success` is someone let in, `risk` is someone turned away.
+ */
+const STATUS_STYLE: Record<string, { label: string; color: string; background: string }> = {
+  pending: { label: "Waiting on you", color: "var(--attention)", background: "var(--attention-soft)" },
+  reviewed: { label: "Reviewed", color: "var(--evidence)", background: "var(--evidence-soft)" },
+  invited: { label: "Invited", color: "var(--success-color)", background: "var(--success-soft)" },
+  declined: { label: "Declined", color: "var(--risk)", background: "var(--risk-soft)" },
+};
+
 export function AccessRequestsConsole() {
   const utils = trpc.useUtils();
   const access = trpc.invitations.accessState.useQuery(undefined, { retry: false });
@@ -34,6 +46,13 @@ export function AccessRequestsConsole() {
     },
   });
 
+  const counts = React.useMemo(() => {
+    if (!requests.data) return null;
+    const tally: Record<string, number> = {};
+    for (const request of requests.data) tally[request.status] = (tally[request.status] ?? 0) + 1;
+    return tally;
+  }, [requests.data]);
+
   if (access.isLoading) return null;
   if (!access.data?.isPlatformAdmin) {
     return (
@@ -44,12 +63,36 @@ export function AccessRequestsConsole() {
   }
 
   return (
-    <div className="px-6 py-10" data-testid="access-requests-console">
-      <h1 className="font-serif text-[24px] text-foreground">Access requests</h1>
-      <p className="mt-2 text-[13px] text-muted-foreground">
-        Closed beta. Approving creates the invitation; you pass the link on
-        yourself — Joon does not email it.
-      </p>
+    <div data-testid="access-requests-console">
+      <header className="border-b border-border pb-5">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          Closed beta
+        </p>
+        <h1 className="mt-2 font-serif text-[26px] leading-tight text-foreground">
+          Access requests
+        </h1>
+        <p className="mt-2 max-w-xl text-[13px] leading-6 text-muted-foreground">
+          Approving creates the invitation and shows its link once. You pass it
+          on yourself — Joon does not email it while sender domains are still
+          being set up.
+        </p>
+        {counts && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(["pending", "reviewed", "invited", "declined"] as const).map((status) => (
+              <span
+                key={status}
+                className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                style={{
+                  color: STATUS_STYLE[status]!.color,
+                  background: STATUS_STYLE[status]!.background,
+                }}
+              >
+                {counts[status] ?? 0} {STATUS_STYLE[status]!.label.toLowerCase()}
+              </span>
+            ))}
+          </div>
+        )}
+      </header>
 
       {issued && (
         <div
@@ -116,6 +159,8 @@ function RequestRow({
     note: string | null;
     status: string;
     createdAt: string | Date;
+    existingAccount?: boolean;
+    existingWorkspaceCount?: number;
   };
   busy: boolean;
   onStatus: (status: "pending" | "reviewed" | "declined") => void;
@@ -139,9 +184,28 @@ function RequestRow({
           </p>
           <p className="font-mono text-[12px] text-muted-foreground">{request.email}</p>
         </div>
-        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-          {request.status}
-        </span>
+        <div className="flex items-center gap-2">
+          {request.existingAccount && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px]"
+              style={{ color: "var(--attention)", background: "var(--attention-soft)" }}
+              title={`This address already has a Joon account in ${request.existingWorkspaceCount} workspace(s). Inviting it is not wrong — it will be added to another workspace — but it is worth knowing first.`}
+              data-testid="existing-account-flag"
+            >
+              Has an account
+            </span>
+          )}
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+            style={{
+              color: STATUS_STYLE[request.status]?.color ?? "var(--muted-foreground)",
+              background: STATUS_STYLE[request.status]?.background ?? "transparent",
+            }}
+            data-testid="request-status"
+          >
+            {STATUS_STYLE[request.status]?.label ?? request.status}
+          </span>
+        </div>
       </div>
 
       <p className="mt-2 text-[12px] text-muted-foreground">
