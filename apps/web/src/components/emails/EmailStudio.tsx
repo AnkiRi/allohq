@@ -3,7 +3,7 @@
 import * as React from "react";
 import {
   ArrowDown, ArrowUp, Check, Code2, FileClock, ImagePlus, Inspect, Loader2,
-  MessageSquareText, Plus, Redo2, Save, Send, ShieldCheck, Sparkles, Trash2,
+  MessageSquareText, Plus, Redo2, Save, Send, ShieldCheck, ShoppingBag, Sparkles, Trash2,
   Undo2, X,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
@@ -15,10 +15,11 @@ import type { BrandKit } from "@allohq/emails";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { ScopeChooser, type AskScope } from "./AskScope";
+import { ShopifyDataPanel } from "./ShopifyDataPanel";
 import { BlockEditor } from "./BlockEditor";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 
-type StudioTab = "ask" | "inspect" | "versions" | "code" | "preflight";
+type StudioTab = "ask" | "inspect" | "shopify" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
 type Proposal = { id?: string; blocks: EmailBlock[]; subject: string; previewText: string; instruction: string; createdAt: Date };
 type DurableVersion = { id: string; sequence: number; source: string; note?: string | null; createdAt: string | Date; document: unknown };
@@ -135,6 +136,42 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     const timer = window.setTimeout(() => renderRef.current.mutate({ blocks: effectiveBlocks, subject: effectiveSubject, previewText: effectivePreviewText, variables: previewVariables, brandKit, storeId }), 220);
     return () => window.clearTimeout(timer);
   }, [effectiveBlocks, effectiveSubject, effectivePreviewText, previewVariables, brandKit, storeId]);
+
+  /**
+   * Bind a product the merchant PICKED. Only the reference is stored — title,
+   * price, description and image are resolved from the store at render and
+   * send time, so the email cannot drift from what the store actually says.
+   */
+  const bindProduct = (productId: string) => {
+    if (!selected || selected.type !== "product") return;
+    updateBlock({ ...selected, props: { ...selected.props, productId, source: "manual" } } as EmailBlock);
+    toast("Product bound. Its details come from your store.", "success");
+  };
+
+  /** Add or remove a product from a grid. Only ids are stored. */
+  const toggleGridProduct = (productId: string) => {
+    if (!selected || selected.type !== "product_grid") return;
+    const current = selected.props.productIds ?? [];
+    const next = current.includes(productId)
+      ? current.filter((id) => id !== productId)
+      : [...current, productId];
+    updateBlock({ ...selected, props: { ...selected.props, productIds: next, source: "manual" } } as EmailBlock);
+  };
+
+  /** Append a personalization token to the selected block's own text field. */
+  const insertToken = (text: string) => {
+    if (!selected) return;
+    const field = selected.type === "text" ? "html"
+      : selected.type === "hero" ? "heading"
+      : selected.type === "button" ? "text"
+      : selected.type === "footer" ? "text"
+      : selected.type === "testimonial" ? "quote"
+      : null;
+    if (!field) return;
+    const props = selected.props as Record<string, unknown>;
+    const current = typeof props[field] === "string" ? (props[field] as string) : "";
+    updateBlock({ ...selected, props: { ...props, [field]: `${current}${current ? " " : ""}${text}` } } as EmailBlock);
+  };
 
   const updateBlock = (next: EmailBlock) => {
     const parsed = emailBlockSchema.safeParse(next);
@@ -263,9 +300,10 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
         <aside className={cn("min-h-0 flex-col border-l border-border bg-[var(--surface,#FFFDF8)]", compactPanelOpen ? "fixed inset-x-3 bottom-3 top-24 z-40 flex overflow-hidden rounded-xl border shadow-2xl" : "hidden", "xl:static xl:z-auto xl:flex xl:overflow-visible xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none")}>
           <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[var(--surface,#FFFDF8)] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
-          <div className="grid shrink-0 grid-cols-5 border-b border-border bg-[var(--surface-soft,#ECE9E1)] p-1">
+          <div className="grid shrink-0 grid-cols-6 border-b border-border bg-[var(--surface-soft,#ECE9E1)] p-1">
             <StudioTabButton active={activeTab === "ask"} label="Ask" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => setActiveTab("ask")} />
-            <StudioTabButton active={activeTab === "inspect"} label="Inspect" icon={<Inspect className="h-4 w-4" />} onClick={() => setActiveTab("inspect")} />
+            <StudioTabButton active={activeTab === "inspect"} label="Edit" icon={<Inspect className="h-4 w-4" />} onClick={() => setActiveTab("inspect")} />
+            <StudioTabButton active={activeTab === "shopify"} label="Shopify" icon={<ShoppingBag className="h-4 w-4" />} onClick={() => setActiveTab("shopify")} />
             <StudioTabButton active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-4 w-4" />} onClick={() => setActiveTab("versions")} />
             <StudioTabButton active={activeTab === "code"} label="Code" icon={<Code2 className="h-4 w-4" />} onClick={() => setActiveTab("code")} />
             <StudioTabButton active={activeTab === "preflight"} label="Check" icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setActiveTab("preflight")} />
@@ -273,6 +311,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="min-h-0 flex-1 overflow-y-auto">
             {activeTab === "ask" ? <AskPanel selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} assets={creativeAssets} products={productPage?.products ?? []} /> : null}
+            {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onToggleGridProduct={toggleGridProduct} onInsertToken={insertToken} /> : null}
             {activeTab === "versions" ? <VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /> : null}
             {activeTab === "code" ? <CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /> : null}
             {activeTab === "preflight" ? <PreflightPanel preflight={preflight} /> : null}
