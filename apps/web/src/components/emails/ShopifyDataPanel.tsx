@@ -341,8 +341,12 @@ function ProductBinding({
           )}
           <p className="mt-2 text-[11px] text-muted-foreground">
             {gridIds.length
-              ? `${gridIds.length} product${gridIds.length === 1 ? "" : "s"} in this grid.`
-              : "No products chosen yet — this grid renders empty until you pick some."}
+              ? boundCollection
+                ? `${gridIds.length} product${gridIds.length === 1 ? "" : "s"} picked, but the bound collection takes precedence. Unbind it to use this list.`
+                : `${gridIds.length} product${gridIds.length === 1 ? "" : "s"} in this grid.`
+              : boundCollection
+                ? "This grid shows the bound collection."
+                : "No products chosen yet — this grid renders empty until you pick some."}
           </p>
         </div>
       ) : (

@@ -121,6 +121,19 @@ test("an empty grid says it will render empty", () => {
   assert.match(render(block("product_grid", { productIds: [] })), /renders empty until you pick some/);
 });
 
+test("a grid with a bound collection does not claim it renders empty", () => {
+  // The renderer prefers the collection, so "renders empty" would be false.
+  const markup = render(block("product_grid", { productIds: [], collectionId: "c1" }));
+  assert.doesNotMatch(markup, /renders empty until you pick some/);
+  assert.match(markup, /This grid shows the bound collection/);
+});
+
+test("picked products defer to a bound collection, and say so", () => {
+  const markup = render(block("product_grid", { productIds: ["p1", "p2"], collectionId: "c1" }));
+  assert.match(markup, /the bound collection takes precedence/);
+  assert.match(markup, /Unbind it to use this list/);
+});
+
 test("text blocks offer personalization with its fallback explained", () => {
   const markup = render(block("text", { html: "<p>Hi</p>" }));
   assert.match(markup, /Personalize this block/);

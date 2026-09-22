@@ -420,14 +420,24 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
         <aside className={cn("min-h-0 flex-col border-l border-border bg-[var(--surface,#FFFDF8)]", compactPanelOpen ? "fixed inset-x-3 bottom-3 top-24 z-40 flex overflow-hidden rounded-xl border shadow-2xl" : "hidden", "xl:static xl:z-auto xl:flex xl:overflow-visible xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none")}>
           <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[var(--surface,#FFFDF8)] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
-          <div className="grid shrink-0 grid-cols-7 border-b border-border bg-[var(--surface-soft,#ECE9E1)] p-1">
-            <StudioTabButton active={activeTab === "ask"} label="Ask" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => setActiveTab("ask")} />
-            <StudioTabButton active={activeTab === "inspect"} label="Edit" icon={<Inspect className="h-4 w-4" />} onClick={() => setActiveTab("inspect")} />
-            <StudioTabButton active={activeTab === "shopify"} label="Shopify" icon={<ShoppingBag className="h-4 w-4" />} onClick={() => setActiveTab("shopify")} />
-            <StudioTabButton active={activeTab === "visuals"} label="Visuals" icon={<ImagePlus className="h-4 w-4" />} onClick={() => setActiveTab("visuals")} />
-            <StudioTabButton active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-4 w-4" />} onClick={() => setActiveTab("versions")} />
-            <StudioTabButton active={activeTab === "code"} label="Code" icon={<Code2 className="h-4 w-4" />} onClick={() => setActiveTab("code")} />
-            <StudioTabButton active={activeTab === "preflight"} label="Check" icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setActiveTab("preflight")} />
+          <div role="tablist" aria-label="Email tools" className="shrink-0 border-b border-border bg-[#ECE9E1] p-1">
+            {/*
+              Three primary tabs are the whole everyday loop: look at a block,
+              give it real store data, or ask Joon about it. Versions, code and
+              preflight are real but occasional, so they sit behind a divider at
+              a smaller weight rather than competing for the same attention.
+            */}
+            <div className="grid grid-cols-4">
+              <StudioTabButton active={activeTab === "inspect"} label="Edit" icon={<Inspect className="h-4 w-4" />} onClick={() => setActiveTab("inspect")} />
+              <StudioTabButton active={activeTab === "shopify"} label="Shopify" icon={<ShoppingBag className="h-4 w-4" />} onClick={() => setActiveTab("shopify")} />
+              <StudioTabButton active={activeTab === "ask"} label="Ask Joon" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => setActiveTab("ask")} />
+              <StudioTabButton active={activeTab === "visuals"} label="Visuals" icon={<ImagePlus className="h-4 w-4" />} onClick={() => setActiveTab("visuals")} />
+            </div>
+            <div className="mt-1 flex items-center justify-center gap-1 border-t border-border/60 pt-1">
+              <SecondaryTab active={activeTab === "preflight"} label="Checks" icon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={() => setActiveTab("preflight")} />
+              <SecondaryTab active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-3.5 w-3.5" />} onClick={() => setActiveTab("versions")} />
+              <SecondaryTab active={activeTab === "code"} label="Code" icon={<Code2 className="h-3.5 w-3.5" />} onClick={() => setActiveTab("code")} />
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {activeTab === "ask" ? <AskPanel selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
@@ -476,5 +486,24 @@ function PreflightPanel({ preflight }: { preflight: ReturnType<typeof preflightE
 function BlockPicker({ onAdd }: { onAdd: (type: EmailBlockType) => void }) { return <div className="border-b border-border bg-[var(--surface,#FFFDF8)] p-2">{ADDABLE.map((item) => <button key={item.type} type="button" onClick={() => onAdd(item.type)} className="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-[var(--attention-soft,#FFF0B8)]"><Plus className="h-3 w-3" />{item.label}</button>)}</div>; }
 function EnvelopeField({ label, value, readOnly, placeholder, onChange }: { label: string; value: string; readOnly?: boolean; placeholder?: string; onChange: (value: string) => void }) { return <label className="min-w-0"><span className="mb-1 block text-[12px] font-medium text-muted-foreground">{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} readOnly={readOnly} placeholder={placeholder} className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-[14px] outline-none focus:border-[var(--evidence,#2D4F9E)] read-only:opacity-70" /></label>; }
 function PanelHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div><p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--evidence,#2D4F9E)]">{eyebrow}</p><h2 className="mt-1 text-[19px] font-medium tracking-[-0.01em]">{title}</h2><p className="mt-1 text-[13px] leading-5 text-muted-foreground">{description}</p></div>; }
-function StudioTabButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} title={label} className={cn("flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] transition-colors", active ? "bg-[var(--surface,#FFFDF8)] text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{icon}<span className="truncate">{label}</span></button>; }
+function StudioTabButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) { return <button type="button" role="tab" aria-selected={active} onClick={onClick} title={label} className={cn("flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] transition-colors", active ? "bg-[var(--surface,#FFFDF8)] text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{icon}<span className="truncate">{label}</span></button>; }
+/** A demoted tool: real, but not part of the everyday loop. */
+function SecondaryTab({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-[#2D4F9E]",
+        active ? "bg-white font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
 function IconButton({ children, label, onClick, disabled }: { children: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) { return <button type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled} className="rounded-lg border border-border bg-[var(--surface,#FFFDF8)] p-2 text-muted-foreground hover:text-foreground disabled:opacity-30">{children}</button>; }
