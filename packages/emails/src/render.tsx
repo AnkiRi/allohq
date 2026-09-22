@@ -2,6 +2,7 @@ import * as React from "react";
 import { render } from "@react-email/render";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import type { BrandKit } from "./brand-kit";
+import { resolvePersonalization } from "@allohq/email-builder";
 import { BrandEmailLayout } from "./BrandEmailLayout";
 import { renderBlock, type BlockRenderContext } from "./blocks";
 
@@ -108,8 +109,22 @@ export async function renderGeneratedEmail(
     previewMode: options.previewMode,
   };
 
+  // The footer's unsubscribe link is renderer-controlled, so it never passed
+  // through block interpolation and shipped as the literal "{{unsubscribe_url}}"
+  // — a visible link that goes nowhere. The List-Unsubscribe header was always
+  // correct, so mail-client unsubscribe worked; the link in the body did not.
+  // Resolve it from the same variables, and never emit a bare tag.
+  const footerKit: BrandKit = {
+    ...brandKit,
+    footer: {
+      ...brandKit.footer,
+      unsubscribeUrl:
+        resolvePersonalization(brandKit.footer?.unsubscribeUrl ?? "{{unsubscribe_url}}", ctx.variables) || "#",
+    },
+  };
+
   let html = await render(
-    <GeneratedEmailDocument content={content} brandKit={brandKit} ctx={ctx} />,
+    <GeneratedEmailDocument content={content} brandKit={footerKit} ctx={ctx} />,
     { pretty: false },
   );
 
