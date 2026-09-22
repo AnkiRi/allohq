@@ -163,7 +163,7 @@ uninstrumented and 2.15 MB with query capture on**. Both are reported.
 | Control selection is one long statement at scale | 4,319 ms for 90,909 candidates on the runner (9,255 ms locally) | inference at 1M, not measured; the first component likely to need attention there |
 | Pre-existing migration drift on main | one `DROP DEFAULT`, five index renames | unrelated to this work; CI reports without gating |
 | `campaign_audience_members` ranking index unused | bitmap scan on `(runId, arm)` chosen instead | dropping it measured −1% on writes |
-| Five migrations undeployed | `…090000`, `…140000`, `…150000`, `…190000` | deployment is a separate gate |
+| ~~Five migrations undeployed~~ | **Superseded 2026-09-22T08:24:06Z** — all migrations are applied in production; see "Closed beta is live in production" | verified against the live schema |
 | Preparation progress has no UI | `campaignPreparationProgress` exists and is tested | the API returns it; nothing renders it |
 | Node 20 unverified | `engines` permits it; CI pinned to 24 | nothing has been run on 20 |
 
@@ -1965,6 +1965,11 @@ reach for an email test and find it missing.
 
 ### Migrations now on `main` and not yet deployed
 
+> **Superseded 2026-09-22T08:24:06Z.** All eight are now applied in production,
+> confirmed by `prisma migrate status` and by introspecting the live schema. The
+> list below is retained because it records what each migration was and where it
+> came from; the "undeployed" framing is no longer accurate.
+
 Eight exist; the four earliest were already recorded as undeployed, and four
 have been added since:
 
@@ -2002,6 +2007,103 @@ default integration run excludes `*.load.integration.ts`; the 1M file was named
 couple, with no change in coverage — and a one-in-four flake inside a half-hour
 run is easy to re-run away instead of diagnose, which is part of why these
 survived as long as they did.
+
+## Closed beta is live in production — verified — 2026-09-22T08:24:06Z
+
+_Status: **deployed and verified**. Deployed `main` `5129a31`. Every check below
+was run against the production API through the Railway service, or against the
+public web surface. No variable value is reproduced here._
+
+**This supersedes every earlier statement in this document that closed beta is
+merged but not deployed, and every count of undeployed migrations.** Those were
+true when written. They are not true now.
+
+### Migrations — already applied, not applied by me
+
+```
+100 migrations found in prisma/migrations
+Database schema is up to date!
+```
+
+Run twice, before and after inspection, through
+`railway ssh --service api -- pnpm --filter @allohq/database exec prisma migrate status`.
+There was nothing pending, so `migrate deploy` had nothing to do and **no
+migration was applied during this pass**.
+
+`railway run` could not reach the database: it executes locally, and
+`postgres.railway.internal` resolves only inside Railway's private network.
+Running through `railway ssh` instead keeps the command — and the credential —
+inside Railway.
+
+Confirmed against the **live database** by introspection rather than by trusting
+the migration table:
+
+| Expected | Found |
+| --- | --- |
+| `Invitation` | present |
+| `AccessRequest` | present |
+| `CampaignAudienceRun` | present |
+| `CampaignAudienceMember` | present |
+| The ordering index dropped in #26 | **absent**, as intended |
+
+So the eight migrations this document listed as undeployed — the four audience
+tables, the index removal, the two closed-beta tables and the email-IDE
+versions — are all applied.
+
+**Not captured:** the timestamp at which each was applied. Reading
+`_prisma_migrations` needs a query through the container, and `railway ssh`
+mangles quoted arguments, so the attempts were abandoned rather than pursued
+further. Introspection of the live schema is stronger evidence for the question
+that matters — whether the tables exist — than the history table would be.
+
+### The gate is enabled
+
+| Check | Result |
+| --- | --- |
+| `INVITE_ONLY_MODE` on the running **API** | `true` — the literal value that enables it |
+| `INVITE_ONLY_MODE` on **web** | enabled, proven by `/sign-up` serving the invitation notice, which renders only when the value is literally `true` |
+| `PLATFORM_ADMIN_CLERK_IDS` on the **API** | 2 identifiers, both well-formed `user_` ids. **Values not printed** |
+| `PLATFORM_ADMIN_CLERK_IDS` on web | correctly absent — only the API reads it |
+| Workers | correctly carry neither |
+
+Both services therefore agree, which is what matters: the API enforcing without
+the web explaining leaves people with an unexplained refusal, and the web
+explaining without the API enforcing looks closed while being open.
+
+### The deployed API build carries every closed-beta surface
+
+Checked in `apps/api/dist/index.js` on the running instance:
+
+`CLOSED_BETA_MESSAGE` · `closedBetaVerdict` · `checkForCurrentUser` ·
+`approveAndInvite` · `accessRequest` · `authenticateAgentRequest` — all present.
+
+The last of those is the merchant-agent authorisation fix from #27, so that is
+live too.
+
+### The deployed web surface
+
+| Surface | Result |
+| --- | --- |
+| Landing | "Request an invite" present, "Start free" **absent** |
+| Landing nav | the sign-in link is live |
+| `/request-invite` | 200, renders |
+| `/sign-up` | 200, serves the invitation notice rather than a sign-up form |
+| Google Fonts | **no call to `fonts.googleapis.com`** — the self-hosted fonts from #33 are live |
+
+### What this does and does not establish
+
+**Established, by a real check against production:** the schema is current, the
+gate is enabled on both services, an operator is configured, and every code
+surface is deployed.
+
+**Not established:** that the journey behaves correctly for a real person.
+Nothing here created an access request, issued an invitation, accepted one, or
+signed in as an uninvited identity. Those need a browser and real Clerk
+identities, and they are the merchant-side runbook in
+`docs/ClosedBetaRunbook-2026-09-22.md`.
+
+**Out of scope for this pass, deliberately:** Email Studio, campaign creation,
+email generation, sending, delivery, tracking and provider configuration.
 
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
@@ -2236,6 +2338,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-22T08:24:06Z | `5129a31` deployed | **deployed and verified** | Closed beta is live. `prisma migrate status` reports 100 migrations and "Database schema is up to date"; **nothing was pending, so no migration was applied during this pass**. Live introspection confirms `Invitation`, `AccessRequest`, `CampaignAudienceRun` and `CampaignAudienceMember` exist and the index dropped in #26 is absent. `INVITE_ONLY_MODE` is `true` on the running API and enabled on web (proven by `/sign-up` serving the invitation notice); 2 well-formed platform-admin ids are configured on the API only; workers carry neither. The deployed API build contains every closed-beta surface plus the merchant-agent authorisation fix. Landing serves "Request an invite", no "Start free", and no call to Google Fonts. | **No journey was exercised** — no access request created, no invitation issued or accepted, no uninvited sign-in attempted. Those need a browser and real Clerk identities and remain the merchant-side runbook. Migration application timestamps not captured: reading `_prisma_migrations` needs a quoted query through `railway ssh`, which mangles quoting; introspection of the live schema was used instead. Supersedes every earlier claim that closed beta is merged-but-not-deployed and every undeployed-migration count |
 | 2026-09-22T03:40:14Z | `5e7ca24` `13b933c` | **merged, not deployed** | Closed beta merged to `main` and green: CI, postgres + redis, and the main-only 100k approval load proof all pass on `13b933c`. Typecheck 19/19, unit 368/368, integration 69/69. Every closed-beta and merchant-agent claim listed against the test that proves it. Runbook added at `docs/ClosedBetaRunbook-2026-09-22.md`. Four flaky tests of mine fixed, each diagnosed to root cause. | **Nothing is verified on a deployed environment — no migration applied, no revision deployed, no variable set, closed beta is not active anywhere.** Blocked on a Clerk user id for `PLATFORM_ADMIN_CLERK_IDS`, which is not knowable from the repository; Railway service management is also gated here. Eight migrations now sit undeployed, superseding the earlier count of four. Email Studio, delivery, tracking, sender domains, client rendering and asset safety remain deliberately deferred |
 | 2026-09-21T18:37:56Z | _(branch `closed-beta-invite-only`, PR #28)_ | **implemented, pending review** | Public "Request an invite" flow added to the closed-beta gate as one product flow. All three landing CTAs changed; `/request-invite` writes one platform-level `AccessRequest` and is asserted to create no user, workspace, membership, invitation, store, message log or agent chat. Honeypot, repeat and rate-limited submissions all return the one acknowledgement, so the form is not an enumeration oracle. Platform-admin console at `/admin/access-requests` approves into a new or existing workspace and issues the invitation in one transaction. 6 of 6 integration tests including the Healthify-shaped flow end to end. | No Turnstile — recorded as a later optional layer rather than a dependency taken before evidence of abuse. **Corrected an earlier conflict in the deployment checklist:** setting Clerk sign-up to Restricted would also block invited people from creating the account they need; the checklist now states both options and their costs, and recommends leaving Clerk public because an uninvited account reaches nothing |
 | 2026-09-21T16:58:44Z | _(branch `invite-only-closed-beta`)_ | **implemented, pending review** | Joon is invite-only behind `INVITE_ONLY_MODE`, enforced at the provisioning boundary: no workspace, so `workspaceProcedure` refuses before any resolver, which puts every cost-bearing path behind it at once. Invitations are single-use, expiring, revocable, stored as SHA-256 only, and require a Clerk-verified email match. Issuing restricted to platform admins named by Clerk id in env. **Found while auditing and fixed in a separate security PR: the merchant-agent endpoint lacked authentication and workspace authorisation.** typecheck 19/19, unit 366/366, 17 new tests. | `INVITE_ONLY_MODE` and `PLATFORM_ADMIN_CLERK_IDS` are not set anywhere yet, so nothing changes until they are. Clerk's sign-up mode must be set to Restricted in the dashboard — defence in depth, not the gate. No invitation email is sent: the operator copies the link, because sending would depend on unfinished sender-domain and warm-up work |
