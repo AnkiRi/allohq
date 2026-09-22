@@ -23,13 +23,17 @@ const render = (overrides: Record<string, unknown> = {}) =>
       reviewHref: "/campaigns/c1",
       onAddBlock: () => {},
       onOpenTools: () => {},
+      onBack: () => {},
       ...overrides,
     } as never),
   );
 
-test("there is always a way back to the library", () => {
-  assert.match(render(), /href="\/templates"/);
-  assert.match(render(), /Email library/);
+test("there is always a way out of Studio", () => {
+  // Server render has no history, so it falls back to the library link —
+  // a full-page surface must never render without an exit.
+  const markup = render();
+  assert.match(markup, /href="\/templates"/);
+  assert.match(markup, /Email library/);
 });
 
 test("the email is named and its state stated", () => {

@@ -13,6 +13,8 @@ import {
 import type { BrandKit } from "@allohq/emails";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
+import { useRouter } from "next/navigation";
+import { useIsDesktop } from "@/lib/use-breakpoint";
 import { BlockList } from "./BlockList";
 import { StudioTopBar } from "./StudioTopBar";
 import { ScopeChooser, type AskScope } from "./AskScope";
@@ -68,13 +70,15 @@ const preflightEmail = (subject: string, previewText: string, blocks: EmailBlock
   };
 };
 
-export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText, initialHtml, brandKit, previewVariables, templateId, storeId, templateName, reviewHref }: {
+export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText, initialHtml, brandKit, previewVariables, templateId, storeId, templateName, reviewHref, onBack }: {
   initialBlocks: EmailBlock[]; initialSubject: string; initialPreviewText: string; initialHtml: string;
   brandKit?: BrandKit; previewVariables: Record<string, string>; templateId?: string; storeId?: string;
   /** Shown in the Studio top bar. */
   templateName?: string;
   /** Where the existing review/delivery flow continues, when there is one. */
   reviewHref?: string | null;
+  /** Overrides the default "go back the way you came". */
+  onBack?: () => void;
 }) {
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(() => cloneBlocks(initialBlocks));
   const [subject, setSubject] = React.useState(initialSubject);
@@ -86,6 +90,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [outlineOpen, setOutlineOpen] = React.useState(true);
   const [toolsOpen, setToolsOpen] = React.useState(true);
   const askInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const isDesktop = useIsDesktop();
+  const router = useRouter();
   const [instruction, setInstruction] = React.useState("");
   const [askScope, setAskScope] = React.useState<AskScope>("document");
   const [visualMode, setVisualMode] = React.useState<VisualMode>("creative_concept");
@@ -414,8 +420,12 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     }
   };
 
+  // The root fills its parent rather than subtracting a fixed 6.25rem for a
+  // dashboard top bar the Studio route no longer has — that allowance was
+  // leaving ~100px of dead space under the editor. The card border and shadow
+  // went with it: this is a workspace, not a card on a page.
   return (
-    <div className="relative flex h-[calc(100vh-6.25rem)] min-h-[640px] flex-col overflow-hidden rounded-[13px] border border-border bg-[var(--surface,#FFFDF8)] text-foreground shadow-[0_10px_36px_rgba(23,23,23,0.06)]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FFFDF8] text-foreground">
       <StudioTopBar
         name={templateName ?? "Untitled email"}
         state={dirty ? "draft" : "saved"}
@@ -429,48 +439,54 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         reviewHref={reviewHref ?? null}
         onAddBlock={() => setShowAdd((value) => !value)}
         onOpenTools={() => setCompactPanelOpen(true)}
+        onBack={onBack ?? (() => router.back())}
       />
       {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} /> : null}
       {showAdd ? <div className="absolute right-3 top-[68px] z-50 w-56 overflow-hidden rounded-xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl xl:hidden"><BlockPicker onAdd={add} /></div> : null}
 
-      <div
-        className={cn(
-          "relative grid min-h-0 flex-1 grid-cols-1",
-          // The canvas takes every column the side panes give up, so collapsing
-          // a pane actually buys the email width rather than leaving a gap.
-          outlineOpen && toolsOpen && "xl:grid-cols-[220px_minmax(0,1fr)_360px]",
-          outlineOpen && !toolsOpen && "xl:grid-cols-[220px_minmax(0,1fr)]",
-          !outlineOpen && toolsOpen && "xl:grid-cols-[minmax(0,1fr)_360px]",
-          !outlineOpen && !toolsOpen && "xl:grid-cols-[minmax(0,1fr)]",
-        )}
-      >
-        <aside className={cn("hidden min-h-0 flex-col border-r border-border bg-[#F4F2EC]", outlineOpen && "xl:flex")}>
+      <div className="relative flex min-h-0 flex-1">
+        <aside
+          aria-label="Email outline"
+          aria-hidden={!isDesktop || !outlineOpen}
+          className={cn(
+            // Width animates and the pane stays in flow — the same shape the
+            // app sidebar uses. Nothing toggles `display`, so nothing can lose
+            // its column and wrap underneath.
+            "min-h-0 shrink-0 flex-col overflow-hidden bg-[#F4F2EC] transition-[width] duration-200",
+            isDesktop ? "flex" : "hidden",
+            // A collapsed pane leaves no 1px border line behind.
+            isDesktop && outlineOpen && "border-r border-border",
+          )}
+          style={{ width: isDesktop && outlineOpen ? 220 : 0 }}
+        >
           <div className="flex items-center justify-between border-b border-border px-3 py-2"><div><p className="text-[13px] font-medium">Content</p><p className="text-[12px] text-muted-foreground">{blocks.length} blocks</p></div><IconButton label="Add block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></div>
-          <button type="button" onClick={() => setOutlineOpen(false)} className="mx-3 mt-2 rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground outline-none hover:bg-[#FFFDF8] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]">Hide outline</button>
+          <button type="button" onClick={() => setOutlineOpen(false)} aria-expanded={true} className="mx-3 mt-2 shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground outline-none hover:bg-[#FFFDF8] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]">Hide outline</button>
           {showAdd ? <BlockPicker onAdd={add} /> : null}
           <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { setSelectedId(blockId); setActiveTab("inspect"); }} onMove={move} onRemove={remove} blockTitle={blockTitle} /></div>
         </aside>
 
-        {!outlineOpen ? (
+        {isDesktop && !outlineOpen ? (
           <button
             type="button"
             onClick={() => setOutlineOpen(true)}
-            className="absolute left-2 top-2 z-20 hidden rounded-lg border border-border bg-[#FFFDF8] px-2 py-1 text-[11px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E] xl:block"
+            aria-expanded={false}
+            className="absolute left-2 top-2 z-20 rounded-lg border border-border bg-[#FFFDF8] px-2 py-1 text-[11px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
           >
             Show outline
           </button>
         ) : null}
-        {!toolsOpen ? (
+        {isDesktop && !toolsOpen ? (
           <button
             type="button"
             onClick={() => setToolsOpen(true)}
-            className="absolute right-2 top-2 z-20 hidden rounded-lg border border-border bg-[#FFFDF8] px-2 py-1 text-[11px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E] xl:block"
+            aria-expanded={false}
+            className="absolute right-2 top-2 z-20 rounded-lg border border-border bg-[#FFFDF8] px-2 py-1 text-[11px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
           >
             Show tools
           </button>
         ) : null}
 
-        <main className="flex min-h-0 min-w-0 flex-col bg-[#F4F2EC] p-2">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F4F2EC] p-2">
           <div className="mb-2 grid shrink-0 gap-2 rounded-lg border border-border bg-[#FFFDF8] p-2 md:grid-cols-2">
             <EnvelopeField label="Subject" value={effectiveSubject} readOnly={!!proposal} onChange={(value) => { setSubject(value); setDirty(true); }} />
             <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={!!proposal} placeholder="The line people see beside the subject" onChange={(value) => { setPreviewText(value); setDirty(true); }} />
@@ -479,7 +495,20 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         </main>
 
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
-        <aside className={cn("min-h-0 flex-col border-l border-border bg-[#FFFDF8]", !toolsOpen && "xl:hidden", compactPanelOpen ? "fixed inset-x-3 bottom-3 top-24 z-40 flex overflow-hidden rounded-xl border shadow-2xl" : "hidden", "xl:static xl:z-auto xl:flex xl:overflow-visible xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none")}>
+        <aside
+          aria-label="Email tools"
+          className={cn(
+            "min-h-0 flex-col border-border bg-[#FFFDF8]",
+            isDesktop
+              // Desktop: an in-flow column whose width animates to nothing.
+              ? cn("flex shrink-0 overflow-hidden transition-[width] duration-200", toolsOpen && "border-l")
+              // Below xl: a drawer over the canvas, which is what there is room for.
+              : compactPanelOpen
+                ? "fixed inset-x-3 bottom-3 top-20 z-40 flex overflow-hidden rounded-xl border shadow-2xl"
+                : "hidden",
+          )}
+          style={isDesktop ? { width: toolsOpen ? 360 : 0 } : undefined}
+        >
           <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[#FFFDF8] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
 
           <div role="tablist" aria-label="Email tools" className="shrink-0 border-b border-border bg-[#ECE9E1] p-1">
@@ -499,7 +528,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
               <SecondaryTab active={activeTab === "preflight"} label="Checks" icon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={() => setActiveTab("preflight")} />
               <SecondaryTab active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-3.5 w-3.5" />} onClick={() => setActiveTab("versions")} />
               <SecondaryTab active={activeTab === "code"} label="Code" icon={<Code2 className="h-3.5 w-3.5" />} onClick={() => setActiveTab("code")} />
-              <button type="button" onClick={() => setToolsOpen(false)} aria-label="Hide tools panel" title="Hide tools panel" className="ml-1 hidden rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[#2D4F9E] xl:inline-flex"><X className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => setToolsOpen(false)} aria-label="Hide tools panel" aria-expanded={true} title="Hide tools panel" className={cn("ml-1 rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[#2D4F9E]", isDesktop ? "inline-flex" : "hidden")}><X className="h-3.5 w-3.5" /></button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
