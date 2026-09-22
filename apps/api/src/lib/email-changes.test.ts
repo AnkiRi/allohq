@@ -124,3 +124,85 @@ test("added blocks get server-assigned ids, never model-chosen ones", () => {
   assert.ok(added);
   assert.notEqual(added.id, "attacker-chosen");
 });
+
+// --- Shopify is the truth layer ----------------------------------------------
+
+test("the model cannot invent a product title, price or description", () => {
+  const result = plan(
+    JSON.stringify({
+      blocks: { b3: { title: "Limited Edition Board", price: 199, description: "Handmade in Nepal." } },
+    }),
+    { kind: "document" },
+  );
+  assert.equal(result.ok, false, "an edit made only of invented facts is refused, not applied");
+});
+
+test("the model cannot swap which product a block shows", () => {
+  const result = plan(
+    JSON.stringify({ blocks: { b3: { productId: "some-other-product", buttonText: "Shop now" } } }),
+    { kind: "document" },
+  );
+  assert.ok(result.ok);
+  assert.equal(result.change.blocks[2]!.props["productId"], "p1", "the bound product is unchanged");
+  assert.equal(result.change.blocks[2]!.props["buttonText"], "Shop now", "but wording is Joon's to edit");
+  assert.deepEqual(result.stripped[0]!.props, ["productId"]);
+});
+
+test("the model cannot invent a link destination", () => {
+  const withCta = [
+    { id: "c1", type: "button", props: { text: "Shop", href: "https://shop.test/real" } },
+  ];
+  const result = planEmailChange({
+    content: JSON.stringify({ blocks: { c1: { text: "Shop the drop", href: "https://not-your-store.test/x" } } }),
+    scope: { kind: "document" },
+    original: withCta,
+    idSeed,
+  });
+  assert.ok(result.ok);
+  assert.equal(result.change.blocks[0]!.props["href"], "https://shop.test/real", "destination unchanged");
+  assert.equal(result.change.blocks[0]!.props["text"], "Shop the drop", "copy still editable");
+});
+
+test("the model cannot invent an image source", () => {
+  const withImage = [{ id: "i1", type: "image", props: { src: "https://cdn.test/real.png", alt: "Board" } }];
+  const result = planEmailChange({
+    content: JSON.stringify({ blocks: { i1: { src: "https://example.test/made-up.png", alt: "A board on snow" } } }),
+    scope: { kind: "document" },
+    original: withImage,
+    idSeed,
+  });
+  assert.ok(result.ok);
+  assert.equal(result.change.blocks[0]!.props["src"], "https://cdn.test/real.png");
+  assert.equal(result.change.blocks[0]!.props["alt"], "A board on snow", "alt text is Joon's to write");
+});
+
+test("a product block the model adds arrives with no product chosen", () => {
+  const result = plan(
+    JSON.stringify({
+      add: [{ type: "product", props: { productId: "invented", title: "Invented Board", price: 1 } }],
+    }),
+    { kind: "document" },
+  );
+  assert.ok(result.ok);
+  const added = result.change.blocks.find((b) => b.type === "product" && b.id !== "b3");
+  assert.ok(added, "the block is still added");
+  assert.deepEqual(added.props, {}, "but carries no invented facts — the merchant picks the product");
+});
+
+test("presentation stays Joon's to change", () => {
+  const result = plan(
+    JSON.stringify({ blocks: { b3: { showPrice: false, buttonText: "See the board" } } }),
+    { kind: "document" },
+  );
+  assert.ok(result.ok);
+  assert.equal(result.change.blocks[2]!.props["showPrice"], false);
+  assert.equal(result.change.blocks[2]!.props["buttonText"], "See the board");
+  assert.deepEqual(result.stripped, [], "nothing factual was attempted");
+});
+
+test("the refusal tells the merchant which picker to use", () => {
+  const result = plan(JSON.stringify({ blocks: { b3: { price: 49 } } }), { kind: "document" });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /come from your store/);
+  assert.match(result.reason, /Shopify data tab/);
+});

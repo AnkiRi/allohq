@@ -14,6 +14,76 @@ import { containToScope, scopeViolation, type EmailEditScope, type ModelChangeSe
 
 type Block = { id: string; type: string; props: Record<string, unknown> };
 
+/**
+ * Props the model may never write.
+ *
+ * These are either facts that belong to the store — a product's title, price,
+ * description, image — or destinations a merchant chooses. A model that can
+ * set them can invent a product, a price or a link that does not exist, and
+ * the email would carry it all the way to a customer's inbox looking exactly
+ * as authoritative as a real one.
+ *
+ * Joon can still change how a product is PRESENTED (layout, which fields
+ * show, the button's wording). What it cannot do is decide what is true.
+ */
+const MERCHANT_OWNED_PROPS: Record<string, readonly string[]> = {
+  product: [
+    "productId", "variantId", "title", "description", "imageUrl",
+    "price", "compareAtPrice", "handle", "buttonHref",
+  ],
+  product_grid: ["productIds", "collectionId", "source"],
+  button: ["href"],
+  hero: ["buttonHref", "bgImageSrc"],
+  image: ["src"],
+};
+
+export type StrippedFact = { blockId: string; blockType: string; props: string[] };
+
+/**
+ * Remove any model edit to a merchant-owned prop, and report what was removed
+ * so the merchant can be told which picker to use instead.
+ */
+export function stripInventedFacts(
+  original: Block[],
+  changes: ModelChangeSet,
+): { changes: ModelChangeSet; stripped: StrippedFact[] } {
+  const typeById = new Map(original.map((block) => [block.id, block.type]));
+  const stripped: StrippedFact[] = [];
+  const blocks: Record<string, Record<string, unknown>> = {};
+
+  for (const [blockId, edit] of Object.entries(changes.blocks ?? {})) {
+    const blockType = typeById.get(blockId);
+    const owned = blockType ? MERCHANT_OWNED_PROPS[blockType] ?? [] : [];
+    const kept: Record<string, unknown> = {};
+    const removed: string[] = [];
+    for (const [prop, value] of Object.entries(edit ?? {})) {
+      if (owned.includes(prop)) removed.push(prop);
+      else kept[prop] = value;
+    }
+    if (removed.length) stripped.push({ blockId, blockType: blockType ?? "unknown", props: removed });
+    if (Object.keys(kept).length) blocks[blockId] = kept;
+  }
+
+  // A block the model tried to ADD carries no store facts either: added
+  // product blocks arrive empty and the merchant picks the product.
+  const add = changes.add?.map((candidate) => {
+    if (!candidate || typeof candidate !== "object") return candidate;
+    const entry = candidate as { type?: unknown; props?: unknown };
+    const owned = typeof entry.type === "string" ? MERCHANT_OWNED_PROPS[entry.type] ?? [] : [];
+    if (!owned.length || !entry.props || typeof entry.props !== "object") return candidate;
+    const props: Record<string, unknown> = {};
+    for (const [prop, value] of Object.entries(entry.props as Record<string, unknown>)) {
+      if (!owned.includes(prop)) props[prop] = value;
+    }
+    return { ...(candidate as object), props };
+  });
+
+  const next: ModelChangeSet = { ...changes };
+  if (changes.blocks) next.blocks = blocks;
+  if (add) next.add = add;
+  return { changes: next, stripped };
+}
+
 /** The chip lanes the Studio offers alongside a scope. */
 export type EditLane = "subject" | "copy" | "visual" | "tone";
 
@@ -147,7 +217,7 @@ export function planEmailChange(input: {
   subject?: string;
   previewText?: string;
   idSeed: () => string;
-}): { ok: false; reason: string } | { ok: true; change: AppliedChange } {
+}): { ok: false; reason: string } | { ok: true; change: AppliedChange; stripped: StrippedFact[] } {
   let changeSet: ModelChangeSet;
   try {
     changeSet = readModelChangeSet(input.content);
@@ -155,10 +225,16 @@ export function planEmailChange(input: {
     return { ok: false, reason: "Joon's reply could not be read as an email change." };
   }
 
-  const contained = applyLane(input.lane, containToScope(input.scope, changeSet));
+  const laned = applyLane(input.lane, containToScope(input.scope, changeSet));
+  const { changes: contained, stripped } = stripInventedFacts(input.original, laned);
   const change = applyChangeSet(input.original, contained, input.idSeed);
   if (!change.applied) {
-    return { ok: false, reason: "joon didn't change anything — try rephrasing." };
+    return {
+      ok: false,
+      reason: stripped.length
+        ? `Joon cannot set product facts or link destinations — those come from your store. Pick the ${stripped[0]!.blockType === "product_grid" ? "collection" : "product"} in the Shopify data tab and ask again.`
+        : "joon didn't change anything — try rephrasing.",
+    };
   }
 
   const violation = scopeViolation(input.scope, input.original, change.blocks, {
@@ -167,5 +243,5 @@ export function planEmailChange(input: {
   });
   if (violation) return { ok: false, reason: violation };
 
-  return { ok: true, change };
+  return { ok: true, change, stripped };
 }
