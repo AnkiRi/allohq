@@ -35,6 +35,7 @@ export function StudioTopBar({
   reviewHref,
   onAddBlock,
   onOpenTools,
+  onBack,
 }: {
   name: string;
   state: StudioState;
@@ -54,17 +55,54 @@ export function StudioTopBar({
    */
   onAddBlock: () => void;
   onOpenTools: () => void;
+  /** Return the merchant to wherever they came from. Routing belongs to the page. */
+  onBack: () => void;
 }) {
   const stateCopy = STATE_COPY[state];
+
+  /**
+   * Where "back" goes.
+   *
+   * A merchant usually arrives at the Studio from a campaign, or from the chat,
+   * or from the email library — and being marched to the library regardless
+   * loses whatever they were doing. So go back the way they came when there IS
+   * a way back within the app, and fall back to the library only when there
+   * genuinely isn't one (a fresh tab, a pasted link).
+   */
+  const [canGoBack, setCanGoBack] = React.useState(false);
+  React.useEffect(() => {
+    // `history.length > 1` is true for any tab with navigation behind it,
+    // including arrivals from outside the app, so also require a same-origin
+    // referrer or a client-side navigation.
+    const sameOriginReferrer =
+      typeof document !== "undefined" &&
+      document.referrer !== "" &&
+      new URL(document.referrer).origin === window.location.origin;
+    setCanGoBack(window.history.length > 1 && sameOriginReferrer);
+  }, []);
+
+  const backLabel = canGoBack ? "Back" : "Email library";
+
   return (
     <header className="flex shrink-0 items-center gap-3 border-b border-border bg-[#FFFDF8] px-3 py-2">
-      <Link
-        href="/templates"
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Email library</span>
-      </Link>
+      {canGoBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{backLabel}</span>
+        </button>
+      ) : (
+        <Link
+          href="/templates"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{backLabel}</span>
+        </Link>
+      )}
 
       <div className="flex min-w-0 items-center gap-2">
         <h1 className="truncate text-[14px] font-medium">{name}</h1>
