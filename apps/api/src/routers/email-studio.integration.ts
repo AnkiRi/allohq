@@ -149,6 +149,7 @@ test("a version frozen from that email is readable by the approval path", { skip
 
     // The approval freeze runs this exact call.
     const current = await prisma.emailTemplate.findUnique({ where: { id: template.id } });
+    assert.ok(current, "the template is still there");
     const version = await ensureEmailVersion(prisma, {
       workspaceId: workspace.id,
       templateId: template.id,
