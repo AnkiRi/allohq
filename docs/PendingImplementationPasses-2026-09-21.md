@@ -1879,6 +1879,130 @@ Neither is the gate.
 One migration, additive: `20260921180000_add_access_requests`. One new table,
 no change to any existing one, inert unless the admin surface is used.
 
+## Closed beta — merged, and what is verified where — 2026-09-22T03:40:14Z
+
+_Status: **merged to `main` and green**. Nothing is deployed. This section is
+the single place that says which claims rest on CI, which on a deployed
+environment, which wait on the merchant-side owner, and which are deliberately
+held for the Email Studio and delivery passes._
+
+### Merged
+
+| PR | Commit on `main` | What |
+| --- | --- | --- |
+| #27 | `968cdbb` | Merchant-agent API requires authentication and workspace authorisation |
+| #28 | `5e7ca24` | Closed beta: invite-only gate, invitations, request-an-invite, admin review |
+| #29 | `13b933c` | Test teardown race fixed; closed-beta runbook added |
+
+`main` post-merge on `13b933c`: **CI success, postgres + redis success, 100k
+approval load proof success.**
+
+### Verified in CI
+
+Everything here ran on a hosted runner against the merged code. No deployed
+environment was involved.
+
+| Claim | Evidence |
+| --- | --- |
+| Typecheck across the monorepo | 19 of 19 tasks |
+| Unit suite | 368 pass, 0 fail |
+| Integration suite | 69 pass, 0 fail, 13 files |
+| 100k approval load proof | passes on `main` |
+| Invite-only mode defaults off, and only literal `true` enables it | `closed-beta.test.ts` |
+| Platform admins resolved from environment only, never from source | `closed-beta.test.ts` |
+| Token is 256 bits, unique, and only its SHA-256 is comparable | `closed-beta.test.ts` |
+| Existing member keeps access under invite-only | `closed-beta.integration.ts` |
+| Uninvited identity is refused a workspace | `closed-beta.integration.ts` |
+| An unaccepted invitation is not access on its own | `closed-beta.integration.ts` |
+| Accept once; second attempt refused | `closed-beta.integration.ts` |
+| Expired, revoked, wrong-email, unknown token all refused, and no membership created | `closed-beta.integration.ts` |
+| An unverified address cannot accept | `closed-beta.integration.ts` |
+| Plaintext token appears nowhere in the stored row | `closed-beta.integration.ts` |
+| Submitting a request creates no user, workspace, membership, invitation, store, message log or agent chat | `access-requests.integration.ts` |
+| Honeypot, repeat and rate-limited submissions all read identically | `access-requests.integration.ts` |
+| Only a platform admin can list, triage or approve | `access-requests.integration.ts` |
+| Healthify-shaped flow: request → approve → owner invitation → forwarded link refused → intended address accepts | `access-requests.integration.ts` |
+| Approving into an existing workspace creates no second one | `access-requests.integration.ts` |
+| Merchant-agent endpoint refuses with no credentials, a malformed header, an invalid token, or no Clerk secret | `agent-auth.test.ts` |
+| Merchant-agent store authorisation is workspace membership; unknown and not-yours answer identically | `agent-authorisation.integration.ts` |
+| A refused agent request performs no model, tool or provider work | `agent-authorisation.integration.ts` |
+
+### Verified on a deployed environment
+
+**Nothing.** No migration has been applied, no revision deployed, and no
+environment variable set. Closed beta is not active anywhere.
+
+### Requires the merchant-side owner
+
+| # | Action | Why it cannot be done here |
+| --- | --- | --- |
+| 1 | Apply `20260921140000_add_invitations` and `20260921180000_add_access_requests` through the deployed migration path | Production database |
+| 2 | Deploy matching web, API and worker revisions from `13b933c` or later | Production deploy |
+| 3 | **Supply the Clerk user id** for `PLATFORM_ADMIN_CLERK_IDS` on the **API service** | The id is not knowable from the repository, and guessing one would either do nothing or name the wrong person |
+| 4 | Confirm existing sign-in still works, and create and accept one test invitation — **before** enabling the mode | Needs a real Clerk identity and a browser |
+| 5 | Set `INVITE_ONLY_MODE=true` on the **API and web** services | Production configuration. The API enforces; the web service explains. One without the other leaves the app half-gated, and web-only is the dangerous direction — it looks closed and is not |
+| 6 | Run the manual runbook | `docs/ClosedBetaRunbook-2026-09-22.md` |
+| 7 | Decide the Clerk sign-up posture | Public is recommended and is the default; restricted plus an allowlist is documented in `ClosedBetaDeployment` § 3 |
+
+Railway service management is also gated in this working environment, so even
+with the id, step 2 onward could not be completed here.
+
+### Deliberately deferred to the Email Studio and delivery passes
+
+Not attempted, not claimed, and out of scope for the closed-beta runbook:
+
+- Email Studio and the block editor;
+- campaign delivery of any kind;
+- open and click tracking;
+- sender-domain authentication and warm-up;
+- provider selection and the Resend/SES switch;
+- real-client rendering evidence in Gmail, Outlook and Apple Mail;
+- asset OCR, malware scanning, metadata stripping and moderation;
+- the manual 2–3 recipient real-delivery acceptance, which remains unexecuted.
+
+The runbook states this exclusion in its own scope line, so a tester does not
+reach for an email test and find it missing.
+
+### Migrations now on `main` and not yet deployed
+
+Eight exist; the four earliest were already recorded as undeployed, and four
+have been added since:
+
+| Migration | Added by |
+| --- | --- |
+| `20260920090000_add_audience_decision_write_key` | earlier |
+| `20260920140000_add_campaign_audience_runs` | earlier |
+| `20260920150000_add_audience_member_reconsider` | earlier |
+| `20260920190000_add_audience_run_lease` | earlier |
+| `20260921123000_drop_unused_assignment_ordering_index` | #26 |
+| `20260921140000_add_invitations` | #28 |
+| `20260921180000_add_access_requests` | #28 |
+| `20260919123000_add_email_ide_versions` | pre-existing, undeployed |
+
+**This supersedes any earlier count in this document.** Earlier sections say
+"four undeployed migrations"; that was true when written and is no longer. All
+eight are additive or index-only, and each has been verified to apply cleanly
+from an empty database.
+
+### Flaky tests found and fixed, all mine
+
+Recorded because the pattern matters more than the individual fixes: four
+timing-dependent tests I wrote passed locally and failed on shared runners.
+
+| Test | Rate | Cause | Fix |
+| --- | --- | --- | --- |
+| `CampaignPreparationPolling` | ~1 in 3 | The component outlived its test; the file died mid-test with no assertion error | Asserts the real property with no DOM-absence wait; mutation-proven |
+| `access-requests` creates-nothing | in-suite only | Counted whole tables while other files wrote to the same database concurrently | Every assertion scoped to what the submission touched |
+| `preparation-acceptance` 3 | ~1 in 4 | The run finished before the lease could be stolen | Five rows per write instead of a hundred |
+| `preparation-acceptance` 1 | main only | A fixed 250 ms wait, plus teardown deleting the workspace while the run was still writing | Observed state, and the in-flight promise settled in `finally` |
+
+**The million-customer proof had been running inside every pull request.** The
+default integration run excludes `*.load.integration.ts`; the 1M file was named
+`.integration.ts`. Renaming it cut the suite from about thirty minutes to a
+couple, with no change in coverage — and a one-in-four flake inside a half-hour
+run is easy to re-run away instead of diagnose, which is part of why these
+survived as long as they did.
+
 ## Manual acceptance checklist — real delivery — 2026-09-21T07:22:57Z
 
 _For a human to run. **Nothing in this pass sends email, and no step here is
@@ -2112,6 +2236,7 @@ that already exist, so no entry ever names a commit that has not been made.
 
 | UTC timestamp | Commit | Status | Change and evidence | Remaining limitation |
 | --- | --- | --- | --- | --- |
+| 2026-09-22T03:40:14Z | `5e7ca24` `13b933c` | **merged, not deployed** | Closed beta merged to `main` and green: CI, postgres + redis, and the main-only 100k approval load proof all pass on `13b933c`. Typecheck 19/19, unit 368/368, integration 69/69. Every closed-beta and merchant-agent claim listed against the test that proves it. Runbook added at `docs/ClosedBetaRunbook-2026-09-22.md`. Four flaky tests of mine fixed, each diagnosed to root cause. | **Nothing is verified on a deployed environment — no migration applied, no revision deployed, no variable set, closed beta is not active anywhere.** Blocked on a Clerk user id for `PLATFORM_ADMIN_CLERK_IDS`, which is not knowable from the repository; Railway service management is also gated here. Eight migrations now sit undeployed, superseding the earlier count of four. Email Studio, delivery, tracking, sender domains, client rendering and asset safety remain deliberately deferred |
 | 2026-09-21T18:37:56Z | _(branch `closed-beta-invite-only`, PR #28)_ | **implemented, pending review** | Public "Request an invite" flow added to the closed-beta gate as one product flow. All three landing CTAs changed; `/request-invite` writes one platform-level `AccessRequest` and is asserted to create no user, workspace, membership, invitation, store, message log or agent chat. Honeypot, repeat and rate-limited submissions all return the one acknowledgement, so the form is not an enumeration oracle. Platform-admin console at `/admin/access-requests` approves into a new or existing workspace and issues the invitation in one transaction. 6 of 6 integration tests including the Healthify-shaped flow end to end. | No Turnstile — recorded as a later optional layer rather than a dependency taken before evidence of abuse. **Corrected an earlier conflict in the deployment checklist:** setting Clerk sign-up to Restricted would also block invited people from creating the account they need; the checklist now states both options and their costs, and recommends leaving Clerk public because an uninvited account reaches nothing |
 | 2026-09-21T16:58:44Z | _(branch `invite-only-closed-beta`)_ | **implemented, pending review** | Joon is invite-only behind `INVITE_ONLY_MODE`, enforced at the provisioning boundary: no workspace, so `workspaceProcedure` refuses before any resolver, which puts every cost-bearing path behind it at once. Invitations are single-use, expiring, revocable, stored as SHA-256 only, and require a Clerk-verified email match. Issuing restricted to platform admins named by Clerk id in env. **Found while auditing and fixed in a separate security PR: the merchant-agent endpoint lacked authentication and workspace authorisation.** typecheck 19/19, unit 366/366, 17 new tests. | `INVITE_ONLY_MODE` and `PLATFORM_ADMIN_CLERK_IDS` are not set anywhere yet, so nothing changes until they are. Clerk's sign-up mode must be set to Restricted in the dashboard — defence in depth, not the gate. No invitation email is sent: the operator copies the link, because sending would depend on unfinished sender-domain and warm-up work |
 | 2026-09-21T13:28:53Z | `1fdb179` `199abda` | **decided** | Stored hash left unchanged: proven 35x margin against collision or reordering, verified on 2,999,999 worst-case adjacent pairs and 1,715,519 across every binade, zero collisions and zero inversions; the frozen authority is `MeasurementAssignment.arm`, which holds no hash. Regression tests pin the margin and fail below the safe threshold. Index removal kept: every production query audited and none needs it; controlled 1M comparison 80,565 ms to 53,252 ms and 3,370.8 MB to 1,710.2 MB of WAL; full proof 58,649 ms to 43,152 ms. | The intermediate stored hash is not byte-identical to the mathematical reference at the final digits. **Deferred — revisit only if a future audit requirement demands byte-exact intermediate reproducibility.** No BIGINT column or versioned representation added. End-to-end recovery varied 484 s to 496 s because independent bulk-insert timings moved 11-15% across hosted runners; no overall speed-up is claimed. The planner's exact index choice varied between runs, so no claim is made that it never used the index |
