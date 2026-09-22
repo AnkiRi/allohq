@@ -111,17 +111,9 @@ export function V2Landing({
           (same pattern the root <html> uses for the app's data-theme). */}
       <script dangerouslySetInnerHTML={{ __html: PAL_INIT }} />
 
-      {/* Fonts: Hanken Grotesk (display + body) · JetBrains Mono (data/console) */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link
-        rel="preconnect"
-        href="https://fonts.gstatic.com"
-        crossOrigin="anonymous"
-      />
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-      />
+      {/* Fonts are declared in v2.css and served from this origin. The
+          landing used to <link> to fonts.googleapis.com, which put a call to
+          Google in front of every visitor before the page could paint. */}
 
       {/* ── prototype label banner, /options/v2 only ──────────── */}
       {showBanner && (
