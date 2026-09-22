@@ -8,7 +8,7 @@ import {
 } from "@allohq/customer-intelligence";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
-import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema } from "@allohq/email-builder";
+import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
 import { ensureEmailVersion } from "@allohq/campaign-engine";
 import {
   createEmailAssetUpload,
@@ -650,7 +650,7 @@ export const emailsRouter = router({
         return { status: "rejected" as const, version: null };
       }
 
-      const candidate = emailDocumentSchema.parse(proposal.candidate);
+      const candidate = parseEmailDocument(proposal.candidate);
       const result = await ctx.prisma.$transaction(async (tx) => {
         const latestVersion = await tx.emailVersion.findFirst({
           where: { templateId: proposal.templateId },
