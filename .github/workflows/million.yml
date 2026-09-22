@@ -73,7 +73,7 @@ jobs:
         run: pnpm --filter @allohq/database exec prisma migrate deploy
 
       - name: One-million-customer proof
-        run: pnpm --filter @allohq/workers exec tsx --test src/workers/prepare-audience.million.integration.ts
+        run: pnpm --filter @allohq/workers exec tsx --test src/workers/prepare-audience.million.load.integration.ts
 
       - name: Resources after the run
         # Runs even on failure: if the proof is killed, the reason is usually

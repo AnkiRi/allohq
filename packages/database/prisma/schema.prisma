@@ -95,8 +95,95 @@ model Workspace {
   aiChats                 AiChat[]
   brandAssets             BrandAsset[]
   notificationPreferences NotificationPreference[]
+  invitations             Invitation[]
 
   @@map("workspaces")
+}
+
+/// Someone asking to be let into the closed beta.
+///
+/// Platform-level on purpose: it carries no `workspaceId` and no relation to
+/// one, because the person asking has no tenant yet and creating one to hold
+/// their request would be the very thing closed beta withholds. Submitting
+/// this creates nothing else — no Clerk identity, no user, no workspace, no
+/// membership, no invitation, no store, no agent task, no provider call.
+///
+/// An operator reads it, decides, and issues an invitation separately. The
+/// link between the two is recorded here once that happens.
+model AccessRequest {
+  id      String @id @default(cuid())
+  /// Lower-cased on write so one address cannot queue under several spellings.
+  email   String
+  name    String
+  company String
+  /// Website or storefront URL, if they gave one.
+  website String?
+  /// shopify | custom_storefront | mobile_app
+  platform String
+  /// A range, not a number: "under_10k", "10k_100k", "100k_1m", "over_1m".
+  customerRange String
+  note          String?
+
+  /// pending | reviewed | declined | invited
+  status String @default("pending")
+  /// Set when an operator acts, for the audit trail.
+  reviewedAt        DateTime?
+  reviewedByClerkId String?
+  /// The invitation issued from this request, once one is.
+  invitationId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("access_requests")
+}
+
+/// A single invitation to join Joon during closed beta.
+///
+/// The token is never stored. Only its SHA-256 hash is, so a database read
+/// cannot produce a working invitation link — the plaintext exists once, in
+/// the response that created it, and is the operator's to pass on.
+///
+/// One invitation, one acceptance. `acceptedAt` is the single-use latch;
+/// `revokedAt` and `expiresAt` are the two ways it can stop working without
+/// being used. All three are kept rather than deleted, because "this
+/// invitation was revoked on the 4th" is a different audit answer from "no
+/// such invitation".
+model Invitation {
+  id          String @id @default(cuid())
+  /// The address the invitation is for. Acceptance requires an authenticated
+  /// identity whose verified email matches this, so forwarding the link to
+  /// someone else does not let them in.
+  email       String
+  workspaceId String
+  /// Role granted on acceptance: owner | admin | member | viewer.
+  role        String @default("admin")
+
+  /// SHA-256 of the opaque token. Unique so a hash collision or a replayed
+  /// token cannot match two rows.
+  tokenHash String @unique
+
+  expiresAt DateTime
+  /// Set once, on acceptance. A second attempt finds it non-null and fails.
+  acceptedAt DateTime?
+  /// The user who accepted, for the audit trail.
+  acceptedByUserId String?
+  revokedAt        DateTime?
+  revokedByClerkId String?
+
+  /// Clerk id of the platform admin who issued it.
+  invitedByClerkId String
+  createdAt        DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Answering "does this address already have an invitation" is an operator
+  /// question, never a public one — no unauthenticated surface reads by email.
+  @@index([email])
+  @@index([workspaceId])
+  @@map("invitations")
 }
 
 /// Durable audit trail for Shopify's mandatory privacy webhooks. Requests are

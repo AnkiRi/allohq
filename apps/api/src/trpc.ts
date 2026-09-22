@@ -7,6 +7,7 @@ import { verifyStoreAccess } from "./lib/storeAccess";
 import { verifyShopifyIdToken } from "./auth/shopify-id-token";
 import { resolveShopifyIdentity } from "./auth/resolve-shopify-identity";
 import { isProtectedDataRoute, protectedDataAuditRecord } from "./lib/protected-data-audit";
+import { closedBetaVerdict, isPlatformAdmin, CLOSED_BETA_MESSAGE } from "./auth/closed-beta";
 
 /**
  * Context creation for tRPC
@@ -24,6 +25,9 @@ export async function createContext(opts: { req?: any; res?: any }) {
   let workspaceId: string | null = null;
   let isDemo = false;
   let authSource: "clerk" | "shopify" | "demo" | null = null;
+  // Signed in, but holding no workspace because closed beta withheld one. The
+  // web app reads this to show an invitation screen rather than an error.
+  let closedBeta = false;
 
   if (token) {
     const shopifyApiKey = process.env.SHOPIFY_API_KEY;
@@ -83,8 +87,22 @@ export async function createContext(opts: { req?: any; res?: any }) {
         },
       });
 
-      // Auto-provision user + default workspace on first authenticated request
-      if (!user) {
+      // Closed beta: a Clerk session is an identity, not an authorisation.
+      // Until someone is a member, a platform admin, or has accepted an
+      // invitation, no workspace is created for them — and without a workspace
+      // `workspaceProcedure` refuses every call before a resolver runs, so no
+      // model call, provider send, campaign, store connection or background job
+      // is reachable. Blocking provisioning is the gate; the screen the web app
+      // shows is only its explanation.
+      if (!user || user.workspaceMembers.length === 0) {
+        const verdict = await closedBetaVerdict({ clerkUserId: userId });
+        closedBeta = !verdict.allowed;
+      }
+
+      // Auto-provision user + default workspace on first authenticated request.
+      // Skipped under closed beta: with no membership, `workspaceId` resolves to
+      // null below and every workspace procedure fails closed.
+      if (!user && !closedBeta) {
         const slug = `ws-${userId.slice(0, 8)}`;
         // Use existing workspace if slug collision, otherwise create new
         let workspace = await prisma.workspace.findUnique({ where: { slug } });
@@ -167,6 +185,7 @@ export async function createContext(opts: { req?: any; res?: any }) {
     isDemo,
     authSource,
     clientIp,
+    closedBeta,
   };
 }
 
@@ -230,6 +249,23 @@ const DEMO_LLM_PATHS = new Set<string>([
 ]);
 
 /**
+ * Platform admin — the operator of the closed beta, not of a tenant.
+ *
+ * Deliberately NOT a workspace procedure: issuing invitations and reading
+ * access requests are platform acts, and requiring a workspace would mean an
+ * operator had to belong to one of the tenants they are letting in.
+ *
+ * Refuses with NOT_FOUND rather than FORBIDDEN. Someone who is not an operator
+ * has no business learning that this surface exists.
+ */
+export const platformAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!isPlatformAdmin(ctx.userId)) {
+    throw new TRPCError({ code: "NOT_FOUND" });
+  }
+  return next({ ctx });
+});
+
+/**
  * Workspace procedure - requires authentication + workspace access + rate limiting
  */
 export const workspaceProcedure = protectedProcedure
@@ -261,9 +297,12 @@ export const workspaceProcedure = protectedProcedure
   })
   .use(async ({ ctx, next }) => {
     if (!ctx.workspaceId) {
+      // One sentence for everyone held at closed beta, whatever the reason.
+      // Saying "no invitation was found for you" would confirm which addresses
+      // have one to anyone who can create a Clerk session.
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "No workspace access",
+        message: ctx.closedBeta ? CLOSED_BETA_MESSAGE : "No workspace access",
       });
     }
     return next({

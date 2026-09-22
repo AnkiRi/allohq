@@ -159,18 +159,36 @@ test("3. a worker dying mid-run is resumed without any new merchant action", { s
   const fixture = await seed(prisma, 2_400);
   try {
     // Kill the worker once it has written something but not everything.
-    // Waiting a fixed number of milliseconds raced the run and let it finish,
-    // so the kill is triggered by observed state instead of by a timer.
+    //
+    // Triggered by observed state rather than a timer, because a fixed wait
+    // raced the run. Observation alone was still not enough: with a hundred
+    // rows per write there are only twenty-four chunks, and the whole run
+    // could finish between two polls — "expected partial work, saw 2400",
+    // about one run in four.
+    //
+    // Five rows per write makes it four hundred and eighty round trips to
+    // Postgres, so the run cannot complete inside a two-millisecond poll
+    // interval. Slower on purpose: the point of this test is to catch a run in
+    // the middle, and it is worth a second to do that reliably.
     const dying = runCampaignAudienceResolution(
-      runInput(fixture, { owner: "doomed-worker", writeChunk: 100 })
+      runInput(fixture, { owner: "doomed-worker", writeChunk: 5 })
     );
-    for (let attempt = 0; attempt < 200; attempt += 1) {
+    let caughtMidRun = false;
+    for (let attempt = 0; attempt < 2_000; attempt += 1) {
       const written = await prisma.campaignAudienceMember.count({
         where: { run: { campaignId: fixture.campaignId } },
       });
-      if (written > 0 && written < fixture.total) break;
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (written > 0 && written < fixture.total) {
+        caughtMidRun = true;
+        break;
+      }
+      if (written >= fixture.total) break;
+      await new Promise((resolve) => setTimeout(resolve, 2));
     }
+    assert.ok(
+      caughtMidRun,
+      "the run finished before it could be interrupted, so this test did not test anything"
+    );
     await prisma.campaignAudienceRun.updateMany({
       where: { campaignId: fixture.campaignId },
       data: { leaseOwner: "someone-else", leaseExpiresAt: new Date(Date.now() - 60_000) },

@@ -4,6 +4,7 @@ import { Queue } from "bullmq";
 import { encryptSecret, prisma } from "@allohq/database";
 import { shopify } from "@allohq/ecommerce-integrations";
 import { verifyShopifyIdToken } from "../auth/shopify-id-token";
+import { isInviteOnlyMode, CLOSED_BETA_MESSAGE } from "../auth/closed-beta";
 
 const redisConnection = {
   host: process.env.REDIS_HOST ?? "localhost",
@@ -72,6 +73,19 @@ export async function handleShopifyBootstrap(req: IncomingMessage, res: ServerRe
       orderBy: { installedAt: "asc" },
     });
     let workspaceId = existing?.workspaceId;
+    // Closed beta refuses a NEW tenant from the App Store. An existing
+    // installation keeps working — `existing` is the whole difference. There is
+    // no Clerk identity on this path to match against an invitation, so the
+    // rule is about the shop, not the person: during closed beta a shop joins
+    // Joon because an invited operator connected it, not because someone found
+    // the listing.
+    if (!workspaceId && isInviteOnlyMode()) {
+      console.warn(
+        `Closed beta: refused a managed install for ${identity.shopDomain} — no existing installation`
+      );
+      json(res, 403, { error: "closed_beta", message: CLOSED_BETA_MESSAGE });
+      return;
+    }
     if (!workspaceId) {
       const workspace = await prisma.workspace.create({
         data: {
