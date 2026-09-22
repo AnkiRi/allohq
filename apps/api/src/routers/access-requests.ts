@@ -6,6 +6,15 @@ import {
   createInvitationToken,
   hashInvitationToken,
 } from "../auth/closed-beta";
+import {
+  allowedActions,
+  canTransition,
+  invitationStateOf,
+  nextStatus,
+  stateSummary,
+  type AccessRequestAction,
+  type AccessRequestStatus,
+} from "../auth/access-request-state";
 
 /**
  * Asking to be let into the closed beta, and the operator side of deciding.
@@ -142,40 +151,165 @@ export const accessRequestsRouter = router({
       const known = new Map(
         existing.map((user) => [user.email, user.workspaceMembers.length])
       );
-      return requests.map((request) => ({
-        ...request,
-        existingAccount: known.has(request.email),
-        existingWorkspaceCount: known.get(request.email) ?? 0,
-      }));
+
+      // The invitation each approved request produced, so its live state is
+      // known rather than assumed from the request status alone.
+      const invitationIds = requests
+        .map((request) => request.invitationId)
+        .filter((id): id is string => Boolean(id));
+      const invitations = invitationIds.length
+        ? await ctx.prisma.invitation.findMany({
+            where: { id: { in: invitationIds } },
+            select: {
+              id: true,
+              acceptedAt: true,
+              revokedAt: true,
+              expiresAt: true,
+              role: true,
+              workspaceId: true,
+              workspace: { select: { name: true } },
+            },
+          })
+        : [];
+      const invitationById = new Map(invitations.map((invitation) => [invitation.id, invitation]));
+
+      const decisions = await ctx.prisma.accessRequestDecision.findMany({
+        where: { accessRequestId: { in: requests.map((request) => request.id) } },
+        orderBy: { createdAt: "asc" },
+      });
+      const trailByRequest = new Map<string, typeof decisions>();
+      for (const decision of decisions) {
+        const trail = trailByRequest.get(decision.accessRequestId) ?? [];
+        trail.push(decision);
+        trailByRequest.set(decision.accessRequestId, trail);
+      }
+
+      return requests.map((request) => {
+        const invitation = request.invitationId
+          ? invitationById.get(request.invitationId) ?? null
+          : null;
+        const state = {
+          status: request.status as AccessRequestStatus,
+          invitation: invitationStateOf(invitation),
+        };
+        return {
+          ...request,
+          existingAccount: known.has(request.email),
+          existingWorkspaceCount: known.get(request.email) ?? 0,
+          invitationState: state.invitation,
+          invitationRole: invitation?.role ?? null,
+          invitationWorkspaceName: invitation?.workspace?.name ?? null,
+          invitationExpiresAt: invitation?.expiresAt ?? null,
+          // The server decides what may be done. The console renders exactly
+          // this rather than working it out again and drifting.
+          allowedActions: allowedActions(state),
+          summary: stateSummary(state),
+          decisions: trailByRequest.get(request.id) ?? [],
+        };
+      });
     }),
 
-  setStatus: platformAdminProcedure
-    .input(z.object({ id: z.string().min(1), status: z.enum(["pending", "reviewed", "declined"]) }))
+  /**
+   * Take a decision on a request.
+   *
+   * One entry point for reviewing, declining, reopening and revoking, because
+   * they share the thing that matters: the move must be legal from where the
+   * request actually is, and a stale click must fail rather than repeat.
+   *
+   * Before this, every action stayed available after every decision. An
+   * operator could decline the same request twice, or mark a reviewed one
+   * reviewed again, and the server accepted it. Disabling the buttons would not
+   * have fixed that — this does, and the buttons now come from the same table.
+   */
+  decide: platformAdminProcedure
+    .input(
+      z.object({
+        id: z.string().min(1),
+        action: z.enum(["mark_reviewed", "decline", "reopen", "revoke_invitation"]),
+        reason: z.string().trim().max(500).optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      const request = await ctx.prisma.accessRequest.findUnique({
-        where: { id: input.id },
-        select: { id: true, status: true },
-      });
+      const request = await ctx.prisma.accessRequest.findUnique({ where: { id: input.id } });
       if (!request) throw new TRPCError({ code: "NOT_FOUND" });
-      if (request.status === "invited") {
+
+      const invitation = request.invitationId
+        ? await ctx.prisma.invitation.findUnique({
+            where: { id: request.invitationId },
+            select: { id: true, acceptedAt: true, revokedAt: true, expiresAt: true },
+          })
+        : null;
+      const state = {
+        status: request.status as AccessRequestStatus,
+        invitation: invitationStateOf(invitation),
+      };
+      const action = input.action as AccessRequestAction;
+
+      if (!canTransition(state, action)) {
+        // The specific reason, because this is an operator surface and a
+        // vague refusal here helps nobody. It reveals nothing about anyone
+        // outside the console.
         throw new TRPCError({
           code: "CONFLICT",
-          message: "That request already has an invitation. Revoke the invitation instead.",
+          message: `That request is ${stateSummary(state).toLowerCase().replace(/\.$/, "")}, so it cannot be ${action.replace(/_/g, " ")}. Reload to see where it actually is.`,
         });
       }
-      const updated = await ctx.prisma.accessRequest.update({
-        where: { id: request.id },
-        data: {
-          status: input.status,
-          reviewedAt: new Date(),
-          reviewedByClerkId: ctx.userId,
-        },
+
+      const toStatus = nextStatus(state, action);
+      const now = new Date();
+
+      const updated = await ctx.prisma.$transaction(async (tx) => {
+        // Re-read inside the transaction and re-check, so two operators
+        // clicking at once cannot both win.
+        const current = await tx.accessRequest.findUniqueOrThrow({ where: { id: request.id } });
+        if (current.status !== request.status) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Someone else decided this while you were looking at it. Reload.",
+          });
+        }
+
+        if (action === "revoke_invitation" && invitation) {
+          await tx.invitation.update({
+            where: { id: invitation.id },
+            data: { revokedAt: now, revokedByClerkId: ctx.userId },
+          });
+        }
+
+        const next = await tx.accessRequest.update({
+          where: { id: request.id },
+          data: {
+            status: toStatus,
+            reviewedAt: now,
+            reviewedByClerkId: ctx.userId,
+            // Reopening clears the link to the old invitation; the decision
+            // trail keeps it, and the request is decidable again.
+            ...(action === "reopen" ? { invitationId: null } : {}),
+          },
+        });
+
+        await tx.accessRequestDecision.create({
+          data: {
+            accessRequestId: request.id,
+            action,
+            fromStatus: state.status,
+            toStatus,
+            actorClerkId: ctx.userId,
+            reason: input.reason ?? null,
+            invitationId: invitation?.id ?? null,
+          },
+        });
+
+        return next;
       });
+
       console.info(
         JSON.stringify({
-          event: "access_request.status",
-          accessRequestId: updated.id,
-          status: updated.status,
+          event: "access_request.decided",
+          accessRequestId: request.id,
+          action,
+          from: state.status,
+          to: toStatus,
           byClerkId: ctx.userId,
         })
       );
@@ -209,10 +343,25 @@ export const accessRequestsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const request = await ctx.prisma.accessRequest.findUnique({ where: { id: input.id } });
       if (!request) throw new TRPCError({ code: "NOT_FOUND" });
-      if (request.status === "invited") {
+
+      const priorInvitation = request.invitationId
+        ? await ctx.prisma.invitation.findUnique({
+            where: { id: request.invitationId },
+            select: { acceptedAt: true, revokedAt: true, expiresAt: true },
+          })
+        : null;
+      const state = {
+        status: request.status as AccessRequestStatus,
+        invitation: invitationStateOf(priorInvitation),
+      };
+      // Same rules as every other decision. An already-invited request can be
+      // approved again only once its invitation can no longer be used —
+      // otherwise two live invitations exist for one person, and revoking one
+      // does not close the door.
+      if (!canTransition(state, "approve")) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "That request already has an invitation.",
+          message: `That request is ${stateSummary(state).toLowerCase().replace(/\.$/, "")}, so it cannot be approved. Reload to see where it actually is.`,
         });
       }
 
@@ -269,6 +418,17 @@ export const accessRequestsRouter = router({
             status: "invited",
             reviewedAt: new Date(),
             reviewedByClerkId: ctx.userId,
+            invitationId: invitation.id,
+          },
+        });
+
+        await tx.accessRequestDecision.create({
+          data: {
+            accessRequestId: request.id,
+            action: "approve",
+            fromStatus: state.status,
+            toStatus: "invited",
+            actorClerkId: ctx.userId,
             invitationId: invitation.id,
           },
         });

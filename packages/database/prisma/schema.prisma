@@ -135,9 +135,45 @@ model AccessRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  decisions AccessRequestDecision[]
+
   @@index([status, createdAt])
   @@index([email])
   @@map("access_requests")
+}
+
+/// Every decision ever taken on an access request, in order.
+///
+/// The request row carries only the latest state, which cannot answer "who
+/// declined this, and did someone reopen it afterwards". Appending here rather
+/// than overwriting means a reopened request still shows the decline that
+/// preceded it, and a revoked invitation still shows who issued it.
+///
+/// Nothing in this table is ever updated or deleted.
+model AccessRequestDecision {
+  id              String @id @default(cuid())
+  accessRequestId String
+
+  /// reviewed | approved | declined | reopened | invitation_revoked
+  action     String
+  /// The status before and after, so an invalid transition is visible in the
+  /// trail rather than inferred from ordering.
+  fromStatus String
+  toStatus   String
+
+  /// Clerk id of the operator who took the decision.
+  actorClerkId String
+  /// Free text, required on the decisions that need explaining.
+  reason       String?
+  /// The invitation this decision produced or acted on, where there is one.
+  invitationId String?
+
+  createdAt DateTime @default(now())
+
+  accessRequest AccessRequest @relation(fields: [accessRequestId], references: [id], onDelete: Cascade)
+
+  @@index([accessRequestId, createdAt])
+  @@map("access_request_decisions")
 }
 
 /// A single invitation to join Joon during closed beta.

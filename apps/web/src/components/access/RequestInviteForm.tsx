@@ -125,8 +125,10 @@ export function RequestInviteForm() {
         </button>
       </div>
 
+      {/* Subtle, and worded so it cannot read as a second way in: signing in
+          is for people who already have access, not a route to getting it. */}
       <p className="request-invite__note">
-        Already have access? <Link href="/sign-in">Sign in</Link>.
+        Already have Joon access? <Link href="/sign-in">Sign in</Link>.
       </p>
     </form>
   );

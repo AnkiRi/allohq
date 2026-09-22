@@ -195,7 +195,7 @@ test("only a platform admin can read requests or issue an invitation", { skip },
       (error: { code?: string }) => error.code === "NOT_FOUND"
     );
     await assert.rejects(
-      caller.setStatus({ id: "whatever", status: "declined" }),
+      caller.decide({ id: "whatever", action: "decline" }),
       (error: { code?: string }) => error.code === "NOT_FOUND"
     );
   } finally {
@@ -311,6 +311,146 @@ test("approving a request creates the workspace, the invitation and the audit li
       if (previousMode === undefined) delete process.env["INVITE_ONLY_MODE"];
       else process.env["INVITE_ONLY_MODE"] = previousMode;
     }
+  } finally {
+    if (previous === undefined) delete process.env["PLATFORM_ADMIN_CLERK_IDS"];
+    else process.env["PLATFORM_ADMIN_CLERK_IDS"] = previous;
+    if (workspaceId) await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => undefined);
+    await prisma.accessRequest.deleteMany({ where: { email } }).catch(() => undefined);
+  }
+});
+
+test("a decision cannot be taken twice, and the server is what refuses", { skip }, async () => {
+  const { prisma, accessRequestsRouter } = await load();
+  const operator = `user_operator_${randomUUID().slice(0, 8)}`;
+  const previous = process.env["PLATFORM_ADMIN_CLERK_IDS"];
+  process.env["PLATFORM_ADMIN_CLERK_IDS"] = operator;
+  const email = `twice-${randomUUID().slice(0, 8)}@example.test`;
+  try {
+    const request = await prisma.accessRequest.create({
+      data: { email, name: "A Founder", company: "Twice Ltd", platform: "shopify", customerRange: "under_10k" },
+    });
+    const admin = accessRequestsRouter.createCaller(adminCaller(prisma, operator));
+
+    // Pending offers three moves and no more.
+    const [pending] = await admin.list({ status: "pending" });
+    assert.deepEqual(
+      [...(pending!.allowedActions as string[])].sort(),
+      ["approve", "decline", "mark_reviewed"]
+    );
+
+    await admin.decide({ id: request.id, action: "mark_reviewed" });
+
+    // The repeat that used to succeed.
+    await assert.rejects(
+      admin.decide({ id: request.id, action: "mark_reviewed" }),
+      (error: { code?: string }) => error.code === "CONFLICT",
+      "marking a reviewed request reviewed again must be refused by the server"
+    );
+
+    await admin.decide({ id: request.id, action: "decline", reason: "Not a fit yet" });
+    await assert.rejects(
+      admin.decide({ id: request.id, action: "decline" }),
+      (error: { code?: string }) => error.code === "CONFLICT",
+      "declining twice must be refused"
+    );
+    await assert.rejects(
+      admin.decide({ id: request.id, action: "mark_reviewed" }),
+      (error: { code?: string }) => error.code === "CONFLICT"
+    );
+    await assert.rejects(
+      admin.approveAndInvite({ id: request.id, newWorkspaceName: "Twice" }),
+      (error: { code?: string }) => error.code === "CONFLICT",
+      "a declined request must be reopened before it can be approved"
+    );
+
+    // Declined offers exactly one way back.
+    const declined = (await admin.list({ status: "declined" })).find((row) => row.id === request.id);
+    assert.deepEqual(declined!.allowedActions, ["reopen"]);
+    assert.match(declined!.summary, /declined/i);
+
+    await admin.decide({ id: request.id, action: "reopen", reason: "They followed up" });
+    const reopened = await prisma.accessRequest.findUniqueOrThrow({ where: { id: request.id } });
+    assert.equal(reopened.status, "reviewed", "reopening returns it to reviewed, not pending");
+
+    // The whole trail survives, including the decision that was undone.
+    const trail = await prisma.accessRequestDecision.findMany({
+      where: { accessRequestId: request.id },
+      orderBy: { createdAt: "asc" },
+    });
+    assert.deepEqual(
+      trail.map((entry) => entry.action),
+      ["mark_reviewed", "decline", "reopen"],
+      "a reopened request must still show the decline that preceded it"
+    );
+    assert.equal(trail.every((entry) => entry.actorClerkId === operator), true);
+    assert.equal(trail[1]!.reason, "Not a fit yet", "the reason is kept");
+    assert.equal(trail[2]!.fromStatus, "declined");
+    assert.equal(trail[2]!.toStatus, "reviewed");
+  } finally {
+    if (previous === undefined) delete process.env["PLATFORM_ADMIN_CLERK_IDS"];
+    else process.env["PLATFORM_ADMIN_CLERK_IDS"] = previous;
+    await prisma.accessRequest.deleteMany({ where: { email } }).catch(() => undefined);
+  }
+});
+
+test("an invited request cannot be decided again until its invitation is revoked", { skip }, async () => {
+  const { prisma, accessRequestsRouter } = await load();
+  const operator = `user_operator_${randomUUID().slice(0, 8)}`;
+  const previous = process.env["PLATFORM_ADMIN_CLERK_IDS"];
+  process.env["PLATFORM_ADMIN_CLERK_IDS"] = operator;
+  const marker = randomUUID().slice(0, 8);
+  const email = `invited-${marker}@example.test`;
+  let workspaceId: string | undefined;
+  try {
+    const request = await prisma.accessRequest.create({
+      data: { email, name: "A Founder", company: `Invited ${marker}`, platform: "shopify", customerRange: "under_10k" },
+    });
+    const admin = accessRequestsRouter.createCaller(adminCaller(prisma, operator));
+    const issued = await admin.approveAndInvite({ id: request.id, role: "owner" });
+    workspaceId = issued.workspaceId;
+
+    // A live invitation: revoke is the only move.
+    const invited = (await admin.list()).find((row) => row.id === request.id);
+    assert.equal(invited!.invitationState, "live");
+    assert.deepEqual(invited!.allowedActions, ["revoke_invitation"]);
+    for (const action of ["mark_reviewed", "decline", "reopen"] as const) {
+      await assert.rejects(
+        admin.decide({ id: request.id, action }),
+        (error: { code?: string }) => error.code === "CONFLICT",
+        `${action} must not be possible while an invitation is live`
+      );
+    }
+    await assert.rejects(
+      admin.approveAndInvite({ id: request.id, newWorkspaceName: "Second" }),
+      (error: { code?: string }) => error.code === "CONFLICT",
+      "a second live invitation would mean revoking one does not close the door"
+    );
+
+    // Revoke, and the only move becomes issuing a new one.
+    await admin.decide({ id: request.id, action: "revoke_invitation", reason: "Sent to the wrong address" });
+    const revoked = (await admin.list()).find((row) => row.id === request.id);
+    assert.equal(revoked!.invitationState, "revoked");
+    assert.deepEqual(revoked!.allowedActions, ["approve"]);
+    assert.match(revoked!.summary, /revoked/i);
+
+    // And the revoked invitation genuinely cannot be used.
+    const stored = await prisma.invitation.findUniqueOrThrow({ where: { id: issued.invitationId } });
+    assert.ok(stored.revokedAt, "revoking must actually revoke the invitation");
+    assert.equal(stored.revokedByClerkId, operator);
+
+    // Issuing a replacement works, and both invitations survive in the trail.
+    const replacement = await admin.approveAndInvite({ id: request.id, workspaceId: issued.workspaceId });
+    assert.notEqual(replacement.invitationId, issued.invitationId);
+    const trail = await prisma.accessRequestDecision.findMany({
+      where: { accessRequestId: request.id },
+      orderBy: { createdAt: "asc" },
+    });
+    assert.deepEqual(trail.map((entry) => entry.action), ["approve", "revoke_invitation", "approve"]);
+    assert.equal(
+      await prisma.invitation.count({ where: { email } }),
+      2,
+      "revoking must not delete the original invitation"
+    );
   } finally {
     if (previous === undefined) delete process.env["PLATFORM_ADMIN_CLERK_IDS"];
     else process.env["PLATFORM_ADMIN_CLERK_IDS"] = previous;
