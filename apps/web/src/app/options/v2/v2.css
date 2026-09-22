@@ -2209,3 +2209,111 @@
     display: none;
   }
 }
+
+/* ── REQUEST AN INVITE ────────────────────────────────────────────────────
+   The public access request, wearing the landing's own palette and type.
+   Scoped under .opt-v2 like everything else in this file.
+
+   One column, generous line length, and the form reads as a short letter
+   rather than a lead-capture grid: the person filling it in is being asked to
+   introduce their brand, not to be qualified. */
+.opt-v2 .request-invite {
+  padding-block: clamp(48px, 10vh, 108px) clamp(64px, 12vh, 132px);
+  max-width: 560px;
+}
+.opt-v2 .request-invite__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.opt-v2 .request-invite__title {
+  margin-top: 12px;
+  font-size: clamp(30px, 5vw, 42px);
+  line-height: 1.06;
+  letter-spacing: -0.032em;
+  color: var(--ink);
+}
+.opt-v2 .request-invite__lead {
+  margin-top: 14px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--dim);
+  max-width: 46ch;
+}
+.opt-v2 .request-invite__fields {
+  margin-top: 36px;
+  display: grid;
+  gap: 18px;
+}
+.opt-v2 .request-invite__row {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 560px) {
+  .opt-v2 .request-invite__row { grid-template-columns: 1fr; }
+}
+.opt-v2 .request-invite__label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 7px;
+}
+.opt-v2 .request-invite__optional { text-transform: none; letter-spacing: 0; opacity: 0.72; }
+.opt-v2 .request-invite__control {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--ink);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.opt-v2 .request-invite__control::placeholder { color: var(--faint); opacity: 0.7; }
+.opt-v2 .request-invite__control:hover { border-color: var(--line-2); }
+.opt-v2 .request-invite__control:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+/* Selects need the arrow drawn back in once the native chrome is replaced. */
+.opt-v2 select.request-invite__control {
+  appearance: none;
+  padding-right: 38px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--faint) 50%),
+    linear-gradient(135deg, var(--faint) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 52%, calc(100% - 15px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.opt-v2 textarea.request-invite__control { resize: vertical; min-height: 92px; }
+.opt-v2 .request-invite__actions {
+  margin-top: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.opt-v2 .request-invite__note {
+  margin-top: 26px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+.opt-v2 .request-invite__note a { color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
+.opt-v2 .request-invite__note a:hover { color: var(--ink); }
+/* The honeypot. Off-screen rather than display:none, which some fillers skip. */
+.opt-v2 .request-invite__trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

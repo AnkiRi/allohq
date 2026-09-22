@@ -7,13 +7,17 @@ import { trpc } from "@/lib/trpc";
 /**
  * Asking to be let in.
  *
- * The answer is the same sentence whatever happens — a new request, a repeat,
- * a rate-limited attempt, an address that already has an account. Anything that
- * varied would answer "is this address known to Joon?" for anyone who asked.
+ * The answer is the same sentence whatever happens — a new request, a repeat, a
+ * throttled attempt, an address that already has an account. Anything that
+ * varied would answer "is this address known to joon?" for anyone who asked.
  *
- * So the form does not report errors from the server either: it acknowledges.
- * Only client-side validation, which knows nothing about who exists, can say
- * "that isn't an email address".
+ * So the form does not report server errors either: it acknowledges. Only
+ * client-side validation, which knows nothing about who exists, says anything
+ * specific — and the browser does that.
+ *
+ * Styling is the landing's, not the app's: this page sits inside `.opt-v2`, so
+ * it inherits that palette and typography rather than arriving in the
+ * authenticated theme.
  */
 const PLATFORMS = [
   { value: "shopify", label: "Shopify" },
@@ -38,27 +42,23 @@ export function RequestInviteForm() {
 
   if (done) {
     return (
-      <div className="w-full max-w-md" data-testid="request-invite-done">
-        <p className="text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
-          Request received
-        </p>
-        <h1 className="mt-3 font-serif text-[26px] leading-tight text-foreground">
-          Thanks—we&rsquo;re opening Joon with a small number of design partners.
+      <div data-testid="request-invite-done">
+        <p className="request-invite__eyebrow">Request received</p>
+        <h1 className="request-invite__title">
+          Thanks—we&rsquo;re opening joon with a small number of design partners.
           We&rsquo;ll review your request and be in touch.
         </h1>
-        <Link
-          href="/"
-          className="mt-8 inline-block rounded-lg border border-border px-4 py-2 text-xs font-sans text-foreground transition-colors hover:border-foreground"
-        >
-          Back to joon
-        </Link>
+        <div className="request-invite__actions">
+          <Link className="v2-btn v2-btn--ghost" href="/">
+            Back to joon
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <form
-      className="w-full max-w-md"
       data-testid="request-invite-form"
       onSubmit={(event) => {
         event.preventDefault();
@@ -76,46 +76,37 @@ export function RequestInviteForm() {
         });
       }}
     >
-      <p className="text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
-        Closed beta
-      </p>
-      <h1 className="mt-3 font-serif text-[26px] leading-tight text-foreground">
-        Request an invite
-      </h1>
-      <p className="mt-3 text-[14px] leading-6 text-muted-foreground">
-        Joon is opening with a small number of design partners. Tell us a little
-        about your brand and we will get back to you.
+      <p className="request-invite__eyebrow">Closed beta</p>
+      <h1 className="request-invite__title">Request an invite</h1>
+      <p className="request-invite__lead">
+        joon is opening with a small number of design partners. Tell us a little
+        about your brand and we&rsquo;ll be in touch.
       </p>
 
-      <div className="mt-8 space-y-4">
-        <Field label="Name" name="name" required autoComplete="name" />
-        <Field label="Work email" name="email" type="email" required autoComplete="email" />
-        <Field label="Company" name="company" required autoComplete="organization" />
-        <Field
-          label="Website or store URL"
-          name="website"
-          optional
-          placeholder="brand.myshopify.com"
-        />
+      <div className="request-invite__fields">
+        <div className="request-invite__row">
+          <Field label="Name" name="name" required autoComplete="name" />
+          <Field label="Work email" name="email" type="email" required autoComplete="email" />
+        </div>
+        <div className="request-invite__row">
+          <Field label="Company" name="company" required autoComplete="organization" />
+          <Field label="Website or store" name="website" optional placeholder="brand.myshopify.com" />
+        </div>
+        <div className="request-invite__row">
+          <Select label="Where you sell" name="platform" options={PLATFORMS} />
+          <Select label="Customers, roughly" name="customerRange" options={RANGES} />
+        </div>
 
-        <Select label="Where do you sell?" name="platform" options={PLATFORMS} />
-        <Select label="Roughly how many customers?" name="customerRange" options={RANGES} />
-
-        <label className="block">
-          <span className="text-[12px] text-muted-foreground">
-            Anything you want us to know <span className="opacity-60">(optional)</span>
+        <label>
+          <span className="request-invite__label">
+            Anything we should know <span className="request-invite__optional">(optional)</span>
           </span>
-          <textarea
-            name="note"
-            rows={3}
-            maxLength={2000}
-            className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-[13px] text-foreground outline-none focus:border-foreground"
-          />
+          <textarea name="note" rows={3} maxLength={2000} className="request-invite__control" />
         </label>
 
-        {/* Honeypot. Hidden from people and from screen readers; something that
-            fills every input gives itself away. */}
-        <div aria-hidden="true" className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+        {/* Honeypot: hidden from people and from screen readers. Something
+            filling every input gives itself away. */}
+        <div aria-hidden="true" className="request-invite__trap">
           <label>
             Confirm your website
             <input name="companyWebsiteConfirm" tabIndex={-1} autoComplete="off" />
@@ -123,21 +114,19 @@ export function RequestInviteForm() {
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={submit.isPending}
-        data-testid="request-invite-submit"
-        className="mt-8 rounded-lg bg-secondary px-4 py-2 text-xs font-sans text-secondary-foreground transition-colors hover:bg-secondary/90 disabled:opacity-50"
-      >
-        {submit.isPending ? "Sending…" : "Request an invite"}
-      </button>
+      <div className="request-invite__actions">
+        <button
+          type="submit"
+          disabled={submit.isPending}
+          data-testid="request-invite-submit"
+          className="v2-btn v2-btn--primary v2-btn--lg"
+        >
+          {submit.isPending ? "Sending…" : "Request an invite"}
+        </button>
+      </div>
 
-      <p className="mt-6 text-[12px] leading-5 text-muted-foreground">
-        Already have access?{" "}
-        <Link href="/sign-in" className="underline underline-offset-2">
-          Sign in
-        </Link>
-        .
+      <p className="request-invite__note">
+        Already have access? <Link href="/sign-in">Sign in</Link>.
       </p>
     </form>
   );
@@ -153,10 +142,10 @@ function Field(props: {
   autoComplete?: string;
 }) {
   return (
-    <label className="block">
-      <span className="text-[12px] text-muted-foreground">
+    <label>
+      <span className="request-invite__label">
         {props.label}
-        {props.optional && <span className="opacity-60"> (optional)</span>}
+        {props.optional && <span className="request-invite__optional"> (optional)</span>}
       </span>
       <input
         name={props.name}
@@ -164,7 +153,7 @@ function Field(props: {
         required={props.required}
         placeholder={props.placeholder}
         autoComplete={props.autoComplete}
-        className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-[13px] text-foreground outline-none focus:border-foreground"
+        className="request-invite__control"
       />
     </label>
   );
@@ -176,13 +165,13 @@ function Select(props: {
   options: ReadonlyArray<{ value: string; label: string }>;
 }) {
   return (
-    <label className="block">
-      <span className="text-[12px] text-muted-foreground">{props.label}</span>
+    <label>
+      <span className="request-invite__label">{props.label}</span>
       <select
         name={props.name}
         required
         defaultValue={props.options[0]!.value}
-        className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-[13px] text-foreground outline-none focus:border-foreground"
+        className="request-invite__control"
       >
         {props.options.map((option) => (
           <option key={option.value} value={option.value}>

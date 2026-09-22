@@ -9,10 +9,12 @@ import { ClosedBetaGate } from "@/components/layout/ClosedBetaGate";
 import { Footer } from "@/components/layout/Footer";
 import { CommandPaletteProvider, CommandPalette } from "@/components/ui/CommandPalette";
 import { ShopifyBootstrapBoundary } from "@/components/shopify/ShopifyBootstrapBoundary";
+import { RequireSession } from "@/components/layout/RequireSession";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <ShopifyBootstrapBoundary>
+    <RequireSession>
     <CommandPaletteProvider>
     <MobileSidebarProvider>
       <div className="app-shell flex h-screen canvas-noise relative">
@@ -45,6 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     </MobileSidebarProvider>
     </CommandPaletteProvider>
+    </RequireSession>
     </ShopifyBootstrapBoundary>
   );
 }

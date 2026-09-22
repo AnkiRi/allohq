@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser, useClerk } from "@clerk/nextjs";
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleGauge, Database, FileText, Inbox, ListChecks, LogOut, Mail, MessageSquare, Settings, Sparkles, Users, Workflow } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleGauge, Database, FileText, Inbox, ListChecks, LogOut, Mail, MessageSquare, Settings, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { cn } from "@allohq/ui";
 import { useMobileSidebar } from "./MobileSidebarContext";
 import { trpc } from "@/lib/trpc";
@@ -42,6 +42,16 @@ export function Sidebar() {
   const { openPanel: askJoon } = useAlloAI();
   const { isOpen, close, collapsed, toggleCollapsed } = useMobileSidebar();
   const { data: stores } = trpc.stores.list.useQuery(undefined, { refetchOnWindowFocus: false });
+  // Platform admins operate the closed beta rather than a tenant, so the entry
+  // point to it belongs here and nowhere else. Server-resolved: the console and
+  // every query behind it answer NOT_FOUND to anyone else, so hiding the link
+  // is presentation, not the control.
+  const { data: access } = trpc.invitations.accessState.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const isPlatformAdmin = Boolean(access?.isPlatformAdmin);
   const store = stores?.[0];
   const onboardingDone = !!store?.onboardingCompletedAt;
   const { data: activationData } = (trpc.stores.activationStatus as any).useQuery({ storeId: store?.id ?? "" }, { enabled: !!store?.id && onboardingDone, refetchInterval: 30000 }) as { data: any | undefined };
@@ -88,7 +98,7 @@ export function Sidebar() {
           {collapsed ? <CheckCircle2 className="mx-auto h-4 w-4" /> : <><div className="flex items-center justify-between text-[13px]"><span>Setup status</span><span>{setupComplete} of {setupTotal}</span></div><div className="mt-2 h-1 overflow-hidden rounded-full bg-white/15"><span className="block h-full bg-[var(--attention-on-dark)]" style={{ width: `${Math.min(100, (setupComplete / Math.max(1, setupTotal)) * 100)}%` }} /></div></>}
         </Link>
       </nav>
-      <div className="space-y-0.5 border-t border-white/10 p-3">{navItem({ name: "Settings", href: "/settings", icon: Settings })}<button onClick={askJoon} className={cn("flex min-h-10 w-full items-center rounded-[9px] text-[14px] text-white/78 hover:bg-white/[0.07] hover:text-white", collapsed ? "justify-center px-2" : "gap-3 px-3")}><MessageSquare className="h-4 w-4" />{!collapsed && <span>Ask Joon</span>}</button></div>
+      <div className="space-y-0.5 border-t border-white/10 p-3">{isPlatformAdmin && navItem({ name: "Access requests", href: "/admin/access-requests", icon: ShieldCheck })}{navItem({ name: "Settings", href: "/settings", icon: Settings })}<button onClick={askJoon} className={cn("flex min-h-10 w-full items-center rounded-[9px] text-[14px] text-white/78 hover:bg-white/[0.07] hover:text-white", collapsed ? "justify-center px-2" : "gap-3 px-3")}><MessageSquare className="h-4 w-4" />{!collapsed && <span>Ask Joon</span>}</button></div>
       <div className="border-t border-white/10 p-3"><div className={cn("flex items-center", collapsed ? "flex-col gap-1" : "gap-2 px-1")}>
         {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-8 w-8 rounded-full object-cover" /> : <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-[11px] text-white">{initials}</div>}
         {!collapsed && <div className="min-w-0 flex-1"><p className="truncate text-[12px] text-white">{user?.fullName || "Your workspace"}</p><p className="truncate text-[10px] text-white/45">{store?.shopDomain || user?.emailAddresses[0]?.emailAddress}</p></div>}
