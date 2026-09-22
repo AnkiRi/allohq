@@ -1,28 +1,44 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
 import { TRPCProvider } from "@/lib/trpc-provider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ThemeProvider, ThemeScript } from "@/components/theme/ThemeProvider";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+/**
+ * Fonts are served from this origin, not fetched from Google.
+ *
+ * `next/font/google` fetches at build time, and when Google was unreachable
+ * from the builder the deploy failed inside Next's font loader with
+ * `TypeError: Cannot read properties of null (reading '1')` — a null pointer
+ * rather than anything about fonts. A deploy should not depend on a third party
+ * answering.
+ *
+ * One variable file per family covers every weight: Google serves the same
+ * variable font for each one, so asking for four weights was four copies of the
+ * same file. `weight` is therefore a range, not a list.
+ *
+ * All three are SIL Open Font License 1.1. The licence and copyright notice
+ * travel with the files in `public/fonts`, which is what the licence asks.
+ */
+const inter = localFont({
+  src: "../../public/fonts/inter-variable.woff2",
+  weight: "100 900",
   variable: "--font-inter",
   display: "swap",
 });
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const spaceGrotesk = localFont({
+  src: "../../public/fonts/space-grotesk-variable.woff2",
+  weight: "300 700",
   variable: "--font-space-grotesk",
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const jetbrainsMono = localFont({
+  src: "../../public/fonts/jetbrains-mono-variable.woff2",
+  weight: "100 800",
   variable: "--font-jetbrains",
   display: "swap",
 });

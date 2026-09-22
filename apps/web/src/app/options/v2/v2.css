@@ -16,6 +16,40 @@
 
 /* ── palette tokens (the switcher's whole job) ───────────────────────────── */
 /* DRENCHED, impeccable-drenched cobalt surface + warm-gold accent (default). */
+/* ── FONTS ────────────────────────────────────────────────────────────────
+   Served from this origin. The landing used to <link> to fonts.googleapis.com,
+   which put a request to Google in front of every visitor before the page could
+   paint — a third-party call on a marketing page, a round trip before first
+   text, and a data-protection question nobody needs to answer.
+
+   One variable file per family: Google serves the same variable font for every
+   weight, so asking for seven weights was seven copies of one file. The weight
+   range here is what makes that single file cover them all.
+
+   SIL Open Font License 1.1; the notices sit beside the files in
+   public/fonts. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("/fonts/hanken-grotesk-variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("/fonts/hanken-grotesk-variable-italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 .opt-v2[data-pal="drenched"] {
   --bg: oklch(0.3 0.16 266);
   --surface: oklch(0.345 0.155 266);
