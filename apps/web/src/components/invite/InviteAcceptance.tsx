@@ -2,14 +2,18 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { SignedIn, SignedOut, SignInButton, SignOutButton, SignUpButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, SignInButton, SignOutButton } from "@clerk/nextjs";
 import { trpc } from "@/lib/trpc";
 
 /**
  * Redeem an invitation.
  *
- * Signed out, this offers sign-in and sign-up and nothing else — the token is
- * not sent anywhere until there is an identity to match it against.
+ * Signed out, this offers one action. Two — "sign in" and "create an account" —
+ * made the person choose a path before they could know which applied, and an
+ * invited person may well already have an account from another workspace.
+ * Clerk's own flow already decides that from the address they type, so the
+ * page stops asking. The token is not sent anywhere until there is an identity
+ * to match it against.
  *
  * Signed in, the server is asked what this invitation means for *this* account
  * before anything is offered. The earlier version said "you have been invited"
@@ -46,29 +50,31 @@ export function InviteAcceptance({ token }: { token: string }) {
           You have been invited to Joon.
         </h1>
         <p className="mt-4 text-[14px] leading-6 text-muted-foreground">
-          Use the address this invitation was sent to. If you already have a
-          Joon account, sign in; if not, create one with that address.
+          Use the email address that received this invitation. It works whether
+          or not you already have a Joon account.
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="mt-8">
+          {/* One action, not two competing ones.
+              "Sign in" and "Create an account" side by side made the person
+              choose a path before they could know which applied — and an
+              invited person may already have an account from another
+              workspace. Clerk's own flow decides: an address it knows goes to
+              sign-in, one it does not goes to sign-up. Both return here, token
+              intact, so the invitation is still waiting. */}
           <SignInButton mode="modal" forceRedirectUrl={here} signUpForceRedirectUrl={here}>
             <button
               type="button"
               className="rounded-lg bg-secondary px-4 py-2 text-xs font-sans text-secondary-foreground transition-colors hover:bg-secondary/90"
-              data-testid="invite-sign-in"
+              data-testid="invite-continue"
             >
-              Sign in
+              Continue with the invited email
             </button>
           </SignInButton>
-          <SignUpButton mode="modal" forceRedirectUrl={here} signInForceRedirectUrl={here}>
-            <button
-              type="button"
-              className="rounded-lg border border-border px-4 py-2 text-xs font-sans text-foreground transition-colors hover:border-foreground"
-              data-testid="invite-sign-up"
-            >
-              Create an account
-            </button>
-          </SignUpButton>
         </div>
+        <p className="mt-5 text-[12px] leading-5 text-muted-foreground">
+          This invitation lets the person it was sent to join a workspace. It
+          does not create an account on its own.
+        </p>
       </SignedOut>
 
       <SignedIn>

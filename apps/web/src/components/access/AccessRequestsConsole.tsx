@@ -6,21 +6,63 @@ import { trpc } from "@/lib/trpc";
 /**
  * Read requests, decide, and issue an invitation in one act.
  *
+ * Every button comes from `allowedActions` on the server. The console does not
+ * work out what is possible — it renders what it was told, so the screen and
+ * the rules cannot drift apart. Before this, every action stayed available
+ * after every decision: a request could be declined twice, or marked reviewed
+ * again, with no finality and no feedback. Disabling buttons would not have
+ * fixed it, because the server accepted the repeat either way.
+ *
  * The invitation link appears exactly once, when it is created. Nothing stores
  * it and no later query can return it, so it is copied here or reissued.
  */
 const ROLES = ["owner", "admin", "member", "viewer"] as const;
 
-/**
- * Status colours, from the app's own semantic tokens rather than a new palette.
- * `attention` is something waiting on you, `evidence` is something you have
- * looked at, `success` is someone let in, `risk` is someone turned away.
- */
 const STATUS_STYLE: Record<string, { label: string; color: string; background: string }> = {
   pending: { label: "Waiting on you", color: "var(--attention)", background: "var(--attention-soft)" },
   reviewed: { label: "Reviewed", color: "var(--evidence)", background: "var(--evidence-soft)" },
   invited: { label: "Invited", color: "var(--success-color)", background: "var(--success-soft)" },
   declined: { label: "Declined", color: "var(--risk)", background: "var(--risk-soft)" },
+};
+
+const ACTION_LABEL: Record<string, string> = {
+  mark_reviewed: "Mark reviewed",
+  approve: "Approve & create invite",
+  decline: "Decline",
+  reopen: "Reopen request",
+  revoke_invitation: "Revoke invitation",
+};
+
+type Decision = {
+  id: string;
+  action: string;
+  fromStatus: string;
+  toStatus: string;
+  actorClerkId: string;
+  reason: string | null;
+  createdAt: string | Date;
+};
+
+type RequestRow = {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+  website: string | null;
+  platform: string;
+  customerRange: string;
+  note: string | null;
+  status: string;
+  createdAt: string | Date;
+  existingAccount?: boolean;
+  existingWorkspaceCount?: number;
+  invitationState?: string;
+  invitationRole?: string | null;
+  invitationWorkspaceName?: string | null;
+  invitationExpiresAt?: string | Date | null;
+  allowedActions?: string[];
+  summary?: string;
+  decisions?: Decision[];
 };
 
 export function AccessRequestsConsole() {
@@ -30,28 +72,47 @@ export function AccessRequestsConsole() {
   const [issued, setIssued] = React.useState<
     { id: string; email: string; workspaceName: string; token: string } | null
   >(null);
+  const [problem, setProblem] = React.useState<string | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
 
-  const setStatus = trpc.accessRequests.setStatus.useMutation({
-    onSuccess: () => utils.accessRequests.list.invalidate(),
+  // Every mutation refetches before it lets go, so the row a decision lands on
+  // is the row the next click sees.
+  const settle = async () => {
+    await utils.accessRequests.list.invalidate();
+    setBusyId(null);
+  };
+
+  const decide = trpc.accessRequests.decide.useMutation({
+    onMutate: (input) => {
+      setProblem(null);
+      setBusyId(input.id);
+    },
+    onError: (error) => setProblem(error.message),
+    onSettled: settle,
   });
+
   const approve = trpc.accessRequests.approveAndInvite.useMutation({
-    onSuccess: (result) => {
+    onMutate: (input) => {
+      setProblem(null);
+      setBusyId(input.id);
+    },
+    onSuccess: (result) =>
       setIssued({
         id: result.invitationId,
         email: result.email,
         workspaceName: result.workspaceName,
         token: result.token,
-      });
-      void utils.accessRequests.list.invalidate();
-    },
+      }),
+    onError: (error) => setProblem(error.message),
+    onSettled: settle,
   });
 
+  const rows = (requests.data ?? []) as RequestRow[];
   const counts = React.useMemo(() => {
-    if (!requests.data) return null;
     const tally: Record<string, number> = {};
-    for (const request of requests.data) tally[request.status] = (tally[request.status] ?? 0) + 1;
+    for (const row of rows) tally[row.status] = (tally[row.status] ?? 0) + 1;
     return tally;
-  }, [requests.data]);
+  }, [rows]);
 
   if (access.isLoading) return null;
   if (!access.data?.isPlatformAdmin) {
@@ -76,29 +137,32 @@ export function AccessRequestsConsole() {
           on yourself — Joon does not email it while sender domains are still
           being set up.
         </p>
-        {counts && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(["pending", "reviewed", "invited", "declined"] as const).map((status) => (
-              <span
-                key={status}
-                className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-                style={{
-                  color: STATUS_STYLE[status]!.color,
-                  background: STATUS_STYLE[status]!.background,
-                }}
-              >
-                {counts[status] ?? 0} {STATUS_STYLE[status]!.label.toLowerCase()}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["pending", "reviewed", "invited", "declined"] as const).map((status) => (
+            <span
+              key={status}
+              className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+              style={{ color: STATUS_STYLE[status]!.color, background: STATUS_STYLE[status]!.background }}
+            >
+              {counts[status] ?? 0} {STATUS_STYLE[status]!.label.toLowerCase()}
+            </span>
+          ))}
+        </div>
       </header>
 
-      {issued && (
+      {problem && (
         <div
-          className="mt-6 rounded-xl border border-border p-4"
-          data-testid="issued-invitation"
+          className="mt-5 rounded-xl px-4 py-3 text-[13px]"
+          style={{ color: "var(--risk)", background: "var(--risk-soft)" }}
+          role="alert"
+          data-testid="decision-error"
         >
+          {problem}
+        </div>
+      )}
+
+      {issued && (
+        <div className="mt-6 rounded-xl border border-border p-4" data-testid="issued-invitation">
           <p className="text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
             Invitation created
           </p>
@@ -112,9 +176,7 @@ export function AccessRequestsConsole() {
           <button
             type="button"
             onClick={() => {
-              void navigator.clipboard?.writeText(
-                `${window.location.origin}/invite/${issued.token}`
-              );
+              void navigator.clipboard?.writeText(`${window.location.origin}/invite/${issued.token}`);
             }}
             className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:border-foreground"
             data-testid="copy-invitation-link"
@@ -125,15 +187,15 @@ export function AccessRequestsConsole() {
       )}
 
       <div className="mt-8 space-y-3">
-        {(requests.data ?? []).length === 0 && (
+        {rows.length === 0 && (
           <p className="text-[13px] text-muted-foreground">No requests yet.</p>
         )}
-        {(requests.data ?? []).map((request) => (
-          <RequestRow
+        {rows.map((request) => (
+          <RequestCard
             key={request.id}
             request={request}
-            busy={approve.isPending || setStatus.isPending}
-            onStatus={(status) => setStatus.mutate({ id: request.id, status })}
+            busy={busyId === request.id}
+            onDecide={(action, reason) => decide.mutate({ id: request.id, action, reason })}
             onApprove={(options) => approve.mutate({ id: request.id, ...options })}
           />
         ))}
@@ -142,28 +204,18 @@ export function AccessRequestsConsole() {
   );
 }
 
-function RequestRow({
+function RequestCard({
   request,
   busy,
-  onStatus,
+  onDecide,
   onApprove,
 }: {
-  request: {
-    id: string;
-    email: string;
-    name: string;
-    company: string;
-    website: string | null;
-    platform: string;
-    customerRange: string;
-    note: string | null;
-    status: string;
-    createdAt: string | Date;
-    existingAccount?: boolean;
-    existingWorkspaceCount?: number;
-  };
+  request: RequestRow;
   busy: boolean;
-  onStatus: (status: "pending" | "reviewed" | "declined") => void;
+  onDecide: (
+    action: "mark_reviewed" | "decline" | "reopen" | "revoke_invitation",
+    reason?: string
+  ) => void;
   onApprove: (options: {
     role: (typeof ROLES)[number];
     workspaceId?: string;
@@ -174,6 +226,10 @@ function RequestRow({
   const [role, setRole] = React.useState<(typeof ROLES)[number]>("owner");
   const [workspaceName, setWorkspaceName] = React.useState(request.company);
   const [existingWorkspaceId, setExistingWorkspaceId] = React.useState("");
+
+  const allowed = request.allowedActions ?? [];
+  const style = STATUS_STYLE[request.status];
+  const trail = request.decisions ?? [];
 
   return (
     <div className="rounded-xl border border-border p-4" data-testid="access-request-row">
@@ -189,7 +245,7 @@ function RequestRow({
             <span
               className="rounded-full px-2 py-0.5 text-[11px]"
               style={{ color: "var(--attention)", background: "var(--attention-soft)" }}
-              title={`This address already has a Joon account in ${request.existingWorkspaceCount} workspace(s). Inviting it is not wrong — it will be added to another workspace — but it is worth knowing first.`}
+              title={`This address already has a Joon account in ${request.existingWorkspaceCount} workspace(s).`}
               data-testid="existing-account-flag"
             >
               Has an account
@@ -198,12 +254,12 @@ function RequestRow({
           <span
             className="rounded-full px-2 py-0.5 text-[11px] font-medium"
             style={{
-              color: STATUS_STYLE[request.status]?.color ?? "var(--muted-foreground)",
-              background: STATUS_STYLE[request.status]?.background ?? "transparent",
+              color: style?.color ?? "var(--muted-foreground)",
+              background: style?.background ?? "transparent",
             }}
             data-testid="request-status"
           >
-            {STATUS_STYLE[request.status]?.label ?? request.status}
+            {style?.label ?? request.status}
           </span>
         </div>
       </div>
@@ -214,37 +270,75 @@ function RequestRow({
       </p>
       {request.note && <p className="mt-2 text-[13px] text-foreground">{request.note}</p>}
 
-      {request.status !== "invited" && (
+      {/* What state this is in, in the server's words, so the explanation and
+          the buttons can never disagree. */}
+      {request.summary && (
+        <p className="mt-3 text-[13px] text-foreground" data-testid="request-summary">
+          {request.summary}
+          {request.invitationWorkspaceName && request.invitationState === "live" && (
+            <span className="text-muted-foreground">
+              {" "}
+              {request.invitationRole} of {request.invitationWorkspaceName}
+              {request.invitationExpiresAt
+                ? `, expires ${new Date(request.invitationExpiresAt).toLocaleDateString("en-IN")}`
+                : ""}
+              .
+            </span>
+          )}
+        </p>
+      )}
+
+      {trail.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[12px] text-muted-foreground hover:text-foreground">
+            {trail.length} decision{trail.length === 1 ? "" : "s"}
+          </summary>
+          <ol className="mt-2 space-y-1 border-l border-border pl-3" data-testid="decision-trail">
+            {trail.map((decision) => (
+              <li key={decision.id} className="text-[12px] text-muted-foreground">
+                <span className="text-foreground">{ACTION_LABEL[decision.action] ?? decision.action}</span>
+                {" · "}
+                {new Date(decision.createdAt).toLocaleString("en-IN")}
+                {decision.reason ? ` · ${decision.reason}` : ""}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+
+      {allowed.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onStatus("reviewed")}
-            className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:border-foreground disabled:opacity-50"
-          >
-            Mark reviewed
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onStatus("declined")}
-            className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:border-foreground disabled:opacity-50"
-          >
-            Decline
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setOpen((value) => !value)}
-            className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-secondary/90 disabled:opacity-50"
-            data-testid="approve-and-create-invite"
-          >
-            Approve &amp; create invite
-          </button>
+          {allowed
+            .filter((action) => action !== "approve")
+            .map((action) => (
+              <button
+                key={action}
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  onDecide(action as "mark_reviewed" | "decline" | "reopen" | "revoke_invitation")
+                }
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:border-foreground disabled:opacity-50"
+                data-testid={`action-${action}`}
+              >
+                {busy ? "Working…" : ACTION_LABEL[action] ?? action}
+              </button>
+            ))}
+          {allowed.includes("approve") && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setOpen((value) => !value)}
+              className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-secondary/90 disabled:opacity-50"
+              data-testid="approve-and-create-invite"
+            >
+              {ACTION_LABEL.approve}
+            </button>
+          )}
         </div>
       )}
 
-      {open && request.status !== "invited" && (
+      {open && allowed.includes("approve") && (
         <div className="mt-4 space-y-3 border-t border-border pt-4">
           <label className="block">
             <span className="text-[12px] text-muted-foreground">Role</span>
@@ -287,17 +381,18 @@ function RequestRow({
           <button
             type="button"
             disabled={busy}
-            onClick={() =>
+            onClick={() => {
+              setOpen(false);
               onApprove(
                 existingWorkspaceId.trim()
                   ? { role, workspaceId: existingWorkspaceId.trim() }
                   : { role, newWorkspaceName: workspaceName.trim() }
-              )
-            }
+              );
+            }}
             className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-secondary/90 disabled:opacity-50"
             data-testid="confirm-create-invite"
           >
-            Create invitation
+            {busy ? "Creating…" : "Create invitation"}
           </button>
         </div>
       )}
