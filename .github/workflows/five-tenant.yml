@@ -74,7 +74,6 @@ jobs:
       FIVE_TENANT_PROOF_SIZE: ${{ github.event.inputs.size || '100000' }}
       # The proof measures retained heap and fails without a collector.
       NODE_OPTIONS: "--expose-gc"
-      PG_CONTAINER: ${{ job.services.postgres.id }}
 
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +114,9 @@ jobs:
         run: pnpm --filter @allohq/database exec prisma migrate deploy
 
       - name: Start resource sampler
+        env:
+          # Step-level: GitHub does not allow the `job` context in job-level env.
+          PG_CONTAINER: ${{ job.services.postgres.id }}
         # Every 15 s, for the whole run: runner memory and swap, free disk,
         # the Postgres container's memory, all Node processes' resident memory,
         # load average and database size. Node heap alone says nothing about
@@ -155,6 +157,8 @@ jobs:
           exit "$code"
 
       - name: Resource record and verdict
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
         # Runs whatever happened above. A run killed for memory, disk or time is
         # reported as resource-limited and inconclusive — never as a pass and
         # never as a product failure.
