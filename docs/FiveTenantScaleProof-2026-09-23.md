@@ -178,21 +178,42 @@ NODE_OPTIONS=--expose-gc FIVE_TENANT_SIZE=8000 FIVE_TENANT_LATE_SIZE=2000 \
 This proves the harness and every assertion in it. It proves **nothing** about a million
 customers per tenant, and no figure from it may be presented as the readiness result.
 
-## Finding: write conflicts under concurrent finalisation
+## Blocker: approval finalisation has no retry at SERIALIZABLE isolation
 
-During development, with five tenants finalising concurrently, Postgres reported:
+With five tenants finalising concurrently, tenants fail outright and dispatch nothing:
 
 ```
-Invalid `prisma.campaign.updateMany()` invocation:
-Transaction failed due to a write conflict or a deadlock. Please retry your transaction
+status threw: Transaction failed due to a write conflict or a deadlock.
+Please retry your transaction
 ```
 
-raised from the approval-finalisation transaction in
-`packages/campaign-engine/src/approval-finalize.ts`, which wraps `ensureEmailVersion`,
-`campaign.updateMany` and `emailApproval.upsert` together.
+The cause is established, not guessed:
 
-It was **transient**: the same rehearsal passed on a later run with all six tenants
-`approved`. It is recorded here rather than dismissed, because a conflict that resolves at
-8,000 customers may not resolve at 1,000,000, and because the tenants involved share no rows
-— they have different campaigns, templates and stores. Whether this is retry-covered under
-the real workload is an open question this proof will answer.
+- `packages/campaign-engine/src/approval-finalize.ts:241` runs the approval-finalisation
+  transaction with `{ isolationLevel: "Serializable", timeout: 15_000 }`.
+- `pg_stat_database` showed **`deadlocks=0`, `xact_rollback=22`** — these are serialization
+  failures (SQLSTATE 40001) under SSI, not deadlocks. Postgres SSI can abort transactions
+  that touch **no common rows**, which is why tenants with different campaigns, templates and
+  stores conflict at all.
+- Prisma maps 40001 to P2034, whose own message is *"Please retry your transaction"*.
+  **There is no retry.** A failed approval is permanent, and the merchant's campaign never
+  completes.
+- The **aborting statement varies** between runs — `campaign.updateMany` in one,
+  `emailVersion.create` (`email-versions.ts:50`) in another. Both sit inside that same
+  transaction, which is exactly how SSI behaves: any statement can be the one rolled back.
+  A fix must therefore wrap the transaction, not a statement.
+
+Single-tenant proofs could never surface this, because nothing else was running.
+
+**Observed rate on this machine: 2 failures in 8 runs.**
+
+| Workload | Runs | Result |
+|---|---|---|
+| 5 x 6,000 | 2 | PASS, PASS |
+| 5 x 8,000 | 3 | PASS, PASS, **FAIL** (3 of 5 tenants threw) |
+| 5 x 15,000 | 3 | PASS, **FAIL**, PASS |
+
+It is load- and timing-dependent, so a million per tenant — where the transaction window is
+far longer — is more exposed, not less.
+
+The harness fails on this rather than tolerating it, which is the proof doing its job.
