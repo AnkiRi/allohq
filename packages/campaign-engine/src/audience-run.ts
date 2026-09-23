@@ -796,6 +796,30 @@ export async function materialiseAudienceEvaluation(input: {
   exclusions: Record<string, number>;
   retainEvaluations?: number;
 }): Promise<{ evaluationId: string; rows: number }> {
+  // One evaluation per audience run. Row ids are derived from the run's member
+  // ids ('ev_' || member id), so a second evaluation of the SAME run can never
+  // write its rows: the primary keys already exist, and the ON CONFLICT below
+  // guards (evaluationId, customerId), not the primary key. Approval
+  // finalisation therefore succeeded once per run and threw 23505 on every
+  // re-run — which meant the job queue's retry of a failed approval could
+  // never recover it. When this run has already been evaluated, return that.
+  //
+  // One member is probed rather than the whole run: the insert below is a
+  // single statement, so a run's rows exist all together or not at all.
+  const already = await prisma.$queryRaw<Array<{ evaluationId: string }>>`
+    SELECT r."evaluationId"
+    FROM "campaign_audience_members" m
+    JOIN "campaign_audience_evaluation_rows" r ON r."id" = 'ev_' || m."id"
+    WHERE m."runId" = ${input.runId}
+    LIMIT 1`;
+  if (already[0]) {
+    const evaluationId = already[0].evaluationId;
+    return {
+      evaluationId,
+      rows: await prisma.campaignAudienceEvaluationRow.count({ where: { evaluationId } }),
+    };
+  }
+
   const evaluation = await prisma.campaignAudienceEvaluation.create({
     data: {
       campaignId: input.campaignId,
