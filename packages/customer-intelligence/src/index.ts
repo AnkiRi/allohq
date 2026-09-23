@@ -141,6 +141,7 @@ export {
   TEXT_WORKLOADS,
   VISUAL_WORKLOADS,
   WORKLOAD_CAPABILITY,
+  WORKLOAD_COPY,
   availableModels,
   isModelAvailable,
   modelById,
@@ -167,6 +168,16 @@ export {
   type VisualAdapterRequest,
   type VisualAdapterResult,
 } from "./images/adapters";
+
+export {
+  DEFAULT_TEXT_ROUTE,
+  describeHarnessV2,
+  eligibleModels,
+  normalizeModelHarnessV2,
+  routeForWorkload,
+  type HarnessRouteV2,
+  type ModelHarnessV2,
+} from "./ai/harness-v2";
 
 export {
   describeMigration,

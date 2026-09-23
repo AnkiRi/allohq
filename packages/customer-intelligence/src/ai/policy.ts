@@ -13,7 +13,8 @@ export type AIModelId =
   | "claude-sonnet-5"
   | "claude-sonnet-4-6"
   | "claude-haiku-4-5-20251001"
-  | "gpt-4o-mini";
+  | "gpt-4o-mini"
+  | "gemini-2.5-flash";
 
 export type ModelTier = "premium" | "standard" | "economy";
 
@@ -80,6 +81,19 @@ export const AI_MODELS: AIModel[] = [
     outputCostPerMillion: 0.6,
     tier: "economy",
   },
+  // Selectable, never automatic. Gemini is absent from every TIER_MODELS chain
+  // below, so no task routes here unless a workspace chose it for that job.
+  // Listing it without an executable path would be false availability; putting
+  // it in the chains would change production routing nobody asked to change.
+  {
+    id: "gemini-2.5-flash",
+    provider: "google",
+    label: "Gemini 2.5 Flash",
+    description: "Fast and affordable — Google economy option",
+    inputCostPerMillion: 0.3,
+    outputCostPerMillion: 2.5,
+    tier: "economy",
+  },
 ];
 
 export const DEFAULT_MODEL: AIModelId = "claude-sonnet-5";
@@ -127,6 +141,7 @@ export const FALLBACK_CHAIN: Record<AIModelId, AIModelId[]> = {
   "claude-sonnet-4-6": ["gpt-4o-mini", "claude-haiku-4-5-20251001"],
   "claude-haiku-4-5-20251001": ["gpt-4o-mini", "claude-sonnet-4-6"],
   "gpt-4o-mini": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+  "gemini-2.5-flash": ["claude-sonnet-4-6", "gpt-4o-mini"],
 };
 
 export function getModel(id: AIModelId): AIModel | undefined {

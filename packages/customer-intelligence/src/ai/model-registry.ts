@@ -1,6 +1,7 @@
 import { geminiImageAdapter } from "../images/adapters/gemini-image";
 import { openAiImageAdapter } from "../images/adapters/openai-image";
 import type { VisualAdapter } from "../images/adapters/types";
+import { AI_MODELS, type ModelTier as PolicyTier } from "./policy";
 import { getProvider, type AIProvider } from "./providers";
 
 /**
@@ -75,6 +76,54 @@ export type ModelEntry = {
   note?: string;
 };
 
+const CREDENTIAL_ENV: Record<AIProvider, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  google: "GOOGLE_API_KEY",
+};
+
+/**
+ * Gemini text has never run in production here, so it stays behind a switch
+ * even once a key exists. Anthropic and OpenAI text is the path Joon has
+ * always used.
+ */
+const TEXT_ENABLE_ENV: Partial<Record<AIProvider, string>> = {
+  google: "JOON_GEMINI_TEXT_ENABLED",
+};
+
+const POLICY_COST: Record<PolicyTier, CostClass> = {
+  premium: "premium",
+  standard: "standard",
+  economy: "economy",
+};
+
+/**
+ * Text entries are DERIVED from the policy roster rather than written out
+ * again here.
+ *
+ * The first version of this file invented its own text ids — `claude-sonnet`,
+ * `gpt-text`, `gemini-text`. Nothing could execute them: the text path resolves
+ * `AIModelId` through `policy.ts`, so a workspace that routed a job to
+ * `gpt-text` would have chosen a model that could never be called. Same disease
+ * as a declared-only provider, different surface. One roster, one id space.
+ */
+const TEXT_MODELS: ModelEntry[] = AI_MODELS.map((model) => ({
+  id: model.id,
+  provider: model.provider,
+  // Policy ids are sent to the provider verbatim, so they are the API ids.
+  apiModelId: model.id,
+  label: model.label,
+  capabilities: ["text"],
+  inputModes: ["text"],
+  outputModes: ["text"],
+  costClass: POLICY_COST[model.tier],
+  tier: model.tier === "economy" ? "fast" : "recommended",
+  credentialEnvVar: CREDENTIAL_ENV[model.provider],
+  enableEnvVar: TEXT_ENABLE_ENV[model.provider] ?? null,
+  adapter: { kind: "text", provider: model.provider },
+  note: model.description,
+}));
+
 /**
  * Anthropic is absent from every image capability because the API returns no
  * images. Flux/Replicate was removed rather than left declared: its generation
@@ -82,49 +131,7 @@ export type ModelEntry = {
  * listing it would be exactly the false availability this file forbids.
  */
 export const MODEL_REGISTRY: readonly ModelEntry[] = [
-  // --- text ---------------------------------------------------------------
-  {
-    id: "claude-sonnet",
-    provider: "anthropic",
-    apiModelId: "claude-sonnet-4-6",
-    label: "Claude Sonnet",
-    capabilities: ["text"],
-    inputModes: ["text"],
-    outputModes: ["text"],
-    costClass: "standard",
-    tier: "recommended",
-    credentialEnvVar: "ANTHROPIC_API_KEY",
-    enableEnvVar: null,
-    adapter: { kind: "text", provider: "anthropic" },
-  },
-  {
-    id: "gpt-text",
-    provider: "openai",
-    apiModelId: "gpt-4o",
-    label: "GPT-4o",
-    capabilities: ["text"],
-    inputModes: ["text"],
-    outputModes: ["text"],
-    costClass: "standard",
-    tier: "recommended",
-    credentialEnvVar: "OPENAI_API_KEY",
-    enableEnvVar: null,
-    adapter: { kind: "text", provider: "openai" },
-  },
-  {
-    id: "gemini-text",
-    provider: "google",
-    apiModelId: "gemini-2.5-flash",
-    label: "Gemini Flash",
-    capabilities: ["text"],
-    inputModes: ["text"],
-    outputModes: ["text"],
-    costClass: "economy",
-    tier: "fast",
-    credentialEnvVar: "GOOGLE_API_KEY",
-    enableEnvVar: "JOON_GEMINI_TEXT_ENABLED",
-    adapter: { kind: "text", provider: "google" },
-  },
+  ...TEXT_MODELS,
 
   // --- images: OpenAI GPT Image 2.5 ---------------------------------------
   {
@@ -227,6 +234,27 @@ export const WORKLOAD_CAPABILITY: Record<HarnessWorkload, ModelCapability> = {
   /** The whole point: the real product must reach the model. */
   product_reference_edit: "image_reference_input",
   image_analysis: "image_analysis",
+};
+
+/**
+ * What each job is, in the words a merchant would use. Settings shows these
+ * instead of the internal workload id, so a choice is made on what the model
+ * will be doing rather than on a name from the codebase.
+ */
+export const WORKLOAD_COPY: Record<HarnessWorkload, { label: string; purpose: string }> = {
+  strategy: { label: "Campaign strategy", purpose: "Deciding who to reach, when, and with what offer." },
+  email_structure: { label: "Email structure", purpose: "Laying out an email — what sections it needs and in what order." },
+  short_copy: { label: "Subject lines and short copy", purpose: "Subject lines, preview text, buttons." },
+  long_content: { label: "Body copy", purpose: "The paragraphs a customer actually reads." },
+  brand_refinement: { label: "Brand voice", purpose: "Rewriting copy to sound like your brand rather than a template." },
+  analysis: { label: "Analysis", purpose: "Reading customer and campaign data and explaining what it means." },
+  classification: { label: "Sorting and labelling", purpose: "Mechanical work — tagging, parsing, extracting fields." },
+  evaluation: { label: "Quality checks", purpose: "Reviewing a draft before it reaches you for approval." },
+  merchant_agent_orchestration: { label: "Ask Joon", purpose: "The assistant you talk to, and the tools it runs on your behalf." },
+  campaign_art: { label: "Campaign imagery", purpose: "Hero banners and backgrounds that are not of a specific product." },
+  product_reference_edit: { label: "Your product in a scene", purpose: "Sends your real product photo to the model so the product stays itself." },
+  product_safe_composition: { label: "Product-safe layouts", purpose: "Backgrounds and framing built around a product without redrawing it." },
+  image_analysis: { label: "Reading an image", purpose: "Describing an image Joon has been given — never making one." },
 };
 
 function switchedOn(name: string | null): boolean {

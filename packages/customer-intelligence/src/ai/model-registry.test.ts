@@ -1,4 +1,5 @@
 import test from "node:test";
+import { getModel, TIER_MODELS } from "./policy";
 import assert from "node:assert/strict";
 import {
   MODEL_REGISTRY,
@@ -97,7 +98,7 @@ test("no model states a flat per-image price", () => {
 test("a credential alone enables nothing that has a switch", () => {
   withEnv({ GOOGLE_API_KEY: "k" }, () => {
     assert.equal(isModelAvailable(modelById("nano-banana-2")!), false);
-    assert.equal(isModelAvailable(modelById("gemini-text")!), false);
+    assert.equal(isModelAvailable(modelById("gemini-2.5-flash")!), false);
   });
 });
 
@@ -143,7 +144,7 @@ test("supplying a reference forces a reference-capable model", () => {
 
 test("a model that cannot do the job is refused, not substituted", () => {
   withEnv({ ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", JOON_OPENAI_IMAGE_ENABLED: "true" }, () => {
-    const decision = routeModel({ workload: "campaign_art", preferredModelId: "claude-sonnet" });
+    const decision = routeModel({ workload: "campaign_art", preferredModelId: "claude-sonnet-5" });
     assert.equal(decision.ok, false);
     assert.ok(!decision.ok);
     assert.match(decision.reason, /cannot do this job/);
@@ -204,4 +205,22 @@ test("visual workloads route only to models that output images", () => {
       if (decision.ok) assert.ok(decision.model.outputModes.includes("image"), `${workload}`);
     }
   });
+});
+
+// --- one id space ------------------------------------------------------------
+
+test("every text model is an id the text executor can actually run", () => {
+  // A route is stored as a model id and later handed to the gateway, which
+  // resolves it through the policy roster. An id the roster does not know is a
+  // job that can never run — invisible until a merchant picks it.
+  for (const model of MODEL_REGISTRY.filter((entry) => entry.capabilities.includes("text"))) {
+    assert.ok(getModel(model.id as never), `${model.id} is not executable by the text path`);
+  }
+});
+
+test("Gemini text is selectable but never routed to automatically", () => {
+  assert.ok(getModel("gemini-2.5-flash"), "must be reachable when chosen");
+  for (const chain of Object.values(TIER_MODELS)) {
+    assert.ok(!chain.includes("gemini-2.5-flash"), "no task may land on Gemini by default");
+  }
 });
