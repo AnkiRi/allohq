@@ -1,7 +1,9 @@
 # Five-tenant concurrency readiness proof
 
-**Status:** harness implemented and rehearsed; the full workload has **not** been run.
-It awaits disposable infrastructure of the size measured below.
+**Status:** harness implemented. **5 x 100,000 plus a late tenant of 100,000 passed on a
+standard GitHub runner** (run 35871521585, 7 min 40 s). The 5 x 1,000,000 workload has not yet
+been run; it is dispatched through the same workflow, which records runner, Postgres and Node
+memory so that a resource-limited run cannot be mistaken for a result.
 
 The canonical register records multi-tenant concurrency as a pending proof:
 
@@ -86,10 +88,10 @@ preparation and measure again.
 |---|---|---|
 | **Disk (live data)** | **≈ 13.5 GB** | 5 × 2.65 GB + 0.27 GB |
 | **Disk (with bloat and WAL)** | **≥ 40 GB** provisioned | the crashed tenant writes members twice; dead tuples measured at 170 MB after a 42,000-row rehearsal, so bloat is real and must be budgeted |
-| **RAM** | **≥ 32 GB** recommended | the 1M *single*-tenant proof was killed on an 8 GB machine and needed a 16 GB runner; five concurrent preparations have never been measured, so 16 GB is the known floor for one and 32 GB is the margin for five |
-| **CPU** | **≥ 8 cores** | five concurrent preparations are database-bound; fewer cores makes Postgres the bottleneck and measures the host rather than the product |
+| **RAM** | **unmeasured at 5 x 1M** | an earlier "32 GB recommended" here was a guess, and the evidence since does not support it: at 5 x 100k, Node's peak heap was 103 MB with no retained growth on a 16 GB runner, because preparation is paged. What Postgres and the runner need at 1M is what the workflow's resource record measures |
+| **CPU** | 4 on a standard runner | five concurrent preparations are database-bound, so on 4 cores elapsed time partly measures the host; reported, not asserted |
 | **Elapsed** | **90–180 min** | seeding ≈ 30 min (5 × 1M sequential at 35.5 s/100k); preparation ≥ 10 min if perfectly parallel, realistically far longer under contention |
-| **Timeout** | 300 min in the harness | leaves room for contention without hanging forever |
+| **Timeout** | harness 290 min, step 300, job 350 | nested so the harness reports INCONCLUSIVE itself, and the resource record still runs if the proof is cut off; GitHub-hosted jobs stop at 360 |
 
 **Preparation time does not extrapolate linearly and is not claimed to.** The register
 records the 1M single-tenant run's control-selection `UPDATE` alone at **468,127 ms** — far
@@ -148,12 +150,25 @@ NODE_OPTIONS=--expose-gc \
 `NODE_OPTIONS=--expose-gc` is required: the proof measures retained heap and **fails rather
 than skips** without a collector.
 
-### On a GitHub runner, at 100,000 per tenant
+### On a GitHub runner
 
-`.github/workflows/five-tenant.yml` runs 5 x 100,000 plus a late tenant of 100,000 on a
-standard runner — about 1.7 GB of live data at the measured 2,847 bytes per customer. It
-starts on `workflow_dispatch` or on a push to a `scale-proof/**` branch; never on a pull
-request, and never `proof/**`, which belongs to the 1M workflow.
+`.github/workflows/five-tenant.yml` runs on a standard runner. It starts on
+`workflow_dispatch` or on a push to a `scale-proof/**` branch; never on a pull request, and
+never `proof/**`, which belongs to the 1M workflow. A push runs the default, 5 x 100,000 plus
+a late tenant of 100,000. For the full workload, dispatch it from the Actions tab with
+`size=1000000` and `late_size=100000`.
+
+Safeguards:
+
+- refuses to start without disk for three times the measured data size;
+- samples runner memory, swap, free disk, the Postgres container's memory, all Node processes'
+  resident memory, load and database size every 15 seconds, and keeps the samples as an
+  artifact alongside the proof log;
+- ends with one verdict: **completed proof — pass**, **completed proof — fail**, or
+  **resource- or time-limited — inconclusive**, the last covering a kernel out-of-memory kill,
+  exhausted disk, or a proof cut off by its time limit;
+- runs one proof at a time, queued rather than cancelled, so a push cannot throw away a
+  multi-hour run.
 
 `FIVE_TENANT_PROOF_SIZE` is set to the seeded size, so the run is reported as a proof **at
 100,000** and the crash must land. It is not the 1M proof and must not be quoted as one.

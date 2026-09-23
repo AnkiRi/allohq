@@ -86,7 +86,7 @@ type Tenant = SeededTenant & {
 
 test(
   "five tenants of a million, one joining late, one crashing: isolation, correctness, recovery, completion",
-  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set", timeout: 300 * 60 * 1000 },
+  { skip: databaseUrl ? false : "TEST_DATABASE_URL is not set", timeout: 290 * 60 * 1000 },
   async () => {
     if (typeof (globalThis as Record<string, unknown>)["gc"] !== "function") {
       assert.fail("this proof measures retained heap and needs NODE_OPTIONS=--expose-gc");
@@ -338,7 +338,7 @@ test(
       }
 
       // --- correctness: per-tenant totals are self-consistent ----------------
-      const perTenant: Array<{ index: number; size: number; members: number; candidates: number; control: number; treatment: number; leftAlone: number; notReceiving: number; attempts: number; seconds: number }> = [];
+      const perTenant: Array<{ index: number; size: number; members: number; candidates: number; control: number; treatment: number; leftAlone: number; notReceiving: number; attempts: number; timing: string }> = [];
       let totalMembers = 0;
       for (const tenant of all) {
         // A recovered run reports its id through the completed run rather than
@@ -381,7 +381,9 @@ test(
           candidates: progress?.candidates ?? 0, control: progress?.control ?? 0,
           treatment: progress?.treatment ?? 0, leftAlone: progress?.deliberatelyLeftAlone ?? 0,
           notReceiving: progress?.notReceiving ?? 0, attempts: progress?.attempts ?? 0,
-          seconds: Math.round((tenant.finishedAt - tenant.startedAt) / 1000),
+          timing: crashLanded && tenant.index === CRASH_INDEX
+            ? `${Math.round((tenant.finishedAt - tenant.startedAt) / 1000)} s cut off + ${Math.round(recoveryMs / 1000)} s recovery`
+            : `${Math.round((tenant.finishedAt - tenant.startedAt) / 1000)} s`,
         });
       }
 
@@ -431,9 +433,18 @@ test(
       const messages = await prisma.messageLog.count({ where: { workspaceId: { in: workspaceIds } } });
       check(messages === 0, "no message was logged as sent", `${messages} rows`);
 
-      const durations = all.map((tenant) => (tenant.finishedAt - tenant.startedAt) / 1000);
-      const slowest = Math.max(...durations);
-      const fastest = Math.min(...durations.filter((d) => d > 0));
+      // Fairness is comparable only among tenants that started together and ran
+      // start to finish without interruption. The crashed tenant's clock stops
+      // when its lease is revoked, and the late tenant starts later and finishes
+      // partly alone, so counting either made the spread meaningless: the 100k
+      // GitHub run printed 6.2x when the four comparable tenants were within 2%.
+      const uninterrupted = tenants.filter((tenant) => !(crashLanded && tenant.index === CRASH_INDEX));
+      const uninterruptedSeconds = uninterrupted.map((tenant) => (tenant.finishedAt - tenant.startedAt) / 1000);
+      const slowest = Math.max(...uninterruptedSeconds);
+      const fastest = Math.min(...uninterruptedSeconds);
+      const lateSeconds = (lateTenant.finishedAt - lateTenant.startedAt) / 1000;
+      const lateOffset = (lateTenant.startedAt - tenants[0]!.startedAt) / 1000;
+      const victimCutOff = (victim.finishedAt - victim.startedAt) / 1000;
 
       console.log([
         "",
@@ -446,7 +457,11 @@ test(
         `  crashed-tenant recovery ....... ${(recoveryMs / 60000).toFixed(1)} min`,
         `  retained heap ................. ${retained <= 0 ? `no growth detected; ${mb(-retained)} MB below baseline` : `${mb(retained)} MB`}`,
         `  peak heap above baseline ...... ${mb(peak - baseline)} MB`,
-        `  slowest / fastest tenant ...... ${slowest.toFixed(0)} s / ${fastest.toFixed(0)} s (spread ${(slowest / Math.max(fastest, 1)).toFixed(1)}x)`,
+        `  uninterrupted tenants ......... slowest ${slowest.toFixed(0)} s / fastest ${fastest.toFixed(0)} s (spread ${(slowest / Math.max(fastest, 1)).toFixed(2)}x across ${uninterrupted.length})`,
+        `  late tenant ................... ${lateSeconds.toFixed(0)} s, started ${lateOffset.toFixed(0)} s after the others`,
+        crashLanded
+          ? `  crashed tenant ................ cut off after ${victimCutOff.toFixed(0)} s, recovered in ${(recoveryMs / 1000).toFixed(0)} s`
+          : `  crashed tenant ................ finished before its lease could be revoked`,
         `  cross-tenant member rows ...... ${crossTenantRows}`,
         `  audience rows, all tenants .... ${totalMembers.toLocaleString()}`,
         "",
@@ -455,7 +470,7 @@ test(
           `    t${row.index}${row.index === CRASH_INDEX ? "*" : " "} ${row.size.toLocaleString().padStart(9)} seeded  ` +
           `${row.candidates.toLocaleString().padStart(9)} candidates  ` +
           `${row.control.toLocaleString().padStart(8)} control  ${row.treatment.toLocaleString().padStart(9)} treatment  ` +
-          `${String(row.attempts).padStart(2)} attempts  ${String(row.seconds).padStart(5)} s`),
+          `${String(row.attempts).padStart(2)} attempts  ${row.timing}`),
         `    * tenant ${CRASH_INDEX} lost its lease mid-run and recovered`,
         "",
         `  victim state right after the crash: ${victimProgressAfterCrash?.state}, completed run ${victimCompletedAfterCrash ? "present" : "absent"}`,

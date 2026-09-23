@@ -1,19 +1,20 @@
 name: Five-tenant concurrency proof
 
-# Never on a pull request, and never on a push to main. It seeds several
-# hundred thousand synthetic customers across six tenants, so it runs only when
-# someone asks for it, or on a `scale-proof/**` branch pushed for that purpose.
+# Never on a pull request, and never on a push to main. It seeds hundreds of
+# thousands to millions of synthetic customers across six tenants, so it runs
+# only when someone asks for it, or on a `scale-proof/**` branch pushed for
+# that purpose.
 #
 # Deliberately NOT `proof/**`: that prefix belongs to million.yml, and sharing
 # it would start a second, hour-long run on every push here.
 #
-# The default is 5 x 100,000 plus a late tenant of 100,000 — measured at
-# 2,847 bytes per customer end to end, about 1.7 GB of live data, which fits a
-# standard 16 GB runner. The 5 x 1,000,000 workload does not (about 13.5 GB of
-# data and a 32 GB recommendation) and needs a larger, disposable host.
+# Default: 5 x 100,000 plus a late tenant of 100,000 (about 1.7 GB of data at
+# the measured 2,847 bytes per customer). Dispatch with size=1000000 and
+# late_size=100000 for the full workload; whether a standard runner holds that
+# is exactly what the resource record below is there to establish.
 #
 # Synthetic tenants, disposable Postgres, simulated provider. No Shopify, no
-# Resend, no SES, no Railway, no real recipients.
+# Resend, no SES, no Railway, no production database, no real recipients.
 on:
   workflow_dispatch:
     inputs:
@@ -28,11 +29,20 @@ on:
   push:
     branches: ["scale-proof/**"]
 
+# One proof at a time. Queued rather than cancelled: cancelling a multi-hour
+# run because someone pushed would throw away the only evidence it produces.
+concurrency:
+  group: five-tenant-proof
+  cancel-in-progress: false
+
 jobs:
   five-tenant:
     name: Five concurrent tenants, one late, one crashing — isolation, correctness, recovery, completion
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # GitHub-hosted jobs stop at 360 minutes. The proof step has its own,
+    # shorter limit so that the resource record and verdict below still run
+    # when the proof itself is cut off.
+    timeout-minutes: 350
 
     services:
       postgres:
@@ -44,7 +54,12 @@ jobs:
           POSTGRES_PASSWORD: joon
           POSTGRES_DB: joon_five_tenant_test
         ports: ["5432:5432"]
+        # --shm-size: Docker gives containers 64 MB of /dev/shm, which Postgres
+        # parallel queries outgrow on multi-million-row joins ("could not resize
+        # shared memory segment"). A managed Postgres has no such cap, so leaving
+        # it would measure a container artefact rather than Joon.
         options: >-
+          --shm-size=1g
           --health-cmd "pg_isready -U joon"
           --health-interval 5s
           --health-timeout 5s
@@ -59,6 +74,7 @@ jobs:
       FIVE_TENANT_PROOF_SIZE: ${{ github.event.inputs.size || '100000' }}
       # The proof measures retained heap and fails without a collector.
       NODE_OPTIONS: "--expose-gc"
+      PG_CONTAINER: ${{ job.services.postgres.id }}
 
     steps:
       - uses: actions/checkout@v4
@@ -78,28 +94,140 @@ jobs:
       - name: Refuse to run against anything but a disposable database
         run: node scripts/assert-disposable-database-cli.mjs
 
-      - name: Resources before the run
+      - name: Refuse to start without room to finish
+        # 2,847 bytes per customer was measured end to end; three times that
+        # covers dead tuples from the crashed tenant's rewrite, WAL, and the
+        # verification queries' temporary files. Failing here costs seconds;
+        # running out of disk two hours in costs the run.
         run: |
+          customers=$(( FIVE_TENANT_SIZE * 5 + FIVE_TENANT_LATE_SIZE ))
+          need_gb=$(( (customers * 2847 * 3 + 999999999) / 1000000000 ))
+          free_gb=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          echo "customers: $customers  disk needed: ~${need_gb} GB  disk free: ${free_gb} GB"
+          if [ "$free_gb" -lt "$need_gb" ]; then
+            echo "::error::Not enough disk for this workload (${free_gb} GB free, ~${need_gb} GB needed)"
+            exit 1
+          fi
           echo "--- memory ---"; free -h
-          echo "--- disk ---"; df -h /
           echo "--- cpus ---"; nproc
 
       - name: Apply migrations to the disposable database
         run: pnpm --filter @allohq/database exec prisma migrate deploy
 
-      - name: Five-tenant proof
-        run: pnpm --filter @allohq/workers exec tsx --test src/workers/five-tenant.load.integration.ts
-
-      - name: Resources after the run
-        # Runs even on failure: a killed run must be reported as inconclusive
-        # rather than guessed at, and the reason is usually here.
-        if: always()
+      - name: Start resource sampler
+        # Every 15 s, for the whole run: runner memory and swap, free disk,
+        # the Postgres container's memory, all Node processes' resident memory,
+        # load average and database size. Node heap alone says nothing about
+        # whether the database or the runner is the limit.
         run: |
-          echo "--- memory ---"; free -h
-          echo "--- disk ---"; df -h /
-          echo "--- database size ---"
-          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test \
-            -c "SELECT pg_size_pretty(pg_database_size(current_database()))" || true
-          echo "--- serialization conflicts, deadlocks, rollbacks ---"
-          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test \
-            -c "SELECT deadlocks, conflicts, xact_rollback FROM pg_stat_database WHERE datname = current_database()" || true
+          cat > /tmp/sample.sh <<'EOF'
+          #!/usr/bin/env bash
+          echo "time,runner_used_mb,runner_available_mb,swap_used_mb,disk_free_gb,postgres_mb,node_rss_mb,load_1m,database_mb" > /tmp/resources.csv
+          while true; do
+            now=$(date -u +%H:%M:%S)
+            read -r total avail swap_total swap_free < <(awk '/^MemTotal/{t=$2} /^MemAvailable/{a=$2} /^SwapTotal/{st=$2} /^SwapFree/{sf=$2} END {print t, a, st, sf}' /proc/meminfo)
+            used=$(( (total - avail) / 1024 )); available=$(( avail / 1024 )); swap=$(( (swap_total - swap_free) / 1024 ))
+            disk=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+            pg=$(docker stats --no-stream --format '{{.MemUsage}}' "$PG_CONTAINER" 2>/dev/null | awk '{v=$1; u=v; gsub(/[0-9.]/, "", u); gsub(/[A-Za-z]/, "", v); m = (u == "GiB") ? 1024 : (u == "MiB") ? 1 : (u == "KiB") ? 1/1024 : 0; printf "%d", v * m}')
+            node=$(ps -C node -o rss= 2>/dev/null | awk '{s += $1} END {printf "%d", s / 1024}')
+            load=$(cut -d' ' -f1 /proc/loadavg)
+            db=$(PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test -tAc "SELECT pg_database_size(current_database()) / 1048576" 2>/dev/null)
+            echo "$now,$used,$available,$swap,$disk,$pg,$node,$load,$db" >> /tmp/resources.csv
+            sleep 15
+          done
+          EOF
+          chmod +x /tmp/sample.sh
+          nohup /tmp/sample.sh > /dev/null 2>&1 &
+          echo $! > /tmp/sampler.pid
+
+      - name: Five-tenant proof
+        id: proof
+        # Shorter than the job, so the record below survives a cut-off run. The
+        # harness's own timeout is shorter still, so it can report
+        # INCONCLUSIVE itself rather than being killed silently.
+        timeout-minutes: 300
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @allohq/workers exec tsx --test src/workers/five-tenant.load.integration.ts 2>&1 | tee /tmp/proof.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > /tmp/proof-exit
+          exit "$code"
+
+      - name: Resource record and verdict
+        # Runs whatever happened above. A run killed for memory, disk or time is
+        # reported as resource-limited and inconclusive — never as a pass and
+        # never as a product failure.
+        if: always()
+        shell: bash
+        run: |
+          kill "$(cat /tmp/sampler.pid 2>/dev/null)" 2>/dev/null || true
+          csv=/tmp/resources.csv
+          if [ -s "$csv" ]; then
+            peaks=$(awk -F, 'NR > 1 && $2 != "" {
+                if ($2 > ru) ru = $2; if (ra == "" || $3 < ra) ra = $3; if ($4 > sw) sw = $4;
+                if (df == "" || $5 < df) df = $5; if ($6 > pg) pg = $6; if ($7 > nd) nd = $7;
+                if ($8 > ld) ld = $8; if ($9 > db) db = $9; n++ }
+              END { printf "%d %d %d %d %d %d %s %d %d", ru, ra, sw, df, pg, nd, ld + 0, db, n }' "$csv")
+            read -r runner_used runner_min_available swap disk_min pg_peak node_peak load_peak db_peak samples <<< "$peaks"
+          fi
+          # The kernel's own record of the Postgres container's peak, if exposed:
+          # exact, where 15-second sampling can miss a spike.
+          pg_cgroup_peak=$(cat /sys/fs/cgroup/system.slice/docker-${PG_CONTAINER}.scope/memory.peak 2>/dev/null)
+          [ -n "$pg_cgroup_peak" ] && pg_cgroup_peak="$(( pg_cgroup_peak / 1048576 )) MB" || pg_cgroup_peak="not exposed on this runner"
+          oom=$(sudo dmesg 2>/dev/null | grep -ciE "out of memory|oom-kill|killed process" || true)
+          stats=$(PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test -tAc \
+            "SELECT 'deadlocks=' || deadlocks || ' conflicts=' || conflicts || ' rollbacks=' || xact_rollback || ' temp_files=' || temp_files || ' temp_bytes=' || pg_size_pretty(temp_bytes) FROM pg_stat_database WHERE datname = current_database()" 2>/dev/null)
+
+          exit_code=$(cat /tmp/proof-exit 2>/dev/null || echo none)
+          verdict=$(grep -oE "=== .* — (PASS|FAIL) ===|INCONCLUSIVE" /tmp/proof.log 2>/dev/null | tail -1)
+          if [ "$exit_code" = "0" ] && echo "$verdict" | grep -q "PASS"; then
+            result="COMPLETED PROOF — PASS"
+          elif echo "$verdict" | grep -q "— FAIL"; then
+            result="COMPLETED PROOF — FAIL: the run finished and assertions failed; see the log"
+          elif [ "${oom:-0}" -gt 0 ]; then
+            result="RESOURCE-LIMITED — the kernel killed a process for memory; inconclusive"
+          elif [ -n "$disk_min" ] && [ "$disk_min" -le 1 ]; then
+            result="RESOURCE-LIMITED — disk ran out; inconclusive"
+          elif [ "$exit_code" = "none" ]; then
+            result="RESOURCE- OR TIME-LIMITED — the proof was cut off before finishing; inconclusive"
+          else
+            result="INCONCLUSIVE — the harness stopped (exit ${exit_code}); see the log"
+          fi
+
+          report=$(cat <<REPORT
+          ## ${result}
+
+          Workload: 5 x ${FIVE_TENANT_SIZE} concurrent, plus 1 x ${FIVE_TENANT_LATE_SIZE} joining mid-flight
+
+          | Peak resource | Value |
+          |---|---|
+          | Runner memory used (peak) | ${runner_used:-?} MB |
+          | Runner memory available (lowest) | ${runner_min_available:-?} MB |
+          | Swap used (peak) | ${swap:-?} MB |
+          | Postgres container memory (peak sampled) | ${pg_peak:-?} MB |
+          | Postgres container memory (kernel peak) | ${pg_cgroup_peak} |
+          | All Node processes, resident (peak) | ${node_peak:-?} MB |
+          | Load average, 1 min (peak; $(nproc) CPUs) | ${load_peak:-?} |
+          | Database size (peak) | ${db_peak:-?} MB |
+          | Disk free (lowest) | ${disk_min:-?} GB |
+          | Samples | ${samples:-0} at 15 s |
+          | Kernel OOM events | ${oom:-0} |
+          | Postgres counters | ${stats:-unavailable} |
+          REPORT
+          )
+          echo "$report"
+          echo "$report" >> "$GITHUB_STEP_SUMMARY"
+          echo "--- last Postgres log lines ---"
+          docker logs --tail 40 "$PG_CONTAINER" 2>&1 || true
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: five-tenant-proof-${{ github.run_id }}
+          path: |
+            /tmp/resources.csv
+            /tmp/proof.log
+          if-no-files-found: warn
+          retention-days: 30
