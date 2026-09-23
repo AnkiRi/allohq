@@ -81,10 +81,29 @@ export async function prepareCampaignAudience(
       ...(request.approvedBy ? { approvedBy: request.approvedBy } : {}),
     });
   } catch (error) {
-    // The campaign was already claimed — by a duplicate job, or by a retry
-    // whose predecessor finished after it started. The frozen audience and
-    // arms are the same either way, so this is success, not failure.
+    // The campaign was already claimed. The frozen audience and arms are the
+    // same whoever claimed it, so this is success, not failure — but the send
+    // still has to be queued by someone.
+    //
+    // Two ways to get here:
+    //  - a duplicate job won the claim, and it will queue the send itself;
+    //  - an earlier attempt of THIS job committed the claim and then failed in
+    //    the bookkeeping that follows (decision ledger, activity entries), so
+    //    the queue retried it. Nobody else will ever queue that send, and the
+    //    campaign would sit in "sending" indefinitely.
+    //
+    // So queue it whenever the campaign is claimed and still sending. The send
+    // job's id is fixed per campaign, so when the winner has already queued
+    // it, this second add is a no-op. A campaign that has since finished, or
+    // been reset to draft, is left alone.
     if (error instanceof CampaignApprovalConflictError) {
+      const claimed = await prisma.campaign.findUnique({
+        where: { id: request.campaignId },
+        select: { status: true, approvedAt: true },
+      });
+      if (claimed?.approvedAt && claimed.status === "sending") {
+        await enqueueSend(request.campaignId, request.forceImmediate);
+      }
       return { status: "already_approved", runId: run.runId };
     }
     throw error;
