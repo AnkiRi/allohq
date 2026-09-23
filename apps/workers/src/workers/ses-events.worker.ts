@@ -60,8 +60,23 @@ async function persist(event: NormalizedSesEvent, _raw: string) {
   }
 }
 
+/**
+ * Whether this worker reads SES delivery events.
+ *
+ * Tied to the event queue being configured, NOT to which provider carries new
+ * traffic. It used to require EMAIL_PROVIDER=ses, so switching new sends back
+ * to Resend stopped reading SES events at once, and the bounces and complaints
+ * for SES mail already in flight went unrecorded: no suppression of those
+ * recipients, no automatic hold or pause, no reconciliation of ambiguous sends.
+ * A provider keeps producing events for days after it stops getting new mail.
+ * (Resend's webhook was never tied to the selected provider.)
+ */
+export function shouldConsumeSesEvents(env: Record<string, string | undefined> = process.env): boolean {
+  return Boolean(env["SES_EVENT_QUEUE_URL"]?.trim());
+}
+
 export function startSesEventWorker() {
-  if (process.env["EMAIL_PROVIDER"] !== "ses" || !process.env["SES_EVENT_QUEUE_URL"]) return null;
+  if (!shouldConsumeSesEvents()) return null;
   let stopped = false;
   const events = new EventEmitter();
   const abortController = new AbortController();

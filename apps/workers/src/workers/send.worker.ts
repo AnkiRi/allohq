@@ -40,6 +40,7 @@ import {
 } from "@allohq/campaign-engine";
 import { getRecommendations, resolveProducts } from "@allohq/product-recommendations";
 import { prepareCampaignAudience, recoverStalePreparationRuns } from "./prepare-audience";
+import { reconcileClosedSendingDays } from "../utils/sending-day-reconciliation";
 import {
   frozenCohortSize,
   pageCohortByEngagement,
@@ -182,6 +183,7 @@ export const sendWorker = new Worker<
   | FinalizeData
   | CampaignPreparationRequest
   | { recoverPreparation: true }
+  | { reconcileSendingDays: true }
 >(
   QUEUE_NAMES.EMAIL_SEND,
   async (job) => {
@@ -191,7 +193,11 @@ export const sendWorker = new Worker<
       | DeliverChunkData
       | FinalizeData
       | CampaignPreparationRequest
-      | { recoverPreparation: true };
+      | { recoverPreparation: true }
+      | { reconcileSendingDays: true };
+    if ((data as { reconcileSendingDays?: boolean }).reconcileSendingDays) {
+      return reconcileClosedSendingDays();
+    }
     if ((data as { recoverPreparation?: boolean }).recoverPreparation) {
       return recoverStalePreparationRuns(async (request) => {
         await emailSendQueue.add("prepare-audience", request, {

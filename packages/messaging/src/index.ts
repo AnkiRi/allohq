@@ -31,6 +31,7 @@ export {
   getDeliveryModeDecision,
   getMessagingSendMode,
   assertEmailDeliveryConfigured,
+  emailProviderConfigProblems,
 } from "./delivery-mode";
 export type {
   DeliveryModeDecision,
