@@ -10,7 +10,7 @@ import OpenAI from "openai";
 // more `LlmProvider` implementation and registering it — not a rewrite.
 // ---------------------------------------------------------------------------
 
-export type AIProvider = "anthropic" | "openai";
+export type AIProvider = "anthropic" | "openai" | "google";
 
 /** Normalised request handed to a provider adapter. */
 export interface ProviderRequest {
@@ -125,9 +125,69 @@ class OpenAIProvider implements LlmProvider {
 // Registry — config, not a rewrite, to add a provider.
 // ---------------------------------------------------------------------------
 
+/**
+ * Google Gemini text.
+ *
+ * Written so Gemini can appear in TEXT routing honestly — a registry entry
+ * without an adapter is not an implementation, and Gemini was listed before
+ * this existed. Plain fetch, so the request shape is assertable in tests.
+ */
+class GoogleProvider implements LlmProvider {
+  readonly name = "google" as const;
+
+  isAvailable(): boolean {
+    return Boolean(process.env["GOOGLE_API_KEY"]?.trim());
+  }
+
+  async complete(req: ProviderRequest): Promise<ProviderResult> {
+    const apiKey = process.env["GOOGLE_API_KEY"]?.trim();
+    if (!apiKey) throw new Error("GOOGLE_API_KEY is not set");
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: req.prompt }] }],
+          ...(req.system ? { systemInstruction: { parts: [{ text: req.system }] } } : {}),
+          generationConfig: {
+            temperature: req.temperature,
+            maxOutputTokens: req.maxTokens,
+            ...(req.jsonMode ? { responseMimeType: "application/json" } : {}),
+          },
+        }),
+        signal: AbortSignal.timeout(120_000),
+      },
+    );
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+      error?: { message?: string };
+    };
+    if (!response.ok) {
+      throw new Error(`Gemini ${req.model}: ${payload.error?.message ?? `HTTP ${response.status}`}`);
+    }
+
+    const content = (payload.candidates?.[0]?.content?.parts ?? [])
+      .map((part) => part.text ?? "")
+      .join("")
+      .trim();
+    if (!content) throw new Error(`Gemini ${req.model} returned no text`);
+
+    return {
+      content: req.jsonMode ? extractJson(content) : content,
+      inputTokens: payload.usageMetadata?.promptTokenCount ?? 0,
+      outputTokens: payload.usageMetadata?.candidatesTokenCount ?? 0,
+    };
+  }
+}
+
 const PROVIDERS: Record<AIProvider, LlmProvider> = {
   anthropic: new AnthropicProvider(),
   openai: new OpenAIProvider(),
+  google: new GoogleProvider(),
 };
 
 export function getProvider(name: AIProvider): LlmProvider {

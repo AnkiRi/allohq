@@ -1,32 +1,38 @@
+import { geminiImageAdapter } from "../images/adapters/gemini-image";
+import { openAiImageAdapter } from "../images/adapters/openai-image";
+import type { VisualAdapter } from "../images/adapters/types";
+import { getProvider, type AIProvider } from "./providers";
+
 /**
- * What each model can actually do, and whether it is switched on here.
+ * Models Joon can actually run.
  *
- * The text harness routes by workload but assumes every model is
- * interchangeable. That is false the moment images are involved: a model that
- * cannot take a reference image cannot do product-faithful work, and falling
- * back to one that cannot would quietly turn "your product, in this scene"
- * into an invention.
+ * The standard this file exists to enforce: **a registry entry is not an
+ * implementation**. Nothing appears here — and therefore nothing can be
+ * offered, selected, routed to, or fallen back on — unless a real adapter
+ * sends a documented request and converts the response into Joon's common
+ * result shape.
  *
- * So capability is declared, availability is earned (a credential AND an
- * explicit switch), and fallback is only allowed within the capability that
- * was asked for.
+ * An earlier version listed Gemini and others with no adapter behind them.
+ * That is false availability: a merchant could choose a model that could never
+ * run, and routing could "succeed" into nothing.
  */
 
 export const TEXT_WORKLOADS = [
   "strategy",
   "email_structure",
   "short_copy",
-  "long_copy",
+  "long_content",
   "brand_refinement",
   "analysis",
   "classification",
-  "agent",
+  "evaluation",
+  "merchant_agent_orchestration",
 ] as const;
 
 export const VISUAL_WORKLOADS = [
   "campaign_art",
+  "product_reference_edit",
   "product_safe_composition",
-  "reference_grounded_edit",
   "image_analysis",
 ] as const;
 
@@ -37,42 +43,43 @@ export type HarnessWorkload = TextWorkload | VisualWorkload;
 export type ModelCapability =
   | "text"
   | "image_generation"
-  /** Accepts a reference image as an INPUT, not a description of one. */
+  /** Takes the real image as INPUT. Not "can be told about an image". */
   | "image_reference_input"
   | "image_analysis";
 
 export type CostClass = "economy" | "standard" | "premium";
+export type ModelTier = "recommended" | "fast" | "premium" | "legacy";
 
 export type ModelEntry = {
-  /** Stable internal id. */
   id: string;
-  provider: "openai" | "anthropic" | "google" | "replicate";
-  /** The id sent to the API. Never a marketing name. */
+  provider: "openai" | "anthropic" | "google";
+  /** Exactly what is sent to the API. Never a marketing name. */
   apiModelId: string;
-  /** What a merchant sees. */
   label: string;
   capabilities: ModelCapability[];
   inputModes: Array<"text" | "image_reference" | "multiple_references">;
   outputModes: Array<"text" | "image">;
-  /** Approximate USD per call/image. Null where it varies too much to state. */
-  costUsd: number | null;
-  costClass: CostClass;
-  /** Credential required. */
-  credentialEnvVar: string;
   /**
-   * Explicit switch. A credential alone never enables a model: an existing
-   * OpenAI key should not silently start spending on a different, dearer model
-   * because someone added it to the registry.
+   * A class, not a price. Providers change pricing and bill by tokens or
+   * tiers, so a flat "$0.04 per image" printed in the UI would be a number
+   * Joon invented. Real spend is recorded from provider usage when returned.
    */
+  costClass: CostClass;
+  tier: ModelTier;
+  credentialEnvVar: string;
+  /** A credential alone never enables a model. */
   enableEnvVar: string | null;
-  /** Quality/resolution options the Studio may offer. */
+  /** The adapter that runs it. Its presence is what makes this entry real. */
+  adapter: { kind: "visual"; impl: VisualAdapter } | { kind: "text"; provider: AIProvider };
   qualityOptions?: string[];
+  note?: string;
 };
 
 /**
- * Claude is absent from every image capability on purpose: the Anthropic API
- * does not return images. Listing it as an image option would be a promise the
- * API cannot keep.
+ * Anthropic is absent from every image capability because the API returns no
+ * images. Flux/Replicate was removed rather than left declared: its generation
+ * path predates this contract and does not implement `VisualAdapter`, so
+ * listing it would be exactly the false availability this file forbids.
  */
 export const MODEL_REGISTRY: readonly ModelEntry[] = [
   // --- text ---------------------------------------------------------------
@@ -81,71 +88,79 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     provider: "anthropic",
     apiModelId: "claude-sonnet-4-6",
     label: "Claude Sonnet",
-    capabilities: ["text", "image_analysis"],
-    inputModes: ["text", "image_reference"],
+    capabilities: ["text"],
+    inputModes: ["text"],
     outputModes: ["text"],
-    costUsd: null,
     costClass: "standard",
+    tier: "recommended",
     credentialEnvVar: "ANTHROPIC_API_KEY",
     enableEnvVar: null,
+    adapter: { kind: "text", provider: "anthropic" },
   },
   {
     id: "gpt-text",
     provider: "openai",
     apiModelId: "gpt-4o",
     label: "GPT-4o",
-    capabilities: ["text", "image_analysis"],
-    inputModes: ["text", "image_reference"],
+    capabilities: ["text"],
+    inputModes: ["text"],
     outputModes: ["text"],
-    costUsd: null,
     costClass: "standard",
+    tier: "recommended",
     credentialEnvVar: "OPENAI_API_KEY",
     enableEnvVar: null,
+    adapter: { kind: "text", provider: "openai" },
   },
   {
     id: "gemini-text",
     provider: "google",
     apiModelId: "gemini-2.5-flash",
     label: "Gemini Flash",
-    capabilities: ["text", "image_analysis"],
-    inputModes: ["text", "image_reference"],
+    capabilities: ["text"],
+    inputModes: ["text"],
     outputModes: ["text"],
-    costUsd: null,
     costClass: "economy",
+    tier: "fast",
     credentialEnvVar: "GOOGLE_API_KEY",
     enableEnvVar: "JOON_GEMINI_TEXT_ENABLED",
+    adapter: { kind: "text", provider: "google" },
   },
 
-  // --- images: text to image ----------------------------------------------
+  // --- images: OpenAI GPT Image 2.5 ---------------------------------------
   {
-    id: "openai-gpt-image",
+    id: "gpt-image-flare",
     provider: "openai",
-    apiModelId: "gpt-image-1",
-    label: "GPT Image",
+    apiModelId: "gpt-image-2.5-flare",
+    label: "GPT Image 2.5 Flare",
     capabilities: ["image_generation", "image_reference_input"],
     inputModes: ["text", "image_reference"],
     outputModes: ["image"],
-    costUsd: 0.07,
     costClass: "standard",
+    tier: "fast",
     credentialEnvVar: "OPENAI_API_KEY",
-    enableEnvVar: null,
+    enableEnvVar: "JOON_OPENAI_IMAGE_ENABLED",
+    adapter: { kind: "visual", impl: openAiImageAdapter },
     qualityOptions: ["standard", "high"],
+    note: "Everyday campaign visuals.",
   },
   {
-    id: "openai-dalle3",
+    id: "gpt-image-sunburst",
     provider: "openai",
-    apiModelId: "dall-e-3",
-    label: "DALL·E 3",
-    capabilities: ["image_generation"],
-    inputModes: ["text"],
+    apiModelId: "gpt-image-2.5-sunburst",
+    label: "GPT Image 2.5 Sunburst",
+    capabilities: ["image_generation", "image_reference_input"],
+    inputModes: ["text", "image_reference", "multiple_references"],
     outputModes: ["image"],
-    costUsd: 0.04,
-    costClass: "economy",
+    costClass: "premium",
+    tier: "premium",
     credentialEnvVar: "OPENAI_API_KEY",
-    enableEnvVar: null,
+    enableEnvVar: "JOON_OPENAI_IMAGE_ENABLED",
+    adapter: { kind: "visual", impl: openAiImageAdapter },
+    qualityOptions: ["standard", "high"],
+    note: "Precise generation and reference editing.",
   },
 
-  // --- images: reference-grounded -----------------------------------------
+  // --- images: Google Gemini ----------------------------------------------
   {
     id: "nano-banana-2",
     provider: "google",
@@ -154,11 +169,12 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     capabilities: ["image_generation", "image_reference_input"],
     inputModes: ["text", "image_reference", "multiple_references"],
     outputModes: ["image"],
-    costUsd: 0.04,
     costClass: "standard",
+    tier: "recommended",
     credentialEnvVar: "GOOGLE_API_KEY",
     enableEnvVar: "JOON_NANO_BANANA_ENABLED",
-    qualityOptions: ["standard"],
+    adapter: { kind: "visual", impl: geminiImageAdapter },
+    note: "Default for work that must keep the real product.",
   },
   {
     id: "nano-banana-pro",
@@ -168,37 +184,30 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     capabilities: ["image_generation", "image_reference_input"],
     inputModes: ["text", "image_reference", "multiple_references"],
     outputModes: ["image"],
-    costUsd: 0.14,
     costClass: "premium",
+    tier: "premium",
     credentialEnvVar: "GOOGLE_API_KEY",
     enableEnvVar: "JOON_NANO_BANANA_PRO_ENABLED",
+    adapter: { kind: "visual", impl: geminiImageAdapter },
     qualityOptions: ["standard", "high"],
+    note: "Final campaign assets.",
   },
+
+  // --- images: legacy, explicitly labelled ---------------------------------
   {
-    id: "flux-kontext",
-    provider: "replicate",
-    apiModelId: "black-forest-labs/flux-kontext-pro",
-    label: "Flux Kontext",
+    id: "gpt-image-1-legacy",
+    provider: "openai",
+    apiModelId: "gpt-image-1",
+    label: "GPT Image 1 (legacy)",
     capabilities: ["image_generation", "image_reference_input"],
     inputModes: ["text", "image_reference"],
     outputModes: ["image"],
-    costUsd: 0.06,
-    costClass: "standard",
-    credentialEnvVar: "REPLICATE_API_TOKEN",
-    enableEnvVar: "JOON_FLUX_KONTEXT_ENABLED",
-  },
-  {
-    id: "flux-pro",
-    provider: "replicate",
-    apiModelId: "black-forest-labs/flux-1.1-pro",
-    label: "Flux 1.1 Pro",
-    capabilities: ["image_generation"],
-    inputModes: ["text"],
-    outputModes: ["image"],
-    costUsd: 0.05,
-    costClass: "standard",
-    credentialEnvVar: "REPLICATE_API_TOKEN",
-    enableEnvVar: null,
+    costClass: "economy",
+    tier: "legacy",
+    credentialEnvVar: "OPENAI_API_KEY",
+    enableEnvVar: "JOON_OPENAI_IMAGE_LEGACY_ENABLED",
+    adapter: { kind: "visual", impl: openAiImageAdapter },
+    note: "Older model. Only where an account cannot reach GPT Image 2.5.",
   },
 ];
 
@@ -207,128 +216,133 @@ export const WORKLOAD_CAPABILITY: Record<HarnessWorkload, ModelCapability> = {
   strategy: "text",
   email_structure: "text",
   short_copy: "text",
-  long_copy: "text",
+  long_content: "text",
   brand_refinement: "text",
   analysis: "text",
   classification: "text",
-  agent: "text",
+  evaluation: "text",
+  merchant_agent_orchestration: "text",
   campaign_art: "image_generation",
   product_safe_composition: "image_generation",
-  // The whole point of this workload: the real product must reach the model.
-  reference_grounded_edit: "image_reference_input",
+  /** The whole point: the real product must reach the model. */
+  product_reference_edit: "image_reference_input",
   image_analysis: "image_analysis",
 };
 
-function env(name: string | null): boolean {
-  if (!name) return true;
-  return Boolean(process.env[name]?.trim());
+function switchedOn(name: string | null): boolean {
+  return name ? Boolean(process.env[name]?.trim()) : true;
 }
 
-/** A model is available only with BOTH its credential and its switch. */
+/**
+ * Available means: credential present, switch on, AND the adapter itself
+ * reports it can run. The last condition is what a declaration cannot fake.
+ */
 export function isModelAvailable(model: ModelEntry): boolean {
-  return Boolean(process.env[model.credentialEnvVar]?.trim()) && env(model.enableEnvVar);
+  if (!process.env[model.credentialEnvVar]?.trim()) return false;
+  if (!switchedOn(model.enableEnvVar)) return false;
+  return model.adapter.kind === "visual"
+    ? model.adapter.impl.isConfigured()
+    : getProvider(model.adapter.provider).isAvailable();
 }
 
 export function availableModels(): ModelEntry[] {
   return MODEL_REGISTRY.filter(isModelAvailable);
 }
 
+/** Only ids that exist here are acceptable; a browser cannot invent one. */
 export function modelById(id: string): ModelEntry | undefined {
   return MODEL_REGISTRY.find((model) => model.id === id);
 }
 
+export function isKnownModelId(id: string): boolean {
+  return MODEL_REGISTRY.some((model) => model.id === id);
+}
+
+export type StudioPreference = "recommended" | "fast" | "premium" | "product_faithful";
+
 export type RoutingRequest = {
   workload: HarnessWorkload;
-  /** A specific model the merchant or admin asked for. */
   preferredModelId?: string;
-  /** Prefer the cheapest capable model over the best one. */
-  prefer?: "fast" | "quality" | "product_faithful";
+  prefer?: StudioPreference;
+  /** True when the merchant's own product image will be supplied. */
+  hasReference?: boolean;
 };
 
 export type RoutingDecision =
-  | {
-      ok: true;
-      model: ModelEntry;
-      /** True when the chosen model was not the one asked for. */
-      fellBack: boolean;
-      capability: ModelCapability;
-    }
+  | { ok: true; model: ModelEntry; fellBack: boolean; capability: ModelCapability }
   | { ok: false; reason: string; capability: ModelCapability; missing: string[] };
 
-const PREFERENCE_ORDER: Record<NonNullable<RoutingRequest["prefer"]>, CostClass[]> = {
-  fast: ["economy", "standard", "premium"],
-  quality: ["premium", "standard", "economy"],
-  product_faithful: ["standard", "premium", "economy"],
+const TIER_ORDER: Record<StudioPreference, ModelTier[]> = {
+  recommended: ["recommended", "fast", "premium", "legacy"],
+  fast: ["fast", "recommended", "premium", "legacy"],
+  premium: ["premium", "recommended", "fast", "legacy"],
+  product_faithful: ["recommended", "premium", "fast", "legacy"],
 };
 
 /**
  * Choose a model for one job.
  *
  * Fallback may only move WITHIN the requested capability. A
- * `reference_grounded_edit` that quietly fell back to a text-to-image model
- * would return an invented product while the merchant believed they were
- * looking at their own — the single most damaging thing this system could do.
+ * `product_reference_edit` that fell back to a text-only image model would
+ * return an invented product while the merchant believed they were looking at
+ * their own — the single most damaging outcome this system can produce.
  */
 export function routeModel(request: RoutingRequest): RoutingDecision {
   const capability = WORKLOAD_CAPABILITY[request.workload];
-  const capable = MODEL_REGISTRY.filter((model) => model.capabilities.includes(capability));
+  // Product-faithful work needs reference input regardless of the workload's
+  // nominal capability, so the preference tightens the requirement.
+  const required: ModelCapability =
+    request.prefer === "product_faithful" || request.hasReference
+      ? "image_reference_input"
+      : capability;
+  const effective = capability === "text" ? capability : required;
+
+  const capable = MODEL_REGISTRY.filter((model) => model.capabilities.includes(effective));
   const usable = capable.filter(isModelAvailable);
 
   if (request.preferredModelId) {
     const preferred = modelById(request.preferredModelId);
     if (!preferred) {
+      return { ok: false, capability: effective, reason: `Unknown model "${request.preferredModelId}".`, missing: [] };
+    }
+    if (!preferred.capabilities.includes(effective)) {
       return {
         ok: false,
-        capability,
-        reason: `Unknown model "${request.preferredModelId}".`,
+        capability: effective,
+        reason: `${preferred.label} cannot do this job.`,
         missing: [],
       };
     }
-    if (!preferred.capabilities.includes(capability)) {
-      return {
-        ok: false,
-        capability,
-        reason: `${preferred.label} cannot do ${request.workload.replace(/_/g, " ")}.`,
-        missing: [],
-      };
-    }
-    if (isModelAvailable(preferred)) {
-      return { ok: true, model: preferred, fellBack: false, capability };
-    }
-    // Asked-for model is not configured. Fall back only within capability.
+    if (isModelAvailable(preferred)) return { ok: true, model: preferred, fellBack: false, capability: effective };
   }
 
   if (!usable.length) {
     const missing = [
       ...new Set(
-        capable.flatMap((model) =>
-          [model.credentialEnvVar, model.enableEnvVar].filter(Boolean) as string[],
-        ),
+        capable.flatMap((model) => [model.credentialEnvVar, model.enableEnvVar].filter(Boolean) as string[]),
       ),
     ];
     return {
       ok: false,
-      capability,
+      capability: effective,
       reason: `No configured model can do ${request.workload.replace(/_/g, " ")}.`,
       missing,
     };
   }
 
-  const order = PREFERENCE_ORDER[request.prefer ?? "quality"];
-  const chosen = [...usable].sort(
-    (a, b) => order.indexOf(a.costClass) - order.indexOf(b.costClass),
-  )[0]!;
-
-  return { ok: true, model: chosen, fellBack: Boolean(request.preferredModelId), capability };
+  const order = TIER_ORDER[request.prefer ?? "recommended"];
+  const chosen = [...usable].sort((a, b) => order.indexOf(a.tier) - order.indexOf(b.tier))[0]!;
+  return { ok: true, model: chosen, fellBack: Boolean(request.preferredModelId), capability: effective };
 }
 
-/** What a merchant picks from, without provider or model names. */
-export const STUDIO_PREFERENCES = [
-  { id: "fast", label: "Fast", detail: "Quickest and cheapest. Good for trying ideas." },
-  { id: "quality", label: "Best quality", detail: "The strongest model configured for this job." },
+/** What a merchant chooses between. No provider or model names. */
+export const STUDIO_PREFERENCES: Array<{ id: StudioPreference; label: string; detail: string }> = [
+  { id: "recommended", label: "Recommended", detail: "Joon picks the right model for the job." },
+  { id: "fast", label: "Fast", detail: "Quicker and cheaper. Good for trying ideas." },
+  { id: "premium", label: "Premium", detail: "The strongest configured model. For final assets." },
   {
     id: "product_faithful",
     label: "Product-faithful",
-    detail: "Keeps your real product exactly as it is. Needs a model that accepts your product image.",
+    detail: "Sends your real product image to the model, so the product stays itself.",
   },
-] as const;
+];
