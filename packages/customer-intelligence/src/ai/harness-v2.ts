@@ -1,6 +1,17 @@
-import { DEFAULT_MODEL, FALLBACK_CHAIN } from "./policy";
+import {
+  DEFAULT_MODEL,
+  FALLBACK_CHAIN,
+  getModel,
+  resolveModelChain,
+  type AIModelId,
+  type AITask,
+} from "./policy";
 import { migrateHarnessRoutes } from "./harness-migration";
-import { normalizeModelHarness, type ModelHarnessConfig } from "./model-harness";
+import {
+  normalizeModelHarness,
+  type ModelHarnessConfig,
+  type ResolvedModelRoute,
+} from "./model-harness";
 import {
   MODEL_REGISTRY,
   TEXT_WORKLOADS,
@@ -26,6 +37,14 @@ export interface HarnessRouteV2 {
   primary: string;
   /** Ordered. Each must be capable of the same job as the primary. */
   fallbacks: string[];
+  /**
+   * Carried forward from v1, which allowed per-route generation defaults.
+   * Settings does not expose these, but a workspace that set them keeps them —
+   * a migration that quietly reset someone's tuning is the failure this shape
+   * exists to avoid.
+   */
+  temperature?: number;
+  maxTokens?: number;
 }
 
 export interface ModelHarnessV2 {
@@ -69,7 +88,27 @@ function normalizeRoute(value: unknown, workload: HarnessWorkload): HarnessRoute
     .filter((id): id is string => typeof id === "string")
     .filter((id) => id !== primary && canDo(id, workload));
 
-  return { primary, fallbacks: [...new Set(fallbacks)] };
+  const temperature =
+    typeof value.temperature === "number" &&
+    Number.isFinite(value.temperature) &&
+    value.temperature >= 0 &&
+    value.temperature <= 2
+      ? value.temperature
+      : undefined;
+  const maxTokens =
+    typeof value.maxTokens === "number" &&
+    Number.isInteger(value.maxTokens) &&
+    value.maxTokens >= 128 &&
+    value.maxTokens <= 32_768
+      ? value.maxTokens
+      : undefined;
+
+  return {
+    primary,
+    fallbacks: [...new Set(fallbacks)],
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+  };
 }
 
 /**
@@ -155,4 +194,45 @@ export function describeHarnessV2(harness: ModelHarnessV2): Array<{
       }),
     };
   });
+}
+
+/**
+ * Resolve the ordered models to attempt for one text job.
+ *
+ * The workspace's route comes first, then Joon's own policy chain, so a
+ * configured choice is honoured but a provider outage still degrades instead of
+ * failing. An explicit call-level model remains a deliberate one-off override
+ * and wins over everything.
+ *
+ * This is what stops the settings screen being decorative: what a merchant
+ * saves here is what the gateway attempts.
+ */
+export function resolveTextRoute(opts: {
+  model?: AIModelId;
+  task?: AITask;
+  workload?: TextWorkload;
+  harness?: unknown;
+}): ResolvedModelRoute {
+  if (opts.model && getModel(opts.model)) {
+    return { workload: opts.workload, source: "explicit", candidates: resolveModelChain({ model: opts.model }) };
+  }
+
+  const policyTail = resolveModelChain({ task: opts.task });
+  if (opts.harness === undefined) {
+    return { workload: opts.workload, source: "system_policy", candidates: policyTail };
+  }
+
+  const harness = normalizeModelHarnessV2(opts.harness);
+  const own = opts.workload ? harness.routes[opts.workload] : undefined;
+  const route = own ?? harness.textDefault;
+
+  return {
+    workload: opts.workload,
+    source: own ? "harness_workload" : "harness_default",
+    candidates: [
+      ...new Set([route.primary as AIModelId, ...(route.fallbacks as AIModelId[]), ...policyTail]),
+    ],
+    ...(route.temperature !== undefined ? { temperature: route.temperature } : {}),
+    ...(route.maxTokens !== undefined ? { maxTokens: route.maxTokens } : {}),
+  };
 }

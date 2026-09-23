@@ -9,12 +9,9 @@ import {
   type AIModelId,
   type AITask,
 } from "./policy";
-import {
-  resolveHarnessRoute,
-  type AIWorkload,
-  type ModelHarnessConfig,
-  type ResolvedModelRoute,
-} from "./model-harness";
+import { resolveTextRoute } from "./harness-v2";
+import type { TextWorkload } from "./model-registry";
+import type { ResolvedModelRoute } from "./model-harness";
 import { cacheGet, cacheSet, isCacheable, type CacheKeyParts } from "./cache";
 
 // ---------------------------------------------------------------------------
@@ -37,9 +34,9 @@ export interface CompletionRequest {
   /** Declarative intent — drives task→tier routing when no model is given. */
   task?: AITask;
   /** Product-level job used by a merchant-configured model harness. */
-  workload?: AIWorkload;
+  workload?: TextWorkload;
   /** Persisted workspace harness. Untrusted JSON is normalized before use. */
-  harness?: ModelHarnessConfig | unknown;
+  harness?: unknown;
   prompt: string;
   system?: string;
   temperature?: number;
@@ -110,7 +107,7 @@ function isRecoverable(err: unknown): boolean {
 }
 
 export async function complete(request: CompletionRequest): Promise<CompletionResult> {
-  const route = resolveHarnessRoute({
+  const route = resolveTextRoute({
     model: request.model,
     task: request.task,
     workload: request.workload,

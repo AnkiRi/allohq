@@ -1,10 +1,9 @@
+import type { TextWorkload } from "./model-registry";
 import {
   DEFAULT_MODEL,
   FALLBACK_CHAIN,
   getModel,
-  resolveModelChain,
   type AIModelId,
-  type AITask,
 } from "./policy";
 
 /**
@@ -42,7 +41,8 @@ export interface ModelHarnessConfig {
 }
 
 export interface ResolvedModelRoute {
-  workload?: AIWorkload;
+  /** v1 names remain for callers not yet moved to the split workloads. */
+  workload?: AIWorkload | TextWorkload;
   source: "explicit" | "harness_default" | "harness_workload" | "system_policy";
   candidates: AIModelId[];
   temperature?: number;
@@ -59,12 +59,7 @@ export const DEFAULT_MODEL_HARNESS: ModelHarnessConfig = {
   routes: {},
 };
 
-const TASK_TO_WORKLOAD: Record<AITask, AIWorkload> = {
-  reasoning: "strategy",
-  generation: "creative",
-  analysis: "analysis",
-  classification: "classification",
-};
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -138,86 +133,4 @@ export function normalizeModelHarness(value: unknown): ModelHarnessConfig {
   }
 
   return { version: 1, mode, defaultRoute, routes };
-}
-
-function dedupe(ids: AIModelId[]): AIModelId[] {
-  return [...new Set(ids)];
-}
-
-/**
- * Resolve an ordered model chain. An explicit call-level model is an intentional
- * one-off override. Otherwise, custom workload routes win, followed by the
- * harness default, then the built-in safety chain.
- */
-export function resolveHarnessRoute(opts: {
-  model?: AIModelId;
-  task?: AITask;
-  workload?: AIWorkload;
-  harness?: ModelHarnessConfig | unknown;
-}): ResolvedModelRoute {
-  if (opts.model && getModel(opts.model)) {
-    return {
-      workload: opts.workload ?? (opts.task ? TASK_TO_WORKLOAD[opts.task] : undefined),
-      source: "explicit",
-      candidates: resolveModelChain({ model: opts.model }),
-    };
-  }
-
-  const workload = opts.workload ?? (opts.task ? TASK_TO_WORKLOAD[opts.task] : undefined);
-  if (opts.harness !== undefined) {
-    const harness = normalizeModelHarness(opts.harness);
-    const workloadRoute =
-      harness.mode === "custom" && workload ? harness.routes[workload] : undefined;
-    const route = workloadRoute ?? harness.defaultRoute;
-    const policyTail = resolveModelChain({ task: opts.task });
-
-    return {
-      workload,
-      source: workloadRoute ? "harness_workload" : "harness_default",
-      candidates: dedupe([route.primary, ...route.fallbacks, ...policyTail]),
-      ...(route.temperature !== undefined ? { temperature: route.temperature } : {}),
-      ...(route.maxTokens !== undefined ? { maxTokens: route.maxTokens } : {}),
-    };
-  }
-
-  return {
-    workload,
-    source: "system_policy",
-    candidates: resolveModelChain({ task: opts.task }),
-  };
-}
-
-export function describeHarness(config: ModelHarnessConfig | unknown): Array<{
-  workload: "default" | AIWorkload;
-  primary: AIModelId;
-  fallbacks: AIModelId[];
-  inherited: boolean;
-}> {
-  const harness = normalizeModelHarness(config);
-  const rows: Array<{
-    workload: "default" | AIWorkload;
-    primary: AIModelId;
-    fallbacks: AIModelId[];
-    inherited: boolean;
-  }> = [
-    {
-      workload: "default",
-      primary: harness.defaultRoute.primary,
-      fallbacks: harness.defaultRoute.fallbacks,
-      inherited: false,
-    },
-  ];
-
-  for (const workload of AI_WORKLOADS) {
-    const route =
-      harness.mode === "custom" ? harness.routes[workload] : undefined;
-    rows.push({
-      workload,
-      primary: route?.primary ?? harness.defaultRoute.primary,
-      fallbacks: route?.fallbacks ?? harness.defaultRoute.fallbacks,
-      inherited: !route,
-    });
-  }
-
-  return rows;
 }

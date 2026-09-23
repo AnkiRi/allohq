@@ -634,7 +634,7 @@ export const templatesRouter = router({
         .join("\n");
       try {
         const result = await complete({
-          workload: "creative",
+          workload: "email_structure",
           harness: workspaceAiSettings?.modelHarness,
           prompt,
           system,

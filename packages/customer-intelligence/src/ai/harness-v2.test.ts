@@ -5,6 +5,7 @@ import {
   describeHarnessV2,
   eligibleModels,
   normalizeModelHarnessV2,
+  resolveTextRoute,
   routeForWorkload,
 } from "./harness-v2";
 import { TEXT_WORKLOADS, VISUAL_WORKLOADS, modelById } from "./model-registry";
@@ -153,4 +154,56 @@ test("the legacy image model is never what an unconfigured visual job resolves t
     assert.notEqual(row.primary, "gpt-image-1-legacy");
     assert.equal(modelById("gpt-image-1-legacy")?.tier, "legacy");
   }
+});
+
+test("per-route generation defaults survive the move from v1", () => {
+  const harness = normalizeModelHarnessV2({
+    version: 1,
+    mode: "custom",
+    defaultRoute: { primary: "claude-sonnet-4-6", fallbacks: [] },
+    routes: { creative: { primary: "claude-sonnet-5", fallbacks: [], temperature: 0.9, maxTokens: 6000 } },
+  });
+  assert.equal(harness.routes.short_copy?.temperature, 0.9);
+  assert.equal(harness.routes.short_copy?.maxTokens, 6000);
+});
+
+// --- resolution ---------------------------------------------------------------
+
+test("a configured route is attempted first, then Joon's own chain", () => {
+  const route = resolveTextRoute({
+    workload: "short_copy",
+    harness: {
+      version: 2,
+      textDefault: { primary: "claude-sonnet-4-6", fallbacks: [] },
+      routes: { short_copy: { primary: "gpt-4o-mini", fallbacks: ["claude-haiku-4-5-20251001"] } },
+    },
+  });
+  assert.equal(route.source, "harness_workload");
+  assert.deepEqual(route.candidates.slice(0, 2), ["gpt-4o-mini", "claude-haiku-4-5-20251001"]);
+  assert.ok(route.candidates.length > 2, "the policy chain still follows, so an outage degrades");
+});
+
+test("a workload with no route of its own uses the text default", () => {
+  const route = resolveTextRoute({
+    workload: "long_content",
+    harness: { version: 2, textDefault: { primary: "claude-haiku-4-5-20251001", fallbacks: [] }, routes: {} },
+  });
+  assert.equal(route.source, "harness_default");
+  assert.equal(route.candidates[0], "claude-haiku-4-5-20251001");
+});
+
+test("an explicit model stays a one-off override", () => {
+  const route = resolveTextRoute({
+    model: "gpt-4o-mini",
+    workload: "short_copy",
+    harness: { version: 2, textDefault: { primary: "claude-sonnet-5", fallbacks: [] }, routes: {} },
+  });
+  assert.equal(route.source, "explicit");
+  assert.equal(route.candidates[0], "gpt-4o-mini");
+});
+
+test("no harness at all means Joon's policy, not an empty chain", () => {
+  const route = resolveTextRoute({ task: "classification" });
+  assert.equal(route.source, "system_policy");
+  assert.ok(route.candidates.length > 0);
 });

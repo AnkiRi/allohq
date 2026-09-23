@@ -109,28 +109,37 @@ const aiModelIdSchema = z.enum([
 ]);
 const aiModelSchema = aiModelIdSchema.optional();
 
-const aiWorkloadSchema = z.enum([
+const harnessWorkloadSchema = z.enum([
   "strategy",
-  "creative",
+  "email_structure",
+  "short_copy",
+  "long_content",
+  "brand_refinement",
   "analysis",
   "classification",
   "evaluation",
-  "support",
-  "orchestration",
+  "merchant_agent_orchestration",
+  "campaign_art",
+  "product_reference_edit",
+  "product_safe_composition",
+  "image_analysis",
 ]);
 
-const modelRouteSchema = z.object({
-  primary: aiModelIdSchema,
-  fallbacks: z.array(aiModelIdSchema).max(3).default([]),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().min(128).max(32_768).optional(),
+/**
+ * Model ids are checked for EXISTENCE here and for CAPABILITY in
+ * normalizeModelHarnessV2. Zod cannot express "this model can do this job",
+ * so the shape check stays here and the meaning check stays in one place that
+ * every write goes through.
+ */
+const harnessRouteSchema = z.object({
+  primary: z.string().min(1).max(64),
+  fallbacks: z.array(z.string().min(1).max(64)).max(3).default([]),
 });
 
 const modelHarnessSchema = z.object({
-  version: z.literal(1).default(1),
-  mode: z.enum(["unified", "custom"]),
-  defaultRoute: modelRouteSchema,
-  routes: z.record(aiWorkloadSchema, modelRouteSchema).default({}),
+  version: z.literal(2).default(2),
+  textDefault: harnessRouteSchema,
+  routes: z.record(harnessWorkloadSchema, harnessRouteSchema).default({}),
 });
 
 const emailIntentSchema = z.enum([
@@ -583,13 +592,15 @@ export const aiRouter = router({
 
   /** List available AI models with cost/tier metadata */
   models: workspaceProcedure.query(async () => {
-    const { AI_MODELS } = await import("@allohq/customer-intelligence");
-    return AI_MODELS.map((m) => ({
-      ...m,
-      available:
-        (m.provider === "anthropic" && !!process.env["ANTHROPIC_API_KEY"]) ||
-        (m.provider === "openai" && !!process.env["OPENAI_API_KEY"]),
-    }));
+    const { AI_MODELS, isModelAvailable, modelById } =
+      await import("@allohq/customer-intelligence");
+    // Availability comes from the registry, which also honours per-model
+    // switches. Inferring it from a provider key alone reported models as
+    // ready that were deliberately turned off.
+    return AI_MODELS.map((m) => {
+      const entry = modelById(m.id);
+      return { ...m, available: !!entry && isModelAvailable(entry) };
+    });
   }),
 
   /** Get available layout templates for email generation */
@@ -604,10 +615,55 @@ export const aiRouter = router({
       where: { id: ctx.workspaceId },
       select: { defaultModel: true, modelHarness: true },
     });
-    const { normalizeModelHarness } = await import("@allohq/customer-intelligence");
+    const { normalizeModelHarnessV2 } = await import("@allohq/customer-intelligence");
     return {
       defaultModel: workspace?.defaultModel ?? null,
-      modelHarness: normalizeModelHarness(workspace?.modelHarness),
+      modelHarness: normalizeModelHarnessV2(workspace?.modelHarness),
+    };
+  }),
+
+  /**
+   * Everything the settings screen needs to offer a choice truthfully: which
+   * models exist, which can do which job, and which are actually reachable.
+   *
+   * `configured` is decided on the server because it depends on credentials the
+   * browser must never see. A model the workspace cannot reach is returned so
+   * it can be shown as unavailable and WHY — but it can never be selected, and
+   * saving one is refused below.
+   */
+  harnessCatalogue: workspaceProcedure.query(async () => {
+    const {
+      MODEL_REGISTRY,
+      TEXT_WORKLOADS,
+      VISUAL_WORKLOADS,
+      WORKLOAD_COPY,
+      WORKLOAD_CAPABILITY,
+      eligibleModels,
+      isModelAvailable,
+    } = await import("@allohq/customer-intelligence");
+
+    return {
+      models: MODEL_REGISTRY.map((model) => ({
+        id: model.id,
+        label: model.label,
+        provider: model.provider,
+        apiModelId: model.apiModelId,
+        capabilities: model.capabilities,
+        costClass: model.costClass,
+        tier: model.tier,
+        configured: isModelAvailable(model),
+        note: model.note ?? null,
+      })),
+      workloads: [...TEXT_WORKLOADS, ...VISUAL_WORKLOADS].map((workload) => ({
+        id: workload,
+        kind: WORKLOAD_CAPABILITY[workload] === "text" ? ("text" as const) : ("visual" as const),
+        label: WORKLOAD_COPY[workload].label,
+        purpose: WORKLOAD_COPY[workload].purpose,
+        capability: WORKLOAD_CAPABILITY[workload],
+        // The browser renders only these. It never filters by capability
+        // itself, so it cannot get the rule wrong.
+        eligibleModelIds: eligibleModels(workload).map((model) => model.id),
+      })),
     };
   }),
 
@@ -615,17 +671,19 @@ export const aiRouter = router({
   setDefaultModel: ownerProcedure
     .input(z.object({ model: aiModelIdSchema.nullable() }))
     .mutation(async ({ ctx, input }) => {
-      const { normalizeModelHarness } = await import("@allohq/customer-intelligence");
+      const { normalizeModelHarnessV2 } = await import("@allohq/customer-intelligence");
       const workspace = await ctx.prisma.workspace.findUnique({
         where: { id: ctx.workspaceId },
         select: { modelHarness: true },
       });
-      const modelHarness = normalizeModelHarness(workspace?.modelHarness);
+      // Read as v2 and write back as v2. Reading through the v1 parser here
+      // would drop every per-job route the workspace had set.
+      const modelHarness = normalizeModelHarnessV2(workspace?.modelHarness);
       if (input.model) {
-        modelHarness.defaultRoute.primary = input.model;
-        modelHarness.defaultRoute.fallbacks = modelHarness.defaultRoute.fallbacks.filter(
-          (id) => id !== input.model
-        );
+        modelHarness.textDefault = {
+          primary: input.model,
+          fallbacks: modelHarness.textDefault.fallbacks.filter((id) => id !== input.model),
+        };
       }
 
       await ctx.prisma.workspace.update({
@@ -640,9 +698,26 @@ export const aiRouter = router({
 
   /** Save the complete workspace model harness. Owner-only because it affects cost and behavior. */
   setModelHarness: ownerProcedure.input(modelHarnessSchema).mutation(async ({ ctx, input }) => {
-    const { normalizeModelHarness, describeHarness } =
+    const { normalizeModelHarnessV2, describeHarnessV2, modelById, WORKLOAD_CAPABILITY, WORKLOAD_COPY } =
       await import("@allohq/customer-intelligence");
-    const harness = normalizeModelHarness(input);
+
+    // Normalising silently drops a route a model cannot perform. Saving would
+    // then report success while the setting quietly did not take, so the
+    // mismatch is reported instead of swallowed.
+    const harness = normalizeModelHarnessV2(input);
+    const rejected: string[] = [];
+    for (const [workload, route] of Object.entries(input.routes ?? {})) {
+      if (!route || harness.routes[workload as keyof typeof harness.routes]) continue;
+      const model = modelById(route.primary);
+      rejected.push(
+        model
+          ? `${model.label} cannot do ${WORKLOAD_COPY[workload as keyof typeof WORKLOAD_COPY].label.toLowerCase()} (it needs ${WORKLOAD_CAPABILITY[workload as keyof typeof WORKLOAD_CAPABILITY].replace(/_/g, " ")}).`
+          : `"${route.primary}" is not a model Joon can run.`,
+      );
+    }
+    if (rejected.length) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: rejected.join(" ") });
+    }
 
     await ctx.prisma.workspace.update({
       where: { id: ctx.workspaceId },
@@ -650,25 +725,14 @@ export const aiRouter = router({
         modelHarness: harness as any,
         // Keep the legacy field synchronized for workers that have not yet
         // migrated to workload-aware routing.
-        defaultModel: harness.defaultRoute.primary,
+        defaultModel: harness.textDefault.primary,
       },
     });
 
     return {
       success: true,
       harness,
-      resolvedRoutes: describeHarness(harness),
-    };
-  }),
-
-  /** Resolve every route without calling a provider; used by the settings preview. */
-  previewModelHarness: ownerProcedure.input(modelHarnessSchema).query(async ({ input }) => {
-    const { normalizeModelHarness, describeHarness } =
-      await import("@allohq/customer-intelligence");
-    const harness = normalizeModelHarness(input);
-    return {
-      harness,
-      resolvedRoutes: describeHarness(harness),
+      resolvedRoutes: describeHarnessV2(harness),
     };
   }),
 
