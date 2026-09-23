@@ -10,7 +10,18 @@ const redisConnection = {
   password: process.env["REDIS_PASSWORD"],
 };
 
-const brandAnalysisQueue = new Queue("brand-analysis", { connection: redisConnection });
+/**
+ * Opened on first use, not on import.
+ *
+ * At module scope this connected to Redis merely because something imported
+ * the router — which kept the process alive forever and stalled the
+ * integration run on a suite that never touches the queue.
+ */
+let brandAnalysisQueueInstance: Queue | null = null;
+function brandAnalysisQueue(): Queue {
+  brandAnalysisQueueInstance ??= new Queue("brand-analysis", { connection: redisConnection });
+  return brandAnalysisQueueInstance;
+}
 
 /** Common words to skip when searching for customer names in messages */
 const STOP_WORDS = new Set([
@@ -1193,7 +1204,7 @@ export const aiRouter = router({
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const job = await brandAnalysisQueue.add(
+      const job = await brandAnalysisQueue().add(
         "analyze-brand",
         { storeId: input.storeId, model: input.model },
         {
@@ -2424,7 +2435,7 @@ NOTE: Use this customer feedback data to inform recommendations. For example, if
   brandAnalysisStatus: workspaceProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
-      const job = await brandAnalysisQueue.getJob(input.jobId);
+      const job = await brandAnalysisQueue().getJob(input.jobId);
       if (!job) return { status: "not_found" as const };
 
       const state = await job.getState();
