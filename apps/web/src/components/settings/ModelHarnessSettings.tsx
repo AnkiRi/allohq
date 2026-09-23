@@ -351,7 +351,7 @@ export function ModelHarnessSettings() {
               aria-expanded={showModels}
             >
               <ChevronDown
-                className={`h-3 w-3 transition-transform ${showModels ? "rotate-180" : ""}`}
+                className={`h-3.5 w-3.5 transition-transform ${showModels ? "rotate-180" : ""}`}
               />
               {showModels ? "Hide" : "Show"} the {models.length} models Joon can run
             </button>
@@ -385,7 +385,7 @@ export function ModelHarnessSettings() {
               onClick={() => setDraft(clone(JSON.parse(saved) as Harness))}
               className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-3.5 w-3.5" />
               Discard changes
             </button>
           )}
