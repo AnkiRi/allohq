@@ -1,0 +1,105 @@
+name: Five-tenant concurrency proof
+
+# Never on a pull request, and never on a push to main. It seeds several
+# hundred thousand synthetic customers across six tenants, so it runs only when
+# someone asks for it, or on a `scale-proof/**` branch pushed for that purpose.
+#
+# Deliberately NOT `proof/**`: that prefix belongs to million.yml, and sharing
+# it would start a second, hour-long run on every push here.
+#
+# The default is 5 x 100,000 plus a late tenant of 100,000 — measured at
+# 2,847 bytes per customer end to end, about 1.7 GB of live data, which fits a
+# standard 16 GB runner. The 5 x 1,000,000 workload does not (about 13.5 GB of
+# data and a 32 GB recommendation) and needs a larger, disposable host.
+#
+# Synthetic tenants, disposable Postgres, simulated provider. No Shopify, no
+# Resend, no SES, no Railway, no real recipients.
+on:
+  workflow_dispatch:
+    inputs:
+      size:
+        description: "Customers per concurrent tenant"
+        required: false
+        default: "100000"
+      late_size:
+        description: "Customers in the tenant that joins mid-flight"
+        required: false
+        default: "100000"
+  push:
+    branches: ["scale-proof/**"]
+
+jobs:
+  five-tenant:
+    name: Five concurrent tenants, one late, one crashing — isolation, correctness, recovery, completion
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    services:
+      postgres:
+        # pgvector, not stock postgres:16 — a migration creates the `vector`
+        # extension and the stock image does not ship it.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_five_tenant_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_five_tenant_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_five_tenant_test"
+      FIVE_TENANT_SIZE: ${{ github.event.inputs.size || '100000' }}
+      FIVE_TENANT_LATE_SIZE: ${{ github.event.inputs.late_size || '100000' }}
+      # The run claims to prove exactly the size it seeds, and nothing larger.
+      FIVE_TENANT_PROOF_SIZE: ${{ github.event.inputs.size || '100000' }}
+      # The proof measures retained heap and fails without a collector.
+      NODE_OPTIONS: "--expose-gc"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Resources before the run
+        run: |
+          echo "--- memory ---"; free -h
+          echo "--- disk ---"; df -h /
+          echo "--- cpus ---"; nproc
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Five-tenant proof
+        run: pnpm --filter @allohq/workers exec tsx --test src/workers/five-tenant.load.integration.ts
+
+      - name: Resources after the run
+        # Runs even on failure: a killed run must be reported as inconclusive
+        # rather than guessed at, and the reason is usually here.
+        if: always()
+        run: |
+          echo "--- memory ---"; free -h
+          echo "--- disk ---"; df -h /
+          echo "--- database size ---"
+          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test \
+            -c "SELECT pg_size_pretty(pg_database_size(current_database()))" || true
+          echo "--- serialization conflicts, deadlocks, rollbacks ---"
+          PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test \
+            -c "SELECT deadlocks, conflicts, xact_rollback FROM pg_stat_database WHERE datname = current_database()" || true

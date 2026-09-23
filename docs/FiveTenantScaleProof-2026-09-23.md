@@ -148,6 +148,16 @@ NODE_OPTIONS=--expose-gc \
 `NODE_OPTIONS=--expose-gc` is required: the proof measures retained heap and **fails rather
 than skips** without a collector.
 
+### On a GitHub runner, at 100,000 per tenant
+
+`.github/workflows/five-tenant.yml` runs 5 x 100,000 plus a late tenant of 100,000 on a
+standard runner — about 1.7 GB of live data at the measured 2,847 bytes per customer. It
+starts on `workflow_dispatch` or on a push to a `scale-proof/**` branch; never on a pull
+request, and never `proof/**`, which belongs to the 1M workflow.
+
+`FIVE_TENANT_PROOF_SIZE` is set to the seeded size, so the run is reported as a proof **at
+100,000** and the crash must land. It is not the 1M proof and must not be quoted as one.
+
 ### Rehearsal only
 
 `FIVE_TENANT_SIZE`, `FIVE_TENANT_LATE_SIZE` and `FIVE_TENANT_COUNT` exist so the assertions

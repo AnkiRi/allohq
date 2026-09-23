@@ -31,12 +31,19 @@ import { seedTenant, type SeededTenant } from "./scale-tenant-fixture";
  *
  * FIVE_TENANT_SIZE exists so the assertions can be rehearsed at a small size
  * on a laptop. The DEFAULT is the real workload; a rehearsal must be reported
- * as a rehearsal and never quoted as the proof.
+ * as a rehearsal and never quoted as the proof. FIVE_TENANT_PROOF_SIZE names
+ * the size a run claims to prove; a run at 100,000 is a 100,000 proof only.
  */
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 const SIZE = Number(process.env["FIVE_TENANT_SIZE"] ?? 1_000_000);
 const LATE_SIZE = Number(process.env["FIVE_TENANT_LATE_SIZE"] ?? 100_000);
 const TENANTS = Number(process.env["FIVE_TENANT_COUNT"] ?? 5);
+/**
+ * The per-tenant size this run claims to prove. A run below it is a rehearsal
+ * and says so. Declared rather than hard-coded, so a 5 x 100,000 run can be a
+ * genuine proof AT 100,000 — reported as exactly that, never as the 1M proof.
+ */
+const PROOF_SIZE = Number(process.env["FIVE_TENANT_PROOF_SIZE"] ?? 1_000_000);
 /** Which of the concurrent tenants loses its lease. */
 const CRASH_INDEX = Math.min(2, TENANTS - 1);
 
@@ -87,7 +94,7 @@ test(
     const { prisma, prepareCampaignAudience, campaignPreparationProgress, completedAudienceRun, experiments } =
       await load();
 
-    const rehearsal = SIZE < 1_000_000;
+    const rehearsal = SIZE < PROOF_SIZE;
     checkpoint(
       rehearsal ? "REHEARSAL (not the proof)" : "run started",
       `${TENANTS} x ${SIZE.toLocaleString()} concurrent, plus one late tenant of ${LATE_SIZE.toLocaleString()}`,
@@ -393,8 +400,8 @@ test(
         victim.status,
       );
       check(
-        crashLanded || SIZE < 1_000_000,
-        "the crash landed (required at the full workload)",
+        crashLanded || rehearsal,
+        "the crash landed (required whenever this run claims to be the proof)",
         "the victim completed before its lease could be revoked",
       );
       check(victim.dispatched.length === 1, `crashed tenant ${CRASH_INDEX} dispatched once overall`,
@@ -432,7 +439,7 @@ test(
         "",
         `  === ${TENANTS} TENANTS x ${SIZE.toLocaleString()} + 1 x ${LATE_SIZE.toLocaleString()} — ${failed.length === 0 ? "PASS" : "FAIL"} ===`,
         ...(rehearsal
-          ? ["  REHEARSAL ONLY: below the one-million workload; not the readiness proof.", ""]
+          ? [`  REHEARSAL ONLY: below the ${PROOF_SIZE.toLocaleString()} target; not the readiness proof.`, ""]
           : []),
         `  seeding ....................... ${(seedMs / 60000).toFixed(1)} min`,
         `  concurrent phase .............. ${(concurrentMs / 60000).toFixed(1)} min`,
