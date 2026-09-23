@@ -61,3 +61,26 @@ test("production logs and thrown errors do not interpolate direct customer conta
     `Direct customer contact data must not appear in production logs:\n${violations.join("\n")}`,
   );
 });
+
+function appFiles(relativeDirectory: string): string[] {
+  return readdirSync(join(root, relativeDirectory), { withFileTypes: true }).flatMap((entry) => {
+    const relative = join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) return ["node_modules", ".next", "dist", ".turbo"].includes(entry.name) ? [] : appFiles(relative);
+    return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [relative] : [];
+  });
+}
+
+test("every Sentry.init scrubs both errors and transactions", () => {
+  const inits = appFiles("apps").flatMap((relative) => {
+    const source = readFileSync(join(root, relative), "utf8");
+    return source.split("Sentry.init(").slice(1).map((call) => ({ relative, options: call.slice(0, call.indexOf("});")) }));
+  });
+  assert.ok(inits.length >= 4, `expected api, workers, web server and web client inits, found ${inits.length}`);
+  for (const { relative, options } of inits) {
+    assert.match(options, /sendDefaultPii:\s*false/, `${relative} must not send default PII`);
+    assert.match(options, /beforeSend:/, `${relative} must scrub error events`);
+    // beforeSend never sees transactions; without this, raising the traces
+    // sample rate would ship request URLs and span attributes unscrubbed.
+    assert.match(options, /beforeSendTransaction:/, `${relative} must scrub transactions`);
+  }
+});
