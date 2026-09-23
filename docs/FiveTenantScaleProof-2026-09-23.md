@@ -196,8 +196,11 @@ The cause is established, not guessed:
   that touch **no common rows**, which is why tenants with different campaigns, templates and
   stores conflict at all.
 - Prisma maps 40001 to P2034, whose own message is *"Please retry your transaction"*.
-  **There is no retry.** A failed approval is permanent, and the merchant's campaign never
-  completes.
+  The transaction itself had no retry. The BullMQ job does retry up to five times, but on
+  `main` every one of those retries fails on a duplicate evaluation-row key (`23505`) before
+  it reaches the transaction, so the queue cannot recover it either. Measured: one conflict
+  followed by the five queue attempts left the campaign `draft`, unapproved, with nothing
+  sent. **A failed approval is effectively permanent.** Fixed in #43.
 - The **aborting statement varies** between runs — `campaign.updateMany` in one,
   `emailVersion.create` (`email-versions.ts:50`) in another. Both sit inside that same
   transaction, which is exactly how SSI behaves: any statement can be the one rolled back.
@@ -213,7 +216,11 @@ Single-tenant proofs could never surface this, because nothing else was running.
 | 5 x 8,000 | 3 | PASS, PASS, **FAIL** (3 of 5 tenants threw) |
 | 5 x 15,000 | 3 | PASS, **FAIL**, PASS |
 
-It is load- and timing-dependent, so a million per tenant — where the transaction window is
-far longer — is more exposed, not less.
+It is timing-dependent, and the timing comes from the harness: identical tenants released at
+the same instant reach finalisation together. Audience size does **not** widen the window —
+the finalisation transaction writes the same few records whether a tenant has 1,000
+customers or a million — so this rate says nothing about the 1M run beyond "it can happen".
+*(An earlier version of this section claimed a million per tenant would be more exposed;
+that was wrong.)*
 
 The harness fails on this rather than tolerating it, which is the proof doing its job.
