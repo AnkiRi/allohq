@@ -100,3 +100,16 @@ test("product-in-a-scene offers only reference-capable models", () => {
   assert.doesNotMatch(markup, /Claude Sonnet 5/);
   assert.match(markup, /your real product photo/);
 });
+
+test("a job no model implements is distinguished from one that is unconfigured", () => {
+  // Telling a merchant to configure something would send them to add a key
+  // that changes nothing. The two states have different remedies and must
+  // read differently.
+  const unimplemented = render({ ...campaignArt, eligibleModelIds: [] });
+  assert.match(unimplemented, /Joon cannot do this yet/);
+  assert.doesNotMatch(unimplemented, /not configured yet/);
+
+  const unconfigured = render({ ...campaignArt, eligibleModelIds: ["nano-banana-pro"] });
+  assert.match(unconfigured, /No model for this job is configured yet/);
+  assert.doesNotMatch(unconfigured, /Joon cannot do this yet/);
+});

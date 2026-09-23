@@ -120,6 +120,10 @@ export function WorkloadRow({
     [models, workload.eligibleModelIds],
   );
   const fallbackOptions = eligible.filter((model) => model.id !== route?.primary);
+  // Two different situations that must not be reported as one. "Not
+  // configured" invites the merchant to go and add a key; for a job Joon has
+  // no adapter for, a key would change nothing.
+  const unimplemented = workload.eligibleModelIds.length === 0;
   const runnable = eligible.some((model) => model.configured);
 
   return (
@@ -129,11 +133,15 @@ export function WorkloadRow({
         <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
           {workload.purpose}
         </p>
-        {!runnable && (
+        {unimplemented ? (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Joon cannot do this yet — no model it can run offers it.
+          </p>
+        ) : !runnable ? (
           <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-500">
             No model for this job is configured yet.
           </p>
-        )}
+        ) : null}
       </div>
 
       <div>

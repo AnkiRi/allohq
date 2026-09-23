@@ -44,14 +44,28 @@ const ADDABLE: { type: EmailBlockType; label: string }[] = [
   { type: "custom_html", label: "Custom HTML" },
 ];
 
-function blockTitle(block: EmailBlock): string {
+/**
+ * The name for a block in the outline.
+ *
+ * A product block's title is deliberately not stored on the block — it is
+ * resolved from the store so it can never go stale. That left the outline
+ * saying "Product · picked" the moment a merchant switched product, which is
+ * worse than the name they just chose. Resolving from the same store data the
+ * picker used gives the live title without reintroducing the stale copy.
+ */
+function blockTitle(block: EmailBlock, products?: Array<{ id: string; title: string }>): string {
   switch (block.type) {
     case "hero": return block.props.heading || "Hero";
     case "text": return block.props.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 48) || "Text";
     case "button": return block.props.text || "Button";
     // Not the raw id: stripping a replaced product's title leaves nothing to
     // show, and "prod_01H9X" is worse than saying what kind of block it is.
-    case "product": return block.props.title || (block.props.productId ? "Product · picked" : "Product");
+    case "product": {
+      const fromStore = block.props.productId
+        ? products?.find((product) => product.id === block.props.productId)?.title
+        : undefined;
+      return fromStore || block.props.title || (block.props.productId ? "Product · picked" : "Product");
+    }
     case "product_grid": return "Product grid";
     case "testimonial": return `Quote · ${block.props.author}`;
     case "icon_row": return "Reasons row";
@@ -172,6 +186,10 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     { storeId: storeId ?? "", page: 1, limit: 24 },
     { enabled: !!storeId },
   ) as { data?: { products: Array<{ id: string; title: string; description?: string | null; imageUrl?: string | null; price: number; handle: string }> } };
+  const nameOf = React.useCallback(
+    (block: EmailBlock) => blockTitle(block, productPage?.products),
+    [productPage?.products],
+  );
   const { data: storeCollections } = (trpc.products as any).collections.useQuery(
     { storeId: storeId ?? "" }, { enabled: !!storeId },
   ) as { data?: Array<{ id: string; title: string; handle: string; productCount: number }> };
@@ -409,7 +427,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     // back to Edit, and say where it landed.
     const fieldLabel = field === "html" ? "body text" : field === "heading" ? "heading" : field;
     setActiveTab("inspect");
-    setInsertReceipt(`Inserted in ${blockTitle(selected)} ${fieldLabel}`);
+    setInsertReceipt(`Inserted in ${nameOf(selected)} ${fieldLabel}`);
     window.setTimeout(() => setInsertReceipt(null), 4000);
   };
 
@@ -532,7 +550,12 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} /> : null}
       {showAdd ? <div className="absolute right-3 top-[68px] z-50 w-56 overflow-hidden rounded-xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl xl:hidden"><BlockPicker onAdd={add} /></div> : null}
 
-      <div className="relative flex min-h-0 flex-1">
+      {/*
+        The library declares aria-modal, so the Studio behind it has to be
+        genuinely inert. The backdrop stops a pointer; only this stops Tab
+        reaching the tab strip and editor underneath.
+      */}
+      <div className="relative flex min-h-0 flex-1" inert={libraryOpen}>
         <aside
           aria-label="Email outline"
           aria-hidden={!isDesktop || !outlineOpen}
@@ -550,7 +573,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="flex items-center justify-between border-b border-border px-3 py-2"><div><p className="text-[13px] font-medium">Content</p><p className="text-[12px] text-muted-foreground">{blocks.length} blocks</p></div><IconButton label="Add block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></div>
           <button type="button" onClick={() => setOutlineOpen(false)} aria-expanded={true} className="mx-3 mt-2 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-[#FFFDF8] px-3 py-2 text-[12px] font-medium outline-none transition-colors hover:border-[#2D4F9E] hover:bg-[#E9EFFF] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"><PanelLeftClose className="h-3.5 w-3.5" />Hide outline</button>
           {showAdd ? <BlockPicker onAdd={add} /> : null}
-          <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { setSelectedId(blockId); setActiveTab("inspect"); }} onMove={move} onRemove={remove} blockTitle={blockTitle} /></div>
+          <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { setSelectedId(blockId); setActiveTab("inspect"); }} onMove={move} onRemove={remove} blockTitle={nameOf} /></div>
         </aside>
 
         {isDesktop && !outlineOpen ? (
@@ -659,6 +682,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       ) : null}
     </div>
   );
+
 }
 
 /**
