@@ -80,3 +80,11 @@ test("the configured model is named where it is used", () => {
 test("with nothing selected it asks for a selection", () => {
   assert.match(render(null), /Select a block/);
 });
+
+test("the library action names the sources it actually opens", () => {
+  // It used to send the merchant to Ask Joon's flat upload strip. It now opens
+  // the real library, and the copy has to match what they will see.
+  const markup = render(block("image"));
+  assert.match(markup, /Choose from library/);
+  assert.match(markup, /Shopify photos, your uploads, and anything Joon has made/);
+});

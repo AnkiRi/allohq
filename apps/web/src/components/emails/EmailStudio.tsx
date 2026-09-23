@@ -14,6 +14,7 @@ import type { BrandKit } from "@allohq/emails";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { useRouter } from "next/navigation";
+import { AssetLibrary, type Library, type LibraryItem } from "./AssetLibrary";
 import { useIsDesktop } from "@/lib/use-breakpoint";
 import { bindProductToBlock } from "@/lib/product-binding";
 import { BlockList } from "./BlockList";
@@ -162,6 +163,11 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     { storeId: storeId ?? "" }, { enabled: !!storeId },
   ) as { data?: Array<{ id: string; fileName: string; type: string; url?: string }>; refetch: () => Promise<unknown> };
   const creativeAssets = creativeAssetsQuery.data ?? [];
+  const [libraryOpen, setLibraryOpen] = React.useState(false);
+  const libraryQuery = (trpc as any).assets.library.useQuery(
+    { storeId: storeId! },
+    { enabled: !!storeId && libraryOpen },
+  );
   const { data: productPage } = (trpc.products as any).list.useQuery(
     { storeId: storeId ?? "", page: 1, limit: 24 },
     { enabled: !!storeId },
@@ -293,6 +299,30 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       return;
     }
     toast("Visual placed. Nothing is sent until you approve the campaign.", "success");
+  };
+
+  /**
+   * Place a picture the merchant chose from the library.
+   *
+   * A product block is refused on purpose: its image is the product's own
+   * Shopify photograph. Letting a chosen picture sit there would make the
+   * block stop being a record of the product.
+   */
+  const useLibraryItem = (item: { url: string; label: string; altText?: string | null }) => {
+    if (!selected) { toast("Select an image or hero block first.", "error"); return; }
+    if (selected.type === "image") {
+      updateBlock({ ...selected, props: { ...selected.props, src: item.url, alt: item.altText || item.label } } as EmailBlock);
+    } else if (selected.type === "hero") {
+      updateBlock({ ...selected, props: { ...selected.props, bgImageSrc: item.url } } as EmailBlock);
+    } else if (selected.type === "product") {
+      toast("A product block always shows the product's own Shopify image. Put this in an image or hero block instead.", "error");
+      return;
+    } else {
+      toast("That block cannot hold an image. Select an image or hero block.", "error");
+      return;
+    }
+    setLibraryOpen(false);
+    toast("Image placed. Nothing is sent until you approve the campaign.", "success");
   };
 
   /**
@@ -594,7 +624,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="min-h-0 flex-1 overflow-y-auto">
             {activeTab === "ask" ? <AskPanel visualProposal={visualProposal} onVisualGenerate={() => { setVisualProposal(null); setActiveTab("visuals"); }} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {insertReceipt ? <p role="status" className="mx-4 mt-3 rounded-lg border border-[#157858]/30 bg-[#E5F4EE] px-2.5 py-1.5 text-[12px] text-[#157858]">{insertReceipt}</p> : null}
-            {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} assets={creativeAssets} products={productPage?.products ?? []} onOpenVisuals={() => { setActiveTab("visuals"); setAdvancedVisuals(false); }} onUploadImage={() => document.getElementById("studio-asset-upload")?.click()} onChooseAsset={() => setActiveTab("ask")} /> : null}
+            {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} products={productPage?.products ?? []} onOpenVisuals={() => { setActiveTab("visuals"); setAdvancedVisuals(false); }} onUploadImage={() => document.getElementById("studio-asset-upload")?.click()} onChooseAsset={() => setLibraryOpen(true)} /> : null}
             {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /> : null}
             {activeTab === "visuals" && !advancedVisuals ? (
               <VisualActions
@@ -603,7 +633,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
                 productTitle={blockProduct?.title ?? null}
                 onGenerate={() => setAdvancedVisuals(true)}
                 onUpload={() => document.getElementById("studio-asset-upload")?.click()}
-                onChooseFromLibrary={() => { setActiveTab("inspect"); toast("Reference assets are listed in Ask Joon.", "success"); }}
+                onChooseFromLibrary={() => setLibraryOpen(true)}
                 onCreateProductScene={createProductScene}
                 onOpenAdvanced={() => setAdvancedVisuals(true)}
               />
@@ -614,6 +644,72 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
             {activeTab === "preflight" ? <PreflightPanel preflight={preflight} /> : null}
           </div>
         </aside>
+      </div>
+
+      {libraryOpen ? (
+        <AssetLibraryDialog
+          library={libraryQuery.data ?? null}
+          loading={libraryQuery.isLoading}
+          initialTab={selected?.type === "product" ? "shopify" : undefined}
+          onClose={() => setLibraryOpen(false)}
+          onSelect={useLibraryItem}
+          onUpload={() => { setLibraryOpen(false); document.getElementById("studio-asset-upload")?.click(); }}
+          onGenerate={() => { setLibraryOpen(false); setActiveTab("visuals"); setAdvancedVisuals(false); }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The library opens over the Studio rather than replacing a panel, because
+ * choosing a picture is an errand inside editing a block — the email stays
+ * visible behind it and the selection is not lost.
+ */
+function AssetLibraryDialog({
+  library, loading, initialTab, onClose, onSelect, onUpload, onGenerate,
+}: {
+  library: Library | null;
+  loading: boolean;
+  initialTab?: "shopify" | "uploads" | "generated" | "brand";
+  onClose: () => void;
+  onSelect: (item: LibraryItem) => void;
+  onUpload: () => void;
+  onGenerate: () => void;
+}) {
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-6">
+      <button type="button" aria-label="Close asset library" onClick={onClose} className="absolute inset-0 cursor-default" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Asset library"
+        className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl sm:rounded-2xl"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-[#F4F2EC] hover:text-foreground focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <AssetLibrary
+            library={library}
+            loading={loading}
+            initialTab={initialTab}
+            onSelect={onSelect}
+            onUpload={onUpload}
+            onGenerate={onGenerate}
+          />
+        </div>
       </div>
     </div>
   );
@@ -643,21 +739,14 @@ function AskPanel({ visualProposal, onVisualGenerate, onVisualRefine, onVisualCa
   return <div className="flex min-h-full flex-col"><div className="p-4"><PanelHeading eyebrow="Ask Joon" title={selected ? blockTitle(selected) : "This email"} description="Every result arrives as a proposal you accept or reject. Nothing changes until you do." /><ScopeChooser scope={scope} setScope={setScope} selectedTitle={selected ? blockTitle(selected) : null} />{visualProposal ? <VisualProposalCard proposal={visualProposal} onGenerate={onVisualGenerate} onRefine={onVisualRefine} onCancel={onVisualCancel} /> : null}{history.length ? <div className="mt-5 space-y-2 border-l border-border pl-3">{history.slice(-8).map((item) => <div key={item.id} className="rounded-r-xl bg-[#F4F2EC] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-[12px] leading-5">{item.instruction}</p><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", item.status === "accepted" ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : item.status === "rejected" ? "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]" : "bg-[var(--attention-soft,#FFF0B8)] text-foreground")}>{item.status}</span></div><p className="mt-1 text-[10px] text-muted-foreground">Joon prepared a reviewable change · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div> : <div className="mt-5 rounded-xl border border-border bg-[#F4F2EC] p-3"><div className="flex gap-2.5"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#17204D] text-[11px] font-medium text-white">J</div><p className="text-[13px] leading-5">Tell me what should change. I’ll keep the current version intact and show you the proposal before anything is applied.</p></div></div>}<div className="mt-3 flex flex-wrap gap-1.5">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => onAsk(suggestion)} disabled={pending} className="rounded-full border border-border px-2.5 py-1 text-[12px] hover:border-[var(--attention,#C99116)] hover:bg-[var(--attention-soft,#FFF0B8)] disabled:opacity-40">{suggestion}</button>)}</div><div className="mt-5"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[12px] font-medium">Reference assets</p><label className="cursor-pointer rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-[#F4F2EC]"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.currentTarget.value = ""; }} />{uploading ? "Uploading…" : "+ Upload"}</label></div><div className="flex flex-wrap gap-1.5">{assets.map((asset) => { const active = selectedAssetIds.includes(asset.id); return <button key={asset.id} type="button" onClick={() => setSelectedAssetIds((current) => active ? current.filter((id) => id !== asset.id) : [...current, asset.id])} className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px]", active ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border")}><ImagePlus className="h-3.5 w-3.5" />{asset.fileName}</button>; })}{!assets.length ? <p className="text-[12px] text-muted-foreground">Upload a product or campaign reference, then ask Joon to use or transform it.</p> : null}</div></div></div><div className="sticky bottom-0 mt-auto border-t border-border bg-[var(--surface,#FFFDF8)] p-3"><div className="rounded-xl border border-border bg-white p-2 focus-within:border-[var(--evidence,#2D4F9E)]"><textarea ref={inputRef} value={instruction} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onAsk(); } }} rows={4} placeholder={scope === "block" && selected ? `Ask Joon about “${blockTitle(selected)}”…` : scope === "envelope" ? "Ask Joon about the subject or inbox preview…" : "Ask Joon about the whole email…"} className="w-full resize-none bg-transparent px-1 text-[14px] leading-5 outline-none" /><div className="flex items-center justify-between"><span className="text-[11px] text-muted-foreground">Enter to propose · Shift Enter for a new line</span><button type="button" onClick={() => onAsk()} disabled={pending || !instruction.trim()} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17204D] text-white disabled:opacity-40" aria-label="Ask Joon">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div></div>{error ? <p className="mt-2 text-[12px] text-[var(--risk,#B95849)]">{error}</p> : null}</div></div>;
 }
 
-function InspectorPanel({ selected, updateBlock, assets, products, onOpenVisuals, onUploadImage, onChooseAsset }: { selected: EmailBlock | null; updateBlock: (block: EmailBlock) => void; assets: Array<{ id: string; fileName: string; type: string; url?: string }>; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void; products: Array<{ id: string; title: string; description?: string | null; imageUrl?: string | null; price: number; handle: string }> }) {
-  const applyAsset = (url: string) => {
-    if (!selected) return;
-    if (selected.type === "image") updateBlock({ ...selected, props: { ...selected.props, src: url } });
-    else if (selected.type === "hero") updateBlock({ ...selected, props: { ...selected.props, bgImageSrc: url } });
-    else if (selected.type === "product") updateBlock({ ...selected, props: { ...selected.props, imageUrl: url } });
-  };
+function InspectorPanel({ selected, updateBlock, products, onOpenVisuals, onUploadImage, onChooseAsset }: { selected: EmailBlock | null; updateBlock: (block: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void; products: Array<{ id: string; title: string; description?: string | null; imageUrl?: string | null; price: number; handle: string }> }) {
   const bindProduct = (product: (typeof products)[number]) => {
     if (!selected) return;
     if (selected.type === "product") updateBlock({ ...selected, props: { ...selected.props, productId: product.id, source: "manual", title: product.title, description: product.description ?? undefined, imageUrl: product.imageUrl ?? undefined, price: product.price } });
     else if (selected.type === "product_grid") updateBlock({ ...selected, props: { ...selected.props, source: "manual", productIds: [...new Set([...selected.props.productIds, product.id])] } });
   };
-  const supportsAssets = selected?.type === "image" || selected?.type === "hero" || selected?.type === "product";
   const supportsProducts = selected?.type === "product" || selected?.type === "product_grid";
-  return <div className="p-4"><PanelHeading eyebrow="Selected element" title={selected ? blockTitle(selected) : "Nothing selected"} description={selected ? `Editing ${selected.type.replace("_", " ")} · click the canvas to choose another element.` : "Click any part of the email canvas."} />{supportsAssets && assets.length ? <div className="mt-5"><p className="mb-2 text-[12px] font-medium">Asset library</p><div className="grid grid-cols-3 gap-2">{assets.filter((asset) => asset.url).slice(0, 9).map((asset) => <button key={asset.id} type="button" onClick={() => applyAsset(asset.url!)} className="group overflow-hidden rounded-lg border border-border bg-[#F4F2EC] text-left"><img src={asset.url} alt={asset.fileName} className="aspect-square w-full object-cover" /><span className="block truncate px-1.5 py-1 text-[10px] text-muted-foreground group-hover:text-foreground">{asset.fileName}</span></button>)}</div></div> : null}{supportsProducts && products.length ? <div className="mt-5"><p className="mb-2 text-[12px] font-medium">Store products</p><div className="max-h-64 space-y-1 overflow-y-auto">{products.map((product) => <button key={product.id} type="button" onClick={() => bindProduct(product)} className="flex w-full items-center gap-2 rounded-lg border border-transparent p-1.5 text-left hover:border-border hover:bg-[#F4F2EC]">{product.imageUrl ? <img src={product.imageUrl} alt="" className="h-9 w-9 rounded-md object-cover" /> : <div className="h-9 w-9 rounded-md bg-[var(--surface-soft,#ECE9E1)]" />}<div className="min-w-0"><p className="truncate text-[12px] font-medium">{product.title}</p><p className="text-[11px] text-muted-foreground">{product.price.toLocaleString()}</p></div></button>)}</div></div> : null}<div className="mt-5"><BlockEditor block={selected} onUpdate={updateBlock} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} /></div></div>;
+  return <div className="p-4"><PanelHeading eyebrow="Selected element" title={selected ? blockTitle(selected) : "Nothing selected"} description={selected ? `Editing ${selected.type.replace("_", " ")} · click the canvas to choose another element.` : "Click any part of the email canvas."} />{supportsProducts && products.length ? <div className="mt-5"><p className="mb-2 text-[12px] font-medium">Store products</p><div className="max-h-64 space-y-1 overflow-y-auto">{products.map((product) => <button key={product.id} type="button" onClick={() => bindProduct(product)} className="flex w-full items-center gap-2 rounded-lg border border-transparent p-1.5 text-left hover:border-border hover:bg-[#F4F2EC]">{product.imageUrl ? <img src={product.imageUrl} alt="" className="h-9 w-9 rounded-md object-cover" /> : <div className="h-9 w-9 rounded-md bg-[var(--surface-soft,#ECE9E1)]" />}<div className="min-w-0"><p className="truncate text-[12px] font-medium">{product.title}</p><p className="text-[11px] text-muted-foreground">{product.price.toLocaleString()}</p></div></button>)}</div></div> : null}<div className="mt-5"><BlockEditor block={selected} onUpdate={updateBlock} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} /></div></div>;
 }
 function VersionsPanel({ versions, cursor, restore, durableVersions, restoreDurable, restoring }: { versions: Snapshot[]; cursor: number; restore: (index: number) => void; durableVersions: DurableVersion[]; restoreDurable: (id: string) => void; restoring: boolean }) { return <div className="p-4"><PanelHeading eyebrow="Recoverable history" title="Versions" description="Manual and Joon changes share one history. Restoring creates a new version; nothing is erased." />{durableVersions.length ? <><p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Saved across sessions</p><div className="space-y-2">{durableVersions.map((version) => <button key={version.id} type="button" disabled={restoring} onClick={() => restoreDurable(version.id)} className="w-full rounded-xl border border-border p-3 text-left hover:bg-[#F4F2EC] disabled:opacity-40"><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-medium">Version {version.sequence} · {version.source}</span><span className="text-[11px] text-muted-foreground">{new Date(version.createdAt).toLocaleDateString()}</span></div><p className="mt-1 text-[12px] text-muted-foreground">{version.note ?? "Saved email artifact"}</p></button>)}</div></> : null}<p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">This session</p><div className="space-y-2">{[...versions].reverse().map((version, reverseIndex) => { const index = versions.length - reverseIndex - 1; return <button key={version.id} type="button" onClick={() => restore(index)} className={cn("w-full rounded-xl border p-3 text-left", index === cursor ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border hover:bg-[#F4F2EC]")}><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-medium">{version.label}</span><span className="text-[11px] text-muted-foreground">{version.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div><p className="mt-1 text-[12px] text-muted-foreground">{version.blocks.length} blocks · {version.subject || "No subject"}</p></button>; })}</div></div>; }
 function CodePanel({ selected, code, setCode, apply }: { selected: EmailBlock | null; code: string; setCode: (value: string) => void; apply: () => void }) { return <div className="p-4"><PanelHeading eyebrow="Structured code" title={selected ? blockTitle(selected) : "Select a block"} description="Edit the selected block as validated JSON. Use a Custom HTML block for precise email-safe markup." /><textarea value={code} onChange={(event) => setCode(event.target.value)} disabled={!selected} spellCheck={false} className="mt-5 min-h-[430px] w-full resize-y rounded-xl border border-border bg-[#171717] p-3 font-mono text-[12px] leading-5 text-[#F4F2EC] outline-none focus:border-[var(--attention,#C99116)] disabled:opacity-40" /><button type="button" onClick={apply} disabled={!selected} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#17204D] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"><Code2 className="h-4 w-4" />Apply code</button></div>; }

@@ -85,7 +85,7 @@ export function VisualActions({
         <div className="mt-3 grid gap-2">
           <Action icon={<Sparkles className="h-4 w-4" />} label="Generate a visual" detail={capabilities?.provider ? `Using ${capabilities.provider}` : "Ask Joon for artwork"} onClick={onGenerate} disabled={Boolean(blocked)} primary />
           <Action icon={<Upload className="h-4 w-4" />} label="Upload an image" detail="From your computer" onClick={onUpload} disabled={capabilities?.storageConfigured === false} />
-          <Action icon={<Library className="h-4 w-4" />} label="Choose from library" detail="Images already in this workspace" onClick={onChooseFromLibrary} />
+          <Action icon={<Library className="h-4 w-4" />} label="Choose from library" detail="Shopify photos, your uploads, and anything Joon has made" onClick={onChooseFromLibrary} />
         </div>
         {blocked ? <Blocked>{blocked}</Blocked> : null}
         <button
