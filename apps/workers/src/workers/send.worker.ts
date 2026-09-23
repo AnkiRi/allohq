@@ -15,7 +15,8 @@ import {
   DELIVERY_WINDOWS,
   type DeliveryWindow,
 } from "@allohq/customer-intelligence";
-import { emailDocumentSchema, type EmailBlock, type ProductData } from "@allohq/email-builder";
+import { parseEmailDocument, safeParseEmailDocument, type EmailBlock, type ProductData } from "@allohq/email-builder";
+
 import { sendEmail, selectedEmailProvider, sesSafeTag } from "@allohq/messaging";
 import { shopify } from "@allohq/ecommerce-integrations";
 const { createDiscount, getShopifyAdminClient } = shopify;
@@ -33,6 +34,7 @@ import {
   campaignApprovalChecksum,
   streamCampaignAudience,
   campaignAudienceSnapshot,
+  resolveBlockData,
   type AudienceStreamDecision,
   type CampaignPreparationRequest,
 } from "@allohq/campaign-engine";
@@ -76,15 +78,24 @@ const RECIPIENT_WRITE_CHUNK = 2_000;
 type BrandKit = Awaited<ReturnType<typeof loadBrandKit>>;
 
 function frozenEmailDocument(campaign: {
+  id: string;
   template: { subject: string; previewText: string | null; blocks: unknown } | null;
   approvedEmailVersion?: { document: unknown } | null;
 }) {
   if (!campaign.template) throw new Error("Campaign has no email template");
-  const frozen = campaign.approvedEmailVersion
-    ? emailDocumentSchema.safeParse(campaign.approvedEmailVersion.document)
-    : null;
-  if (frozen?.success) return frozen.data;
-  return emailDocumentSchema.parse({
+  if (campaign.approvedEmailVersion) {
+    // An approved version IS the send. If it cannot be read back, failing the
+    // job is the only safe outcome — falling through to the live template
+    // would deliver content the merchant never approved.
+    const frozen = safeParseEmailDocument(campaign.approvedEmailVersion.document);
+    if (!frozen.success) {
+      throw new Error(
+        `Approved email version for campaign ${campaign.id} could not be read back: ${frozen.error.issues[0]?.message ?? "invalid document"}`,
+      );
+    }
+    return frozen.data;
+  }
+  return parseEmailDocument({
     schemaVersion: 1,
     envelope: {
       subject: campaign.template.subject,
@@ -1165,21 +1176,16 @@ export async function deliverOne(data: DeliverOneData) {
     if (block.type === "product" && block.props.productId) productIds.push(block.props.productId);
     if (block.type === "product_grid") productIds.push(...block.props.productIds);
   }
-  const productsMap: Record<string, ProductData> = {};
-  if (productIds.length > 0) {
-    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
-    for (const p of products) {
-      productsMap[p.id] = {
-        id: p.id,
-        title: p.title,
-        description: p.description ?? undefined,
-        imageUrl: p.imageUrl ?? undefined,
-        price: p.price,
-        compareAtPrice: p.compareAtPrice ?? undefined,
-        handle: p.handle,
-      };
-    }
-  }
+  // Same resolver the Studio preview and the approval snapshot use, so what a
+  // merchant approved is what gets rendered here — including the contents of a
+  // bound collection, which is live by design and must not be read twice in
+  // two different ways.
+  const { products: productsMap, collections: collectionsMap } = await resolveBlockData(
+    prisma as never,
+    blocks,
+    campaign.storeId,
+  );
+  void productIds;
   const hasDynamicProducts = blocks.some(
     (b) =>
       (b.type === "product" && b.props.source && b.props.source !== "manual") ||
@@ -1243,6 +1249,7 @@ export async function deliverOne(data: DeliverOneData) {
     variables,
     products: productsMap,
     dynamicProducts,
+    collections: collectionsMap,
     previewMode: false,
     tracking: {
       utmSource: "allo",

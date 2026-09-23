@@ -38,13 +38,20 @@ exports.renderBlock = renderBlock;
 const jsx_runtime_1 = require("react/jsx-runtime");
 const React = __importStar(require("react"));
 const components_1 = require("@react-email/components");
+const email_builder_1 = require("@allohq/email-builder");
 const brand_kit_1 = require("../brand-kit");
 // ---------------------------------------------------------------------------
 // Small utilities
 // ---------------------------------------------------------------------------
-/** Interpolate merge tags like {{first_name}}. */
+/**
+ * Interpolate merge tags like {{first_name}} or {{first_name|there}}.
+ *
+ * This previously fell back to the tag itself, so a token the sender does not
+ * populate reached the inbox as the literal text "{{first_name}}". Resolution
+ * now ends at a fallback or at nothing — never at the tag.
+ */
 function interpolate(text, variables) {
-    return text.replace(/\{\{(\w[\w.]*)\}\}/g, (_m, key) => variables[key] ?? `{{${key}}}`);
+    return (0, email_builder_1.resolvePersonalization)(text, variables);
 }
 /** Strip HTML tags down to plain text (AI sometimes emits <p>...</p>). */
 function stripHtml(html) {
@@ -227,6 +234,19 @@ function ProductGridBlockView({ block, ctx, }) {
     const { brandKit: bk } = ctx;
     const { columns = 2, showPrice = true, showDescription = false } = block.props;
     let ids = block.props.productIds;
+    // A bound collection wins over a hand-picked list: it is what the merchant
+    // chose most recently, and it is explicitly labelled as live in the Studio.
+    const boundCollection = block.props.collectionId
+        ? ctx.collections?.[block.props.collectionId]
+        : undefined;
+    if (boundCollection?.length) {
+        const limited = boundCollection.slice(0, block.props.collectionLimit ?? 6);
+        for (const product of limited) {
+            if (!ctx.products[product.id])
+                ctx.products[product.id] = product;
+        }
+        ids = limited.map((product) => product.id);
+    }
     if (block.props.source &&
         block.props.source !== "manual" &&
         block.props.dynamicProductCount &&

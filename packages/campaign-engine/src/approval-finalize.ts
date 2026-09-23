@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "@allohq/database";
 import { loadBrandKit } from "@allohq/customer-intelligence";
 import { collectEmailAssetManifest } from "./email-asset-manifest";
+import { resolveBlockData } from "./block-data";
 import {
   campaignMeasurementPolicy,
   type HoldoutRateDecision,
@@ -10,6 +11,11 @@ import { campaignApprovalChecksum } from "./approval-checksum";
 import { campaignApprovalClaimWhere } from "./approval-claim";
 import { buildHumanDecision } from "./human-decision";
 import { ensureEmailVersion } from "./email-versions";
+import {
+  APPROVAL_RETRY_POLICY,
+  withSerializableRetry,
+  type SerializableRetryHooks,
+} from "./serializable-retry";
 import { withCampaignAudienceSnapshotCounts } from "./audience-snapshot";
 import {
   completedAudienceRun,
@@ -61,7 +67,11 @@ export class CampaignApprovalConflictError extends Error {
   }
 }
 
-export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Promise<{
+export async function finalizeCampaignApproval(
+  input: FinalizeApprovalInput,
+  /** Test seam only: deterministic backoff and captured observability. */
+  retryHooks: SerializableRetryHooks = {},
+): Promise<{
   approvedAt: Date;
   approvalChecksum: string;
   controlCount: number;
@@ -152,7 +162,10 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
     exclusions: input.run.exclusions,
   });
 
-  // Frozen measurement rows land before the claim. They are idempotent, and
+  // Frozen measurement rows land before the claim. Both this and the
+  // evaluation above are idempotent per run — the evaluation only since it
+  // began reusing an existing one, which is what lets a retried job reach the
+  // claim at all — and
   // both attribution and the causal ledger ignore assignments whose campaign
   // has no approvedAt, so a claim that fails leaves inert rows rather than
   // phantom arms.
@@ -174,7 +187,28 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
   const approvedBrandKit = await loadBrandKit(campaign.storeId);
   const emailAssetManifest = collectEmailAssetManifest(campaign.template.blocks);
 
-  await prisma.$transaction(
+  // Snapshot the store facts this email resolved to at the moment of approval.
+  //
+  // A collection binding is deliberately LIVE — the grid shows whatever the
+  // collection holds when the email is sent — so the approved document alone
+  // cannot say what a merchant was looking at when they approved it. Recording
+  // the resolution here keeps the approval reproducible for audit without
+  // freezing the binding and quietly turning it into a snapshot.
+  const approvedStoreFacts = await resolveBlockData(
+    prisma as never,
+    (campaign.template.blocks ?? []) as never,
+    campaign.storeId,
+  );
+
+  // Retried as a whole: under SERIALIZABLE any statement below can be the one
+  // Postgres aborts with 40001, and a rolled-back attempt has undone all of
+  // them. Nothing inside reaches outside the database — the send is queued by
+  // the caller only after this commits — so replaying it cannot send twice.
+  // Each attempt keeps its own 15 s timeout; a timeout is never retried.
+  await withSerializableRetry(
+    "approval_finalize",
+    { campaignId: campaign.id },
+    () => prisma.$transaction(
     async (tx) => {
       const approvedEmailVersion = await ensureEmailVersion(tx, {
         workspaceId: campaign.workspaceId,
@@ -208,7 +242,15 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
           emailVersionId: approvedEmailVersion.id,
           renderHash: releaseRenderHash,
           assetManifest: emailAssetManifest as never,
-          renderContext: { brandKit: approvedBrandKit } as never,
+          renderContext: {
+            brandKit: approvedBrandKit,
+            resolvedAt: approvedAt,
+            products: approvedStoreFacts.products,
+            // Live bindings: what each bound collection held at approval. The
+            // send resolves them again, so these are an audit record of what
+            // was shown, not the source delivery reads.
+            collectionsAtApproval: approvedStoreFacts.collections,
+          } as never,
           preflight: input.emailPreflightReceipt as never,
           approvedBy: input.approvedBy,
           approvedAt,
@@ -217,7 +259,15 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
           emailVersionId: approvedEmailVersion.id,
           renderHash: releaseRenderHash,
           assetManifest: emailAssetManifest as never,
-          renderContext: { brandKit: approvedBrandKit } as never,
+          renderContext: {
+            brandKit: approvedBrandKit,
+            resolvedAt: approvedAt,
+            products: approvedStoreFacts.products,
+            // Live bindings: what each bound collection held at approval. The
+            // send resolves them again, so these are an audit record of what
+            // was shown, not the source delivery reads.
+            collectionsAtApproval: approvedStoreFacts.collections,
+          } as never,
           preflight: input.emailPreflightReceipt as never,
           approvedBy: input.approvedBy,
           approvedAt,
@@ -225,6 +275,9 @@ export async function finalizeCampaignApproval(input: FinalizeApprovalInput): Pr
       });
     },
     { isolationLevel: "Serializable", timeout: 15_000 }
+    ),
+    APPROVAL_RETRY_POLICY,
+    retryHooks,
   );
 
   // The audience-decision ledger follows the claim. It is the merchant's

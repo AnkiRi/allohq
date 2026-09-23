@@ -67,6 +67,8 @@ const product = z.object({
   type: z.literal("product"),
   props: z.object({
     productId: z.string().max(500).default(""),
+    /** Chosen variant, where the store has more than one. */
+    variantId: z.string().max(500).optional(),
     showPrice: z.boolean().optional(),
     showDescription: z.boolean().optional(),
     showImage: z.boolean().optional(),
@@ -85,6 +87,14 @@ const productGrid = z.object({
   type: z.literal("product_grid"),
   props: z.object({
     productIds: z.array(z.string().max(500)).max(100).default([]),
+    /**
+     * A LIVE binding: the grid renders whatever is in this collection at send
+     * time, not a snapshot taken when it was bound. Resolved by
+     * `resolveBlockData`, which preview, approval and delivery all call.
+     */
+    collectionId: z.string().max(500).optional(),
+    /** How many of the collection's products to show. */
+    collectionLimit: z.number().int().min(1).max(12).optional(),
     columns: z.union([z.literal(2), z.literal(3)]).optional(),
     showPrice: z.boolean().optional(),
     showDescription: z.boolean().optional(),

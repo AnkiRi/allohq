@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@allohq/ui";
 import { Loader2 } from "lucide-react";
 
 export type PreviewWidth = "desktop" | "mobile";
@@ -27,6 +28,45 @@ export function EmailPreviewFrame({
 }) {
   const [width, setWidth] = React.useState<PreviewWidth>("desktop");
   const [theme, setTheme] = React.useState<PreviewTheme>("light");
+  /**
+   * Edit is normal scale, for precise work. Fit scales the WHOLE email into
+   * the available height so a merchant can judge composition at a glance —
+   * which is a different job from editing, and cannot be done by scrolling a
+   * tall narrow column a screen at a time.
+   */
+  const [view, setView] = React.useState<"edit" | "fit">("edit");
+  /** Real rendered height, reported by the iframe. */
+  const [contentHeight, setContentHeight] = React.useState<number | null>(null);
+  const stageRef = React.useRef<HTMLDivElement>(null);
+  const [stageHeight, setStageHeight] = React.useState(0);
+
+  React.useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (event.data?.type !== "joon-email-height") return;
+      if (typeof event.data.height === "number" && event.data.height > 0) {
+        setContentHeight(event.data.height);
+      }
+    };
+    window.addEventListener("message", listener);
+    return () => window.removeEventListener("message", listener);
+  }, []);
+
+  React.useEffect(() => {
+    const node = stageRef.current;
+    if (!node) return;
+    const measure = () => setStageHeight(node.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Only ever scale DOWN. Blowing a short email up to fill the stage would
+  // misrepresent how it actually looks in an inbox.
+  const fitScale =
+    view === "fit" && contentHeight && stageHeight
+      ? Math.min(1, (stageHeight - 32) / contentHeight)
+      : 1;
 
   const srcDoc = React.useMemo(() => {
     const scheme =
@@ -41,6 +81,17 @@ export function EmailPreviewFrame({
           ${safeSelected ? `[data-email-block-id="${safeSelected}"]{outline:2px solid #2D4F9E;box-shadow:inset 4px 0 0 #2D4F9E}` : ""}
         </style>
         <script>
+          function reportHeight(){
+            // documentElement.scrollHeight echoes the iframe's own height, so
+            // measuring it would report whatever we last set and never settle.
+            // The body is the email.
+            var b=document.body;
+            var h=Math.max(b.scrollHeight,b.offsetHeight);
+            if(h>0)parent.postMessage({type:'joon-email-height',height:h+2},'*');
+          }
+          window.addEventListener('load',reportHeight);
+          if(window.ResizeObserver){new ResizeObserver(reportHeight).observe(document.documentElement);}
+          setTimeout(reportHeight,80);
           document.addEventListener('click',function(event){
             var element=event.target&&event.target.closest?event.target.closest('[data-email-block-id]'):null;
             if(!element)return;
@@ -93,30 +144,45 @@ export function EmailPreviewFrame({
             value={theme}
             onChange={(v) => setTheme(v as PreviewTheme)}
           />
+          <Toggle
+            options={[
+              { v: "edit", label: "Edit" },
+              { v: "fit", label: "Fit email" },
+            ]}
+            value={view}
+            onChange={(v) => setView(v as "edit" | "fit")}
+          />
         </div>
       </header>
 
       <div
-        className="flex-1 flex justify-center overflow-auto p-6"
-        style={{
-          background:
-            theme === "dark"
-              ? "#20211f"
-              : "#ECE9E1",
-        }}
+        ref={stageRef}
+        className={cn(
+          // Padding at the BOTTOM as well as the top: a long email used to run
+          // flush into the edge of the pane, so there was no way to tell
+          // whether it had ended or was simply cut off.
+          "flex-1 flex justify-center px-4 pt-4 pb-10",
+          view === "fit" ? "overflow-hidden items-start" : "overflow-auto items-start",
+        )}
+        style={{ background: theme === "dark" ? "#20211f" : "#ECE9E1" }}
       >
         <iframe
-          title={`Email preview · ${width} ${theme}`}
+          title={`Email preview · ${width} ${theme} ${view === "fit" ? "fitted" : "actual size"}`}
           srcDoc={srcDoc}
           style={{
             width: WIDTHS[width],
             maxWidth: "100%",
-            height: "100%",
-            minHeight: 720,
+            // The email's own height, not an invented one. A 400px email used
+            // to sit in a 720px box and look like a mostly-empty page.
+            height: contentHeight ?? 600,
             border: "none",
             borderRadius: 8,
             background: theme === "dark" ? "#14150F" : "#F7F4EC",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+            // A defined edge, so the end of the email is unmistakable.
+            boxShadow: "0 2px 6px rgba(23,23,23,0.06), 0 12px 40px rgba(23,23,23,0.10)",
+            outline: "1px solid rgba(23,23,23,0.08)",
+            transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
+            transformOrigin: "top center",
           }}
         />
       </div>
