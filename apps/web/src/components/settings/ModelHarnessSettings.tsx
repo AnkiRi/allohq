@@ -1,152 +1,100 @@
 "use client";
 
+import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Check, Cpu, GitBranch, RotateCcw, Sparkles } from "lucide-react";
+import { Check, ChevronDown, Cpu, RotateCcw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 
-type ModelId =
-  | "claude-sonnet-5"
-  | "claude-sonnet-4-6"
-  | "claude-haiku-4-5-20251001"
-  | "gpt-4o-mini";
+type Kind = "text" | "visual";
 
-type Workload =
-  | "strategy"
-  | "creative"
-  | "analysis"
-  | "classification"
-  | "evaluation"
-  | "support"
-  | "orchestration";
-
-type ModelRoute = {
-  primary: ModelId;
-  fallbacks: ModelId[];
-  temperature?: number;
-  maxTokens?: number;
-};
-
-type ModelHarness = {
-  version: 1;
-  mode: "unified" | "custom";
-  defaultRoute: ModelRoute;
-  routes: Partial<Record<Workload, ModelRoute>>;
-};
-
-type ModelOption = {
-  id: ModelId;
+export type CatalogueModel = {
+  id: string;
+  label: string;
   provider: string;
-  label: string;
-  description: string;
+  apiModelId: string;
+  capabilities: string[];
+  costClass: "economy" | "standard" | "premium";
   tier: string;
-  available: boolean;
-  inputCostPerMillion: number;
-  outputCostPerMillion: number;
+  configured: boolean;
+  note: string | null;
 };
 
-const WORKLOADS: Array<{
-  id: Workload;
+export type CatalogueWorkload = {
+  id: string;
+  kind: Kind;
   label: string;
-  description: string;
-}> = [
-  {
-    id: "strategy",
-    label: "Strategy",
-    description: "Campaign direction, offers and retention decisions",
-  },
-  {
-    id: "creative",
-    label: "Creative",
-    description: "Email subjects, content and campaign copy",
-  },
-  {
-    id: "analysis",
-    label: "Analysis",
-    description: "Brand, customer and performance synthesis",
-  },
-  {
-    id: "classification",
-    label: "Classification",
-    description: "Intent parsing, labels and structured extraction",
-  },
-  {
-    id: "evaluation",
-    label: "Evaluation",
-    description: "Quality review and policy checks",
-  },
-  {
-    id: "support",
-    label: "Customer support",
-    description: "Storefront customer conversations",
-  },
-  {
-    id: "orchestration",
-    label: "Joon operator",
-    description: "Merchant chat and tool-using workflows",
-  },
-];
+  purpose: string;
+  capability: string;
+  /**
+   * Decided on the server. The browser renders exactly this list and never
+   * filters by capability itself, so there is no second copy of the rule to
+   * drift out of step.
+   */
+  eligibleModelIds: string[];
+};
 
-const EMPTY_HARNESS: ModelHarness = {
-  version: 1,
-  mode: "unified",
-  defaultRoute: {
-    primary: "claude-sonnet-5",
-    fallbacks: ["claude-sonnet-4-6"],
-  },
+export type Route = { primary: string; fallbacks: string[] };
+type Harness = {
+  version: 2;
+  textDefault: Route;
+  routes: Partial<Record<string, Route>>;
+};
+
+const EMPTY: Harness = {
+  version: 2,
+  textDefault: { primary: "claude-sonnet-5", fallbacks: [] },
   routes: {},
 };
 
-function cloneHarness(harness: ModelHarness): ModelHarness {
+const CAPABILITY_COPY: Record<string, string> = {
+  text: "Writing and reasoning",
+  image_generation: "Makes images",
+  image_reference_input: "Takes your photo as input",
+  image_analysis: "Reads images",
+};
+
+function clone(harness: Harness): Harness {
   return {
     ...harness,
-    defaultRoute: {
-      ...harness.defaultRoute,
-      fallbacks: [...harness.defaultRoute.fallbacks],
-    },
+    textDefault: { ...harness.textDefault, fallbacks: [...harness.textDefault.fallbacks] },
     routes: Object.fromEntries(
       Object.entries(harness.routes).map(([key, route]) => [
         key,
-        route
-          ? { ...route, fallbacks: [...route.fallbacks] }
-          : route,
+        route ? { ...route, fallbacks: [...route.fallbacks] } : route,
       ]),
-    ) as ModelHarness["routes"],
+    ),
   };
-}
-
-function routeFor(harness: ModelHarness, workload: Workload): ModelRoute {
-  return harness.routes[workload] ?? harness.defaultRoute;
 }
 
 function ModelSelect({
   value,
-  models,
-  onChange,
+  options,
+  placeholder,
   label,
+  onChange,
 }: {
-  value: ModelId | "";
-  models: ModelOption[];
-  onChange: (value: ModelId | "") => void;
+  value: string;
+  options: CatalogueModel[];
+  placeholder: string;
   label: string;
+  onChange: (value: string) => void;
 }) {
   return (
     <label className="block min-w-0">
       <span className="sr-only">{label}</span>
       <select
         value={value}
-        onChange={(event) => onChange(event.target.value as ModelId | "")}
+        onChange={(event) => onChange(event.target.value)}
         className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[11px] text-foreground outline-none transition-colors hover:border-primary/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
       >
-        {value === "" && <option value="">No fallback</option>}
-        {models.map((model) => (
-          <option
-            key={model.id}
-            value={model.id}
-            disabled={!model.available}
-          >
+        <option value="">{placeholder}</option>
+        {options.map((model) => (
+          // An unreachable model stays visible but unselectable, and says why.
+          // Hiding it would leave a merchant wondering where a model went.
+          <option key={model.id} value={model.id} disabled={!model.configured}>
             {model.label} · {model.provider}
-            {!model.available ? " · unavailable" : ""}
+            {model.configured ? "" : " · not configured"}
           </option>
         ))}
       </select>
@@ -154,363 +102,295 @@ function ModelSelect({
   );
 }
 
+export function WorkloadRow({
+  workload,
+  route,
+  models,
+  inheritLabel,
+  onChange,
+}: {
+  workload: CatalogueWorkload;
+  route: Route | undefined;
+  models: CatalogueModel[];
+  inheritLabel: string;
+  onChange: (route: Route | undefined) => void;
+}) {
+  const eligible = useMemo(
+    () => models.filter((model) => workload.eligibleModelIds.includes(model.id)),
+    [models, workload.eligibleModelIds],
+  );
+  const fallbackOptions = eligible.filter((model) => model.id !== route?.primary);
+  const runnable = eligible.some((model) => model.configured);
+
+  return (
+    <div className="grid gap-3 py-4 md:grid-cols-[minmax(200px,1.1fr)_minmax(190px,1fr)_minmax(190px,1fr)] md:items-start">
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-foreground">{workload.label}</p>
+        <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+          {workload.purpose}
+        </p>
+        {!runnable && (
+          <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-500">
+            No model for this job is configured yet.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[10px] text-muted-foreground">Model</p>
+        <ModelSelect
+          value={route?.primary ?? ""}
+          options={eligible}
+          placeholder={inheritLabel}
+          label={`${workload.label} model`}
+          onChange={(value) =>
+            onChange(
+              value
+                ? { primary: value, fallbacks: (route?.fallbacks ?? []).filter((id) => id !== value) }
+                : undefined,
+            )
+          }
+        />
+      </div>
+
+      <div className={route ? "" : "opacity-50"}>
+        <p className="mb-1.5 text-[10px] text-muted-foreground">If that one fails</p>
+        <ModelSelect
+          value={route?.fallbacks[0] ?? ""}
+          options={fallbackOptions}
+          placeholder="Nothing — let Joon decide"
+          label={`${workload.label} fallback model`}
+          onChange={(value) =>
+            route && onChange({ ...route, fallbacks: value ? [value] : [] })
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ModelHarnessSettings() {
   const { toast } = useToast();
   const utils = trpc.useUtils();
-  const { data: modelsData, isLoading: modelsLoading } = trpc.ai.models.useQuery();
-  const { data: settings, isLoading: settingsLoading } =
-    (trpc.ai.getSettings as any).useQuery() as {
-      data:
-        | {
-            defaultModel: string | null;
-            modelHarness: ModelHarness;
-          }
-        | undefined;
-      isLoading: boolean;
-    };
+  const { data: catalogue, isLoading: catalogueLoading } = (
+    trpc.ai.harnessCatalogue as any
+  ).useQuery() as {
+    data: { models: CatalogueModel[]; workloads: CatalogueWorkload[] } | undefined;
+    isLoading: boolean;
+  };
+  const { data: settings, isLoading: settingsLoading } = (trpc.ai.getSettings as any).useQuery() as {
+    data: { modelHarness: Harness } | undefined;
+    isLoading: boolean;
+  };
 
-  const models = (modelsData ?? []) as ModelOption[];
-  const [draft, setDraft] = useState<ModelHarness>(EMPTY_HARNESS);
-  const [savedSnapshot, setSavedSnapshot] = useState(
-    JSON.stringify(EMPTY_HARNESS),
-  );
+  const [draft, setDraft] = useState<Harness>(EMPTY);
+  const [saved, setSaved] = useState(JSON.stringify(EMPTY));
+  const [showModels, setShowModels] = useState(false);
 
   useEffect(() => {
     if (!settings?.modelHarness) return;
-    const next = cloneHarness(settings.modelHarness);
+    const next = clone(settings.modelHarness);
     setDraft(next);
-    setSavedSnapshot(JSON.stringify(next));
+    setSaved(JSON.stringify(next));
   }, [settings?.modelHarness]);
 
-  const dirty = JSON.stringify(draft) !== savedSnapshot;
-  const selectedDefault = models.find(
-    (model) => model.id === draft.defaultRoute.primary,
-  );
-  const effectiveDefault = [
-    draft.defaultRoute.primary,
-    ...draft.defaultRoute.fallbacks,
-    ...models.map((model) => model.id),
-  ]
-    .map((id) => models.find((model) => model.id === id))
-    .find((model) => model?.available);
+  const models = catalogue?.models ?? [];
+  const workloads = catalogue?.workloads ?? [];
+  const textWorkloads = workloads.filter((workload) => workload.kind === "text");
+  const visualWorkloads = workloads.filter((workload) => workload.kind === "visual");
+  const textModels = models.filter((model) => model.capabilities.includes("text"));
+  const dirty = JSON.stringify(draft) !== saved;
+  const loading = catalogueLoading || settingsLoading;
 
-  const saveHarness = (trpc.ai.setModelHarness as any).useMutation({
-    onSuccess: (result: { harness: ModelHarness }) => {
-      const next = cloneHarness(result.harness);
+  const save = (trpc.ai.setModelHarness as any).useMutation({
+    onSuccess: (result: { harness: Harness }) => {
+      const next = clone(result.harness);
       setDraft(next);
-      setSavedSnapshot(JSON.stringify(next));
+      setSaved(JSON.stringify(next));
       (utils.ai as any).getSettings.invalidate();
-      toast("Model harness saved. New AI work will use these routes.", "success");
+      toast("Saved. New work uses these models.", "success");
     },
     onError: (error: { message?: string }) => {
-      toast(error.message || "Couldn’t save the model harness.", "error");
+      toast(error.message || "Couldn’t save.", "error");
     },
-  }) as {
-    mutate: (input: ModelHarness) => void;
-    isPending: boolean;
-  };
+  }) as { mutate: (input: Harness) => void; isPending: boolean };
 
-  const routeSummary = useMemo(
-    () =>
-      WORKLOADS.reduce<Record<string, number>>((acc, workload) => {
-        const route = routeFor(draft, workload.id);
-        const model = [route.primary, ...route.fallbacks, ...models.map((item) => item.id)]
-          .find((id) => models.find((item) => item.id === id)?.available) ?? route.primary;
-        acc[model] = (acc[model] ?? 0) + 1;
-        return acc;
-      }, {}),
-    [draft, models],
-  );
-
-  function setDefaultPrimary(primary: ModelId) {
-    setDraft((current) => ({
-      ...current,
-      defaultRoute: {
-        ...current.defaultRoute,
-        primary,
-        fallbacks: current.defaultRoute.fallbacks.filter(
-          (model) => model !== primary,
-        ),
-      },
-    }));
-  }
-
-  function setDefaultFallback(fallback: ModelId | "") {
-    setDraft((current) => ({
-      ...current,
-      defaultRoute: {
-        ...current.defaultRoute,
-        fallbacks:
-          fallback && fallback !== current.defaultRoute.primary
-            ? [fallback]
-            : [],
-      },
-    }));
-  }
-
-  function toggleOverride(workload: Workload, enabled: boolean) {
+  function setRoute(workload: string, route: Route | undefined) {
     setDraft((current) => {
       const routes = { ...current.routes };
-      if (enabled) {
-        routes[workload] = {
-          ...current.defaultRoute,
-          fallbacks: [...current.defaultRoute.fallbacks],
-        };
-      } else {
-        delete routes[workload];
-      }
+      if (route) routes[workload] = route;
+      else delete routes[workload];
       return { ...current, routes };
     });
   }
 
-  function updateRoute(
-    workload: Workload,
-    field: "primary" | "fallback",
-    value: ModelId | "",
-  ) {
-    setDraft((current) => {
-      const existing = current.routes[workload] ?? current.defaultRoute;
-      const next: ModelRoute = {
-        ...existing,
-        fallbacks: [...existing.fallbacks],
-      };
-
-      if (field === "primary" && value) {
-        next.primary = value;
-        next.fallbacks = next.fallbacks.filter((model) => model !== value);
-      }
-      if (field === "fallback") {
-        next.fallbacks =
-          value && value !== next.primary ? [value] : [];
-      }
-
-      return {
-        ...current,
-        routes: { ...current.routes, [workload]: next },
-      };
-    });
-  }
-
-  const loading = modelsLoading || settingsLoading;
+  const defaultModel = models.find((model) => model.id === draft.textDefault.primary);
 
   return (
-    <section className="glass-card-static rounded-xl overflow-hidden">
+    <section className="glass-card-static overflow-hidden rounded-xl">
       <div className="flex flex-col gap-4 border-b border-border p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div className="max-w-2xl">
           <div className="flex items-center gap-3">
             <Cpu className="h-4 w-4 text-muted-foreground" />
-            <h2 className="section-header text-[13px]">Model harness</h2>
+            <h2 className="section-header text-[13px]">Models</h2>
           </div>
           <p className="mt-2 max-w-[68ch] text-[11px] leading-relaxed text-muted-foreground">
-            Use one dependable model across Joon, or route each kind of work to
-            the model that fits it. A fallback keeps work moving when a provider
-            is unavailable.
+            Joon picks a sensible model for every job on its own. Change one here
+            only if you want to. Each job lists only models that can actually do
+            it — writing models cannot make pictures, and image models cannot
+            write.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={() => saveHarness.mutate(draft)}
-          disabled={!dirty || saveHarness.isPending || loading}
+          onClick={() => save.mutate(draft)}
+          disabled={!dirty || save.isPending || loading}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-[11px] font-semibold text-primary-foreground transition-colors hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {saveHarness.isPending ? "Saving…" : dirty ? "Save harness" : "Saved"}
-          {!dirty && !saveHarness.isPending && <Check className="h-3.5 w-3.5" />}
+          {save.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
+          {!dirty && !save.isPending && <Check className="h-3.5 w-3.5" />}
         </button>
       </div>
 
-      <div className="p-5 sm:p-6">
-        <div
-          className="inline-flex rounded-lg border border-border bg-muted p-1"
-          role="group"
-          aria-label="Model routing mode"
-        >
-          {[
-            {
-              id: "unified" as const,
-              label: "One model",
-              icon: Sparkles,
-            },
-            {
-              id: "custom" as const,
-              label: "Route by job",
-              icon: GitBranch,
-            },
-          ].map((mode) => {
-            const Icon = mode.icon;
-            const active = draft.mode === mode.id;
-            return (
-              <button
-                key={mode.id}
-                type="button"
-                onClick={() =>
-                  setDraft((current) => ({ ...current, mode: mode.id }))
-                }
-                className={`inline-flex h-8 items-center gap-2 rounded-md px-3 text-[11px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                  active
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                aria-pressed={active}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {mode.label}
-              </button>
-            );
-          })}
+      {loading ? (
+        <div className="space-y-2 p-5 sm:p-6">
+          {[1, 2, 3, 4].map((row) => (
+            <div key={row} className="glass-skeleton h-12 rounded-lg" />
+          ))}
         </div>
+      ) : (
+        <div className="p-5 sm:p-6">
+          <div className="border-b border-border pb-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(200px,1.1fr)_minmax(190px,1fr)_minmax(190px,1fr)] md:items-start">
+              <div>
+                <p className="text-[12px] font-semibold text-foreground">Writing and thinking</p>
+                <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                  Used for every writing job below that you leave alone.
+                </p>
+              </div>
+              <div>
+                <p className="mb-1.5 text-[10px] text-muted-foreground">Model</p>
+                <ModelSelect
+                  value={draft.textDefault.primary}
+                  options={textModels}
+                  placeholder="Joon decides"
+                  label="Default writing model"
+                  onChange={(value) =>
+                    value &&
+                    setDraft((current) => ({
+                      ...current,
+                      textDefault: {
+                        primary: value,
+                        fallbacks: current.textDefault.fallbacks.filter((id) => id !== value),
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <p className="mb-1.5 text-[10px] text-muted-foreground">If that one fails</p>
+                <ModelSelect
+                  value={draft.textDefault.fallbacks[0] ?? ""}
+                  options={textModels.filter((model) => model.id !== draft.textDefault.primary)}
+                  placeholder="Nothing — let Joon decide"
+                  label="Default writing fallback"
+                  onChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      textDefault: { ...current.textDefault, fallbacks: value ? [value] : [] },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
 
-        {loading ? (
-          <div className="mt-6 space-y-2">
-            {[1, 2, 3].map((row) => (
-              <div key={row} className="h-12 rounded-lg glass-skeleton" />
+          <div className="divide-y divide-border border-b border-border">
+            {textWorkloads.map((workload) => (
+              <WorkloadRow
+                key={workload.id}
+                workload={workload}
+                route={draft.routes[workload.id]}
+                models={models}
+                inheritLabel={
+                  defaultModel ? `Same as above — ${defaultModel.label}` : "Same as above"
+                }
+                onChange={(route) => setRoute(workload.id, route)}
+              />
             ))}
           </div>
-        ) : (
-          <>
-            <div className="mt-6 border-y border-border">
-              <div className="grid gap-3 py-4 md:grid-cols-[minmax(190px,1fr)_minmax(210px,1.2fr)_minmax(210px,1.2fr)] md:items-center">
-                <div>
-                  <p className="text-[12px] font-semibold text-foreground">
-                    Default route
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    Used everywhere unless a job has its own route
-                  </p>
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[10px] text-muted-foreground">
-                    Primary
-                  </p>
-                  <ModelSelect
-                    value={draft.defaultRoute.primary}
-                    models={models}
-                    onChange={(value) => value && setDefaultPrimary(value)}
-                    label="Default primary model"
-                  />
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[10px] text-muted-foreground">
-                    Fallback
-                  </p>
-                  <ModelSelect
-                    value={draft.defaultRoute.fallbacks[0] ?? ""}
-                    models={models.filter(
-                      (model) => model.id !== draft.defaultRoute.primary,
-                    )}
-                    onChange={setDefaultFallback}
-                    label="Default fallback model"
-                  />
-                </div>
-              </div>
-            </div>
 
-            {draft.mode === "custom" && (
-              <div className="divide-y divide-border border-b border-border">
-                {WORKLOADS.map((workload) => {
-                  const overridden = !!draft.routes[workload.id];
-                  const route = routeFor(draft, workload.id);
-                  return (
-                    <div
-                      key={workload.id}
-                      className="grid gap-3 py-4 md:grid-cols-[minmax(190px,1fr)_minmax(210px,1.2fr)_minmax(210px,1.2fr)] md:items-center"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[11px] font-semibold text-foreground">
-                            {workload.label}
-                          </p>
-                          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[9px] text-muted-foreground">
-                            <input
-                              type="checkbox"
-                              checked={overridden}
-                              onChange={(event) =>
-                                toggleOverride(
-                                  workload.id,
-                                  event.target.checked,
-                                )
-                              }
-                              className="h-3.5 w-3.5 rounded border-border accent-[hsl(var(--primary))]"
-                            />
-                            Custom
-                          </label>
-                        </div>
-                        <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                          {workload.description}
-                        </p>
-                      </div>
+          <div className="border-b border-border py-4">
+            <p className="text-[12px] font-semibold text-foreground">Images</p>
+            <p className="mt-0.5 max-w-[64ch] text-[10px] leading-relaxed text-muted-foreground">
+              Different work needs different models. Putting your real product
+              in a scene requires one that can take your photograph as input, so
+              only those are offered for that job.
+            </p>
+          </div>
 
-                      <div className={overridden ? "" : "opacity-55"}>
-                        <p className="mb-1.5 text-[10px] text-muted-foreground">
-                          Primary
-                        </p>
-                        <ModelSelect
-                          value={route.primary}
-                          models={models}
-                          onChange={(value) =>
-                            updateRoute(workload.id, "primary", value)
-                          }
-                          label={`${workload.label} primary model`}
-                        />
-                      </div>
+          <div className="divide-y divide-border border-b border-border">
+            {visualWorkloads.map((workload) => (
+              <WorkloadRow
+                key={workload.id}
+                workload={workload}
+                route={draft.routes[workload.id]}
+                models={models}
+                inheritLabel="Joon decides"
+                onChange={(route) => setRoute(workload.id, route)}
+              />
+            ))}
+          </div>
 
-                      <div className={overridden ? "" : "opacity-55"}>
-                        <p className="mb-1.5 text-[10px] text-muted-foreground">
-                          Fallback
-                        </p>
-                        <ModelSelect
-                          value={route.fallbacks[0] ?? ""}
-                          models={models.filter(
-                            (model) => model.id !== route.primary,
-                          )}
-                          onChange={(value) =>
-                            updateRoute(workload.id, "fallback", value)
-                          }
-                          label={`${workload.label} fallback model`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => setShowModels((open) => !open)}
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              aria-expanded={showModels}
+            >
+              <ChevronDown
+                className={`h-3 w-3 transition-transform ${showModels ? "rotate-180" : ""}`}
+              />
+              {showModels ? "Hide" : "Show"} the {models.length} models Joon can run
+            </button>
 
-            <div className="mt-5 flex flex-col gap-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {draft.mode === "unified"
-                  ? selectedDefault?.available
-                    ? `${selectedDefault.label} will handle every AI job.`
-                    : effectiveDefault
-                      ? `${selectedDefault?.label ?? draft.defaultRoute.primary} is unavailable. Joon is using ${effectiveDefault.label}.`
-                      : "No configured AI provider is available. Add a provider key before starting new AI work."
-                  : `${Object.keys(draft.routes).length} custom route${Object.keys(draft.routes).length === 1 ? "" : "s"}; the rest inherit the default.`}
-              </p>
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {Object.entries(routeSummary).map(([model, count]) => (
-                  <span key={model}>
-                    {models.find((item) => item.id === model)?.label ?? model}:{" "}
-                    {count} jobs
-                  </span>
+            {showModels && (
+              <ul className="mt-3 space-y-2">
+                {models.map((model) => (
+                  <li key={model.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px]">
+                    <span className="font-semibold text-foreground">{model.label}</span>
+                    <span className="text-muted-foreground">{model.provider}</span>
+                    <code className="font-mono text-[9px] text-muted-foreground">
+                      {model.apiModelId}
+                    </code>
+                    <span className="text-muted-foreground">
+                      {model.capabilities
+                        .map((capability) => CAPABILITY_COPY[capability] ?? capability)
+                        .join(", ")}
+                    </span>
+                    <span className={model.configured ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}>
+                      {model.configured ? "configured" : "not configured"}
+                    </span>
+                  </li>
                 ))}
-              </div>
-            </div>
-
-            {dirty && (
-              <button
-                type="button"
-                onClick={() => {
-                  const restored = JSON.parse(savedSnapshot) as ModelHarness;
-                  setDraft(cloneHarness(restored));
-                }}
-                className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Discard changes
-              </button>
+              </ul>
             )}
-          </>
-        )}
-      </div>
+          </div>
+
+          {dirty && (
+            <button
+              type="button"
+              onClick={() => setDraft(clone(JSON.parse(saved) as Harness))}
+              className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Discard changes
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
