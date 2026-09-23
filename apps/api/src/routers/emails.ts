@@ -13,10 +13,12 @@ import {
 import { buildSlotPrompt, modeLabel, validateVisualRequest } from "@allohq/email-builder";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
-import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
+import { emailBlocksSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
 import { ensureEmailVersion, resolveBlockData } from "@allohq/campaign-engine";
 import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/email-scope";
 import { planEmailChange } from "../lib/email-changes";
+import { assetStorageStatus } from "../lib/asset-storage-status";
+import { describeTarget, detectVisualIntent, proposeVisualTarget } from "../lib/visual-intent";
 
 import {
   createEmailAssetUpload,
@@ -370,168 +372,62 @@ export const emailsRouter = router({
         error,
       });
 
-      const requestsGeneratedImage =
-        (/\b(?:generate|create|make)\b[\s\S]{0,120}\b(?:image|photo|visual|scene)\b/i.test(
-          input.instruction
-        ) ||
-          /\b(?:put|place|swap|replace)\b[\s\S]{0,160}\b(?:model|hand|scene|background|product|image|photo)\b/i.test(
-            input.instruction
-          )) &&
-        (!input.scope || input.scope === "visual");
-      if (requestsGeneratedImage) {
-        try {
-          const { storeId } = await resolveBrandKit(ctx, undefined, input.storeId);
-          const sourceAssets = input.sourceAssetIds?.length
-            ? await ctx.prisma.brandAsset.findMany({
-                where: {
-                  id: { in: input.sourceAssetIds },
-                  workspaceId: ctx.workspaceId,
-                  ...(storeId ? { storeId } : {}),
-                },
-                select: { id: true, url: true, type: true },
-              })
-            : [];
-          const visual = storeId
-            ? await ctx.prisma.brandVisualProfile.findUnique({ where: { storeId } })
-            : null;
-          const generated = await generateImage({
-            purpose: "hero_banner",
-            prompt: [
-              input.instruction,
-              sourceAssets.length
-                ? "Generate only the setting and background. Do not draw products, packaging, labels, logos or text; Joon will composite the authoritative product pixels afterward."
-                : "",
-            ]
-              .filter(Boolean)
-              .join("\n"),
-            brandStyle: visual
-              ? {
-                  aesthetic:
-                    visual.aestheticClassification ?? visual.visualTone ?? "brand-consistent",
-                  suggestedColors: [
-                    ...((visual.primaryColors as string[]) ?? []),
-                    ...((visual.accentColors as string[]) ?? []),
-                  ].slice(0, 6),
-                }
-              : undefined,
-            fallbackToStock: false,
-          });
-          if (!storeId) throw new Error("Choose a store before generating an email image.");
-          const persisted = sourceAssets[0]
-            ? await persistProductSafeComposite({
-                workspaceId: ctx.workspaceId,
-                storeId,
-                backgroundUrl: generated.url,
-                productUrl: sourceAssets[0].url,
-                fileName: `${input.templateId ?? "email"}-${Date.now()}.png`,
-              })
-            : await persistRemoteEmailImage({
-                workspaceId: ctx.workspaceId,
-                storeId,
-                remoteUrl: generated.url,
-                fileName: `${input.templateId ?? "email"}-${Date.now()}.png`,
-              });
-          await ctx.prisma.generatedImage.create({
-            data: {
-              workspaceId: ctx.workspaceId,
-              provider: generated.provider,
-              prompt: generated.prompt,
-              url: persisted.url,
-              purpose: "hero_banner",
-              cost: generated.cost,
-              width: persisted.width,
-              height: persisted.height,
-              templateId: input.templateId,
-              sourceAssetIds: sourceAssets.map((asset: any) => asset.id),
-            },
-          });
-          const durableAsset = await ctx.prisma.brandAsset.create({
-            data: {
-              workspaceId: ctx.workspaceId,
-              storeId,
-              type: "hero",
-              url: persisted.url,
-              fileName: `${input.templateId ?? "email"}-generated.png`,
-              mimeType: persisted.mimeType,
-              width: persisted.width,
-              height: persisted.height,
-              storageKey: persisted.key,
-              checksum: persisted.checksum,
-              source: "generated",
-              sourcePrompt: generated.prompt,
-              sourceAssetIds: sourceAssets.map((asset: any) => asset.id),
-              altText: input.instruction,
-              status: "ready",
-            },
-          });
-          const imageBlock = emailBlockSchema.parse({
-            id: `b-${Date.now()}-generated-image`,
-            type: "image",
-            props: {
-                src: persisted.url,
-              alt: input.instruction,
-              align: "center",
-              fullWidth: true,
-            },
-          });
-          const selectedIndex = input.selectedBlockId
-            ? original.findIndex((block) => block.id === input.selectedBlockId)
-            : -1;
-          const selectedBlock = selectedIndex >= 0 ? original[selectedIndex] : null;
-          let nextBlocks = [...original];
-          if (selectedBlock?.type === "image") {
-            nextBlocks[selectedIndex] = {
-              ...selectedBlock,
-              props: { ...selectedBlock.props, src: persisted.url, alt: input.instruction },
-            };
-          } else if (selectedBlock?.type === "hero") {
-            nextBlocks[selectedIndex] = {
-              ...selectedBlock,
-              props: { ...selectedBlock.props, bgImageSrc: persisted.url },
-            };
-          } else if (selectedBlock?.type === "product") {
-            // A product block's image is a Shopify fact: the renderer prefers
-            // the store's product map and enrichment rewrites `imageUrl` on
-            // every load, so a generated image here shows in preview and is
-            // replaced at delivery. Refuse rather than promise it.
-            return fail(
-              "A product block always shows the product's own Shopify image. Select an image or hero block for a generated visual.",
-            );
-          } else if (editScope.kind === "block") {
-            // The merchant pointed at one block. Appending a new one would be
-            // a change they did not ask for, so say so instead.
-            return fail(
-              "That block cannot hold an image. Select an image, hero or product block, or switch the request to the whole email.",
-            );
-          } else {
-            nextBlocks.push(imageBlock);
-          }
-          const proposal = await persistProposal(
-            nextBlocks,
-            input.subject ?? "",
-            input.previewText ?? "",
-            {
-              editScope,
-              type: selectedBlock?.type === "image" || selectedBlock?.type === "hero" || selectedBlock?.type === "product"
-                ? "replaceAsset"
-                : "insertBlock",
-              blockId: selectedBlock?.id ?? null,
-              generatedUrl: persisted.url,
-            },
-          );
-          return {
-            applied: true,
-            blocks: emailBlocksSchema.parse(nextBlocks),
-            subject: input.subject,
-            previewText: input.previewText,
-            proposalId: proposal?.id,
-            generatedAsset: { id: durableAsset.id, url: persisted.url, provider: generated.provider },
-          };
-        } catch (error) {
-          return fail(
-            error instanceof Error ? error.message : "Joon could not generate that image."
-          );
-        }
+      /**
+       * A request for artwork is answered with a PROPOSAL, not an attempt.
+       *
+       * This branch used to try to generate immediately, inside the same call
+       * that edits copy. When storage or a provider was missing it surfaced a
+       * configuration error where the merchant had asked for a picture. Now
+       * Joon says what it would make, where it would go and what it would
+       * cost, and waits.
+       */
+      const visualIntent = detectVisualIntent(input.instruction);
+      if (visualIntent) {
+        const target = proposeVisualTarget(original as never, input.selectedBlockId ?? null);
+        const storage = assetStorageStatus();
+        const provider = selectVisualProvider({ preferReference: true });
+        const spendRefusal = await imageSpendRefusal({
+          workspaceId: ctx.workspaceId,
+          templateId: input.templateId,
+        });
+        const blocked =
+          !storage.configured
+            ? storage.merchantMessage
+            : !provider.ok
+              ? "Image generation is not available for this workspace yet."
+              : spendRefusal;
+
+        const boundProductId =
+          input.selectedBlockId
+            ? (original.find((block) => block.id === input.selectedBlockId)?.props?.productId as string | undefined)
+            : undefined;
+        const product = boundProductId
+          ? await ctx.prisma.product.findFirst({
+              where: { id: boundProductId, store: { workspaceId: ctx.workspaceId } },
+              select: { id: true, title: true, imageUrl: true },
+            })
+          : null;
+
+        return {
+          applied: false,
+          blocks: original,
+          subject: input.subject,
+          previewText: input.previewText,
+          // The Studio renders this as Generate / Edit request / Cancel.
+          visualProposal: {
+            instruction: visualIntent.instruction,
+            kind: visualIntent.kind,
+            target,
+            targetDescription: describeTarget(target),
+            product: product ? { id: product.id, title: product.title, hasImage: Boolean(product.imageUrl) } : null,
+            mode: product?.imageUrl ? ("product_safe" as const) : ("creative_concept" as const),
+            modeLabel: product?.imageUrl ? modeLabel("product_safe") : modeLabel("creative_concept"),
+            providerLabel: provider.ok ? provider.provider.label : null,
+            referenceGrounded: provider.ok ? provider.usesReference && Boolean(product?.imageUrl) : false,
+            estimatedCostUsd: provider.ok ? provider.provider.costUsd : null,
+            blockedReason: blocked ?? null,
+          },
+        };
       }
 
       try {
@@ -635,6 +531,20 @@ export const emailsRouter = router({
       });
       if (!validated.ok) {
         throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
+      }
+
+      // Durable storage is checked BEFORE the provider, because a generation
+      // that cannot be saved is worse than one that never ran: it costs money
+      // and produces nothing the merchant can use.
+      const storage = assetStorageStatus();
+      if (!storage.configured) {
+        console.error(
+          `[Assets] storage unavailable; refusing generation. Missing: ${storage.missing.join(", ")}`,
+        );
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: storage.merchantMessage ?? "Image generation is not available for this workspace yet.",
+        });
       }
 
       // Fail closed, and say what to configure. Substituting stock imagery here
@@ -788,12 +698,19 @@ export const emailsRouter = router({
     .input(z.object({ templateId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const selection = selectVisualProvider({ preferReference: true });
+      const storage = assetStorageStatus();
       const spendRefusal = await imageSpendRefusal({
         workspaceId: ctx.workspaceId,
         templateId: input?.templateId,
       });
       return {
-        generationAvailable: selection.ok,
+        // A provider without somewhere to put its output is not availability.
+        // Reporting it as available is what let a merchant spend on a
+        // generation that then failed on the way to storage.
+        generationAvailable: selection.ok && storage.configured,
+        storageConfigured: storage.configured,
+        storageMessage: storage.merchantMessage,
+        providerAvailable: selection.ok,
         provider: selection.ok ? selection.provider.label : null,
         missingCredentials: selection.ok ? [] : selection.missing,
         referenceGrounded: referenceGenerationAvailable(),

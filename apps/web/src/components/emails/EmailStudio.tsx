@@ -15,6 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { useRouter } from "next/navigation";
 import { useIsDesktop } from "@/lib/use-breakpoint";
+import { bindProductToBlock } from "@/lib/product-binding";
 import { BlockList } from "./BlockList";
 import { StudioTopBar } from "./StudioTopBar";
 import { ScopeChooser, type AskScope } from "./AskScope";
@@ -172,8 +173,27 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     { templateId: templateId ?? "" },
     { enabled: !!templateId },
   ) as { data?: ProposalHistoryItem[]; refetch: () => Promise<unknown> };
+  /**
+   * Preview renders are sequenced.
+   *
+   * Every edit fires a debounced render, and responses came back in whatever
+   * order the network delivered them — so a slower EARLIER render could land
+   * after a faster later one and put the previous state back on screen. That
+   * is what made a changed product look like it had not changed, and then
+   * "catch up" when the next edit happened to win the race.
+   *
+   * Each request takes a sequence number; anything but the newest is dropped.
+   */
+  const renderSeq = React.useRef(0);
+  const latestApplied = React.useRef(0);
   const renderMut = (trpc.emails as any).renderPreview.useMutation({
-    onSuccess: (data: { html: string }) => setHtml(data.html),
+    onMutate: () => ({ seq: ++renderSeq.current }),
+    onSuccess: (data: { html: string }, _vars: unknown, context: { seq: number } | undefined) => {
+      const seq = context?.seq ?? renderSeq.current;
+      if (seq < latestApplied.current) return;
+      latestApplied.current = seq;
+      setHtml(data.html);
+    },
     onError: (error: { message?: string }) => setPromptError(error.message ?? "Preview could not be rendered."),
   });
   const promptMut = (trpc.emails as any).promptEdit.useMutation();
@@ -273,7 +293,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
    */
   const bindProduct = (productId: string) => {
     if (!selected || selected.type !== "product") return;
-    updateBlock({ ...selected, props: { ...selected.props, productId, source: "manual" } } as EmailBlock);
+    // Carries no trace of the product being replaced — see `product-binding`.
+    updateBlock(bindProductToBlock(selected, productId));
     toast("Product bound. Its details come from your store.", "success");
   };
 

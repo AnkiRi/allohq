@@ -134,3 +134,23 @@ export type {
   JudgeVerdict,
   ContentEvalResult,
 } from "./eval/content-quality";
+
+export {
+  MODEL_REGISTRY,
+  STUDIO_PREFERENCES,
+  TEXT_WORKLOADS,
+  VISUAL_WORKLOADS,
+  WORKLOAD_CAPABILITY,
+  availableModels,
+  isModelAvailable,
+  modelById,
+  routeModel,
+  type CostClass,
+  type HarnessWorkload,
+  type ModelCapability,
+  type ModelEntry,
+  type RoutingDecision,
+  type RoutingRequest,
+  type TextWorkload,
+  type VisualWorkload,
+} from "./ai/model-registry";
