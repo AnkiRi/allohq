@@ -148,3 +148,23 @@ test("Resend needs its key", () => {
   assert.deepEqual(emailProviderConfigProblems("resend", {}), ["RESEND_API_KEY must be configured when email delivery is enabled"]);
   assert.deepEqual(emailProviderConfigProblems("resend", { RESEND_API_KEY: "re_x" }), []);
 });
+
+test("Stockholm is configured through AWS_SES_REGION alone", () => {
+  assert.deepEqual(emailProviderConfigProblems("ses", {
+    AWS_SES_REGION: "eu-north-1",
+    SES_TENANT_REGION_CONFIRMED: "true",
+    AWS_ACCOUNT_ID: "123456789012",
+    SES_FROM_EMAIL: "hello@mail.joonhq.com",
+    SES_EVENT_QUEUE_URL: "https://sqs.eu-north-1.amazonaws.com/123456789012/joon-events",
+    SES_STANDARD_REPUTATION_POLICY: "arn:aws:ses:eu-north-1:aws:reputation-policy/standard",
+    SES_EVENT_TOPIC_ARN: "arn:aws:sns:eu-north-1:123456789012:joon-events",
+  }), []);
+});
+
+test("an event queue in another region than AWS_SES_REGION is a configuration problem", () => {
+  const problems = emailProviderConfigProblems("ses", {
+    AWS_SES_REGION: "eu-north-1", AWS_ACCOUNT_ID: "123456789012",
+    SES_EVENT_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/123456789012/joon-events",
+  });
+  assert.ok(problems.some((p) => p.includes("SES_EVENT_QUEUE_URL is in ap-south-1 but AWS_SES_REGION is eu-north-1")));
+});

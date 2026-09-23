@@ -43,7 +43,10 @@ export function emailProviderConfigProblems(
     if (env["SES_TENANT_REGION_CONFIRMED"] !== "true") problems.push("SES_TENANT_REGION_CONFIRMED=true is required before SES delivery is enabled");
     if (!/^\d{12}$/.test(account ?? "")) problems.push("AWS_ACCOUNT_ID must be a 12-digit account id");
     if (!env["SES_FROM_EMAIL"]?.trim()) problems.push("SES_FROM_EMAIL must be configured when SES delivery is enabled");
-    if (!env["SES_EVENT_QUEUE_URL"]?.trim()) problems.push("SES_EVENT_QUEUE_URL must be configured when SES delivery is enabled");
+    const queue = env["SES_EVENT_QUEUE_URL"]?.trim();
+    if (!queue) problems.push("SES_EVENT_QUEUE_URL must be configured when SES delivery is enabled");
+    const queueRegion = queue ? /^https:\/\/sqs\.([a-z0-9-]+)\.amazonaws\.com\//.exec(queue)?.[1] : undefined;
+    if (queueRegion && region && queueRegion !== region) problems.push(`SES_EVENT_QUEUE_URL is in ${queueRegion} but AWS_SES_REGION is ${region}`);
     if (!env["SES_STANDARD_REPUTATION_POLICY"]?.trim()) problems.push("SES_STANDARD_REPUTATION_POLICY must be configured when SES delivery is enabled");
     if (!topic?.startsWith(`arn:aws:sns:${region}:${account}:`)) problems.push("SES_EVENT_TOPIC_ARN must match the configured region and account");
   }

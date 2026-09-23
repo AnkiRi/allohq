@@ -61,7 +61,7 @@ async function persist(event: NormalizedSesEvent, _raw: string) {
 }
 
 /**
- * Whether this worker reads SES delivery events.
+ * Whether this worker reads SES delivery events, and why not when it doesn't.
  *
  * Tied to the event queue being configured, NOT to which provider carries new
  * traffic. It used to require EMAIL_PROVIDER=ses, so switching new sends back
@@ -70,13 +70,37 @@ async function persist(event: NormalizedSesEvent, _raw: string) {
  * recipients, no automatic hold or pause, no reconciliation of ambiguous sends.
  * A provider keeps producing events for days after it stops getting new mail.
  * (Resend's webhook was never tied to the selected provider.)
+ *
+ * The region must be explicit and match the queue. Without AWS_SES_REGION the
+ * SQS client falls back to ap-south-1 and signs for the wrong region — for a
+ * Stockholm (eu-north-1) queue, every poll would fail. That is reported as a
+ * configuration problem rather than retried forever.
  */
+export function sesEventConsumption(env: Record<string, string | undefined> = process.env): {
+  consume: boolean;
+  problem: string | null;
+} {
+  const queue = env["SES_EVENT_QUEUE_URL"]?.trim();
+  if (!queue) return { consume: false, problem: null };
+  const region = env["AWS_SES_REGION"]?.trim();
+  if (!region) {
+    return { consume: false, problem: "SES_EVENT_QUEUE_URL is set but AWS_SES_REGION is not; SES events cannot be read" };
+  }
+  const queueRegion = /^https:\/\/sqs\.([a-z0-9-]+)\.amazonaws\.com\//.exec(queue)?.[1];
+  if (queueRegion && queueRegion !== region) {
+    return { consume: false, problem: `SES_EVENT_QUEUE_URL is in ${queueRegion} but AWS_SES_REGION is ${region}; SES events cannot be read` };
+  }
+  return { consume: true, problem: null };
+}
+
 export function shouldConsumeSesEvents(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(env["SES_EVENT_QUEUE_URL"]?.trim());
+  return sesEventConsumption(env).consume;
 }
 
 export function startSesEventWorker() {
-  if (!shouldConsumeSesEvents()) return null;
+  const decision = sesEventConsumption();
+  if (decision.problem) console.error(`[ses-events] ${decision.problem}`);
+  if (!decision.consume) return null;
   let stopped = false;
   const events = new EventEmitter();
   const abortController = new AbortController();
