@@ -1,4 +1,4 @@
-export { generateImage } from "./generate-image";
+export { generateImage, ImageGenerationUnavailableError } from "./generate-image";
 export type { GenerateImageInput, GenerateImageOutput } from "./generate-image";
 export {
   CAMPAIGN_IMAGE_BUDGET_USD,
