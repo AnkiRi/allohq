@@ -1,5 +1,5 @@
 import { generateWithFlux } from "./providers/flux";
-import { generateWithDalle } from "./providers/dalle";
+import { generateWithOpenAiImages } from "./providers/openai-images";
 import { searchUnsplash } from "./providers/unsplash";
 import { DAILY_IMAGE_BUDGET_USD, dailyImageSpendUsd, imageBudgetExceeded } from "./image-budget";
 
@@ -21,6 +21,21 @@ export interface GenerateImageInput {
    * check, so callers that cannot attribute spend stay uncapped and obvious.
    */
   workspaceId?: string;
+}
+
+/**
+ * No configured image provider could produce an image.
+ *
+ * Deliberately carries no provider name, model name, purpose or prompt: this
+ * message is rendered in the Studio, and "[Image] All providers failed for
+ * purpose=hero_banner" tells a merchant nothing they can do anything about
+ * while leaking how the system is built.
+ */
+export class ImageGenerationUnavailableError extends Error {
+  constructor() {
+    super("Joon could not create an image just now. Your email is unchanged — try again, or add an image yourself.");
+    this.name = "ImageGenerationUnavailableError";
+  }
 }
 
 export interface GenerateImageOutput {
@@ -93,12 +108,12 @@ async function tryFlux(
   return { url, provider: "flux", prompt, cost: 0.05 };
 }
 
-async function tryDalle(
+async function tryOpenAiImages(
   prompt: string,
   width: number,
   height: number,
 ): Promise<GenerateImageOutput | null> {
-  const url = await generateWithDalle({ prompt, width, height });
+  const url = await generateWithOpenAiImages({ prompt, width, height });
   if (!url) return null;
   return { url, provider: "dalle", prompt, cost: 0.04 };
 }
@@ -137,12 +152,12 @@ function getProviderChain(
     case "background":
       // Flux first (more creative), DALL-E fallback
       chain.push(() => tryFlux(prompt, width, height));
-      chain.push(() => tryDalle(prompt, width, height));
+      chain.push(() => tryOpenAiImages(prompt, width, height));
       break;
     case "product_lifestyle":
     case "card":
       // DALL-E first (better for product-adjacent), Flux fallback
-      chain.push(() => tryDalle(prompt, width, height));
+      chain.push(() => tryOpenAiImages(prompt, width, height));
       chain.push(() => tryFlux(prompt, width, height));
       break;
   }
@@ -207,8 +222,12 @@ export async function generateImage(
     }
   }
 
-  throw new Error(
+  // The diagnostic detail goes to the log, where an operator can act on it.
+  // The thrown message reaches a merchant's screen, so it says what happened
+  // to THEIR email rather than naming providers, purposes and prompts.
+  console.error(
     `[Image] All providers failed for purpose="${input.purpose}". ` +
       `Prompt: "${input.prompt.slice(0, 80)}..."`,
   );
+  throw new ImageGenerationUnavailableError();
 }

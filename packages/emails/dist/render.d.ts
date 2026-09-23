@@ -12,6 +12,8 @@ export interface RenderGeneratedEmailOptions {
     variables?: Record<string, string>;
     products?: Record<string, ProductData>;
     dynamicProducts?: ProductData[];
+    /** Products of each bound collection, keyed by collection id. */
+    collections?: Record<string, ProductData[]>;
     previewMode?: boolean;
     /** UTM tracking — injected into store-domain links after render. */
     tracking?: {

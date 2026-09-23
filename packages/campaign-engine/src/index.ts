@@ -119,4 +119,19 @@ export {
   CampaignApprovalConflictError,
 } from "./approval-finalize";
 export type { FinalizeApprovalInput } from "./approval-finalize";
+export {
+  APPROVAL_RETRY_POLICY,
+  SerializationConflictExhaustedError,
+  backoffDelayMs,
+  isSerializationConflict,
+  withSerializableRetry,
+} from "./serializable-retry";
+export type { SerializableRetryHooks, SerializableRetryPolicy } from "./serializable-retry";
 export type { CampaignPreparationRequest } from "./preparation-request";
+
+export {
+  DEFAULT_COLLECTION_LIMIT,
+  resolveBlockData,
+  resolveBlockProducts,
+  type ResolvedBlockData,
+} from "./block-data";

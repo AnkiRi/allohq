@@ -3,13 +3,21 @@ import { router, workspaceProcedure } from "../trpc";
 import {
   complete,
   generateImage,
+  imageSpendRefusal,
   loadBrandKit,
+  referenceGenerationAvailable,
+  referenceProviderSetupHint,
   renderBrandedEmail,
+  selectVisualProvider,
 } from "@allohq/customer-intelligence";
+import { buildSlotPrompt, modeLabel, validateVisualRequest } from "@allohq/email-builder";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
 import { TRPCError } from "@trpc/server";
-import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema } from "@allohq/email-builder";
-import { ensureEmailVersion } from "@allohq/campaign-engine";
+import { emailBlocksSchema, emailBlockSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
+import { ensureEmailVersion, resolveBlockData } from "@allohq/campaign-engine";
+import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/email-scope";
+import { planEmailChange } from "../lib/email-changes";
+
 import {
   createEmailAssetUpload,
   inspectUploadedEmailAsset,
@@ -63,25 +71,6 @@ async function resolveBrandKit(
     brandKit: resolvedStoreId ? await loadBrandKit(resolvedStoreId) : buildBrandKit(null, null),
     storeId: resolvedStoreId,
   };
-}
-
-// LLMs (esp. Claude) often wrap JSON in ```fences``` or add a trailing note, so
-// JSON.parse(result.content) throws and the prompt-edit silently no-ops. Extract
-// the JSON payload before parsing. promptEdit's response is an OBJECT (which may
-// CONTAIN arrays like `add: [...]`), so take the outermost object — first "{" to
-// last "}". Prose brackets like "[Brand Name]" are "[", so starting at "{" skips
-// them; falls back to an array only if there's no object at all.
-function extractJsonPayload(s: string): string {
-  let t = s.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence && fence[1]) t = fence[1].trim();
-  const o = t.indexOf("{");
-  const lo = t.lastIndexOf("}");
-  if (o !== -1 && lo > o) return t.slice(o, lo + 1);
-  const a = t.indexOf("[");
-  const la = t.lastIndexOf("]");
-  if (a !== -1 && la > a) return t.slice(a, la + 1);
-  return t;
 }
 
 export const emailsRouter = router({
@@ -179,6 +168,10 @@ export const emailsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { brandKit, storeId } = await resolveBrandKit(ctx, input.brandKit, input.storeId);
+      // Delivery resolves products from the store and the renderer prefers that
+      // over anything on the block. Preview must do the same, or a merchant
+      // approves one thing and Joon sends another.
+      const { products, collections } = await resolveBlockData(ctx.prisma, input.blocks as any, storeId || undefined);
       const html = await renderBrandedEmail({
         storeId,
         brandKit,
@@ -186,6 +179,8 @@ export const emailsRouter = router({
         subject: input.subject,
         previewText: input.previewText,
         variables: input.variables ?? {},
+        products,
+        collections,
         previewMode: true,
       });
       return { html };
@@ -213,10 +208,32 @@ export const emailsRouter = router({
         // existing-block copy edits; "visual" → only structure (add/remove/reorder
         // + visual blocks). Omitted (free-text "tell joon") = no restriction.
         scope: z.enum(["subject", "copy", "visual", "tone"]).optional(),
+        // WHAT this request may touch. Block scope is the default whenever a
+        // block is selected; whole-email is never inferred, only asked for.
+        editScope: z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("block"), blockId: z.string().max(200) }),
+          z.object({ kind: z.literal("envelope") }),
+          z.object({ kind: z.literal("document") }),
+        ]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const original = input.blocks as any[];
+      const resolvedScope = resolveEditScope({
+        editScope: input.editScope,
+        lane: input.scope,
+        selectedBlockId: input.selectedBlockId,
+      });
+      if (!resolvedScope.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: resolvedScope.reason });
+      }
+      const editScope: EmailEditScope = resolvedScope.scope;
+      if (editScope.kind === "block" && !original.some((block) => block.id === editScope.blockId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That block is no longer part of this email.",
+        });
+      }
       const workspaceAiSettings = await ctx.prisma.workspace.findUnique({
         where: { id: ctx.workspaceId },
         select: { modelHarness: true },
@@ -324,9 +341,11 @@ export const emailsRouter = router({
       const prompt = [
         `INSTRUCTION: ${input.instruction}`,
         input.subject ? `\nCURRENT SUBJECT: ${input.subject}` : "",
-        input.selectedBlockId
-          ? `\nSELECTED BLOCK: ${input.selectedBlockId}. Unless the instruction explicitly says whole email, target this block.`
-          : "",
+        editScope.kind === "block"
+          ? `\nSCOPE: block ${editScope.blockId} ONLY. Return changes for that id and nothing else — edits to other blocks, additions, removals, reorderings and subject changes are discarded before they are applied.`
+          : editScope.kind === "envelope"
+          ? "\nSCOPE: the subject and inbox preview ONLY. Body blocks are discarded before they are applied."
+          : "\nSCOPE: the whole email. The merchant asked for this explicitly.",
         conversationHistory.length
           ? `\nRECENT STUDIO CONTEXT (oldest to newest):\n${conversationHistory
               .reverse()
@@ -471,10 +490,19 @@ export const emailsRouter = router({
               props: { ...selectedBlock.props, bgImageSrc: persisted.url },
             };
           } else if (selectedBlock?.type === "product") {
-            nextBlocks[selectedIndex] = {
-              ...selectedBlock,
-              props: { ...selectedBlock.props, imageUrl: persisted.url },
-            };
+            // A product block's image is a Shopify fact: the renderer prefers
+            // the store's product map and enrichment rewrites `imageUrl` on
+            // every load, so a generated image here shows in preview and is
+            // replaced at delivery. Refuse rather than promise it.
+            return fail(
+              "A product block always shows the product's own Shopify image. Select an image or hero block for a generated visual.",
+            );
+          } else if (editScope.kind === "block") {
+            // The merchant pointed at one block. Appending a new one would be
+            // a change they did not ask for, so say so instead.
+            return fail(
+              "That block cannot hold an image. Select an image, hero or product block, or switch the request to the whole email.",
+            );
           } else {
             nextBlocks.push(imageBlock);
           }
@@ -483,6 +511,7 @@ export const emailsRouter = router({
             input.subject ?? "",
             input.previewText ?? "",
             {
+              editScope,
               type: selectedBlock?.type === "image" || selectedBlock?.type === "hero" || selectedBlock?.type === "product"
                 ? "replaceAsset"
                 : "insertBlock",
@@ -516,109 +545,263 @@ export const emailsRouter = router({
           maxTokens: 2048,
         });
 
-        const parsed = JSON.parse(extractJsonPayload(result.content));
-        const changes: Record<string, Record<string, unknown>> = parsed &&
-        typeof parsed === "object" &&
-        parsed.blocks &&
-        typeof parsed.blocks === "object"
-          ? parsed.blocks
-          : {};
-        const removeIds = new Set(
-          Array.isArray(parsed?.remove)
-            ? parsed.remove.filter((x: unknown) => typeof x === "string")
-            : []
-        );
-        const addList: any[] = Array.isArray(parsed?.add) ? parsed.add : [];
-        const order: string[] | null = Array.isArray(parsed?.order)
-          ? parsed.order.filter((x: unknown) => typeof x === "string")
-          : null;
-        const newSubject =
-          typeof parsed?.subject === "string" && parsed.subject.trim()
-            ? parsed.subject.trim()
-            : undefined;
-        const newPreviewText =
-          typeof parsed?.previewText === "string"
-            ? parsed.previewText.trim()
-            : undefined;
+        let addCounter = 0;
+        const planned = planEmailChange({
+          content: result.content,
+          scope: editScope,
+          lane: input.scope,
+          original: original as any,
+          subject: input.subject,
+          previewText: input.previewText,
+          idSeed: () => `b-${Date.now()}-${addCounter++}`,
+        });
+        if (!planned.ok) return fail(planned.reason);
 
-        // Enforce the chip's lane — drop any out-of-scope changes the model returned,
-        // so Subject chips never touch the body, Copy/Tone never touch the subject or
-        // structure, and Visual never rewrites the subject. (Belt-and-suspenders over
-        // the SCOPE_RULE in the prompt.)
-        const sc = input.scope;
-        const editsAllowed = !sc || sc === "copy" || sc === "tone" || sc === "visual";
-        const structureAllowed = !sc || sc === "visual";
-        const subjectAllowed = !sc || sc === "subject";
-        const previewAllowed = !sc || sc === "subject" || sc === "copy" || sc === "tone";
-        const effChanges = editsAllowed ? changes : {};
-        const effRemove = structureAllowed ? removeIds : new Set<string>();
-        const effAdd = structureAllowed ? addList : [];
-        const effOrder = structureAllowed ? order : null;
-        const effSubject = subjectAllowed ? newSubject : undefined;
-        const effPreviewText = previewAllowed ? newPreviewText : undefined;
-
-        // 1. edit existing + drop removed
-        let next = original
-          .filter((b) => !effRemove.has(b.id))
-          .map((b) =>
-            effChanges[b.id] && typeof effChanges[b.id] === "object"
-              ? { ...b, props: { ...b.props, ...effChanges[b.id] } }
-              : b
-          );
-
-        // 2. add new blocks (server assigns ids; insert after afterId or append)
-        let addCount = 0;
-        for (const a of effAdd) {
-          if (!a || typeof a !== "object" || typeof a.type !== "string") continue;
-          const block = {
-            id: `b-${Date.now()}-${addCount}`,
-            type: a.type,
-            props: a.props && typeof a.props === "object" ? a.props : {},
-          };
-          const idx = a.afterId ? next.findIndex((b) => b.id === a.afterId) : -1;
-          if (idx >= 0) next.splice(idx + 1, 0, block);
-          else next.push(block);
-          addCount++;
-        }
-
-        // 3. reorder (known ids first in the given order, then any leftovers)
-        if (effOrder && effOrder.length) {
-          const byId = new Map(next.map((b) => [b.id, b]));
-          const ordered = effOrder.map((id) => byId.get(id)).filter(Boolean) as any[];
-          const rest = next.filter((b) => !effOrder!.includes(b.id));
-          if (ordered.length) next = [...ordered, ...rest];
-        }
-
-        const changedCount = Object.keys(effChanges).filter((id) =>
-          original.some((b) => b.id === id)
-        ).length;
-        const applied =
-          changedCount > 0 || addCount > 0 || effRemove.size > 0 || !!effOrder || !!effSubject || effPreviewText !== undefined;
-
-        if (!applied) {
-          return fail("joon didn't change anything — try rephrasing.");
-        }
-        const validatedBlocks = emailBlocksSchema.safeParse(next);
+        const validatedBlocks = emailBlocksSchema.safeParse(planned.change.blocks);
         if (!validatedBlocks.success) {
           return fail(`Joon proposed an invalid email change: ${validatedBlocks.error.issues[0]?.message ?? "validation failed"}`);
         }
+        const nextSubject = planned.change.subject ?? input.subject;
+        const nextPreviewText = planned.change.previewText ?? input.previewText;
         const proposal = await persistProposal(
           validatedBlocks.data,
-          effSubject ?? input.subject ?? "",
-          effPreviewText ?? input.previewText ?? "",
-          parsed,
+          nextSubject ?? "",
+          nextPreviewText ?? "",
+          { editScope, scopeLabel: describeScope(editScope), lane: input.scope ?? null },
         );
         return {
           applied: true,
           blocks: validatedBlocks.data,
-          subject: effSubject ?? input.subject,
-          previewText: effPreviewText ?? input.previewText,
+          subject: nextSubject,
+          previewText: nextPreviewText,
+          scope: describeScope(editScope),
           proposalId: proposal?.id,
           model: result.model,
         };
       } catch (err: any) {
         return fail(err?.message ?? "joon is unavailable right now. Your email is unchanged.");
       }
+    }),
+
+  /**
+   * Generate several labelled email visuals from one merchant action.
+   *
+   * Each slot is generated SEPARATELY, so the merchant gets four selectable
+   * assets rather than one collage they have to crop apart. Nothing is applied
+   * to the email: the assets land in the library and the merchant chooses.
+   *
+   * Never called on its own — generation costs money, so it needs an explicit
+   * merchant action, and the workspace's daily image budget applies inside
+   * `generateImage`.
+   */
+  generateVisuals: workspaceProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        templateId: z.string().optional(),
+        productId: z.string().optional(),
+        mode: z.enum(["product_safe", "creative_concept"]),
+        slots: z.array(z.object({
+          id: z.string().min(1).max(64),
+          label: z.string().min(1).max(120),
+          prompt: z.string().min(1).max(2000),
+          purpose: z.enum(["hero_banner", "product_lifestyle", "background", "card"]),
+        })).min(1).max(4),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findFirst({
+        where: { id: input.storeId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+
+      // Product-safe mode composites the REAL product image, so the product
+      // must be one of this store's and must actually have an image.
+      const product = input.productId
+        ? await ctx.prisma.product.findFirst({
+            where: { id: input.productId, storeId: input.storeId },
+            select: { id: true, title: true, imageUrl: true },
+          })
+        : null;
+      if (input.productId && !product) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "That product is not in this store." });
+      }
+
+      const validated = validateVisualRequest({
+        mode: input.mode,
+        slots: input.slots,
+        productImageUrl: product?.imageUrl ?? null,
+      });
+      if (!validated.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
+      }
+
+      // Fail closed, and say what to configure. Substituting stock imagery here
+      // would hand back something that looks like a result and is not one.
+      const selection = selectVisualProvider({
+        preferReference: input.mode === "product_safe" && Boolean(product?.imageUrl),
+      });
+      if (!selection.ok) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `${selection.reason} (${selection.missing.join(" or ")})`,
+        });
+      }
+
+      // Both ceilings: the workspace's day, and this email's lifetime.
+      const spendRefusal = await imageSpendRefusal({
+        workspaceId: ctx.workspaceId,
+        templateId: input.templateId,
+      });
+      if (spendRefusal) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: spendRefusal });
+      }
+
+      const visual = await ctx.prisma.brandVisualProfile.findUnique({ where: { storeId: input.storeId } });
+      const aesthetic = visual?.aestheticClassification ?? visual?.visualTone ?? undefined;
+
+      // A reference-capable provider works FROM the real product image, so the
+      // product in the scene is the merchant's. Without one, product-safe still
+      // preserves the product by compositing it over generated scenery after
+      // the fact — faithful either way, but assembled rather than photographed.
+      const useReference = selection.usesReference && Boolean(product?.imageUrl);
+
+      const assets: Array<{
+        slotId: string; label: string; url: string; assetId: string;
+        provider: string; mode: string; modeLabel: string;
+      }> = [];
+      const failures: Array<{ slotId: string; reason: string }> = [
+        ...validated.refused.map((item) => ({ slotId: item.slotId, reason: item.reason })),
+      ];
+
+      for (const slot of validated.slots) {
+        try {
+          const generated = useReference
+            ? await (async () => {
+                const url = await selection.provider.generate({
+                  prompt: buildSlotPrompt(slot, input.mode, aesthetic, { hasReference: true }),
+                  width: 1024,
+                  height: slot.purpose === "hero_banner" ? 683 : 1024,
+                  referenceImageUrls: [product!.imageUrl!],
+                });
+                if (!url) throw new Error("The image provider returned nothing for this visual.");
+                return { url, provider: selection.provider.id, prompt: slot.prompt, cost: selection.provider.costUsd };
+              })()
+            : await generateImage({
+                purpose: slot.purpose,
+                prompt: buildSlotPrompt(slot, input.mode, aesthetic),
+                workspaceId: ctx.workspaceId,
+                fallbackToStock: false,
+              });
+          // With a reference provider the product is already IN the image, so
+          // compositing it again would paste it over itself.
+          const persisted = !useReference && input.mode === "product_safe" && product?.imageUrl
+            ? await persistProductSafeComposite({
+                workspaceId: ctx.workspaceId,
+                storeId: input.storeId,
+                backgroundUrl: generated.url,
+                productUrl: product.imageUrl,
+                fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
+              })
+            : await persistRemoteEmailImage({
+                workspaceId: ctx.workspaceId,
+                storeId: input.storeId,
+                remoteUrl: generated.url,
+                fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
+              });
+
+          await ctx.prisma.generatedImage.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              provider: generated.provider,
+              prompt: generated.prompt,
+              url: persisted.url,
+              purpose: slot.purpose,
+              cost: generated.cost,
+              width: persisted.width,
+              height: persisted.height,
+              templateId: input.templateId,
+              sourceAssetIds: [],
+            },
+          });
+          const asset = await ctx.prisma.brandAsset.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              storeId: input.storeId,
+              type: slot.purpose === "hero_banner" ? "hero" : "lifestyle",
+              url: persisted.url,
+              // The label is what the merchant sees on the tile, so a set of
+              // four is tellable apart at a glance.
+              fileName: `${slot.label}.png`,
+              mimeType: persisted.mimeType,
+              width: persisted.width,
+              height: persisted.height,
+              storageKey: persisted.key,
+              checksum: persisted.checksum,
+              source: "generated",
+              sourcePrompt: generated.prompt,
+              sourceAssetIds: [],
+              altText: slot.prompt,
+              status: "ready",
+            },
+          });
+          assets.push({
+            slotId: slot.id,
+            label: slot.label,
+            url: persisted.url,
+            assetId: asset.id,
+            provider: generated.provider,
+            mode: input.mode,
+            modeLabel: modeLabel(input.mode),
+          });
+        } catch (error) {
+          // One slot failing must not lose the others.
+          failures.push({
+            slotId: slot.id,
+            reason: error instanceof Error ? error.message : "Joon could not generate this visual.",
+          });
+        }
+      }
+
+      return {
+        assets,
+        failures,
+        mode: input.mode,
+        modeLabel: modeLabel(input.mode),
+        provider: selection.provider.label,
+        // True only when the real product image was an INPUT to the model,
+        // which is the sole condition under which "your actual product in this
+        // scene" is a truthful thing to show a merchant.
+        referenceGrounded: useReference,
+      };
+    }),
+
+  /**
+   * What image generation can actually do right now, for this workspace.
+   *
+   * The Studio uses this to say whether "your actual product in this scene" is
+   * available or whether product-safe will composite instead — rather than
+   * letting a merchant discover the difference in the output.
+   */
+  visualCapabilities: workspaceProcedure
+    .input(z.object({ templateId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const selection = selectVisualProvider({ preferReference: true });
+      const spendRefusal = await imageSpendRefusal({
+        workspaceId: ctx.workspaceId,
+        templateId: input?.templateId,
+      });
+      return {
+        generationAvailable: selection.ok,
+        provider: selection.ok ? selection.provider.label : null,
+        missingCredentials: selection.ok ? [] : selection.missing,
+        referenceGrounded: referenceGenerationAvailable(),
+        // How an operator would switch reference grounding on. Surfaced so the
+        // limitation reads as configuration rather than as a law of nature.
+        referenceSetup: referenceProviderSetupHint(),
+        spendRefusal,
+      };
     }),
 
   resolveProposal: workspaceProcedure
@@ -650,7 +833,7 @@ export const emailsRouter = router({
         return { status: "rejected" as const, version: null };
       }
 
-      const candidate = emailDocumentSchema.parse(proposal.candidate);
+      const candidate = parseEmailDocument(proposal.candidate);
       const result = await ctx.prisma.$transaction(async (tx) => {
         const latestVersion = await tx.emailVersion.findFirst({
           where: { templateId: proposal.templateId },

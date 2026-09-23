@@ -27,7 +27,7 @@ export default function EditTemplatePage() {
     { enabled: !!id },
   ) as {
     data:
-      | { blocks: unknown; subject?: string; previewText?: string; name?: string; storeId?: string | null }
+      | { blocks: unknown; subject?: string; previewText?: string; name?: string; storeId?: string | null; campaignId?: string | null }
       | undefined;
     isLoading: boolean;
     error: unknown;
@@ -68,6 +68,8 @@ export default function EditTemplatePage() {
       initialPreviewText={data.previewText ?? ""}
       initialHtml=""
       storeId={data.storeId ?? undefined}
+      templateName={data.name ?? "Untitled email"}
+      reviewHref={data.campaignId ? `/campaigns/${data.campaignId}` : null}
       previewVariables={{ first_name: "there", last_order_month: "recently" }}
     />
   );

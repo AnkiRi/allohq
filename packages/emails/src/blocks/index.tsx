@@ -10,6 +10,7 @@ import {
   Section,
   Text,
 } from "@react-email/components";
+import { resolvePersonalization } from "@allohq/email-builder";
 import type { EmailBlock, ProductData } from "@allohq/email-builder";
 import type { BrandKit } from "../brand-kit";
 import { formatCurrency } from "../brand-kit";
@@ -26,6 +27,15 @@ export interface BlockRenderContext {
   products: Record<string, ProductData>;
   /** Dynamic recommendations resolved at send time. */
   dynamicProducts?: ProductData[];
+  /**
+   * Products of each bound collection, keyed by collection id.
+   *
+   * A collection binding is LIVE: the grid shows whatever the collection holds
+   * when the email renders. Preview, the approval snapshot and delivery all
+   * fill this from the same resolver, so a merchant cannot approve one set of
+   * products and have another sent.
+   */
+  collections?: Record<string, ProductData[]>;
   /** Show placeholders for missing data (editor preview). */
   previewMode?: boolean;
 }
@@ -34,9 +44,15 @@ export interface BlockRenderContext {
 // Small utilities
 // ---------------------------------------------------------------------------
 
-/** Interpolate merge tags like {{first_name}}. */
+/**
+ * Interpolate merge tags like {{first_name}} or {{first_name|there}}.
+ *
+ * This previously fell back to the tag itself, so a token the sender does not
+ * populate reached the inbox as the literal text "{{first_name}}". Resolution
+ * now ends at a fallback or at nothing — never at the tag.
+ */
 function interpolate(text: string, variables: Record<string, string>): string {
-  return text.replace(/\{\{(\w[\w.]*)\}\}/g, (_m, key: string) => variables[key] ?? `{{${key}}}`);
+  return resolvePersonalization(text, variables);
 }
 
 /** Strip HTML tags down to plain text (AI sometimes emits <p>...</p>). */
@@ -430,6 +446,20 @@ function ProductGridBlockView({
   const { columns = 2, showPrice = true, showDescription = false } = block.props;
 
   let ids = block.props.productIds;
+
+  // A bound collection wins over a hand-picked list: it is what the merchant
+  // chose most recently, and it is explicitly labelled as live in the Studio.
+  const boundCollection = block.props.collectionId
+    ? ctx.collections?.[block.props.collectionId]
+    : undefined;
+  if (boundCollection?.length) {
+    const limited = boundCollection.slice(0, block.props.collectionLimit ?? 6);
+    for (const product of limited) {
+      if (!ctx.products[product.id]) ctx.products[product.id] = product;
+    }
+    ids = limited.map((product) => product.id);
+  }
+
   if (
     block.props.source &&
     block.props.source !== "manual" &&

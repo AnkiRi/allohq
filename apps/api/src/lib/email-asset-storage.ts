@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -75,13 +76,70 @@ export async function inspectUploadedEmailAsset(input: {
   const { bucket, cdnBaseUrl, client } = storageConfig();
   const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: input.key }));
   const mimeType = head.ContentType ?? "application/octet-stream";
-  const size = Number(head.ContentLength ?? 0);
-  assertAssetInput(mimeType, size);
+  assertAssetInput(mimeType, Number(head.ContentLength ?? 0));
+
+  // A merchant's file is uploaded straight to storage by the browser, so the
+  // bytes sitting there are exactly what came off their device — EXIF, GPS and
+  // all. Read it back, re-encode it without metadata, and overwrite. Joon
+  // serves these at public URLs and mails them to strangers; publishing
+  // somebody's coordinates because they attached a photo is not acceptable.
+  const stored = await client.send(new GetObjectCommand({ Bucket: bucket, Key: input.key }));
+  const raw = Buffer.from(await stored.Body!.transformToByteArray());
+  const stripped = await stripImageMetadata(raw, mimeType);
+  const checksum = createHash("sha256").update(stripped.body).digest("hex");
+  await client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: input.key,
+    Body: stripped.body,
+    ContentType: mimeType,
+    CacheControl: "public,max-age=31536000,immutable",
+    Metadata: { workspace: input.workspaceId, store: input.storeId, sha256: checksum },
+  }));
+
   return {
     url: `${cdnBaseUrl}/${input.key}`,
     mimeType,
-    size,
-    checksum: head.ChecksumSHA256 ?? head.ETag?.replaceAll('"', "") ?? null,
+    size: stripped.body.byteLength,
+    width: stripped.width,
+    height: stripped.height,
+    checksum,
+  };
+}
+
+/**
+ * Re-encode an image so no metadata survives into a hosted asset.
+ *
+ * A merchant's phone photo carries EXIF, which routinely includes GPS
+ * coordinates, device serials and timestamps. Joon hosts these files at
+ * public CDN URLs and mails them to strangers, so shipping that metadata
+ * through would publish someone's home address as a side effect of adding a
+ * picture to an email.
+ *
+ * sharp drops metadata unless explicitly asked to keep it, so a re-encode is
+ * the whole job. Orientation is applied first, because that IS carried in EXIF
+ * and dropping it without rotating would turn photographs sideways.
+ *
+ * This is metadata removal only. It is NOT malware scanning and NOT content
+ * moderation — neither is implemented, and nothing here should be read as
+ * either.
+ */
+export async function stripImageMetadata(
+  body: Buffer,
+  mimeType: string,
+): Promise<{ body: Buffer; width: number | null; height: number | null }> {
+  const pipeline = sharp(body).rotate();
+  const encoded =
+    mimeType === "image/jpeg"
+      ? await pipeline.jpeg({ quality: 90 }).toBuffer({ resolveWithObject: true })
+      : mimeType === "image/webp"
+        ? await pipeline.webp({ quality: 90 }).toBuffer({ resolveWithObject: true })
+        : mimeType === "image/gif"
+          ? await pipeline.gif().toBuffer({ resolveWithObject: true })
+          : await pipeline.png().toBuffer({ resolveWithObject: true });
+  return {
+    body: encoded.data,
+    width: encoded.info.width ?? null,
+    height: encoded.info.height ?? null,
   };
 }
 
@@ -96,14 +154,16 @@ export async function persistRemoteEmailImage(input: {
   const body = Buffer.from(await response.arrayBuffer());
   const mimeType = response.headers.get("content-type")?.split(";")[0] ?? "image/png";
   assertAssetInput(mimeType, body.byteLength);
-  const metadata = await sharp(body).metadata();
-  const checksum = createHash("sha256").update(body).digest("hex");
+  const stripped = await stripImageMetadata(body, mimeType);
+  // Checksum the bytes actually stored, so the content hash identifies what a
+  // recipient receives rather than what a provider happened to return.
+  const checksum = createHash("sha256").update(stripped.body).digest("hex");
   const { bucket, cdnBaseUrl, client } = storageConfig();
   const key = `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/${checksum}.${safeExtension(input.fileName, mimeType)}`;
   await client.send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,
-    Body: body,
+    Body: stripped.body,
     ContentType: mimeType,
     CacheControl: "public,max-age=31536000,immutable",
     Metadata: { workspace: input.workspaceId, store: input.storeId, sha256: checksum },
@@ -112,9 +172,9 @@ export async function persistRemoteEmailImage(input: {
     key,
     url: `${cdnBaseUrl}/${key}`,
     mimeType,
-    width: metadata.width ?? null,
-    height: metadata.height ?? null,
-    size: body.byteLength,
+    width: stripped.width,
+    height: stripped.height,
+    size: stripped.body.byteLength,
     checksum,
   };
 }
