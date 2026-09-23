@@ -1086,7 +1086,7 @@ async function updateCustomerEmailConsent(
     select: { id: true },
   });
   if (!customer) {
-    throw new Error(`Consent update arrived before customer ${externalId ?? email ?? "unknown"}`);
+    throw new Error(`Consent update arrived before customer ${externalId ?? (email ? "(matched by email)" : "unknown")}`);
   }
 
   const shopifyState = String(payload.email_marketing_consent?.state ?? "unknown").toLowerCase();
