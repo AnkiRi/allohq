@@ -188,9 +188,8 @@ test("with storage but no provider, generation fails closed and names the variab
           slots: [slot("hero", "A clean premium hero")],
         }),
         (error: any) => {
-          assert.match(error.message, /No image provider is configured/);
-          assert.match(error.message, /REPLICATE_API_TOKEN|OPENAI_API_KEY/);
-          assert.doesNotMatch(error.message, /stock|unsplash/i);
+          assert.match(error.message, /not available for this workspace yet/);
+          assert.doesNotMatch(error.message, /OPENAI|GOOGLE|API_KEY|stock|unsplash/i);
           return true;
         },
       );
@@ -217,9 +216,10 @@ test("capabilities report honestly when nothing is configured", { skip }, async 
     assert.match(caps.storageMessage ?? "", /not available for this workspace yet/);
     assert.equal(caps.referenceGrounded, false, "no reference grounding without a provider");
     assert.ok(caps.missingCredentials.length > 0);
-    // The limitation must read as configuration, not as impossible.
-    assert.ok(caps.referenceSetup.length >= 1);
-    assert.ok(caps.referenceSetup.every((hint: any) => hint.variables.length >= 2));
+    // Merchant-level choices are always offered; the model list is empty
+    // until something is genuinely configured — no false availability.
+    assert.ok(caps.preferences.length >= 3, "Recommended / Fast / Premium / Product-faithful");
+    assert.deepEqual(caps.models, [], "nothing configured, so nothing selectable");
   } finally {
     if (saved.r) process.env["REPLICATE_API_TOKEN"] = saved.r;
     if (saved.o) process.env["OPENAI_API_KEY"] = saved.o;

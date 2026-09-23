@@ -2,13 +2,13 @@ import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import {
   complete,
-  generateImage,
   imageSpendRefusal,
   loadBrandKit,
-  referenceGenerationAvailable,
-  referenceProviderSetupHint,
   renderBrandedEmail,
-  selectVisualProvider,
+  isKnownModelId,
+  routeModel,
+  availableModels,
+  STUDIO_PREFERENCES,
 } from "@allohq/customer-intelligence";
 import { buildSlotPrompt, modeLabel, validateVisualRequest } from "@allohq/email-builder";
 import { buildBrandKit, type BrandKit } from "@allohq/emails";
@@ -18,12 +18,12 @@ import { ensureEmailVersion, resolveBlockData } from "@allohq/campaign-engine";
 import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/email-scope";
 import { planEmailChange } from "../lib/email-changes";
 import { assetStorageStatus } from "../lib/asset-storage-status";
+import { fetchReferenceBytes, planGeneration, refusalFromAdapterError } from "../lib/visual-generation";
 import { describeTarget, detectVisualIntent, proposeVisualTarget } from "../lib/visual-intent";
 
 import {
   createEmailAssetUpload,
   inspectUploadedEmailAsset,
-  persistProductSafeComposite,
   persistRemoteEmailImage,
 } from "../lib/email-asset-storage";
 
@@ -385,7 +385,7 @@ export const emailsRouter = router({
       if (visualIntent) {
         const target = proposeVisualTarget(original as never, input.selectedBlockId ?? null);
         const storage = assetStorageStatus();
-        const provider = selectVisualProvider({ preferReference: true });
+        const provider = routeModel({ workload: "product_reference_edit" });
         const spendRefusal = await imageSpendRefusal({
           workspaceId: ctx.workspaceId,
           templateId: input.templateId,
@@ -422,9 +422,10 @@ export const emailsRouter = router({
             product: product ? { id: product.id, title: product.title, hasImage: Boolean(product.imageUrl) } : null,
             mode: product?.imageUrl ? ("product_safe" as const) : ("creative_concept" as const),
             modeLabel: product?.imageUrl ? modeLabel("product_safe") : modeLabel("creative_concept"),
-            providerLabel: provider.ok ? provider.provider.label : null,
-            referenceGrounded: provider.ok ? provider.usesReference && Boolean(product?.imageUrl) : false,
-            estimatedCostUsd: provider.ok ? provider.provider.costUsd : null,
+            providerLabel: provider.ok ? provider.model.label : null,
+            referenceGrounded: provider.ok && Boolean(product?.imageUrl),
+            // A class, not an invented per-image price.
+            costClass: provider.ok ? provider.model.costClass : null,
             blockedReason: blocked ?? null,
           },
         };
@@ -497,6 +498,10 @@ export const emailsRouter = router({
         templateId: z.string().optional(),
         productId: z.string().optional(),
         mode: z.enum(["product_safe", "creative_concept"]),
+        /** A merchant-level choice, never a raw model id from the browser. */
+        prefer: z.enum(["recommended", "fast", "premium", "product_faithful"]).optional(),
+        /** Advanced disclosure only; validated against the registry. */
+        modelId: z.string().max(64).optional(),
         slots: z.array(z.object({
           id: z.string().min(1).max(64),
           label: z.string().min(1).max(120),
@@ -512,8 +517,11 @@ export const emailsRouter = router({
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
 
-      // Product-safe mode composites the REAL product image, so the product
-      // must be one of this store's and must actually have an image.
+      if (input.modelId && !isKnownModelId(input.modelId)) {
+        // A model id typed into the browser is not a model.
+        throw new TRPCError({ code: "BAD_REQUEST", message: "That image model is not available." });
+      }
+
       const product = input.productId
         ? await ctx.prisma.product.findFirst({
             where: { id: input.productId, storeId: input.storeId },
@@ -529,110 +537,76 @@ export const emailsRouter = router({
         slots: input.slots,
         productImageUrl: product?.imageUrl ?? null,
       });
-      if (!validated.ok) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
-      }
+      if (!validated.ok) throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
 
-      // Durable storage is checked BEFORE the provider, because a generation
-      // that cannot be saved is worse than one that never ran: it costs money
-      // and produces nothing the merchant can use.
-      const storage = assetStorageStatus();
-      if (!storage.configured) {
-        console.error(
-          `[Assets] storage unavailable; refusing generation. Missing: ${storage.missing.join(", ")}`,
-        );
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: storage.merchantMessage ?? "Image generation is not available for this workspace yet.",
-        });
-      }
+      // Product-safe means the merchant's own product must reach the model.
+      const wantsReference = input.mode === "product_safe";
+      const reference = wantsReference && product?.imageUrl
+        ? await fetchReferenceBytes(product.imageUrl)
+        : null;
 
-      // Fail closed, and say what to configure. Substituting stock imagery here
-      // would hand back something that looks like a result and is not one.
-      const selection = selectVisualProvider({
-        preferReference: input.mode === "product_safe" && Boolean(product?.imageUrl),
+      const planned = planGeneration({
+        workload: wantsReference ? "product_reference_edit" : "campaign_art",
+        prefer: input.prefer,
+        preferredModelId: input.modelId,
+        wantsReference,
+        hasReferenceBytes: Boolean(reference),
       });
-      if (!selection.ok) {
+      if (!planned.ok) {
+        console.error(`[Visuals] refused at ${planned.refusal.stage}: ${planned.refusal.operatorDetail}`);
         throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: `${selection.reason} (${selection.missing.join(" or ")})`,
+          code: planned.refusal.stage === "storage" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+          message: planned.refusal.merchantMessage,
         });
       }
+      const { model, referenceGrounded } = planned.plan;
 
-      // Both ceilings: the workspace's day, and this email's lifetime.
       const spendRefusal = await imageSpendRefusal({
         workspaceId: ctx.workspaceId,
         templateId: input.templateId,
       });
-      if (spendRefusal) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: spendRefusal });
-      }
+      if (spendRefusal) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: spendRefusal });
 
       const visual = await ctx.prisma.brandVisualProfile.findUnique({ where: { storeId: input.storeId } });
       const aesthetic = visual?.aestheticClassification ?? visual?.visualTone ?? undefined;
+      const adapter = model.adapter.kind === "visual" ? model.adapter.impl : null;
+      if (!adapter) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Image generation is not available for this workspace yet." });
 
-      // A reference-capable provider works FROM the real product image, so the
-      // product in the scene is the merchant's. Without one, product-safe still
-      // preserves the product by compositing it over generated scenery after
-      // the fact — faithful either way, but assembled rather than photographed.
-      const useReference = selection.usesReference && Boolean(product?.imageUrl);
-
-      const assets: Array<{
-        slotId: string; label: string; url: string; assetId: string;
-        provider: string; mode: string; modeLabel: string;
-      }> = [];
+      const assets: Array<Record<string, unknown>> = [];
       const failures: Array<{ slotId: string; reason: string }> = [
         ...validated.refused.map((item) => ({ slotId: item.slotId, reason: item.reason })),
       ];
 
       for (const slot of validated.slots) {
         try {
-          const generated = useReference
-            ? await (async () => {
-                const url = await selection.provider.generate({
-                  prompt: buildSlotPrompt(slot, input.mode, aesthetic, { hasReference: true }),
-                  width: 1024,
-                  height: slot.purpose === "hero_banner" ? 683 : 1024,
-                  referenceImageUrls: [product!.imageUrl!],
-                });
-                if (!url) throw new Error("The image provider returned nothing for this visual.");
-                return { url, provider: selection.provider.id, prompt: slot.prompt, cost: selection.provider.costUsd };
-              })()
-            : await generateImage({
-                purpose: slot.purpose,
-                prompt: buildSlotPrompt(slot, input.mode, aesthetic),
-                workspaceId: ctx.workspaceId,
-                fallbackToStock: false,
-              });
-          // With a reference provider the product is already IN the image, so
-          // compositing it again would paste it over itself.
-          const persisted = !useReference && input.mode === "product_safe" && product?.imageUrl
-            ? await persistProductSafeComposite({
-                workspaceId: ctx.workspaceId,
-                storeId: input.storeId,
-                backgroundUrl: generated.url,
-                productUrl: product.imageUrl,
-                fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
-              })
-            : await persistRemoteEmailImage({
-                workspaceId: ctx.workspaceId,
-                storeId: input.storeId,
-                remoteUrl: generated.url,
-                fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
-              });
+          const result = await adapter.generate({
+            apiModelId: model.apiModelId,
+            prompt: buildSlotPrompt(slot, input.mode, aesthetic, { hasReference: referenceGrounded }),
+            width: slot.purpose === "hero_banner" ? 1536 : 1024,
+            height: slot.purpose === "hero_banner" ? 1024 : 1024,
+            ...(reference ? { references: [reference] } : {}),
+          });
 
+          const persisted = await persistRemoteEmailImage({
+            workspaceId: ctx.workspaceId,
+            storeId: input.storeId,
+            remoteUrl: `data:${result.mimeType};base64,${result.imageBase64}`,
+            fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
+          });
+
+          // Lineage: what made it, from what, at what recorded usage.
           await ctx.prisma.generatedImage.create({
             data: {
               workspaceId: ctx.workspaceId,
-              provider: generated.provider,
-              prompt: generated.prompt,
+              provider: model.provider,
+              prompt: slot.prompt,
               url: persisted.url,
               purpose: slot.purpose,
-              cost: generated.cost,
+              cost: 0,
               width: persisted.width,
               height: persisted.height,
               templateId: input.templateId,
-              sourceAssetIds: [],
+              sourceAssetIds: product ? [product.id] : [],
             },
           });
           const asset = await ctx.prisma.brandAsset.create({
@@ -641,8 +615,6 @@ export const emailsRouter = router({
               storeId: input.storeId,
               type: slot.purpose === "hero_banner" ? "hero" : "lifestyle",
               url: persisted.url,
-              // The label is what the merchant sees on the tile, so a set of
-              // four is tellable apart at a glance.
               fileName: `${slot.label}.png`,
               mimeType: persisted.mimeType,
               width: persisted.width,
@@ -650,27 +622,29 @@ export const emailsRouter = router({
               storageKey: persisted.key,
               checksum: persisted.checksum,
               source: "generated",
-              sourcePrompt: generated.prompt,
-              sourceAssetIds: [],
+              sourcePrompt: `${model.apiModelId} · ${slot.prompt}`,
+              sourceAssetIds: product ? [product.id] : [],
               altText: slot.prompt,
               status: "ready",
             },
           });
+
           assets.push({
             slotId: slot.id,
             label: slot.label,
             url: persisted.url,
             assetId: asset.id,
-            provider: generated.provider,
+            provider: model.provider,
+            modelLabel: model.label,
             mode: input.mode,
             modeLabel: modeLabel(input.mode),
+            referenceGrounded,
+            usage: result.usage ?? null,
           });
         } catch (error) {
-          // One slot failing must not lose the others.
-          failures.push({
-            slotId: slot.id,
-            reason: error instanceof Error ? error.message : "Joon could not generate this visual.",
-          });
+          const refusal = refusalFromAdapterError(error);
+          console.error(`[Visuals] ${slot.id} failed: ${refusal.operatorDetail}`);
+          failures.push({ slotId: slot.id, reason: refusal.merchantMessage });
         }
       }
 
@@ -679,11 +653,8 @@ export const emailsRouter = router({
         failures,
         mode: input.mode,
         modeLabel: modeLabel(input.mode),
-        provider: selection.provider.label,
-        // True only when the real product image was an INPUT to the model,
-        // which is the sole condition under which "your actual product in this
-        // scene" is a truthful thing to show a merchant.
-        referenceGrounded: useReference,
+        modelLabel: model.label,
+        referenceGrounded,
       };
     }),
 
@@ -697,7 +668,10 @@ export const emailsRouter = router({
   visualCapabilities: workspaceProcedure
     .input(z.object({ templateId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const selection = selectVisualProvider({ preferReference: true });
+      // Availability now means: an adapter exists, its credential is present,
+      // and its switch is on. A registry entry alone proves nothing.
+      const generation = routeModel({ workload: "campaign_art" });
+      const grounded = routeModel({ workload: "product_reference_edit" });
       const storage = assetStorageStatus();
       const spendRefusal = await imageSpendRefusal({
         workspaceId: ctx.workspaceId,
@@ -707,16 +681,26 @@ export const emailsRouter = router({
         // A provider without somewhere to put its output is not availability.
         // Reporting it as available is what let a merchant spend on a
         // generation that then failed on the way to storage.
-        generationAvailable: selection.ok && storage.configured,
+        generationAvailable: generation.ok && storage.configured,
         storageConfigured: storage.configured,
         storageMessage: storage.merchantMessage,
-        providerAvailable: selection.ok,
-        provider: selection.ok ? selection.provider.label : null,
-        missingCredentials: selection.ok ? [] : selection.missing,
-        referenceGrounded: referenceGenerationAvailable(),
-        // How an operator would switch reference grounding on. Surfaced so the
-        // limitation reads as configuration rather than as a law of nature.
-        referenceSetup: referenceProviderSetupHint(),
+        providerAvailable: generation.ok,
+        provider: generation.ok ? generation.model.label : null,
+        missingCredentials: generation.ok ? [] : generation.missing,
+        /** True only when a model that takes the real product image is on. */
+        referenceGrounded: grounded.ok,
+        /** Merchant-level choices, never a provider dropdown. */
+        preferences: STUDIO_PREFERENCES,
+        /** Advanced disclosure for design partners. */
+        models: availableModels().map((model) => ({
+          id: model.id,
+          label: model.label,
+          provider: model.provider,
+          tier: model.tier,
+          costClass: model.costClass,
+          referenceCapable: model.capabilities.includes("image_reference_input"),
+          note: model.note ?? null,
+        })),
         spendRefusal,
       };
     }),

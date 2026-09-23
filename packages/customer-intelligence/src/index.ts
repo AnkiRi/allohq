@@ -157,3 +157,13 @@ export {
   type TextWorkload,
   type VisualWorkload,
 } from "./ai/model-registry";
+
+export {
+  VisualAdapterError,
+  geminiImageAdapter,
+  openAiImageAdapter,
+  type ReferenceImage,
+  type VisualAdapter,
+  type VisualAdapterRequest,
+  type VisualAdapterResult,
+} from "./images/adapters";
