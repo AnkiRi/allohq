@@ -11,6 +11,27 @@ import sharp from "sharp";
 const MAX_ASSET_BYTES = 12 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
+/**
+ * Overridable S3 client, so persistence can be exercised against a double.
+ *
+ * Storage is where workspace isolation is actually enforced — the object key
+ * carries the tenant — and that cannot be left to inspection.
+ */
+let clientOverride: { send: (command: unknown) => Promise<unknown> } | null = null;
+export function __setStorageClientForTests(client: typeof clientOverride) {
+  clientOverride = client;
+}
+
+/** The object key for one asset. The tenant prefix is the isolation boundary. */
+export function emailAssetKey(input: {
+  workspaceId: string;
+  storeId: string;
+  checksum: string;
+  extension: string;
+}): string {
+  return `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/${input.checksum}.${input.extension}`;
+}
+
 function storageConfig() {
   const bucket = process.env["ASSET_BUCKET"];
   const cdnBaseUrl = process.env["ASSET_CDN_BASE_URL"]?.replace(/\/$/, "");
@@ -19,10 +40,11 @@ function storageConfig() {
   }
   const region = process.env["ASSET_REGION"] ?? process.env["AWS_REGION"] ?? "us-east-1";
   const endpoint = process.env["ASSET_S3_ENDPOINT"];
-  const client = new S3Client({
-    region,
-    ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-  });
+  const client = (clientOverride ??
+    new S3Client({
+      region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    })) as S3Client;
   return { bucket, cdnBaseUrl, client };
 }
 
@@ -159,7 +181,7 @@ export async function persistRemoteEmailImage(input: {
   // recipient receives rather than what a provider happened to return.
   const checksum = createHash("sha256").update(stripped.body).digest("hex");
   const { bucket, cdnBaseUrl, client } = storageConfig();
-  const key = `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/${checksum}.${safeExtension(input.fileName, mimeType)}`;
+  const key = emailAssetKey({ workspaceId: input.workspaceId, storeId: input.storeId, checksum, extension: safeExtension(input.fileName, mimeType) });
   await client.send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,

@@ -167,3 +167,11 @@ export {
   type VisualAdapterRequest,
   type VisualAdapterResult,
 } from "./images/adapters";
+
+export {
+  describeMigration,
+  migrateHarnessRoutes,
+  migrationPreservesRoutes,
+  unroutedWorkloads,
+  type TextHarnessRoutes,
+} from "./ai/harness-migration";

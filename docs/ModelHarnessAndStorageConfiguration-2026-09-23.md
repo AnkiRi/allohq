@@ -41,38 +41,60 @@ Storage must be a bucket you control. Joon has created nothing.
 | GPT-4o | `OPENAI_API_KEY` | — | Text and visual reasoning |
 | Gemini Flash | `GOOGLE_API_KEY` | `JOON_GEMINI_TEXT_ENABLED=true` | Economy tier |
 
-The existing text harness is unchanged. This registry sits alongside it.
+All three have real adapters. The Gemini text adapter was written for this
+pass; Gemini was previously listed with nothing behind it.
+
+Existing Harness v1 configuration is **migrated, not discarded**: the single
+`creative` route becomes all four creative workloads, and `support` plus
+`orchestration` merge into `merchant_agent_orchestration`. No workspace loses
+a route it had set.
 
 ---
 
 ## 3. Image models
 
-### Text-to-image — invents whatever it draws
+Every model listed here has a **real adapter** behind it. Nothing appears in
+the Studio, in routing, or as a fallback without one — a registry entry is not
+an implementation.
 
-| Model | API id | Credential | Enable flag | ~Cost |
-|---|---|---|---|---|
-| GPT Image | `gpt-image-1` | `OPENAI_API_KEY` | — | $0.07 |
-| DALL·E 3 | `dall-e-3` | `OPENAI_API_KEY` | — | $0.04 |
-| Flux 1.1 Pro | `black-forest-labs/flux-1.1-pro` | `REPLICATE_API_TOKEN` | — | $0.05 |
+### OpenAI — GPT Image 2.5
 
-### Reference-grounded — your real product reaches the model
+| Model | API id | Credential | Enable flag |
+|---|---|---|---|
+| GPT Image 2.5 Flare | `gpt-image-2.5-flare` | `OPENAI_API_KEY` | `JOON_OPENAI_IMAGE_ENABLED=true` |
+| GPT Image 2.5 Sunburst | `gpt-image-2.5-sunburst` | `OPENAI_API_KEY` | `JOON_OPENAI_IMAGE_ENABLED=true` |
+| GPT Image 1 (legacy) | `gpt-image-1` | `OPENAI_API_KEY` | `JOON_OPENAI_IMAGE_LEGACY_ENABLED=true` |
 
-| Model | API id | Credential | Enable flag | ~Cost |
-|---|---|---|---|---|
-| **Nano Banana 2** | `gemini-3.1-flash-image` | `GOOGLE_API_KEY` | `JOON_NANO_BANANA_ENABLED=true` | $0.04 |
-| Nano Banana Pro | `gemini-3-pro-image` | `GOOGLE_API_KEY` | `JOON_NANO_BANANA_PRO_ENABLED=true` | $0.14 |
-| GPT Image | `gpt-image-1` | `OPENAI_API_KEY` | `JOON_OPENAI_IMAGE_REFERENCE_ENABLED=true` | $0.07 |
-| Flux Kontext | `black-forest-labs/flux-kontext-pro` | `REPLICATE_API_TOKEN` | `JOON_FLUX_KONTEXT_ENABLED=true` | $0.06 |
+Flare is the everyday path; Sunburst the premium and reference-editing path.
+With a reference the adapter posts multipart to `/v1/images/edits`; without
+one, JSON to `/v1/images/generations`.
 
-**Nano Banana 2 is the intended default for product work** once configured —
-it takes references, handles multiple references, and sits at the same price as
-DALL·E. Nano Banana Pro is the premium option for final campaign assets.
+`dall-e-3` was removed. An account that cannot reach it is exactly how image
+generation came to be configured and dead in production.
 
-**Claude is deliberately absent from every image capability.** The Anthropic
-API does not return images; offering it would be a promise the API cannot keep.
-A test asserts this.
+### Google — Nano Banana
 
----
+| Model | API id | Credential | Enable flag |
+|---|---|---|---|
+| **Nano Banana 2** | `gemini-3.1-flash-image` | `GOOGLE_API_KEY` | `JOON_NANO_BANANA_ENABLED=true` |
+| Nano Banana Pro | `gemini-3-pro-image` | `GOOGLE_API_KEY` | `JOON_NANO_BANANA_PRO_ENABLED=true` |
+
+**Nano Banana 2 is the default for product work.** The adapter sends the real
+Shopify product image as inline image data to `generateContent` — the product
+reaches the model, it is not described to it.
+
+### Removed
+
+**Replicate / Flux.** Its generation path predates the adapter contract and
+implements none, so listing it would be the false availability this system now
+forbids. `REPLICATE_API_TOKEN` is no longer read by the harness.
+
+### Costs
+
+Models carry a **class** — economy, standard, premium — not a price. Providers
+bill by tokens and tiers, so a printed "$0.04 per image" would be a number Joon
+invented. Real usage is recorded from the provider's own response when it
+returns any.
 
 ## 4. Budgets
 
