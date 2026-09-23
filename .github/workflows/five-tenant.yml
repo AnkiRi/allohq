@@ -131,7 +131,9 @@ jobs:
             used=$(( (total - avail) / 1024 )); available=$(( avail / 1024 )); swap=$(( (swap_total - swap_free) / 1024 ))
             disk=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
             pg=$(docker stats --no-stream --format '{{.MemUsage}}' "$PG_CONTAINER" 2>/dev/null | awk '{v=$1; u=v; gsub(/[0-9.]/, "", u); gsub(/[A-Za-z]/, "", v); m = (u == "GiB") ? 1024 : (u == "MiB") ? 1 : (u == "KiB") ? 1/1024 : 0; printf "%d", v * m}')
-            node=$(ps -C node -o rss= 2>/dev/null | awk '{s += $1} END {printf "%d", s / 1024}')
+            # Matched on the executable path, not the process name: Node renames
+            # its main thread "MainThread", so `ps -C node` finds nothing.
+            node=$(ps -eo rss=,args= 2>/dev/null | awk '{n = split($2, part, "/"); if (part[n] == "node") s += $1} END {printf "%d", s / 1024}')
             load=$(cut -d' ' -f1 /proc/loadavg)
             db=$(PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_five_tenant_test -tAc "SELECT pg_database_size(current_database()) / 1048576" 2>/dev/null)
             echo "$now,$used,$available,$swap,$disk,$pg,$node,$load,$db" >> /tmp/resources.csv
@@ -209,8 +211,8 @@ jobs:
           | Runner memory used (peak) | ${runner_used:-?} MB |
           | Runner memory available (lowest) | ${runner_min_available:-?} MB |
           | Swap used (peak) | ${swap:-?} MB |
-          | Postgres container memory (peak sampled) | ${pg_peak:-?} MB |
-          | Postgres container memory (kernel peak) | ${pg_cgroup_peak} |
+          | Postgres working memory, excluding reclaimable file cache (peak sampled) | ${pg_peak:-?} MB |
+          | Postgres memory including file cache (kernel peak) | ${pg_cgroup_peak} |
           | All Node processes, resident (peak) | ${node_peak:-?} MB |
           | Load average, 1 min (peak; $(nproc) CPUs) | ${load_peak:-?} |
           | Database size (peak) | ${db_peak:-?} MB |
