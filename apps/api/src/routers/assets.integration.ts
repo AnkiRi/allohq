@@ -74,8 +74,14 @@ test("each source is separated, not mixed into one list", { skip }, async () => 
 
     assert.equal(library.uploads.length, 1);
     assert.equal(library.generated.length, 1);
-    assert.equal(library.shopify.length, 1, "the catalogue product image is listed");
-    assert.match(library.shopify[0]!.url, /board\.png/);
+    // Both kinds of Shopify-sourced image belong here: the catalogue photo,
+    // listed by reference, and brand imagery imported from shop.brand. The
+    // stored one used to be classified as Shopify and then read by nothing,
+    // so it was silently absent.
+    const shopifyUrls = library.shopify.map((item: { url: string }) => item.url);
+    assert.equal(library.shopify.length, 2);
+    assert.ok(shopifyUrls.some((url) => /board\.png/.test(url)), "the catalogue product image is listed");
+    assert.ok(shopifyUrls.some((url) => /l\.png/.test(url)), "the imported brand logo is listed");
   } finally {
     await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }
@@ -165,6 +171,97 @@ test("the library reports whether uploads can be saved at all", { skip }, async 
     assert.equal(library.storageConfigured, false, "the UI gates before an upload starts");
   } finally {
     if (saved) process.env["ASSET_BUCKET"] = saved;
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+
+// --- Shopify brand logo import ------------------------------------------------
+
+test("an imported Shopify brand logo reaches the library as a Shopify asset", { skip }, async () => {
+  const { prisma, assetsRouter } = await load();
+  const { syncShopifyBrandLogo } = await import("@allohq/ecommerce-integrations");
+  const f = await fixture(prisma, { logo: null });
+  try {
+    const client = {
+      graphql: async () => ({
+        shop: { brand: { logo: { image: { url: "https://cdn.shopify.test/brand-logo.png" } } } },
+      }),
+    };
+    const result = await syncShopifyBrandLogo(client as never, f.store.id, prisma as never);
+    assert.equal(result.outcome, "imported");
+
+    const library = await assetsRouter
+      .createCaller(caller(prisma, f.workspace.id, f.clerkId))
+      .library({ storeId: f.store.id });
+
+    assert.ok(
+      library.shopify.some((item: any) => item.url === "https://cdn.shopify.test/brand-logo.png"),
+      "the logo is listed under Shopify, where it came from",
+    );
+    assert.equal(library.shopifyLogo?.url, "https://cdn.shopify.test/brand-logo.png");
+    assert.equal(library.shopifyLogoMessage, null);
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("no Shopify logo leaves the merchant a plain instruction, not an error", { skip }, async () => {
+  const { prisma, assetsRouter } = await load();
+  const { syncShopifyBrandLogo } = await import("@allohq/ecommerce-integrations");
+  const f = await fixture(prisma, { logo: null });
+  try {
+    const client = { graphql: async () => ({ shop: { brand: null } }) };
+    const result = await syncShopifyBrandLogo(client as never, f.store.id, prisma as never);
+    assert.equal(result.outcome, "absent");
+
+    const library = await assetsRouter
+      .createCaller(caller(prisma, f.workspace.id, f.clerkId))
+      .library({ storeId: f.store.id });
+    assert.equal(library.shopifyLogo, null);
+    assert.match(library.shopifyLogoMessage ?? "", /No Shopify logo found — upload one/);
+    assert.doesNotMatch(library.shopifyLogoMessage ?? "", /scope|read_|graphql|API/i);
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("a manual logo survives an empty Shopify response", { skip }, async () => {
+  const { prisma, assetsRouter } = await load();
+  const { syncShopifyBrandLogo } = await import("@allohq/ecommerce-integrations");
+  const f = await fixture(prisma, { logo: "https://merchant.test/chosen.png" });
+  try {
+    const client = { graphql: async () => { throw new Error("Access denied for brand field"); } };
+    const result = await syncShopifyBrandLogo(client as never, f.store.id, prisma as never);
+    assert.equal(result.outcome, "absent");
+
+    const library = await assetsRouter
+      .createCaller(caller(prisma, f.workspace.id, f.clerkId))
+      .library({ storeId: f.store.id });
+    assert.equal(library.shopifyLogo?.url, "https://merchant.test/chosen.png", "the merchant's choice stands");
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("repeated syncs never create a second logo record", { skip }, async () => {
+  const { prisma } = await load();
+  const { syncShopifyBrandLogo } = await import("@allohq/ecommerce-integrations");
+  const f = await fixture(prisma, { logo: null });
+  try {
+    const client = {
+      graphql: async () => ({
+        shop: { brand: { logo: { image: { url: "https://cdn.shopify.test/brand-logo.png" } } } },
+      }),
+    };
+    for (let i = 0; i < 3; i += 1) {
+      await syncShopifyBrandLogo(client as never, f.store.id, prisma as never);
+    }
+    const rows = await prisma.brandAsset.count({
+      where: { storeId: f.store.id, type: "logo", source: "shopify" },
+    });
+    assert.equal(rows, 1);
+  } finally {
     await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }
 });

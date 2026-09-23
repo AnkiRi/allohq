@@ -80,15 +80,23 @@ export const assetsRouter = router({
 
       return {
         // Listed by reference from the synced catalogue. Not copies.
-        shopify: products
-          .filter((product) => product.imageUrl)
-          .map((product) => ({
-            id: `product:${product.id}`,
-            url: product.imageUrl!,
-            label: product.title,
-            source: "shopify" as const,
-            productId: product.id,
-          })),
+        // Product photos are listed BY REFERENCE from the synced catalogue;
+        // Joon holds no copies. Brand imagery imported from shop.brand is a
+        // stored row and joins them here — `classify` already called it
+        // Shopify, but nothing used to read that group, so an imported logo
+        // would have been invisible.
+        shopify: [
+          ...stored.filter((asset) => asset.source === "shopify"),
+          ...products
+            .filter((product) => product.imageUrl)
+            .map((product) => ({
+              id: `product:${product.id}`,
+              url: product.imageUrl!,
+              label: product.title,
+              source: "shopify" as const,
+              productId: product.id,
+            })),
+        ],
         uploads: stored.filter((asset) => asset.source === "upload"),
         generated: stored.filter((asset) => asset.source === "generated"),
         brand: stored.filter((asset) => asset.source === "brand"),

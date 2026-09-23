@@ -665,7 +665,13 @@ export const aiRouter = router({
         configured: isModelAvailable(model),
         note: model.note ?? null,
       })),
-      workloads: [...TEXT_WORKLOADS, ...VISUAL_WORKLOADS].map((workload) => ({
+      // A job with no model that can perform it is not a choice, and showing
+      // it as one implies a capability Joon does not have. image_analysis has
+      // no adapter, so it is withheld until one exists rather than being
+      // offered and explained away.
+      workloads: [...TEXT_WORKLOADS, ...VISUAL_WORKLOADS]
+        .filter((workload) => eligibleModels(workload).length > 0)
+        .map((workload) => ({
         id: workload,
         kind: WORKLOAD_CAPABILITY[workload] === "text" ? ("text" as const) : ("visual" as const),
         label: WORKLOAD_COPY[workload].label,

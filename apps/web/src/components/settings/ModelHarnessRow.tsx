@@ -126,9 +126,10 @@ export function WorkloadRow({
     [models, workload.eligibleModelIds],
   );
   const fallbackOptions = eligible.filter((model) => model.id !== route?.primary);
-  // Two different situations that must not be reported as one. "Not
-  // configured" invites the merchant to go and add a key; for a job Joon has
-  // no adapter for, a key would change nothing.
+  // A job Joon has no adapter for is withheld by the server rather than
+  // shown, so this only ever distinguishes "nothing configured yet" — where
+  // adding a key genuinely helps. The unimplemented branch remains as a
+  // backstop in case a job is ever surfaced without one.
   const unimplemented = workload.eligibleModelIds.length === 0;
   const runnable = eligible.some((model) => model.configured);
 

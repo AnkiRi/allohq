@@ -207,3 +207,15 @@ test("no harness at all means Joon's policy, not an empty chain", () => {
   assert.equal(route.source, "system_policy");
   assert.ok(route.candidates.length > 0);
 });
+
+test("a job with no model behind it is not offered as a choice", () => {
+  // image_analysis has no adapter. Listing it in settings would imply a
+  // capability Joon does not have; it is withheld until one exists.
+  assert.equal(eligibleModels("image_analysis").length, 0);
+
+  const offered = [...TEXT_WORKLOADS, ...VISUAL_WORKLOADS].filter(
+    (workload) => eligibleModels(workload).length > 0,
+  );
+  assert.ok(!offered.includes("image_analysis" as never));
+  assert.equal(offered.length, TEXT_WORKLOADS.length + VISUAL_WORKLOADS.length - 1);
+});
