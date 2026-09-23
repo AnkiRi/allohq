@@ -7,7 +7,7 @@ import {
   type CatalogueModel,
   type CatalogueWorkload,
   type Route,
-} from "./ModelHarnessSettings";
+} from "./ModelHarnessRow";
 
 /**
  * One row is where the promise lives: a merchant must not be able to point a
