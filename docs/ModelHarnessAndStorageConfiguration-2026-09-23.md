@@ -14,16 +14,21 @@ Nothing in this document has been set by Joon. All of it is yours to decide.
 Without this, uploads and generated images are refused **before** a provider is
 called, so nothing is spent on output that cannot be saved.
 
+The architecture, the IAM policies, the CORS and lifecycle rules, the
+setup order and the production canary are in
+[`docs/asset-storage/README.md`](asset-storage/README.md).
+
 | Variable | Required | Notes |
 |---|---|---|
 | `ASSET_BUCKET` | yes | S3 or S3-compatible bucket name |
-| `ASSET_CDN_BASE_URL` | yes | Public base URL, no trailing slash |
-| `AWS_ACCESS_KEY_ID` | yes* | |
-| `AWS_SECRET_ACCESS_KEY` | yes* | |
-| `ASSET_REGION` | no | Falls back to `AWS_REGION`, then `us-east-1` |
-| `ASSET_S3_ENDPOINT` | no | For S3-compatible stores (R2, MinIO). Forces path-style |
+| `ASSET_CDN_BASE_URL` | yes | `https://assets.joonhq.com`, no trailing slash, never a provider hostname |
+| `ASSET_AWS_ACCESS_KEY_ID` | yes* | Storage's own key (`iam-joon-api.json`); keeps it apart from SES |
+| `ASSET_AWS_SECRET_ACCESS_KEY` | yes* | |
+| `ASSET_REGION` | no | `eu-north-1` for the production bucket; falls back to `AWS_REGION`, then `us-east-1` |
+| `ASSET_S3_ENDPOINT` | no | For S3-compatible stores (R2, MinIO). Forces path-style. Unset for AWS |
 
-\* Or an instance role. Railway has none, so on Railway these are required.
+\* Or the generic `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, or an instance
+role. Railway has no instance role.
 
 **The production error named only the first two.** An operator could set both
 and still have every upload fail on credentials. The capability check now
