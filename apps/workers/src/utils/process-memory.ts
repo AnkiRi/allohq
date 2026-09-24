@@ -30,9 +30,11 @@ export type MemoryBreakdown = {
   threadArenaCount: number | null;
   otherAnonymous: number | null;
   fileBacked: number | null;
+  /** Anonymous memory backed by transparent huge pages (a 2 MB page is resident as a whole). */
+  anonHugePages: number | null;
 };
 
-type Mapping = { start: bigint; end: bigint; perms: string; path: string; rss: number };
+type Mapping = { start: bigint; end: bigint; perms: string; path: string; rss: number; anonHuge: number };
 
 const ARENA_SPAN = 64n * 1024n * 1024n;
 
@@ -42,12 +44,14 @@ export function parseSmaps(text: string): Mapping[] {
   for (const line of text.split("\n")) {
     const header = /^([0-9a-f]+)-([0-9a-f]+) (\S{4}) \S+ \S+ \S+\s*(.*)$/.exec(line);
     if (header) {
-      current = { start: BigInt(`0x${header[1]}`), end: BigInt(`0x${header[2]}`), perms: header[3]!, path: header[4]!.trim(), rss: 0 };
+      current = { start: BigInt(`0x${header[1]}`), end: BigInt(`0x${header[2]}`), perms: header[3]!, path: header[4]!.trim(), rss: 0, anonHuge: 0 };
       mappings.push(current);
       continue;
     }
     const rss = /^Rss:\s+(\d+) kB/.exec(line);
     if (rss && current) current.rss = Number(rss[1]) * 1024;
+    const huge = /^AnonHugePages:\s+(\d+) kB/.exec(line);
+    if (huge && current) current.anonHuge = Number(huge[1]) * 1024;
   }
   return mappings;
 }
@@ -58,8 +62,10 @@ export function classifySmaps(mappings: Mapping[]) {
   let threadArenaCount = 0;
   let otherAnonymous = 0;
   let fileBacked = 0;
+  let anonHugePages = 0;
   for (let i = 0; i < mappings.length; i += 1) {
     const mapping = mappings[i]!;
+    anonHugePages += mapping.anonHuge;
     if (mapping.path === "[heap]") { mallocMainArena += mapping.rss; continue; }
     if (mapping.path.startsWith("/")) { fileBacked += mapping.rss; continue; }
     if (mapping.path.startsWith("[")) { otherAnonymous += mapping.rss; continue; } // stacks, vdso
@@ -75,7 +81,7 @@ export function classifySmaps(mappings: Mapping[]) {
       otherAnonymous += mapping.rss;
     }
   }
-  return { mallocMainArena, mallocThreadArenas, threadArenaCount, otherAnonymous, fileBacked };
+  return { mallocMainArena, mallocThreadArenas, threadArenaCount, otherAnonymous, fileBacked, anonHugePages };
 }
 
 export function processMemory(): MemoryBreakdown {
@@ -89,6 +95,6 @@ export function processMemory(): MemoryBreakdown {
     const threads = Number(/^Threads:\s+(\d+)/m.exec(status)?.[1] ?? NaN);
     return { ...base, threads: Number.isFinite(threads) ? threads : null, ...classifySmaps(parseSmaps(readFileSync("/proc/self/smaps", "utf8"))) };
   } catch {
-    return { ...base, threads: null, mallocMainArena: null, mallocThreadArenas: null, threadArenaCount: null, otherAnonymous: null, fileBacked: null };
+    return { ...base, threads: null, mallocMainArena: null, mallocThreadArenas: null, threadArenaCount: null, otherAnonymous: null, fileBacked: null, anonHugePages: null };
   }
 }

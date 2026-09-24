@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import { seedTenant, type SeededTenant } from "./scale-tenant-fixture";
 import { memoryTrend, type Trend, type TrendThresholds } from "../utils/memory-trend";
@@ -42,6 +43,31 @@ const DUPLICATE_EVERY = Number(process.env["SOAK_DUPLICATE_EVERY"] ?? 7);
 const CANARY_CYCLES = Number(process.env["SOAK_CANARY_CYCLES"] ?? 20);
 const CANARY_WARMUP = Number(process.env["SOAK_CANARY_WARMUP"] ?? 4);
 const CSV_PATH = process.env["SOAK_CSV"];
+/**
+ * Extra observation that itself touches the process: a forced GC and a
+ * breakdown after each tenant is seeded, and a 100 ms peak sampler. Off
+ * reproduces the conditions of the first soak run exactly.
+ */
+const PHASE_DETAIL = process.env["SOAK_PHASE_DETAIL"] !== "0";
+/**
+ * When set, the process pauses at chosen points with no query in flight and
+ * asks an outside observer (the diagnosis workflow, via gdb) to record glibc's
+ * own malloc_info: bytes in use versus free bytes the allocator is keeping.
+ * Pausing first matters: calling into malloc while another thread holds an
+ * arena lock would deadlock.
+ */
+const MALLOC_SNAPSHOT_DIR = process.env["SOAK_MALLOC_SNAPSHOT_DIR"];
+const SNAPSHOT_CYCLES = new Set([1, 2, 3, 5, 10, 15, 20]);
+/** Restrict snapshots to one label, so a run in original conditions pauses only after the fact. */
+const MALLOC_SNAPSHOT_ONLY = process.env["SOAK_MALLOC_SNAPSHOT_ONLY"];
+async function mallocSnapshot(label: string) {
+  if (!MALLOC_SNAPSHOT_DIR || (MALLOC_SNAPSHOT_ONLY && label !== MALLOC_SNAPSHOT_ONLY)) return;
+  const request = join(MALLOC_SNAPSHOT_DIR, `${label}.request`);
+  writeFileSync(request, String(process.pid));
+  for (let waited = 0; waited < 60_000 && existsSync(request); waited += 100) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
 const MIN_SOAK_CYCLES = 50;
 
 const MB = 1024 * 1024;
@@ -82,7 +108,7 @@ const breakdown = (label: string, m: MemoryBreakdown) =>
   (m.mallocMainArena === null
     ? "smaps unavailable"
     : `malloc main ${mb(m.mallocMainArena).padStart(7)} + ${m.threadArenaCount} thread arenas ${mb(m.mallocThreadArenas!).padStart(7)} | ` +
-      `other anon ${mb(m.otherAnonymous!).padStart(7)} | files ${mb(m.fileBacked!).padStart(6)} | threads ${m.threads}`);
+      `other anon ${mb(m.otherAnonymous!).padStart(7)} | files ${mb(m.fileBacked!).padStart(6)} | huge pages ${mb(m.anonHugePages!).padStart(6)} | threads ${m.threads}`);
 
 async function load() {
   process.env["DATABASE_URL"] = databaseUrl;
@@ -131,22 +157,25 @@ test(
         const seeded = await seedTenant(prisma, SIZE, `soak-${index}`);
         const template = await prisma.emailTemplate.findFirstOrThrow({ where: { workspaceId: seeded.workspaceId }, select: { id: true } });
         tenants.push({ ...seeded, templateId: template.id });
-        await settled();
-        console.log(breakdown(`seeded tenant ${index}`, processMemory()));
+        if (PHASE_DETAIL) {
+          await settled();
+          console.log(breakdown(`seeded tenant ${index}`, processMemory()));
+        }
       }
       const seedSeconds = (Date.now() - started) / 1000;
+      await mallocSnapshot("seeded");
       log(`seeded ${TENANTS} tenants in ${seedSeconds.toFixed(0)} s`);
 
       /** One cycle: a fresh campaign per tenant, all prepared at once. */
       const cycle = async (phase: Sample["phase"], index: number, retain?: unknown[]) => {
         const cycleStart = Date.now();
         const peak = { rss: 0, heapTotal: 0, heapUsed: 0 };
-        const sampler = setInterval(() => {
+        const sampler = PHASE_DETAIL ? setInterval(() => {
           const now = process.memoryUsage();
           peak.rss = Math.max(peak.rss, now.rss);
           peak.heapTotal = Math.max(peak.heapTotal, now.heapTotal);
           peak.heapUsed = Math.max(peak.heapUsed, now.heapUsed);
-        }, 100);
+        }, 100) : undefined;
         const crash = phase === "soak" && RECOVERY_EVERY > 0 && index % RECOVERY_EVERY === RECOVERY_EVERY - 1;
         // Never both in one cycle: a duplicate could take over the revoked run
         // and blur which path finished it.
@@ -256,6 +285,7 @@ test(
           detail, peakRss: peak.rss, peakHeapTotal: peak.heapTotal, peakHeapUsed: peak.heapUsed,
         };
         samples.push(sample);
+        if (SNAPSHOT_CYCLES.has(index + 1)) await mallocSnapshot(`${phase}-${index + 1}`);
         if (index < 3 || index % 10 === 9) {
           console.log(`  [memory] ${phase} ${index + 1} peaks while running: rss ${mb(peak.rss)} | heap committed ${mb(peak.heapTotal)} | heap used ${mb(peak.heapUsed)}`);
           console.log(breakdown(`${phase} ${index + 1} (post-GC)`, detail));

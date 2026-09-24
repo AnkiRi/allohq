@@ -13,6 +13,7 @@ const SMAPS = [
   kb(20000),
   "7f0004000000-7f0006000000 rw-p 00000000 00:00 0 ",
   kb(30000),
+  "AnonHugePages:      4096 kB",
   "7f0006000000-7f0008000000 ---p 00000000 00:00 0 ",
   kb(0),
   "7f1000000000-7f1000100000 rw-p 00000000 00:00 0 ",
@@ -28,6 +29,7 @@ test("smaps pages are attributed to the main arena, thread arenas, other anonymo
   assert.equal(result.mallocThreadArenas, 30000 * 1024);
   assert.equal(result.threadArenaCount, 1);
   assert.equal(result.otherAnonymous, (900 + 100) * 1024);
+  assert.equal(result.anonHugePages, 4096 * 1024);
 });
 
 test("an anonymous mapping that is not a 64 MiB-aligned arena is not called one", () => {
