@@ -109,7 +109,8 @@ jobs:
             echo "## ${{ matrix.name }}"
             echo '```'
             sed -n '/=== EMAIL QUEUE/,/^✔\|^✖/p' /tmp/queue.log | grep -v "^✔\|^✖"
-            grep -oE "failed: Email capacity unavailable: [a-z_]+|failed: .{0,60}rate.{0,20}" /tmp/queue.log | sort | uniq -c | sort -rn | head -5
+            grep -oE "failed: Email capacity unavailable: [a-z_]+" /tmp/queue.log | sort | uniq -c | sort -rn || true
+            echo "chunk failures citing the provider's rate limit: $(grep -c 'Too many requests' /tmp/queue.log || true)"
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 

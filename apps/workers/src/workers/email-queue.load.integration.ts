@@ -221,6 +221,17 @@ test(
       await worker.close();
       worker = null;
       log(drained ? "queue drained" : `TIME CAP reached after ${seconds(endedAt - started)}; the queue was not drained`);
+      // A failed chunk leaves its sibling sends running with no job owning
+      // them. Wait until the provider has been quiet for 10 s, and count those
+      // late requests, so nothing is measured while work is still landing.
+      const requestsAtDrain = provider.stats.requests;
+      let lastSeen = provider.stats.requests;
+      let quietSince = Date.now();
+      while (Date.now() - quietSince < 10_000 && Date.now() - endedAt < 120_000) {
+        await sleep(1_000);
+        if (provider.stats.requests !== lastSeen) { lastSeen = provider.stats.requests; quietSince = Date.now(); }
+      }
+      const orphanRequests = provider.stats.requests - requestsAtDrain;
 
       // ================= measurements =================
       const states = ["completed", "failed", "delayed", "waiting", "active"] as const;
@@ -293,7 +304,7 @@ test(
         throughputPerMinute: window ? Math.round((provider.accepted.length / window) * 60_000) : null,
         providerRequests: provider.stats.requests, rateLimited: provider.stats.rateLimited,
         serverErrors: provider.stats.serverErrors, idempotentReplays: provider.stats.replays,
-        duplicateRecipients: duplicates, blockedHosts: Object.fromEntries(provider.stats.blocked),
+        duplicateRecipients: duplicates, blockedHosts: Object.fromEntries(provider.stats.blocked), orphanRequests,
         jobsFailed: jobs.filter((job) => job.state === "failed").length,
         jobsLeft: jobs.filter((job) => ["waiting", "active"].includes(job.state) || (job.state === "delayed" && !job.data?.finalize)).length,
       };
@@ -303,7 +314,7 @@ test(
         `  === EMAIL QUEUE: ${TENANTS.length} tenants (${TENANTS.join(", ")}) · concurrency ${CONCURRENCY} · ${capacityEnv} · provider ${PROVIDER_RPS} rps ===`,
         `  ${drained ? "drained" : "NOT DRAINED (time cap)"} in ${seconds(summary.elapsed)} | sent ${summary.sent} | ${summary.throughputPerMinute ?? "—"} sends/min between first and last send`,
         `  provider: ${summary.providerRequests} requests, ${summary.rateLimited} rate-limited (429), ${summary.serverErrors} server errors (500), ${summary.idempotentReplays} idempotent replays`,
-        `  jobs left behind: ${summary.jobsLeft} | jobs failed for good: ${summary.jobsFailed} | duplicate recipients: ${duplicates}`,
+        `  jobs left behind: ${summary.jobsLeft} | jobs failed for good: ${summary.jobsFailed} | duplicate recipients: ${duplicates} | provider requests after the queue drained (orphaned sends): ${orphanRequests}`,
         `  stranded deliveries (deferred + failed + never attempted, nothing left to send them): ${report.reduce((total, row: any) => total + row.stranded, 0)} of ${report.reduce((total, row: any) => total + row.planned, 0)} planned`,
         "",
         "  tenant     customers planned  sent suppr deferred failed never STRANDED | prep wait  prep run  first send  last send | chunks retried failed",
