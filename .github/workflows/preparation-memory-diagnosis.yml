@@ -1,0 +1,117 @@
+name: Preparation memory diagnosis
+
+# Opt-in only. The soak found ~3.9 GB of resident memory outside the JS heap
+# in one preparing worker process. This runs the same workload three ways, on
+# separate disposable runners, and records where resident memory sits
+# (process-memory.ts: glibc arenas, other anonymous, files, V8):
+#
+#   glibc        the default allocator, as production runs today
+#   arena-max-2  glibc with MALLOC_ARENA_MAX=2
+#   jemalloc     glibc malloc replaced via LD_PRELOAD
+#
+# A diagnosis only: nothing here changes production settings.
+# Disposable Postgres, synthetic tenants, no provider, no real recipients.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["memory-diagnosis/**"]
+
+concurrency:
+  group: preparation-memory-diagnosis
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: "allocator: ${{ matrix.allocator }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        allocator: [glibc, arena-max-2, jemalloc]
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_soak_test
+        ports: ["5432:5432"]
+        options: >-
+          --shm-size=1g
+          --health-cmd "pg_isready -U joon -d joon_soak_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_soak_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_soak_test"
+      SOAK_CYCLES: "20"
+      SOAK_WARMUP: "5"
+      SOAK_TENANTS: "3"
+      SOAK_SIZE: "20000"
+      SOAK_CANARY_CYCLES: "10"
+      SOAK_CANARY_WARMUP: "2"
+      SOAK_CSV: /tmp/soak-cycles.csv
+      NODE_OPTIONS: "--expose-gc"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Allocator
+        run: |
+          case "${{ matrix.allocator }}" in
+            arena-max-2) echo "MALLOC_ARENA_MAX=2" >> "$GITHUB_ENV" ;;
+            jemalloc)
+              sudo apt-get install -y -qq libjemalloc2 > /dev/null
+              echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" >> "$GITHUB_ENV" ;;
+          esac
+          nproc; free -m; ldd --version | head -1
+
+      - name: Instrumented preparation run
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @allohq/workers exec tsx --test src/workers/preparation-soak.load.integration.ts 2>&1 | tee /tmp/soak.log
+          echo "exit ${PIPESTATUS[0]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## allocator: ${{ matrix.allocator }}"
+            echo '```'
+            grep -E "\[memory\]|=== PREPARATION SOAK|^  (heap|external|rss|canary)" /tmp/soak.log
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-diagnosis-${{ matrix.allocator }}-${{ github.run_id }}
+          path: |
+            /tmp/soak-cycles.csv
+            /tmp/soak.log
+          if-no-files-found: warn
+          retention-days: 30

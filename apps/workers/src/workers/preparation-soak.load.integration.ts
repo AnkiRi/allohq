@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import test from "node:test";
 import { seedTenant, type SeededTenant } from "./scale-tenant-fixture";
 import { memoryTrend, type Trend, type TrendThresholds } from "../utils/memory-trend";
+import { processMemory, type MemoryBreakdown } from "../utils/process-memory";
 
 /**
  * Preparation soak: does one long-lived worker process hold on to memory?
@@ -66,7 +67,22 @@ type Sample = {
   databaseMb: number;
   recovered: boolean;
   duplicated: boolean;
+  /** Post-GC breakdown of where resident memory is (see process-memory.ts). */
+  detail: MemoryBreakdown;
+  /** Highest values seen while the cycle ran, sampled every 100 ms. */
+  peakRss: number;
+  peakHeapTotal: number;
+  peakHeapUsed: number;
 };
+
+/** Resident memory by owner, for one line of the log. */
+const breakdown = (label: string, m: MemoryBreakdown) =>
+  `  [memory] ${label.padEnd(22)} rss ${mb(m.rss).padStart(7)} | heap used ${mb(m.heapUsed).padStart(6)} of ${mb(m.heapTotal).padStart(6)} committed | ` +
+  `v8 malloc ${mb(m.v8Malloced).padStart(5)} | external ${mb(m.external).padStart(5)} | ` +
+  (m.mallocMainArena === null
+    ? "smaps unavailable"
+    : `malloc main ${mb(m.mallocMainArena).padStart(7)} + ${m.threadArenaCount} thread arenas ${mb(m.mallocThreadArenas!).padStart(7)} | ` +
+      `other anon ${mb(m.otherAnonymous!).padStart(7)} | files ${mb(m.fileBacked!).padStart(6)} | threads ${m.threads}`);
 
 async function load() {
   process.env["DATABASE_URL"] = databaseUrl;
@@ -95,7 +111,11 @@ test(
     if (typeof (globalThis as { gc?: unknown }).gc !== "function") {
       assert.fail("the soak measures post-GC memory and needs NODE_OPTIONS=--expose-gc");
     }
+    console.log(breakdown("before load", processMemory()));
     const { prisma, prepareCampaignAudience, recoverStalePreparationRuns, experiments } = await load();
+    console.log(breakdown("modules loaded", processMemory()));
+    await prisma.$queryRaw`SELECT 1`;
+    console.log(breakdown("database connected", processMemory()));
     const rehearsal = CYCLES < MIN_SOAK_CYCLES;
     const started = Date.now();
     const log = (line: string) => console.log(`  [${new Date().toISOString().slice(11, 19)}] ${line}`);
@@ -111,6 +131,8 @@ test(
         const seeded = await seedTenant(prisma, SIZE, `soak-${index}`);
         const template = await prisma.emailTemplate.findFirstOrThrow({ where: { workspaceId: seeded.workspaceId }, select: { id: true } });
         tenants.push({ ...seeded, templateId: template.id });
+        await settled();
+        console.log(breakdown(`seeded tenant ${index}`, processMemory()));
       }
       const seedSeconds = (Date.now() - started) / 1000;
       log(`seeded ${TENANTS} tenants in ${seedSeconds.toFixed(0)} s`);
@@ -118,6 +140,13 @@ test(
       /** One cycle: a fresh campaign per tenant, all prepared at once. */
       const cycle = async (phase: Sample["phase"], index: number, retain?: unknown[]) => {
         const cycleStart = Date.now();
+        const peak = { rss: 0, heapTotal: 0, heapUsed: 0 };
+        const sampler = setInterval(() => {
+          const now = process.memoryUsage();
+          peak.rss = Math.max(peak.rss, now.rss);
+          peak.heapTotal = Math.max(peak.heapTotal, now.heapTotal);
+          peak.heapUsed = Math.max(peak.heapUsed, now.heapUsed);
+        }, 100);
         const crash = phase === "soak" && RECOVERY_EVERY > 0 && index % RECOVERY_EVERY === RECOVERY_EVERY - 1;
         // Never both in one cycle: a duplicate could take over the revoked run
         // and blur which path finished it.
@@ -216,14 +245,21 @@ test(
           }));
         }
 
+        clearInterval(sampler);
         const memory = await settled();
+        const detail = processMemory();
         const size = await prisma.$queryRaw<Array<{ mb: bigint }>>`SELECT pg_database_size(current_database()) / 1048576 AS mb`;
         const sample: Sample = {
           phase, cycle: index, seconds: (Date.now() - cycleStart) / 1000,
           heap: memory.heapUsed, external: memory.external, rss: memory.rss, arrayBuffers: memory.arrayBuffers,
           databaseMb: Number(size[0]?.mb ?? 0), recovered, duplicated: duplicate,
+          detail, peakRss: peak.rss, peakHeapTotal: peak.heapTotal, peakHeapUsed: peak.heapUsed,
         };
         samples.push(sample);
+        if (index < 3 || index % 10 === 9) {
+          console.log(`  [memory] ${phase} ${index + 1} peaks while running: rss ${mb(peak.rss)} | heap committed ${mb(peak.heapTotal)} | heap used ${mb(peak.heapUsed)}`);
+          console.log(breakdown(`${phase} ${index + 1} (post-GC)`, detail));
+        }
         log(`${phase} ${String(index + 1).padStart(3)}  ${sample.seconds.toFixed(1)} s  heap ${mb(sample.heap)} MB  ` +
           `external ${mb(sample.external)} MB  rss ${mb(sample.rss)} MB${recovered ? "  recovered" : ""}${duplicate ? "  duplicate" : ""}`);
       };
@@ -247,9 +283,15 @@ test(
 
       if (CSV_PATH) {
         writeFileSync(CSV_PATH, [
-          "phase,cycle,seconds,heap_mb,external_mb,rss_mb,array_buffers_mb,database_mb,recovered,duplicated",
+          "phase,cycle,seconds,heap_mb,external_mb,rss_mb,array_buffers_mb,database_mb,recovered,duplicated," +
+            "heap_total_mb,v8_malloc_mb,malloc_main_mb,malloc_thread_arenas_mb,thread_arenas,other_anon_mb,file_mb,threads," +
+            "peak_rss_mb,peak_heap_total_mb,peak_heap_used_mb",
           ...samples.map((s) => [s.phase, s.cycle + 1, s.seconds.toFixed(2), mb(s.heap), mb(s.external), mb(s.rss),
-            mb(s.arrayBuffers), s.databaseMb, s.recovered, s.duplicated].join(",")),
+            mb(s.arrayBuffers), s.databaseMb, s.recovered, s.duplicated,
+            mb(s.detail.heapTotal), mb(s.detail.v8Malloced), s.detail.mallocMainArena === null ? "" : mb(s.detail.mallocMainArena),
+            s.detail.mallocThreadArenas === null ? "" : mb(s.detail.mallocThreadArenas), s.detail.threadArenaCount ?? "",
+            s.detail.otherAnonymous === null ? "" : mb(s.detail.otherAnonymous), s.detail.fileBacked === null ? "" : mb(s.detail.fileBacked),
+            s.detail.threads ?? "", mb(s.peakRss), mb(s.peakHeapTotal), mb(s.peakHeapUsed)].join(",")),
         ].join("\n") + "\n");
       }
 
