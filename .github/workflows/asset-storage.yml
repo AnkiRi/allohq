@@ -1,0 +1,114 @@
+name: Asset storage (real S3 server, real browser)
+
+# The browser upload path end to end: signed PUT from Chrome, private staging,
+# sanitise and publish, read with the CDN-scoped key, Asset Library and email
+# preview. MinIO stands in for S3 and is given the SAME policy documents we ask
+# AWS to use (docs/asset-storage), with only the bucket name changed.
+#
+# Everything is disposable and local to the runner: MinIO, Postgres, Chrome.
+# No AWS, no Bunny, no production data, no image provider.
+on:
+  pull_request:
+    paths:
+      - "apps/api/src/lib/email-asset-storage.ts"
+      - "apps/api/src/lib/email-asset-storage.s3.integration.ts"
+      - "apps/api/src/routers/emails.ts"
+      - "docs/asset-storage/**"
+      - ".github/workflows/asset-storage.yml"
+  workflow_dispatch:
+
+jobs:
+  storage:
+    name: Browser upload → staging → publish → CDN-key read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_storage_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon -d joon_storage_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_storage_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_storage_test"
+      ASSET_S3_TEST_ENDPOINT: "http://127.0.0.1:9000"
+      ASSET_BUCKET: "joon-assets-test"
+      ASSET_REGION: "eu-north-1"
+      ASSET_CDN_BASE_URL: "https://assets.test"
+      ASSET_TEST_ADMIN_KEY: "minio-root"
+      ASSET_TEST_ADMIN_SECRET: "minio-root-secret"
+      # The API's own key, restricted by docs/asset-storage/iam-joon-api.json.
+      AWS_ACCESS_KEY_ID: "joon-api"
+      AWS_SECRET_ACCESS_KEY: "joon-api-secret"
+      # The CDN's read key, restricted by docs/asset-storage/iam-bunny-read.json.
+      ASSET_TEST_CDN_KEY: "joon-cdn"
+      ASSET_TEST_CDN_SECRET: "joon-cdn-secret"
+      MINIO_IMAGE: "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z"
+      MC_IMAGE: "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Start MinIO with the production policies
+        run: |
+          # CORS on MinIO is server-wide, not the bucket rule: only the test
+          # page's origin may PUT, so a second origin can be shown refused.
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER="$ASSET_TEST_ADMIN_KEY" -e MINIO_ROOT_PASSWORD="$ASSET_TEST_ADMIN_SECRET" \
+            -e MINIO_SITE_REGION="$ASSET_REGION" -e MINIO_API_CORS_ALLOW_ORIGIN="http://127.0.0.1:4173" \
+            "$MINIO_IMAGE" server /data
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+          mkdir -p /tmp/policies
+          for f in iam-joon-api iam-bunny-read; do
+            sed "s/joon-assets-production-632404568116-eu-north-1-an/$ASSET_BUCKET/g" "docs/asset-storage/$f.json" > "/tmp/policies/$f.json"
+          done
+          mc() { docker run --rm --network host -v /tmp/policies:/policies \
+            -e MC_HOST_local="http://$ASSET_TEST_ADMIN_KEY:$ASSET_TEST_ADMIN_SECRET@127.0.0.1:9000" "$MC_IMAGE" "$@"; }
+          mc mb "local/$ASSET_BUCKET"
+          mc admin policy create local joon-api /policies/iam-joon-api.json
+          mc admin policy create local joon-cdn-read /policies/iam-bunny-read.json
+          mc admin user add local "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
+          mc admin user add local "$ASSET_TEST_CDN_KEY" "$ASSET_TEST_CDN_SECRET"
+          mc admin policy attach local joon-api --user "$AWS_ACCESS_KEY_ID"
+          mc admin policy attach local joon-cdn-read --user "$ASSET_TEST_CDN_KEY"
+          mc anonymous get "local/$ASSET_BUCKET"
+
+      - name: Locate Chrome
+        run: |
+          path=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium)
+          "$path" --version
+          echo "CHROME_PATH=$path" >> "$GITHUB_ENV"
+
+      - name: Storage path, end to end
+        run: pnpm --filter @allohq/api exec tsx --test src/lib/email-asset-storage.s3.integration.ts
+
+      - name: MinIO log on failure
+        if: failure()
+        run: docker logs --tail 80 minio
