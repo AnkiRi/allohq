@@ -61,7 +61,15 @@ function storageConfig() {
   }
   const region = process.env["ASSET_REGION"] ?? process.env["AWS_REGION"] ?? "us-east-1";
   const endpoint = process.env["ASSET_S3_ENDPOINT"];
-  const options = { region, ...(endpoint ? { endpoint, forcePathStyle: true } : {}) };
+  // Storage's own key when set, so it never has to share one with SES (whose
+  // clients use the default AWS credential chain). Falls back to that chain.
+  const accessKeyId = process.env["ASSET_AWS_ACCESS_KEY_ID"]?.trim();
+  const secretAccessKey = process.env["ASSET_AWS_SECRET_ACCESS_KEY"]?.trim();
+  const options = {
+    region,
+    ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
+  };
   const client = (clientOverride ?? new S3Client(options)) as S3Client;
   // Presigning uses its own client. By default the SDK signs a CRC32 of the
   // request body into the URL, and a presigned PUT has no body yet, so every

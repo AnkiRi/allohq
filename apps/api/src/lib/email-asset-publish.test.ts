@@ -96,6 +96,20 @@ test("an upload URL targets private staging, returns no public URL, and signs no
   assert.equal(url.searchParams.get("X-Amz-Expires"), "600");
 });
 
+test("storage signs with its own key when one is set, not the shared AWS credential chain", async () => {
+  const saved = { id: process.env["ASSET_AWS_ACCESS_KEY_ID"], secret: process.env["ASSET_AWS_SECRET_ACCESS_KEY"] };
+  process.env["ASSET_AWS_ACCESS_KEY_ID"] = "AKIAASSETSONLY";
+  process.env["ASSET_AWS_SECRET_ACCESS_KEY"] = "assets-secret";
+  try {
+    const result = await withEnv(() =>
+      createEmailAssetUpload({ ...TENANT, fileName: "shot.jpg", mimeType: "image/jpeg", size: 1000 }));
+    assert.match(new URL(result.uploadUrl).searchParams.get("X-Amz-Credential") ?? "", /^AKIAASSETSONLY\//);
+  } finally {
+    if (saved.id === undefined) delete process.env["ASSET_AWS_ACCESS_KEY_ID"]; else process.env["ASSET_AWS_ACCESS_KEY_ID"] = saved.id;
+    if (saved.secret === undefined) delete process.env["ASSET_AWS_SECRET_ACCESS_KEY"]; else process.env["ASSET_AWS_SECRET_ACCESS_KEY"] = saved.secret;
+  }
+});
+
 test("publishing writes clean bytes to a new content-addressed key and removes the staging object", async () => {
   const s3 = bucket();
   try {

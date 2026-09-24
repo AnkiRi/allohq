@@ -25,12 +25,15 @@ function assetStorage() {
   const cdnBaseUrl = process.env["ASSET_CDN_BASE_URL"]?.replace(/\/$/, "");
   if (!bucket || !cdnBaseUrl) return null;
   const endpoint = process.env["ASSET_S3_ENDPOINT"];
+  const accessKeyId = process.env["ASSET_AWS_ACCESS_KEY_ID"]?.trim();
+  const secretAccessKey = process.env["ASSET_AWS_SECRET_ACCESS_KEY"]?.trim();
   return {
     bucket,
     cdnBaseUrl,
     client: new S3Client({
       region: process.env["ASSET_REGION"] ?? process.env["AWS_REGION"] ?? "us-east-1",
       ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+      ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
     }),
   };
 }

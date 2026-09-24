@@ -29,9 +29,8 @@ const MERCHANT_MESSAGE =
  * module should not assume.
  */
 function hasExplicitCredentials(): boolean {
-  return Boolean(
-    process.env["AWS_ACCESS_KEY_ID"]?.trim() && process.env["AWS_SECRET_ACCESS_KEY"]?.trim(),
-  );
+  const pair = (id: string, secret: string) => Boolean(process.env[id]?.trim() && process.env[secret]?.trim());
+  return pair("ASSET_AWS_ACCESS_KEY_ID", "ASSET_AWS_SECRET_ACCESS_KEY") || pair("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY");
 }
 
 export function assetStorageStatus(): AssetStorageStatus {
@@ -39,7 +38,7 @@ export function assetStorageStatus(): AssetStorageStatus {
   if (!process.env["ASSET_BUCKET"]?.trim()) missing.push("ASSET_BUCKET");
   if (!process.env["ASSET_CDN_BASE_URL"]?.trim()) missing.push("ASSET_CDN_BASE_URL");
   if (!hasExplicitCredentials()) {
-    missing.push("AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (or an instance role)");
+    missing.push("ASSET_AWS_ACCESS_KEY_ID + ASSET_AWS_SECRET_ACCESS_KEY (or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or an instance role)");
   }
 
   const configured = missing.length === 0;

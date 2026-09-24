@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assetStorageStatus } from "./asset-storage-status";
 
-const KEYS = ["ASSET_BUCKET", "ASSET_CDN_BASE_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"];
+const KEYS = ["ASSET_BUCKET", "ASSET_CDN_BASE_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+  "ASSET_AWS_ACCESS_KEY_ID", "ASSET_AWS_SECRET_ACCESS_KEY"];
 function withEnv<T>(env: Record<string, string | undefined>, run: () => T): T {
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   try {
@@ -39,6 +40,13 @@ test("credentials count, not only the bucket and CDN URL", () => {
     const status = assetStorageStatus();
     assert.equal(status.configured, false);
     assert.ok(status.missing.some((m) => m.includes("AWS_ACCESS_KEY_ID")));
+  });
+});
+
+test("storage's own key is enough; it need not share the AWS key SES would use", () => {
+  withEnv({ ASSET_BUCKET: "b", ASSET_CDN_BASE_URL: "https://cdn",
+    ASSET_AWS_ACCESS_KEY_ID: "AKIAASSETS", ASSET_AWS_SECRET_ACCESS_KEY: "s" }, () => {
+    assert.equal(assetStorageStatus().configured, true);
   });
 });
 
