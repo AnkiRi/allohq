@@ -23,7 +23,8 @@ import { describeTarget, detectVisualIntent, proposeVisualTarget } from "../lib/
 
 import {
   createEmailAssetUpload,
-  inspectUploadedEmailAsset,
+  publishUploadedEmailAsset,
+  EmailAssetRejectedError,
   persistRemoteEmailImage,
 } from "../lib/email-asset-storage";
 
@@ -131,10 +132,13 @@ export const emailsRouter = router({
         select: { id: true },
       });
       if (!store) throw new TRPCError({ code: "NOT_FOUND" });
-      const uploaded = await inspectUploadedEmailAsset({
+      const uploaded = await publishUploadedEmailAsset({
         workspaceId: ctx.workspaceId,
         storeId: input.storeId,
         key: input.key,
+      }).catch((error) => {
+        if (error instanceof EmailAssetRejectedError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        throw error;
       });
       return ctx.prisma.brandAsset.create({
         data: {
@@ -144,7 +148,7 @@ export const emailsRouter = router({
           url: uploaded.url,
           fileName: input.fileName,
           mimeType: uploaded.mimeType,
-          storageKey: input.key,
+          storageKey: uploaded.key,
           checksum: uploaded.checksum,
           source: "upload",
           altText: input.altText,
