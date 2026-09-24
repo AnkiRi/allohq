@@ -8,9 +8,10 @@ name: Preparation memory diagnosis
 # free bytes the allocator keeps.
 #
 # Round 1 (run 35997365153) compared glibc, MALLOC_ARENA_MAX=2 and jemalloc.
-# This round repeats glibc four times: two with full phase detail, two in the
-# first soak's exact conditions (SOAK_PHASE_DETAIL=0), to see whether 3.9 GB
-# recurs and, if it does, whether it is live or retained.
+# Round 2 (run 35999592524) repeated glibc: the arenas were 95-97% free.
+# This round runs six more glibc replicas in the first soak's exact
+# conditions, to see how high the retained level goes, and two with glibc's
+# mmap threshold pinned (a mechanism probe, not a proposed setting).
 #
 # A diagnosis only: nothing here changes production settings.
 # Disposable Postgres, synthetic tenants, no provider, no real recipients.
@@ -32,10 +33,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { allocator: glibc, detail: "1", replica: 1 }
-          - { allocator: glibc, detail: "1", replica: 2 }
-          - { allocator: glibc, detail: "0", replica: 1 }
-          - { allocator: glibc, detail: "0", replica: 2 }
+          - { allocator: glibc, detail: "0", replica: 3 }
+          - { allocator: glibc, detail: "0", replica: 4 }
+          - { allocator: glibc, detail: "0", replica: 5 }
+          - { allocator: glibc, detail: "0", replica: 6 }
+          - { allocator: glibc, detail: "0", replica: 7 }
+          - { allocator: glibc, detail: "0", replica: 8 }
+          - { allocator: mmap-threshold-128k, detail: "0", replica: 1 }
+          - { allocator: mmap-threshold-128k, detail: "0", replica: 2 }
 
     services:
       postgres:
@@ -90,6 +95,9 @@ jobs:
         run: |
           case "${{ matrix.allocator }}" in
             arena-max-2) echo "MALLOC_ARENA_MAX=2" >> "$GITHUB_ENV" ;;
+            # Pins glibc's mmap threshold (disabling its dynamic growth), so
+            # blocks of 128 KiB and larger are mmapped and returned when freed.
+            mmap-threshold-128k) echo "MALLOC_MMAP_THRESHOLD_=131072" >> "$GITHUB_ENV" ;;
             jemalloc)
               sudo apt-get install -y -qq libjemalloc2 > /dev/null
               echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" >> "$GITHUB_ENV" ;;
