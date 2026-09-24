@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import type { EmailDeliveryClass } from "../../delivery-mode";
 import { htmlToPlainText } from "../../plain-text";
+import { redactEmailAddresses } from "../../redact";
 import type { Message, SendResult } from "../../types";
 import type { EmailProvider } from "./provider";
 
@@ -41,7 +42,7 @@ export class SesEmailProvider implements EmailProvider {
       }));
       return { messageId, channel: "email", status: "sent", provider: "ses", externalId: response.MessageId };
     } catch (error) {
-      return { messageId, channel: "email", status: "failed", provider: "ses", retryable: false, error: `SES_AMBIGUOUS: provider acceptance is unknown; do not retry automatically. ${error instanceof Error ? error.message : "Unknown SES error"}` };
+      return { messageId, channel: "email", status: "failed", provider: "ses", retryable: false, error: `SES_AMBIGUOUS: provider acceptance is unknown; do not retry automatically. ${error instanceof Error ? redactEmailAddresses(error.message) : "Unknown SES error"}` };
     }
   }
 }

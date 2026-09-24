@@ -1,4 +1,5 @@
 import { Queue, QueueEvents } from "bullmq";
+import { redactEmailAddresses } from "@allohq/messaging";
 import { redisConnection, QUEUE_NAMES } from "./config";
 
 export const CRITICAL_QUEUE_NAMES = [
@@ -50,7 +51,7 @@ export function startCriticalDeadLetterCapture() {
           removeOnComplete: false,
           removeOnFail: false,
         });
-        console.error(`[dlq] ${sourceQueue.name}/${jobId}: ${failedReason}`);
+        console.error(`[dlq] ${sourceQueue.name}/${jobId}: ${redactEmailAddresses(failedReason)}`);
       } catch (error) {
         console.error(`[dlq] failed to record ${sourceQueue.name}/${jobId}:`, error);
       }
