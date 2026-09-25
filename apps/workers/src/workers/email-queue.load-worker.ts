@@ -33,5 +33,6 @@ void (async () => {
     process.exit(0);
   };
   process.on("SIGTERM", () => void stop());
+  console.log(`[queue-worker] pid ${process.pid} ready, concurrency ${sendWorker.concurrency}`);
   process.send?.({ ready: true });
 })();

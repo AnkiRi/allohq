@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { openSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import test from "node:test";
@@ -47,6 +47,8 @@ const RESTART_AFTER_SENDS = Number(process.env["QUEUE_RESTART_AFTER_SENDS"] ?? 4
 const RESTART_GAP_MS = Number(process.env["QUEUE_RESTART_GAP_MS"] ?? 3_000);
 const TIME_CAP_MS = Number(process.env["QUEUE_TIME_CAP_MINUTES"] ?? 25) * 60_000;
 const REPORT_PATH = process.env["QUEUE_REPORT"];
+/** Each worker process logs to its own file here: the test runner's output drops lines. */
+const WORKER_LOG_DIR = process.env["QUEUE_WORKER_LOG_DIR"] ?? "/tmp";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const seconds = (ms: number | null | undefined) => (ms == null ? "—" : `${(ms / 1000).toFixed(1)} s`);
@@ -148,9 +150,13 @@ test(
     const blocked = new Map<string, number>();
     const workers: ChildProcess[] = [];
     const startWorker = async () => {
-      const child = spawn(join(__dirname, "../../node_modules/.bin/tsx"), [join(__dirname, "email-queue.load-worker.ts")], {
+      const logFile = openSync(join(WORKER_LOG_DIR, `queue-worker-${workers.length + 1}.log`), "a");
+      // One process, with tsx as a loader: the tsx CLI would start the worker
+      // as a grandchild, and killing the CLI would leave the worker running.
+      const child = spawn(process.execPath, ["--import", "tsx", join(__dirname, "email-queue.load-worker.ts")], {
+        cwd: join(__dirname, "../.."),
         env: { ...process.env, ...env, FAKE_RESEND_URL: provider.url, QUEUE_CONCURRENCY: "1" },
-        stdio: ["ignore", "inherit", "inherit", "ipc"],
+        stdio: ["ignore", logFile, logFile, "ipc"],
       });
       workers.push(child);
       await new Promise<void>((resolve, reject) => {
@@ -253,7 +259,11 @@ test(
             if (pending.busy === 0 && pending.delayed === 0) break;
           }
         }
+        const exited = new Promise((resolve) => worker.once("exit", resolve));
         worker.kill("SIGKILL");
+        await exited;
+        // The premise of the test: the worker process is really gone.
+        assert.throws(() => process.kill(worker.pid!, 0), /ESRCH/, "the killed worker must not still be running");
         restart["killedAt"] = Date.now() - started;
         restart["sentAtKill"] = provider.accepted.length;
         log(`worker killed (SIGKILL) after ${provider.accepted.length} sends`);
@@ -270,7 +280,8 @@ test(
         worker = await startWorker();
         restart["restartedAt"] = Date.now() - started;
         const resumedFrom = provider.accepted.length;
-        while (provider.accepted.length === resumedFrom && Date.now() - started < TIME_CAP_MS) await sleep(200);
+        const resumeDeadline = Date.now() + 5 * 60_000;
+        while (provider.accepted.length === resumedFrom && Date.now() < resumeDeadline) await sleep(200);
         restart["firstSendAfterRestart"] = Date.now() - started;
         log(`sending resumed ${seconds((restart["firstSendAfterRestart"] as number) - (restart["restartedAt"] as number))} after the new worker started`);
       }
@@ -408,6 +419,8 @@ test(
         await prisma.workspace.delete({ where: { id: tenant.workspaceId } }).catch(() => undefined);
       }
       await prisma.$disconnect().catch(() => undefined);
+      // Modules the test imported hold Redis connections open; never linger.
+      setTimeout(() => process.exit(process.exitCode ?? 0), 3_000).unref();
     }
   },
 );
