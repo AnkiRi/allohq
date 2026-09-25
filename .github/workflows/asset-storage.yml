@@ -52,8 +52,11 @@ jobs:
       # The CDN's read key, restricted by docs/asset-storage/iam-bunny-read.json.
       ASSET_TEST_CDN_KEY: "joon-cdn"
       ASSET_TEST_CDN_SECRET: "joon-cdn-secret"
-      MINIO_IMAGE: "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z"
-      MC_IMAGE: "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+      # MinIO's published images are no longer publicly pullable, so the same
+      # releases are built from their public source at pinned commits:
+      # RELEASE.2025-04-22T22-12-26Z and mc RELEASE.2025-08-13T08-35-41Z.
+      MINIO_MODULE: "github.com/minio/minio@v0.0.0-20250422221226-0d7408fc9969"
+      MC_MODULE: "github.com/minio/mc@v0.0.0-20250813083541-7394ce0dd2a8"
 
     steps:
       - uses: actions/checkout@v4
@@ -76,26 +79,45 @@ jobs:
       - name: Apply migrations to the disposable database
         run: pnpm --filter @allohq/database exec prisma migrate deploy
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Cache the MinIO build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/minio-bin
+          key: minio-bin-${{ env.MINIO_MODULE }}-${{ env.MC_MODULE }}
+
+      - name: Build MinIO and mc from source
+        run: |
+          if [ ! -x /tmp/minio-bin/minio ] || [ ! -x /tmp/minio-bin/mc ]; then
+            GOBIN=/tmp/minio-bin go install "$MINIO_MODULE"
+            GOBIN=/tmp/minio-bin go install "$MC_MODULE"
+          fi
+          ls -la /tmp/minio-bin
+
       - name: Start MinIO with the production policies
         run: |
           # CORS on MinIO is server-wide, not the bucket rule: only the test
           # page's origin may PUT, so a second origin can be shown refused.
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER="$ASSET_TEST_ADMIN_KEY" -e MINIO_ROOT_PASSWORD="$ASSET_TEST_ADMIN_SECRET" \
-            -e MINIO_SITE_REGION="$ASSET_REGION" -e MINIO_API_CORS_ALLOW_ORIGIN="http://127.0.0.1:4173" \
-            "$MINIO_IMAGE" server /data
+          mkdir -p /tmp/minio-data /tmp/policies
+          MINIO_ROOT_USER="$ASSET_TEST_ADMIN_KEY" MINIO_ROOT_PASSWORD="$ASSET_TEST_ADMIN_SECRET" \
+          MINIO_SITE_REGION="$ASSET_REGION" MINIO_API_CORS_ALLOW_ORIGIN="http://127.0.0.1:4173" \
+            nohup /tmp/minio-bin/minio server /tmp/minio-data --address 127.0.0.1:9000 --console-address 127.0.0.1:9001 \
+            > /tmp/minio.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
-          mkdir -p /tmp/policies
           for f in iam-joon-api iam-bunny-read; do
             sed "s/joon-assets-production-632404568116-eu-north-1-an/$ASSET_BUCKET/g" "docs/asset-storage/$f.json" > "/tmp/policies/$f.json"
           done
-          mc() { docker run --rm --network host -v /tmp/policies:/policies \
-            -e MC_HOST_local="http://$ASSET_TEST_ADMIN_KEY:$ASSET_TEST_ADMIN_SECRET@127.0.0.1:9000" "$MC_IMAGE" "$@"; }
+          export MC_HOST_local="http://$ASSET_TEST_ADMIN_KEY:$ASSET_TEST_ADMIN_SECRET@127.0.0.1:9000"
+          mc() { /tmp/minio-bin/mc "$@"; }
           mc mb "local/$ASSET_BUCKET"
           # Production's bucket is versioned; so is this one.
           mc version enable "local/$ASSET_BUCKET"
-          mc admin policy create local joon-api /policies/iam-joon-api.json
-          mc admin policy create local joon-cdn-read /policies/iam-bunny-read.json
+          mc admin policy create local joon-api /tmp/policies/iam-joon-api.json
+          mc admin policy create local joon-cdn-read /tmp/policies/iam-bunny-read.json
           mc admin user add local "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
           mc admin user add local "$ASSET_TEST_CDN_KEY" "$ASSET_TEST_CDN_SECRET"
           mc admin policy attach local joon-api --user "$AWS_ACCESS_KEY_ID"
@@ -113,4 +135,4 @@ jobs:
 
       - name: MinIO log on failure
         if: failure()
-        run: docker logs --tail 80 minio
+        run: tail -80 /tmp/minio.log

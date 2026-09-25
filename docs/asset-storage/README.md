@@ -34,8 +34,8 @@ Email readers    ──▶ assets.joonhq.com ──▶ Bunny pull zone ──S3 
 The bucket is versioned, which changes what "deleted" means:
 
 - **Staging.** When the API deletes a staging object after publishing it, S3 adds a delete marker, and the raw upload stays as a **noncurrent version**. The lifecycle rule (`s3-lifecycle.json`) removes it about a day later (`NoncurrentVersionExpiration: 1 day`). It also expires uncompleted staging objects after one day and cleans up incomplete multipart uploads.
-  - Until then, nobody but an owner identity can read that version: reading a named version needs `s3:GetObjectVersion`, which neither IAM user has.
-  - The CI job tests this against a versioned bucket.
+  - Until then, nobody but an owner identity can read that version. Bunny's key is denied `staging/*` outright. On AWS, reading a named version needs `s3:GetObjectVersion`, which neither IAM user has.
+  - The CI job, on a versioned MinIO bucket, proves the Bunny key and the public are refused. It cannot show the API key's refusal: MinIO lets `s3:GetObject` read old versions where AWS does not.
 - **Published images** are not covered by any lifecycle rule. That's deliberate: sent emails keep referencing them.
 
 ## What each key may do
@@ -106,4 +106,8 @@ Bunny fetches from S3 only on a cache miss:
 
 ## The CI job (`asset-storage.yml`)
 
-It runs these files against MinIO, with only the bucket name changed, on a **versioned** bucket, and does the signed PUT from a real Chrome. MinIO is not AWS. The live probe is what established AWS's own answers.
+It runs these files against MinIO, with only the bucket name changed, on a **versioned** bucket, and does the signed PUT from a real Chrome. MinIO is not AWS; the live probe established AWS's own answers. Known differences:
+- MinIO does not store `AbortIncompleteMultipartUpload`;
+- MinIO lets `s3:GetObject` read old versions.
+
+MinIO and `mc` are built from source at pinned release commits, because MinIO's published images are no longer publicly pullable.
