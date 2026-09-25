@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -20,20 +20,24 @@ import type { EmailBlock } from "@allohq/email-builder";
  */
 export default function EditTemplatePage() {
   const params = useParams();
+  const router = useRouter();
   const id = String(params.id ?? "");
 
-  const { data, isLoading, error } = (trpc.templates.getById as any).useQuery(
+  const { data, isLoading, isFetchedAfterMount, error } = (trpc.templates.getById as any).useQuery(
     { id },
-    { enabled: !!id },
+    { enabled: !!id, refetchOnMount: "always" },
   ) as {
     data:
       | { blocks: unknown; subject?: string; previewText?: string; name?: string; storeId?: string | null; campaignId?: string | null }
       | undefined;
     isLoading: boolean;
+    isFetchedAfterMount: boolean;
     error: unknown;
   };
 
-  if (isLoading) {
+  // A cached template can be one version behind immediately after Save.
+  // Do not mount an editor from that stale snapshot while the fresh read runs.
+  if (isLoading || !isFetchedAfterMount) {
     return (
       <div className="flex items-center justify-center py-32">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -70,6 +74,12 @@ export default function EditTemplatePage() {
       storeId={data.storeId ?? undefined}
       templateName={data.name ?? "Untitled email"}
       reviewHref={data.campaignId ? `/campaigns/${data.campaignId}` : null}
+      onBack={() => {
+        const campaignId = new URLSearchParams(window.location.search).get("campaignId");
+        if (campaignId && /^c[a-z0-9]+$/i.test(campaignId)) router.push(`/campaigns/${campaignId}`);
+        else if (window.history.length > 1) router.back();
+        else router.push("/templates");
+      }}
       previewVariables={{ first_name: "there", last_order_month: "recently" }}
     />
   );

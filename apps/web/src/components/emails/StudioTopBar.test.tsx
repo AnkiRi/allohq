@@ -29,11 +29,10 @@ const render = (overrides: Record<string, unknown> = {}) =>
   );
 
 test("there is always a way out of Studio", () => {
-  // Server render has no history, so it falls back to the library link —
-  // a full-page surface must never render without an exit.
+  // The page owns the destination; the bar must never hard-code the library.
   const markup = render();
-  assert.match(markup, /href="\/templates"/);
-  assert.match(markup, /Email library/);
+  assert.match(markup, /aria-label="Back"/);
+  assert.doesNotMatch(markup, /Email library/);
 });
 
 test("the email is named and its state stated", () => {
@@ -55,6 +54,12 @@ test("undo and redo reflect what is actually available", () => {
 test("the review entry point appears only when a campaign exists", () => {
   assert.match(render(), /href="\/campaigns\/c1"/);
   assert.doesNotMatch(render({ reviewHref: null }), /\/campaigns\//);
+});
+
+test("unsaved content cannot proceed to delivery review", () => {
+  const markup = render({ reviewBlocked: true });
+  assert.doesNotMatch(markup, /href="\/campaigns\/c1"/);
+  assert.match(markup, /Save before review/);
 });
 
 test("saving says so rather than looking idle", () => {
