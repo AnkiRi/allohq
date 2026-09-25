@@ -1,0 +1,186 @@
+name: Preparation memory diagnosis
+
+# Opt-in only. The soak found ~3.9 GB of resident memory outside the JS heap
+# in one preparing worker process. This runs the same workload on separate
+# disposable runners and records where resident memory sits
+# (process-memory.ts: glibc arenas, other anonymous, files, huge pages, V8),
+# plus glibc's own malloc_info via gdb at idle points: bytes in use versus
+# free bytes the allocator keeps.
+#
+# Round 1 (run 35997365153) compared glibc, MALLOC_ARENA_MAX=2 and jemalloc.
+# Round 2 (run 35999592524) repeated glibc: the arenas were 95-97% free.
+# This round runs six more glibc replicas in the first soak's exact
+# conditions, to see how high the retained level goes, and two with glibc's
+# mmap threshold pinned (a mechanism probe, not a proposed setting).
+#
+# A diagnosis only: nothing here changes production settings.
+# Disposable Postgres, synthetic tenants, no provider, no real recipients.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["memory-diagnosis/**"]
+
+concurrency:
+  group: preparation-memory-diagnosis
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: "${{ matrix.allocator }} · detail ${{ matrix.detail }} · run ${{ matrix.replica }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { allocator: glibc, detail: "0", replica: 3 }
+          - { allocator: glibc, detail: "0", replica: 4 }
+          - { allocator: glibc, detail: "0", replica: 5 }
+          - { allocator: glibc, detail: "0", replica: 6 }
+          - { allocator: glibc, detail: "0", replica: 7 }
+          - { allocator: glibc, detail: "0", replica: 8 }
+          - { allocator: mmap-threshold-128k, detail: "0", replica: 1 }
+          - { allocator: mmap-threshold-128k, detail: "0", replica: 2 }
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_soak_test
+        ports: ["5432:5432"]
+        options: >-
+          --shm-size=1g
+          --health-cmd "pg_isready -U joon -d joon_soak_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_soak_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_soak_test"
+      SOAK_CYCLES: "20"
+      SOAK_WARMUP: "5"
+      SOAK_TENANTS: "3"
+      SOAK_SIZE: "20000"
+      SOAK_CANARY_CYCLES: "10"
+      SOAK_CANARY_WARMUP: "2"
+      SOAK_PHASE_DETAIL: ${{ matrix.detail }}
+      SOAK_CSV: /tmp/soak-cycles.csv
+      NODE_OPTIONS: "--expose-gc"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Allocator and observer
+        run: |
+          case "${{ matrix.allocator }}" in
+            arena-max-2) echo "MALLOC_ARENA_MAX=2" >> "$GITHUB_ENV" ;;
+            # Pins glibc's mmap threshold (disabling its dynamic growth), so
+            # blocks of 128 KiB and larger are mmapped and returned when freed.
+            mmap-threshold-128k) echo "MALLOC_MMAP_THRESHOLD_=131072" >> "$GITHUB_ENV" ;;
+            jemalloc)
+              sudo apt-get install -y -qq libjemalloc2 > /dev/null
+              echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" >> "$GITHUB_ENV" ;;
+          esac
+          nproc; free -m; ldd --version | head -1
+          cat /sys/kernel/mm/transparent_hugepage/enabled /sys/kernel/mm/transparent_hugepage/defrag
+          if [ "${{ matrix.allocator }}" != "jemalloc" ]; then
+            sudo apt-get install -y -qq gdb > /dev/null
+            mkdir -p /tmp/malloc
+            echo "SOAK_MALLOC_SNAPSHOT_DIR=/tmp/malloc" >> "$GITHUB_ENV"
+            # Original conditions: one pause, after the soak phase, so nothing
+            # before it is disturbed.
+            [ "${{ matrix.detail }}" = "0" ] && echo "SOAK_MALLOC_SNAPSHOT_ONLY=soak-20" >> "$GITHUB_ENV"
+            # The test pauses with no query in flight and writes <label>.request
+            # holding its pid; record malloc_info and smaps_rollup, then release it.
+            cat > /tmp/observe.sh <<'OBSERVE'
+          #!/usr/bin/env bash
+          while true; do
+            for request in /tmp/malloc/*.request; do
+              [ -e "$request" ] || continue
+              label=$(basename "$request" .request); pid=$(cat "$request")
+              timeout 45 sudo gdb -p "$pid" -batch -nx \
+                -ex "set \$f = (void *) fopen(\"/tmp/malloc/$label.xml\", \"w\")" \
+                -ex 'call (int) malloc_info(0, $f)' -ex 'call (int) fclose($f)' > "/tmp/malloc/$label.gdb.log" 2>&1
+              sudo cat "/proc/$pid/smaps_rollup" > "/tmp/malloc/$label.rollup" 2>/dev/null
+              rm -f "$request"
+            done
+            sleep 0.2
+          done
+          OBSERVE
+            chmod +x /tmp/observe.sh
+            nohup /tmp/observe.sh > /tmp/observer.log 2>&1 &
+          fi
+
+      - name: Instrumented preparation run
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @allohq/workers exec tsx --test src/workers/preparation-soak.load.integration.ts 2>&1 | tee /tmp/soak.log
+          echo "exit ${PIPESTATUS[0]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          node - <<'NODE' > /tmp/malloc-summary.txt 2>&1 || true
+          const fs = require("fs");
+          const dir = "/tmp/malloc";
+          if (!fs.existsSync(dir)) { console.log("no malloc snapshots (jemalloc run)"); process.exit(0); }
+          const order = ["seeded", ...[1, 2, 3, 5, 10, 15, 20].map((n) => `soak-${n}`), ...[1, 2, 3, 5, 10].map((n) => `canary-${n}`)];
+          const mb = (n) => (Number(n) / 1048576).toFixed(0).padStart(6);
+          console.log("snapshot      rss(rollup)  arena system  free in arenas  in use (system-free)  mmapped chunks  anon huge pages");
+          for (const label of order) {
+            const file = `${dir}/${label}.xml`;
+            if (!fs.existsSync(file)) continue;
+            const xml = fs.readFileSync(file, "utf8");
+            const tail = xml.slice(xml.lastIndexOf("</heap>"));
+            const get = (re) => Number((re.exec(tail) || [])[1] || 0);
+            const system = get(/<system type="current" size="(\d+)"/);
+            const free = get(/<total type="fast" count="\d+" size="(\d+)"/) + get(/<total type="rest" count="\d+" size="(\d+)"/);
+            const mmap = get(/<total type="mmap" count="\d+" size="(\d+)"/);
+            const rollup = fs.existsSync(`${dir}/${label}.rollup`) ? fs.readFileSync(`${dir}/${label}.rollup`, "utf8") : "";
+            const kb = (name) => Number((new RegExp(`^${name}:\\s+(\\d+) kB`, "m").exec(rollup) || [])[1] || 0) * 1024;
+            console.log(`${label.padEnd(12)} ${mb(kb("Rss"))} MB    ${mb(system)} MB      ${mb(free)} MB          ${mb(system - free)} MB             ${mb(mmap)} MB        ${mb(kb("AnonHugePages"))} MB`);
+          }
+          NODE
+          {
+            echo "## ${{ matrix.allocator }} · detail ${{ matrix.detail }} · run ${{ matrix.replica }}"
+            echo '```'
+            grep -E "\[memory\]|=== PREPARATION SOAK|^  (heap|external|rss|canary)" /tmp/soak.log
+            echo
+            cat /tmp/malloc-summary.txt
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-diagnosis-${{ matrix.allocator }}-detail${{ matrix.detail }}-r${{ matrix.replica }}-${{ github.run_id }}
+          path: |
+            /tmp/soak-cycles.csv
+            /tmp/soak.log
+            /tmp/malloc
+            /tmp/observer.log
+          if-no-files-found: warn
+          retention-days: 30
