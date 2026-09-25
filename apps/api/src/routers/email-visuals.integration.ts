@@ -132,32 +132,69 @@ test("a product from another store is refused", { skip }, async () => {
   }
 });
 
-test("with no provider configured, generation fails closed and names the variables", { skip }, async () => {
+const STORAGE_ENV = {
+  ASSET_BUCKET: "joon-test-assets",
+  ASSET_CDN_BASE_URL: "https://cdn.test",
+  AWS_ACCESS_KEY_ID: "AKIATEST",
+  AWS_SECRET_ACCESS_KEY: "secret",
+};
+function withStorage<T>(run: () => Promise<T>): Promise<T> {
+  const saved = Object.fromEntries(Object.keys(STORAGE_ENV).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, STORAGE_ENV);
+  return run().finally(() => {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+}
+
+test("without durable storage, generation is refused before any provider is chosen", { skip }, async () => {
+  const { prisma, emailsRouter } = await load();
+  const f = await fixture(prisma, "https://cdn.test/board.png");
+  try {
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+    // Spending on an image that cannot be saved is worse than not generating,
+    // so storage is the FIRST gate, ahead of the provider check.
+    await assert.rejects(
+      () => api.generateVisuals({
+        storeId: f.store.id, productId: f.product.id, mode: "creative_concept",
+        slots: [slot("hero", "A clean premium hero")],
+      }),
+      (error: any) => {
+        assert.match(error.message, /not available for this workspace yet/);
+        assert.doesNotMatch(error.message, /ASSET_|AWS_|bucket|S3/i, "no deployment detail reaches the merchant");
+        return true;
+      },
+    );
+    assert.equal(await prisma.generatedImage.count({ where: { workspaceId: f.workspace.id } }), 0);
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
+
+test("with storage but no provider, generation fails closed and names the variables", { skip }, async () => {
   const { prisma, emailsRouter } = await load();
   const f = await fixture(prisma, "https://cdn.test/board.png");
   const saved = { r: process.env["REPLICATE_API_TOKEN"], o: process.env["OPENAI_API_KEY"] };
   delete process.env["REPLICATE_API_TOKEN"];
   delete process.env["OPENAI_API_KEY"];
   try {
-    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
-    // CI has no image-provider keys. The request must refuse and say what to
-    // configure, not throw an opaque error or quietly substitute stock imagery.
-    await assert.rejects(
-      () => api.generateVisuals({
-        storeId: f.store.id,
-        productId: f.product.id,
-        mode: "creative_concept",
-        slots: [slot("hero", "A clean premium hero")],
-      }),
-      (error: any) => {
-        assert.match(error.message, /No image provider is configured/);
-        assert.match(error.message, /REPLICATE_API_TOKEN|OPENAI_API_KEY/);
-        assert.doesNotMatch(error.message, /stock|unsplash/i);
-        return true;
-      },
-    );
-    assert.equal(await prisma.brandAsset.count({ where: { workspaceId: f.workspace.id } }), 0);
-    assert.equal(await prisma.generatedImage.count({ where: { workspaceId: f.workspace.id } }), 0);
+    await withStorage(async () => {
+      const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+      await assert.rejects(
+        () => api.generateVisuals({
+          storeId: f.store.id, productId: f.product.id, mode: "creative_concept",
+          slots: [slot("hero", "A clean premium hero")],
+        }),
+        (error: any) => {
+          assert.match(error.message, /not available for this workspace yet/);
+          assert.doesNotMatch(error.message, /OPENAI|GOOGLE|API_KEY|stock|unsplash/i);
+          return true;
+        },
+      );
+      assert.equal(await prisma.brandAsset.count({ where: { workspaceId: f.workspace.id } }), 0);
+    });
   } finally {
     if (saved.r) process.env["REPLICATE_API_TOKEN"] = saved.r;
     if (saved.o) process.env["OPENAI_API_KEY"] = saved.o;
@@ -175,11 +212,14 @@ test("capabilities report honestly when nothing is configured", { skip }, async 
     const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
     const caps = await api.visualCapabilities({});
     assert.equal(caps.generationAvailable, false);
+    assert.equal(caps.storageConfigured, false, "storage is reported separately from the provider");
+    assert.match(caps.storageMessage ?? "", /not available for this workspace yet/);
     assert.equal(caps.referenceGrounded, false, "no reference grounding without a provider");
     assert.ok(caps.missingCredentials.length > 0);
-    // The limitation must read as configuration, not as impossible.
-    assert.ok(caps.referenceSetup.length >= 1);
-    assert.ok(caps.referenceSetup.every((hint: any) => hint.variables.length >= 2));
+    // Merchant-level choices are always offered; the model list is empty
+    // until something is genuinely configured — no false availability.
+    assert.ok(caps.preferences.length >= 3, "Recommended / Fast / Premium / Product-faithful");
+    assert.deepEqual(caps.models, [], "nothing configured, so nothing selectable");
   } finally {
     if (saved.r) process.env["REPLICATE_API_TOKEN"] = saved.r;
     if (saved.o) process.env["OPENAI_API_KEY"] = saved.o;

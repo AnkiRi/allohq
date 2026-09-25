@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@allohq/database";
 import { Prisma } from "@allohq/database";
 import { ShopifyClient } from "../client";
+import { syncShopifyBrandLogo } from "./brand-logo";
 
 interface ShopifyShop {
   name: string;
@@ -79,6 +80,19 @@ export async function syncShopMetadata(
       timezone: shop.ianaTimezone,
     },
   });
+
+  // Brand imagery rides along with shop metadata, so install, bootstrap and
+  // every later sync all import it through this one path. It is deliberately
+  // not allowed to fail the metadata sync: most stores have no brand logo set,
+  // and the scopes Joon installs may refuse the field entirely.
+  try {
+    const logo = await syncShopifyBrandLogo(client, storeId, prisma);
+    console.log(`Shopify brand logo for store ${storeId}: ${logo.outcome}${logo.detail ? ` — ${logo.detail}` : ""}`);
+  } catch (error) {
+    console.warn(
+      `Shopify brand logo sync skipped for store ${storeId}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   console.log(`Shop metadata synced for store ${storeId}: ${shop.name}`);
 }

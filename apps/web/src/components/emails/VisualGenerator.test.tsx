@@ -118,17 +118,31 @@ test("a run in progress says so", () => {
   assert.match(render({ pending: true }), /Generating…/);
 });
 
-test("with no provider configured, the panel refuses and names the variables", () => {
+test("with no provider configured, the panel refuses without naming variables", () => {
   const markup = render({
     capabilities: {
-      generationAvailable: false, provider: null,
-      missingCredentials: ["REPLICATE_API_TOKEN", "OPENAI_API_KEY"],
+      generationAvailable: false, storageConfigured: true, storageMessage: null,
+      provider: null, missingCredentials: ["REPLICATE_API_TOKEN", "OPENAI_API_KEY"],
       referenceGrounded: false, referenceSetup: [], spendRefusal: null,
     },
   });
   assert.match(markup, /not switched on for this workspace/);
-  assert.match(markup, /REPLICATE_API_TOKEN or OPENAI_API_KEY/);
   assert.match(markup, /rather than hand you a stand-in/);
+  assert.doesNotMatch(markup, /REPLICATE_API_TOKEN|OPENAI_API_KEY/, "no deployment detail in the Studio");
+  assert.match(markup, /disabled=""/);
+});
+
+test("unavailable storage is explained as storage, not as a missing provider", () => {
+  const markup = render({
+    capabilities: {
+      generationAvailable: false, storageConfigured: false,
+      storageMessage: "Uploads and generated images are not available for this workspace yet. Joon will not start work it cannot save.",
+      providerAvailable: true, provider: "GPT Image", missingCredentials: [],
+      referenceGrounded: false, referenceSetup: [], spendRefusal: null,
+    },
+  });
+  assert.match(markup, /will not start work it cannot save/);
+  assert.doesNotMatch(markup, /ASSET_|AWS_|bucket|S3/i);
   assert.match(markup, /disabled=""/);
 });
 

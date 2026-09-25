@@ -111,7 +111,7 @@ export async function generateRcs(
   const result = await complete({
     model: input.model,
     task: "generation",
-    workload: "creative",
+    workload: "short_copy",
     harness: input.modelHarness,
     prompt,
     temperature: 0.7,

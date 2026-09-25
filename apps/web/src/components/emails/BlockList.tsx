@@ -121,7 +121,7 @@ export function BlockList({
                     focusRow(block.id);
                   }}
                 >
-                  <ArrowUp className="h-3 w-3" />
+                  <ArrowUp className="h-3.5 w-3.5" />
                 </RowButton>
                 <RowButton
                   label={`Move ${title} down`}
@@ -132,7 +132,7 @@ export function BlockList({
                     focusRow(block.id);
                   }}
                 >
-                  <ArrowDown className="h-3 w-3" />
+                  <ArrowDown className="h-3.5 w-3.5" />
                 </RowButton>
                 <RowButton
                   label={`Delete ${title}`}
@@ -141,7 +141,7 @@ export function BlockList({
                     onRemove(block.id);
                   }}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </RowButton>
               </div>
             </li>

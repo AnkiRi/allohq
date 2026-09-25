@@ -57,7 +57,8 @@ export interface AgentResult {
   outputTokens: number;
   /** Concrete route selected by the model harness. */
   model?: string;
-  provider?: "anthropic" | "openai";
+  /** Widened when a real Gemini text adapter was added to the gateway. */
+  provider?: "anthropic" | "openai" | "google";
   usedFallback?: boolean;
 }
 

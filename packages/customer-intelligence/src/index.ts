@@ -11,8 +11,6 @@ export {
   AI_WORKLOADS,
   DEFAULT_MODEL_HARNESS,
   normalizeModelHarness,
-  resolveHarnessRoute,
-  describeHarness,
 } from "./ai";
 export type {
   AIModelId,
@@ -134,3 +132,56 @@ export type {
   JudgeVerdict,
   ContentEvalResult,
 } from "./eval/content-quality";
+
+export {
+  MODEL_REGISTRY,
+  STUDIO_PREFERENCES,
+  TEXT_WORKLOADS,
+  VISUAL_WORKLOADS,
+  WORKLOAD_CAPABILITY,
+  WORKLOAD_COPY,
+  availableModels,
+  isModelAvailable,
+  modelById,
+  routeModel,
+  isKnownModelId,
+  type CostClass,
+  type HarnessWorkload,
+  type ModelCapability,
+  type ModelEntry,
+  type ModelTier as HarnessModelTier,
+  type RoutingDecision,
+  type RoutingRequest,
+  type StudioPreference,
+  type TextWorkload,
+  type VisualWorkload,
+} from "./ai/model-registry";
+
+export {
+  VisualAdapterError,
+  geminiImageAdapter,
+  openAiImageAdapter,
+  type ReferenceImage,
+  type VisualAdapter,
+  type VisualAdapterRequest,
+  type VisualAdapterResult,
+} from "./images/adapters";
+
+export {
+  DEFAULT_TEXT_ROUTE,
+  describeHarnessV2,
+  eligibleModels,
+  normalizeModelHarnessV2,
+  resolveTextRoute,
+  routeForWorkload,
+  type HarnessRouteV2,
+  type ModelHarnessV2,
+} from "./ai/harness-v2";
+
+export {
+  describeMigration,
+  migrateHarnessRoutes,
+  migrationPreservesRoutes,
+  unroutedWorkloads,
+  type TextHarnessRoutes,
+} from "./ai/harness-migration";

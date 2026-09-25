@@ -179,7 +179,7 @@ function TextEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "t
   );
 }
 
-function ImageEditor({ block, onUpdate, onOpenVisuals }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void }) {
+function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAsset }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void }) {
   const set = useSet(block, onUpdate);
   const empty = !block.props.src?.trim();
   return (
@@ -193,17 +193,31 @@ function ImageEditor({ block, onUpdate, onOpenVisuals }: { block: Extract<EmailB
         <div className="mb-3 rounded-lg border border-dashed border-border bg-card p-3">
           <p className="text-[13px] font-sans text-foreground">This image is empty</p>
           <p className="mt-1 text-[11px] font-sans text-muted-foreground">
-            Ask Joon for a visual, or paste a link to one you already host.
+            Three ways to fill it. Pasting a link is the fourth, below.
           </p>
-          {onOpenVisuals ? (
+          <div className="mt-2.5 grid gap-1.5">
             <button
               type="button"
               onClick={onOpenVisuals}
-              className="mt-2 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+              className="rounded-lg bg-[#17204D] px-3 py-2 text-left text-[12px] font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
             >
               Generate a visual
             </button>
-          ) : null}
+            <button
+              type="button"
+              onClick={onUploadImage}
+              className="rounded-lg border border-border px-3 py-2 text-left text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+            >
+              Upload an image
+            </button>
+            <button
+              type="button"
+              onClick={onChooseAsset}
+              className="rounded-lg border border-border px-3 py-2 text-left text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+            >
+              Choose from library
+            </button>
+          </div>
         </div>
       ) : null}
       <Field><Label>Image URL</Label><TextInput value={block.props.src} onChange={(src) => set({ src })} mono placeholder="https://…" /></Field>
@@ -361,11 +375,15 @@ export function BlockEditor({
   block,
   onUpdate,
   onOpenVisuals,
+  onUploadImage,
+  onChooseAsset,
 }: {
   block: EmailBlock | null;
   onUpdate: (b: EmailBlock) => void;
   /** Takes the merchant to the Visuals tab, where images are actually made. */
   onOpenVisuals?: () => void;
+  onUploadImage?: () => void;
+  onChooseAsset?: () => void;
 }) {
   if (!block) {
     return (
@@ -381,7 +399,7 @@ export function BlockEditor({
     switch (block.type) {
       case "hero": return <HeroEditor block={block} onUpdate={onUpdate} />;
       case "text": return <TextEditor block={block} onUpdate={onUpdate} />;
-      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} />;
+      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} />;
       case "button": return <ButtonEditor block={block} onUpdate={onUpdate} />;
       case "product": return <ProductEditor block={block} onUpdate={onUpdate} />;
       case "product_grid": return <ProductGridEditor block={block} onUpdate={onUpdate} />;

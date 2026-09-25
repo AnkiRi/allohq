@@ -18,8 +18,6 @@ export {
   AI_WORKLOADS,
   DEFAULT_MODEL_HARNESS,
   normalizeModelHarness,
-  resolveHarnessRoute,
-  describeHarness,
 } from "./model-harness";
 export type {
   AIWorkload,

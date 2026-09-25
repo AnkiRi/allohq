@@ -63,7 +63,7 @@ export async function runCustomerAgent(opts: {
     toolContext: { storeId, customerId, conversationId },
     agentType: "customer_assistant",
     conversationHistory: history,
-    workload: "support",
+    workload: "merchant_agent_orchestration",
     modelHarness: opts.modelHarness,
   });
 }

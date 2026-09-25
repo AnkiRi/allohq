@@ -24,6 +24,7 @@ import { onboardingRouter } from "./onboarding";
 import { notificationsRouter } from "./notifications";
 import { conversationsRouter } from "./conversations";
 import { eventsRouter } from "./events";
+import { assetsRouter } from "./assets";
 import { activityRouter } from "./activity";
 import { senderDomainsRouter } from "./sender-domains";
 import { teamRouter } from "./team";
@@ -59,6 +60,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   conversations: conversationsRouter,
   events: eventsRouter,
+  assets: assetsRouter,
   activity: activityRouter,
   senderDomains: senderDomainsRouter,
   team: teamRouter,

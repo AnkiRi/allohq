@@ -13,6 +13,11 @@ export { getShopifyAdminClient } from "./token-manager";
 export { registerWebhooks, registerWebPixel, verifyWebhookHmac } from "./webhooks";
 export { syncShopMetadata, syncAllProducts, syncAllCustomers, syncAllOrders, syncAllCollections } from "./sync";
 export {
+  syncShopifyBrandLogo,
+  type BrandLogoOutcome,
+  type BrandLogoSyncResult,
+} from "./sync";
+export {
   createDiscount, deleteDiscount, getDiscountCode,
   getOrder, cancelOrder, closeOrder, addOrderNote,
   calculateRefund, createRefund, listRefunds,

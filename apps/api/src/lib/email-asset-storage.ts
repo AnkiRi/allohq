@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -10,6 +11,47 @@ import sharp from "sharp";
 
 const MAX_ASSET_BYTES = 12 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+/** Published objects are content-addressed and never rewritten, so they may be cached for good. */
+const IMMUTABLE = "public,max-age=31536000,immutable";
+const FORMAT_MIME: Record<string, string> = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+const MIME_EXTENSION: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
+
+/**
+ * A merchant's upload that cannot be published, with a message safe to show
+ * them. Anything else thrown from here is an operational failure.
+ */
+export class EmailAssetRejectedError extends Error {}
+
+/**
+ * Where a browser's raw upload lands. Nothing under `staging/` is ever served:
+ * the CDN's read key is scoped to published prefixes only, and the API deletes
+ * a staging object once its sanitised copy is published (a bucket lifecycle
+ * rule removes any that an interrupted upload leaves behind).
+ */
+export function stagingPrefix(input: { workspaceId: string; storeId: string }): string {
+  return `staging/workspaces/${input.workspaceId}/stores/${input.storeId}/`;
+}
+
+/**
+ * Overridable S3 client, so persistence can be exercised against a double.
+ *
+ * Storage is where workspace isolation is actually enforced — the object key
+ * carries the tenant — and that cannot be left to inspection.
+ */
+let clientOverride: { send: (command: unknown) => Promise<unknown> } | null = null;
+export function __setStorageClientForTests(client: typeof clientOverride) {
+  clientOverride = client;
+}
+
+/** The object key for one asset. The tenant prefix is the isolation boundary. */
+export function emailAssetKey(input: {
+  workspaceId: string;
+  storeId: string;
+  checksum: string;
+  extension: string;
+}): string {
+  return `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/${input.checksum}.${input.extension}`;
+}
 
 function storageConfig() {
   const bucket = process.env["ASSET_BUCKET"];
@@ -19,11 +61,25 @@ function storageConfig() {
   }
   const region = process.env["ASSET_REGION"] ?? process.env["AWS_REGION"] ?? "us-east-1";
   const endpoint = process.env["ASSET_S3_ENDPOINT"];
-  const client = new S3Client({
+  // Storage's own key when set, so it never has to share one with SES (whose
+  // clients use the default AWS credential chain). Falls back to that chain.
+  const accessKeyId = process.env["ASSET_AWS_ACCESS_KEY_ID"]?.trim();
+  const secretAccessKey = process.env["ASSET_AWS_SECRET_ACCESS_KEY"]?.trim();
+  const options = {
     region,
     ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-  });
-  return { bucket, cdnBaseUrl, client };
+    ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
+  };
+  const client = (clientOverride ?? new S3Client(options)) as S3Client;
+  // Presigning uses its own client. By default the SDK puts a CRC32 of the
+  // request body into the URL, and a presigned PUT has no body yet, so every
+  // URL carried the checksum of an EMPTY file (AAAAAA==). AWS accepted both
+  // forms in the live probe (HTTP 200), so this is not a fix for a failure
+  // seen on AWS: it removes a value that can never describe the upload, which
+  // stricter S3-compatible stores reject. Server-side writes keep the default:
+  // there the body is real.
+  const signer = new S3Client({ ...options, requestChecksumCalculation: "WHEN_REQUIRED" });
+  return { bucket, cdnBaseUrl, client, signer };
 }
 
 function safeExtension(fileName: string, mimeType: string) {
@@ -49,55 +105,110 @@ export async function createEmailAssetUpload(input: {
   size: number;
 }) {
   assertAssetInput(input.mimeType, input.size);
-  const { bucket, cdnBaseUrl, client } = storageConfig();
-  const key = `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/${randomUUID()}.${safeExtension(input.fileName, input.mimeType)}`;
-  const command = new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    ContentType: input.mimeType,
-    CacheControl: "public,max-age=31536000,immutable",
-    Metadata: { workspace: input.workspaceId, store: input.storeId },
-  });
+  const { bucket, signer } = storageConfig();
+  // No public URL is returned: the raw bytes go to staging, which is never
+  // served. The URL a merchant and their recipients see comes only from
+  // `publishUploadedEmailAsset`, for the sanitised copy.
+  const key = `${stagingPrefix(input)}${randomUUID()}`;
+  const command = new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: input.mimeType });
   return {
     key,
-    uploadUrl: await getSignedUrl(client, command, { expiresIn: 600 }),
-    publicUrl: `${cdnBaseUrl}/${key}`,
+    uploadUrl: await getSignedUrl(signer, command, { expiresIn: 600 }),
     expiresInSeconds: 600,
   };
 }
 
-export async function inspectUploadedEmailAsset(input: {
+/** The image type the bytes actually are, whatever the browser declared. */
+async function detectImageType(body: Buffer): Promise<string | null> {
+  try {
+    const { format } = await sharp(body).metadata();
+    return (format && FORMAT_MIME[format]) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Publish a browser upload: read the raw staging object, re-encode it without
+ * metadata, write the clean bytes to a NEW content-addressed key, then remove
+ * the staging object.
+ *
+ * The browser uploads straight to storage, so the staged bytes are exactly
+ * what came off the merchant's device, EXIF and GPS included. They are never
+ * served. The published key is derived from the clean bytes, so it is written
+ * once and never replaced, and a CDN can cache it indefinitely without ever
+ * holding a raw or superseded image.
+ */
+export async function publishUploadedEmailAsset(input: {
   workspaceId: string;
   storeId: string;
   key: string;
 }) {
-  const expectedPrefix = `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/`;
-  if (!input.key.startsWith(expectedPrefix)) throw new Error("Asset does not belong to this store.");
+  const staging = stagingPrefix(input);
+  if (!input.key.startsWith(staging) || input.key.slice(staging.length).includes("/")) {
+    throw new EmailAssetRejectedError("This upload does not belong to this store.");
+  }
   const { bucket, cdnBaseUrl, client } = storageConfig();
-  const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: input.key }));
-  const mimeType = head.ContentType ?? "application/octet-stream";
-  assertAssetInput(mimeType, Number(head.ContentLength ?? 0));
+  const discard = () =>
+    client.send(new DeleteObjectCommand({ Bucket: bucket, Key: input.key })).catch(() => undefined);
 
-  // A merchant's file is uploaded straight to storage by the browser, so the
-  // bytes sitting there are exactly what came off their device — EXIF, GPS and
-  // all. Read it back, re-encode it without metadata, and overwrite. Joon
-  // serves these at public URLs and mails them to strangers; publishing
-  // somebody's coordinates because they attached a photo is not acceptable.
+  let size: number;
+  try {
+    const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: input.key }));
+    size = Number(head.ContentLength ?? 0);
+  } catch (error) {
+    // Without list permission S3 answers a missing key with 403, not 404, so
+    // both mean the same thing here: nothing arrived (an interrupted upload
+    // creates no object) or the staging copy has already expired.
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 403 || status === 404) {
+      throw new EmailAssetRejectedError("The upload did not arrive. Try adding the image again.");
+    }
+    throw error;
+  }
+  if (!(size > 0 && size <= MAX_ASSET_BYTES)) {
+    await discard();
+    throw new EmailAssetRejectedError("Image must be between 1 byte and 12 MB.");
+  }
+
   const stored = await client.send(new GetObjectCommand({ Bucket: bucket, Key: input.key }));
   const raw = Buffer.from(await stored.Body!.transformToByteArray());
-  const stripped = await stripImageMetadata(raw, mimeType);
+  const mimeType = await detectImageType(raw);
+  if (!mimeType) {
+    await discard();
+    throw new EmailAssetRejectedError("Use a JPEG, PNG, WebP or GIF image.");
+  }
+  const stripped = await stripImageMetadata(raw, mimeType).catch(() => null);
+  if (!stripped) {
+    await discard();
+    throw new EmailAssetRejectedError("This image could not be read. Try saving it again as JPEG or PNG.");
+  }
   const checksum = createHash("sha256").update(stripped.body).digest("hex");
+  const key = emailAssetKey({
+    workspaceId: input.workspaceId,
+    storeId: input.storeId,
+    checksum,
+    extension: MIME_EXTENSION[mimeType]!,
+  });
+  // A failure here leaves the staging object in place, so the same completion
+  // can simply be retried; the key is the same either way.
   await client.send(new PutObjectCommand({
     Bucket: bucket,
-    Key: input.key,
+    Key: key,
     Body: stripped.body,
     ContentType: mimeType,
-    CacheControl: "public,max-age=31536000,immutable",
+    CacheControl: IMMUTABLE,
     Metadata: { workspace: input.workspaceId, store: input.storeId, sha256: checksum },
   }));
+  // Published. A failed delete is not a failed upload: the lifecycle rule on
+  // `staging/` removes the leftover, and it was never readable by the CDN.
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: input.key })).catch((error: Error) => {
+    console.warn(`[email-assets] staging cleanup left to the lifecycle rule: ${error.name}`);
+  });
 
   return {
-    url: `${cdnBaseUrl}/${input.key}`,
+    key,
+    url: `${cdnBaseUrl}/${key}`,
     mimeType,
     size: stripped.body.byteLength,
     width: stripped.width,
@@ -159,13 +270,13 @@ export async function persistRemoteEmailImage(input: {
   // recipient receives rather than what a provider happened to return.
   const checksum = createHash("sha256").update(stripped.body).digest("hex");
   const { bucket, cdnBaseUrl, client } = storageConfig();
-  const key = `workspaces/${input.workspaceId}/stores/${input.storeId}/email-assets/${checksum}.${safeExtension(input.fileName, mimeType)}`;
+  const key = emailAssetKey({ workspaceId: input.workspaceId, storeId: input.storeId, checksum, extension: safeExtension(input.fileName, mimeType) });
   await client.send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,
     Body: stripped.body,
     ContentType: mimeType,
-    CacheControl: "public,max-age=31536000,immutable",
+    CacheControl: IMMUTABLE,
     Metadata: { workspace: input.workspaceId, store: input.storeId, sha256: checksum },
   }));
   return {
@@ -224,7 +335,7 @@ export async function persistProductSafeComposite(input: {
     Key: key,
     Body: composed,
     ContentType: "image/png",
-    CacheControl: "public,max-age=31536000,immutable",
+    CacheControl: IMMUTABLE,
     Metadata: { workspace: input.workspaceId, store: input.storeId, sha256: checksum, composite: "product-safe" },
   }));
   return {

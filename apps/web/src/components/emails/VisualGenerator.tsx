@@ -16,6 +16,10 @@ export type VisualFailure = { slotId: string; reason: string };
 export type VisualSlotDraft = { id: string; label: string; prompt: string };
 export type VisualCapabilities = {
   generationAvailable: boolean;
+  /** Durable storage. Reported separately so the reason is accurate. */
+  storageConfigured?: boolean;
+  storageMessage?: string | null;
+  providerAvailable?: boolean;
   provider: string | null;
   missingCredentials: string[];
   referenceGrounded: boolean;
@@ -65,6 +69,8 @@ export function VisualGenerator({
   const productSafeBlocked = mode === "product_safe" && !productHasImage;
   const nothingToDo = slots.every((slot) => !slot.prompt.trim());
   const unavailable = capabilities ? !capabilities.generationAvailable : false;
+  // Storage and provider fail for different reasons and need different copy.
+  const storageBlocked = capabilities ? capabilities.storageConfigured === false : false;
   const spendBlocked = Boolean(capabilities?.spendRefusal);
 
   return (
@@ -111,14 +117,14 @@ export function VisualGenerator({
         ) : null}
       </div>
 
-      {unavailable ? (
+      {storageBlocked ? (
+        <p className="mt-3 rounded-lg border border-[#B95849]/40 bg-[#FAE8E4] p-2.5 text-[12px]">
+          {capabilities?.storageMessage}
+        </p>
+      ) : unavailable ? (
         <p className="mt-3 rounded-lg border border-[#B95849]/40 bg-[#FAE8E4] p-2.5 text-[12px]">
           Image generation is not switched on for this workspace, so Joon will not
-          produce a visual rather than hand you a stand-in. An operator needs to set{" "}
-          <span className="font-mono text-[11px]">
-            {capabilities?.missingCredentials.join(" or ")}
-          </span>
-          .
+          produce a visual rather than hand you a stand-in.
         </p>
       ) : null}
 

@@ -391,7 +391,7 @@ export async function generateEmail(input: GenerateEmailInput): Promise<Generate
   const result = await complete({
     model: input.model,
     task: "generation", // customer-facing copy → frontier when no explicit model is chosen
-    workload: "creative",
+    workload: "email_structure",
     harness: input.modelHarness,
     prompt,
     temperature: 0.7,

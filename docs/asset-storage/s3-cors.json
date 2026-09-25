@@ -1,0 +1,12 @@
+{
+  "CORSRules": [
+    {
+      "ID": "studio-browser-upload",
+      "AllowedOrigins": ["https://agent.joonhq.com"],
+      "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}

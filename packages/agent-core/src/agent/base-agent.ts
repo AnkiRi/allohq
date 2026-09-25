@@ -4,9 +4,9 @@ import { prisma } from "@allohq/database";
 import {
   getModel,
   getProvider,
-  resolveHarnessRoute,
+  resolveTextRoute,
   type AIModelId,
-  type AIWorkload,
+  type TextWorkload,
   type ModelHarnessConfig,
 } from "@allohq/customer-intelligence";
 import type { ToolDefinition, ToolContext, AgentResult, AgentType } from "../types";
@@ -25,7 +25,7 @@ export async function runAgent(opts: {
   agentType: AgentType;
   conversationHistory?: Array<{ role: string; content: string }>;
   model?: AIModelId;
-  workload?: AIWorkload;
+  workload?: TextWorkload;
   modelHarness?: ModelHarnessConfig | unknown;
   maxTokens?: number;
 }): Promise<AgentResult> {
@@ -43,9 +43,11 @@ export async function runAgent(opts: {
   // most recent exchanges (last 12 messages ≈ 6 turns); older turns drop off.
   const conversationHistory = rawHistory.slice(-12);
 
-  const route = resolveHarnessRoute({
+  const route = resolveTextRoute({
     model: opts.model,
-    workload: opts.workload ?? (agentType === "customer_assistant" ? "support" : "orchestration"),
+    // Both assistants are the same job to the harness: a model that talks to a
+    // person and runs tools on their behalf.
+    workload: opts.workload ?? "merchant_agent_orchestration",
     harness: opts.modelHarness,
     task: "reasoning",
   });
