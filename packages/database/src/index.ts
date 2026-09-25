@@ -40,6 +40,7 @@ export {
   deliverabilityPauseReason,
   type ProviderSafetyEvent,
 } from "./email-provider-effects";
+export { sendingDayEvidence, storesThatSent } from "./sending-day";
 export { CAMPAIGN_ORIGINS, parseCampaignOrigin } from "./campaign-origin";
 export type { CampaignOriginValue } from "./campaign-origin";
 export {
