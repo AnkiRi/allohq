@@ -4,6 +4,7 @@ import type { Message, SendResult } from "../../types";
 import { getEmailDeliveryDecision, type EmailDeliveryClass } from "../../delivery-mode";
 import { isTransientProviderError, withProviderRetry } from "../../provider-retry";
 import { htmlToPlainText } from "../../plain-text";
+import { redactEmailAddresses } from "../../redact";
 import { selectedEmailProvider } from "./provider";
 import { SesEmailProvider } from "./ses";
 
@@ -72,7 +73,7 @@ async function deliverEmail(message: Message, deliveryClass: EmailDeliveryClass)
     };
   } catch (err) {
     const errorMessage =
-      err instanceof Error ? err.message : "Unknown email sending error";
+      err instanceof Error ? redactEmailAddresses(err.message) : "Unknown email sending error";
     return {
       messageId,
       channel: "email",

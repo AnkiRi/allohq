@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, ownerStoreProcedure } from "../trpc";
-import { createSenderDomain, getSenderDomain, requestSenderDomainVerification, selectedEmailProvider, warmupDailyCap, warmupHealthAction, type SenderDomainProvider } from "@allohq/messaging";
-import { getStoreSenderIdentity } from "@allohq/database";
+import { assessSendingDay, createSenderDomain, getSenderDomain, growthEligibility, latestClosedSendingDay, requestSenderDomainVerification, selectedEmailProvider, warmupDailyCap, type SenderDomainProvider, type WarmupStanding } from "@allohq/messaging";
+import { getStoreSenderIdentity, sendingDayEvidence } from "@allohq/database";
 import { canReuseSenderDomain, conflictsWithConfiguredDomain } from "../lib/sender-domain-provider";
 
 const domainSchema = z.string().trim().toLowerCase().regex(/^(?!-)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/);
@@ -14,37 +14,52 @@ function providerData(data: any) {
   };
 }
 
+/**
+ * Delivery health for the most recent SETTLED sending day.
+ *
+ * This used to read "the last 24 hours up to now", which judged today's sends
+ * before their complaints could arrive — mailbox feedback loops take a day or
+ * more — so a day could look healthy and justify growth before its bad news
+ * existed. Counting a closed day by send date picks up late complaints, which
+ * are written onto the original message rows.
+ */
 async function reputationWindow(prisma: any, storeId: string, provider: "resend" | "ses", now = new Date()) {
-  const windowStartsAt = new Date(now.getTime() - 24 * 60 * 60 * 1_000);
-  const where = { storeId, provider, sentAt: { gte: windowStartsAt } };
-  const [attempted, delivered, bounced, complained] = await Promise.all([
-    prisma.messageLog.count({ where }),
-    prisma.messageLog.count({ where: { ...where, status: { in: ["delivered", "opened", "clicked"] } } }),
-    prisma.messageLog.count({ where: { ...where, status: "bounced" } }),
-    prisma.messageLog.count({ where: { ...where, error: "spam_complaint" } }),
-  ]);
-  const recommended = attempted < 100
-    ? "hold"
-    : warmupHealthAction({ delivered, bounced, complained });
+  const day = latestClosedSendingDay(now);
+  const evidence = await sendingDayEvidence(prisma, { storeId, provider, startsAt: day.startsAt, endsAt: day.endsAt });
+  const assessment = assessSendingDay(evidence, { closed: true });
   return {
     provider,
-    windowStartsAt,
-    windowEndsAt: now,
-    attempted,
-    delivered,
-    bounced,
-    complained,
-    bounceRate: attempted ? bounced / attempted : 0,
-    complaintRate: delivered ? complained / delivered : 0,
-    recommended,
-    reason: attempted < 100
-      ? `Hold until at least 100 delivery attempts provide enough evidence (${attempted} so far).`
-      : recommended === "grow"
-        ? "Delivery health is inside Joon's conservative bounce and complaint thresholds."
-        : recommended === "pause"
-          ? "Complaint rate is above the safety threshold; pause and review the audience and copy."
-          : "Bounce or complaint evidence requires holding the current volume tier.",
+    windowStartsAt: day.startsAt,
+    windowEndsAt: day.endsAt,
+    ...evidence,
+    bounceRate: evidence.attempted ? evidence.bounced / evidence.attempted : 0,
+    complaintRate: evidence.delivered ? evidence.complained / evidence.delivered : 0,
+    recommended: assessment.action,
+    reason: assessment.reason,
+    assessment,
   } as const;
+}
+
+/**
+ * Fold the store's standing into the recommendation, so the screen never
+ * offers "grow" for a tier the review would then refuse.
+ */
+function withGrowthEligibility(
+  reputation: Awaited<ReturnType<typeof reputationWindow>>,
+  warmup: WarmupStanding | null,
+  now: Date,
+) {
+  const eligibility = growthEligibility({
+    day: { startsAt: reputation.windowStartsAt },
+    assessment: reputation.assessment,
+    // No state yet means no send yet; a review would create it now.
+    warmup: warmup ?? { healthyDay: 1, lastGrowthAt: now, heldUntil: null, pausedAt: null },
+    now,
+  });
+  if (reputation.recommended !== "grow" || eligibility.eligible) {
+    return { ...reputation, growthEligible: eligibility.eligible };
+  }
+  return { ...reputation, recommended: "hold" as const, reason: eligibility.reason, growthEligible: false };
 }
 
 export const senderDomainsRouter = router({
@@ -63,7 +78,7 @@ export const senderDomainsRouter = router({
     return domain ? {
       ...domain,
       warmup,
-      reputation,
+      reputation: withGrowthEligibility(reputation, warmup, new Date()),
       assessments,
       currentDailyCap: warmupDailyCap(warmup?.healthyDay ?? 1, Number.MAX_SAFE_INTEGER),
     } : null;
@@ -139,30 +154,53 @@ export const senderDomainsRouter = router({
           update: {},
         }),
       ]);
-      if (input.action === "grow" && health.recommended !== "grow") {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: health.reason,
+      if (input.action === "grow") {
+        // Growth needs a settled healthy day at the CURRENT tier, no active
+        // automated hold or pause, and a day whose evidence has not already
+        // raised the tier. Before this, each click doubled the cap again on the
+        // same evidence, and a review silently cleared an automated hold.
+        const eligibility = growthEligibility({
+          day: { startsAt: health.windowStartsAt },
+          assessment: health.assessment,
+          warmup: current,
+          now,
         });
+        if (!eligibility.eligible) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: eligibility.reason });
+        }
       }
       const nextTier = input.action === "grow" ? Math.min(current.healthyDay + 1, 31) : current.healthyDay;
       const heldUntil = input.action === "hold" ? new Date(now.getTime() + 24 * 60 * 60 * 1_000) : null;
       const pausedAt = input.action === "pause" ? now : null;
       const capBefore = warmupDailyCap(current.healthyDay, Number.MAX_SAFE_INTEGER);
       const capAfter = warmupDailyCap(nextTier, Number.MAX_SAFE_INTEGER);
-      const [, assessment] = await ctx.prisma.$transaction([
-        ctx.prisma.sesWarmupState.update({
-          where: { storeId: input.storeId },
-          data: {
-            healthyDay: nextTier,
-            lastGrowthAt: now,
-            heldUntil,
-            pausedAt,
-            overrideReason: input.reason,
-            overrideRecordedAt: now,
-          },
-        }),
-        ctx.prisma.senderReputationAssessment.create({
+      const warmupData = {
+        healthyDay: nextTier,
+        lastGrowthAt: now,
+        heldUntil,
+        pausedAt,
+        overrideReason: input.reason,
+        overrideRecordedAt: now,
+      };
+      const assessment = await ctx.prisma.$transaction(async (tx) => {
+        if (input.action === "grow") {
+          // Claim the tier that was just judged. Two reviews landing together
+          // would otherwise both read tier N and both write N+1, and a later
+          // write could build on a tier it never evaluated.
+          const claimed = await tx.sesWarmupState.updateMany({
+            where: { storeId: input.storeId, healthyDay: current.healthyDay, lastGrowthAt: current.lastGrowthAt },
+            data: warmupData,
+          });
+          if (claimed.count !== 1) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "The volume tier changed while this review was being recorded. Reload and review again.",
+            });
+          }
+        } else {
+          await tx.sesWarmupState.update({ where: { storeId: input.storeId }, data: warmupData });
+        }
+        const created = await tx.senderReputationAssessment.create({
           data: {
             storeId: input.storeId,
             provider,
@@ -176,6 +214,7 @@ export const senderDomainsRouter = router({
             dailyCapBefore: capBefore,
             dailyCapAfter: capAfter,
             evidence: {
+              kind: "closed_day",
               recommended: health.recommended,
               bounceRate: health.bounceRate,
               complaintRate: health.complaintRate,
@@ -187,8 +226,8 @@ export const senderDomainsRouter = router({
             nextReviewAt: new Date(now.getTime() + input.reviewAfterHours * 60 * 60 * 1_000),
             rollbackCondition: input.rollbackCondition,
           },
-        }),
-        ctx.prisma.agentObservation.create({
+        });
+        await tx.agentObservation.create({
           data: {
             storeId: input.storeId,
             type: `sender_reputation_${input.action}`,
@@ -211,23 +250,26 @@ export const senderDomainsRouter = router({
               description: input.rollbackCondition,
             },
           },
-        }),
-        input.action === "pause"
-          ? ctx.prisma.store.update({
-              where: { id: input.storeId },
-              data: {
-                emailSendingPausedAt: now,
-                emailSendingPauseReason: `Warm-up review pause: ${input.reason}`,
-              },
-            })
-          : ctx.prisma.store.updateMany({
-              where: {
-                id: input.storeId,
-                emailSendingPauseReason: { startsWith: "Warm-up review pause:" },
-              },
-              data: { emailSendingPausedAt: null, emailSendingPauseReason: null },
-            }),
-      ]);
+        });
+        if (input.action === "pause") {
+          await tx.store.update({
+            where: { id: input.storeId },
+            data: {
+              emailSendingPausedAt: now,
+              emailSendingPauseReason: `Warm-up review pause: ${input.reason}`,
+            },
+          });
+        } else {
+          await tx.store.updateMany({
+            where: {
+              id: input.storeId,
+              emailSendingPauseReason: { startsWith: "Warm-up review pause:" },
+            },
+            data: { emailSendingPausedAt: null, emailSendingPauseReason: null },
+          });
+        }
+        return created;
+      });
       return { assessment, nextTier, dailyCap: capAfter };
     }),
 });

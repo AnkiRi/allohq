@@ -301,6 +301,18 @@ gatedSchedule(
   console.error("Failed to set up preparation recovery schedule:", err.message);
 });
 
+// Reconcile each store's most recent settled sending day into a growth/hold
+// recommendation. 06:00 IST is 00:30 UTC, just after a UTC sending day closes;
+// the day judged is the one whose events have had 48 hours to arrive.
+gatedSchedule(
+  preparationRecoveryQueue,
+  "sending-day-reconciliation-schedule",
+  { pattern: "0 6 * * *", tz: BRIEFING_TZ },
+  { name: "reconcile-sending-days", data: { reconcileSendingDays: true } }
+).catch((err) => {
+  console.error("Failed to set up sending-day reconciliation schedule:", err.message);
+});
+
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
 gatedSchedule(

@@ -182,6 +182,9 @@ export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> =
   // Recovers campaign audience preparation abandoned by a crashed worker. It
   // resumes an approval the merchant already gave; it never starts one.
   "preparation-recovery-schedule": null,
+  // Records what each settled sending day supports. It recommends; it never
+  // raises a sending cap and never touches a messaging provider.
+  "sending-day-reconciliation-schedule": null,
   "monthly-shadow-invoice-schedule": null,
   "state-decay-schedule": null,
   "privacy-retention-schedule": null,

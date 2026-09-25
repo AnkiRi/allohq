@@ -27,10 +27,12 @@ export type { UnsubscribeChannel } from "./unsubscribe";
 export { createSenderDomain, deleteSenderDomain, getSenderDomain, requestSenderDomainVerification, type SenderDomainProvider } from "./sender-domains";
 export { isTransientProviderError, withProviderRetry } from "./provider-retry";
 export { htmlToPlainText } from "./plain-text";
+export { redactEmailAddresses } from "./redact";
 export {
   getDeliveryModeDecision,
   getMessagingSendMode,
   assertEmailDeliveryConfigured,
+  emailProviderConfigProblems,
 } from "./delivery-mode";
 export type {
   DeliveryModeDecision,
