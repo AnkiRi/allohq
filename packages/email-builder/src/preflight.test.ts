@@ -15,6 +15,15 @@ test("custom HTML cannot carry executable content", () => {
   assert.equal(result.blockingFailures.some((check) => check.id === "custom_html"), true);
 });
 
+test("preflight blocks inline image data in existing drafts", () => {
+  const blocks = emailBlocksSchema.parse([
+    { id: "hero", type: "hero", props: { heading: "Offer", bgImageSrc: "data:image/png;base64,AAAA" } },
+  ]);
+  const result = preflightEmailDocument({ subject: "Offer", previewText: "Preview", blocks });
+  assert.equal(result.blockingFailures.some((check) => check.id === "inline_image"), true);
+  assert.doesNotMatch(result.blockingFailures.map((check) => check.detail).join(" "), /AAAA/);
+});
+
 test("full-price campaign blocks discount creative", () => {
   const blocks = emailBlocksSchema.parse([
     { id: "hero", type: "hero", props: { heading: "Take 20% off", subtext: "Use code SAVE20" } },

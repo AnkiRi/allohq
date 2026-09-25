@@ -57,6 +57,7 @@ import { nextSesWarmupDelay, nextSesWarmupResume } from "../utils/ses-warmup-def
 import { campaignDeliveryCompletion } from "../utils/campaign-delivery-completion";
 import { deliveryWindowDelay } from "../utils/delivery-window";
 import { formatStoreMoney } from "../utils/format-money";
+import { discountEndsAt } from "../utils/discount-expiry";
 
 const customerStateQueue = new Queue(QUEUE_NAMES.CUSTOMER_STATE, { connection: redisConnection });
 // Same queue the planner runs on — used to fan out per-customer delayed delivery
@@ -461,8 +462,7 @@ export async function planCampaignSend(
   if (discountCode && !offerId && !isDemo && campaign.store?.accessToken) {
     try {
       const client = await getShopifyAdminClient(campaign.storeId);
-      const endsAt = new Date();
-      endsAt.setDate(endsAt.getDate() + 30);
+      const endsAt = discountEndsAt(proposal["discountDurationHours"]);
       const res = await createDiscount(client, {
         code: discountCode,
         valueType: "percentage",

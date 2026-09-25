@@ -11,8 +11,46 @@ import {
 } from "@allohq/customer-intelligence";
 import type { ToolDefinition, ToolContext, AgentResult, AgentType } from "../types";
 import { toAnthropicTools } from "../tools";
+import { modelFacingToolOutput, serializeToolResult } from "./tool-result";
 
 const MAX_TOOL_ROUNDS = 5;
+const MAX_HISTORY_MESSAGES = 12;
+const MAX_HISTORY_CONTENT_CHARS = 4_000;
+const MAX_MODEL_INPUT_BYTES = 100_000;
+
+function safeAgentFailureMessage(agentType: AgentType): string {
+  return agentType === "customer_assistant"
+    ? "Joon couldn't complete this request right now. Please try again later."
+    : "Joon couldn't complete this request right now. Please contact the Joon team if it continues.";
+}
+
+function safeToolError(message: string, agentType: AgentType): string {
+  return /no credits remaining|insufficient_quota|maximum context length|platform\.openai\.com|openai|anthropic|claude/i.test(message)
+    ? safeAgentFailureMessage(agentType)
+    : message;
+}
+
+function completedCampaignMessage(toolCalls: AgentResult["toolCalls"]): string | null {
+  const completed = toolCalls.find((call) => {
+    const result = call.output as Record<string, unknown> | null;
+    return call.name === "create_campaign_with_preview" && result?.success === true &&
+      typeof result.draftCampaignId === "string";
+  });
+  const result = completed?.output as Record<string, unknown> | undefined;
+  return result && typeof result.message === "string"
+    ? result.message
+    : completed ? "Your campaign draft is ready to review. Nothing has been sent." : null;
+}
+
+function assertModelInputBudget(systemPrompt: string, messages: unknown): void {
+  // UTF-8 byte count is a conservative guard against another multi-megabyte
+  // provider request. The provider's tool schemas are small and stable.
+  const bytes = Buffer.byteLength(systemPrompt) + Buffer.byteLength(JSON.stringify(messages));
+  if (bytes > MAX_MODEL_INPUT_BYTES) {
+    console.error(`[Agent] model input rejected before provider call: ${bytes} bytes`);
+    throw new Error("Agent input exceeded its safety budget");
+  }
+}
 /**
  * Run the agent loop: send messages to the LLM, execute tool calls, repeat.
  * The merchant harness supplies an ordered provider/model chain.
@@ -41,7 +79,10 @@ export async function runAgent(opts: {
 
   // Cap history so context (and cost) doesn't grow unbounded per turn — keep the
   // most recent exchanges (last 12 messages ≈ 6 turns); older turns drop off.
-  const conversationHistory = rawHistory.slice(-12);
+  const conversationHistory = rawHistory.slice(-MAX_HISTORY_MESSAGES).map((entry) => ({
+    role: entry.role,
+    content: entry.content.slice(0, MAX_HISTORY_CONTENT_CHARS),
+  }));
 
   const route = resolveTextRoute({
     model: opts.model,
@@ -52,7 +93,6 @@ export async function runAgent(opts: {
     task: "reasoning",
   });
 
-  let lastError: Error | undefined;
   let attempted = 0;
 
   for (const modelId of route.candidates) {
@@ -91,16 +131,14 @@ export async function runAgent(opts: {
         usedFallback: attempted > 1,
       };
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+      const error = err instanceof Error ? err : new Error(String(err));
       console.error(
-        `[Agent] ${modelId} (${model.provider}) failed: ${lastError.message}. Falling back...`,
+        `[Agent] ${modelId} (${model.provider}) failed: ${error.name}; status=${(error as { status?: number }).status ?? "unknown"}. Falling back...`,
       );
     }
   }
 
-  throw new Error(
-    `All tool-capable AI models failed or unavailable. Last error: ${lastError?.message ?? "no provider configured"}`,
-  );
+  throw new Error(safeAgentFailureMessage(agentType));
 }
 
 // ---------------------------------------------------------------------------
@@ -144,13 +182,21 @@ async function runAnthropicAgent(opts: {
   let totalOutputTokens = 0;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await client.messages.create({
-      model,
-      max_tokens: maxTokens,
-      system: cachedSystem as unknown as Anthropic.MessageCreateParams["system"],
-      tools: anthropicTools,
-      messages,
-    });
+    let response: Anthropic.Message;
+    try {
+      assertModelInputBudget(systemPrompt, messages);
+      response = await client.messages.create({
+        model,
+        max_tokens: maxTokens,
+        system: cachedSystem as unknown as Anthropic.MessageCreateParams["system"],
+        tools: anthropicTools,
+        messages,
+      });
+    } catch (error) {
+      const message = completedCampaignMessage(allToolCalls);
+      if (!message) throw error;
+      return { response: message, toolCalls: allToolCalls, inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
+    }
 
     const usage = response.usage as {
       input_tokens: number;
@@ -186,7 +232,7 @@ async function runAnthropicAgent(opts: {
       toolResults.push({
         type: "tool_result",
         tool_use_id: toolUse.id,
-        content: JSON.stringify(result.output),
+        content: serializeToolResult(toolUse.name, result.output),
         ...(result.isError ? { is_error: true } : {}),
       });
     }
@@ -255,12 +301,20 @@ async function runOpenAIAgent(opts: {
   let totalOutputTokens = 0;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await client.chat.completions.create({
-      model,
-      max_tokens: maxTokens,
-      messages,
-      tools: openaiTools.length > 0 ? openaiTools : undefined,
-    });
+    let response: OpenAI.ChatCompletion;
+    try {
+      assertModelInputBudget(systemPrompt, messages);
+      response = await client.chat.completions.create({
+        model,
+        max_tokens: maxTokens,
+        messages,
+        tools: openaiTools.length > 0 ? openaiTools : undefined,
+      });
+    } catch (error) {
+      const message = completedCampaignMessage(allToolCalls);
+      if (!message) throw error;
+      return { response: message, toolCalls: allToolCalls, inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
+    }
 
     totalInputTokens += response.usage?.prompt_tokens ?? 0;
     totalOutputTokens += response.usage?.completion_tokens ?? 0;
@@ -293,7 +347,7 @@ async function runOpenAIAgent(opts: {
       messages.push({
         role: "tool",
         tool_call_id: fnCall.id,
-        content: JSON.stringify(result.output),
+        content: serializeToolResult(fnCall.function.name, result.output),
       });
     }
   }
@@ -323,23 +377,9 @@ async function executeToolCall(
     return { output: { error: `Unknown tool: ${toolName}` }, isError: true };
   }
 
+  let output: unknown;
   try {
-    const output = await tool.handler(input, toolContext);
-
-    await prisma.agentAction.create({
-      data: {
-        storeId: toolContext.storeId,
-        customerId: toolContext.customerId ?? null,
-        agentType,
-        actionType: toolName,
-        input: input as any,
-        output: (output ?? {}) as any,
-        status: "completed",
-      },
-    });
-
-    allToolCalls.push({ name: toolName, input, output });
-    return { output, isError: false };
+    output = await tool.handler(input, toolContext);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Tool execution failed";
 
@@ -353,8 +393,28 @@ async function executeToolCall(
         status: "failed",
         error: errorMsg,
       },
+    }).catch((logError: Error) => {
+      console.error(`[Agent] failed to record ${toolName} error: ${logError.name}`);
     });
-
-    return { output: { error: errorMsg }, isError: true };
+    return { output: { error: safeToolError(errorMsg, agentType) }, isError: true };
   }
+
+  // A failed audit write must not turn a completed campaign creation into an
+  // apparent tool failure. Retrying that tool would create another draft.
+  await prisma.agentAction.create({
+      data: {
+        storeId: toolContext.storeId,
+        customerId: toolContext.customerId ?? null,
+        agentType,
+        actionType: toolName,
+        input: input as any,
+        output: (modelFacingToolOutput(toolName, output) ?? {}) as any,
+        status: "completed",
+      },
+  }).catch((logError: Error) => {
+    console.error(`[Agent] failed to record completed ${toolName}: ${logError.name}`);
+  });
+
+  allToolCalls.push({ name: toolName, input, output });
+  return { output, isError: false };
 }
