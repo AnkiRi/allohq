@@ -12,7 +12,8 @@ SES has no provider idempotency key. A transport error after submission is ambig
 
 - Request production access for permission-based Shopify marketing email. Explain one-click unsubscribe, suppression before send, hard-bounce and complaint suppression, complaint-pausing, per-tenant isolation and staged warmup.
 - Request quota and maximum send rate based on the largest approved blast. Runtime concurrency must use `GetAccount.MaximumSendRate`; do not hardcode throughput.
-- Create one SES tenant per store with Standard reputation policy where region availability permits. Confirm tenant support in `ap-south-1`; otherwise document the selected region before provisioning.
+- **Region: `eu-north-1` (Stockholm)** — recorded 2026-09-23. The founder verified `mail.joonhq.com`, configured its custom MAIL FROM domain and submitted production access there. SES tenants and reputation policies are available in every SES region, and Stockholm uses the standard `dkim.amazonses.com` DKIM target the code already emits. Joon selects it with `AWS_SES_REGION=eu-north-1` on **both** api and workers; the SNS topic and SQS event queue must be created in the same region (the code refuses a mismatch). `ap-south-1` appears in code only as the fallback when `AWS_SES_REGION` is unset — no Mumbai resources are to be created.
+- Create one SES tenant per store with Standard reputation policy.
 - Create Easy DKIM identity per merchant domain and custom MAIL FROM subdomain. Surface the three DKIM CNAMEs, MAIL FROM MX/TXT and DMARC guidance in Joon.
 - Supply least-privilege credentials through the deployment secret manager. Do not place credentials in repository files.
 
@@ -24,6 +25,6 @@ Restrict resources to Joon identities, configuration sets and tenants. Required 
 
 Per store, the worker starts at `min(eligible, 500 * 2^(day-1))`; excess recipients receive an explicit next-day queue job without changing frozen arms or delivery keys, and suppression is rechecked when that job runs. It prioritizes customers who clicked or purchased within 30 days, then 90 days, then the remainder; opens do not raise priority. Over rolling seven days, growth is held for three days above 2% bounce or 0.1% complaint, and the store is paused above 0.3% complaint. A founder override requires a recorded reason and timestamp. The proposed 180-day unengaged sunset is stored but remains disabled.
 
-Enabling delivery also requires `SES_TENANT_REGION_CONFIRMED=true`, a 12-digit `AWS_ACCOUNT_ID`, a verified `SES_FROM_EMAIL`, and queue/topic values whose SNS ARN matches the configured account and region. This explicit gate prevents assuming tenant support in `ap-south-1` before AWS confirms it.
+Enabling delivery also requires `SES_TENANT_REGION_CONFIRMED=true`, a 12-digit `AWS_ACCOUNT_ID`, a verified `SES_FROM_EMAIL`, and queue/topic values whose SNS ARN and SQS URL match the configured account and region (`eu-north-1`). This explicit gate records that tenant support in the chosen region has been confirmed, rather than assumed.
 
 Sandbox verification uses only `success@simulator.amazonses.com`, `bounce@simulator.amazonses.com` and `complaint@simulator.amazonses.com`. Do not run a 70,000-message simulator blast: sandbox rate and quota make that neither representative nor responsible.

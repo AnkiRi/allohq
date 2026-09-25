@@ -301,6 +301,18 @@ gatedSchedule(
   console.error("Failed to set up preparation recovery schedule:", err.message);
 });
 
+// Reconcile each store's most recent settled sending day into a growth/hold
+// recommendation. 06:00 IST is 00:30 UTC, just after a UTC sending day closes;
+// the day judged is the one whose events have had 48 hours to arrive.
+gatedSchedule(
+  preparationRecoveryQueue,
+  "sending-day-reconciliation-schedule",
+  { pattern: "0 6 * * *", tz: BRIEFING_TZ },
+  { name: "reconcile-sending-days", data: { reconcileSendingDays: true } }
+).catch((err) => {
+  console.error("Failed to set up sending-day reconciliation schedule:", err.message);
+});
+
 // Re-drive planned campaign deliveries that no job is left to send: a chunk
 // that failed for good, or a job lost from Redis. The plan is durable
 // (campaign_delivery_chunks); delivery keys make re-sending a no-op.

@@ -91,7 +91,7 @@ For small strata, merge all strata below ten customers into a deterministic `oth
 ### SES architecture
 
 - Provider abstraction with Resend as the default until acceptance proves SES.
-- SES in `ap-south-1`, subject to account production access and quota.
+- SES in `eu-north-1` (Stockholm), subject to account production access and quota. *(Changed from `ap-south-1` on 2026-09-23: the Joon sending domain was verified and production access requested in Stockholm.)*
 - One regional SES tenant per store, verified identity association and explicit reputation policy.
 - Separate triggered and broadcast configuration sets.
 - SES configuration set → SNS standard topic → SQS queue → worker, with a DLQ.
