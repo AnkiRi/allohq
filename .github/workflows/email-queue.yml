@@ -1,0 +1,126 @@
+name: Email queue proof (multi-tenant, simulated provider)
+
+# Opt-in only: never on a pull request or a push to main. Runs the production
+# email-send worker against disposable Postgres and Redis with several tenants
+# approving together, and a provider simulated inside the test process
+# (api.resend.com answered locally; every other host refused). No email can be
+# sent, and no production setting is read or changed.
+#
+# Each variant runs on its own runner. Capacity variables are the ones
+# production reads (unset there today, so the code defaults apply).
+on:
+  workflow_dispatch:
+  push:
+    branches: ["queue-proof/**"]
+
+concurrency:
+  group: email-queue-proof
+  cancel-in-progress: false
+
+jobs:
+  queue:
+    name: "${{ matrix.name }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Production today: code defaults, one job at a time, Resend's 10 rps.
+          - { name: "today", concurrency: "1", store: "", provider_minute: "", rps: "10" }
+          # Capacity raised to what one Resend team allows (10 rps, 90% of it).
+          - { name: "capacity-at-provider-limit", concurrency: "1", store: "10", provider_minute: "540", rps: "10" }
+          # Nothing refuses: the queue's own mechanics, one job and three at a time.
+          - { name: "unconstrained-c1", concurrency: "1", store: "10", provider_minute: "1000000", rps: "1000" }
+          - { name: "unconstrained-c3", concurrency: "3", store: "10", provider_minute: "1000000", rps: "1000" }
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_queue_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon -d joon_queue_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_queue_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_queue_test"
+      REDIS_HOST: "127.0.0.1"
+      REDIS_PORT: "6379"
+      QUEUE_TENANTS: "4000,400,400,400"
+      QUEUE_STAGGER_MS: "3000"
+      QUEUE_TIME_CAP_MINUTES: "25"
+      QUEUE_CONCURRENCY: ${{ matrix.concurrency }}
+      PROVIDER_RPS: ${{ matrix.rps }}
+      QUEUE_REPORT: /tmp/queue-report.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Capacity settings for this variant
+        run: |
+          [ -n "${{ matrix.store }}" ] && echo "EMAIL_STORE_CONCURRENCY=${{ matrix.store }}" >> "$GITHUB_ENV"
+          [ -n "${{ matrix.provider_minute }}" ] && echo "EMAIL_PROVIDER_PER_MINUTE=${{ matrix.provider_minute }}" >> "$GITHUB_ENV"
+          true
+
+      - name: Email queue run
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @allohq/workers exec tsx --test src/workers/email-queue.load.integration.ts 2>&1 | tee /tmp/queue.log
+          echo "exit ${PIPESTATUS[0]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## ${{ matrix.name }}"
+            echo '```'
+            sed -n '/=== EMAIL QUEUE/,/^✔\|^✖/p' /tmp/queue.log | grep -v "^✔\|^✖"
+            grep -oE "failed: Email capacity unavailable: [a-z_]+" /tmp/queue.log | sort | uniq -c | sort -rn || true
+            echo "chunk failures citing the provider's rate limit: $(grep -c 'Too many requests' /tmp/queue.log || true)"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-queue-${{ matrix.name }}-${{ github.run_id }}
+          path: |
+            /tmp/queue-report.json
+            /tmp/queue.log
+          if-no-files-found: warn
+          retention-days: 30
