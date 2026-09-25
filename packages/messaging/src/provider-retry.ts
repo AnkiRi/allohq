@@ -8,6 +8,14 @@ export function isTransientProviderError(error: unknown): boolean {
   return ["timeout", "timed out", "econnreset", "etimedout", "rate_limit", "too many requests", "internal_server", "service_unavailable"].some((part) => signal.includes(part));
 }
 
+/** A provider's rate-limit refusal (HTTP 429 or its named equivalent). */
+export function isRateLimitError(error: unknown): boolean {
+  const value = error as Partial<ProviderErrorLike> | null;
+  if (Number(value?.statusCode ?? value?.status) === 429) return true;
+  const signal = `${value?.name ?? ""} ${value?.code ?? ""} ${value?.message ?? ""}`.toLowerCase();
+  return signal.includes("rate_limit") || signal.includes("too many requests");
+}
+
 export async function withProviderRetry<T>(operation: () => Promise<T>, options: { maxRetries?: number; sleep?: (ms: number) => Promise<void> } = {}): Promise<T> {
   const maxRetries = options.maxRetries ?? 2;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));

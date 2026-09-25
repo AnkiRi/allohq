@@ -15,6 +15,11 @@ export interface SendResult {
   provider?: Provider;
   /** Whether a queue retry can plausibly succeed without changing the message. */
   retryable?: boolean;
+  /**
+   * The provider refused because of its rate limit (HTTP 429). Nothing is wrong
+   * with this message: the caller should wait and send it again, not fail it.
+   */
+  rateLimited?: boolean;
 }
 
 export type ProviderSendFn = (message: Message) => Promise<SendResult>;

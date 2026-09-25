@@ -11,6 +11,12 @@ export interface EmailCapacityPolicy {
   storeConcurrency: number;
   providerPerMinute: number;
   providerWindowMs: number;
+  /**
+   * Provider-wide sends per second, shared by every tenant. The per-minute
+   * budget alone let a whole minute's sends go out in the first second, and
+   * Resend refuses a team above 10 requests a second.
+   */
+  providerPerSecond: number;
   leaseMs: number;
 }
 
@@ -31,6 +37,8 @@ export function emailCapacityPolicy(installedAt: Date, now = new Date()): EmailC
     storeConcurrency: positiveInt(process.env["EMAIL_STORE_CONCURRENCY"], 2),
     providerPerMinute: positiveInt(process.env["EMAIL_PROVIDER_PER_MINUTE"], 100),
     providerWindowMs: 60_000,
+    // 80% of Resend's documented 10 requests/second per team.
+    providerPerSecond: positiveInt(process.env["EMAIL_PROVIDER_PER_SECOND"], 8),
     leaseMs: positiveInt(process.env["EMAIL_CAPACITY_LEASE_MS"], 120_000),
   };
 }
@@ -43,10 +51,17 @@ local concurrencyCap = tonumber(ARGV[4])
 local providerCap = tonumber(ARGV[5])
 local leaseMs = tonumber(ARGV[6])
 
+local perSecondCap = tonumber(ARGV[9])
+
 redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now)
 if tonumber(redis.call('GET', KEYS[1]) or '0') >= dailyCap then return {'daily_cap'} end
-if tonumber(redis.call('ZCARD', KEYS[2])) >= concurrencyCap then return {'store_concurrency'} end
-if tonumber(redis.call('GET', KEYS[3]) or '0') >= providerCap then return {'provider_rate'} end
+if tonumber(redis.call('ZCARD', KEYS[2])) >= concurrencyCap then
+  -- When the earliest lease in the store runs out, as a retry hint.
+  local earliest = redis.call('ZRANGE', KEYS[2], 0, 0, 'WITHSCORES')
+  return {'store_concurrency', earliest[2] or tostring(now)}
+end
+if tonumber(redis.call('GET', KEYS[3]) or '0') >= providerCap then return {'provider_rate', 'window'} end
+if tonumber(redis.call('GET', KEYS[4]) or '0') >= perSecondCap then return {'provider_rate', 'second'} end
 
 redis.call('INCR', KEYS[1])
 redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[7]))
@@ -54,6 +69,8 @@ redis.call('ZADD', KEYS[2], now + leaseMs, token)
 redis.call('PEXPIRE', KEYS[2], leaseMs * 2)
 redis.call('INCR', KEYS[3])
 redis.call('PEXPIRE', KEYS[3], tonumber(ARGV[8]))
+redis.call('INCR', KEYS[4])
+redis.call('PEXPIRE', KEYS[4], 2000)
 return {'allowed'}
 `;
 
@@ -66,8 +83,20 @@ function capacityRedis(): Redis {
 export interface EmailCapacityLease {
   allowed: boolean;
   reason?: EmailCapacityReason;
+  /**
+   * For a pacing refusal (store concurrency or provider rate): how long to
+   * wait before asking again. A refusal is a "not yet", never a failure.
+   */
+  retryAfterMs?: number;
   release(): Promise<void>;
 }
+
+/** Sends one store may have in flight at once; delivery never starts more than this. */
+export function storeSendConcurrency(): number {
+  return emailCapacityPolicy(new Date(0)).storeConcurrency;
+}
+
+const jitter = (ms: number) => Math.floor(Math.random() * ms);
 
 export async function acquireEmailCapacity(storeId: string, installedAt: Date): Promise<EmailCapacityLease> {
   const client = capacityRedis();
@@ -96,6 +125,8 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
   if (selectedEmailProvider() === "ses") {
     policy.providerPerMinute = await sesProviderPerMinute();
     policy.providerWindowMs = 1_000;
+    // SES's window is already one second, sized from its own quota.
+    policy.providerPerSecond = Number.MAX_SAFE_INTEGER;
   }
   const token = randomUUID();
   const dateKey = now.toISOString().slice(0, 10);
@@ -103,16 +134,30 @@ export async function acquireEmailCapacity(storeId: string, installedAt: Date): 
   const concurrencyKey = `joon:email:store:${storeId}:active`;
   const result = await client.eval(
     ACQUIRE_SCRIPT,
-    3,
+    4,
     `joon:email:store:${storeId}:daily:${dateKey}`,
     concurrencyKey,
     `joon:email:provider:minute:${minuteKey}`,
+    `joon:email:provider:second:${Math.floor(now.getTime() / 1_000)}`,
     String(now.getTime()), token, String(policy.dailyCap), String(policy.storeConcurrency),
     String(policy.providerPerMinute), String(policy.leaseMs), String(DAY_MS * 2), String(policy.providerWindowMs * 2),
+    String(policy.providerPerSecond),
   ) as string[];
   const reason = result[0];
   if (reason !== "allowed") {
-    return { allowed: false, reason: reason as EmailCapacityReason, release: async () => undefined };
+    const at = now.getTime();
+    const retryAfterMs =
+      reason === "store_concurrency"
+        // Ask again soon: a live send frees its lease in well under a second.
+        // A crashed worker's leases run out on their own; don't wait that long
+        // in one step, in case a live one frees first.
+        ? Math.min(5_000, Math.max(250, Number(result[1] ?? at) - at))
+        : reason === "provider_rate" && result[1] === "second"
+          ? 1_000 - (at % 1_000) + jitter(250)
+          : reason === "provider_rate"
+            ? policy.providerWindowMs - (at % policy.providerWindowMs) + jitter(1_000)
+            : undefined;
+    return { allowed: false, reason: reason as EmailCapacityReason, retryAfterMs, release: async () => undefined };
   }
   let released = false;
   return {

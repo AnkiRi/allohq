@@ -35,6 +35,7 @@ async function withSeededStore<T>(
     acquire: (storeId: string, installedAt: Date) => Promise<{
       allowed: boolean;
       reason?: string;
+      retryAfterMs?: number;
       release(): Promise<void>;
     }>;
   }) => Promise<T>
@@ -137,5 +138,42 @@ test("admission refuses a store that no longer exists", async () => {
     );
   } finally {
     await closeEmailCapacityRedis();
+  }
+});
+
+test("a refusal says when to ask again: per-store within the lease, provider pace within a second", async () => {
+  assert.ok(databaseUrl, "TEST_DATABASE_URL must be set");
+  const saved = { store: process.env["EMAIL_STORE_CONCURRENCY"], second: process.env["EMAIL_PROVIDER_PER_SECOND"] };
+  try {
+    process.env["EMAIL_STORE_CONCURRENCY"] = "1";
+    await withSeededStore(async ({ storeId, installedAt, acquire }) => {
+      const held = await acquire(storeId, installedAt);
+      assert.equal(held!.allowed, true);
+      const refused = await acquire(storeId, installedAt);
+      assert.equal(refused!.reason, "store_concurrency");
+      assert.ok(refused!.retryAfterMs! >= 250 && refused!.retryAfterMs! <= 5_000, `store retry hint ${refused!.retryAfterMs}`);
+      await held!.release();
+    });
+
+    // The provider pace is shared by every store: once this second's sends
+    // are spent, the next acquisition is told to wait for the next second.
+    process.env["EMAIL_STORE_CONCURRENCY"] = "50";
+    process.env["EMAIL_PROVIDER_PER_SECOND"] = "2";
+    await withSeededStore(async ({ storeId, installedAt, acquire }) => {
+      const leases: Array<{ allowed: boolean; reason?: string; retryAfterMs?: number; release(): Promise<void> }> = [];
+      let refusal: (typeof leases)[number] | undefined;
+      for (let i = 0; i < 12 && !refusal; i += 1) {
+        const lease = (await acquire(storeId, installedAt))!;
+        leases.push(lease);
+        if (!lease.allowed) refusal = lease;
+      }
+      assert.ok(refusal, "the per-second pace must refuse within a few acquisitions");
+      assert.equal(refusal!.reason, "provider_rate");
+      assert.ok(refusal!.retryAfterMs! > 0 && refusal!.retryAfterMs! <= 1_250, `pace retry hint ${refusal!.retryAfterMs}`);
+      await Promise.all(leases.map((lease) => lease.release()));
+    });
+  } finally {
+    if (saved.store === undefined) delete process.env["EMAIL_STORE_CONCURRENCY"]; else process.env["EMAIL_STORE_CONCURRENCY"] = saved.store;
+    if (saved.second === undefined) delete process.env["EMAIL_PROVIDER_PER_SECOND"]; else process.env["EMAIL_PROVIDER_PER_SECOND"] = saved.second;
   }
 });
