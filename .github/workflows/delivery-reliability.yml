@@ -1,0 +1,127 @@
+name: Delivery reliability proof
+
+# Opt-in only: never on a pull request or a push to main. Several tenants
+# through the real email-send queue, with the worker in its own process so it
+# can be killed mid-campaign; the provider is a local fake (Resend's 10 rps
+# limit, latency, 500s, idempotency) and every real host is refused. The proof
+# REQUIRES zero stranded, zero duplicate and zero control-group sends.
+#
+# No production setting is read or changed. Capacity variables are the ones
+# production reads (unset there today, so the code defaults apply); the worker
+# stays at concurrency 1.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["queue-proof/**"]
+
+concurrency:
+  group: delivery-reliability-proof
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    name: "${{ matrix.name }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Production's pacing today: 2 sends in flight per store, 100 a minute.
+          - { name: "concurrent · production defaults", scenario: "concurrent", provider_minute: "", rps: "10" }
+          - { name: "restart · production defaults", scenario: "restart", provider_minute: "", rps: "10" }
+          # The pace set to what one Resend team allows (8 of its 10 rps).
+          - { name: "concurrent · 480/min", scenario: "concurrent", provider_minute: "480", rps: "10" }
+          - { name: "restart · 480/min", scenario: "restart", provider_minute: "480", rps: "10" }
+          # A provider tighter than our pace, so its 429s must be waited out.
+          - { name: "concurrent · provider 429s", scenario: "concurrent", provider_minute: "480", rps: "4" }
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_queue_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U joon -d joon_queue_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_queue_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_queue_test"
+      REDIS_HOST: "127.0.0.1"
+      REDIS_PORT: "6379"
+      QUEUE_SCENARIO: ${{ matrix.scenario }}
+      QUEUE_TENANTS: "4000,400,400,400"
+      QUEUE_STAGGER_MS: "3000"
+      QUEUE_RESTART_AFTER_SENDS: "800"
+      QUEUE_TIME_CAP_MINUTES: "70"
+      PROVIDER_RPS: ${{ matrix.rps }}
+      QUEUE_REPORT: /tmp/reliability-report.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Pace for this variant
+        run: |
+          [ -n "${{ matrix.provider_minute }}" ] && echo "EMAIL_PROVIDER_PER_MINUTE=${{ matrix.provider_minute }}" >> "$GITHUB_ENV"
+          true
+
+      - name: Delivery reliability proof
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @allohq/workers exec tsx --test src/workers/email-queue.load.integration.ts 2>&1 | tee /tmp/reliability.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## ${{ matrix.name }}"
+            echo '```'
+            sed -n '/=== DELIVERY RELIABILITY/,/^$/p' /tmp/reliability.log
+            sed -n '/  tenant     treatment/,/^$/p' /tmp/reliability.log
+            grep -E "AssertionError|ALERT" /tmp/reliability.log | head -5 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-reliability-${{ strategy.job-index }}-${{ github.run_id }}
+          path: |
+            /tmp/reliability-report.json
+            /tmp/reliability.log
+          if-no-files-found: warn
+          retention-days: 30

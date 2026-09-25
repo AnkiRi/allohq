@@ -185,6 +185,9 @@ export const SCHEDULE_CAPABILITIES: Record<string, V1BlockedCapability | null> =
   // Records what each settled sending day supports. It recommends; it never
   // raises a sending cap and never touches a messaging provider.
   "sending-day-reconciliation-schedule": null,
+  // Re-drives planned deliveries of an approved campaign whose job failed for
+  // good or was lost. It sends only what the merchant already approved.
+  "delivery-recovery-schedule": null,
   "monthly-shadow-invoice-schedule": null,
   "state-decay-schedule": null,
   "privacy-retention-schedule": null,

@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { randomUUID } from "node:crypto";
 import type { Message, SendResult } from "../../types";
 import { getEmailDeliveryDecision, type EmailDeliveryClass } from "../../delivery-mode";
-import { isTransientProviderError, withProviderRetry } from "../../provider-retry";
+import { isRateLimitError, isTransientProviderError, withProviderRetry } from "../../provider-retry";
 import { htmlToPlainText } from "../../plain-text";
 import { redactEmailAddresses } from "../../redact";
 import { selectedEmailProvider } from "./provider";
@@ -81,6 +81,7 @@ async function deliverEmail(message: Message, deliveryClass: EmailDeliveryClass)
       error: errorMessage,
       provider: "resend",
       retryable: isTransientProviderError(err),
+      rateLimited: isRateLimitError(err),
     };
   }
 }

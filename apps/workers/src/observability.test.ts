@@ -117,3 +117,13 @@ test("worker transaction names keep readable routes and collapse only opaque ids
   assert.equal(name("GET /customers.search?batch=1&input=%7B%22q%22%3A%22a%40b.com%22%7D"), "GET /customers.search");
   assert.equal(name("GET /u/customer@example.com"), "GET /u/[email]");
 });
+
+test("a delivery chunk that fails for good always alerts, whatever its message", () => {
+  const chunk = (attemptsMade: number) => ({ name: "deliver-chunk", attemptsMade, opts: { attempts: 5 } }) as Job;
+  assert.equal(shouldCaptureWorkerFailure(chunk(5), new Error("Email capacity unavailable: provider_rate")), true);
+  assert.equal(shouldCaptureWorkerFailure(chunk(5), new Error("Delivery pacing window exceeded after 9000 deferrals")), true);
+  assert.equal(shouldCaptureWorkerFailure(chunk(2), new Error("provider unavailable")), false, "not while it will still be retried");
+  // Other jobs keep the expected-failure filter.
+  const other = { name: "deliver-one", attemptsMade: 3, opts: { attempts: 3 } } as Job;
+  assert.equal(shouldCaptureWorkerFailure(other, new Error("Deferred: daily_cap")), false);
+});

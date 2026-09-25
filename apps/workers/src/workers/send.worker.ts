@@ -1,4 +1,4 @@
-import { Worker, Queue } from "bullmq";
+import { DelayedError, Worker, Queue, type Job } from "bullmq";
 import {
   prisma,
   Prisma,
@@ -49,7 +49,9 @@ import {
 } from "./send-cohort";
 import { redisConnection, QUEUE_NAMES } from "../config";
 import { getUnsubscribeUrl } from "../utils/unsubscribe";
-import { acquireEmailCapacity } from "../utils/email-capacity";
+import { acquireEmailCapacity, storeSendConcurrency } from "../utils/email-capacity";
+import { DeliveryPacingError, PACING_WINDOW_MS, runDeliveryChunk } from "../utils/delivery-pacing";
+import { recoverStrandedDeliveries } from "../utils/delivery-recovery";
 import { providerJobFailure } from "../utils/provider-job-failure";
 import { nextSesWarmupDelay, nextSesWarmupResume } from "../utils/ses-warmup-defer";
 import { campaignDeliveryCompletion } from "../utils/campaign-delivery-completion";
@@ -157,6 +159,11 @@ interface DeliverChunkData {
   deliverChunk: true;
   campaignId: string;
   deliveries: DeliverOneData[];
+  /** The planned chunk's job id: the key of its durable plan row. */
+  planJobId?: string;
+  /** Times this job has waited for pacing, and since when (never counted as attempts). */
+  pacingDeferrals?: number;
+  pacingSince?: number;
 }
 interface FinalizeData {
   finalize: true;
@@ -164,16 +171,43 @@ interface FinalizeData {
   attempt?: number;
 }
 
-async function deliverChunk(data: DeliverChunkData) {
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(10, data.deliveries.length) }, async () => {
-    while (cursor < data.deliveries.length) {
-      const delivery = data.deliveries[cursor++];
-      if (delivery) await deliverOne(delivery);
-    }
+/**
+ * Wait for pacing instead of failing: put this job back in "delayed" for the
+ * refusal's retry hint, without spending an attempt. Only a chunk that has been
+ * waiting for longer than the pacing window counts as failed (and alerts).
+ */
+async function deferForPacing(job: Job, token: string | undefined, error: DeliveryPacingError): Promise<never> {
+  const data = job.data as { pacingDeferrals?: number; pacingSince?: number };
+  const since = data.pacingSince ?? Date.now();
+  if (Date.now() - since > PACING_WINDOW_MS) {
+    throw new Error(`Delivery pacing window exceeded after ${data.pacingDeferrals ?? 0} deferrals (${error.reason})`);
+  }
+  await job.updateData({ ...job.data, pacingDeferrals: (data.pacingDeferrals ?? 0) + 1, pacingSince: since });
+  await job.moveToDelayed(Date.now() + error.retryAfterMs, token);
+  throw new DelayedError();
+}
+
+async function deliverChunk(job: Job, token: string | undefined) {
+  const data = job.data as DeliverChunkData;
+  // Never more sends in flight for this store than its capacity allows: the
+  // old ten-at-once chunk refused itself against a limit of two.
+  const result = await runDeliveryChunk(data.deliveries, (delivery) => deliverOne(delivery), storeSendConcurrency());
+  if (result.outcome === "paced") return deferForPacing(job, token, result.error);
+  if (result.outcome === "failed") throw result.error;
+  await prisma.campaignDeliveryChunk.updateMany({
+    where: { jobId: data.planJobId ?? String(job.id), completedAt: null },
+    data: { completedAt: new Date() },
   });
-  await Promise.all(workers);
-  return { delivered: data.deliveries.length };
+  return { delivered: result.attempted, failedForGood: result.permanentFailures };
+}
+
+async function deliverOneJob(job: Job, token: string | undefined) {
+  try {
+    return await deliverOne(job.data as DeliverOneData);
+  } catch (error) {
+    if (error instanceof DeliveryPacingError) return deferForPacing(job, token, error);
+    throw error;
+  }
 }
 
 export const sendWorker = new Worker<
@@ -184,9 +218,10 @@ export const sendWorker = new Worker<
   | CampaignPreparationRequest
   | { recoverPreparation: true }
   | { reconcileSendingDays: true }
+  | { recoverDeliveries: true }
 >(
   QUEUE_NAMES.EMAIL_SEND,
-  async (job) => {
+  async (job, token) => {
     const data = job.data as
       | SendJobData
       | DeliverOneData
@@ -194,9 +229,13 @@ export const sendWorker = new Worker<
       | FinalizeData
       | CampaignPreparationRequest
       | { recoverPreparation: true }
-      | { reconcileSendingDays: true };
+      | { reconcileSendingDays: true }
+      | { recoverDeliveries: true };
     if ((data as { reconcileSendingDays?: boolean }).reconcileSendingDays) {
       return reconcileClosedSendingDays();
+    }
+    if ((data as { recoverDeliveries?: boolean }).recoverDeliveries) {
+      return recoverStrandedDeliveries({ queue: emailSendQueue });
     }
     if ((data as { recoverPreparation?: boolean }).recoverPreparation) {
       return recoverStalePreparationRuns(async (request) => {
@@ -218,8 +257,8 @@ export const sendWorker = new Worker<
         );
       });
     }
-    if ((data as DeliverOneData).deliverOne) return deliverOne(data as DeliverOneData);
-    if ((data as DeliverChunkData).deliverChunk) return deliverChunk(data as DeliverChunkData);
+    if ((data as DeliverOneData).deliverOne) return deliverOneJob(job, token);
+    if ((data as DeliverChunkData).deliverChunk) return deliverChunk(job, token);
     if ((data as FinalizeData).finalize)
       return finalizeCampaign((data as FinalizeData).campaignId, data as FinalizeData);
     return planCampaignSend(
@@ -503,25 +542,47 @@ export async function planCampaignSend(
    * more than one chunk, which the queue treats identically.
    */
   const enqueuePlannedDeliveries = async (planned: Map<number, DeliverOneData[]>) => {
+    const chunks: Array<{ jobId: string; deliverAt: Date; deliveries: DeliverOneData[] }> = [];
     for (const [deliveryTimestamp, deliveries] of planned) {
       for (let index = 0; index < deliveries.length; index += 100) {
-        await emailSendQueue.add(
-          "deliver-chunk",
-          {
-            deliverChunk: true,
-            campaignId,
-            deliveries: deliveries.slice(index, index + 100),
-          } as DeliverChunkData,
-          {
-            delay: Math.max(0, deliveryTimestamp - Date.now()),
-            jobId: `deliver-chunk-${campaignId}-${chunkIndex++}`,
-            attempts: 5,
-            backoff: { type: "exponential", delay: 2_000 },
-            removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
-            removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
-          }
-        );
+        chunks.push({
+          jobId: `deliver-chunk-${campaignId}-${chunkIndex++}`,
+          deliverAt: new Date(deliveryTimestamp),
+          deliveries: deliveries.slice(index, index + 100),
+        });
       }
+    }
+    // The plan is written down before it is queued. The job is only the
+    // runnable copy; if it fails for good or is lost, the delivery recovery
+    // sweep finds the plan here. A retried planner rewrites nothing: job ids
+    // are deterministic, so both the rows and the jobs are skipped.
+    await prisma.campaignDeliveryChunk.createMany({
+      data: chunks.map((chunk) => ({
+        campaignId,
+        jobId: chunk.jobId,
+        deliverAt: chunk.deliverAt,
+        deliveries: chunk.deliveries as unknown as Prisma.InputJsonValue,
+      })),
+      skipDuplicates: true,
+    });
+    for (const chunk of chunks) {
+      await emailSendQueue.add(
+        "deliver-chunk",
+        {
+          deliverChunk: true,
+          campaignId,
+          deliveries: chunk.deliveries,
+          planJobId: chunk.jobId,
+        } as DeliverChunkData,
+        {
+          delay: Math.max(0, chunk.deliverAt.getTime() - Date.now()),
+          jobId: chunk.jobId,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 2_000 },
+          removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 10_000 },
+        }
+      );
     }
     planned.clear();
   };
@@ -1302,7 +1363,7 @@ export async function deliverOne(data: DeliverOneData) {
       );
       return { sent: false, deferred: true };
     }
-    throw new Error(`Email capacity unavailable: ${capacity.reason}`);
+    throw new DeliveryPacingError(capacity.reason ?? "capacity", capacity.retryAfterMs ?? 1_000);
   }
   let result;
   try {
@@ -1349,6 +1410,9 @@ export async function deliverOne(data: DeliverOneData) {
                             delay: nextSesWarmupDelay(),
                           }
                         );
+                      }
+                      if (lease.reason !== "daily_cap") {
+                        throw new DeliveryPacingError(lease.reason ?? "capacity", lease.retryAfterMs ?? 1_000);
                       }
                       throw new Error(`Email capacity unavailable: ${lease.reason}`);
                     }
@@ -1410,6 +1474,15 @@ export async function deliverOne(data: DeliverOneData) {
       storeId: campaign.storeId,
     });
     return { sent: true };
+  }
+  if (result.rateLimited) {
+    // The provider's rate limit, not a problem with this message: it stays
+    // queued and the chunk waits instead of spending an attempt.
+    await prisma.messageLog.update({
+      where: { id: messageLog.id },
+      data: { status: "queued", provider: result.provider ?? "resend", error: "Deferred: provider_rate_limited" },
+    });
+    throw new DeliveryPacingError("provider_rate_limited", 2_000 + Math.floor(Math.random() * 1_000));
   }
   await prisma.messageLog.update({
     where: { id: messageLog.id },
@@ -1509,4 +1582,20 @@ sendWorker.on("completed", (job) => {
 
 sendWorker.on("failed", (job, err) => {
   console.error(`Send job ${job?.id} failed:`, err.message);
+  if (!job || job.name !== "deliver-chunk") return;
+  if (job.attemptsMade < Math.max(1, Number(job.opts.attempts ?? 1))) return;
+  // A chunk that failed for good. Its recipients are not lost, since the delivery
+  // recovery sweep re-drives the plan, but it must never pass silently. Sentry
+  // capture happens in monitorWorkerFailures; this marks the plan and logs it.
+  const data = job.data as DeliverChunkData;
+  console.error(
+    `[delivery] ALERT chunk failed permanently: campaign=${data.campaignId} job=${job.id} ` +
+      `deliveries=${data.deliveries?.length ?? 0} reason=${err.message}`,
+  );
+  void prisma.campaignDeliveryChunk
+    .updateMany({
+      where: { jobId: data.planJobId ?? String(job.id) },
+      data: { failedAt: new Date(), lastError: err.message.slice(0, 500) },
+    })
+    .catch(() => undefined);
 });

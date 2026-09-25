@@ -313,6 +313,18 @@ gatedSchedule(
   console.error("Failed to set up sending-day reconciliation schedule:", err.message);
 });
 
+// Re-drive planned campaign deliveries that no job is left to send: a chunk
+// that failed for good, or a job lost from Redis. The plan is durable
+// (campaign_delivery_chunks); delivery keys make re-sending a no-op.
+gatedSchedule(
+  preparationRecoveryQueue,
+  "delivery-recovery-schedule",
+  { every: 5 * 60 * 1000 },
+  { name: "recover-deliveries", data: { recoverDeliveries: true } }
+).catch((err) => {
+  console.error("Failed to set up delivery recovery schedule:", err.message);
+});
+
 // Schedule periodic trigger checks (every 5 minutes)
 const triggerCheckQueue = new Queue(QUEUE_NAMES.TRIGGER_CHECK, { connection: redisConnection });
 gatedSchedule(
