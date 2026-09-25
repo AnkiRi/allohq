@@ -22,6 +22,7 @@ export interface DetectedIntent {
 export interface MerchantRequestConstraints {
   topCustomerCount?: number;
   discountPercent?: number;
+  discountDurationHours?: number;
   noDiscount?: boolean;
   noControl?: boolean;
   deliveryIntent?: "immediate" | "joon_timing" | "scheduled";
@@ -31,11 +32,20 @@ export interface MerchantRequestConstraints {
 export function extractMerchantRequestConstraints(message: string): MerchantRequestConstraints {
   const topCustomerMatch = message.match(/\btop\s+(\d{1,3})\s+customers?\b/i);
   const requestedDiscountMatch = message.match(/\b(\d{1,3}(?:\.\d+)?)\s*%\s*(?:discount|off)?\b/i);
+  const durationMatch = message.match(/\b(?:valid|lasts|lasting|expires?)\s+(?:only\s+)?(?:for\s+|in\s+)?(\d{1,5})\s*(hours?|hrs?|days?)\b/i);
+  const duration = durationMatch?.[1] ? Number(durationMatch[1]) : undefined;
+  const durationHours = duration == null ? undefined
+    : /^days?/i.test(durationMatch![2]!) ? duration * 24 : duration;
   return {
     topCustomerCount: topCustomerMatch?.[1] ? Number(topCustomerMatch[1]) : undefined,
     discountPercent:
       requestedDiscountMatch?.[1] && /\b(?:discount|off|offer|coupon|promo)\b/i.test(message)
         ? Number(requestedDiscountMatch[1])
+        : undefined,
+    discountDurationHours:
+      /\b(?:discount|offer|coupon|code|promo)\b/i.test(message) &&
+      durationHours != null
+        ? durationHours
         : undefined,
     noDiscount:
       /\b(?:no|without)\s+(?:(?:a|any|the)\s+)?(?:discount|coupon|code|offer)\b|\bfull[- ]price\b/i.test(

@@ -9,9 +9,22 @@ test("full-price email never generates opaque campaign artwork", () => {
   );
 });
 
-test("discount and neutral campaigns retain configured visual generation", () => {
+test("automatic artwork requires a workspace budget and a durable publisher", () => {
   assert.equal(
     shouldGenerateCampaignArtwork({ creativeIntensity: "balanced", offerPolicy: "discount" }),
+    false,
+  );
+  assert.equal(
+    shouldGenerateCampaignArtwork({ creativeIntensity: "balanced", offerPolicy: "discount", workspaceId: "workspace" }),
+    false,
+  );
+  assert.equal(
+    shouldGenerateCampaignArtwork({
+      creativeIntensity: "balanced",
+      offerPolicy: "discount",
+      workspaceId: "workspace",
+      publishGeneratedImage: async () => "https://assets.example.test/image.png",
+    }),
     true,
   );
   assert.equal(

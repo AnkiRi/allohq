@@ -8,6 +8,7 @@ test("preserves top-customer count and discount from a campaign request", () => 
     {
       topCustomerCount: 30,
       discountPercent: 30,
+      discountDurationHours: undefined,
       noDiscount: undefined,
       noControl: undefined,
       deliveryIntent: undefined,
@@ -21,6 +22,7 @@ test("does not mistake an unrelated percentage for a discount", () => {
     {
       topCustomerCount: 12,
       discountPercent: undefined,
+      discountDurationHours: undefined,
       noDiscount: undefined,
       noControl: undefined,
       deliveryIntent: undefined,
@@ -34,11 +36,31 @@ test("preserves no-offer, no-control and immediate-delivery instructions", () =>
     {
       topCustomerCount: undefined,
       discountPercent: undefined,
+      discountDurationHours: undefined,
       noDiscount: true,
       noControl: true,
       deliveryIntent: "immediate",
     }
   );
+});
+
+test("preserves a requested 24-hour discount validity window", () => {
+  const constraints = extractMerchantRequestConstraints(
+    "Make a 25% discount campaign for my top 25 customers - discount must be valid only for 24 hours"
+  );
+  assert.equal(constraints.topCustomerCount, 25);
+  assert.equal(constraints.discountPercent, 25);
+  assert.equal(constraints.discountDurationHours, 24);
+});
+
+test("does not apply an unrelated time window to a discount", () => {
+  const constraints = extractMerchantRequestConstraints("Show the last 24 hours of discount performance");
+  assert.equal(constraints.discountDurationHours, undefined);
+});
+
+test("retains an unsupported requested duration so campaign creation can reject it", () => {
+  const constraints = extractMerchantRequestConstraints("Make a 25% discount valid for 40 days");
+  assert.equal(constraints.discountDurationHours, 960);
 });
 
 test("treats without any discount as a hard full-price constraint", () => {

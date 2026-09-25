@@ -86,6 +86,10 @@ export function preflightEmailDocument(input: {
 }) {
   const { links, missingAlt, unsafeHtml } = collectLinksAndImages(input.blocks);
   const artifactText = `${input.subject}\n${input.previewText ?? ""}\n${JSON.stringify(input.blocks)}`;
+  // Data URLs can be megabytes long, cannot be fetched through the asset CDN,
+  // and must never be frozen into an approved email. This also protects drafts
+  // created before image generation was restricted to published HTTPS assets.
+  const hasInlineImage = /data:image\//i.test(artifactText);
 
   // Personalization is checked on the text a customer actually reads: the
   // subject, the inbox preview, and the block copy. A token Joon cannot fill
@@ -115,6 +119,7 @@ export function preflightEmailDocument(input: {
     { id: "image_alt", label: "Images have alt text", severity: "warning", passed: missingAlt.length === 0, detail: missingAlt.length ? `${missingAlt.length} image${missingAlt.length === 1 ? "" : "s"} need alt text.` : "All images are described." },
     { id: "links", label: "Links are structurally usable", severity: "error", passed: links.every((link) => /^(https?:\/\/|#|\{\{)/.test(link)), detail: `${links.length} link${links.length === 1 ? "" : "s"} checked.` },
     { id: "custom_html", label: "Custom code is safe", severity: "error", passed: !unsafeHtml, detail: unsafeHtml ? "Scripts, forms, frames and event handlers are not allowed." : "No unsafe markup detected." },
+    { id: "inline_image", label: "Images use hosted URLs", severity: "error", passed: !hasInlineImage, detail: hasInlineImage ? "Replace embedded image data with a hosted image before approval." : "No embedded image data detected." },
     {
       id: "personalization_known",
       label: "Personalization can be filled",

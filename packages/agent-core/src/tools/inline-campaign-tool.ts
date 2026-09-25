@@ -46,6 +46,10 @@ export const inlineCampaignTools: ToolDefinition[] = [
         type: "number",
         description: "Discount percentage to include in the email (e.g. 15)",
       },
+      discountDurationHours: {
+        type: "number",
+        description: "How many hours the discount code should remain valid after the campaign starts sending (e.g. 24).",
+      },
       productIds: {
         type: "array",
         description: "Array of product IDs to feature in the email",
@@ -70,6 +74,14 @@ export const inlineCampaignTools: ToolDefinition[] = [
         : (ctx.requestConstraints?.discountPercent ??
           (params.discountPercent ? Number(params.discountPercent) : undefined));
       let discountPercent = forceNoDiscount ? undefined : requestedDiscountPercent;
+      const durationInput = ctx.requestConstraints?.discountDurationHours ?? params.discountDurationHours;
+      const requestedDuration = Number(durationInput);
+      if (discountPercent && durationInput != null && (!Number.isInteger(requestedDuration) ||
+        requestedDuration < 1 || requestedDuration > 720)) {
+        return { success: false, message: "The discount duration must be between 1 and 720 hours. No campaign was created." };
+      }
+      const discountDurationHours = discountPercent && Number.isInteger(requestedDuration) &&
+        requestedDuration >= 1 && requestedDuration <= 720 ? requestedDuration : null;
       const customInstructions =
         [
           params.customInstructions ? String(params.customInstructions) : undefined,
@@ -632,6 +644,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
           requestedNoControl: ctx.requestConstraints?.noControl ?? false,
           requestedDeliveryIntent: ctx.requestConstraints?.deliveryIntent ?? null,
           discountCode: discountCode ?? null,
+          discountDurationHours,
           discountValueType: discountPercent ? "percentage" : null,
           offerPolicy: forceNoDiscount ? "full_price" : discountPercent ? "discount" : "none",
           creativePolicyVersion: forceNoDiscount ? FULL_PRICE_CREATIVE_POLICY_VERSION : 1,
@@ -738,7 +751,9 @@ export const inlineCampaignTools: ToolDefinition[] = [
           audience: segment?.name ?? "All customers",
           requestedAudienceCount: ctx.requestConstraints?.topCustomerCount ?? null,
           selectedAudienceCount: recipientCount,
-          offer: discountPercent ? `${discountPercent}% discount` : "Full price",
+          offer: discountPercent
+            ? `${discountPercent}% discount${discountDurationHours ? ` · valid ${discountDurationHours} hours from launch` : ""}`
+            : "Full price",
           requestedDiscountPercent: requestedDiscountPercent ?? null,
           appliedDiscountPercent: discountPercent ?? null,
           controlPreference: ctx.requestConstraints?.noControl
@@ -755,7 +770,7 @@ export const inlineCampaignTools: ToolDefinition[] = [
                 reason: "store_discount_guardrail",
               }
             : undefined,
-        message: `Campaign "${campaignName}" created as draft with inline preview. Target: ${segment?.name ?? "All customers"} (${recipientCount} recipients). Subject: "${result.subject}". Review the preview and approve to send.`,
+        message: `Campaign "${campaignName}" created as draft with inline preview. Target: ${segment?.name ?? "All customers"} (${recipientCount} reachable recipients). ${requestedDiscountPercent != null && discountPercent !== requestedDiscountPercent ? `The requested ${requestedDiscountPercent}% discount was capped at ${discountPercent}% by your store's guardrail. ` : ""}${discountDurationHours ? `The code will be valid for ${discountDurationHours} hours from launch. ` : ""}Subject: "${result.subject}". Review the preview and approve to send; nothing has been sent.`,
       };
     },
   },

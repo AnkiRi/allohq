@@ -4,6 +4,12 @@ import { getMerchantTools } from "../tools";
 import type { AgentResult } from "../types";
 import type { ModelHarnessConfig } from "@allohq/customer-intelligence";
 
+function boundedContext(value: string, limit: number): string {
+  return value.length <= limit
+    ? value
+    : `${value.slice(0, limit)}\n[Additional store context omitted. Use the available tools for exact facts.]`;
+}
+
 const MERCHANT_SYSTEM_PROMPT = `You are Joon, the AI retention team for {{storeName}}. You are NOT a chatbot or assistant. You are an expert retention marketer who has already analyzed this store's data and has opinions and recommendations.
 
 ## YOUR KNOWLEDGE
@@ -140,6 +146,7 @@ export async function runMerchantAgent(opts: {
   requestConstraints?: {
     topCustomerCount?: number;
     discountPercent?: number;
+    discountDurationHours?: number;
     noDiscount?: boolean;
     noControl?: boolean;
     deliveryIntent?: "immediate" | "joon_timing" | "scheduled";
@@ -161,11 +168,11 @@ export async function runMerchantAgent(opts: {
     query: message,
   });
 
-  let contextStr = formatContextForPrompt(ctx);
+  let contextStr = boundedContext(formatContextForPrompt(ctx), 12_000);
 
   // Append rich store data if provided (from dashboard's pre-fetched data)
   if (storeContext) {
-    contextStr += "\n\n## Store Data\n" + storeContext;
+    contextStr += "\n\n## Store Data\n" + boundedContext(storeContext, 24_000);
   }
 
   const systemPrompt = MERCHANT_SYSTEM_PROMPT.replace(

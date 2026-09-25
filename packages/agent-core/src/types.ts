@@ -21,6 +21,7 @@ export interface ToolContext {
   requestConstraints?: {
     topCustomerCount?: number;
     discountPercent?: number;
+    discountDurationHours?: number;
     noDiscount?: boolean;
     noControl?: boolean;
     deliveryIntent?: "immediate" | "joon_timing" | "scheduled";

@@ -57,6 +57,12 @@ export interface GenerateEmailInput {
   tweaks?: string;
   model?: AIModelId;
   modelHarness?: ModelHarnessConfig | unknown;
+  /**
+   * Automatic artwork is allowed only when the caller can publish the result
+   * to a durable HTTPS asset URL. Provider data URLs must never enter an email
+   * block, campaign draft, or model tool result.
+   */
+  publishGeneratedImage?: (sourceUrl: string, purpose: "hero_banner" | "product_lifestyle") => Promise<string>;
 }
 
 export interface GenerateEmailOutput {
@@ -75,8 +81,11 @@ export interface GenerateEmailOutput {
 export function shouldGenerateCampaignArtwork(input: {
   creativeIntensity?: CreativeIntensity;
   offerPolicy?: GenerateEmailInput["offerPolicy"];
+  workspaceId?: string;
+  publishGeneratedImage?: GenerateEmailInput["publishGeneratedImage"];
 }): boolean {
-  return input.creativeIntensity !== "text_heavy" && input.offerPolicy !== "full_price";
+  return Boolean(input.workspaceId && input.publishGeneratedImage) &&
+    input.creativeIntensity !== "text_heavy" && input.offerPolicy !== "full_price";
 }
 
 function buildPrompt(input: GenerateEmailInput): string {
@@ -283,10 +292,8 @@ async function postProcessImages(
   // inspected from the resulting opaque URL. Full-price emails therefore use
   // only merchant-owned product imagery already present in sanitized blocks;
   // hero blocks keep their brand-colour background.
-  if (!shouldGenerateCampaignArtwork({
-    creativeIntensity: intensity,
-    offerPolicy: input.offerPolicy,
-  })) {
+  const publishGeneratedImage = input.publishGeneratedImage;
+  if (!publishGeneratedImage || !shouldGenerateCampaignArtwork({ ...input, creativeIntensity: intensity })) {
     return { blocks, totalCost: 0 };
   }
 
@@ -314,7 +321,9 @@ async function postProcessImages(
           fallbackToStock: false,
           workspaceId: input.workspaceId,
         });
-        (block.props as Record<string, unknown>).bgImageSrc = imgResult.url;
+        const publishedUrl = await publishGeneratedImage(imgResult.url, "hero_banner");
+        if (!/^https:\/\//i.test(publishedUrl)) throw new Error("Generated image was not published to HTTPS storage");
+        (block.props as Record<string, unknown>).bgImageSrc = publishedUrl;
         totalCost += imgResult.cost;
       } catch (err) {
         // No AI image providers configured or all failed — hero uses solid bgColor only
@@ -336,7 +345,9 @@ async function postProcessImages(
           fallbackToStock: false,
           workspaceId: input.workspaceId,
         });
-        (block.props as Record<string, unknown>).src = imgResult.url;
+        const publishedUrl = await publishGeneratedImage(imgResult.url, "product_lifestyle");
+        if (!/^https:\/\//i.test(publishedUrl)) throw new Error("Generated image was not published to HTTPS storage");
+        (block.props as Record<string, unknown>).src = publishedUrl;
         totalCost += imgResult.cost;
       } catch (err) {
         // No AI image providers — leave image empty for user to fill
@@ -409,13 +420,14 @@ export async function generateEmail(input: GenerateEmailInput): Promise<Generate
   // Build set of known product image URLs
   const knownImageUrls = new Set<string>();
   for (const p of input.products) {
-    if (p.imageUrl) knownImageUrls.add(p.imageUrl);
+    if (p.imageUrl && /^https?:\/\//i.test(p.imageUrl)) knownImageUrls.add(p.imageUrl);
   }
 
   // Strip hallucinated image URLs from AI output
   const sanitizedBlocks = sanitizeBlocks(parsed.blocks, knownImageUrls);
 
-  // Post-process blocks to add AI-generated images (only if providers are configured)
+  // No automatic image call unless the caller has both an attributed budget
+  // and a durable publisher. Explicit Studio generation uses its own storage path.
   const { blocks, totalCost } = await postProcessImages(
     sanitizedBlocks,
     input,
