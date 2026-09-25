@@ -88,7 +88,19 @@ async function main() {
     record("CDN cache status on a repeat request", null, `cdn-cache ${second.headers.get("cdn-cache") ?? "(no header)"}`);
     const anonymous = await fetch(`${s3Direct}/${published.key}`);
     record("anonymous S3 cannot read the published image", anonymous.status === 403, `${anonymous.status}`);
-    console.log(`\n  Published probe object: ${published.key}\n  Remove with your admin identity, then purge the URL in Bunny:\n    aws s3 rm s3://${bucket}/${published.key}\n`);
+    console.log([
+      "",
+      `  Published probe object: ${published.key}`,
+      "  The bucket is versioned, so `aws s3 rm` only adds a delete marker and the image stays as a",
+      "  noncurrent version (the staging lifecycle rule does not cover published prefixes).",
+      "  To remove it completely, with your admin identity, delete every version and delete marker:",
+      `    aws s3api list-object-versions --bucket ${bucket} --prefix ${published.key} \\`,
+      "      --query '{versions: Versions[].VersionId, markers: DeleteMarkers[].VersionId}'",
+      `    aws s3api delete-object --bucket ${bucket} --key ${published.key} --version-id <each id above>`,
+      `  then purge ${published.url} in Bunny.`,
+      "  Staging objects this probe deleted stay as noncurrent versions until the lifecycle rule removes them (about a day).",
+      "",
+    ].join("\n"));
   }
 
   // 5. The CDN's root must not list the bucket.

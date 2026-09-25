@@ -225,6 +225,28 @@ test("an upload never completed stays unreadable, and the staging lifecycle rule
   const rule = applied.Rules?.find((candidate) => candidate.ID === "expire-unpublished-uploads");
   assert.equal(rule?.Filter?.Prefix, "staging/");
   assert.equal(rule?.Expiration?.Days, 1);
+  // The bucket is versioned: a deleted staging object stays as a noncurrent
+  // version until this removes it, a day later.
+  assert.equal(rule?.NoncurrentVersionExpiration?.NoncurrentDays, 1);
+  assert.equal(rule?.AbortIncompleteMultipartUpload?.DaysAfterInitiation, 1);
+});
+
+test("in the versioned bucket, a published upload's raw bytes survive only as a noncurrent version nobody but the owner can read", { skip }, async () => {
+  const staged = await upload(await photo());
+  await api().emails.completeAssetUpload({ storeId: fixture.storeId, key: staged.key, fileName: "shot.jpg", type: "reference_image" });
+  const versions = await admin().send(new loaded.s3.ListObjectVersionsCommand({ Bucket: bucket(), Prefix: staged.key }));
+  const raw = (versions.Versions ?? []).filter((version) => version.Key === staged.key);
+  const markers = (versions.DeleteMarkers ?? []).filter((marker) => marker.Key === staged.key);
+  assert.equal(markers.length, 1, "deleting the staging object added a delete marker");
+  assert.equal(raw.length, 1, "the raw upload is still there as one noncurrent version");
+  assert.equal(raw[0]!.IsLatest, false);
+  // Naming the old version explicitly needs s3:GetObjectVersion, which neither
+  // the CDN's key nor the API's key has.
+  const byVersion = (credentials: Credentials) => status(() => client(credentials).send(
+    new loaded.s3.GetObjectCommand({ Bucket: bucket(), Key: staged.key, VersionId: raw[0]!.VersionId })));
+  assert.equal(await byVersion(creds("ASSET_TEST_CDN_KEY", "ASSET_TEST_CDN_SECRET")), 403);
+  assert.equal(await byVersion(creds("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")), 403);
+  assert.equal((await fetch(`${endpoint}/${bucket()}/${staged.key}?versionId=${raw[0]!.VersionId}`)).status, 403);
 });
 
 test("a file that is not an image is refused, its staging copy removed, and nothing is published", { skip }, async () => {

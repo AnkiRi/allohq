@@ -4,7 +4,7 @@
       "ID": "studio-browser-upload",
       "AllowedOrigins": ["https://agent.joonhq.com"],
       "AllowedMethods": ["PUT"],
-      "AllowedHeaders": ["content-type"],
+      "AllowedHeaders": ["*"],
       "ExposeHeaders": ["ETag"],
       "MaxAgeSeconds": 3000
     }

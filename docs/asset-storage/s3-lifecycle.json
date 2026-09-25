@@ -5,6 +5,7 @@
       "Status": "Enabled",
       "Filter": { "Prefix": "staging/" },
       "Expiration": { "Days": 1 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 },
       "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
     }
   ]

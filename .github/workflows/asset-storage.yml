@@ -92,6 +92,8 @@ jobs:
           mc() { docker run --rm --network host -v /tmp/policies:/policies \
             -e MC_HOST_local="http://$ASSET_TEST_ADMIN_KEY:$ASSET_TEST_ADMIN_SECRET@127.0.0.1:9000" "$MC_IMAGE" "$@"; }
           mc mb "local/$ASSET_BUCKET"
+          # Production's bucket is versioned; so is this one.
+          mc version enable "local/$ASSET_BUCKET"
           mc admin policy create local joon-api /policies/iam-joon-api.json
           mc admin policy create local joon-cdn-read /policies/iam-bunny-read.json
           mc admin user add local "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"

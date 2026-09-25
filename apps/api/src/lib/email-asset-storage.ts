@@ -71,10 +71,13 @@ function storageConfig() {
     ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
   };
   const client = (clientOverride ?? new S3Client(options)) as S3Client;
-  // Presigning uses its own client. By default the SDK signs a CRC32 of the
+  // Presigning uses its own client. By default the SDK puts a CRC32 of the
   // request body into the URL, and a presigned PUT has no body yet, so every
-  // URL carried the checksum of an EMPTY file (AAAAAA==) for the browser to
-  // contradict. Server-side writes keep the default: there the body is real.
+  // URL carried the checksum of an EMPTY file (AAAAAA==). AWS accepted both
+  // forms in the live probe (HTTP 200), so this is not a fix for a failure
+  // seen on AWS: it removes a value that can never describe the upload, which
+  // stricter S3-compatible stores reject. Server-side writes keep the default:
+  // there the body is real.
   const signer = new S3Client({ ...options, requestChecksumCalculation: "WHEN_REQUIRED" });
   return { bucket, cdnBaseUrl, client, signer };
 }
