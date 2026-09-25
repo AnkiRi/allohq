@@ -19,3 +19,17 @@ test("invalid configuration fails back to safe defaults", () => {
   if (previous === undefined) delete process.env["EMAIL_STORE_CONCURRENCY"];
   else process.env["EMAIL_STORE_CONCURRENCY"] = previous;
 });
+
+test("the provider-wide pace defaults below Resend's 10 requests a second, and can be set", async () => {
+  const { emailCapacityPolicy, storeSendConcurrency } = await import("./email-capacity");
+  const saved = process.env["EMAIL_PROVIDER_PER_SECOND"];
+  try {
+    delete process.env["EMAIL_PROVIDER_PER_SECOND"];
+    assert.equal(emailCapacityPolicy(new Date(0)).providerPerSecond, 8);
+    process.env["EMAIL_PROVIDER_PER_SECOND"] = "5";
+    assert.equal(emailCapacityPolicy(new Date(0)).providerPerSecond, 5);
+  } finally {
+    if (saved === undefined) delete process.env["EMAIL_PROVIDER_PER_SECOND"]; else process.env["EMAIL_PROVIDER_PER_SECOND"] = saved;
+  }
+  assert.equal(storeSendConcurrency(), emailCapacityPolicy(new Date(0)).storeConcurrency);
+});

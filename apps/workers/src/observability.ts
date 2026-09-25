@@ -131,10 +131,13 @@ const EXPECTED_FAILURES = [
 ];
 
 export function shouldCaptureWorkerFailure(job: Job | undefined, error: Error): boolean {
+  const terminal = !job || job.attemptsMade >= Math.max(1, Number(job.opts.attempts ?? 1));
+  // A delivery chunk that has failed for good always alerts, whatever the
+  // message says: capacity refusals used to fail chunks under an "expected"
+  // message, and 95% of a campaign went unsent without anyone being told.
+  if (job?.name === "deliver-chunk") return terminal;
   if (EXPECTED_FAILURES.some((pattern) => pattern.test(error.message))) return false;
-  if (!job) return true;
-  const attempts = Math.max(1, Number(job.opts.attempts ?? 1));
-  return job.attemptsMade >= attempts;
+  return terminal;
 }
 
 export function monitorWorkerFailures(workers: readonly FailureObservable[]): () => void {

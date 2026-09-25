@@ -1204,6 +1204,7 @@ model Campaign {
   audienceOverridePolicies CampaignAudienceOverridePolicy[]
   audienceEvaluations      CampaignAudienceEvaluation[]
   audienceRuns             CampaignAudienceRun[]
+  deliveryChunks           CampaignDeliveryChunk[]
 
   @@index([workspaceId])
   @@index([storeId])
@@ -1211,6 +1212,38 @@ model Campaign {
   @@index([approvedEmailVersionId])
   @@map("campaigns")
 }
+
+/// The durable record of a campaign's delivery plan, one row per chunk of up
+/// to 100 deliveries, written before the chunk's queue job. The job in Redis is
+/// only the runnable copy: if it fails for good or is lost, the delivery
+/// recovery sweep re-drives the plan from here. Delivery keys make a re-driven
+/// delivery that already went out a no-op.
+model CampaignDeliveryChunk {
+  id            String    @id @default(cuid())
+  campaignId    String
+  /// The queue job that runs this chunk as planned (deterministic per campaign).
+  jobId         String    @unique
+  /// When the chunk was planned to go out. Recovery waits past this.
+  deliverAt     DateTime
+  /// The planned deliveries, exactly as the planner froze them.
+  deliveries    Json
+  createdAt     DateTime  @default(now())
+  /// Every delivery reached an outcome (sent, suppressed, or failed for good).
+  completedAt   DateTime?
+  /// The last time the chunk's job failed for good, and why.
+  failedAt      DateTime?
+  lastError     String?
+  /// Recovery re-drives the plan under a new job id; this is the latest one.
+  recoveryJobId String?
+  recoveryCount Int       @default(0)
+  recoveredAt   DateTime?
+  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([completedAt, deliverAt])
+  @@map("campaign_delivery_chunks")
+}
+
 
 /// A durable, bounded-time audience computation. The summary makes campaign
 /// detail fast; rows let the review drawer search and paginate without keeping
