@@ -215,7 +215,10 @@ export default function ActionsPage() {
     else if (!selectedId || !visible.some((action) => action.id === selectedId)) setSelectedId(visible[0]!.id);
   }, [selectedId, visible]);
   useEffect(() => {
-    if (linkedAction?.id === requestedDecisionId) setSelectedId(linkedAction.id);
+    if (linkedAction?.id === requestedDecisionId) {
+      setSelectedId(linkedAction.id);
+      setInspectorOpen(true);
+    }
   }, [linkedAction?.id, requestedDecisionId]);
   const selected = visible.find((action) => action.id === selectedId) ?? null;
   const busy = approveMut.isPending || rejectMut.isPending;
