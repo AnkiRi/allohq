@@ -19,7 +19,7 @@ import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/ema
 import { planEmailChange } from "../lib/email-changes";
 import { assetStorageStatus } from "../lib/asset-storage-status";
 import { fetchReferenceBytes, planGeneration, refusalFromAdapterError } from "../lib/visual-generation";
-import { describeTarget, detectVisualIntent, proposeVisualTarget } from "../lib/visual-intent";
+import { describeTarget, detectVisualIntent, productSceneReferenceRefusal, proposeVisualTarget } from "../lib/visual-intent";
 
 import {
   createEmailAssetUpload,
@@ -422,13 +422,6 @@ export const emailsRouter = router({
           workspaceId: ctx.workspaceId,
           templateId: input.templateId,
         });
-        const blocked =
-          !storage.configured
-            ? storage.merchantMessage
-            : !provider.ok
-              ? "Image generation is not available for this workspace yet."
-              : spendRefusal;
-
         const boundProductId =
           input.selectedBlockId
             ? (original.find((block) => block.id === input.selectedBlockId)?.props?.productId as string | undefined)
@@ -439,6 +432,12 @@ export const emailsRouter = router({
               select: { id: true, title: true, imageUrl: true },
             })
           : null;
+        const blocked =
+          !storage.configured
+            ? storage.merchantMessage
+            : !provider.ok
+              ? "Image generation is not available for this workspace yet."
+              : spendRefusal ?? productSceneReferenceRefusal(visualIntent, Boolean(product?.imageUrl));
 
         return {
           applied: false,

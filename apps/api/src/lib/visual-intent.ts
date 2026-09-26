@@ -52,6 +52,13 @@ export function detectVisualIntent(instruction: string): VisualIntent | null {
   return { instruction: text, kind };
 }
 
+/** A product-scene request needs an actual Shopify photo, not a lookalike. */
+export function productSceneReferenceRefusal(intent: VisualIntent, hasProductImage: boolean): string | null {
+  return intent.kind === "product_scene" && !hasProductImage
+    ? "Joon cannot place your exact product in a scene from this block. Select its Shopify product block with a photo, or use Visuals to make a clearly labelled creative concept."
+    : null;
+}
+
 export type VisualProposalTarget =
   | { kind: "existing"; blockId: string; blockType: "image" | "hero" }
   | { kind: "new"; blockType: "image" | "hero"; afterBlockId: string | null };

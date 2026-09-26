@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { describeTarget, detectVisualIntent, proposeVisualTarget } from "./visual-intent";
+import { describeTarget, detectVisualIntent, productSceneReferenceRefusal, proposeVisualTarget } from "./visual-intent";
 import type { EmailBlock } from "@allohq/email-builder";
 
 const blocks = [
@@ -87,4 +87,11 @@ test("every target explains itself before anything is generated", () => {
     const described = describeTarget(proposeVisualTarget(blocks, id));
     assert.ok(described.length > 10, "a merchant has to know where it is going");
   }
+});
+
+test("an exact-product scene is refused without a real product photo", () => {
+  const intent = detectVisualIntent("Put the snowboard in a models hand");
+  assert.ok(intent);
+  assert.match(productSceneReferenceRefusal(intent, false) ?? "", /exact product/);
+  assert.equal(productSceneReferenceRefusal(intent, true), null);
 });
