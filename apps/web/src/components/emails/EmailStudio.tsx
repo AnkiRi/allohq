@@ -342,6 +342,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
 
   const generateProposedVisual = () => {
     if (!visualProposal) return;
+    if (!storeId) { toast("Choose a store before generating a visual.", "error"); return; }
+    if (generateVisualsMut.isPending) return;
     const slot = {
       id: visualProposal.target.blockType === "hero" ? "hero" : "lifestyle",
       label: "Requested visual",

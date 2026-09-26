@@ -94,4 +94,7 @@ test("an exact-product scene is refused without a real product photo", () => {
   assert.ok(intent);
   assert.match(productSceneReferenceRefusal(intent, false) ?? "", /exact product/);
   assert.equal(productSceneReferenceRefusal(intent, true), null);
+  const genericPortrait = detectVisualIntent("Create a photo of a model on a beach");
+  assert.ok(genericPortrait);
+  assert.equal(productSceneReferenceRefusal(genericPortrait, false), null);
 });
