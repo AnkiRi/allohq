@@ -24,7 +24,7 @@ const VISUAL_VERBS = /\b(generate|create|make|design|draw|render|produce|shoot|p
 const VISUAL_NOUNS = /\b(image|images|photo|photos|picture|pictures|visual|visuals|graphic|graphics|shot|scene|banner|artwork|render)\b/i;
 /** Placing a real thing INTO a scene — the commonest phrasing, and no verb above. */
 const PLACEMENT = /\b(put|place|show|swap|replace|set)\b[\s\S]{0,80}\b(in|into|on|onto|against|with|holding|hands?|wearing|using)\b/i;
-const SCENE_WORDS = /\b(beach|ocean|surf|surfing|mountain|snow|studio|model|person|people|man|woman|athlete|lifestyle|background|backdrop|outdoors|street|desk|table)\b/i;
+const SCENE_WORDS = /\b(beach|ocean|surf|surfing|mountain|snow|studio|models?|person|people|man|woman|athlete|lifestyle|background|backdrop|outdoors|street|desk|table)\b/i;
 
 /**
  * Whether an instruction is asking for artwork.
@@ -41,7 +41,7 @@ export function detectVisualIntent(instruction: string): VisualIntent | null {
   const hasPlacementInScene = PLACEMENT.test(text) && SCENE_WORDS.test(text);
   if (!hasVerbAndNoun && !hasPlacementInScene) return null;
 
-  const kind: VisualIntent["kind"] = /\b(model|person|people|man|woman|athlete|hands?|wearing|using|holding)\b/i.test(text)
+  const kind: VisualIntent["kind"] = /\b(models?|person|people|man|woman|athlete|hands?|wearing|using|holding)\b/i.test(text)
     ? "product_scene"
     : /\b(lifestyle|beach|ocean|surf|mountain|outdoors|street)\b/i.test(text)
       ? "lifestyle"
@@ -50,6 +50,13 @@ export function detectVisualIntent(instruction: string): VisualIntent | null {
         : "general";
 
   return { instruction: text, kind };
+}
+
+/** A product-scene request needs an actual Shopify photo, not a lookalike. */
+export function productSceneReferenceRefusal(intent: VisualIntent, hasProductImage: boolean): string | null {
+  return intent.kind === "product_scene" && PLACEMENT.test(intent.instruction) && !hasProductImage
+    ? "Joon cannot place your exact product in a scene from this block. Select its Shopify product block with a photo, or use Visuals to make a clearly labelled creative concept."
+    : null;
 }
 
 export type VisualProposalTarget =

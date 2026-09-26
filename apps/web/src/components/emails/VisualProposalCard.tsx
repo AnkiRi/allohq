@@ -5,6 +5,7 @@ import * as React from "react";
 export type VisualProposal = {
   instruction: string;
   kind: string;
+  target: { kind: "existing"; blockId: string; blockType: "image" | "hero" } | { kind: "new"; blockType: "image" | "hero"; afterBlockId: string | null };
   targetDescription: string;
   product: { id: string; title: string; hasImage: boolean } | null;
   mode: "product_safe" | "creative_concept";
