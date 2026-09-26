@@ -14,6 +14,7 @@ test("the reported request is recognised as visual", () => {
   for (const instruction of [
     "Put this snowboard in the hands of a Brazilian model and show him surfing",
     "Change the image to put the snowboard in a model's hands",
+    "Put the snowboard in a models hand",
   ]) {
     const intent = detectVisualIntent(instruction);
     assert.ok(intent, `This request must use the visual proposal path: ${instruction}`);

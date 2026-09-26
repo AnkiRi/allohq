@@ -28,12 +28,14 @@ import { VisualActions } from "./VisualActions";
 import { BlockEditor } from "./BlockEditor";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 import { placeUploadedImage } from "./upload-placement";
+import { placeProposalVisual } from "./visual-proposal-placement";
 
 type StudioTab = "ask" | "inspect" | "shopify" | "visuals" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
-type Proposal = { id?: string; blocks: EmailBlock[]; subject: string; previewText: string; instruction: string; createdAt: Date };
+type Proposal = { id?: string; blocks: EmailBlock[]; subject: string; previewText: string; instruction: string; createdAt: Date; baseSignature: string; stale?: boolean };
 type DurableVersion = { id: string; sequence: number; source: string; note?: string | null; createdAt: string | Date; document: unknown };
 type ProposalHistoryItem = { id: string; instruction: string; scope?: string | null; status: string; createdAt: string | Date; resolvedAt?: string | Date | null };
+type PendingProposal = { id: string; instruction: string; createdAt: string | Date; stale: boolean; candidate: { blocks: EmailBlock[]; envelope: { subject: string; previewText: string } } };
 
 let idCounter = 0;
 const newId = (type: string) => `${type}-${Date.now().toString(36)}-${idCounter++}`;
@@ -139,6 +141,9 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [visuals, setVisuals] = React.useState<GeneratedVisual[]>([]);
   const [visualFailures, setVisualFailures] = React.useState<VisualFailure[]>([]);
   const [visualProposal, setVisualProposal] = React.useState<VisualProposal | null>(null);
+  const [visualTarget, setVisualTarget] = React.useState<VisualProposal["target"] | null>(null);
+  const [visualTargetDescription, setVisualTargetDescription] = React.useState<string | null>(null);
+  const [visualProductHasImage, setVisualProductHasImage] = React.useState(false);
   /** The four-slot form is a deliberate advanced workflow, not the default. */
   const [advancedVisuals, setAdvancedVisuals] = React.useState(false);
   /** A short receipt after inserting a Shopify token, so it is not silent. */
@@ -147,6 +152,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [showAdd, setShowAdd] = React.useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = React.useState<string[]>([]);
   const [proposal, setProposal] = React.useState<Proposal | null>(null);
+  const restoredProposalIds = React.useRef(new Set<string>());
   const [proposalView, setProposalView] = React.useState<"before" | "proposed">("proposed");
   const [dirty, setDirty] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
@@ -163,6 +169,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const effectiveBlocks = proposal && proposalView === "proposed" ? proposal.blocks : blocks;
   const effectiveSubject = proposal && proposalView === "proposed" ? proposal.subject : subject;
   const effectivePreviewText = proposal && proposalView === "proposed" ? proposal.previewText : previewText;
+  const proposalNotice = proposal?.stale
+    ? "This proposal was made for an older saved email. Reject it and ask Joon again."
+    : proposal && draftSignature !== proposal.baseSignature
+      ? "The draft changed after this proposal. Reject it and ask Joon again."
+      : proposal && JSON.stringify({ blocks: proposal.blocks, subject: proposal.subject, previewText: proposal.previewText }) === proposal.baseSignature
+        ? "Joon made no visible change. Reject this proposal and try another instruction."
+        : null;
   const preflight = React.useMemo(() => preflightEmail(effectiveSubject, effectivePreviewText, effectiveBlocks), [effectiveSubject, effectivePreviewText, effectiveBlocks]);
 
   React.useEffect(() => { setCodeDraft(selected ? JSON.stringify(selected, null, 2) : ""); }, [selected]);
@@ -223,6 +236,26 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     { templateId: templateId ?? "" },
     { enabled: !!templateId },
   ) as { data?: ProposalHistoryItem[]; refetch: () => Promise<unknown> };
+  const pendingProposalQuery = (trpc.emails as any).pendingProposal.useQuery(
+    { templateId: templateId ?? "" },
+    { enabled: !!templateId },
+  ) as { data?: PendingProposal | null; refetch: () => Promise<unknown> };
+  React.useEffect(() => {
+    const pending = pendingProposalQuery.data;
+    if (!pending || proposal || dirty || restoredProposalIds.current.has(pending.id)) return;
+    restoredProposalIds.current.add(pending.id);
+    setProposal({
+      id: pending.id,
+      blocks: pending.candidate.blocks,
+      subject: pending.candidate.envelope.subject,
+      previewText: pending.candidate.envelope.previewText,
+      instruction: pending.instruction,
+      createdAt: new Date(pending.createdAt),
+      baseSignature: draftSignature,
+      stale: pending.stale,
+    });
+    setProposalView("proposed");
+  }, [pendingProposalQuery.data, proposal, dirty, draftSignature]);
   /**
    * Preview renders are sequenced.
    *
@@ -273,9 +306,10 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     ? (productPage?.products ?? []).find((product) => product.id === blockProductId) ?? null
     : null;
 
-  const generateVisuals = () => {
-    if (!storeId || generateVisualsMut.isPending) return;
-    const slots = visualSlots
+  const generateVisuals = (requestedSlots = visualSlots, requestedMode = visualMode) => {
+    if (!storeId) { toast("Choose a store before generating a visual.", "error"); return; }
+    if (generateVisualsMut.isPending) return;
+    const slots = requestedSlots
       .filter((slot) => slot.prompt.trim())
       .map((slot) => ({
         id: slot.id,
@@ -289,7 +323,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (!slots.length) return;
     setVisualFailures([]);
     generateVisualsMut.mutate(
-      { storeId, templateId, productId: blockProductId ?? undefined, mode: visualMode, slots },
+      { storeId, templateId, productId: blockProductId ?? undefined, mode: requestedMode, slots },
       {
         onSuccess: (data: { assets: GeneratedVisual[]; failures: VisualFailure[] }) => {
           setVisuals(data.assets);
@@ -306,6 +340,26 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     );
   };
 
+  const generateProposedVisual = () => {
+    if (!visualProposal) return;
+    const slot = {
+      id: visualProposal.target.blockType === "hero" ? "hero" : "lifestyle",
+      label: "Requested visual",
+      prompt: visualProposal.instruction,
+    };
+    setVisualSlots([slot]);
+    setVisualMode(visualProposal.mode);
+    setVisualTarget(visualProposal.target);
+    setVisualTargetDescription(visualProposal.targetDescription);
+    setVisualProductHasImage(Boolean(visualProposal.product?.hasImage));
+    setVisuals([]);
+    setVisualFailures([]);
+    setAdvancedVisuals(true);
+    setActiveTab("visuals");
+    generateVisuals([slot], visualProposal.mode);
+    setVisualProposal(null);
+  };
+
   /**
    * Put a chosen visual into the selected block. Never applied automatically.
    *
@@ -318,6 +372,20 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
    * field that does not overwrite the product fact, the answer is no.
    */
   const useVisual = (visual: GeneratedVisual) => {
+    if (visualTarget) {
+      const placement = placeProposalVisual(blocks, visualTarget, visual, () => newId(visualTarget.blockType));
+      if ("error" in placement) { toast(placement.error, "error"); return; }
+      setBlocks(placement.blocks);
+      setSelectedId(placement.selectedId);
+      setDirty(true);
+      setVisualTarget(null);
+      setVisualTargetDescription(null);
+      setVisualProductHasImage(false);
+      setVisuals([]);
+      setActiveTab("inspect");
+      toast("Visual placed in the email. Save the version to keep it.", "success");
+      return;
+    }
     if (!selected) { toast("Select an image or hero block first.", "error"); return; }
     if (selected.type === "image") {
       updateBlock({ ...selected, props: { ...selected.props, src: visual.url, alt: visual.label } } as EmailBlock);
@@ -512,21 +580,25 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         // A request for artwork comes back as a proposal, not a mutation.
         if (data.visualProposal) { setVisualProposal(data.visualProposal); setInstruction(""); return; }
         if (!data.applied) { setPromptError(data.error ?? "Joon could not produce a safe change."); return; }
-        setProposal({ id: data.proposalId, blocks: data.blocks, subject: data.subject ?? subject, previewText: data.previewText ?? previewText, instruction: text, createdAt: new Date() }); setProposalView("proposed"); setInstruction(""); void proposalHistoryQuery.refetch();
+        if (data.proposalId) restoredProposalIds.current.add(data.proposalId);
+        setProposal({ id: data.proposalId, blocks: data.blocks, subject: data.subject ?? subject, previewText: data.previewText ?? previewText, instruction: text, createdAt: new Date(), baseSignature: draftSignature }); setProposalView("proposed"); setInstruction(""); void proposalHistoryQuery.refetch();
       },
       onError: (error: { message?: string }) => setPromptError(error.message ?? "Joon is unavailable right now."),
     });
   };
   const acceptProposal = () => {
     if (!proposal || resolveProposalMut.isPending) return;
+    if (proposal.stale) { toast("This proposal is based on an older saved email. Reject it and ask Joon again.", "error"); return; }
+    if (draftSignature !== proposal.baseSignature) { toast("The email changed after this proposal. Save or discard those edits, then ask Joon again.", "error"); return; }
+    if (JSON.stringify({ blocks: proposal.blocks, subject: proposal.subject, previewText: proposal.previewText }) === proposal.baseSignature) { toast("Joon did not change the email. Reject this proposal and try another instruction.", "error"); return; }
     const apply = () => { createCheckpoint(`Joon · ${proposal.instruction}`, proposal); setBlocks(cloneBlocks(proposal.blocks)); setSubject(proposal.subject); setPreviewText(proposal.previewText); setSelectedId(proposal.blocks.some((block) => block.id === selectedId) ? selectedId : proposal.blocks[0]?.id ?? null); setProposal(null); setDirty(!proposal.id); setSavedAt(proposal.id ? new Date() : savedAt); if (proposal.id) { void durableVersionsQuery.refetch(); void proposalHistoryQuery.refetch(); } };
     if (!proposal.id) { apply(); return; }
-    resolveProposalMut.mutate({ proposalId: proposal.id, decision: "accepted" }, { onSuccess: apply, onError: (error: { message?: string }) => toast(error.message ?? "Could not accept this proposal.", "error") });
+    resolveProposalMut.mutate({ proposalId: proposal.id, decision: "accepted" }, { onSuccess: () => { apply(); void pendingProposalQuery.refetch(); }, onError: (error: { message?: string }) => toast(error.message ?? "Could not accept this proposal.", "error") });
   };
   const rejectProposal = () => {
     if (!proposal || resolveProposalMut.isPending) return;
     if (!proposal.id) { setProposal(null); return; }
-    resolveProposalMut.mutate({ proposalId: proposal.id, decision: "rejected" }, { onSuccess: () => { setProposal(null); void proposalHistoryQuery.refetch(); }, onError: (error: { message?: string }) => toast(error.message ?? "Could not reject this proposal.", "error") });
+    resolveProposalMut.mutate({ proposalId: proposal.id, decision: "rejected" }, { onSuccess: () => { setProposal(null); void proposalHistoryQuery.refetch(); void pendingProposalQuery.refetch(); }, onError: (error: { message?: string }) => toast(error.message ?? "Could not reject this proposal.", "error") });
   };
   const applyCode = () => {
     if (!selected) return;
@@ -614,7 +686,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         onOpenTools={() => setCompactPanelOpen(true)}
         onBack={leaveStudio}
       />
-      {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} /> : null}
+      {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} notice={proposalNotice} /> : null}
       {showAdd ? <div className="absolute right-3 top-[68px] z-50 w-56 overflow-hidden rounded-xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl xl:hidden"><BlockPicker onAdd={add} /></div> : null}
 
       {/*
@@ -712,7 +784,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {activeTab === "ask" ? <AskPanel visualProposal={visualProposal} onVisualGenerate={() => { setVisualProposal(null); setActiveTab("visuals"); }} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
+            {activeTab === "ask" ? <AskPanel visualProposal={visualProposal} onVisualGenerate={generateProposedVisual} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {insertReceipt ? <p role="status" className="mx-4 mt-3 rounded-lg border border-[#157858]/30 bg-[#E5F4EE] px-2.5 py-1.5 text-[12px] text-[#157858]">{insertReceipt}</p> : null}
             {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} products={productPage?.products ?? []} onOpenVisuals={() => { setActiveTab("visuals"); setAdvancedVisuals(false); }} onUploadImage={() => openUploadPicker()} onChooseAsset={() => setLibraryOpen(true)} /> : null}
             {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /> : null}
@@ -721,14 +793,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
                 selected={selected}
                 capabilities={visualCapabilities ?? null}
                 productTitle={blockProduct?.title ?? null}
-                onGenerate={() => setAdvancedVisuals(true)}
+                onGenerate={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); }}
                 onUpload={() => openUploadPicker()}
                 onChooseFromLibrary={() => setLibraryOpen(true)}
                 onCreateProductScene={createProductScene}
-                onOpenAdvanced={() => setAdvancedVisuals(true)}
+                onOpenAdvanced={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); }}
               />
             ) : null}
-            {activeTab === "visuals" && advancedVisuals ? <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={Boolean(blockProduct?.imageUrl)} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} onGenerate={generateVisuals} onUseAsset={useVisual} /> : null}
+            {activeTab === "visuals" && advancedVisuals ? <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={visualTarget ? visualProductHasImage : Boolean(blockProduct?.imageUrl)} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} placementDescription={visualTargetDescription} onGenerate={() => generateVisuals()} onUseAsset={useVisual} /> : null}
             {activeTab === "versions" ? <VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /> : null}
             {activeTab === "code" ? <CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /> : null}
             {activeTab === "preflight" ? <PreflightPanel preflight={preflight} /> : null}
@@ -827,8 +899,8 @@ function AssetLibraryDialog({
   );
 }
 
-function ProposalBar({ proposal, view, setView, reject, accept, pending }: { proposal: Proposal; view: "before" | "proposed"; setView: (view: "before" | "proposed") => void; reject: () => void; accept: () => void; pending: boolean }) {
-  return <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex min-w-0 items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="truncate text-[13px]"><span className="font-medium">Joon proposed:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} className={cn("rounded-md px-2.5 py-1 text-[12px] capitalize", view === item && "bg-white shadow-sm")}>{item}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>;
+function ProposalBar({ proposal, view, setView, reject, accept, pending, notice }: { proposal: Proposal; view: "before" | "proposed"; setView: (view: "before" | "proposed") => void; reject: () => void; accept: () => void; pending: boolean; notice: string | null }) {
+  return <div className="shrink-0 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-wrap items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="min-w-0 text-[13px]"><span className="font-medium">Joon proposed:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5" aria-label="Compare email proposal">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} aria-pressed={view === item} className={cn("rounded-md px-2.5 py-1 text-[12px] capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D]", view === item && "bg-white shadow-sm")}>{item}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending || Boolean(notice)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] focus-visible:ring-offset-2 disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>{notice ? <p role="status" className="mt-2 text-[12px] leading-5 text-foreground">{notice}</p> : null}</div>;
 }
 
 function AskPanel({ visualProposal, onVisualGenerate, onVisualRefine, onVisualCancel, inputRef, selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { visualProposal: VisualProposal | null; onVisualGenerate: () => void; onVisualRefine: () => void; onVisualCancel: () => void; inputRef: React.RefObject<HTMLTextAreaElement | null>; selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {

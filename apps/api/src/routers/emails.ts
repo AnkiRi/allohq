@@ -102,6 +102,34 @@ export const emailsRouter = router({
       return rows.reverse();
     }),
 
+  pendingProposal: workspaceProcedure
+    .input(z.object({ templateId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const template = await ctx.prisma.emailTemplate.findFirst({
+        where: { id: input.templateId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+      const proposal = await ctx.prisma.emailProposal.findFirst({
+        where: { templateId: input.templateId, workspaceId: ctx.workspaceId, status: "pending" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, instruction: true, candidate: true, baseVersionId: true, createdAt: true },
+      });
+      if (!proposal) return null;
+      const latestVersion = await ctx.prisma.emailVersion.findFirst({
+        where: { templateId: input.templateId },
+        orderBy: { sequence: "desc" },
+        select: { id: true },
+      });
+      return {
+        id: proposal.id,
+        instruction: proposal.instruction,
+        createdAt: proposal.createdAt,
+        stale: (proposal.baseVersionId ?? null) !== (latestVersion?.id ?? null),
+        candidate: parseEmailDocument(proposal.candidate),
+      };
+    }),
+
   createAssetUpload: workspaceProcedure
     .input(z.object({
       storeId: z.string(),

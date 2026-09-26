@@ -114,6 +114,17 @@ test("a no-op change set is reported rather than proposed", () => {
   assert.equal(result.ok, false);
 });
 
+test("a syntactically valid edit that changes no visible content is refused", () => {
+  for (const change of [
+    { blocks: { b1: { heading: "Ride further" } } },
+    { subject: "Ride further" },
+    { previewText: "Same spirit." },
+    { order: ["b1", "b2", "b3"] },
+  ]) {
+    assert.equal(plan(JSON.stringify(change), { kind: "document" }).ok, false);
+  }
+});
+
 test("added blocks get server-assigned ids, never model-chosen ones", () => {
   const result = plan(
     JSON.stringify({ add: [{ type: "divider", props: {}, id: "attacker-chosen" }] }),
