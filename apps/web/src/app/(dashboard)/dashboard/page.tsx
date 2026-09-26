@@ -13,6 +13,7 @@ import { useUser } from "@clerk/nextjs";
 import { useDemo } from "@/lib/useDemo";
 import { useToast } from "@/components/ui/Toast";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
+import { formatDecisionTime } from "@/lib/decision-time";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { DemoOnboarding } from "@/components/dashboard/DemoOnboarding";
 import {
@@ -771,7 +772,7 @@ export default function DashboardPage() {
             {pendingActions.slice(0, 3).map((action, index) => {
               const reasoning = firstLine(action.reasoning, 160);
               return (
-                <div key={action.id} className={`grid gap-4 p-4 sm:grid-cols-[120px_minmax(0,1fr)_120px_auto] sm:items-center ${index ? "border-t border-border" : ""}`}><div><span className="text-[12px] uppercase tracking-wide text-muted-foreground">{actionToTags(action)[0]?.replace("-", " ")}</span></div><div className="min-w-0"><p className="text-[14px] font-medium">{action.campaignName || reasoning || "Joon lined up an action for you"}</p>{action.campaignName && reasoning ? <p className="mt-1 truncate text-[12px] text-muted-foreground">{reasoning}</p> : null}</div><div>{action.estimatedRevenue ? <><span className="block text-[11px] uppercase text-muted-foreground">Expected</span><span className="font-mono text-[14px]">~{formatStoreCurrency(action.estimatedRevenue, storeCurrency)}</span></> : <span className="text-[12px] text-muted-foreground">Evidence ready</span>}</div><div className="flex gap-2"><button className="min-h-9 rounded-lg border border-border px-3 text-[13px] font-medium" onClick={() => setViewing({
+                <div key={action.id} className={`grid gap-4 p-4 sm:grid-cols-[120px_minmax(0,1fr)_120px_auto] sm:items-center ${index ? "border-t border-border" : ""}`}><div><span className="text-[12px] uppercase tracking-wide text-muted-foreground">{actionToTags(action)[0]?.replace("-", " ")}</span></div><div className="min-w-0"><p className="text-[14px] font-medium">{action.campaignName || reasoning || "Joon lined up an action for you"}</p>{action.campaignName && reasoning ? <p className="mt-1 truncate text-[12px] text-muted-foreground">{reasoning}</p> : null}{formatDecisionTime(action.createdAt) ? <p className="mt-1 text-[12px] text-muted-foreground">First prepared <time dateTime={new Date(action.createdAt).toISOString()}>{formatDecisionTime(action.createdAt)}</time></p> : null}</div><div>{action.estimatedRevenue ? <><span className="block text-[11px] uppercase text-muted-foreground">Expected</span><span className="font-mono text-[14px]">~{formatStoreCurrency(action.estimatedRevenue, storeCurrency)}</span></> : <span className="text-[12px] text-muted-foreground">Evidence ready</span>}</div><div className="flex gap-2"><button className="min-h-9 rounded-lg border border-border px-3 text-[13px] font-medium" onClick={() => setViewing({
                       data: actionToDetail(action),
                       onApprove: () => {
                         approveMut.mutate({ actionId: action.id });

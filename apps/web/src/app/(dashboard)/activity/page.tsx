@@ -6,6 +6,8 @@ import { ChevronRight, Loader2, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { MetricStrip, PageHeader, Surface } from "@/components/ui/AppPrimitives";
 import { formatStoreCurrency } from "@/components/console/MetricReadout";
+import { formatDecisionTime } from "@/lib/decision-time";
+import { activityDecisionResult } from "@/lib/activity-decision";
 
 const TZ = "Asia/Kolkata";
 const LABELS: Record<string, string> = {
@@ -13,13 +15,15 @@ const LABELS: Record<string, string> = {
   ab_test_concluded: "A/B test concluded", campaign_opportunity: "Opportunity found",
   auto_send: "Sent", browse_abandon: "Browse recovery",
 };
-const TIER_NOTE: Record<string, string> = { autopilot: "ran on its own", copilot: "merchant review", advisor: "suggested" };
+const TIER_NOTE: Record<string, string> = { autopilot: "ran on its own", copilot: "review requested", advisor: "suggested" };
 
 interface ActivityRow {
   id: string; activityType: string; summary: string; category: string | null;
   tier: string | null; actionTaken: string | null; entityId?: string | null;
   entityType?: string | null; revenue: number | null; metadata: unknown;
   createdAt: string | Date;
+  storeId: string;
+  decision?: { id: string; status: string; expiresAt: string | Date | null; reviewedAt: string | Date | null } | null;
 }
 interface ActivityGroup { id: string; latest: ActivityRow; rows: ActivityRow[]; }
 
@@ -39,6 +43,10 @@ function dayHeading(value: string | Date) {
   return new Date(value).toLocaleDateString("en-IN", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" });
 }
 function entityHref(row: ActivityRow) {
+  if (row.entityType === "action") {
+    const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, unknown> : {};
+    return typeof metadata.customerId === "string" ? `/customers/${encodeURIComponent(metadata.customerId)}` : null;
+  }
   if (!row.entityId) return null;
   if (row.entityType === "campaign") return `/campaigns/${row.entityId}`;
   if (row.entityType === "automation") return `/automations/${row.entityId}`;
@@ -92,6 +100,12 @@ export default function ActivityPage() {
   }, [visible]);
   const selectedRow = selected?.latest ?? null;
   const selectedHref = selectedRow ? entityHref(selectedRow) : null;
+  const selectedHrefLabel = selectedRow?.entityType === "campaign" ? "Open campaign"
+    : selectedRow?.entityType === "automation" ? "Open automation"
+      : "Open related customer";
+  const selectedDecisionHref = selectedRow?.decision
+    ? `/actions?decision=${encodeURIComponent(selectedRow.decision.id)}`
+    : null;
   return <div className="space-y-6">
     <PageHeader title="Activity" description="The durable record of what Joon evaluated, proposed, changed and sent. Newest first." />
     <MetricStrip items={[{ label: "Events loaded", value: items.length }, { label: "Review events loaded", value: needsYou.length }, { label: "Delivery events loaded", value: sent.length }]} />
@@ -109,9 +123,9 @@ export default function ActivityPage() {
       {inspectorOpen && <button className="fixed inset-0 z-40 bg-black/25 lg:hidden" onClick={() => setInspectorOpen(false)} aria-label="Close activity receipt" />}
       <aside className={`${inspectorOpen ? "fixed inset-x-3 bottom-3 top-20 z-50 overflow-auto" : "hidden"} lg:sticky lg:top-0 lg:z-auto lg:block lg:self-start`} aria-label="Activity receipt"><Surface className="overflow-hidden">{selected && selectedRow ? <>
         <header className="border-b border-border p-5"><button onClick={() => setInspectorOpen(false)} className="float-right rounded-md p-1 text-muted-foreground lg:hidden" aria-label="Close receipt"><X className="h-5 w-5" /></button><p className="font-mono text-[12px] text-muted-foreground">{dateLabel(selectedRow.createdAt)} · {timeLabel(selectedRow.createdAt)}</p><h2 className="mt-2 text-[20px] font-medium">{labelFor(selectedRow.activityType)}</h2><p className="mt-2 text-[13px] leading-5 text-muted-foreground">{selectedRow.summary}</p>{selected.rows.length > 1 && <p className="mt-3 text-[12px] text-muted-foreground">Grouped from {selected.rows.length} matching evaluations. Every run remains below.</p>}</header>
-        <dl className="divide-y divide-border text-[13px]">{[["Category", selectedRow.category ?? "—"], ["Autonomy", selectedRow.tier ? TIER_NOTE[selectedRow.tier] ?? selectedRow.tier : "—"], ["Result", selectedRow.actionTaken?.replace(/_/g, " ") ?? "Recorded"], ["Event amount", money(selectedRow.revenue)], ["Latest receipt", selectedRow.id]].map(([label, value]) => <div key={label} className="grid grid-cols-[100px_1fr] gap-3 px-5 py-3"><dt className="text-muted-foreground">{label}</dt><dd className={label === "Latest receipt" ? "break-all font-mono text-[11px]" : "font-medium"}>{value}</dd></div>)}</dl>
+        <dl className="divide-y divide-border text-[13px]">{[["Category", selectedRow.category ?? "—"], ["Autonomy", selectedRow.tier ? TIER_NOTE[selectedRow.tier] ?? selectedRow.tier : "—"], ["Result", activityDecisionResult(selectedRow)], ["Review deadline", selectedRow.decision ? formatDecisionTime(selectedRow.decision.expiresAt) ?? "No deadline recorded" : selectedRow.actionTaken === "queued_for_review" ? "Not linked for this historical event" : "Not applicable"], ["Reviewed", selectedRow.decision?.reviewedAt ? formatDecisionTime(selectedRow.decision.reviewedAt) ?? "—" : "—"], ["Event amount", money(selectedRow.revenue)], ["Latest receipt", selectedRow.id]].map(([label, value]) => <div key={label} className="grid grid-cols-[100px_1fr] gap-3 px-5 py-3"><dt className="text-muted-foreground">{label}</dt><dd className={label === "Latest receipt" ? "break-all font-mono text-[11px]" : "font-medium"}>{value}</dd></div>)}</dl>
         <details className="border-t border-border"><summary className="cursor-pointer list-none px-5 py-3 text-[13px] font-medium hover:bg-[var(--surface-soft)]">Underlying runs · {selected.rows.length}<span className="float-right">＋</span></summary><div className="max-h-72 overflow-auto border-t border-border bg-[var(--surface-soft)]">{selected.rows.map((row) => <div key={row.id} className="border-b border-border p-4 last:border-0"><p className="font-mono text-[11px] text-muted-foreground">{dateLabel(row.createdAt)} · {timeLabel(row.createdAt)} · {row.id}</p>{row.metadata ? <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-5 text-muted-foreground">{JSON.stringify(row.metadata, null, 2)}</pre> : <p className="mt-2 text-[12px] text-muted-foreground">No additional metadata recorded.</p>}</div>)}</div></details>
-        <div className="flex gap-2 border-t border-border p-4">{selectedRow.actionTaken === "queued_for_review" && <Link href="/actions" className="app-attention-button min-h-10 px-4 py-2.5 text-[13px] font-medium">Open current decisions</Link>}{selectedHref && <Link href={selectedHref} className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">Open related work</Link>}</div>
+        <div className="flex flex-wrap gap-2 border-t border-border p-4">{selectedDecisionHref && <Link href={selectedDecisionHref} className="app-attention-button min-h-10 px-4 py-2.5 text-[13px] font-medium">Open this decision</Link>}{selectedHref && <Link href={selectedHref} className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">{selectedHrefLabel}</Link>}</div>
       </> : <div className="p-8 text-center text-[13px] text-muted-foreground">Select an event to inspect its receipt.</div>}</Surface></aside>
     </div>
   </div>;
