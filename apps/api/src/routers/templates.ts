@@ -32,7 +32,7 @@ export const templatesRouter = router({
         where: { id: input.id, workspaceId: ctx.workspaceId },
         include: {
           campaigns: {
-            select: { id: true, storeId: true },
+            select: { id: true, storeId: true, status: true },
             orderBy: { createdAt: "desc" },
             take: 1,
           },
@@ -97,7 +97,7 @@ export const templatesRouter = router({
         storeId: resolvedStoreId,
         // Lets the Studio offer the existing review/delivery entry point
         // instead of stranding a merchant on a full-page surface.
-        campaignId: template.campaigns[0]?.id ?? null,
+        campaignId: template.campaigns[0]?.status === "draft" ? template.campaigns[0].id : null,
       };
     }),
 

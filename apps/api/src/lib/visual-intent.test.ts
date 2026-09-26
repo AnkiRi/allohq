@@ -11,11 +11,14 @@ const blocks = [
 ] as unknown as EmailBlock[];
 
 test("the reported request is recognised as visual", () => {
-  const intent = detectVisualIntent(
+  for (const instruction of [
     "Put this snowboard in the hands of a Brazilian model and show him surfing",
-  );
-  assert.ok(intent, "this went down the copy path and returned a storage error");
-  assert.equal(intent.kind, "product_scene");
+    "Change the image to put the snowboard in a model's hands",
+  ]) {
+    const intent = detectVisualIntent(instruction);
+    assert.ok(intent, `This request must use the visual proposal path: ${instruction}`);
+    assert.equal(intent.kind, "product_scene");
+  }
 });
 
 test("plain generation requests are recognised", () => {

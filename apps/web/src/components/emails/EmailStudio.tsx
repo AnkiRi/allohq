@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   Check, Code2, FileClock, ImagePlus, Inspect, Loader2,
   MessageSquareText, PanelLeft, PanelLeftClose, PanelRightClose, Plus, Send, ShieldCheck, ShoppingBag, Sparkles, X,
@@ -26,6 +27,7 @@ import { VisualGenerator, type GeneratedVisual, type VisualFailure, type VisualM
 import { VisualActions } from "./VisualActions";
 import { BlockEditor } from "./BlockEditor";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
+import { placeUploadedImage } from "./upload-placement";
 
 type StudioTab = "ask" | "inspect" | "shopify" | "visuals" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
@@ -103,8 +105,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(() => cloneBlocks(initialBlocks));
   const [subject, setSubject] = React.useState(initialSubject);
   const [previewText, setPreviewText] = React.useState(initialPreviewText);
+  const draftSignature = JSON.stringify({ blocks, subject, previewText });
+  const draftSignatureRef = React.useRef(draftSignature);
+  draftSignatureRef.current = draftSignature;
   const [selectedId, setSelectedId] = React.useState<string | null>(initialBlocks[0]?.id ?? null);
   const [html, setHtml] = React.useState(initialHtml);
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+  const [previewModalHtml, setPreviewModalHtml] = React.useState<string | null>(null);
+  const [previewModalError, setPreviewModalError] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState<StudioTab>("ask");
   const [compactPanelOpen, setCompactPanelOpen] = React.useState(false);
   const [outlineOpen, setOutlineOpen] = React.useState(true);
@@ -112,6 +120,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const askInputRef = React.useRef<HTMLTextAreaElement>(null);
   const isDesktop = useIsDesktop();
   const router = useRouter();
+  const utils = trpc.useUtils();
+  const leaveStudio = () => {
+    if (dirty && !window.confirm("This email has unsaved changes. Leave without saving?")) return;
+    if (onBack) return onBack();
+    if (window.history.length > 1) router.back();
+    else router.push("/templates");
+  };
   const [instruction, setInstruction] = React.useState("");
   const [askScope, setAskScope] = React.useState<AskScope>("document");
   const [visualMode, setVisualMode] = React.useState<VisualMode>("creative_concept");
@@ -141,6 +156,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [versionCursor, setVersionCursor] = React.useState(0);
   const [codeDraft, setCodeDraft] = React.useState("");
   const [assetUploading, setAssetUploading] = React.useState(false);
+  const assetUploadInputRef = React.useRef<HTMLInputElement>(null);
+  const uploadTargetIdRef = React.useRef<string | null>(null);
   const { toast } = useToast();
   const selected = blocks.find((block) => block.id === selectedId) ?? null;
   const effectiveBlocks = proposal && proposalView === "proposed" ? proposal.blocks : blocks;
@@ -234,7 +251,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const restoreVersionMut = (trpc.templates as any).restoreVersion.useMutation();
   const createAssetUploadMut = (trpc.emails as any).createAssetUpload.useMutation();
   const completeAssetUploadMut = (trpc.emails as any).completeAssetUpload.useMutation();
-  const saveMut = (trpc.templates as any).update.useMutation() as { mutate: (input: unknown, opts?: { onSuccess?: () => void; onError?: (error: { message?: string }) => void }) => void; isPending: boolean };
+  const saveMut = (trpc.templates as any).update.useMutation() as { mutate: (input: unknown, opts?: { onSuccess?: (data: any) => void; onError?: (error: { message?: string }) => void }) => void; isPending: boolean };
   const renderRef = React.useRef(renderMut); renderRef.current = renderMut;
   const firstRun = React.useRef(Boolean(initialHtml));
   React.useEffect(() => {
@@ -457,9 +474,30 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (!templateId) return;
     const validated = emailBlocksSchema.safeParse(blocks);
     if (!validated.success) { toast(validated.error.issues[0]?.message ?? "This email contains an invalid block.", "error"); return; }
+    const submittedSignature = draftSignature;
+    const savedDocument = { blocks: validated.data, subject, previewText };
     saveMut.mutate({ id: templateId, subject, previewText, blocks: validated.data }, {
-      onSuccess: () => { createCheckpoint("Saved version"); setDirty(false); setSavedAt(new Date()); void durableVersionsQuery.refetch(); toast("Saved as a recoverable version.", "success"); },
+      onSuccess: (saved) => {
+        createCheckpoint("Saved version", savedDocument);
+        if (draftSignatureRef.current === submittedSignature) setDirty(false);
+        setSavedAt(new Date());
+        (utils.templates.getById as any).setData({ id: templateId }, (current: any) => current ? { ...current, ...saved } : current);
+        void utils.templates.getById.invalidate({ id: templateId });
+        void utils.templates.list.invalidate();
+        void utils.campaigns.getById.invalidate();
+        void durableVersionsQuery.refetch();
+        toast("Saved as a recoverable version.", "success");
+      },
       onError: (error) => toast(error.message ?? "Could not save this email.", "error"),
+    });
+  };
+  const openFullPreview = () => {
+    setPreviewOpen(true);
+    setPreviewModalHtml(null);
+    setPreviewModalError(null);
+    renderMut.mutate({ blocks: effectiveBlocks, subject: effectiveSubject, previewText: effectivePreviewText, variables: previewVariables, brandKit, storeId }, {
+      onSuccess: (data: { html: string }) => setPreviewModalHtml(data.html),
+      onError: () => setPreviewModalError("Joon couldn't render this preview. Your edits are still here; close this view and try again."),
     });
   };
   const askJoon = (text = instruction, scope?: "subject" | "copy" | "visual" | "tone") => {
@@ -505,7 +543,11 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       onError: (error: { message?: string }) => toast(error.message ?? "Could not restore this version.", "error"),
     });
   };
-  const uploadAsset = async (file: File) => {
+  const openUploadPicker = (targetBlockId: string | null = selectedId) => {
+    uploadTargetIdRef.current = targetBlockId;
+    assetUploadInputRef.current?.click();
+  };
+  const uploadAsset = async (file: File, targetBlockId?: string | null) => {
     if (!storeId || assetUploading) {
       if (!storeId) toast("Choose a store before uploading an email asset.", "error");
       return;
@@ -518,7 +560,16 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       const asset = await completeAssetUploadMut.mutateAsync({ storeId, key: upload.key, fileName: file.name, type: "reference_image" });
       setSelectedAssetIds((current) => [...new Set([...current, asset.id])]);
       await creativeAssetsQuery.refetch();
-      toast("Image added to this store’s asset library.", "success");
+      void libraryQuery.refetch();
+      const target = blocks.find((block) => block.id === targetBlockId);
+      if (target?.type === "image" || target?.type === "hero") {
+        setBlocks((current) => current.map((block) => placeUploadedImage(block, targetBlockId!, asset.url, file.name)));
+        setDirty(true);
+        setLibraryOpen(false);
+        toast("Image uploaded and placed in this email. Save the version to keep it.", "success");
+      } else {
+        toast("Image added to this store’s asset library.", "success");
+      }
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not upload this image.", "error");
     } finally {
@@ -532,6 +583,21 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   // went with it: this is a workspace, not a card on a page.
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FFFDF8] text-foreground">
+      <input
+        ref={assetUploadInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        aria-label="Upload an email image"
+        disabled={assetUploading}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          const targetBlockId = uploadTargetIdRef.current;
+          event.currentTarget.value = "";
+          uploadTargetIdRef.current = null;
+          if (file) void uploadAsset(file, targetBlockId);
+        }}
+      />
       <StudioTopBar
         name={templateName ?? "Untitled email"}
         state={dirty ? "draft" : "saved"}
@@ -539,13 +605,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         canRedo={versionCursor < versions.length - 1}
         onUndo={() => restoreVersion(Math.max(0, versionCursor - 1))}
         onRedo={() => restoreVersion(Math.min(versions.length - 1, versionCursor + 1))}
-        onPreview={() => renderMut.mutate({ blocks: effectiveBlocks, subject: effectiveSubject, previewText: effectivePreviewText, variables: previewVariables, storeId })}
+        onPreview={openFullPreview}
         onSave={saveDraft}
         saving={saveMut.isPending}
         reviewHref={reviewHref ?? null}
+        reviewBlocked={dirty || saveMut.isPending}
         onAddBlock={() => setShowAdd((value) => !value)}
         onOpenTools={() => setCompactPanelOpen(true)}
-        onBack={onBack ?? (() => router.back())}
+        onBack={leaveStudio}
       />
       {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} /> : null}
       {showAdd ? <div className="absolute right-3 top-[68px] z-50 w-56 overflow-hidden rounded-xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl xl:hidden"><BlockPicker onAdd={add} /></div> : null}
@@ -647,7 +714,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="min-h-0 flex-1 overflow-y-auto">
             {activeTab === "ask" ? <AskPanel visualProposal={visualProposal} onVisualGenerate={() => { setVisualProposal(null); setActiveTab("visuals"); }} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
             {insertReceipt ? <p role="status" className="mx-4 mt-3 rounded-lg border border-[#157858]/30 bg-[#E5F4EE] px-2.5 py-1.5 text-[12px] text-[#157858]">{insertReceipt}</p> : null}
-            {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} products={productPage?.products ?? []} onOpenVisuals={() => { setActiveTab("visuals"); setAdvancedVisuals(false); }} onUploadImage={() => document.getElementById("studio-asset-upload")?.click()} onChooseAsset={() => setLibraryOpen(true)} /> : null}
+            {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} products={productPage?.products ?? []} onOpenVisuals={() => { setActiveTab("visuals"); setAdvancedVisuals(false); }} onUploadImage={() => openUploadPicker()} onChooseAsset={() => setLibraryOpen(true)} /> : null}
             {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /> : null}
             {activeTab === "visuals" && !advancedVisuals ? (
               <VisualActions
@@ -655,7 +722,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
                 capabilities={visualCapabilities ?? null}
                 productTitle={blockProduct?.title ?? null}
                 onGenerate={() => setAdvancedVisuals(true)}
-                onUpload={() => document.getElementById("studio-asset-upload")?.click()}
+                onUpload={() => openUploadPicker()}
                 onChooseFromLibrary={() => setLibraryOpen(true)}
                 onCreateProductScene={createProductScene}
                 onOpenAdvanced={() => setAdvancedVisuals(true)}
@@ -676,10 +743,31 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           initialTab={selected?.type === "product" ? "shopify" : undefined}
           onClose={() => setLibraryOpen(false)}
           onSelect={useLibraryItem}
-          onUpload={() => { setLibraryOpen(false); document.getElementById("studio-asset-upload")?.click(); }}
+          onUpload={() => openUploadPicker()}
           onGenerate={() => { setLibraryOpen(false); setActiveTab("visuals"); setAdvancedVisuals(false); }}
         />
       ) : null}
+      <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-[#171717]/70" />
+          <Dialog.Content className="fixed inset-x-3 bottom-3 top-3 z-50 mx-auto flex max-w-5xl flex-col overflow-hidden rounded-xl bg-[#FFFDF8] shadow-2xl outline-none sm:inset-y-[4vh]" aria-describedby="studio-preview-description">
+            <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+              <div className="min-w-0">
+                <Dialog.Title className="truncate text-[15px] font-medium">Full email preview</Dialog.Title>
+                <Dialog.Description id="studio-preview-description" className="mt-1 truncate text-[12px] text-muted-foreground">{effectiveSubject || "Untitled subject"} · {dirty ? "Unsaved changes" : "Saved version"}</Dialog.Description>
+              </div>
+              <Dialog.Close className="rounded-lg border border-border p-2 outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]" aria-label="Close full preview"><X className="h-4 w-4" /></Dialog.Close>
+            </div>
+            <div className="min-h-0 flex-1 p-3 sm:p-4">
+              {previewModalHtml ? <EmailPreviewFrame html={previewModalHtml} /> : (
+                <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground" role="status">
+                  {previewModalError ?? "Rendering the full email…"}
+                </div>
+              )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 

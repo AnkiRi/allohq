@@ -1322,6 +1322,7 @@ export const campaignsRouter = router({
       where: { id: input.id, workspaceId: ctx.workspaceId },
       include: {
         template: true,
+        approvedEmailVersion: { select: { document: true, contentHash: true } },
         segment: true,
         store: { select: { id: true, shopDomain: true } },
       },

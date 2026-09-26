@@ -11,7 +11,7 @@ export type VisualProposal = {
   modeLabel: string;
   providerLabel: string | null;
   referenceGrounded: boolean;
-  estimatedCostUsd: number | null;
+  costClass: "economy" | "standard" | "premium" | null;
   blockedReason: string | null;
 };
 
@@ -55,8 +55,8 @@ export function VisualProposalCard({
         <Row label="Style">{proposal.modeLabel}</Row>
         <Row label="Where">{proposal.targetDescription}</Row>
         {proposal.providerLabel ? <Row label="Model">{proposal.providerLabel}</Row> : null}
-        {proposal.estimatedCostUsd !== null ? (
-          <Row label="Cost">about ${proposal.estimatedCostUsd.toFixed(2)}</Row>
+        {proposal.costClass ? (
+          <Row label="Cost tier">{proposal.costClass}</Row>
         ) : null}
       </dl>
 

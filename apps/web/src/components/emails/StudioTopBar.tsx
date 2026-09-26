@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from "react";
 import Link from "next/link";
+import * as React from "react";
 import { ArrowLeft, Eye, PanelRight, Plus, Redo2, Save, Send, Undo2 } from "lucide-react";
 import { cn } from "@allohq/ui";
 
@@ -33,6 +33,7 @@ export function StudioTopBar({
   onSave,
   saving,
   reviewHref,
+  reviewBlocked,
   onAddBlock,
   onOpenTools,
   onBack,
@@ -48,6 +49,8 @@ export function StudioTopBar({
   saving: boolean;
   /** Where the existing review/delivery flow continues, when there is one. */
   reviewHref?: string | null;
+  /** An unsaved or in-flight edit must not lead to approval of an older version. */
+  reviewBlocked?: boolean;
   /**
    * Below xl the side panes are drawers, so their entry points have to live
    * here. Without them a merchant on a phone can preview an email and do
@@ -60,49 +63,17 @@ export function StudioTopBar({
 }) {
   const stateCopy = STATE_COPY[state];
 
-  /**
-   * Where "back" goes.
-   *
-   * A merchant usually arrives at the Studio from a campaign, or from the chat,
-   * or from the email library — and being marched to the library regardless
-   * loses whatever they were doing. So go back the way they came when there IS
-   * a way back within the app, and fall back to the library only when there
-   * genuinely isn't one (a fresh tab, a pasted link).
-   */
-  const [canGoBack, setCanGoBack] = React.useState(false);
-  React.useEffect(() => {
-    // `history.length > 1` is true for any tab with navigation behind it,
-    // including arrivals from outside the app, so also require a same-origin
-    // referrer or a client-side navigation.
-    const sameOriginReferrer =
-      typeof document !== "undefined" &&
-      document.referrer !== "" &&
-      new URL(document.referrer).origin === window.location.origin;
-    setCanGoBack(window.history.length > 1 && sameOriginReferrer);
-  }, []);
-
-  const backLabel = canGoBack ? "Back" : "Email library";
-
   return (
     <header className="flex shrink-0 items-center gap-3 border-b border-border bg-[#FFFDF8] px-3 py-2">
-      {canGoBack ? (
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{backLabel}</span>
-        </button>
-      ) : (
-        <Link
-          href="/templates"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{backLabel}</span>
-        </Link>
-      )}
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="Back"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Back</span>
+      </button>
 
       <div className="flex min-w-0 items-center gap-2">
         <h1 className="truncate text-[14px] font-medium">{name}</h1>
@@ -145,7 +116,12 @@ export function StudioTopBar({
           <span className="hidden sm:inline">{saving ? "Saving…" : "Save version"}</span>
         </button>
 
-        {reviewHref ? (
+        {reviewHref ? reviewBlocked ? (
+          <button type="button" disabled title="Save this email before reviewing delivery" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] opacity-50">
+            <Send className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">Save before review</span>
+          </button>
+        ) : (
           <Link
             href={reviewHref}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"

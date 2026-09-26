@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   canApproveDelivery,
   preparationView,
@@ -37,6 +37,7 @@ import {
   type AudienceReviewGroup,
 } from "@/components/campaigns/AudienceReviewDrawer";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
+import { campaignMessageView } from "@/lib/campaign-message-view";
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -46,6 +47,7 @@ export default function CampaignDetailPage() {
   const { submitCampaignAlternative } = useAlloAI();
 
   const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [renderedPreview, setRenderedPreview] = useState<{ key: string; html: string } | null>(null);
   const [showRecentOverride, setShowRecentOverride] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState("");
@@ -64,9 +66,10 @@ export default function CampaignDetailPage() {
   const [showTimingOverride, setShowTimingOverride] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
   const [activeSection, setActiveSection] = useState<"overview" | "message" | "audience" | "delivery" | "results" | "receipt">("overview");
-  const { data: campaign, isLoading } = (trpc.campaigns.getById as any).useQuery(
+  const { data: campaign, isLoading, isFetchedAfterMount } = (trpc.campaigns.getById as any).useQuery(
     { id: campaignId },
     {
+      refetchOnMount: "always",
       refetchInterval: (query: { state: { data?: { status?: string } } }) =>
         ["scheduled", "sending"].includes(query.state.data?.status ?? "") ? 5_000 : false,
     }
@@ -145,18 +148,25 @@ export default function CampaignDetailPage() {
         }).format(new Date(timingPreview.earliestAt))
       : null;
 
-  // Render preview from blocks if template has no pre-rendered HTML
-  const templateBlocks =
-    campaign?.template && !campaign.template.html
-      ? ((campaign.template as any).blocks as any[] | undefined)
-      : undefined;
+  // The approved version, not the reusable library template, is the campaign's
+  // source of truth once delivery has been approved.
+  const messageView = campaign ? campaignMessageView(campaign) : null;
+  const templateBlocks = messageView?.blocks as any[] | null;
+  const previewKey = `${campaignId}:${messageView?.revision ?? campaign?.template?.updatedAt ?? "draft"}`;
+  const latestPreviewKey = useRef(previewKey);
+  latestPreviewKey.current = previewKey;
+  const previewHtml = messageView?.html ?? (renderedPreview?.key === previewKey ? renderedPreview.html : null);
   const renderMut = trpc.templates.renderPreview.useMutation();
   useEffect(() => {
-    if (templateBlocks && templateBlocks.length > 0 && !renderMut.data && !renderMut.isPending) {
-      renderMut.mutate({ blocks: templateBlocks });
+    if (!messageView?.html && templateBlocks && templateBlocks.length > 0) {
+      renderMut.mutate({ blocks: templateBlocks }, {
+        onSuccess: (data) => {
+          if (latestPreviewKey.current === previewKey) setRenderedPreview({ key: previewKey, html: data.html });
+        },
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateBlocks]);
+  }, [previewKey]);
   const utils = trpc.useUtils();
   const sendMut = trpc.campaigns.sendNow.useMutation({
     onSuccess: (_result, variables) => {
@@ -334,7 +344,7 @@ export default function CampaignDetailPage() {
     }
   }, [activeSection, campaign?.status]);
 
-  if (isLoading) {
+  if (isLoading || !isFetchedAfterMount) {
     return (
       <div className="flex items-center justify-center h-64 gap-2">
         <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
@@ -1724,10 +1734,10 @@ export default function CampaignDetailPage() {
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-px h-6 bg-secondary" />
-            <h2 className="text-[13px] font-bold text-foreground font-serif">Email preview</h2>
+            <h2 className="text-[13px] font-bold text-foreground font-serif">{messageView?.editable ? "Email preview" : "Approved email preview"}</h2>
           </div>
           <div className="flex items-center gap-3">
-            {(campaign.template?.html || renderMut.data?.html) && (
+            {previewHtml && (
               <button
                 onClick={() => setPreviewExpanded((v) => !v)}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-sans text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
@@ -1740,9 +1750,9 @@ export default function CampaignDetailPage() {
                 {previewExpanded ? "Collapse" : "Full Preview"}
               </button>
             )}
-            {campaign.templateId && (
+            {campaign.templateId && messageView?.editable && (
               <Link
-                href={`/templates/${campaign.templateId}/edit`}
+                href={`/templates/${campaign.templateId}/edit?campaignId=${campaignId}`}
                 className="text-[10px] font-sans text-muted-foreground hover:text-foreground transition-colors"
               >
                 Edit template &rarr;
@@ -1751,13 +1761,13 @@ export default function CampaignDetailPage() {
           </div>
         </div>
         <div className="flex justify-center bg-muted/50 p-6">
-          {campaign.template?.html || renderMut.data?.html ? (
+          {previewHtml ? (
             <div
               className="border border-border rounded-lg overflow-hidden bg-card shadow-sm"
               style={{ width: 620 }}
             >
               <iframe
-                srcDoc={campaign.template?.html ?? renderMut.data?.html}
+                srcDoc={previewHtml}
                 className={`w-full transition-all duration-300 ${previewExpanded ? "h-[1200px]" : "h-[700px]"}`}
                 title="Email preview"
                 sandbox="allow-same-origin"
@@ -1771,9 +1781,9 @@ export default function CampaignDetailPage() {
                 Putting the preview together…
               </span>
             </div>
-          ) : campaign.templateId ? (
+          ) : campaign.templateId && messageView?.editable ? (
             <Link
-              href={`/templates/${campaign.templateId}/edit`}
+              href={`/templates/${campaign.templateId}/edit?campaignId=${campaignId}`}
               className="block p-8 bg-card rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center w-full max-w-md"
             >
               <Eye className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
@@ -1787,7 +1797,7 @@ export default function CampaignDetailPage() {
           ) : (
             <div className="p-8 text-center w-full">
               <Mail className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-[10px] text-muted-foreground">No template attached yet</p>
+              <p className="text-[10px] text-muted-foreground">{messageView?.editable ? "No editable email is attached to this campaign." : "The approved email preview is unavailable. The sent version cannot be edited."}</p>
             </div>
           )}
         </div>
