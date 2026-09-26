@@ -9,17 +9,25 @@ import { prisma } from "@allohq/database";
  * number is an operational decision, not a product truth.
  */
 export const DAILY_IMAGE_BUDGET_USD = Number(process.env["IMAGE_DAILY_BUDGET_USD"] ?? 5);
+/** Conservative budget charge when a provider omits billable usage. */
+export const UNKNOWN_IMAGE_COST_USD = 0.5;
+
+export function imageBudgetChargeUsd(reportedCostUsd: number | undefined): number {
+  return typeof reportedCostUsd === "number" && Number.isFinite(reportedCostUsd) && reportedCostUsd > 0
+    ? reportedCostUsd
+    : UNKNOWN_IMAGE_COST_USD;
+}
 
 /**
- * Pure budget policy. A missing or nonsensical budget fails closed to stock
- * imagery rather than opening the tap.
+ * Pure budget policy. Missing or nonsensical figures fail closed rather than
+ * opening the tap on paid generation.
  */
 export function imageBudgetExceeded(
   spentUsd: number,
   budgetUsd: number = DAILY_IMAGE_BUDGET_USD
 ): boolean {
   if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) return true;
-  if (!Number.isFinite(spentUsd) || spentUsd < 0) return false;
+  if (!Number.isFinite(spentUsd) || spentUsd < 0) return true;
   return spentUsd >= budgetUsd;
 }
 

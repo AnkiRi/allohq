@@ -90,6 +90,7 @@ export { generateImage, ImageGenerationUnavailableError } from "./images";
 export {
   CAMPAIGN_IMAGE_BUDGET_USD,
   DAILY_IMAGE_BUDGET_USD,
+  imageBudgetChargeUsd,
   imageSpendRefusal,
   referenceGenerationAvailable,
   referenceProviderSetupHint,

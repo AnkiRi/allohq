@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, workspaceProcedure } from "../trpc";
 import {
   complete,
+  imageBudgetChargeUsd,
   imageSpendRefusal,
   loadBrandKit,
   renderBrandedEmail,
@@ -609,6 +610,16 @@ export const emailsRouter = router({
       ];
 
       for (const slot of validated.slots) {
+        // A single request may contain four paid images. Recheck after each
+        // charge so the first image can close the budget for the remaining ones.
+        const slotSpendRefusal = await imageSpendRefusal({
+          workspaceId: ctx.workspaceId,
+          templateId: input.templateId,
+        });
+        if (slotSpendRefusal) {
+          failures.push({ slotId: slot.id, reason: slotSpendRefusal });
+          break;
+        }
         try {
           const result = await adapter.generate({
             apiModelId: model.apiModelId,
@@ -618,6 +629,21 @@ export const emailsRouter = router({
             ...(reference ? { references: [reference] } : {}),
           });
 
+          // Record the paid call before S3 publishing. If publishing fails,
+          // the provider may still bill us and the budget must still count it.
+          const ledger = await ctx.prisma.generatedImage.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              provider: model.provider,
+              prompt: slot.prompt,
+              url: "",
+              purpose: slot.purpose,
+              cost: imageBudgetChargeUsd(result.usage?.costUsd),
+              templateId: input.templateId,
+              sourceAssetIds: product ? [product.id] : [],
+            },
+          });
+
           const persisted = await persistRemoteEmailImage({
             workspaceId: ctx.workspaceId,
             storeId: input.storeId,
@@ -625,20 +651,9 @@ export const emailsRouter = router({
             fileName: `${input.templateId ?? "email"}-${slot.id}-${Date.now()}.png`,
           });
 
-          // Lineage: what made it, from what, at what recorded usage.
-          await ctx.prisma.generatedImage.create({
-            data: {
-              workspaceId: ctx.workspaceId,
-              provider: model.provider,
-              prompt: slot.prompt,
-              url: persisted.url,
-              purpose: slot.purpose,
-              cost: 0,
-              width: persisted.width,
-              height: persisted.height,
-              templateId: input.templateId,
-              sourceAssetIds: product ? [product.id] : [],
-            },
+          await ctx.prisma.generatedImage.update({
+            where: { id: ledger.id },
+            data: { url: persisted.url, width: persisted.width, height: persisted.height },
           });
           const asset = await ctx.prisma.brandAsset.create({
             data: {
