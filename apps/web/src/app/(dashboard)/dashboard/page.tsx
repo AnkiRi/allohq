@@ -314,11 +314,22 @@ export default function DashboardPage() {
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1);
   const greeting = getGreeting();
 
-  const { data: stats } = trpc.dashboard.stats.useQuery();
   const { data: stores, isLoading: storesLoading } = trpc.stores.list.useQuery();
   const storeId = stores?.[0]?.id ?? "";
   const store = stores?.[0];
   const storeCurrency = store?.currency ?? "INR";
+  const { data: todaySnapshot, isError: snapshotError, refetch: refetchSnapshot } = (trpc.dashboard.todaySnapshot as any).useQuery(
+    { storeId },
+    { enabled: !!storeId, refetchInterval: 60_000 },
+  ) as { data: {
+    asOf: string;
+    customers: number;
+    stateProfiles: number;
+    stateChanges24h: number;
+    actionsPrepared24h: number;
+    decisionsWaiting: number;
+    attributedRevenue30d: number;
+  } | undefined; isError: boolean; refetch: () => void };
   // Demo (Vana) is always pre-onboarded — skip the wizard and let the data
   // queries (gated on onboardingDone) run, so the console fills instead of
   // hanging on "loading" after entering the demo.
@@ -354,39 +365,7 @@ export default function DashboardPage() {
       | undefined;
   };
 
-  const { data: tokenUsage } = (trpc.dashboard.tokenUsage as any).useQuery(
-    undefined,
-    {
-      enabled: onboardingDone,
-      refetchInterval: 15000,
-    },
-  ) as {
-    data:
-      | {
-          totalInputTokens: number;
-          totalOutputTokens: number;
-          totalCalls: number;
-          totalCost: number;
-        }
-      | undefined;
-  };
-
   trpc.segments.list.useQuery(undefined, { enabled: onboardingDone });
-
-  const { data: customerStats } = (trpc.customers.stats as any).useQuery(
-    undefined,
-    { enabled: onboardingDone },
-  ) as {
-    data:
-      | {
-          totalCustomers: number;
-          acceptsMarketing: number;
-          marketingRate: number;
-          totalRevenue: number;
-          avgOrderValue: number;
-        }
-      | undefined;
-  };
 
   const { data: segmentDist } = (trpc.segments.distribution as any).useQuery(
     undefined,
@@ -394,6 +373,7 @@ export default function DashboardPage() {
   ) as {
     data:
       | {
+          storeId: string;
           segment: string;
           customerCount: number;
           totalRevenue: number;
@@ -430,8 +410,8 @@ export default function DashboardPage() {
     { enabled: !!storeId && onboardingDone },
   ) as { data: { exists: boolean } | undefined };
 
-  const { data: recentActions } = (trpc.autonomy.listActions as any).useQuery(
-    { storeId, limit: 10 },
+  const { data: recentActions, isError: decisionsError, refetch: refetchDecisions } = (trpc.autonomy.listActions as any).useQuery(
+    { storeId, status: "pending", limit: 3 },
     { enabled: !!storeId && onboardingDone, refetchInterval: 5000 },
   ) as {
     data:
@@ -448,8 +428,11 @@ export default function DashboardPage() {
             campaignName?: string | null;
           }[];
           total: number;
+          statusCounts: Record<string, number>;
         }
       | undefined;
+    isError: boolean;
+    refetch: () => void;
   };
 
   // Time-series (kept — feeds deltas/trends consumed by the briefing voice)
@@ -465,37 +448,6 @@ export default function DashboardPage() {
     { metric: "orders", days: "30" },
     { enabled: onboardingDone },
   );
-
-  const { data: roiData } = (trpc.analytics.roi as any).useQuery(
-    { storeId, days: 30 },
-    { enabled: !!storeId && onboardingDone },
-  ) as {
-    data:
-      | {
-          aiTokenCost: number;
-          aiAttributedRevenue: number;
-          roi: number;
-          campaignsSent: number;
-          automationsSent: number;
-        }
-      | undefined;
-  };
-
-  const { data: revenueAttribution } = (
-    trpc.dashboard.revenueAttribution as any
-  ).useQuery(
-    { storeId },
-    { enabled: !!storeId && onboardingDone, refetchInterval: 60000 },
-  ) as {
-    data:
-      | {
-          today: { revenue: number; orders: number };
-          week: { revenue: number; orders: number };
-          month: { revenue: number; orders: number };
-          total: { revenue: number; orders: number };
-        }
-      | undefined;
-  };
 
   const utils = trpc.useUtils();
 
@@ -536,36 +488,27 @@ export default function DashboardPage() {
   } | null>(null);
 
   // ---- Derived values ----
-  const aiCost = tokenUsage?.totalCost ?? 0;
-  const hasSyncedData = (stats?.totalCustomers ?? 0) > 0;
+  const hasSyncedData = (todaySnapshot?.customers ?? 0) > 0;
   const hasBrand = brandStatus?.exists ?? false;
   const automationCount =
     programs?.filter((p) => p.status !== "recommended").length ?? 0;
   const activeCount = programs?.filter((p) => p.status === "active").length ?? 0;
   const readyCount = programs?.filter((p) => p.status === "ready").length ?? 0;
 
-  const totalCustomers = stats?.totalCustomers ?? customerStats?.totalCustomers ?? 0;
+  const totalCustomers = todaySnapshot?.customers ?? 0;
+  const stateProfiles = todaySnapshot?.stateProfiles ?? 0;
+  const stateChanges24h = todaySnapshot?.stateChanges24h ?? 0;
+  const actionsPrepared24h = todaySnapshot?.actionsPrepared24h ?? 0;
+  const pendingCount = recentActions?.statusCounts?.pending ?? todaySnapshot?.decisionsWaiting ?? 0;
+  const storeSegments = segmentDist?.filter((segment) => segment.storeId === storeId) ?? [];
   const atRisk =
-    segmentDist?.find(
-      (s) => s.segment === "At Risk" || s.segment === "Hibernating",
-    )?.customerCount ?? 0;
+    storeSegments.filter((s) => s.segment === "At Risk" || s.segment === "Hibernating")
+      .reduce((sum, segment) => sum + segment.customerCount, 0);
   const lapsed =
-    segmentDist?.find((s) => s.segment === "Lost" || s.segment === "Hibernating") ?? null;
+    storeSegments.find((s) => s.segment === "Lost" || s.segment === "Hibernating") ?? null;
 
-  const revenue30d =
-    revenueAttribution?.month?.revenue ?? roiData?.aiAttributedRevenue ?? 0;
-
-  const allActions = recentActions?.actions ?? [];
-  const pendingActions = allActions.filter((a) => a.status === "pending");
-  const draftedCount = allActions.filter((a) =>
-    ["pending", "approved", "executed", "auto_executed"].includes(a.status),
-  ).length;
-  // Decisions joon held back (fatigue / suppression) read off rejected/expired.
-  const heldBack = allActions.filter((a) =>
-    ["rejected", "expired"].includes(a.status),
-  ).length;
-
-  const aiCostLabel = aiCost > 0 ? (aiCost < 0.01 ? "$<0.01" : `$${aiCost.toFixed(2)}`) : "$0.00";
+  const revenue30d = todaySnapshot?.attributedRevenue30d ?? 0;
+  const pendingActions = recentActions?.actions ?? [];
 
   // --- Home reasoning story — feeds the SHARED ReasoningReveal (same component
   // the landing hero uses, so the two surfaces can't drift). Built from real
@@ -586,9 +529,9 @@ export default function DashboardPage() {
   if (hasSyncedData) {
     homeLines.push({
       text:
-        `joon scanned ${totalCustomers.toLocaleString("en-IN")} customers` +
-        (segmentDist && segmentDist.length > 0
-          ? ` across ${segmentDist.length} segments`
+        `joon has ${stateProfiles.toLocaleString("en-IN")} customer state profiles` +
+        (storeSegments.length > 0
+          ? ` across ${storeSegments.length} segments`
           : ""),
     });
   }
@@ -597,8 +540,8 @@ export default function DashboardPage() {
       text: `joon noticed ${lapsed.customerCount.toLocaleString("en-IN")} who've gone quiet · ${formatStoreCurrency(lapsed.totalRevenue, storeCurrency)} of past revenue`,
     });
   }
-  if (heldBack > 0) {
-    homeLines.push({ text: `held back ${heldBack} as control`, beat: true });
+  if (stateChanges24h > 0) {
+    homeLines.push({ text: `${stateChanges24h.toLocaleString("en-IN")} recorded state changes in the last 24 hours`, beat: true });
   }
   if (hasBrand) {
     homeLines.push({
@@ -612,18 +555,14 @@ export default function DashboardPage() {
         (readyCount > 0 ? ` · ${readyCount} ready for your okay` : ""),
     });
   }
-  if (draftedCount > 0) {
+  if (actionsPrepared24h > 0 || pendingCount > 0) {
     homeLines.push({
-      text:
-        pendingActions.length > 0
-          ? `drafted ${draftedCount} · ready · ${pendingActions.length} queued for your okay`
-          : `drafted ${draftedCount} · ready`,
+      text: `${actionsPrepared24h} actions prepared in the last 24 hours · ${pendingCount} waiting for your decision`,
       arrow: true,
     });
   }
-  // Show joon's REAL activity as a SINGLE story (plays once, then rests — never
-  // the canned landing reel on a loop). Only fall back to ATTENTION_STORIES when
-  // there's genuinely no real activity yet (e.g. a brand-new store mid-sync).
+  // Only the demo may use the illustrative attention story. A live store with
+  // no evidence must not play a canned account of work that never happened.
   const homeStories: ReasoningStory[] =
     homeLines.length > 0
       ? [
@@ -634,7 +573,7 @@ export default function DashboardPage() {
             lines: homeLines,
           },
         ]
-      : ATTENTION_STORIES;
+      : demo ? ATTENTION_STORIES : [];
 
   // Demo: the typed goal resolves into a real, viewable drafted decision —
   // rendered with the SAME DecisionCard the live app uses (seeded but tailored
@@ -740,29 +679,31 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.15em] text-[var(--attention)]">Today · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</p>
-            <h1 className="app-page-title">{pendingActions.length > 0 ? `${pendingActions.length} ${pendingActions.length === 1 ? "decision needs" : "decisions need"} you.` : `${greeting}, ${firstName}.`}</h1>
-            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">{pendingActions.length > 0 ? "One brief, the highest-impact work, then back to your day." : "Joon is watching the store. Ask a question or review what changed."}</p>
+            <h1 className="app-page-title">{pendingCount > 0 ? `${pendingCount} ${pendingCount === 1 ? "decision needs" : "decisions need"} you.` : `${greeting}, ${firstName}.`}</h1>
+            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">{pendingCount > 0 ? "One brief, the highest-impact work, then back to your day." : "Joon is watching the store. Ask a question or review what changed."}</p>
           </div>
           <button onClick={() => openPanel()} className="app-attention-button inline-flex min-h-10 items-center justify-center gap-2 px-4 text-[13px] font-medium">
             <MessageSquare className="h-4 w-4" /> Ask Joon
           </button>
         </div>
         <MetricStrip items={[
-          { label: "Customers monitored", value: totalCustomers.toLocaleString("en-IN") },
-          { label: "Attributed revenue · 30d", value: formatStoreCurrency(revenue30d, storeCurrency) },
-          { label: "At risk", value: atRisk.toLocaleString("en-IN") },
-          { label: "AI cost · window", value: aiCostLabel },
+          { label: "Customers in store", value: todaySnapshot ? totalCustomers.toLocaleString("en-IN") : "—" },
+          { label: "Attributed revenue · 30d", value: todaySnapshot ? formatStoreCurrency(revenue30d, storeCurrency) : "—" },
+          { label: "At risk or hibernating · current", value: segmentDist ? atRisk.toLocaleString("en-IN") : "—" },
+          { label: "State profiles · current", value: todaySnapshot ? stateProfiles.toLocaleString("en-IN") : "—" },
         ]} />
+        <p className="text-[12px] text-muted-foreground">This store only · attributed revenue is not total store revenue · {todaySnapshot ? `updated ${new Date(todaySnapshot.asOf).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : snapshotError ? "latest counts unavailable" : "loading latest counts"}</p>
+        {snapshotError ? <p role="alert" className="text-[13px] text-[var(--attention)]">Today’s counts could not be loaded. <button type="button" onClick={() => refetchSnapshot()} className="font-medium underline underline-offset-2">Try again</button></p> : null}
         <Surface className="overflow-hidden p-0">
           <div className="grid gap-0 md:grid-cols-[minmax(0,1.35fr)_minmax(360px,1fr)]">
-            <div className="p-5 sm:p-6"><h2 className="text-[20px] font-medium">What Joon worked through overnight</h2><p className="mt-2 max-w-2xl text-[14px] leading-6 text-muted-foreground">Customer state changed first. Joon turned those changes into opportunities, prepared only the useful work and left the rest alone.</p><div className="mt-5 flex flex-wrap gap-2"><Link href="/activity" className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">Inspect the run</Link>{pendingActions.length > 0 ? <Link href="/actions" className="app-attention-button min-h-10 px-4 py-2.5 text-[13px] font-medium">Review what needs you</Link> : null}</div></div>
+            <div className="p-5 sm:p-6"><h2 className="text-[20px] font-medium">What Joon has recorded</h2><p className="mt-2 max-w-2xl text-[14px] leading-6 text-muted-foreground">State changes and prepared actions cover the last 24 hours. Waiting decisions remain here until you act or they expire.</p><div className="mt-5 flex flex-wrap gap-2"><Link href="/activity" className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">Inspect activity</Link>{pendingCount > 0 ? <Link href="/actions" className="app-attention-button min-h-10 px-4 py-2.5 text-[13px] font-medium">Review what needs you</Link> : null}</div></div>
             <div className="grid grid-cols-2 border-t border-border md:border-l md:border-t-0">
               {[
-                ["Observed", totalCustomers, "customers monitored"],
-                ["Changed", homeLines.length, "material observations"],
-                ["Prepared", pendingActions.length, "recommendations"],
-                ["Waiting", pendingActions.length, "for your approval"],
-              ].map(([label, value, note], index) => <Link href={index < 2 ? "/customers/states" : "/actions"} key={String(label)} className={`p-4 transition-colors hover:bg-[var(--surface-soft)] ${index % 2 ? "border-l border-border" : ""} ${index > 1 ? "border-t border-border" : ""}`}><span className="font-mono text-[12px] text-muted-foreground">0{index + 1}</span><span className="mt-2 block text-[14px] font-medium">{label}</span><span className="mt-0.5 block font-mono text-[18px] tabular-nums">{Number(value).toLocaleString("en-IN")}</span><span className="block text-[12px] text-muted-foreground">{note}</span></Link>)}
+                ["Observed", stateProfiles, "customer state profiles", `/customers/states?storeId=${encodeURIComponent(storeId)}`],
+                ["Changed", stateChanges24h, "state transitions · 24h", `/customers/states?storeId=${encodeURIComponent(storeId)}`],
+                ["Prepared", actionsPrepared24h, "actions created · 24h", "/actions?view=prepared24h"],
+                ["Waiting", pendingCount, "live decisions", "/actions"],
+              ].map(([label, value, note, href], index) => <Link href={String(href)} key={String(label)} className={`p-4 transition-colors hover:bg-[var(--surface-soft)] ${index % 2 ? "border-l border-border" : ""} ${index > 1 ? "border-t border-border" : ""}`}><span className="font-mono text-[12px] text-muted-foreground">0{index + 1}</span><span className="mt-2 block text-[14px] font-medium">{label}</span><span className="mt-0.5 block font-mono text-[18px] tabular-nums">{todaySnapshot ? Number(value).toLocaleString("en-IN") : "—"}</span><span className="block text-[12px] text-muted-foreground">{note}</span></Link>)}
             </div>
           </div>
         </Surface>
@@ -822,10 +763,10 @@ export default function DashboardPage() {
       <div className="mt-8">
         <div className="mb-3 flex items-end justify-between"><div><h2 className="app-section-title">
           Highest-impact decisions
-          {pendingActions.length > 0 ? ` · ${pendingActions.length}` : ""}
-        </h2><p className="mt-1 text-[13px] text-muted-foreground">Sorted by expected value and urgency.</p></div><Link href="/actions" className="text-[13px] font-medium text-[var(--attention)]">View all →</Link></div>
+          {pendingCount > 0 ? ` · ${pendingCount}` : ""}
+        </h2><p className="mt-1 text-[13px] text-muted-foreground">Sorted by urgency, then recency.</p></div><Link href="/actions" className="text-[13px] font-medium text-[var(--attention)]">View all →</Link></div>
 
-        {pendingActions.length > 0 ? (
+        {decisionsError ? <div role="alert"><Surface className="p-5 text-[13px]">Decisions could not be loaded. <button type="button" onClick={() => refetchDecisions()} className="font-medium underline underline-offset-2">Try again</button></Surface></div> : pendingCount > 0 && pendingActions.length > 0 ? (
           <Surface className="overflow-hidden p-0">
             {pendingActions.slice(0, 3).map((action, index) => {
               const reasoning = firstLine(action.reasoning, 160);
@@ -847,7 +788,7 @@ export default function DashboardPage() {
               );
             })}
           </Surface>
-        ) : (
+        ) : pendingCount > 0 || !recentActions ? <Surface className="p-5 text-[13px] text-muted-foreground">Loading decisions…</Surface> : (
           <div className="rounded-xl border border-border bg-card p-5">
             <p className="font-sans text-[13.5px] text-foreground">
               Nothing waiting on you.
@@ -860,20 +801,19 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Prove: the overnight reasoning remains available, but it no longer
-          competes with the work queue as a second dashboard voice. */}
+      {/* Prove: a compact, factual receipt of current store state. */}
       <Surface className="mt-8 overflow-hidden">
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
-          <div><h2 className="app-section-title">What Joon checked overnight</h2><p className="mt-1 text-[13px] text-muted-foreground">The short receipt behind today’s recommendations.</p></div>
+          <div><h2 className="app-section-title">Store state and prepared work</h2><p className="mt-1 text-[13px] text-muted-foreground">Current profile evidence and actions created in the last 24 hours.</p></div>
           <Link href="/activity" className="shrink-0 text-[13px] font-medium text-[var(--attention)]">Full activity →</Link>
         </div>
         <details className="group">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-5 text-[13px] font-medium hover:bg-[var(--surface-soft)]">
-            <span>{hasSyncedData ? `${homeLines.length} material observations` : "Store data is still syncing"}</span>
+            <span>{hasSyncedData ? "Store state and prepared work" : todaySnapshot ? "No customer state recorded yet" : snapshotError ? "Store state unavailable" : "Store data is still syncing"}</span>
             <span className="text-muted-foreground transition-transform group-open:rotate-45">＋</span>
           </summary>
           <div className="border-t border-border bg-[var(--surface-soft)] px-5 py-5">
-            {hasSyncedData ? <ReasoningReveal stories={homeStories} /> : <StreamOutput aria-label="what joon has been doing"><StreamRow tick="step">pulling in your store data, this usually takes a minute</StreamRow></StreamOutput>}
+            {hasSyncedData || demo ? <ReasoningReveal stories={homeStories} /> : <StreamOutput aria-label="what joon has been doing"><StreamRow tick="step">{todaySnapshot ? "No customer state has been recorded for this store yet." : snapshotError ? "Store state could not be loaded right now." : "Loading your store data…"}</StreamRow></StreamOutput>}
           </div>
         </details>
       </Surface>

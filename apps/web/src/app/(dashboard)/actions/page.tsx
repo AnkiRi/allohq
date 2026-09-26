@@ -103,6 +103,14 @@ export default function ActionsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [view, setView] = useState<"pending" | "completed" | "passed" | "all">("pending");
+  const [preparedSince, setPreparedSince] = useState<string | null>(null);
+  const [urlScopeLoaded, setUrlScopeLoaded] = useState(false);
+  useEffect(() => {
+    const requestedView = new URLSearchParams(window.location.search).get("view");
+    if (requestedView === "all" || requestedView === "prepared24h") setView("all");
+    if (requestedView === "prepared24h") setPreparedSince(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+    setUrlScopeLoaded(true);
+  }, []);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -111,10 +119,10 @@ export default function ActionsPage() {
   const storeCurrency = stores?.[0]?.currency ?? "USD";
 
   const actionsQuery = (trpc as any).autonomy.listActions.useInfiniteQuery(
-    { storeId, limit: 100 },
-    { enabled: !!storeId, refetchInterval: 15000, getNextPageParam: (lastPage: { nextCursor: number | null }) => lastPage.nextCursor ?? undefined }
+    { storeId, limit: 100, ...(preparedSince ? { createdSince: preparedSince } : {}) },
+    { enabled: !!storeId && urlScopeLoaded, refetchInterval: 15000, getNextPageParam: (lastPage: { nextCursor: number | null }) => lastPage.nextCursor ?? undefined }
   ) as { data: { pages: Array<{ actions: Action[]; total: number; statusCounts?: Record<string, number>; pendingEstimatedRevenue?: number; pendingActionIds?: string[]; nextCursor: number | null }> } | undefined; isLoading: boolean; hasNextPage?: boolean; isFetchingNextPage?: boolean; fetchNextPage: () => void };
-  const { isLoading } = actionsQuery;
+  const isLoading = !urlScopeLoaded || actionsQuery.isLoading;
   const summary = actionsQuery.data?.pages[0];
 
   const utils = trpc.useUtils();
@@ -210,7 +218,8 @@ export default function ActionsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Decisions" description="Review what Joon prepared, the evidence behind it and exactly what approval will create." actions={pendingCount > 1 ? <><button onClick={handleBulkReject} disabled={bulkBusy} className="min-h-10 rounded-lg border border-border bg-[var(--surface)] px-4 text-[13px] font-medium disabled:opacity-50">Pass on all</button><button onClick={handleBulkApprove} disabled={bulkBusy} className="app-attention-button min-h-10 px-4 text-[13px] font-medium disabled:opacity-50">Approve all {pendingCount}</button></> : null} />
+      <PageHeader title="Decisions" description="Review what Joon prepared, the evidence behind it and exactly what approval will create." actions={pendingCount > 1 && !preparedSince ? <><button onClick={handleBulkReject} disabled={bulkBusy} className="min-h-10 rounded-lg border border-border bg-[var(--surface)] px-4 text-[13px] font-medium disabled:opacity-50">Pass on all</button><button onClick={handleBulkApprove} disabled={bulkBusy} className="app-attention-button min-h-10 px-4 text-[13px] font-medium disabled:opacity-50">Approve all {pendingCount}</button></> : null} />
+      {preparedSince ? <p className="text-[13px] text-muted-foreground">Showing actions created in the last 24 hours. Counts below apply to this window. <Link href="/actions" className="font-medium text-[var(--attention)]">See the full decision queue →</Link></p> : null}
       <MetricStrip items={[{ label: "Needs you", value: pendingCount }, { label: "Expected value", value: formatMoney(totalImpact) }, { label: "Completed", value: completedCount }, { label: "Passed or expired", value: passedCount }]} />
       <div className="app-tab-bed" role="tablist" aria-label="Decision views">
         {([ ["pending", `Needs you · ${pendingCount}`], ["completed", `Completed · ${completedCount}`], ["passed", `Passed / expired · ${passedCount}`], ["all", `All · ${summary?.total ?? actions.length}`] ] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className="app-tab" onClick={() => setView(id)}>{label}</button>)}

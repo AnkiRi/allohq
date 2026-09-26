@@ -3,6 +3,7 @@ import { router, workspaceProcedure, ownerProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Queue } from "bullmq";
 import { resolveCampaignAudience } from "@allohq/campaign-engine";
+import { actionableDecisionWhere } from "../lib/actionable-decision";
 
 const redisConnection = {
   host: process.env["REDIS_HOST"] ?? "localhost",
@@ -1624,7 +1625,7 @@ export const aiRouter = router({
 
       // Pending actions count
       const pendingActionCount = await ctx.prisma.actionQueue.count({
-        where: { storeId: input.storeId, status: "pending" },
+        where: actionableDecisionWhere(input.storeId),
       });
 
       const monthRevenue = revenueThisMonth._sum.totalPrice ?? 0;
