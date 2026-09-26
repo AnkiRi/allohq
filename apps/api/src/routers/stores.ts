@@ -12,6 +12,7 @@ import { TRPCError } from "@trpc/server";
 import { encryptSecret } from "@allohq/database";
 import { deleteSenderDomain, selectedEmailProvider, type SenderDomainProvider } from "@allohq/messaging";
 import { removeStoreJobs } from "../lib/store-lifecycle";
+import { actionableDecisionWhere } from "../lib/actionable-decision";
 
 const widgetOriginSchema = z.string().url().transform((value, ctx) => {
   const url = new URL(value);
@@ -161,7 +162,7 @@ export const storesRouter = router({
           where: { storeId: input.storeId },
           select: { id: true, name: true, status: true, category: true },
         }),
-        ctx.prisma.actionQueue.count({ where: { storeId: input.storeId, status: "pending" } }),
+        ctx.prisma.actionQueue.count({ where: actionableDecisionWhere(input.storeId) }),
         ctx.prisma.rfmScore.groupBy({
           by: ["segment"],
           where: { storeId: input.storeId },
@@ -235,9 +236,7 @@ export const storesRouter = router({
           where: { storeId: input.storeId, status: "generating" },
           select: { name: true },
         }),
-        ctx.prisma.actionQueue.count({
-          where: { storeId: input.storeId, status: "pending" },
-        }),
+        ctx.prisma.actionQueue.count({ where: actionableDecisionWhere(input.storeId) }),
       ]);
 
       const activeJobs = automations.map((a) => a.name);

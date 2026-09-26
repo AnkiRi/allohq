@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
@@ -28,6 +28,7 @@ const DISCOUNTS = [
 
 type StateOverview = {
   total: number;
+  transitionCount24h: number;
   lifecycle: Array<{ key: string; count: number }>;
   cycle: Array<{ key: string; count: number }>;
   discounts: Array<{ key: string; count: number }>;
@@ -122,13 +123,24 @@ function Distribution({
 }
 
 export default function CustomerStatesPage() {
+  const [scope, setScope] = useState<{ loaded: boolean; storeId?: string }>({ loaded: false });
+  useEffect(() => {
+    setScope({ loaded: true, storeId: new URLSearchParams(window.location.search).get("storeId") || undefined });
+  }, []);
+  const { data: stores } = (trpc.stores.list as any).useQuery() as {
+    data: Array<{ id: string; storeName?: string | null; shopDomain: string }> | undefined;
+  };
+  const scopedStore = stores?.find((store) => store.id === scope.storeId);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [lifecycle, setLifecycle] = useState("");
   const [cycle, setCycle] = useState("");
   const [discount, setDiscount] = useState("");
   const { submit: submitToJoon } = useAlloAI();
-  const overview = (trpc.customers.stateOverview as any).useQuery() as {
+  const overview = (trpc.customers.stateOverview as any).useQuery(
+    { storeId: scope.storeId },
+    { enabled: scope.loaded },
+  ) as {
     data?: StateOverview;
     isLoading: boolean;
   };
@@ -139,7 +151,8 @@ export default function CustomerStatesPage() {
     lifecycle: lifecycle || undefined,
     cycle: cycle || undefined,
     discount: discount || undefined,
-  }) as { data?: StateExplorer; isLoading: boolean };
+    storeId: scope.storeId,
+  }, { enabled: scope.loaded }) as { data?: StateExplorer; isLoading: boolean };
 
   const setFilter = (setter: (value: string) => void, value: string) => {
     setter(value);
@@ -158,6 +171,7 @@ export default function CustomerStatesPage() {
     <main className="mx-auto w-full max-w-7xl space-y-6">
       <PageHeader title="Customer states" description="Independent signals update as orders, engagement and time change. Campaign context still decides whether each customer is a candidate." />
       <CustomerWorkspaceNav />
+      {scope.storeId ? <p className="text-[13px] text-muted-foreground">Showing {scopedStore?.storeName || scopedStore?.shopDomain || "the selected store"} only. <Link href="/customers/states" className="font-medium text-[var(--attention)]">View all stores →</Link></p> : null}
       {overview.data && <MetricStrip items={[
         { label: "Profiles", value: overview.data.total.toLocaleString("en-IN") },
         { label: "Due for evaluation", value: overview.data.queue.due.toLocaleString("en-IN") },
@@ -184,7 +198,7 @@ export default function CustomerStatesPage() {
                 </p>
               </div>
               <span className="font-mono text-[11px] text-muted-foreground">
-                {overview.data.total.toLocaleString("en-IN")} profiles
+                {overview.data.transitionCount24h.toLocaleString("en-IN")} transitions
               </span>
             </div>
             {overview.data.transitions.length === 0 ? (

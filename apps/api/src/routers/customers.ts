@@ -3,12 +3,14 @@ import { router, workspaceProcedure } from "../trpc";
 import { verifyStoreScopedAccess } from "../lib/storeAccess";
 
 export const customersRouter = router({
-  stateOverview: workspaceProcedure.query(async ({ ctx }) => {
+  stateOverview: workspaceProcedure
+  .input(z.object({ storeId: z.string().optional() }).optional())
+  .query(async ({ ctx, input }) => {
     const stores = await ctx.prisma.store.findMany({
       where: { workspaceId: ctx.workspaceId },
       select: { id: true },
     });
-    const storeIds = stores.map((store) => store.id);
+    const storeIds = stores.filter((store) => !input?.storeId || store.id === input.storeId).map((store) => store.id);
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const now = new Date();
     const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -21,6 +23,7 @@ export const customersRouter = router({
       oldestDue,
       failed,
       updatedLastHour,
+      transitionCount24h,
       transitions,
     ] = await Promise.all([
       ctx.prisma.customerState.count({ where: { storeId: { in: storeIds } } }),
@@ -53,6 +56,9 @@ export const customersRouter = router({
       ctx.prisma.customerState.count({
         where: { storeId: { in: storeIds }, lastStateUpdate: { gte: hourAgo } },
       }),
+      ctx.prisma.customerStateTransition.count({
+        where: { storeId: { in: storeIds }, occurredAt: { gte: since, lte: now } },
+      }),
       ctx.prisma.customerStateTransition.groupBy({
         by: ["dimension", "fromValue", "toValue"],
         where: { storeId: { in: storeIds }, occurredAt: { gte: since } },
@@ -76,6 +82,7 @@ export const customersRouter = router({
         count: row._count._all,
         lastOccurredAt: row._max.occurredAt,
       })),
+      transitionCount24h,
       windowStartedAt: since,
     };
   }),
@@ -91,6 +98,7 @@ export const customersRouter = router({
         discount: z.string().max(40).optional(),
         intent: z.string().max(40).optional(),
         support: z.string().max(40).optional(),
+        storeId: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -98,7 +106,7 @@ export const customersRouter = router({
         where: { workspaceId: ctx.workspaceId },
         select: { id: true },
       });
-      const where: any = { storeId: { in: stores.map((store) => store.id) } };
+      const where: any = { storeId: { in: stores.filter((store) => !input.storeId || store.id === input.storeId).map((store) => store.id) } };
       if (input.lifecycle) where.lifecycleStage = input.lifecycle;
       if (input.cycle) where.purchaseCyclePosition = input.cycle;
       if (input.discount) where.discountBehavior = input.discount;

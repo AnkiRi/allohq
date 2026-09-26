@@ -82,6 +82,7 @@ export async function listPendingActions(
   options?: {
     status?: ActionStatus;
     category?: string;
+    createdSince?: Date;
     limit?: number;
     offset?: number;
   }
@@ -109,6 +110,7 @@ export async function listPendingActions(
     storeId,
     ...(options?.status && { status: options.status }),
     ...(options?.category && { category: options.category }),
+    ...(options?.createdSince && { createdAt: { gte: options.createdSince } }),
   };
 
   const [actions, total] = await Promise.all([

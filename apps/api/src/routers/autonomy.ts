@@ -3,6 +3,7 @@ import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import { predictConsequence } from "../lib/predictions";
 import { getStoreCalibration } from "../lib/calibration";
+import { actionableDecisionWhere } from "../lib/actionable-decision";
 import {
   getAllAutonomyConfigs,
   setAutonomyTier,
@@ -87,6 +88,7 @@ export const autonomyRouter = router({
         storeId: z.string(),
         status: z.nativeEnum(ActionStatus).optional(),
         category: z.string().optional(),
+        createdSince: z.coerce.date().optional(),
         limit: z.number().min(1).max(100).optional(),
         offset: z.number().min(0).optional(),
         cursor: z.number().min(0).optional(),
@@ -98,21 +100,26 @@ export const autonomyRouter = router({
       const result = await listPendingActions(input.storeId, {
         status: input.status,
         category: input.category,
+        createdSince: input.createdSince,
         limit: input.limit,
         offset: input.cursor ?? input.offset,
       });
-      const [statusGroups, pendingAggregate, pendingRows] = await Promise.all([
+      const createdAt = input.createdSince ? { gte: input.createdSince } : undefined;
+      const category = input.category ? { category: input.category } : {};
+      const pendingWhere = { ...actionableDecisionWhere(input.storeId), ...category, ...(createdAt ? { createdAt } : {}) };
+      const [statusGroups, pendingCount, pendingAggregate, pendingRows] = await Promise.all([
         ctx.prisma.actionQueue.groupBy({
           by: ["status"],
-          where: { storeId: input.storeId },
+          where: { storeId: input.storeId, ...category, ...(createdAt ? { createdAt } : {}) },
           _count: { _all: true },
         }),
+        ctx.prisma.actionQueue.count({ where: pendingWhere }),
         ctx.prisma.actionQueue.aggregate({
-          where: { storeId: input.storeId, status: ActionStatus.PENDING },
+          where: pendingWhere,
           _sum: { estimatedRevenue: true },
         }),
         ctx.prisma.actionQueue.findMany({
-          where: { storeId: input.storeId, status: ActionStatus.PENDING },
+          where: pendingWhere,
           select: { id: true },
           orderBy: [{ urgencyScore: "desc" }, { createdAt: "desc" }],
         }),
@@ -197,7 +204,10 @@ export const autonomyRouter = router({
       return {
         actions: enrichedActions,
         total: result.total,
-        statusCounts: Object.fromEntries(statusGroups.map((group) => [group.status, group._count._all])),
+        statusCounts: {
+          ...Object.fromEntries(statusGroups.map((group) => [group.status, group._count._all])),
+          pending: pendingCount,
+        },
         pendingEstimatedRevenue: pendingAggregate._sum.estimatedRevenue ?? 0,
         pendingActionIds: pendingRows.map((row) => row.id),
         nextCursor:

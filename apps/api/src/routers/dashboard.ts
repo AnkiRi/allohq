@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
 // Single source of truth for model costs lives in the AI gateway.
 import { computeTokenCost } from "@allohq/customer-intelligence";
+import { loadTodaySnapshot } from "../lib/today-snapshot";
 
 function periodToDateFilter(period: string | undefined): { gte?: Date; lt?: Date } | undefined {
   if (!period || period === "all") return undefined;
@@ -32,6 +33,10 @@ function periodToDateFilter(period: string | undefined): { gte?: Date; lt?: Date
 }
 
 export const dashboardRouter = router({
+  /** Store-scoped, explicitly windowed facts for the Today operating view. */
+  todaySnapshot: storeProcedure
+    .input(z.object({ storeId: z.string() }))
+    .query(({ ctx, input }) => loadTodaySnapshot(ctx.prisma, input.storeId)),
   /** Revenue recovery opportunities — abandoned carts, price drops, restock, repurchase */
   recoveryOpportunities: workspaceProcedure
     .input(z.object({ storeId: z.string() }))

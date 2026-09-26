@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, workspaceProcedure, storeProcedure } from "../trpc";
 import { verifyStoreScopedAccess } from "../lib/storeAccess";
 import { getMissionControlData, getBaseline, generateStoreReport } from "@allohq/merchant-copilot";
+import { actionableDecisionWhere } from "../lib/actionable-decision";
 
 export const briefingsRouter = router({
   /** Get the latest briefing for a store, enriched with customer voice themes */
@@ -255,7 +256,7 @@ export const briefingsRouter = router({
       const { storeId } = input;
 
       const [pendingActions, automations, segmentGroups, customerCount] = await Promise.all([
-        ctx.prisma.actionQueue.count({ where: { storeId, status: "pending" } }),
+        ctx.prisma.actionQueue.count({ where: actionableDecisionWhere(storeId) }),
         ctx.prisma.automation.findMany({
           where: { storeId },
           select: { status: true },
