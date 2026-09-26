@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { geminiImageAdapter, buildGeminiImageRequest } from "./gemini-image";
-import { openAiImageAdapter, openAiSize } from "./openai-image";
+import { gptImage25CostUsd, openAiImageAdapter, openAiSize } from "./openai-image";
 import { VisualAdapterError } from "./types";
 
 /**
@@ -181,18 +181,37 @@ test("openai uses the edits endpoint and uploads the real bytes for a reference"
 });
 
 test("openai uses the generations endpoint without a reference", async () => {
-  const mock = mockFetch(() => json({ data: [{ b64_json: "QQ==" }] }));
+  const mock = mockFetch(() => json({
+    data: [{ b64_json: "QQ==" }],
+    usage: {
+      input_tokens: 120,
+      input_tokens_details: { image_tokens: 100, text_tokens: 20 },
+      output_tokens: 1000,
+      total_tokens: 1120,
+    },
+  }));
   try {
-    await withKey("OPENAI_API_KEY", () =>
+    const result = await withKey("OPENAI_API_KEY", () =>
       openAiImageAdapter.generate({ apiModelId: "gpt-image-2.5-flare", prompt: "A beach", width: 1024, height: 1024 }),
     );
     assert.match(mock.calls[0]!.url, /\/images\/generations$/);
     const body = JSON.parse(String(mock.calls[0]!.init.body));
     assert.equal(body.model, "gpt-image-2.5-flare");
     assert.equal(body.size, "1024x1024");
+    assert.equal(result.usage?.costUsd, 0.0309);
   } finally {
     mock.restore();
   }
+});
+
+test("GPT Image 2.5 cost charges unclassified input at the higher image rate", () => {
+  assert.equal(gptImage25CostUsd({
+    input_tokens: 100,
+    input_tokens_details: { image_tokens: 40, text_tokens: 20 },
+    output_tokens: 1000,
+  }), 0.03074);
+  assert.equal(gptImage25CostUsd({ input_tokens: 100, output_tokens: 1000 }), 0.0308);
+  assert.equal(gptImage25CostUsd(undefined), undefined);
 });
 
 test("openai turns organisation verification into a merchant-safe message", async () => {

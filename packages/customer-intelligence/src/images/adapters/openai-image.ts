@@ -26,9 +26,27 @@ const BASE = "https://api.openai.com/v1";
 
 type OpenAiImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
-  usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    input_tokens_details?: { image_tokens?: number; text_tokens?: number };
+    output_tokens?: number;
+    total_tokens?: number;
+  };
   error?: { message?: string; code?: string; type?: string };
 };
+
+/** Standard Image API rates for GPT Image 2.5, in USD per million tokens. */
+export function gptImage25CostUsd(usage: OpenAiImageResponse["usage"]): number | undefined {
+  const outputTokens = usage?.output_tokens;
+  if (typeof outputTokens !== "number" || !Number.isFinite(outputTokens) || outputTokens <= 0) return undefined;
+  const imageInput = usage?.input_tokens_details?.image_tokens ?? 0;
+  const textInput = usage?.input_tokens_details?.text_tokens ?? 0;
+  const totalInput = usage?.input_tokens ?? imageInput + textInput;
+  if (![imageInput, textInput, totalInput].every((value) => Number.isFinite(value) && value >= 0)) return undefined;
+  // Charge an unclassified input token at the higher image-input rate.
+  const unclassifiedInput = Math.max(0, totalInput - imageInput - textInput);
+  return (8 * (imageInput + unclassifiedInput) + 5 * textInput + 30 * outputTokens) / 1_000_000;
+}
 
 /** Sizes the image endpoints accept. */
 export function openAiSize(width: number, height: number): "1024x1024" | "1536x1024" | "1024x1536" {
@@ -131,11 +149,14 @@ export const openAiImageAdapter: VisualAdapter = {
     }
 
     const first = payload.data?.[0];
+    const costUsd = request.apiModelId.startsWith("gpt-image-2.5-")
+      ? gptImage25CostUsd(payload.usage)
+      : undefined;
     if (first?.b64_json) {
       return {
         imageBase64: first.b64_json,
         mimeType: "image/png",
-        usage: payload.usage ? { tokens: payload.usage.total_tokens, raw: payload.usage } : undefined,
+        usage: payload.usage ? { costUsd, tokens: payload.usage.total_tokens, raw: payload.usage } : undefined,
       };
     }
 
@@ -152,7 +173,7 @@ export const openAiImageAdapter: VisualAdapter = {
       return {
         imageBase64: bytes.toString("base64"),
         mimeType: image.headers.get("content-type") ?? "image/png",
-        usage: payload.usage ? { tokens: payload.usage.total_tokens, raw: payload.usage } : undefined,
+        usage: payload.usage ? { costUsd, tokens: payload.usage.total_tokens, raw: payload.usage } : undefined,
       };
     }
 

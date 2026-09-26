@@ -6,6 +6,7 @@ export {
   campaignImageBudgetExceeded,
   dailyImageSpendUsd,
   imageBudgetExceeded,
+  imageBudgetChargeUsd,
   imageSpendRefusal,
   templateImageSpendUsd,
 } from "./image-budget";
