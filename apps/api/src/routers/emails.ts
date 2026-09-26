@@ -19,7 +19,7 @@ import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/ema
 import { planEmailChange } from "../lib/email-changes";
 import { assetStorageStatus } from "../lib/asset-storage-status";
 import { fetchReferenceBytes, planGeneration, refusalFromAdapterError } from "../lib/visual-generation";
-import { describeTarget, detectVisualIntent, proposeVisualTarget } from "../lib/visual-intent";
+import { describeTarget, detectVisualIntent, productSceneReferenceRefusal, proposeVisualTarget } from "../lib/visual-intent";
 
 import {
   createEmailAssetUpload,
@@ -100,6 +100,34 @@ export const emailsRouter = router({
         },
       });
       return rows.reverse();
+    }),
+
+  pendingProposal: workspaceProcedure
+    .input(z.object({ templateId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const template = await ctx.prisma.emailTemplate.findFirst({
+        where: { id: input.templateId, workspaceId: ctx.workspaceId },
+        select: { id: true },
+      });
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+      const proposal = await ctx.prisma.emailProposal.findFirst({
+        where: { templateId: input.templateId, workspaceId: ctx.workspaceId, status: "pending" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, instruction: true, candidate: true, baseVersionId: true, createdAt: true },
+      });
+      if (!proposal) return null;
+      const latestVersion = await ctx.prisma.emailVersion.findFirst({
+        where: { templateId: input.templateId },
+        orderBy: { sequence: "desc" },
+        select: { id: true },
+      });
+      return {
+        id: proposal.id,
+        instruction: proposal.instruction,
+        createdAt: proposal.createdAt,
+        stale: (proposal.baseVersionId ?? null) !== (latestVersion?.id ?? null),
+        candidate: parseEmailDocument(proposal.candidate),
+      };
     }),
 
   createAssetUpload: workspaceProcedure
@@ -394,13 +422,6 @@ export const emailsRouter = router({
           workspaceId: ctx.workspaceId,
           templateId: input.templateId,
         });
-        const blocked =
-          !storage.configured
-            ? storage.merchantMessage
-            : !provider.ok
-              ? "Image generation is not available for this workspace yet."
-              : spendRefusal;
-
         const boundProductId =
           input.selectedBlockId
             ? (original.find((block) => block.id === input.selectedBlockId)?.props?.productId as string | undefined)
@@ -411,6 +432,12 @@ export const emailsRouter = router({
               select: { id: true, title: true, imageUrl: true },
             })
           : null;
+        const blocked =
+          !storage.configured
+            ? storage.merchantMessage
+            : !provider.ok
+              ? "Image generation is not available for this workspace yet."
+              : spendRefusal ?? productSceneReferenceRefusal(visualIntent, Boolean(product?.imageUrl));
 
         return {
           applied: false,

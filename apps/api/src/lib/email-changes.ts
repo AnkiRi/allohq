@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { containToScope, scopeViolation, type EmailEditScope, type ModelChangeSet } from "./email-scope";
 
 /**
@@ -228,7 +229,12 @@ export function planEmailChange(input: {
   const laned = applyLane(input.lane, containToScope(input.scope, changeSet));
   const { changes: contained, stripped } = stripInventedFacts(input.original, laned);
   const change = applyChangeSet(input.original, contained, input.idSeed);
-  if (!change.applied) {
+  const changed = change.applied && (
+    !isDeepStrictEqual(change.blocks, input.original) ||
+    (change.subject !== undefined && change.subject !== input.subject) ||
+    (change.previewText !== undefined && change.previewText !== input.previewText)
+  );
+  if (!changed) {
     return {
       ok: false,
       reason: stripped.length

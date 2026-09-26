@@ -49,6 +49,7 @@ export function VisualGenerator({
   results,
   failures,
   pending,
+  placementDescription,
   onGenerate,
   onUseAsset,
 }: {
@@ -63,6 +64,7 @@ export function VisualGenerator({
   results: GeneratedVisual[];
   failures: VisualFailure[];
   pending: boolean;
+  placementDescription?: string | null;
   onGenerate: () => void;
   onUseAsset: (visual: GeneratedVisual) => void;
 }) {
@@ -185,6 +187,7 @@ export function VisualGenerator({
           <p className="mb-2 text-[11px] font-medium">
             {results.length} visual{results.length === 1 ? "" : "s"} · choose one
           </p>
+          {placementDescription ? <p className="mb-2 text-[12px] text-muted-foreground">Choosing one will {placementDescription.charAt(0).toLowerCase() + placementDescription.slice(1)}. Nothing changes until you choose.</p> : null}
           <div className="grid grid-cols-2 gap-2">
             {results.map((visual) => (
               <button

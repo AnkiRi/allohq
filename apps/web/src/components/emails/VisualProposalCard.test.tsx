@@ -8,6 +8,7 @@ test("renders the proposal shape returned by the Studio API without crashing", (
   const proposal = {
     instruction: "Put this product in a model's hand",
     kind: "product_reference_edit",
+    target: { kind: "new" as const, blockType: "image" as const, afterBlockId: "product" },
     targetDescription: "A new image block",
     product: null,
     mode: "creative_concept" as const,
