@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { MetricStrip, PageHeader, Surface } from "@/components/ui/AppPrimitives";
 import type { OpTagKind, DecisionPrediction } from "@/components/console";
 import { formatStoreCurrency } from "@/components/console/MetricReadout";
+import { formatDecisionTime } from "@/lib/decision-time";
 
 // ---------------------------------------------------------------------------
 // Action shape (autonomy.listActions) — surfaced in operator language.
@@ -104,19 +105,41 @@ export default function ActionsPage() {
   const { toast } = useToast();
   const [view, setView] = useState<"pending" | "completed" | "passed" | "all">("pending");
   const [preparedSince, setPreparedSince] = useState<string | null>(null);
+  const [requestedDecisionId, setRequestedDecisionId] = useState<string | null>(null);
   const [urlScopeLoaded, setUrlScopeLoaded] = useState(false);
   useEffect(() => {
-    const requestedView = new URLSearchParams(window.location.search).get("view");
+    const params = new URLSearchParams(window.location.search);
+    const requestedView = params.get("view");
+    const decisionId = params.get("decision");
     if (requestedView === "all" || requestedView === "prepared24h") setView("all");
     if (requestedView === "prepared24h") setPreparedSince(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+    if (decisionId) { setRequestedDecisionId(decisionId); setSelectedId(decisionId); setView("all"); }
     setUrlScopeLoaded(true);
   }, []);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const { data: stores } = trpc.stores.list.useQuery();
-  const storeId = stores?.[0]?.id ?? "";
-  const storeCurrency = stores?.[0]?.currency ?? "USD";
+  const workspaceStores = stores as Array<{ id: string; currency?: string | null }> | undefined;
+  const linkedActionQuery = (trpc as any).autonomy.getActionById.useQuery(
+    { actionId: requestedDecisionId ?? "" },
+    { enabled: !!requestedDecisionId && urlScopeLoaded },
+  ) as { data?: (Action & { storeId: string; payload?: unknown }) | null; isError: boolean };
+  const linkedRaw = linkedActionQuery.data;
+  const linkedPayload = linkedRaw?.payload && typeof linkedRaw.payload === "object"
+    ? linkedRaw.payload as Record<string, unknown>
+    : {};
+  const linkedAction: Action | null = linkedRaw ? {
+    ...linkedRaw,
+    status: linkedRaw.status === "pending" && linkedRaw.expiresAt && new Date(linkedRaw.expiresAt) <= new Date() ? "expired" : linkedRaw.status,
+    campaignName: typeof linkedPayload.campaignName === "string" ? linkedPayload.campaignName : null,
+    offer: typeof linkedPayload.offer === "string" ? linkedPayload.offer : null,
+    targetSegment: linkedPayload.targetSegment && typeof linkedPayload.targetSegment === "object" ? linkedPayload.targetSegment as Action["targetSegment"] : null,
+    scheduledAt: typeof linkedPayload.scheduledAt === "string" ? linkedPayload.scheduledAt : null,
+  } : null;
+  const selectedStore = workspaceStores?.find((store) => store.id === linkedRaw?.storeId) ?? workspaceStores?.[0];
+  const storeId = selectedStore?.id ?? "";
+  const storeCurrency = selectedStore?.currency ?? "USD";
 
   const actionsQuery = (trpc as any).autonomy.listActions.useInfiniteQuery(
     { storeId, limit: 100, ...(preparedSince ? { createdSince: preparedSince } : {}) },
@@ -175,7 +198,10 @@ export default function ActionsPage() {
       toast(err.message || "That didn't go through. Give it another try.", "error"),
   }) as { mutate: (input: Record<string, unknown>) => void; isPending: boolean };
 
-  const actions = actionsQuery.data?.pages.flatMap((page) => page.actions) ?? [];
+  const listedActions = actionsQuery.data?.pages.flatMap((page) => page.actions) ?? [];
+  const actions = linkedAction && !listedActions.some((action) => action.id === linkedAction.id)
+    ? [linkedAction, ...listedActions]
+    : listedActions;
   const pending = actions.filter((a) => a.status === "pending");
   const completed = actions.filter((a) => ["approved", "executed"].includes(a.status));
   const passed = actions.filter((a) => ["rejected", "expired", "failed"].includes(a.status));
@@ -188,6 +214,9 @@ export default function ActionsPage() {
     if (!visible.length) setSelectedId(null);
     else if (!selectedId || !visible.some((action) => action.id === selectedId)) setSelectedId(visible[0]!.id);
   }, [selectedId, visible]);
+  useEffect(() => {
+    if (linkedAction?.id === requestedDecisionId) setSelectedId(linkedAction.id);
+  }, [linkedAction?.id, requestedDecisionId]);
   const selected = visible.find((action) => action.id === selectedId) ?? null;
   const busy = approveMut.isPending || rejectMut.isPending;
   const bulkBusy = bulkApproveMut.isPending || bulkRejectMut.isPending;
@@ -220,6 +249,7 @@ export default function ActionsPage() {
     <div className="space-y-6">
       <PageHeader title="Decisions" description="Review what Joon prepared, the evidence behind it and exactly what approval will create." actions={pendingCount > 1 && !preparedSince ? <><button onClick={handleBulkReject} disabled={bulkBusy} className="min-h-10 rounded-lg border border-border bg-[var(--surface)] px-4 text-[13px] font-medium disabled:opacity-50">Pass on all</button><button onClick={handleBulkApprove} disabled={bulkBusy} className="app-attention-button min-h-10 px-4 text-[13px] font-medium disabled:opacity-50">Approve all {pendingCount}</button></> : null} />
       {preparedSince ? <p className="text-[13px] text-muted-foreground">Showing actions created in the last 24 hours. Counts below apply to this window. <Link href="/actions" className="font-medium text-[var(--attention)]">See the full decision queue →</Link></p> : null}
+      {requestedDecisionId && linkedActionQuery.isError ? <p role="alert" className="text-[13px] text-[var(--risk)]">That linked decision is no longer available. The current decision queue is shown below.</p> : null}
       <MetricStrip items={[{ label: "Needs you", value: pendingCount }, { label: "Expected value", value: formatMoney(totalImpact) }, { label: "Completed", value: completedCount }, { label: "Passed or expired", value: passedCount }]} />
       <div className="app-tab-bed" role="tablist" aria-label="Decision views">
         {([ ["pending", `Needs you · ${pendingCount}`], ["completed", `Completed · ${completedCount}`], ["passed", `Passed / expired · ${passedCount}`], ["all", `All · ${summary?.total ?? actions.length}`] ] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className="app-tab" onClick={() => setView(id)}>{label}</button>)}
@@ -230,7 +260,7 @@ export default function ActionsPage() {
           {isLoading ? <div className="flex items-center justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : visible.length ? <ul className="divide-y divide-border" role="listbox" aria-label="Decisions">{visible.map((action) => {
             const active = action.id === selected?.id;
             const exp = expiresIn(action.expiresAt);
-            return <li key={action.id} role="presentation"><button role="option" onClick={() => { setSelectedId(action.id); setInspectorOpen(true); }} className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-4 text-left transition-colors ${active ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]/60"}`} aria-selected={active}><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-[14px] font-medium">{decisionLine(action)}</span><span className="rounded-full bg-[var(--evidence-soft)] px-2 py-0.5 text-[11px] text-[var(--evidence)]">{action.status}</span></span><span className="mt-1 block line-clamp-2 text-[13px] leading-5 text-muted-foreground">{firstLine(action.reasoning, 150) || "Prepared for review."}</span><span className="mt-2 flex flex-wrap gap-3 text-[12px] text-muted-foreground"><span>{confidenceLabel(action.confidenceScore)}</span>{exp && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{exp}</span>}</span></span><span className="flex items-center gap-2"><span className="font-mono text-[12px] tabular-nums text-[var(--attention)]">{action.estimatedRevenue ? `~${formatMoney(action.estimatedRevenue)}` : ""}</span><ChevronRight className="h-4 w-4 text-muted-foreground" /></span></button></li>;
+            return <li key={action.id} role="presentation"><button role="option" onClick={() => { setSelectedId(action.id); setInspectorOpen(true); }} className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-4 text-left transition-colors ${active ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]/60"}`} aria-selected={active}><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-[14px] font-medium">{decisionLine(action)}</span><span className="rounded-full bg-[var(--evidence-soft)] px-2 py-0.5 text-[11px] text-[var(--evidence)]">{action.status}</span></span><span className="mt-1 block line-clamp-2 text-[13px] leading-5 text-muted-foreground">{firstLine(action.reasoning, 150) || "Prepared for review."}</span><span className="mt-2 flex flex-wrap gap-3 text-[12px] text-muted-foreground">{formatDecisionTime(action.createdAt) ? <span>First prepared {formatDecisionTime(action.createdAt)}</span> : null}<span>{confidenceLabel(action.confidenceScore)}</span>{exp && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{exp}</span>}</span></span><span className="flex items-center gap-2"><span className="font-mono text-[12px] tabular-nums text-[var(--attention)]">{action.estimatedRevenue ? `~${formatMoney(action.estimatedRevenue)}` : ""}</span><ChevronRight className="h-4 w-4 text-muted-foreground" /></span></button></li>;
           })}</ul> : <div className="px-6 py-20 text-center"><p className="text-[15px] font-medium">Nothing in this view</p><p className="mt-1 text-[13px] text-muted-foreground">Joon will place the next material decision here with its evidence.</p></div>}
           {actionsQuery.hasNextPage && <div className="border-t border-border p-3 text-center"><button onClick={() => actionsQuery.fetchNextPage()} disabled={actionsQuery.isFetchingNextPage} className="min-h-9 rounded-lg border border-border px-4 text-[13px] font-medium disabled:opacity-50">{actionsQuery.isFetchingNextPage ? "Loading…" : "Load older decisions"}</button></div>}
         </Surface>
@@ -244,9 +274,9 @@ export default function ActionsPage() {
               ["Delivery", selected.scheduledAt ? new Date(selected.scheduledAt).toLocaleString("en-IN") : "Set when the artifact is reviewed"],
               ["Expected value", selected.estimatedRevenue ? formatMoney(selected.estimatedRevenue) : "No estimate"],
               ["Confidence", confidenceLabel(selected.confidenceScore)],
-              ["Prepared", selected.createdAt ? new Date(selected.createdAt).toLocaleString("en-IN") : "—"],
-              ["Last evaluated", selected.lastEvaluatedAt ? new Date(selected.lastEvaluatedAt).toLocaleString("en-IN") : "—"],
-              ["Expires", expiresIn(selected.expiresAt) ?? "No expiry"],
+              ["First prepared", formatDecisionTime(selected.createdAt) ?? "—"],
+              ["Last evaluated", formatDecisionTime(selected.lastEvaluatedAt) ?? "—"],
+              ["Expires", formatDecisionTime(selected.expiresAt) ? `${formatDecisionTime(selected.expiresAt)} · ${expiresIn(selected.expiresAt) ?? "expired"}` : "No expiry"],
             ].map(([label, value]) => <div key={label} className="grid grid-cols-[112px_1fr] gap-3 px-5 py-3"><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl>
             {selected.prediction && <div className="border-t border-border bg-[var(--evidence-soft)]/55 p-5"><p className="text-[12px] font-medium text-[var(--evidence)]">Predicted consequence · {selected.prediction.basis === "calibrated" ? "control-backed" : "estimate"}</p><p className="mt-2 text-[13px]">Upside: {formatMoney(selected.prediction.upsideRevenue)} · Risk: {selected.prediction.downsideRiskPct}% unsubscribe or annoyance · {selected.prediction.confidence} confidence</p></div>}
             <div className="flex flex-wrap gap-2 border-t border-border p-4">{artifactHref && <Link href={artifactHref} className="min-h-10 rounded-lg border border-border px-4 py-2.5 text-[13px] font-medium">Open artifact</Link>}{selected.status === "pending" && <><button onClick={() => rejectMut.mutate({ actionId: selected.id, reason: "Passed from decision queue" })} disabled={busy} className="min-h-10 rounded-lg border border-border px-4 text-[13px] font-medium disabled:opacity-50"><X className="mr-1 inline h-4 w-4" />Pass</button><button onClick={() => approveMut.mutate({ actionId: selected.id })} disabled={busy} className="app-attention-button min-h-10 px-4 text-[13px] font-medium disabled:opacity-50"><Check className="mr-1 inline h-4 w-4" />Approve</button></>}</div>

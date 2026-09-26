@@ -137,9 +137,12 @@ export const eventReactorWorker = new Worker<EventReactJobData>(
         category: category,
         tier: tier,
         actionTaken,
-        entityId: customerId ?? result.id,
-        entityType: customerId ? "customer" : "action",
-        metadata: payload as any,
+        // The activity event must point to the decision it created. A customer
+        // link alone cannot tell the merchant whether that decision later
+        // expired, was passed, or was approved.
+        entityId: result.id,
+        entityType: "action",
+        metadata: { ...payload, ...(customerId ? { customerId } : {}) } as any,
       },
     }).catch((err) => {
       console.warn(`[event-reactor] Failed to log activity: ${(err as Error).message}`);
