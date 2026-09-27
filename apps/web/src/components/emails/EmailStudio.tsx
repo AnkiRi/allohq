@@ -30,11 +30,13 @@ import { EmailPreviewFrame } from "./EmailPreviewFrame";
 import { placeUploadedImage } from "./upload-placement";
 import { placeProposalVisual } from "./visual-proposal-placement";
 import { proposalPreviewState } from "./proposal-preview";
+import { countStudioDraftChanges, matchingStudioVersion, type StudioDraftContent } from "./studio-draft-state";
 
 type StudioTab = "ask" | "inspect" | "shopify" | "visuals" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
 type Proposal = { id?: string; blocks: EmailBlock[]; subject: string; previewText: string; instruction: string; createdAt: Date; baseSignature: string; stale?: boolean };
 type DurableVersion = { id: string; sequence: number; source: string; note?: string | null; createdAt: string | Date; document: unknown };
+const EMPTY_DURABLE_VERSIONS: DurableVersion[] = [];
 type ProposalHistoryItem = { id: string; instruction: string; scope?: string | null; status: string; createdAt: string | Date; resolvedAt?: string | Date | null };
 type PendingProposal = { id: string; instruction: string; createdAt: string | Date; stale: boolean; candidate: { blocks: EmailBlock[]; envelope: { subject: string; previewText: string } } };
 
@@ -95,22 +97,29 @@ const preflightEmail = (subject: string, previewText: string, blocks: EmailBlock
   };
 };
 
-export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText, initialHtml, brandKit, previewVariables, templateId, storeId, templateName, reviewHref, onBack }: {
+export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText, initialHtml, initialSavedVersionNumber, brandKit, previewVariables, templateId, storeId, templateName, reviewHref, backLabel, onBack }: {
   initialBlocks: EmailBlock[]; initialSubject: string; initialPreviewText: string; initialHtml: string;
+  initialSavedVersionNumber?: number | null;
   brandKit?: BrandKit; previewVariables: Record<string, string>; templateId?: string; storeId?: string;
   /** Shown in the Studio top bar. */
   templateName?: string;
   /** Where the existing review/delivery flow continues, when there is one. */
   reviewHref?: string | null;
+  backLabel?: string;
   /** Overrides the default "go back the way you came". */
   onBack?: () => void;
 }) {
   const [blocks, setBlocks] = React.useState<EmailBlock[]>(() => cloneBlocks(initialBlocks));
   const [subject, setSubject] = React.useState(initialSubject);
   const [previewText, setPreviewText] = React.useState(initialPreviewText);
+  const [savedDraft, setSavedDraft] = React.useState<StudioDraftContent>(() => ({
+    blocks: cloneBlocks(initialBlocks), subject: initialSubject, previewText: initialPreviewText,
+  }));
+  const [lastSavedVersionNumber, setLastSavedVersionNumber] = React.useState<number | null>(initialSavedVersionNumber ?? null);
+  const draftContent = React.useMemo(() => ({ blocks, subject, previewText }), [blocks, subject, previewText]);
+  const unsavedChangeCount = React.useMemo(() => countStudioDraftChanges(savedDraft, draftContent), [savedDraft, draftContent]);
+  const dirty = unsavedChangeCount > 0;
   const draftSignature = JSON.stringify({ blocks, subject, previewText });
-  const draftSignatureRef = React.useRef(draftSignature);
-  draftSignatureRef.current = draftSignature;
   const [selectedId, setSelectedId] = React.useState<string | null>(initialBlocks[0]?.id ?? null);
   const [html, setHtml] = React.useState(initialHtml);
   const [previewOpen, setPreviewOpen] = React.useState(false);
@@ -155,8 +164,6 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [proposal, setProposal] = React.useState<Proposal | null>(null);
   const restoredProposalIds = React.useRef(new Set<string>());
   const [proposalView, setProposalView] = React.useState<"before" | "proposed">("proposed");
-  const [dirty, setDirty] = React.useState(false);
-  const [savedAt, setSavedAt] = React.useState<Date | null>(null);
   const [versions, setVersions] = React.useState<Snapshot[]>([
     { id: "opened", label: "Opened in studio", createdAt: new Date(), blocks: cloneBlocks(initialBlocks), subject: initialSubject, previewText: initialPreviewText },
   ]);
@@ -235,6 +242,19 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     { id: templateId ?? "" },
     { enabled: !!templateId },
   ) as { data?: DurableVersion[]; refetch: () => Promise<unknown> };
+  const durableVersions = durableVersionsQuery.data ?? EMPTY_DURABLE_VERSIONS;
+  const savedVersionNumber = React.useMemo(() => matchingStudioVersion(durableVersions, savedDraft) ?? lastSavedVersionNumber, [durableVersions, savedDraft, lastSavedVersionNumber]);
+  const draftVersionNumber = React.useMemo(() => matchingStudioVersion(durableVersions, draftContent), [durableVersions, draftContent]);
+  const nextVersionNumber = durableVersionsQuery.data
+    ? Math.max(lastSavedVersionNumber ?? 0, 0, ...durableVersions.map((version) => version.sequence)) + 1
+    : null;
+  const draftLabel = dirty
+    ? `Draft · ${unsavedChangeCount} unsaved change${unsavedChangeCount === 1 ? "" : "s"}`
+    : savedVersionNumber !== null ? `Draft · same as v${savedVersionNumber}` : "Draft · no saved version";
+  const saveLabel = dirty
+    ? draftVersionNumber !== null ? `Save matching v${draftVersionNumber}` : nextVersionNumber !== null ? `Save as v${nextVersionNumber}` : "Save version"
+    : savedVersionNumber !== null ? `Saved v${savedVersionNumber}` : nextVersionNumber !== null ? `Save as v${nextVersionNumber}` : "Save version";
+  const reviewNeedsSave = dirty || savedVersionNumber === null;
   const proposalHistoryQuery = (trpc.emails as any).proposalHistory.useQuery(
     { templateId: templateId ?? "" },
     { enabled: !!templateId },
@@ -382,7 +402,6 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       if ("error" in placement) { toast(placement.error, "error"); return; }
       setBlocks(placement.blocks);
       setSelectedId(placement.selectedId);
-      setDirty(true);
       setVisualTarget(null);
       setVisualTargetDescription(null);
       setVisualProductHasImage(false);
@@ -495,7 +514,6 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     next.splice(Math.max(0, index), 0, imageBlock);
     setBlocks(next);
     setSelectedId(imageBlock.id);
-    setDirty(true);
     setAdvancedVisuals(true);
     toast("Added an image block above the product. Its own photo is untouched.", "success");
   };
@@ -524,13 +542,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const updateBlock = (next: EmailBlock) => {
     const parsed = emailBlockSchema.safeParse(next);
     if (!parsed.success) { toast(parsed.error.issues[0]?.message ?? "That block is not valid.", "error"); return; }
-    setBlocks((current) => current.map((block) => block.id === next.id ? parsed.data as EmailBlock : block)); setDirty(true);
+    setBlocks((current) => current.map((block) => block.id === next.id ? parsed.data as EmailBlock : block));
   };
   const move = (blockId: string, direction: -1 | 1) => {
-    setBlocks((current) => { const index = current.findIndex((block) => block.id === blockId); const destination = index + direction; if (index < 0 || destination < 0 || destination >= current.length) return current; const next = [...current]; [next[index], next[destination]] = [next[destination]!, next[index]!]; return next; }); setDirty(true);
+    setBlocks((current) => { const index = current.findIndex((block) => block.id === blockId); const destination = index + direction; if (index < 0 || destination < 0 || destination >= current.length) return current; const next = [...current]; [next[index], next[destination]] = [next[destination]!, next[index]!]; return next; });
   };
   const remove = (blockId: string) => {
-    setBlocks((current) => { const next = current.filter((block) => block.id !== blockId); if (selectedId === blockId) setSelectedId(next[0]?.id ?? null); return next; }); setDirty(true);
+    setBlocks((current) => { const next = current.filter((block) => block.id !== blockId); if (selectedId === blockId) setSelectedId(next[0]?.id ?? null); return next; });
   };
   const selectCanvasBlock = (blockId: string) => {
     // The inspector edits the current draft, never the proposed snapshot. A
@@ -545,7 +563,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     setCompactPanelOpen(true);
   };
   const add = (type: EmailBlockType) => {
-    const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactPanelOpen(true); setDirty(true);
+    const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactPanelOpen(true);
   };
   const createCheckpoint = (label: string, next?: { blocks: EmailBlock[]; subject: string; previewText: string }) => {
     const snapshot: Snapshot = { id: `v-${Date.now()}`, label, createdAt: new Date(), blocks: cloneBlocks(next?.blocks ?? blocks), subject: next?.subject ?? subject, previewText: next?.previewText ?? previewText };
@@ -553,10 +571,15 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   };
   const restoreVersion = (index: number) => {
     const version = versions[index]; if (!version) return;
-    setBlocks(cloneBlocks(version.blocks)); setSubject(version.subject); setPreviewText(version.previewText); setSelectedId(version.blocks[0]?.id ?? null); setVersionCursor(index); setProposal(null); setDirty(true);
+    setBlocks(cloneBlocks(version.blocks)); setSubject(version.subject); setPreviewText(version.previewText); setSelectedId(version.blocks[0]?.id ?? null); setVersionCursor(index); setProposal(null);
   };
-  const saveDraft = () => {
-    if (!templateId) return;
+  const saveDraft = (afterSave?: () => void) => {
+    if (!templateId) { toast("This email cannot be saved right now. Reopen it and try again.", "error"); return; }
+    if (!dirty && savedVersionNumber !== null) {
+      toast(`Matches v${savedVersionNumber}. Nothing new to save.`, "info");
+      afterSave?.();
+      return;
+    }
     const validated = emailBlocksSchema.safeParse(blocks);
     if (!validated.success) { toast(validated.error.issues[0]?.message ?? "This email contains an invalid block.", "error"); return; }
     const submittedSignature = draftSignature;
@@ -564,19 +587,23 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     saveMut.mutate({ id: templateId, subject, previewText, blocks: validated.data }, {
       onSuccess: (saved) => {
         createCheckpoint("Saved version", savedDocument);
-        if (draftSignatureRef.current === submittedSignature) setDirty(false);
+        setSavedDraft({ ...savedDocument, blocks: cloneBlocks(savedDocument.blocks) });
         if (proposal && submittedSignature !== proposal.baseSignature) {
           setProposal(null);
           void proposalHistoryQuery.refetch();
           void pendingProposalQuery.refetch();
         }
-        setSavedAt(new Date());
+        if (typeof saved?.version?.sequence === "number") setLastSavedVersionNumber(saved.version.sequence);
         (utils.templates.getById as any).setData({ id: templateId }, (current: any) => current ? { ...current, ...saved } : current);
         void utils.templates.getById.invalidate({ id: templateId });
         void utils.templates.list.invalidate();
         void utils.campaigns.getById.invalidate();
         void durableVersionsQuery.refetch();
-        toast("Saved as a recoverable version.", "success");
+        const versionNumber = saved?.version?.sequence;
+        toast(versionNumber
+          ? afterSave ? `Saved v${versionNumber}. This campaign now reviews v${versionNumber}.` : `Saved v${versionNumber}.`
+          : "Email saved.", "success");
+        afterSave?.();
       },
       onError: (error) => toast(error.message ?? "Could not save this email.", "error"),
     });
@@ -613,9 +640,9 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (proposal.stale) { toast("This proposal is based on an older saved email. Reject it and ask Joon again.", "error"); return; }
     if (draftSignature !== proposal.baseSignature) { toast("The email changed after this proposal. Save or discard those edits, then ask Joon again.", "error"); return; }
     if (JSON.stringify({ blocks: proposal.blocks, subject: proposal.subject, previewText: proposal.previewText }) === proposal.baseSignature) { toast("Joon did not change the email. Reject this proposal and try another instruction.", "error"); return; }
-    const apply = () => { createCheckpoint(`Joon · ${proposal.instruction}`, proposal); setBlocks(cloneBlocks(proposal.blocks)); setSubject(proposal.subject); setPreviewText(proposal.previewText); setSelectedId(proposal.blocks.some((block) => block.id === selectedId) ? selectedId : proposal.blocks[0]?.id ?? null); setProposal(null); setDirty(!proposal.id); setSavedAt(proposal.id ? new Date() : savedAt); if (proposal.id) { void durableVersionsQuery.refetch(); void proposalHistoryQuery.refetch(); } };
+    const apply = () => { createCheckpoint(`Joon · ${proposal.instruction}`, proposal); setBlocks(cloneBlocks(proposal.blocks)); setSubject(proposal.subject); setPreviewText(proposal.previewText); setSelectedId(proposal.blocks.some((block) => block.id === selectedId) ? selectedId : proposal.blocks[0]?.id ?? null); setProposal(null); if (proposal.id) { setSavedDraft({ blocks: cloneBlocks(proposal.blocks), subject: proposal.subject, previewText: proposal.previewText }); void durableVersionsQuery.refetch(); void proposalHistoryQuery.refetch(); } };
     if (!proposal.id) { apply(); return; }
-    resolveProposalMut.mutate({ proposalId: proposal.id, decision: "accepted" }, { onSuccess: () => { apply(); void pendingProposalQuery.refetch(); }, onError: (error: { message?: string }) => toast(error.message ?? "Could not accept this proposal.", "error") });
+    resolveProposalMut.mutate({ proposalId: proposal.id, decision: "accepted" }, { onSuccess: (data: { version?: { sequence?: number } | null }) => { apply(); if (typeof data.version?.sequence === "number") setLastSavedVersionNumber(data.version.sequence); void pendingProposalQuery.refetch(); }, onError: (error: { message?: string }) => toast(error.message ?? "Could not accept this proposal.", "error") });
   };
   const rejectProposal = () => {
     if (!proposal || resolveProposalMut.isPending) return;
@@ -632,7 +659,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     restoreVersionMut.mutate({ templateId, versionId }, {
       onSuccess: (data: any) => {
         const nextBlocks = data.template.blocks as EmailBlock[];
-        setBlocks(cloneBlocks(nextBlocks)); setSubject(data.template.subject); setPreviewText(data.template.previewText ?? ""); setSelectedId(nextBlocks[0]?.id ?? null); setProposal(null); setDirty(false); setSavedAt(new Date()); void durableVersionsQuery.refetch(); toast("Restored as a new version.", "success");
+        setBlocks(cloneBlocks(nextBlocks)); setSubject(data.template.subject); setPreviewText(data.template.previewText ?? ""); setSelectedId(nextBlocks[0]?.id ?? null); setProposal(null); setSavedDraft({ blocks: cloneBlocks(nextBlocks), subject: data.template.subject, previewText: data.template.previewText ?? "" }); if (typeof data.version?.sequence === "number") setLastSavedVersionNumber(data.version.sequence); void durableVersionsQuery.refetch(); toast("Restored as a new version.", "success");
       },
       onError: (error: { message?: string }) => toast(error.message ?? "Could not restore this version.", "error"),
     });
@@ -658,7 +685,6 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       const target = blocks.find((block) => block.id === targetBlockId);
       if (target?.type === "image" || target?.type === "hero") {
         setBlocks((current) => current.map((block) => placeUploadedImage(block, targetBlockId!, asset.url, file.name)));
-        setDirty(true);
         setLibraryOpen(false);
         toast("Image uploaded and placed in this email. Save the version to keep it.", "success");
       } else {
@@ -695,6 +721,9 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       <StudioTopBar
         name={templateName ?? "Untitled email"}
         state={dirty ? "draft" : "saved"}
+        stateLabel={draftLabel}
+        onOpenVersions={() => { setActiveTab("versions"); setToolsOpen(true); setCompactPanelOpen(true); }}
+        backLabel={backLabel ?? "Back"}
         canUndo={versionCursor > 0}
         canRedo={versionCursor < versions.length - 1}
         onUndo={() => restoreVersion(Math.max(0, versionCursor - 1))}
@@ -708,8 +737,11 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           saveDraft();
         }}
         saving={saveMut.isPending}
+        saveLabel={saveLabel}
+        saveDisabled={showProposed || (!dirty && savedVersionNumber !== null)}
         reviewHref={reviewHref ?? null}
-        reviewBlocked={dirty || saveMut.isPending || showProposed}
+        reviewBlocked={saveMut.isPending || showProposed}
+        onReview={reviewNeedsSave && reviewHref ? () => saveDraft(() => router.push(reviewHref)) : undefined}
         onAddBlock={() => setShowAdd((value) => !value)}
         onOpenTools={() => setCompactPanelOpen(true)}
         onBack={leaveStudio}
@@ -767,9 +799,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         ) : null}
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F4F2EC] p-2">
+          <div className="flex shrink-0 items-center justify-between px-1 pb-2 text-[12px]">
+            <span className="font-medium">{showProposed ? "Joon's suggestion" : "Draft canvas"}</span>
+            <span className="text-muted-foreground">{showProposed ? "Not applied to your draft" : "Always your current draft"}</span>
+          </div>
           <div className="mb-2 grid shrink-0 gap-2 rounded-lg border border-border bg-[#FFFDF8] p-2 md:grid-cols-2">
-            <EnvelopeField label="Subject" value={effectiveSubject} readOnly={Boolean(proposal && !proposalNotice)} onChange={(value) => { setSubject(value); setDirty(true); }} />
-            <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={Boolean(proposal && !proposalNotice)} placeholder="The line people see beside the subject" onChange={(value) => { setPreviewText(value); setDirty(true); }} />
+            <EnvelopeField label="Subject" value={effectiveSubject} readOnly={Boolean(proposal && !proposalNotice)} onChange={setSubject} />
+            <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={Boolean(proposal && !proposalNotice)} placeholder="The line people see beside the subject" onChange={setPreviewText} />
           </div>
           <div className="min-h-0 flex-1"><EmailPreviewFrame html={html} isLoading={renderMut.isPending} selectedBlockId={selectedId} onSelectBlock={selectCanvasBlock} /></div>
         </main>
@@ -853,8 +889,17 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <Dialog.Content className="fixed inset-x-3 bottom-3 top-3 z-50 mx-auto flex max-w-5xl flex-col overflow-hidden rounded-xl bg-[#FFFDF8] shadow-2xl outline-none sm:inset-y-[4vh]" aria-describedby="studio-preview-description">
             <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
               <div className="min-w-0">
-                <Dialog.Title className="truncate text-[15px] font-medium">Full email preview</Dialog.Title>
-                <Dialog.Description id="studio-preview-description" className="mt-1 truncate text-[12px] text-muted-foreground">{effectiveSubject || "Untitled subject"} · {dirty ? "Unsaved changes" : "Saved version"}</Dialog.Description>
+                <Dialog.Title className="truncate text-[15px] font-medium">Inbox preview</Dialog.Title>
+                <Dialog.Description id="studio-preview-description" className="mt-1 text-[12px] text-muted-foreground">
+                  {showProposed
+                    ? "Joon's suggestion · not applied to your draft"
+                    : dirty
+                      ? `Your draft · ${unsavedChangeCount} unsaved change${unsavedChangeCount === 1 ? "" : "s"}`
+                      : savedVersionNumber !== null
+                        ? `v${savedVersionNumber} · the version this campaign reviews`
+                        : "Your draft · no saved version"}
+                  {effectiveSubject ? ` · ${effectiveSubject}` : ""}
+                </Dialog.Description>
               </div>
               <Dialog.Close className="rounded-lg border border-border p-2 outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]" aria-label="Close full preview"><X className="h-4 w-4" /></Dialog.Close>
             </div>

@@ -6,7 +6,7 @@ import { renderBrandedEmail, complete } from "@allohq/customer-intelligence";
 import { scoreSubjectLine } from "@allohq/creative-engine";
 import { emailBlocksSchema } from "@allohq/email-builder";
 import { normalizeLegacyEmailBlocks, parseEmailDocument } from "@allohq/email-builder";
-import { ensureEmailVersion } from "@allohq/campaign-engine";
+import { ensureEmailVersion, emailDocumentFromTemplate, emailDocumentHash } from "@allohq/campaign-engine";
 
 export const templatesRouter = router({
   list: workspaceProcedure
@@ -39,6 +39,14 @@ export const templatesRouter = router({
         },
       });
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // A restored template can match an older version. The highest sequence
+      // is not necessarily the version this saved content represents.
+      const savedContentHash = emailDocumentHash(emailDocumentFromTemplate(template));
+      const savedVersion = await ctx.prisma.emailVersion.findFirst({
+        where: { templateId: template.id, workspaceId: ctx.workspaceId, contentHash: savedContentHash },
+        select: { sequence: true },
+      });
 
       // Enrich product blocks with actual product data from DB
       const blocks = normalizeLegacyEmailBlocks(template.blocks) as any[];
@@ -94,6 +102,7 @@ export const templatesRouter = router({
         thumbnailUrl: template.thumbnailUrl,
         createdAt: template.createdAt,
         updatedAt: template.updatedAt,
+        savedVersionSequence: savedVersion?.sequence ?? null,
         storeId: resolvedStoreId,
         // Lets the Studio offer the existing review/delivery entry point
         // instead of stranding a merchant on a full-page surface.
