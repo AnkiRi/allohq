@@ -164,6 +164,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [visualFailures, setVisualFailures] = React.useState<VisualFailure[]>([]);
   const [visualProposal, setVisualProposal] = React.useState<VisualProposal | null>(null);
   const [visualTarget, setVisualTarget] = React.useState<VisualProposal["target"] | null>(null);
+  const [visualGroundingProductId, setVisualGroundingProductId] = React.useState<string | null>(null);
   const [visualTargetDescription, setVisualTargetDescription] = React.useState<string | null>(null);
   const [visualProductHasImage, setVisualProductHasImage] = React.useState(false);
   /** The four-slot form is a deliberate advanced workflow, not the default. */
@@ -341,14 +342,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   ) as { data?: import("./VisualGenerator").VisualCapabilities };
 
   /** The product the selected block is about, if any — visuals are grounded in it. */
-  const blockProductId = selected && (selected.type === "product")
+  const blockProductId = visualGroundingProductId ?? (selected && selected.type === "product"
     ? (selected.props.productId || null)
-    : (blocks.find((block) => block.type === "product") as any)?.props?.productId ?? null;
+    : (blocks.find((block) => block.type === "product") as any)?.props?.productId ?? null);
   const blockProduct = blockProductId
     ? (productPage?.products ?? []).find((product) => product.id === blockProductId) ?? null
     : null;
 
-  const generateVisuals = (requestedSlots = visualSlots, requestedMode = visualMode) => {
+  const generateVisuals = (requestedSlots = visualSlots, requestedMode = visualMode, productId = blockProductId) => {
     if (!storeId) { toast("Choose a store before generating a visual.", "error"); return; }
     if (generateVisualsMut.isPending) return;
     const slots = requestedSlots
@@ -365,7 +366,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (!slots.length) return;
     setVisualFailures([]);
     generateVisualsMut.mutate(
-      { storeId, templateId, productId: blockProductId ?? undefined, mode: requestedMode, slots },
+      { storeId, templateId, productId: productId ?? undefined, mode: requestedMode, slots },
       {
         onSuccess: (data: { assets: GeneratedVisual[]; failures: VisualFailure[] }) => {
           setVisuals(data.assets);
@@ -400,7 +401,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     setVisualFailures([]);
     setAdvancedVisuals(true);
     openPanelSection("visuals");
-    generateVisuals([slot], visualProposal.mode);
+    generateVisuals([slot], visualProposal.mode, visualProposal.product?.id ?? null);
     setVisualProposal(null);
   };
 
@@ -425,6 +426,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       setVisualTargetDescription(null);
       setVisualProductHasImage(false);
       setVisuals([]);
+      setVisualGroundingProductId(null);
       setActiveTab("inspect");
       toast("Visual placed in the email. Save the version to keep it.", "success");
       return;
@@ -444,6 +446,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       toast("That block cannot hold an image. Select an image or hero block.", "error");
       return;
     }
+    setVisualGroundingProductId(null);
     toast("Visual placed. Nothing is sent until you approve the campaign.", "success");
   };
 
@@ -533,6 +536,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     next.splice(Math.max(0, index + 1), 0, imageBlock);
     setBlocks(next);
     setSelectedId(imageBlock.id);
+    setVisualGroundingProductId(selected.type === "product" ? selected.props.productId || null : null);
     setAdvancedVisuals(true);
     openPanelSection("visuals");
     toast("Added an image block below the product. Its own photo is untouched.", "success");
@@ -579,13 +583,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       return;
     }
     setSelectedId(blockId);
+    setVisualGroundingProductId(null);
     setActiveTab("inspect");
     setToolsOpen(true);
     setCompactPanelOpen(true);
     setCompactOutlineOpen(false);
   };
   const add = (type: EmailBlockType) => {
-    const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactOutlineOpen(false); setCompactPanelOpen(true);
+    const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setVisualGroundingProductId(null); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactOutlineOpen(false); setCompactPanelOpen(true);
   };
   const createCheckpoint = (label: string, next?: { blocks: EmailBlock[]; subject: string; previewText: string }) => {
     const snapshot: Snapshot = { id: `v-${Date.now()}`, label, createdAt: new Date(), blocks: cloneBlocks(next?.blocks ?? blocks), subject: next?.subject ?? subject, previewText: next?.previewText ?? previewText };

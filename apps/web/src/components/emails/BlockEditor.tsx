@@ -381,7 +381,7 @@ export function BlockEditor({
 }: {
   block: EmailBlock | null;
   onUpdate: (b: EmailBlock) => void;
-  /** Takes the merchant to the Visuals tab, where images are actually made. */
+  /** Opens the picture controls for this block. */
   onOpenVisuals?: () => void;
   onUploadImage?: () => void;
   onChooseAsset?: () => void;

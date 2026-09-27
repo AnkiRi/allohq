@@ -15,7 +15,7 @@ export type VisualCapabilitySummary = {
 };
 
 /**
- * What the Visuals tab offers, decided by what is selected.
+ * Picture actions for the selected block.
  *
  * The four-slot generator used to appear for every block, including dividers
  * and text — a large repeated form where most of the time the answer was
