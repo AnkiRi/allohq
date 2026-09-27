@@ -262,7 +262,7 @@ function ProductEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
             <p className="text-[12px] font-mono text-muted-foreground">{block.props.price}</p>
           ) : null}
           <p className="mt-2 text-[11px] font-sans text-muted-foreground">
-            Shopify supplies these at send time. Change the product in the Shopify tab.
+            Shopify supplies these at send time. Change the product in From Shopify below.
           </p>
         </div>
       ) : (
@@ -295,7 +295,7 @@ function ProductGridEditor({ block, onUpdate }: { block: Extract<EmailBlock, { t
             : "No products chosen yet"}
         </p>
         <p className="mt-1 text-[11px] font-sans text-muted-foreground">
-          Choose them in the Shopify tab — typing ids by hand is how a grid ends up
+          Choose them in From Shopify below — typing ids by hand is how a grid ends up
           pointing at something that is not in your store.
         </p>
       </div>
@@ -377,6 +377,7 @@ export function BlockEditor({
   onOpenVisuals,
   onUploadImage,
   onChooseAsset,
+  embedded = false,
 }: {
   block: EmailBlock | null;
   onUpdate: (b: EmailBlock) => void;
@@ -384,6 +385,7 @@ export function BlockEditor({
   onOpenVisuals?: () => void;
   onUploadImage?: () => void;
   onChooseAsset?: () => void;
+  embedded?: boolean;
 }) {
   if (!block) {
     return (
@@ -418,12 +420,12 @@ export function BlockEditor({
 
   return (
     <div className="flex flex-col">
-      <div className="px-4 py-3 border-b border-border">
+      {!embedded ? <div className="px-4 py-3 border-b border-border">
         <h3 className="text-[10px] font-mono uppercase tracking-[0.16em] text-decision">
           {block.type} · {block.id}
         </h3>
-      </div>
-      <div className="p-4 space-y-3.5">{body}</div>
+      </div> : null}
+      <div className={embedded ? "space-y-3.5" : "p-4 space-y-3.5"}>{body}</div>
     </div>
   );
 }

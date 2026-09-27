@@ -20,11 +20,13 @@ export function EmailPreviewFrame({
   isLoading,
   selectedBlockId,
   onSelectBlock,
+  mode = "inbox",
 }: {
   html: string;
   isLoading?: boolean;
   selectedBlockId?: string | null;
   onSelectBlock?: (blockId: string) => void;
+  mode?: "editor" | "inbox";
 }) {
   const [width, setWidth] = React.useState<PreviewWidth>("desktop");
   const [theme, setTheme] = React.useState<PreviewTheme>("light");
@@ -77,6 +79,7 @@ export function EmailPreviewFrame({
     const editorBridge = onSelectBlock
       ? `<style>
           [data-email-block-id]{cursor:pointer;outline:1px solid transparent;outline-offset:-2px;transition:outline-color 120ms ease,box-shadow 120ms ease}
+          [data-email-block-id]:focus-visible{outline:2px solid #2D4F9E}
           [data-email-block-id]:hover{outline-color:#C99116;box-shadow:inset 3px 0 0 #C99116}
           ${safeSelected ? `[data-email-block-id="${safeSelected}"]{outline:2px solid #2D4F9E;box-shadow:inset 4px 0 0 #2D4F9E}` : ""}
         </style>
@@ -92,6 +95,16 @@ export function EmailPreviewFrame({
           window.addEventListener('load',reportHeight);
           if(window.ResizeObserver){new ResizeObserver(reportHeight).observe(document.documentElement);}
           setTimeout(reportHeight,80);
+          window.addEventListener('load',function(){
+            document.querySelectorAll('[data-email-block-id]').forEach(function(element){element.setAttribute('tabindex','0');element.setAttribute('role','button');element.setAttribute('aria-label','Select email block');});
+          });
+          document.addEventListener('keydown',function(event){
+            if(event.key!=='Enter'&&event.key!==' ')return;
+            var element=event.target&&event.target.closest?event.target.closest('[data-email-block-id]'):null;
+            if(!element)return;
+            event.preventDefault();
+            parent.postMessage({type:'joon-email-block-select',blockId:element.getAttribute('data-email-block-id')},'*');
+          },true);
           document.addEventListener('click',function(event){
             var element=event.target&&event.target.closest?event.target.closest('[data-email-block-id]'):null;
             if(!element)return;
@@ -136,22 +149,24 @@ export function EmailPreviewFrame({
             value={width}
             onChange={(v) => setWidth(v as PreviewWidth)}
           />
-          <Toggle
-            options={[
-              { v: "light", label: "Light" },
-              { v: "dark", label: "Dark" },
-            ]}
-            value={theme}
-            onChange={(v) => setTheme(v as PreviewTheme)}
-          />
-          <Toggle
-            options={[
-              { v: "edit", label: "Edit" },
-              { v: "fit", label: "Fit email" },
-            ]}
-            value={view}
-            onChange={(v) => setView(v as "edit" | "fit")}
-          />
+          {mode === "inbox" ? <>
+            <Toggle
+              options={[
+                { v: "light", label: "Light" },
+                { v: "dark", label: "Dark" },
+              ]}
+              value={theme}
+              onChange={(v) => setTheme(v as PreviewTheme)}
+            />
+            <Toggle
+              options={[
+                { v: "edit", label: "Actual size" },
+                { v: "fit", label: "Fit email" },
+              ]}
+              value={view}
+              onChange={(v) => setView(v as "edit" | "fit")}
+            />
+          </> : null}
         </div>
       </header>
 
