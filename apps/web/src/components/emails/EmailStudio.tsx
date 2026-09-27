@@ -892,8 +892,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
               <details className="border-t border-border px-4 py-3" open={activeTab === "code" ? true : undefined}><summary className="cursor-pointer text-[13px] font-medium">Advanced · structured code</summary><CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /></details>
             </> : <>
               <ContextSection title="Envelope" description="The subject and the line shown beside it in an inbox."><div className="grid gap-3"><EnvelopeField label="Subject" value={subject} onChange={setSubject} /><EnvelopeField label="Inbox preview" value={previewText} onChange={setPreviewText} /></div></ContextSection>
-              <ContextSection title="Pictures" description="Make campaign artwork, then choose where it belongs." sectionKey="visuals">{pictureControls}</ContextSection>
               <ContextSection title="Ask Joon about this email" description="Ask for the subject or the whole draft." sectionKey="ask">{askPanel}</ContextSection>
+              <ContextSection title="Pictures" description="Make campaign artwork, then choose where it belongs." sectionKey="visuals">{pictureControls}</ContextSection>
               <ContextSection title="Checks on this draft" description={`${preflight.passed} of ${preflight.checks.length} checks pass.`} sectionKey="preflight"><PreflightPanel preflight={preflight} /></ContextSection>
               <ContextSection title="Versions" description="See what was saved and restore an earlier version." sectionKey="versions"><VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /></ContextSection>
             </>}
