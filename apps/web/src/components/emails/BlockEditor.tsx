@@ -179,7 +179,7 @@ function TextEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "t
   );
 }
 
-function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAsset }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void }) {
+function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAsset, quickActions = true }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void; quickActions?: boolean }) {
   const set = useSet(block, onUpdate);
   const empty = !block.props.src?.trim();
   return (
@@ -189,7 +189,7 @@ function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAs
         fill it was to already have a hosted image somewhere else. The way to
         get a picture is now the first thing in the block.
       */}
-      {empty ? (
+      {empty && quickActions ? (
         <div className="mb-3 rounded-lg border border-dashed border-border bg-card p-3">
           <p className="text-[13px] font-sans text-foreground">This image is empty</p>
           <p className="mt-1 text-[11px] font-sans text-muted-foreground">
@@ -401,7 +401,7 @@ export function BlockEditor({
     switch (block.type) {
       case "hero": return <HeroEditor block={block} onUpdate={onUpdate} />;
       case "text": return <TextEditor block={block} onUpdate={onUpdate} />;
-      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} />;
+      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} quickActions={!embedded} />;
       case "button": return <ButtonEditor block={block} onUpdate={onUpdate} />;
       case "product": return <ProductEditor block={block} onUpdate={onUpdate} />;
       case "product_grid": return <ProductGridEditor block={block} onUpdate={onUpdate} />;
