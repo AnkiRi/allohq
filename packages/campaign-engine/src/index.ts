@@ -110,7 +110,7 @@ export { getBenchmarkComparison } from "./benchmark-comparison";
 // what kept campaign approval inside a request.
 export { campaignApprovalClaimWhere, campaignDispatchFailureUpdate } from "./approval-claim";
 export { buildHumanDecision } from "./human-decision";
-export { ensureEmailVersion } from "./email-versions";
+export { ensureEmailVersion, emailDocumentFromTemplate, emailDocumentHash } from "./email-versions";
 export { collectEmailAssetManifest } from "./email-asset-manifest";
 export type { EmailAssetReceipt } from "./email-asset-manifest";
 export {

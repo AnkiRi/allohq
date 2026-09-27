@@ -163,6 +163,7 @@ test("an email whose product has no description opens, edits, saves and reopens"
 
     // REOPEN.
     const reopened = await api.getById({ id: template.id });
+    assert.equal(reopened.savedVersionSequence, saved.version.sequence);
     const reopenedProduct = (reopened.blocks as any[])[3];
     assert.equal(reopenedProduct.props.buttonText, "Shop the board", "the edit survived");
     assert.ok(!("description" in reopenedProduct.props), "and no null came back");
@@ -170,6 +171,24 @@ test("an email whose product has no description opens, edits, saves and reopens"
   } finally {
     await cleanup(prisma, workspace.id, store.id, user.id);
     void product;
+  }
+});
+
+test("the editor names the saved content's version after restoring an older version", { skip }, async () => {
+  const { prisma, templatesRouter } = await load();
+  const { workspace, store, template, clerkId, user } = await fixture(prisma);
+  try {
+    const api = templatesRouter.createCaller(caller(prisma, workspace.id, clerkId) as any);
+    const first = await api.update({ id: template.id, subject: "First subject" });
+    const second = await api.update({ id: template.id, subject: "Second subject" });
+    assert.ok(second.version.sequence > first.version.sequence);
+
+    await api.restoreVersion({ templateId: template.id, versionId: first.version.id });
+    const reopened = await api.getById({ id: template.id });
+    assert.equal(reopened.subject, "First subject");
+    assert.equal(reopened.savedVersionSequence, first.version.sequence);
+  } finally {
+    await cleanup(prisma, workspace.id, store.id, user.id);
   }
 });
 

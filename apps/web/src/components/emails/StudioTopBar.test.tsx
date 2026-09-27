@@ -56,10 +56,18 @@ test("the review entry point appears only when a campaign exists", () => {
   assert.doesNotMatch(render({ reviewHref: null }), /\/campaigns\//);
 });
 
-test("unsaved content cannot proceed to delivery review", () => {
+test("a proposal still being reviewed blocks delivery review", () => {
   const markup = render({ reviewBlocked: true });
   assert.doesNotMatch(markup, /href="\/campaigns\/c1"/);
-  assert.match(markup, /Save before review/);
+  assert.match(markup, /Review suggestion first/);
+});
+
+test("unsaved content offers one deliberate save-and-review action", () => {
+  const markup = render({ onReview: () => {}, stateLabel: "Draft · 2 unsaved changes", saveLabel: "Save as v5" });
+  assert.match(markup, /Save and review delivery/);
+  assert.match(markup, /Draft · 2 unsaved changes/);
+  assert.match(markup, /Save as v5/);
+  assert.doesNotMatch(markup, /href="\/campaigns\/c1"/);
 });
 
 test("saving says so rather than looking idle", () => {
@@ -76,7 +84,7 @@ test("the drawer entry points exist for narrow screens", () => {
 
 test("every icon-only control is labelled", () => {
   const markup = render();
-  for (const label of ["Undo", "Redo", "Preview", "Add block"]) {
+  for (const label of ["Undo", "Redo", "Inbox preview", "Add block"]) {
     assert.match(markup, new RegExp(`aria-label="${label}"`), `${label} needs a label`);
   }
 });

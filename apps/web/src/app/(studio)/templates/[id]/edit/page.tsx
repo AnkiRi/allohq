@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -22,14 +22,17 @@ import { campaignSectionFromParam, campaignSectionHref } from "@/lib/campaign-se
 export default function EditTemplatePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = String(params.id ?? "");
+  const campaignId = searchParams.get("campaignId");
+  const returnTab = campaignSectionFromParam(searchParams.get("returnTab"), "message");
 
   const { data, isLoading, isFetchedAfterMount, error } = (trpc.templates.getById as any).useQuery(
     { id },
     { enabled: !!id, refetchOnMount: "always" },
   ) as {
     data:
-      | { blocks: unknown; subject?: string; previewText?: string; name?: string; storeId?: string | null; campaignId?: string | null }
+      | { blocks: unknown; subject?: string; previewText?: string; name?: string; storeId?: string | null; campaignId?: string | null; savedVersionSequence?: number | null }
       | undefined;
     isLoading: boolean;
     isFetchedAfterMount: boolean;
@@ -72,12 +75,12 @@ export default function EditTemplatePage() {
       initialSubject={data.subject ?? ""}
       initialPreviewText={data.previewText ?? ""}
       initialHtml=""
+      initialSavedVersionNumber={data.savedVersionSequence ?? null}
       storeId={data.storeId ?? undefined}
       templateName={data.name ?? "Untitled email"}
       reviewHref={data.campaignId ? campaignSectionHref(data.campaignId, "delivery") : null}
+      backLabel={campaignId ? `Campaign · ${returnTab.slice(0, 1).toUpperCase()}${returnTab.slice(1)}` : "Library"}
       onBack={() => {
-        const campaignId = new URLSearchParams(window.location.search).get("campaignId");
-        const returnTab = campaignSectionFromParam(new URLSearchParams(window.location.search).get("returnTab"), "message");
         if (campaignId && /^c[a-z0-9]+$/i.test(campaignId)) router.push(campaignSectionHref(campaignId, returnTab));
         else if (window.history.length > 1) router.back();
         else router.push("/templates");
