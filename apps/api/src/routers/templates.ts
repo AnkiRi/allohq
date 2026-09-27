@@ -161,6 +161,18 @@ export const templatesRouter = router({
           note: "Saved in email studio",
           createdBy: (ctx as any).userId,
         });
+        // A manual save based on newer content makes older AI candidates
+        // impossible to accept. Resolve them here so a stale "pending" banner
+        // does not return when the merchant reopens the editor.
+        await tx.emailProposal.updateMany({
+          where: {
+            workspaceId: ctx.workspaceId,
+            templateId: id,
+            status: "pending",
+            OR: [{ baseVersionId: null }, { baseVersionId: { not: version.id } }],
+          },
+          data: { status: "superseded", resolvedAt: new Date() },
+        });
         return { ...updated, version };
       });
     }),
@@ -219,6 +231,15 @@ export const templatesRouter = router({
           source: "restore",
           note: `Restored from version ${version.sequence}`,
           createdBy: (ctx as any).userId,
+        });
+        await tx.emailProposal.updateMany({
+          where: {
+            workspaceId: ctx.workspaceId,
+            templateId: input.templateId,
+            status: "pending",
+            OR: [{ baseVersionId: null }, { baseVersionId: { not: restored.id } }],
+          },
+          data: { status: "superseded", resolvedAt: new Date() },
         });
         return { template: updated, version: restored };
       });

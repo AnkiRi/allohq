@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { EmailStudio } from "@/components/emails/EmailStudio";
 import type { EmailBlock } from "@allohq/email-builder";
+import { campaignSectionFromParam, campaignSectionHref } from "@/lib/campaign-section";
 
 /**
  * The ONE email editor. Every "edit this email" entry point — the template
@@ -73,10 +74,11 @@ export default function EditTemplatePage() {
       initialHtml=""
       storeId={data.storeId ?? undefined}
       templateName={data.name ?? "Untitled email"}
-      reviewHref={data.campaignId ? `/campaigns/${data.campaignId}` : null}
+      reviewHref={data.campaignId ? campaignSectionHref(data.campaignId, "delivery") : null}
       onBack={() => {
         const campaignId = new URLSearchParams(window.location.search).get("campaignId");
-        if (campaignId && /^c[a-z0-9]+$/i.test(campaignId)) router.push(`/campaigns/${campaignId}`);
+        const returnTab = campaignSectionFromParam(new URLSearchParams(window.location.search).get("returnTab"), "message");
+        if (campaignId && /^c[a-z0-9]+$/i.test(campaignId)) router.push(campaignSectionHref(campaignId, returnTab));
         else if (window.history.length > 1) router.back();
         else router.push("/templates");
       }}
