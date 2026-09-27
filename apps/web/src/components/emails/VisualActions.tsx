@@ -15,7 +15,7 @@ export type VisualCapabilitySummary = {
 };
 
 /**
- * What the Visuals tab offers, decided by what is selected.
+ * Picture actions for the selected block.
  *
  * The four-slot generator used to appear for every block, including dividers
  * and text — a large repeated form where most of the time the answer was
@@ -26,6 +26,7 @@ export function VisualActions({
   selected,
   capabilities,
   productTitle,
+  embedded = false,
   onGenerate,
   onUpload,
   onChooseFromLibrary,
@@ -35,6 +36,7 @@ export function VisualActions({
   selected: EmailBlock | null;
   capabilities: VisualCapabilitySummary | null;
   productTitle: string | null;
+  embedded?: boolean;
   onGenerate: () => void;
   onUpload: () => void;
   onChooseFromLibrary: () => void;
@@ -55,7 +57,7 @@ export function VisualActions({
 
   if (selected.type === "product" || selected.type === "product_grid") {
     return (
-      <div className="p-4">
+      <div className={embedded ? "" : "p-4"}>
         <h3 className="text-[13px] font-medium">Product imagery comes from Shopify</h3>
         <p className="mt-1.5 text-[12px] leading-5 text-muted-foreground">
           {productTitle ? `${productTitle}'s` : "This product's"} photo, title and price are
@@ -71,7 +73,7 @@ export function VisualActions({
           Create a campaign visual from this product
         </button>
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Adds a new image block above this one. The product card keeps its own photo.
+          Adds a new image block below this one. The product card keeps its own photo.
         </p>
         {blocked ? <Blocked>{blocked}</Blocked> : null}
       </div>
@@ -80,7 +82,7 @@ export function VisualActions({
 
   if (selected.type === "image" || selected.type === "hero") {
     return (
-      <div className="p-4">
+      <div className={embedded ? "" : "p-4"}>
         <h3 className="text-[13px] font-medium">Picture for this {selected.type} block</h3>
         <div className="mt-3 grid gap-2">
           <Action icon={<Sparkles className="h-4 w-4" />} label="Generate a visual" detail={capabilities?.provider ? `Using ${capabilities.provider}` : "Ask Joon for artwork"} onClick={onGenerate} disabled={Boolean(blocked)} primary />

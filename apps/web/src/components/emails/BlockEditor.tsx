@@ -179,7 +179,7 @@ function TextEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "t
   );
 }
 
-function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAsset }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void }) {
+function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAsset, quickActions = true }: { block: Extract<EmailBlock, { type: "image" }>; onUpdate: (b: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void; quickActions?: boolean }) {
   const set = useSet(block, onUpdate);
   const empty = !block.props.src?.trim();
   return (
@@ -189,7 +189,7 @@ function ImageEditor({ block, onUpdate, onOpenVisuals, onUploadImage, onChooseAs
         fill it was to already have a hosted image somewhere else. The way to
         get a picture is now the first thing in the block.
       */}
-      {empty ? (
+      {empty && quickActions ? (
         <div className="mb-3 rounded-lg border border-dashed border-border bg-card p-3">
           <p className="text-[13px] font-sans text-foreground">This image is empty</p>
           <p className="mt-1 text-[11px] font-sans text-muted-foreground">
@@ -262,7 +262,7 @@ function ProductEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
             <p className="text-[12px] font-mono text-muted-foreground">{block.props.price}</p>
           ) : null}
           <p className="mt-2 text-[11px] font-sans text-muted-foreground">
-            Shopify supplies these at send time. Change the product in the Shopify tab.
+            Shopify supplies these at send time. Change the product in From Shopify below.
           </p>
         </div>
       ) : (
@@ -295,7 +295,7 @@ function ProductGridEditor({ block, onUpdate }: { block: Extract<EmailBlock, { t
             : "No products chosen yet"}
         </p>
         <p className="mt-1 text-[11px] font-sans text-muted-foreground">
-          Choose them in the Shopify tab — typing ids by hand is how a grid ends up
+          Choose them in From Shopify below — typing ids by hand is how a grid ends up
           pointing at something that is not in your store.
         </p>
       </div>
@@ -377,13 +377,15 @@ export function BlockEditor({
   onOpenVisuals,
   onUploadImage,
   onChooseAsset,
+  embedded = false,
 }: {
   block: EmailBlock | null;
   onUpdate: (b: EmailBlock) => void;
-  /** Takes the merchant to the Visuals tab, where images are actually made. */
+  /** Opens the picture controls for this block. */
   onOpenVisuals?: () => void;
   onUploadImage?: () => void;
   onChooseAsset?: () => void;
+  embedded?: boolean;
 }) {
   if (!block) {
     return (
@@ -399,7 +401,7 @@ export function BlockEditor({
     switch (block.type) {
       case "hero": return <HeroEditor block={block} onUpdate={onUpdate} />;
       case "text": return <TextEditor block={block} onUpdate={onUpdate} />;
-      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} />;
+      case "image": return <ImageEditor block={block} onUpdate={onUpdate} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} quickActions={!embedded} />;
       case "button": return <ButtonEditor block={block} onUpdate={onUpdate} />;
       case "product": return <ProductEditor block={block} onUpdate={onUpdate} />;
       case "product_grid": return <ProductGridEditor block={block} onUpdate={onUpdate} />;
@@ -418,12 +420,12 @@ export function BlockEditor({
 
   return (
     <div className="flex flex-col">
-      <div className="px-4 py-3 border-b border-border">
+      {!embedded ? <div className="px-4 py-3 border-b border-border">
         <h3 className="text-[10px] font-mono uppercase tracking-[0.16em] text-decision">
           {block.type} · {block.id}
         </h3>
-      </div>
-      <div className="p-4 space-y-3.5">{body}</div>
+      </div> : null}
+      <div className={embedded ? "space-y-3.5" : "p-4 space-y-3.5"}>{body}</div>
     </div>
   );
 }

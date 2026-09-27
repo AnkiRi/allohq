@@ -3,8 +3,8 @@
 import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  Check, Code2, FileClock, ImagePlus, Inspect, Loader2,
-  MessageSquareText, PanelLeft, PanelLeftClose, PanelRightClose, Plus, Send, ShieldCheck, ShoppingBag, Sparkles, X,
+  Check, Code2, ImagePlus, Loader2,
+  PanelLeft, PanelLeftClose, Plus, Send, Sparkles, X,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import {
@@ -127,12 +127,24 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [previewModalError, setPreviewModalError] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState<StudioTab>("ask");
   const [compactPanelOpen, setCompactPanelOpen] = React.useState(false);
+  const [compactOutlineOpen, setCompactOutlineOpen] = React.useState(false);
+  const [libraryOpen, setLibraryOpen] = React.useState(false);
   const [outlineOpen, setOutlineOpen] = React.useState(true);
   const [toolsOpen, setToolsOpen] = React.useState(true);
   const askInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const panelScrollRef = React.useRef<HTMLDivElement>(null);
   const isDesktop = useIsDesktop();
   const router = useRouter();
   const utils = trpc.useUtils();
+  const openPanelSection = (section: "ask" | "visuals" | "versions" | "preflight" | "code") => {
+    setActiveTab(section);
+    setToolsOpen(true);
+    setCompactPanelOpen(true);
+    if (section === "versions" || section === "preflight") setSelectedId(null);
+    window.requestAnimationFrame(() => {
+      panelScrollRef.current?.querySelector(`[data-panel-section="${section}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  };
   const leaveStudio = () => {
     if (dirty && !window.confirm("This email has unsaved changes. Leave without saving?")) return;
     if (onBack) return onBack();
@@ -152,6 +164,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [visualFailures, setVisualFailures] = React.useState<VisualFailure[]>([]);
   const [visualProposal, setVisualProposal] = React.useState<VisualProposal | null>(null);
   const [visualTarget, setVisualTarget] = React.useState<VisualProposal["target"] | null>(null);
+  const [visualGroundingProductId, setVisualGroundingProductId] = React.useState<string | null | undefined>(undefined);
   const [visualTargetDescription, setVisualTargetDescription] = React.useState<string | null>(null);
   const [visualProductHasImage, setVisualProductHasImage] = React.useState(false);
   /** The four-slot form is a deliberate advanced workflow, not the default. */
@@ -205,19 +218,26 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || (event.key !== "j" && event.key !== "J")) return;
       event.preventDefault();
-      setActiveTab("ask");
-      setToolsOpen(true);
-      setCompactPanelOpen(true);
+      openPanelSection("ask");
       window.requestAnimationFrame(() => askInputRef.current?.focus());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  React.useEffect(() => {
+    if (!compactPanelOpen && !compactOutlineOpen) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || libraryOpen) return;
+      setCompactPanelOpen(false);
+      setCompactOutlineOpen(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [compactPanelOpen, compactOutlineOpen, libraryOpen]);
   const creativeAssetsQuery = (trpc.ai as any).listBrandAssets.useQuery(
     { storeId: storeId ?? "" }, { enabled: !!storeId },
   ) as { data?: Array<{ id: string; fileName: string; type: string; url?: string }>; refetch: () => Promise<unknown> };
   const creativeAssets = creativeAssetsQuery.data ?? [];
-  const [libraryOpen, setLibraryOpen] = React.useState(false);
   const libraryQuery = (trpc as any).assets.library.useQuery(
     { storeId: storeId! },
     { enabled: !!storeId && libraryOpen },
@@ -318,18 +338,18 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
 
   const generateVisualsMut = (trpc.emails as any).generateVisuals.useMutation();
   const { data: visualCapabilities } = (trpc.emails as any).visualCapabilities.useQuery(
-    { templateId }, { enabled: activeTab === "visuals" },
+    { templateId }, { enabled: !!templateId },
   ) as { data?: import("./VisualGenerator").VisualCapabilities };
 
   /** The product the selected block is about, if any — visuals are grounded in it. */
-  const blockProductId = selected && (selected.type === "product")
+  const blockProductId = visualGroundingProductId !== undefined ? visualGroundingProductId : (selected && selected.type === "product"
     ? (selected.props.productId || null)
-    : (blocks.find((block) => block.type === "product") as any)?.props?.productId ?? null;
+    : (blocks.find((block) => block.type === "product") as any)?.props?.productId ?? null);
   const blockProduct = blockProductId
     ? (productPage?.products ?? []).find((product) => product.id === blockProductId) ?? null
     : null;
 
-  const generateVisuals = (requestedSlots = visualSlots, requestedMode = visualMode) => {
+  const generateVisuals = (requestedSlots = visualSlots, requestedMode = visualMode, productId = blockProductId) => {
     if (!storeId) { toast("Choose a store before generating a visual.", "error"); return; }
     if (generateVisualsMut.isPending) return;
     const slots = requestedSlots
@@ -346,7 +366,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (!slots.length) return;
     setVisualFailures([]);
     generateVisualsMut.mutate(
-      { storeId, templateId, productId: blockProductId ?? undefined, mode: requestedMode, slots },
+      { storeId, templateId, productId: productId ?? undefined, mode: requestedMode, slots },
       {
         onSuccess: (data: { assets: GeneratedVisual[]; failures: VisualFailure[] }) => {
           setVisuals(data.assets);
@@ -380,8 +400,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     setVisuals([]);
     setVisualFailures([]);
     setAdvancedVisuals(true);
-    setActiveTab("visuals");
-    generateVisuals([slot], visualProposal.mode);
+    openPanelSection("visuals");
+    generateVisuals([slot], visualProposal.mode, visualProposal.product?.id ?? null);
     setVisualProposal(null);
   };
 
@@ -406,6 +426,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       setVisualTargetDescription(null);
       setVisualProductHasImage(false);
       setVisuals([]);
+      setVisualGroundingProductId(undefined);
       setActiveTab("inspect");
       toast("Visual placed in the email. Save the version to keep it.", "success");
       return;
@@ -425,6 +446,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       toast("That block cannot hold an image. Select an image or hero block.", "error");
       return;
     }
+    setVisualGroundingProductId(undefined);
     toast("Visual placed. Nothing is sent until you approve the campaign.", "success");
   };
 
@@ -500,7 +522,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   };
 
   /**
-   * Create a campaign visual FROM a product, as a new block above it.
+   * Create a campaign visual FROM a product, as a new block below it.
    *
    * Never into the product block: its picture is resolved from Shopify at send
    * time, so anything placed there shows in preview and is replaced on the way
@@ -511,11 +533,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     const imageBlock = createDefaultBlock("image", newId("image"));
     const index = blocks.findIndex((block) => block.id === selected.id);
     const next = [...blocks];
-    next.splice(Math.max(0, index), 0, imageBlock);
+    next.splice(Math.max(0, index + 1), 0, imageBlock);
     setBlocks(next);
     setSelectedId(imageBlock.id);
+    setVisualGroundingProductId(selected.type === "product" ? selected.props.productId || null : null);
     setAdvancedVisuals(true);
-    toast("Added an image block above the product. Its own photo is untouched.", "success");
+    openPanelSection("visuals");
+    toast("Added an image block below the product. Its own photo is untouched.", "success");
   };
 
   /** Append a personalization token to the selected block's own text field. */
@@ -559,11 +583,14 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       return;
     }
     setSelectedId(blockId);
+    setVisualGroundingProductId(undefined);
     setActiveTab("inspect");
+    setToolsOpen(true);
     setCompactPanelOpen(true);
+    setCompactOutlineOpen(false);
   };
   const add = (type: EmailBlockType) => {
-    const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactPanelOpen(true);
+    const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setVisualGroundingProductId(undefined); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactOutlineOpen(false); setCompactPanelOpen(true);
   };
   const createCheckpoint = (label: string, next?: { blocks: EmailBlock[]; subject: string; previewText: string }) => {
     const snapshot: Snapshot = { id: `v-${Date.now()}`, label, createdAt: new Date(), blocks: cloneBlocks(next?.blocks ?? blocks), subject: next?.subject ?? subject, previewText: next?.previewText ?? previewText };
@@ -697,6 +724,23 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     }
   };
 
+  const askPanel = <AskPanel embedded visualProposal={visualProposal} onVisualGenerate={generateProposedVisual} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} />;
+  const pictureControls = !selected && !advancedVisuals ? (
+    <button type="button" onClick={() => add("image")} className="w-full rounded-lg border border-border px-3 py-2 text-left text-[13px] hover:bg-[#F4F2EC]">Add an image block</button>
+  ) : !advancedVisuals ? (
+    <VisualActions
+      selected={selected}
+      capabilities={visualCapabilities ?? null}
+      productTitle={blockProduct?.title ?? null}
+      embedded
+      onGenerate={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); openPanelSection("visuals"); }}
+      onUpload={() => openUploadPicker()}
+      onChooseFromLibrary={() => setLibraryOpen(true)}
+      onCreateProductScene={createProductScene}
+      onOpenAdvanced={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); openPanelSection("visuals"); }}
+    />
+  ) : <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={visualTarget ? visualProductHasImage : Boolean(blockProduct?.imageUrl)} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} placementDescription={visualTargetDescription} onGenerate={() => generateVisuals()} onUseAsset={useVisual} />;
+
   // The root fills its parent rather than subtracting a fixed 6.25rem for a
   // dashboard top bar the Studio route no longer has — that allowance was
   // leaving ~100px of dead space under the editor. The card border and shadow
@@ -722,7 +766,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         name={templateName ?? "Untitled email"}
         state={dirty ? "draft" : "saved"}
         stateLabel={draftLabel}
-        onOpenVersions={() => { setActiveTab("versions"); setToolsOpen(true); setCompactPanelOpen(true); }}
+        onOpenVersions={() => openPanelSection("versions")}
         backLabel={backLabel ?? "Back"}
         canUndo={versionCursor > 0}
         canRedo={versionCursor < versions.length - 1}
@@ -772,7 +816,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="flex items-center justify-between border-b border-border px-3 py-2"><div><p className="text-[13px] font-medium">Content</p><p className="text-[12px] text-muted-foreground">{blocks.length} blocks</p></div><IconButton label="Add block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></div>
           <button type="button" onClick={() => setOutlineOpen(false)} aria-expanded={true} className="mx-3 mt-2 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-[#FFFDF8] px-3 py-2 text-[12px] font-medium outline-none transition-colors hover:border-[#2D4F9E] hover:bg-[#E9EFFF] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"><PanelLeftClose className="h-3.5 w-3.5" />Hide outline</button>
           {showAdd ? <BlockPicker onAdd={add} /> : null}
-          <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { setSelectedId(blockId); setActiveTab("inspect"); }} onMove={move} onRemove={remove} blockTitle={nameOf} /></div>
+          <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { selectCanvasBlock(blockId); setToolsOpen(true); }} onMove={move} onRemove={remove} blockTitle={nameOf} /></div>
         </aside>
 
         {isDesktop && !outlineOpen ? (
@@ -807,7 +851,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
             <EnvelopeField label="Subject" value={effectiveSubject} readOnly={Boolean(proposal && !proposalNotice)} onChange={setSubject} />
             <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={Boolean(proposal && !proposalNotice)} placeholder="The line people see beside the subject" onChange={setPreviewText} />
           </div>
-          <div className="min-h-0 flex-1"><EmailPreviewFrame html={html} isLoading={renderMut.isPending} selectedBlockId={selectedId} onSelectBlock={selectCanvasBlock} /></div>
+          <div className="min-h-0 flex-1"><EmailPreviewFrame html={html} isLoading={renderMut.isPending} selectedBlockId={selectedId} onSelectBlock={selectCanvasBlock} mode="editor" /></div>
         </main>
 
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
@@ -820,57 +864,58 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
               ? cn("flex shrink-0 overflow-hidden transition-[width] duration-200", toolsOpen && "border-l")
               // Below xl: a drawer over the canvas, which is what there is room for.
               : compactPanelOpen
-                ? "fixed inset-x-3 bottom-3 top-20 z-40 flex overflow-hidden rounded-xl border shadow-2xl"
+                ? "fixed inset-x-0 bottom-0 z-40 flex h-[72dvh] overflow-hidden rounded-t-xl border shadow-2xl"
                 : "hidden",
           )}
           style={isDesktop ? { width: toolsOpen ? 360 : 0 } : undefined}
         >
-          <button type="button" onClick={() => setCompactPanelOpen(false)} className="absolute right-2 top-2 z-10 rounded-lg border border-border bg-[#FFFDF8] p-1.5 text-muted-foreground xl:hidden" aria-label="Close tools"><X className="h-4 w-4" /></button>
-
-          <div role="tablist" aria-label="Email tools" className="shrink-0 border-b border-border bg-[#ECE9E1] p-1">
-            {/*
-              Three primary tabs are the whole everyday loop: look at a block,
-              give it real store data, or ask Joon about it. Versions, code and
-              preflight are real but occasional, so they sit behind a divider at
-              a smaller weight rather than competing for the same attention.
-            */}
-            <div className="grid grid-cols-4">
-              <StudioTabButton active={activeTab === "inspect"} label="Edit" icon={<Inspect className="h-4 w-4" />} onClick={() => setActiveTab("inspect")} />
-              <StudioTabButton active={activeTab === "shopify"} label="Shopify" icon={<ShoppingBag className="h-4 w-4" />} onClick={() => setActiveTab("shopify")} />
-              <StudioTabButton active={activeTab === "ask"} label="Ask Joon" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => setActiveTab("ask")} />
-              <StudioTabButton active={activeTab === "visuals"} label="Visuals" icon={<ImagePlus className="h-4 w-4" />} onClick={() => setActiveTab("visuals")} />
-            </div>
-            <div className="mt-1 flex items-center justify-center gap-1 border-t border-border/60 pt-1">
-              <SecondaryTab active={activeTab === "preflight"} label="Checks" icon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={() => setActiveTab("preflight")} />
-              <SecondaryTab active={activeTab === "versions"} label="Versions" icon={<FileClock className="h-3.5 w-3.5" />} onClick={() => setActiveTab("versions")} />
-              <SecondaryTab active={activeTab === "code"} label="Code" icon={<Code2 className="h-3.5 w-3.5" />} onClick={() => setActiveTab("code")} />
-              <button type="button" onClick={() => setToolsOpen(false)} aria-label="Hide tools panel" aria-expanded={true} title="Hide tools panel" className={cn("ml-1 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground outline-none transition-colors hover:border-[#2D4F9E] hover:bg-[#E9EFFF] hover:text-foreground focus-visible:ring-2 focus-visible:ring-[#2D4F9E]", isDesktop ? "inline-flex" : "hidden")}><PanelRightClose className="h-3.5 w-3.5" />Hide</button>
-            </div>
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
+            <PanelHeading eyebrow={selected ? "Selected block" : "Whole email"} title={selected ? `${selected.type.replace(/_/g, " ")} block` : "Whole email"} description={selected ? nameOf(selected) : "Subject, Joon, checks and versions together."} />
+            <button type="button" onClick={() => isDesktop ? setToolsOpen(false) : setCompactPanelOpen(false)} className="shrink-0 rounded-lg border border-border p-1.5 text-muted-foreground hover:bg-[#F4F2EC]" aria-label="Close email panel"><X className="h-4 w-4" /></button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {activeTab === "ask" ? <AskPanel visualProposal={visualProposal} onVisualGenerate={generateProposedVisual} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} /> : null}
-            {insertReceipt ? <p role="status" className="mx-4 mt-3 rounded-lg border border-[#157858]/30 bg-[#E5F4EE] px-2.5 py-1.5 text-[12px] text-[#157858]">{insertReceipt}</p> : null}
-            {activeTab === "inspect" ? <InspectorPanel selected={selected} updateBlock={updateBlock} products={productPage?.products ?? []} onOpenVisuals={() => { setActiveTab("visuals"); setAdvancedVisuals(false); }} onUploadImage={() => openUploadPicker()} onChooseAsset={() => setLibraryOpen(true)} /> : null}
-            {activeTab === "shopify" ? <ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /> : null}
-            {activeTab === "visuals" && !advancedVisuals ? (
-              <VisualActions
-                selected={selected}
-                capabilities={visualCapabilities ?? null}
-                productTitle={blockProduct?.title ?? null}
-                onGenerate={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); }}
-                onUpload={() => openUploadPicker()}
-                onChooseFromLibrary={() => setLibraryOpen(true)}
-                onCreateProductScene={createProductScene}
-                onOpenAdvanced={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); }}
-              />
-            ) : null}
-            {activeTab === "visuals" && advancedVisuals ? <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={visualTarget ? visualProductHasImage : Boolean(blockProduct?.imageUrl)} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} placementDescription={visualTargetDescription} onGenerate={() => generateVisuals()} onUseAsset={useVisual} /> : null}
-            {activeTab === "versions" ? <VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /> : null}
-            {activeTab === "code" ? <CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /> : null}
-            {activeTab === "preflight" ? <PreflightPanel preflight={preflight} /> : null}
+          <div ref={panelScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {selected ? <>
+              <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+                <button type="button" onClick={() => { setSelectedId(null); setCompactPanelOpen(true); }} className="text-[12px] text-[#2D4F9E] underline underline-offset-2">Whole email</button>
+                <span className="text-border">·</span>
+                <button type="button" onClick={() => move(selected.id, -1)} disabled={blocks[0]?.id === selected.id} className="text-[12px] disabled:opacity-40">Move up</button>
+                <button type="button" onClick={() => move(selected.id, 1)} disabled={blocks[blocks.length - 1]?.id === selected.id} className="text-[12px] disabled:opacity-40">Move down</button>
+                <button type="button" onClick={() => remove(selected.id)} className="ml-auto text-[12px] text-[var(--risk,#B95849)]">Delete</button>
+              </div>
+              {selected.type === "image" || selected.type === "hero" ? <ContextSection title="Picture" description="Choose, upload or generate a picture for this block." sectionKey="visuals">{pictureControls}</ContextSection> : null}
+              <ContextSection title="Content" description="What this block says and where it leads.">
+                <BlockEditor block={selected} onUpdate={updateBlock} embedded onOpenVisuals={() => { setAdvancedVisuals(false); openPanelSection("visuals"); }} onUploadImage={() => openUploadPicker()} onChooseAsset={() => setLibraryOpen(true)} />
+              </ContextSection>
+              {selected.type === "product" || selected.type === "product_grid" ? <ContextSection title="From Shopify" description="Store facts stay connected to your catalog."><ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /></ContextSection> : null}
+              {selected.type === "product" || (advancedVisuals && selected.type !== "image" && selected.type !== "hero") ? <ContextSection title="Picture" description={selected.type === "product" ? "The product photo stays from Shopify. Make a separate campaign picture." : "Choose, upload or generate a picture for this email."} sectionKey="visuals">{pictureControls}</ContextSection> : null}
+              <ContextSection title="Ask Joon about this block" description="Suggestions stay separate until you accept them." sectionKey="ask">{askPanel}</ContextSection>
+              <details className="border-t border-border px-4 py-3" open={activeTab === "code" ? true : undefined}><summary className="cursor-pointer text-[13px] font-medium">Advanced · structured code</summary><CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /></details>
+            </> : <>
+              <ContextSection title="Envelope" description="The subject and the line shown beside it in an inbox."><div className="grid gap-3"><EnvelopeField label="Subject" value={subject} onChange={setSubject} /><EnvelopeField label="Inbox preview" value={previewText} onChange={setPreviewText} /></div></ContextSection>
+              <ContextSection title="Ask Joon about this email" description="Ask for the subject or the whole draft." sectionKey="ask">{askPanel}</ContextSection>
+              <ContextSection title="Pictures" description="Make campaign artwork, then choose where it belongs." sectionKey="visuals">{pictureControls}</ContextSection>
+              <ContextSection title="Checks on this draft" description={`${preflight.passed} of ${preflight.checks.length} checks pass.`} sectionKey="preflight"><PreflightPanel preflight={preflight} /></ContextSection>
+              <ContextSection title="Versions" description="See what was saved and restore an earlier version." sectionKey="versions"><VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /></ContextSection>
+            </>}
+            {insertReceipt ? <p role="status" className="mx-4 my-3 rounded-lg border border-[#157858]/30 bg-[#E5F4EE] px-2.5 py-1.5 text-[12px] text-[#157858]">{insertReceipt}</p> : null}
           </div>
         </aside>
+        {compactOutlineOpen ? <div className="fixed inset-0 z-40 xl:hidden">
+          <button type="button" aria-label="Close block list" onClick={() => setCompactOutlineOpen(false)} className="absolute inset-0 bg-black/20" />
+          <div role="dialog" aria-modal="true" aria-label="Blocks in this email" className="absolute inset-x-0 bottom-0 flex max-h-[72dvh] flex-col overflow-hidden rounded-t-xl border border-border bg-[#FFFDF8] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3"><h2 className="text-[15px] font-medium">Blocks</h2><button type="button" onClick={() => setCompactOutlineOpen(false)} aria-label="Close block list" className="rounded-lg border border-border p-1.5"><X className="h-4 w-4" /></button></div>
+            <div className="overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={selectCanvasBlock} onMove={move} onRemove={remove} blockTitle={nameOf} /></div>
+            <button type="button" onClick={() => { setCompactOutlineOpen(false); setShowAdd(true); }} className="m-3 rounded-lg border border-border px-3 py-2 text-[13px]">Add block</button>
+          </div>
+        </div> : null}
       </div>
+
+      <nav aria-label="Studio actions" className="grid shrink-0 grid-cols-4 border-t border-border bg-[#FFFDF8] xl:hidden">
+        <button type="button" onClick={() => { setCompactPanelOpen(false); setCompactOutlineOpen(true); }} className="px-2 py-3 text-[12px]">Blocks</button>
+        <button type="button" onClick={() => { setSelectedId(null); setCompactOutlineOpen(false); setCompactPanelOpen(true); }} className="px-2 py-3 text-[12px]">Email</button>
+        <button type="button" onClick={openFullPreview} className="px-2 py-3 text-[12px]">Preview</button>
+        <button type="button" disabled={!reviewHref || saveMut.isPending || showProposed} onClick={() => { if (reviewNeedsSave) saveDraft(() => router.push(reviewHref!)); else router.push(reviewHref!); }} className="px-2 py-3 text-[12px] disabled:opacity-40">Delivery</button>
+      </nav>
 
       {libraryOpen ? (
         <AssetLibraryDialog
@@ -880,7 +925,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           onClose={() => setLibraryOpen(false)}
           onSelect={useLibraryItem}
           onUpload={() => openUploadPicker()}
-          onGenerate={() => { setLibraryOpen(false); setActiveTab("visuals"); setAdvancedVisuals(false); }}
+          onGenerate={() => { setLibraryOpen(false); setAdvancedVisuals(false); openPanelSection("visuals"); }}
         />
       ) : null}
       <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
@@ -976,7 +1021,7 @@ function ProposalBar({ proposal, view, setView, reject, accept, pending, notice 
   return <div className="shrink-0 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-wrap items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="min-w-0 text-[13px]"><span className="font-medium">Joon suggested:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5" aria-label="Compare email suggestion">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} disabled={item === "proposed" && Boolean(notice)} aria-pressed={view === item} className={cn("rounded-md px-2.5 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40", view === item && "bg-white shadow-sm")}>{item === "before" ? "Current draft" : "Joon's suggestion"}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending || Boolean(notice)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] focus-visible:ring-offset-2 disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>{notice ? <p role="status" className="mt-2 text-[12px] leading-5 text-foreground">{notice}</p> : null}</div>;
 }
 
-function AskPanel({ visualProposal, onVisualGenerate, onVisualRefine, onVisualCancel, inputRef, selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { visualProposal: VisualProposal | null; onVisualGenerate: () => void; onVisualRefine: () => void; onVisualCancel: () => void; inputRef: React.RefObject<HTMLTextAreaElement | null>; selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {
+function AskPanel({ embedded = false, visualProposal, onVisualGenerate, onVisualRefine, onVisualCancel, inputRef, selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { embedded?: boolean; visualProposal: VisualProposal | null; onVisualGenerate: () => void; onVisualRefine: () => void; onVisualCancel: () => void; inputRef: React.RefObject<HTMLTextAreaElement | null>; selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {
   /**
    * Suggestions that make sense for what is selected.
    *
@@ -993,43 +1038,18 @@ function AskPanel({ visualProposal, onVisualGenerate, onVisualRefine, onVisualCa
     : selected.type === "image" || selected.type === "hero"
     ? ["Make this clearer", "Match our brand voice", "Shorten this block"]
     : ["Make this clearer", "Shorten this block", "Match our brand voice", "Warmer tone"];
-  return <div className="flex min-h-full flex-col"><div className="p-4"><PanelHeading eyebrow="Ask Joon" title={selected ? blockTitle(selected) : "This email"} description="Every result arrives as a proposal you accept or reject. Nothing changes until you do." /><ScopeChooser scope={scope} setScope={setScope} selectedTitle={selected ? blockTitle(selected) : null} />{visualProposal ? <VisualProposalCard proposal={visualProposal} onGenerate={onVisualGenerate} onRefine={onVisualRefine} onCancel={onVisualCancel} /> : null}{history.length ? <div className="mt-5 space-y-2 border-l border-border pl-3">{history.slice(-8).map((item) => <div key={item.id} className="rounded-r-xl bg-[#F4F2EC] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-[12px] leading-5">{item.instruction}</p><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", item.status === "accepted" ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : item.status === "rejected" ? "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]" : "bg-[var(--attention-soft,#FFF0B8)] text-foreground")}>{item.status}</span></div><p className="mt-1 text-[10px] text-muted-foreground">Joon prepared a reviewable change · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div> : <div className="mt-5 rounded-xl border border-border bg-[#F4F2EC] p-3"><div className="flex gap-2.5"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#17204D] text-[11px] font-medium text-white">J</div><p className="text-[13px] leading-5">Tell me what should change. I’ll keep the current version intact and show you the proposal before anything is applied.</p></div></div>}<div className="mt-3 flex flex-wrap gap-1.5">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => onAsk(suggestion)} disabled={pending} className="rounded-full border border-border px-2.5 py-1 text-[12px] hover:border-[var(--attention,#C99116)] hover:bg-[var(--attention-soft,#FFF0B8)] disabled:opacity-40">{suggestion}</button>)}</div><div className="mt-5"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[12px] font-medium">Reference assets</p><label className="cursor-pointer rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-[#F4F2EC]"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.currentTarget.value = ""; }} />{uploading ? "Uploading…" : "+ Upload"}</label></div><div className="flex flex-wrap gap-1.5">{assets.map((asset) => { const active = selectedAssetIds.includes(asset.id); return <button key={asset.id} type="button" onClick={() => setSelectedAssetIds((current) => active ? current.filter((id) => id !== asset.id) : [...current, asset.id])} className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px]", active ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border")}><ImagePlus className="h-3.5 w-3.5" />{asset.fileName}</button>; })}{!assets.length ? <p className="text-[12px] text-muted-foreground">Upload a product or campaign reference, then ask Joon to use or transform it.</p> : null}</div></div></div><div className="sticky bottom-0 mt-auto border-t border-border bg-[var(--surface,#FFFDF8)] p-3"><div className="rounded-xl border border-border bg-white p-2 focus-within:border-[var(--evidence,#2D4F9E)]"><textarea ref={inputRef} value={instruction} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onAsk(); } }} rows={4} placeholder={scope === "block" && selected ? `Ask Joon about “${blockTitle(selected)}”…` : scope === "envelope" ? "Ask Joon about the subject or inbox preview…" : "Ask Joon about the whole email…"} className="w-full resize-none bg-transparent px-1 text-[14px] leading-5 outline-none" /><div className="flex items-center justify-between"><span className="text-[11px] text-muted-foreground">Enter to propose · Shift Enter for a new line</span><button type="button" onClick={() => onAsk()} disabled={pending || !instruction.trim()} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17204D] text-white disabled:opacity-40" aria-label="Ask Joon">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div></div>{error ? <p className="mt-2 text-[12px] text-[var(--risk,#B95849)]">{error}</p> : null}</div></div>;
+  return <div className="flex min-h-0 flex-col"><div className={embedded ? "py-2" : "p-4"}>{!embedded ? <PanelHeading eyebrow="Ask Joon" title={selected ? blockTitle(selected) : "This email"} description="Every result arrives as a proposal you accept or reject. Nothing changes until you do." /> : null}{!selected ? <ScopeChooser scope={scope} setScope={setScope} selectedTitle={null} /> : null}{visualProposal ? <VisualProposalCard proposal={visualProposal} onGenerate={onVisualGenerate} onRefine={onVisualRefine} onCancel={onVisualCancel} /> : null}{history.length ? <div className="mt-5 space-y-2 border-l border-border pl-3">{history.slice(-8).map((item) => <div key={item.id} className="rounded-r-xl bg-[#F4F2EC] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-[12px] leading-5">{item.instruction}</p><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", item.status === "accepted" ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : item.status === "rejected" ? "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]" : "bg-[var(--attention-soft,#FFF0B8)] text-foreground")}>{item.status}</span></div><p className="mt-1 text-[10px] text-muted-foreground">Joon prepared a reviewable change · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div> : <div className="mt-5 rounded-xl border border-border bg-[#F4F2EC] p-3"><div className="flex gap-2.5"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#17204D] text-[11px] font-medium text-white">J</div><p className="text-[13px] leading-5">Tell me what should change. I’ll keep the current version intact and show you the proposal before anything is applied.</p></div></div>}<div className="mt-3 flex flex-wrap gap-1.5">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => onAsk(suggestion)} disabled={pending} className="rounded-full border border-border px-2.5 py-1 text-[12px] hover:border-[var(--attention,#C99116)] hover:bg-[var(--attention-soft,#FFF0B8)] disabled:opacity-40">{suggestion}</button>)}</div><div className="mt-5"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[12px] font-medium">Reference assets</p><label className="cursor-pointer rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-[#F4F2EC]"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.currentTarget.value = ""; }} />{uploading ? "Uploading…" : "+ Upload"}</label></div><div className="flex flex-wrap gap-1.5">{assets.map((asset) => { const active = selectedAssetIds.includes(asset.id); return <button key={asset.id} type="button" onClick={() => setSelectedAssetIds((current) => active ? current.filter((id) => id !== asset.id) : [...current, asset.id])} className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px]", active ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border")}><ImagePlus className="h-3.5 w-3.5" />{asset.fileName}</button>; })}{!assets.length ? <p className="text-[12px] text-muted-foreground">Upload a product or campaign reference, then ask Joon to use or transform it.</p> : null}</div></div></div><div className="border-t border-border bg-[var(--surface,#FFFDF8)] px-0 py-3"><div className="rounded-xl border border-border bg-white p-2 focus-within:border-[var(--evidence,#2D4F9E)]"><textarea ref={inputRef} value={instruction} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onAsk(); } }} rows={4} placeholder={scope === "block" && selected ? `Ask Joon about “${blockTitle(selected)}”…` : scope === "envelope" ? "Ask Joon about the subject or inbox preview…" : "Ask Joon about the whole email…"} className="w-full resize-none bg-transparent px-1 text-[14px] leading-5 outline-none" /><div className="flex items-center justify-between"><span className="text-[11px] text-muted-foreground">Enter to propose · Shift Enter for a new line</span><button type="button" onClick={() => onAsk()} disabled={pending || !instruction.trim()} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17204D] text-white disabled:opacity-40" aria-label="Ask Joon">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div></div>{error ? <p className="mt-2 text-[12px] text-[var(--risk,#B95849)]">{error}</p> : null}</div></div>;
 }
 
-function InspectorPanel({ selected, updateBlock, products, onOpenVisuals, onUploadImage, onChooseAsset }: { selected: EmailBlock | null; updateBlock: (block: EmailBlock) => void; onOpenVisuals?: () => void; onUploadImage?: () => void; onChooseAsset?: () => void; products: Array<{ id: string; title: string; description?: string | null; imageUrl?: string | null; price: number; handle: string }> }) {
-  const bindProduct = (product: (typeof products)[number]) => {
-    if (!selected) return;
-    if (selected.type === "product") updateBlock({ ...selected, props: { ...selected.props, productId: product.id, source: "manual", title: product.title, description: product.description ?? undefined, imageUrl: product.imageUrl ?? undefined, price: product.price } });
-    else if (selected.type === "product_grid") updateBlock({ ...selected, props: { ...selected.props, source: "manual", productIds: [...new Set([...selected.props.productIds, product.id])] } });
-  };
-  const supportsProducts = selected?.type === "product" || selected?.type === "product_grid";
-  return <div className="p-4"><PanelHeading eyebrow="Selected element" title={selected ? blockTitle(selected) : "Nothing selected"} description={selected ? `Editing ${selected.type.replace("_", " ")} · click the canvas to choose another element.` : "Click any part of the email canvas."} />{supportsProducts && products.length ? <div className="mt-5"><p className="mb-2 text-[12px] font-medium">Store products</p><div className="max-h-64 space-y-1 overflow-y-auto">{products.map((product) => <button key={product.id} type="button" onClick={() => bindProduct(product)} className="flex w-full items-center gap-2 rounded-lg border border-transparent p-1.5 text-left hover:border-border hover:bg-[#F4F2EC]">{product.imageUrl ? <img src={product.imageUrl} alt="" className="h-9 w-9 rounded-md object-cover" /> : <div className="h-9 w-9 rounded-md bg-[var(--surface-soft,#ECE9E1)]" />}<div className="min-w-0"><p className="truncate text-[12px] font-medium">{product.title}</p><p className="text-[11px] text-muted-foreground">{product.price.toLocaleString()}</p></div></button>)}</div></div> : null}<div className="mt-5"><BlockEditor block={selected} onUpdate={updateBlock} onOpenVisuals={onOpenVisuals} onUploadImage={onUploadImage} onChooseAsset={onChooseAsset} /></div></div>;
-}
 function VersionsPanel({ versions, cursor, restore, durableVersions, restoreDurable, restoring }: { versions: Snapshot[]; cursor: number; restore: (index: number) => void; durableVersions: DurableVersion[]; restoreDurable: (id: string) => void; restoring: boolean }) { return <div className="p-4"><PanelHeading eyebrow="Recoverable history" title="Versions" description="Manual and Joon changes share one history. Restoring creates a new version; nothing is erased." />{durableVersions.length ? <><p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Saved across sessions</p><div className="space-y-2">{durableVersions.map((version) => <button key={version.id} type="button" disabled={restoring} onClick={() => restoreDurable(version.id)} className="w-full rounded-xl border border-border p-3 text-left hover:bg-[#F4F2EC] disabled:opacity-40"><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-medium">Version {version.sequence} · {version.source}</span><span className="text-[11px] text-muted-foreground">{new Date(version.createdAt).toLocaleDateString()}</span></div><p className="mt-1 text-[12px] text-muted-foreground">{version.note ?? "Saved email artifact"}</p></button>)}</div></> : null}<p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">This session</p><div className="space-y-2">{[...versions].reverse().map((version, reverseIndex) => { const index = versions.length - reverseIndex - 1; return <button key={version.id} type="button" onClick={() => restore(index)} className={cn("w-full rounded-xl border p-3 text-left", index === cursor ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border hover:bg-[#F4F2EC]")}><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-medium">{version.label}</span><span className="text-[11px] text-muted-foreground">{version.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div><p className="mt-1 text-[12px] text-muted-foreground">{version.blocks.length} blocks · {version.subject || "No subject"}</p></button>; })}</div></div>; }
 function CodePanel({ selected, code, setCode, apply }: { selected: EmailBlock | null; code: string; setCode: (value: string) => void; apply: () => void }) { return <div className="p-4"><PanelHeading eyebrow="Structured code" title={selected ? blockTitle(selected) : "Select a block"} description="Edit the selected block as validated JSON. Use a Custom HTML block for precise email-safe markup." /><textarea value={code} onChange={(event) => setCode(event.target.value)} disabled={!selected} spellCheck={false} className="mt-5 min-h-[430px] w-full resize-y rounded-xl border border-border bg-[#171717] p-3 font-mono text-[12px] leading-5 text-[#F4F2EC] outline-none focus:border-[var(--attention,#C99116)] disabled:opacity-40" /><button type="button" onClick={apply} disabled={!selected} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#17204D] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"><Code2 className="h-4 w-4" />Apply code</button></div>; }
 function PreflightPanel({ preflight }: { preflight: ReturnType<typeof preflightEmail> }) { return <div className="p-4"><PanelHeading eyebrow="Exact artifact" title={`${preflight.passed} of ${preflight.checks.length} checks pass`} description="These checks run against the same structured email used for preview and delivery." /><div className="mt-5 space-y-2">{preflight.checks.map((check) => <div key={check.label} className="flex gap-3 rounded-xl border border-border p-3"><span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full", check.ok ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]")}>{check.ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}</span><div><p className="text-[13px] font-medium">{check.label}</p><p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">{check.detail}</p></div></div>)}</div><div className="mt-4 rounded-xl border border-[var(--evidence,#2D4F9E)]/30 bg-[var(--evidence-soft,#E9EFFF)] p-3 text-[12px] leading-5"><strong>Approval happens on the campaign.</strong> Saving here creates the email version; campaign approval freezes this version with its audience, offer and delivery plan.</div></div>; }
 
 function BlockPicker({ onAdd }: { onAdd: (type: EmailBlockType) => void }) { return <div className="border-b border-border bg-[var(--surface,#FFFDF8)] p-2">{ADDABLE.map((item) => <button key={item.type} type="button" onClick={() => onAdd(item.type)} className="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-[var(--attention-soft,#FFF0B8)]"><Plus className="h-3.5 w-3.5" />{item.label}</button>)}</div>; }
 function EnvelopeField({ label, value, readOnly, placeholder, onChange }: { label: string; value: string; readOnly?: boolean; placeholder?: string; onChange: (value: string) => void }) { return <label className="min-w-0"><span className="mb-1 block text-[12px] font-medium text-muted-foreground">{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} readOnly={readOnly} placeholder={placeholder} className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-[14px] outline-none focus:border-[var(--evidence,#2D4F9E)] read-only:opacity-70" /></label>; }
-function PanelHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div><p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--evidence,#2D4F9E)]">{eyebrow}</p><h2 className="mt-1 text-[19px] font-medium tracking-[-0.01em]">{title}</h2><p className="mt-1 text-[13px] leading-5 text-muted-foreground">{description}</p></div>; }
-function StudioTabButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) { return <button type="button" role="tab" aria-selected={active} onClick={onClick} title={label} className={cn("flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] transition-colors", active ? "bg-[var(--surface,#FFFDF8)] text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{icon}<span className="truncate">{label}</span></button>; }
-/** A demoted tool: real, but not part of the everyday loop. */
-function SecondaryTab({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-[#2D4F9E]",
-        active ? "bg-white font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {icon}
-      {label}
-    </button>
-  );
+function ContextSection({ title, description, sectionKey, children }: { title: string; description?: string; sectionKey?: string; children: React.ReactNode }) {
+  return <section data-panel-section={sectionKey} aria-label={title} className="border-t border-border px-4 py-4 scroll-mt-2"><h3 className="text-[14px] font-medium">{title}</h3>{description ? <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">{description}</p> : null}<div className="mt-3">{children}</div></section>;
 }
+function PanelHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div><p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--evidence,#2D4F9E)]">{eyebrow}</p><h2 className="mt-1 text-[19px] font-medium tracking-[-0.01em]">{title}</h2><p className="mt-1 text-[13px] leading-5 text-muted-foreground">{description}</p></div>; }
 
 function IconButton({ children, label, onClick, disabled }: { children: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) { return <button type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled} className="rounded-lg border border-border bg-[var(--surface,#FFFDF8)] p-2 text-muted-foreground hover:text-foreground disabled:opacity-30">{children}</button>; }
