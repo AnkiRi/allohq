@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import {
   canApproveDelivery,
@@ -38,10 +38,12 @@ import {
 } from "@/components/campaigns/AudienceReviewDrawer";
 import { useAlloAI } from "@/components/ai/AlloAIPanel";
 import { campaignMessageView } from "@/lib/campaign-message-view";
+import { CAMPAIGN_SECTIONS, campaignSectionFromParam, campaignSectionHref, type CampaignSection } from "@/lib/campaign-section";
 
 export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const campaignId = params.id as string;
   const { toast } = useToast();
   const { submitCampaignAlternative } = useAlloAI();
@@ -65,7 +67,9 @@ export default function CampaignDetailPage() {
   const [offerOverrideReason, setOfferOverrideReason] = useState("");
   const [showTimingOverride, setShowTimingOverride] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
-  const [activeSection, setActiveSection] = useState<"overview" | "message" | "audience" | "delivery" | "results" | "receipt">("overview");
+  const sectionFromUrl = campaignSectionFromParam(searchParams.get("tab"));
+  const [activeSection, setActiveSection] = useState<CampaignSection>(sectionFromUrl);
+  useEffect(() => setActiveSection(sectionFromUrl), [sectionFromUrl]);
   const { data: campaign, isLoading, isFetchedAfterMount } = (trpc.campaigns.getById as any).useQuery(
     { id: campaignId },
     {
@@ -218,7 +222,7 @@ export default function CampaignDetailPage() {
     onSuccess: ({ id, templateId }: { id: string; templateId: string | null }) => {
       toast("Scheduled delivery cancelled. Your editable revision is ready.", "info");
       router.push(
-        templateId ? `/templates/${templateId}/edit?campaignId=${id}` : `/campaigns/${id}`
+        templateId ? `/templates/${templateId}/edit?campaignId=${id}&returnTab=delivery` : campaignSectionHref(id, "delivery")
       );
     },
     onError: (error: { message?: string }) =>
@@ -341,8 +345,9 @@ export default function CampaignDetailPage() {
       campaign.status !== "scheduled"
     ) {
       setActiveSection("overview");
+      router.replace(campaignSectionHref(campaignId, "overview"), { scroll: false });
     }
-  }, [activeSection, campaign?.status]);
+  }, [activeSection, campaign?.status, campaignId, router]);
 
   if (isLoading || !isFetchedAfterMount) {
     return (
@@ -524,7 +529,7 @@ export default function CampaignDetailPage() {
       ]
     : [];
   const audienceReviewCount = audienceReviewGroups.reduce((sum, group) => sum + group.count, 0);
-  const campaignSections = (["overview", "message", "audience", "delivery", "results", "receipt"] as const).filter(
+  const campaignSections = CAMPAIGN_SECTIONS.filter(
     (section) => section !== "audience" || campaign.status === "draft" || campaign.status === "scheduled"
   );
   return (
@@ -687,7 +692,7 @@ export default function CampaignDetailPage() {
       </div>
 
       <nav className="app-workspace-nav sticky top-0 z-20" aria-label="Campaign workspace" role="tablist">
-        {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => setActiveSection(section)} className="app-workspace-tab capitalize">{section}</button>)}
+        {campaignSections.map((section) => <button key={section} role="tab" aria-selected={activeSection === section} onClick={() => { setActiveSection(section); router.replace(campaignSectionHref(campaignId, section), { scroll: false }); }} className="app-workspace-tab capitalize">{section}</button>)}
       </nav>
 
       <CampaignPreparationSection
@@ -1752,7 +1757,7 @@ export default function CampaignDetailPage() {
             )}
             {campaign.templateId && messageView?.editable && (
               <Link
-                href={`/templates/${campaign.templateId}/edit?campaignId=${campaignId}`}
+                href={`/templates/${campaign.templateId}/edit?campaignId=${campaignId}&returnTab=message`}
                 className="text-[10px] font-sans text-muted-foreground hover:text-foreground transition-colors"
               >
                 Edit template &rarr;
@@ -1783,7 +1788,7 @@ export default function CampaignDetailPage() {
             </div>
           ) : campaign.templateId && messageView?.editable ? (
             <Link
-              href={`/templates/${campaign.templateId}/edit?campaignId=${campaignId}`}
+              href={`/templates/${campaign.templateId}/edit?campaignId=${campaignId}&returnTab=message`}
               className="block p-8 bg-card rounded-lg border border-border hover:border-muted-foreground/50 transition-all text-center w-full max-w-md"
             >
               <Eye className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />

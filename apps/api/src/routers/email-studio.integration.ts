@@ -173,6 +173,45 @@ test("an email whose product has no description opens, edits, saves and reopens"
   }
 });
 
+test("saving a newer manual draft clears a pending suggestion instead of resurrecting it", { skip }, async () => {
+  const { prisma, templatesRouter } = await load();
+  const { emailsRouter } = await load2();
+  const { workspace, store, template, clerkId, user } = await fixture(prisma);
+  try {
+    const context = caller(prisma, workspace.id, clerkId) as any;
+    const templates = templatesRouter.createCaller(context);
+    const emails = emailsRouter.createCaller(context);
+    const base = await templates.update({ id: template.id, subject: "Ride further this winter" });
+    const proposal = await prisma.emailProposal.create({
+      data: {
+        workspaceId: workspace.id,
+        templateId: template.id,
+        baseVersionId: base.version.id,
+        instruction: "Change the button text",
+        operations: [],
+        candidate: base.version.document,
+      },
+    });
+    assert.equal((await emails.pendingProposal({ templateId: template.id }))?.id, proposal.id);
+    const unchanged = await templates.update({ id: template.id, subject: "Ride further this winter" });
+    assert.equal(unchanged.version.id, base.version.id, "an identical save reuses the same version");
+    assert.equal((await emails.pendingProposal({ templateId: template.id }))?.id, proposal.id, "a still-current suggestion remains reviewable");
+
+    const opened = await templates.getById({ id: template.id });
+    const manualBlocks = [
+      ...(opened.blocks as any[]),
+      { id: "manual-image", type: "image", props: { src: "https://example.test/board.jpg", alt: "Snowboard" } },
+    ];
+    const saved = await templates.update({ id: template.id, blocks: manualBlocks as any });
+    assert.notEqual(saved.version.id, base.version.id, "the manual image created a new version");
+    assert.equal((await prisma.emailProposal.findUnique({ where: { id: proposal.id } }))?.status, "superseded");
+    assert.equal(await emails.pendingProposal({ templateId: template.id }), null);
+    assert.equal((await templates.getById({ id: template.id }).then((result) => result.blocks as any[])).at(-1)?.id, "manual-image");
+  } finally {
+    await cleanup(prisma, workspace.id, store.id, user.id);
+  }
+});
+
 test("a version frozen from that email is readable by the approval path", { skip }, async () => {
   const { prisma, templatesRouter, ensureEmailVersion, safeParseEmailDocument } = await load();
   const { workspace, store, template, clerkId, user } = await fixture(prisma);

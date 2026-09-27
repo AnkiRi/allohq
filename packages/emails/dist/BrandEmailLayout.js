@@ -65,7 +65,9 @@ function BrandEmailLayout({ brandKit, preview, children }) {
                 .bk-line { border-color: #2F3326 !important; }
                 .bk-accent { background-color: #20231A !important; }
               }
-              @media only screen and (max-width: 600px) {
+              /* The desktop Studio preview is exactly 600px wide. At 600px,
+                 product grids must remain columns; only narrow phones stack. */
+              @media only screen and (max-width: 480px) {
                 .bk-pad { padding-left: 22px !important; padding-right: 22px !important; }
                 .bk-h1 { font-size: 28px !important; line-height: 34px !important; }
                 .bk-stack { display: block !important; width: 100% !important; }

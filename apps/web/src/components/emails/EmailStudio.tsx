@@ -29,6 +29,7 @@ import { BlockEditor } from "./BlockEditor";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 import { placeUploadedImage } from "./upload-placement";
 import { placeProposalVisual } from "./visual-proposal-placement";
+import { proposalPreviewState } from "./proposal-preview";
 
 type StudioTab = "ask" | "inspect" | "shopify" | "visuals" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
@@ -166,16 +167,18 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const uploadTargetIdRef = React.useRef<string | null>(null);
   const { toast } = useToast();
   const selected = blocks.find((block) => block.id === selectedId) ?? null;
-  const effectiveBlocks = proposal && proposalView === "proposed" ? proposal.blocks : blocks;
-  const effectiveSubject = proposal && proposalView === "proposed" ? proposal.subject : subject;
-  const effectivePreviewText = proposal && proposalView === "proposed" ? proposal.previewText : previewText;
-  const proposalNotice = proposal?.stale
-    ? "This proposal was made for an older saved email. Reject it and ask Joon again."
-    : proposal && draftSignature !== proposal.baseSignature
-      ? "The draft changed after this proposal. Reject it and ask Joon again."
-      : proposal && JSON.stringify({ blocks: proposal.blocks, subject: proposal.subject, previewText: proposal.previewText }) === proposal.baseSignature
-        ? "Joon made no visible change. Reject this proposal and try another instruction."
-        : null;
+  const { showProposed, notice: proposalNotice } = proposalPreviewState(
+    draftSignature,
+    proposal && {
+      baseSignature: proposal.baseSignature,
+      candidateSignature: JSON.stringify({ blocks: proposal.blocks, subject: proposal.subject, previewText: proposal.previewText }),
+      stale: proposal.stale,
+    },
+    proposalView,
+  );
+  const effectiveBlocks = showProposed ? proposal!.blocks : blocks;
+  const effectiveSubject = showProposed ? proposal!.subject : subject;
+  const effectivePreviewText = showProposed ? proposal!.previewText : previewText;
   const preflight = React.useMemo(() => preflightEmail(effectiveSubject, effectivePreviewText, effectiveBlocks), [effectiveSubject, effectivePreviewText, effectiveBlocks]);
 
   React.useEffect(() => { setCodeDraft(selected ? JSON.stringify(selected, null, 2) : ""); }, [selected]);
@@ -529,6 +532,18 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const remove = (blockId: string) => {
     setBlocks((current) => { const next = current.filter((block) => block.id !== blockId); if (selectedId === blockId) setSelectedId(next[0]?.id ?? null); return next; }); setDirty(true);
   };
+  const selectCanvasBlock = (blockId: string) => {
+    // The inspector edits the current draft, never the proposed snapshot. A
+    // click on the preview therefore returns to the editable draft first.
+    if (showProposed) setProposalView("before");
+    if (!blocks.some((block) => block.id === blockId)) {
+      toast("This block belongs to Joon's suggestion. Accept it before editing it.", "info");
+      return;
+    }
+    setSelectedId(blockId);
+    setActiveTab("inspect");
+    setCompactPanelOpen(true);
+  };
   const add = (type: EmailBlockType) => {
     const block = createDefaultBlock(type, newId(type)); setBlocks((current) => [...current, block]); setSelectedId(block.id); setActiveTab(type === "custom_html" ? "code" : "inspect"); setShowAdd(false); setCompactPanelOpen(true); setDirty(true);
   };
@@ -550,6 +565,11 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       onSuccess: (saved) => {
         createCheckpoint("Saved version", savedDocument);
         if (draftSignatureRef.current === submittedSignature) setDirty(false);
+        if (proposal && submittedSignature !== proposal.baseSignature) {
+          setProposal(null);
+          void proposalHistoryQuery.refetch();
+          void pendingProposalQuery.refetch();
+        }
         setSavedAt(new Date());
         (utils.templates.getById as any).setData({ id: templateId }, (current: any) => current ? { ...current, ...saved } : current);
         void utils.templates.getById.invalidate({ id: templateId });
@@ -680,15 +700,21 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         onUndo={() => restoreVersion(Math.max(0, versionCursor - 1))}
         onRedo={() => restoreVersion(Math.min(versions.length - 1, versionCursor + 1))}
         onPreview={openFullPreview}
-        onSave={saveDraft}
+        onSave={() => {
+          if (showProposed) {
+            toast("Accept Joon's suggestion, or switch to Current draft before saving.", "info");
+            return;
+          }
+          saveDraft();
+        }}
         saving={saveMut.isPending}
         reviewHref={reviewHref ?? null}
-        reviewBlocked={dirty || saveMut.isPending}
+        reviewBlocked={dirty || saveMut.isPending || showProposed}
         onAddBlock={() => setShowAdd((value) => !value)}
         onOpenTools={() => setCompactPanelOpen(true)}
         onBack={leaveStudio}
       />
-      {proposal ? <ProposalBar proposal={proposal} view={proposalView} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} notice={proposalNotice} /> : null}
+      {proposal ? <ProposalBar proposal={proposal} view={showProposed ? "proposed" : "before"} setView={setProposalView} reject={rejectProposal} accept={acceptProposal} pending={resolveProposalMut.isPending} notice={proposalNotice} /> : null}
       {showAdd ? <div className="absolute right-3 top-[68px] z-50 w-56 overflow-hidden rounded-xl border border-border bg-[var(--surface,#FFFDF8)] shadow-xl xl:hidden"><BlockPicker onAdd={add} /></div> : null}
 
       {/*
@@ -742,10 +768,10 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F4F2EC] p-2">
           <div className="mb-2 grid shrink-0 gap-2 rounded-lg border border-border bg-[#FFFDF8] p-2 md:grid-cols-2">
-            <EnvelopeField label="Subject" value={effectiveSubject} readOnly={!!proposal} onChange={(value) => { setSubject(value); setDirty(true); }} />
-            <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={!!proposal} placeholder="The line people see beside the subject" onChange={(value) => { setPreviewText(value); setDirty(true); }} />
+            <EnvelopeField label="Subject" value={effectiveSubject} readOnly={Boolean(proposal && !proposalNotice)} onChange={(value) => { setSubject(value); setDirty(true); }} />
+            <EnvelopeField label="Inbox preview" value={effectivePreviewText} readOnly={Boolean(proposal && !proposalNotice)} placeholder="The line people see beside the subject" onChange={(value) => { setPreviewText(value); setDirty(true); }} />
           </div>
-          <div className="min-h-0 flex-1"><EmailPreviewFrame html={html} isLoading={renderMut.isPending} selectedBlockId={selectedId} onSelectBlock={(blockId) => { if (proposalView === "before") return; setSelectedId(blockId); setActiveTab("inspect"); setCompactPanelOpen(true); }} /></div>
+          <div className="min-h-0 flex-1"><EmailPreviewFrame html={html} isLoading={renderMut.isPending} selectedBlockId={selectedId} onSelectBlock={selectCanvasBlock} /></div>
         </main>
 
         {compactPanelOpen ? <button type="button" aria-label="Close email tools" onClick={() => setCompactPanelOpen(false)} className="fixed inset-0 z-30 bg-black/20 xl:hidden" /> : null}
@@ -902,7 +928,7 @@ function AssetLibraryDialog({
 }
 
 function ProposalBar({ proposal, view, setView, reject, accept, pending, notice }: { proposal: Proposal; view: "before" | "proposed"; setView: (view: "before" | "proposed") => void; reject: () => void; accept: () => void; pending: boolean; notice: string | null }) {
-  return <div className="shrink-0 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-wrap items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="min-w-0 text-[13px]"><span className="font-medium">Joon proposed:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5" aria-label="Compare email proposal">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} aria-pressed={view === item} className={cn("rounded-md px-2.5 py-1 text-[12px] capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D]", view === item && "bg-white shadow-sm")}>{item}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending || Boolean(notice)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] focus-visible:ring-offset-2 disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>{notice ? <p role="status" className="mt-2 text-[12px] leading-5 text-foreground">{notice}</p> : null}</div>;
+  return <div className="shrink-0 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-wrap items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="min-w-0 text-[13px]"><span className="font-medium">Joon suggested:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5" aria-label="Compare email suggestion">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} disabled={item === "proposed" && Boolean(notice)} aria-pressed={view === item} className={cn("rounded-md px-2.5 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40", view === item && "bg-white shadow-sm")}>{item === "before" ? "Current draft" : "Joon's suggestion"}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending || Boolean(notice)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] focus-visible:ring-offset-2 disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>{notice ? <p role="status" className="mt-2 text-[12px] leading-5 text-foreground">{notice}</p> : null}</div>;
 }
 
 function AskPanel({ visualProposal, onVisualGenerate, onVisualRefine, onVisualCancel, inputRef, selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { visualProposal: VisualProposal | null; onVisualGenerate: () => void; onVisualRefine: () => void; onVisualCancel: () => void; inputRef: React.RefObject<HTMLTextAreaElement | null>; selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {
