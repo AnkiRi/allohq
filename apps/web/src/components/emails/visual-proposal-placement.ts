@@ -7,11 +7,12 @@ type Target = VisualProposal["target"];
 export function placeProposalVisual(
   blocks: EmailBlock[],
   target: Target,
-  visual: { url: string; label: string },
+  visual: { url: string; label: string; sourceProductId?: string | null },
   newBlockId: () => string,
 ): { blocks: EmailBlock[]; selectedId: string } | { error: string } {
   const decorate = (block: EmailBlock): EmailBlock => block.type === "image"
-    ? { ...block, props: { ...block.props, src: visual.url, alt: visual.label } }
+    ? { ...block, props: { ...block.props, src: visual.url, alt: visual.label,
+      ...(visual.sourceProductId !== undefined ? { sourceProductId: visual.sourceProductId ?? undefined } : {}) } }
     : block.type === "hero"
       ? { ...block, props: { ...block.props, bgImageSrc: visual.url } }
       : block;

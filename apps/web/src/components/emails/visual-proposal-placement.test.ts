@@ -44,3 +44,22 @@ test("a deleted placement target refuses to place the result elsewhere", () => {
   );
   assert.ok("error" in result);
 });
+
+test("a generated picture keeps its request's product reference, not a later selection", () => {
+  const result = placeProposalVisual(
+    blocks,
+    { kind: "existing", blockId: "image", blockType: "image" },
+    { url: "https://assets.test/new.jpg", label: "Requested board", sourceProductId: "shopify-requested" },
+    () => "unused",
+  );
+  assert.ok("blocks" in result);
+  const image = result.blocks[1] as Extract<EmailBlock, { type: "image" }>;
+  assert.equal(image.props.sourceProductId, "shopify-requested");
+  const illustrative = placeProposalVisual(result.blocks,
+    { kind: "existing", blockId: "image", blockType: "image" },
+    { url: "https://assets.test/art.jpg", label: "Illustration", sourceProductId: null },
+    () => "unused",
+  );
+  assert.ok("blocks" in illustrative);
+  assert.equal((illustrative.blocks[1] as Extract<EmailBlock, { type: "image" }>).props.sourceProductId, undefined);
+});

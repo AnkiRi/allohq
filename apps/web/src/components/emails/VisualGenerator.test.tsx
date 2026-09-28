@@ -16,7 +16,7 @@ const render = (overrides: Record<string, unknown> = {}) =>
       setMode: () => {},
       slots,
       setSlots: () => {},
-      productTitle: "Hydrogen Snowboard",
+      productTitle: null,
       productHasImage: true,
       capabilities: {
         generationAvailable: true, provider: "Flux 1.1 Pro (Replicate)", missingCredentials: [],
@@ -33,18 +33,18 @@ const render = (overrides: Record<string, unknown> = {}) =>
     } as never),
   );
 
-test("product-safe explains grounding by compositing, not by the model", () => {
+test("reference generation names the real reference path and requires review", () => {
   const markup = render({ mode: "product_safe" });
-  assert.match(markup, /real Shopify product image/);
-  assert.match(markup, /composited over scenery/);
-  assert.match(markup, /not a photograph of the product being used in that setting/);
+  assert.match(markup, /reference photo is sent to an image-capable model/);
+  assert.match(markup, /not guaranteed to reproduce every product detail/);
+  assert.doesNotMatch(markup, /composited over scenery/);
 });
 
 test("creative concept never implies the real product will appear", () => {
   const markup = render({ mode: "creative_concept" });
   assert.match(markup, /Illustrative campaign art/);
   assert.match(markup, /must not be presented as your actual product/);
-  assert.match(markup, /current image providers cannot take your product photo/);
+  assert.match(markup, /No product reference is sent in this mode/);
   assert.doesNotMatch(markup, /product-grounded|accurate product|photograph of your product/i);
 });
 
@@ -59,7 +59,7 @@ test("mode is a radio group, exposed to assistive tech", () => {
 });
 
 test("product-safe with no product image is blocked and says why", () => {
-  const markup = render({ mode: "product_safe", productHasImage: false });
+  const markup = render({ mode: "product_safe", productTitle: "Hydrogen Snowboard", productHasImage: false });
   assert.match(markup, /Hydrogen Snowboard has no image in Shopify/);
   assert.match(markup, /switch to a generated concept/);
   assert.match(markup, /disabled=""/, "generation cannot be started");
@@ -159,10 +159,10 @@ test("a spend ceiling stops generation and says which one", () => {
   assert.match(markup, /disabled=""/);
 });
 
-test("product-safe says whether the product is a reference or composited", () => {
-  const composited = render({ mode: "product_safe" });
-  assert.match(composited, /No reference-capable provider is configured/);
-  assert.match(composited, /places your product image into it afterwards/);
+test("a reference-capable provider is required rather than falling back to invented art", () => {
+  const unavailable = render({ mode: "product_safe" });
+  assert.match(unavailable, /reference-capable model is required/);
+  assert.match(unavailable, /refuse rather than quietly invent/);
 
   const grounded = render({
     mode: "product_safe",
@@ -171,6 +171,19 @@ test("product-safe says whether the product is a reference or composited", () =>
       referenceGrounded: true, referenceSetup: [], spendRefusal: null,
     },
   });
-  assert.match(grounded, /sent to Flux Kontext \(Replicate\) as a reference/);
-  assert.match(grounded, /the product in the scene is yours/);
+  assert.match(grounded, /sent to Flux Kontext \(Replicate\)/);
+  assert.match(grounded, /Check that the output keeps the right product/);
+});
+
+test("a bound product has a source thumbnail, not an illustrative-mode switch", () => {
+  const html = render({ mode: "product_safe", productTitle: "Oxygen Snowboard", productImageUrl: "https://shopify.test/oxygen.jpg" });
+  assert.match(html, /Shopify reference/); assert.match(html, /Oxygen Snowboard/);
+  assert.match(html, /shopify.test\/oxygen.jpg/);
+  assert.doesNotMatch(html, /role="radiogroup"/);
+});
+
+test("the default one-picture flow exposes one prompt only", () => {
+  const html = render({ slots: [{ id: "lifestyle", label: "Picture request", prompt: "" }] });
+  assert.equal((html.match(/id="visual-slot-/g) ?? []).length, 1);
+  assert.match(html, /Generate picture/);
 });

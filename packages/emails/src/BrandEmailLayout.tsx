@@ -159,7 +159,7 @@ export function BrandEmailLayout({ brandKit, preview, children }: BrandEmailLayo
           </Section>
 
           {/* Footer */}
-          <Section style={{ padding: "26px 28px 40px" }} className="bk-pad">
+          <Section data-joon-email-footer="true" style={{ padding: "26px 28px 40px" }} className="bk-pad">
             <Text
               className="bk-ink"
               style={{

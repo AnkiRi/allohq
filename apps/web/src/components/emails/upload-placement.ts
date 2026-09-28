@@ -4,7 +4,9 @@ import type { EmailBlock } from "@allohq/email-builder";
 export function placeUploadedImage(block: EmailBlock, targetId: string, url: string, fileName: string): EmailBlock {
   if (block.id !== targetId) return block;
   if (block.type === "image") {
-    return { ...block, props: { ...block.props, src: url, alt: block.props.alt || fileName } };
+    const props = { ...block.props, src: url, alt: block.props.alt || fileName };
+    delete props.sourceProductId;
+    return { ...block, props };
   }
   if (block.type === "hero") {
     return { ...block, props: { ...block.props, bgImageSrc: url } };

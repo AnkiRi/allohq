@@ -17,9 +17,10 @@ import { TRPCError } from "@trpc/server";
 import { emailBlocksSchema, emailDocumentSchema, parseEmailDocument } from "@allohq/email-builder";
 import { ensureEmailVersion, resolveBlockData } from "@allohq/campaign-engine";
 import { describeScope, resolveEditScope, type EmailEditScope } from "../lib/email-scope";
-import { planEmailChange } from "../lib/email-changes";
+import { EMAIL_EDITABLE_PROPS, planEmailChange } from "../lib/email-changes";
 import { assetStorageStatus } from "../lib/asset-storage-status";
 import { fetchReferenceBytes, planGeneration, refusalFromAdapterError } from "../lib/visual-generation";
+import { visualReferenceMode } from "../lib/visual-reference";
 import { describeTarget, detectVisualIntent, productSceneReferenceRefusal, proposeVisualTarget } from "../lib/visual-intent";
 
 import {
@@ -366,6 +367,9 @@ export const emailsRouter = router({
         "  product_grid renders REAL store products at send time, so you never need an image URL. Place it with afterId.",
         '- CHANGE LAYOUT: use "order" to resequence, and add/remove blocks as needed.',
         "- Keep existing ids/types stable. Keep merge tags like {{first_name}} intact. ₹ prices plain numbers.",
+        `- ONLY these editable properties affect the rendered email: ${JSON.stringify(EMAIL_EDITABLE_PROPS)}. Never invent width, size, style, border, or a block's type as props.`,
+        "- For a larger button, increase fontSize and paddingY/paddingX. For a full-width button set fullWidth: true. These are actual rendered controls.",
+        "- You cannot change an existing block's type in a single-block request. A spacer only supports height; divider supports color, thickness and margin.",
         "- If the instruction concerns the inbox line, edit previewText. Keep it complementary to the subject, not repetitive.",
         "- Warm, unhurried brand voice. Never hype, ALL-CAPS, or fake urgency.",
         '- The response MUST be valid JSON: escape EVERY newline as \\n and EVERY double-quote as \\". No literal line breaks inside strings.',
@@ -529,6 +533,7 @@ export const emailsRouter = router({
         storeId: z.string(),
         templateId: z.string().optional(),
         productId: z.string().optional(),
+        sourceAssetIds: z.array(z.string()).max(1).optional(),
         mode: z.enum(["product_safe", "creative_concept"]),
         /** A merchant-level choice, never a raw model id from the browser. */
         prefer: z.enum(["recommended", "fast", "premium", "product_faithful"]).optional(),
@@ -564,18 +569,44 @@ export const emailsRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "That product is not in this store." });
       }
 
+      const sourceAsset = !product && input.sourceAssetIds?.[0]
+        ? await ctx.prisma.brandAsset.findFirst({
+            where: { id: input.sourceAssetIds[0], workspaceId: ctx.workspaceId, storeId: input.storeId, status: "ready" },
+            select: { id: true, url: true },
+          }) : null;
+      if (!product && input.sourceAssetIds?.length && !sourceAsset) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "That reference image is no longer available in this store." });
+      }
+      const generationMode = visualReferenceMode(input);
+
       const validated = validateVisualRequest({
-        mode: input.mode,
+        mode: generationMode,
         slots: input.slots,
-        productImageUrl: product?.imageUrl ?? null,
+        productImageUrl: product?.imageUrl ?? sourceAsset?.url ?? null,
       });
       if (!validated.ok) throw new TRPCError({ code: "BAD_REQUEST", message: validated.reason });
 
+      const storage = assetStorageStatus();
+      if (!storage.configured) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: storage.merchantMessage! });
+      }
+
       // Product-safe means the merchant's own product must reach the model.
-      const wantsReference = input.mode === "product_safe";
-      const reference = wantsReference && product?.imageUrl
-        ? await fetchReferenceBytes(product.imageUrl)
+      const wantsReference = generationMode === "product_safe";
+      const modelAvailability = routeModel({
+        workload: wantsReference ? "product_reference_edit" : "campaign_art",
+        prefer: input.prefer, preferredModelId: input.modelId, hasReference: wantsReference,
+      });
+      if (!modelAvailability.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Image generation is not available for this workspace yet." });
+      }
+      const referenceUrl = product?.imageUrl ?? sourceAsset?.url;
+      const reference = wantsReference && referenceUrl
+        ? await fetchReferenceBytes(referenceUrl)
         : null;
+      if (wantsReference && !reference) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Joon could not load the chosen reference photo. Nothing was generated. Retry or choose another reference." });
+      }
 
       const planned = planGeneration({
         workload: wantsReference ? "product_reference_edit" : "campaign_art",
@@ -623,7 +654,7 @@ export const emailsRouter = router({
         try {
           const result = await adapter.generate({
             apiModelId: model.apiModelId,
-            prompt: buildSlotPrompt(slot, input.mode, aesthetic, { hasReference: referenceGrounded }),
+            prompt: buildSlotPrompt(slot, generationMode, aesthetic, { hasReference: referenceGrounded }),
             width: slot.purpose === "hero_banner" ? 1536 : 1024,
             height: slot.purpose === "hero_banner" ? 1024 : 1024,
             ...(reference ? { references: [reference] } : {}),
@@ -640,7 +671,7 @@ export const emailsRouter = router({
               purpose: slot.purpose,
               cost: imageBudgetChargeUsd(result.usage?.costUsd),
               templateId: input.templateId,
-              sourceAssetIds: product ? [product.id] : [],
+              sourceAssetIds: product ? [product.id] : sourceAsset ? [sourceAsset.id] : [],
             },
           });
 
@@ -669,7 +700,7 @@ export const emailsRouter = router({
               checksum: persisted.checksum,
               source: "generated",
               sourcePrompt: `${model.apiModelId} · ${slot.prompt}`,
-              sourceAssetIds: product ? [product.id] : [],
+              sourceAssetIds: product ? [product.id] : sourceAsset ? [sourceAsset.id] : [],
               altText: slot.prompt,
               status: "ready",
             },
@@ -680,10 +711,11 @@ export const emailsRouter = router({
             label: slot.label,
             url: persisted.url,
             assetId: asset.id,
+            sourceProductId: product?.id ?? null,
             provider: model.provider,
             modelLabel: model.label,
-            mode: input.mode,
-            modeLabel: modeLabel(input.mode),
+            mode: generationMode,
+            modeLabel: modeLabel(generationMode),
             referenceGrounded,
             usage: result.usage ?? null,
           });
@@ -697,8 +729,8 @@ export const emailsRouter = router({
       return {
         assets,
         failures,
-        mode: input.mode,
-        modeLabel: modeLabel(input.mode),
+        mode: generationMode,
+        modeLabel: modeLabel(generationMode),
         modelLabel: model.label,
         referenceGrounded,
       };

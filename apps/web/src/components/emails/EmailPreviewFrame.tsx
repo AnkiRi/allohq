@@ -3,6 +3,7 @@
 import * as React from "react";
 import { cn } from "@allohq/ui";
 import { Loader2 } from "lucide-react";
+import { previewDocument } from "./preview-document";
 
 export type PreviewWidth = "desktop" | "mobile";
 export type PreviewTheme = "light" | "dark";
@@ -40,12 +41,13 @@ export function EmailPreviewFrame({
   /** Real rendered height, reported by the iframe. */
   const [contentHeight, setContentHeight] = React.useState<number | null>(null);
   const stageRef = React.useRef<HTMLDivElement>(null);
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const [stageHeight, setStageHeight] = React.useState(0);
 
   React.useEffect(() => {
     const listener = (event: MessageEvent) => {
-      if (event.data?.type !== "joon-email-height") return;
-      if (typeof event.data.height === "number" && event.data.height > 0) {
+      if (event.source !== iframeRef.current?.contentWindow || event.data?.type !== "joon-email-height") return;
+      if (typeof event.data.height === "number" && Number.isFinite(event.data.height) && event.data.height > 0) {
         setContentHeight(event.data.height);
       }
     };
@@ -70,59 +72,12 @@ export function EmailPreviewFrame({
       ? Math.min(1, (stageHeight - 32) / contentHeight)
       : 1;
 
-  const srcDoc = React.useMemo(() => {
-    const scheme =
-      theme === "dark"
-        ? "<style>:root{color-scheme:dark}html,body{background:#14150F}</style>"
-        : "<style>:root{color-scheme:light}</style>";
-    const safeSelected = (selectedBlockId ?? "").replace(/["\\]/g, "\\$&");
-    const editorBridge = onSelectBlock
-      ? `<style>
-          [data-email-block-id]{cursor:pointer;outline:1px solid transparent;outline-offset:-2px;transition:outline-color 120ms ease,box-shadow 120ms ease}
-          [data-email-block-id]:focus-visible{outline:2px solid #2D4F9E}
-          [data-email-block-id]:hover{outline-color:#C99116;box-shadow:inset 3px 0 0 #C99116}
-          ${safeSelected ? `[data-email-block-id="${safeSelected}"]{outline:2px solid #2D4F9E;box-shadow:inset 4px 0 0 #2D4F9E}` : ""}
-        </style>
-        <script>
-          function reportHeight(){
-            // documentElement.scrollHeight echoes the iframe's own height, so
-            // measuring it would report whatever we last set and never settle.
-            // The body is the email.
-            var b=document.body;
-            var h=Math.max(b.scrollHeight,b.offsetHeight);
-            if(h>0)parent.postMessage({type:'joon-email-height',height:h+2},'*');
-          }
-          window.addEventListener('load',reportHeight);
-          if(window.ResizeObserver){new ResizeObserver(reportHeight).observe(document.documentElement);}
-          setTimeout(reportHeight,80);
-          window.addEventListener('load',function(){
-            document.querySelectorAll('[data-email-block-id]').forEach(function(element){element.setAttribute('tabindex','0');element.setAttribute('role','button');element.setAttribute('aria-label','Select email block');});
-          });
-          document.addEventListener('keydown',function(event){
-            if(event.key!=='Enter'&&event.key!==' ')return;
-            var element=event.target&&event.target.closest?event.target.closest('[data-email-block-id]'):null;
-            if(!element)return;
-            event.preventDefault();
-            parent.postMessage({type:'joon-email-block-select',blockId:element.getAttribute('data-email-block-id')},'*');
-          },true);
-          document.addEventListener('click',function(event){
-            var element=event.target&&event.target.closest?event.target.closest('[data-email-block-id]'):null;
-            if(!element)return;
-            event.preventDefault();
-            parent.postMessage({type:'joon-email-block-select',blockId:element.getAttribute('data-email-block-id')},'*');
-          },true);
-        </script>`
-      : "";
-    const additions = `${scheme}${editorBridge}`;
-    return html.includes("</head>")
-      ? html.replace("</head>", `${additions}</head>`)
-      : `${additions}${html}`;
-  }, [html, theme, selectedBlockId, onSelectBlock]);
+  const srcDoc = React.useMemo(() => previewDocument(html, theme === "dark", selectedBlockId ?? null, Boolean(onSelectBlock)), [html, theme, selectedBlockId, onSelectBlock]);
 
   React.useEffect(() => {
     if (!onSelectBlock) return;
     const listener = (event: MessageEvent) => {
-      if (event.data?.type !== "joon-email-block-select") return;
+      if (event.source !== iframeRef.current?.contentWindow || event.data?.type !== "joon-email-block-select") return;
       if (typeof event.data.blockId === "string") onSelectBlock(event.data.blockId);
     };
     window.addEventListener("message", listener);
@@ -130,7 +85,7 @@ export function EmailPreviewFrame({
   }, [onSelectBlock]);
 
   return (
-    <section className="flex flex-col h-full rounded-xl border border-border overflow-hidden bg-[var(--surface-soft,#ECE9E1)]">
+    <section className="flex min-h-0 flex-col h-full rounded-xl border border-border overflow-hidden bg-[var(--surface-soft,#ECE9E1)]">
       <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-card/60 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-decision">
@@ -176,12 +131,13 @@ export function EmailPreviewFrame({
           // Padding at the BOTTOM as well as the top: a long email used to run
           // flush into the edge of the pane, so there was no way to tell
           // whether it had ended or was simply cut off.
-          "flex-1 flex justify-center px-4 pt-4 pb-10",
+          "min-h-0 flex-1 flex justify-center px-4 pt-4 pb-10",
           view === "fit" ? "overflow-hidden items-start" : "overflow-auto items-start",
         )}
         style={{ background: theme === "dark" ? "#20211f" : "#ECE9E1" }}
       >
         <iframe
+          ref={iframeRef}
           title={`Email preview · ${width} ${theme} ${view === "fit" ? "fitted" : "actual size"}`}
           srcDoc={srcDoc}
           style={{
@@ -190,6 +146,7 @@ export function EmailPreviewFrame({
             // The email's own height, not an invented one. A 400px email used
             // to sit in a 720px box and look like a mostly-empty page.
             height: contentHeight ?? 600,
+            flexShrink: 0,
             border: "none",
             borderRadius: 8,
             background: theme === "dark" ? "#14150F" : "#F7F4EC",

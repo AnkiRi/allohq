@@ -99,11 +99,12 @@ function renderBlockToMjml(block: EmailBlock, options: RenderOptions): string {
         borderRadius = 4,
         align = "center",
         fullWidth = false,
+        fontSize = 14, paddingX = 24, paddingY = 16,
       } = block.props;
       return `
         <mj-section padding="0">
           <mj-column>
-            <mj-button href="${escapeHtml(interpolate(href, variables))}" background-color="${bgColor}" color="${textColor}" border-radius="${borderRadius}px" align="${align}" font-size="14px" font-weight="bold" font-family="Arial, sans-serif" padding="16px 24px"${fullWidth ? ' width="100%"' : ""}>
+            <mj-button href="${escapeHtml(interpolate(href, variables))}" background-color="${bgColor}" color="${textColor}" border-radius="${borderRadius}px" align="${align}" font-size="${fontSize}px" font-weight="bold" font-family="Arial, sans-serif" inner-padding="${paddingY}px ${paddingX}px" padding="16px 24px"${fullWidth ? ' width="100%"' : ""}>
               ${escapeHtml(interpolate(text, variables))}
             </mj-button>
           </mj-column>
@@ -465,8 +466,9 @@ function renderBlockInnerMjml(block: EmailBlock, options: RenderOptions): string
         borderRadius = 4,
         align = "center",
         fullWidth = false,
+        fontSize = 14, paddingX = 24, paddingY = 16,
       } = block.props;
-      return `<mj-button href="${escapeHtml(interpolate(href, variables))}" background-color="${bgColor}" color="${textColor}" border-radius="${borderRadius}px" align="${align}" font-size="14px" font-weight="bold" font-family="Arial, sans-serif" padding="8px 0"${fullWidth ? ' width="100%"' : ""}>${escapeHtml(interpolate(text, variables))}</mj-button>`;
+      return `<mj-button href="${escapeHtml(interpolate(href, variables))}" background-color="${bgColor}" color="${textColor}" border-radius="${borderRadius}px" align="${align}" font-size="${fontSize}px" font-weight="bold" font-family="Arial, sans-serif" inner-padding="${paddingY}px ${paddingX}px" padding="8px 0"${fullWidth ? ' width="100%"' : ""}>${escapeHtml(interpolate(text, variables))}</mj-button>`;
     }
 
     case "divider": {

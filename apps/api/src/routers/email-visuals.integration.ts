@@ -260,3 +260,64 @@ test("more than four visuals at once is refused by the schema", { skip }, async 
     await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
   }
 });
+
+test("a reference from another store is refused before generation", { skip }, async () => {
+  const { prisma, emailsRouter } = await load();
+  const f = await fixture(prisma, null);
+  const other = await fixture(prisma, null);
+  try {
+    const asset = await prisma.brandAsset.create({ data: { workspaceId: other.workspace.id, storeId: other.store.id, type: "reference_image", fileName: "sb.jpg", url: "https://cdn.test/private.png", status: "ready" } });
+    const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+    await assert.rejects(() => api.generateVisuals({ storeId: f.store.id, sourceAssetIds: [asset.id], mode: "creative_concept", slots: [slot("scene", "On a mountain")] }), /reference image is no longer available in this store/);
+    assert.equal(await prisma.generatedImage.count({ where: { workspaceId: f.workspace.id } }), 0);
+  } finally {
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+    await cleanup(prisma, other.workspace.id, other.store.id, other.user.id);
+  }
+});
+
+test("explicit Shopify and uploaded references reach the adapter, even if the mode was illustrative", { skip }, async () => {
+  const { prisma, emailsRouter } = await load();
+  const { routeModel } = await import("@allohq/customer-intelligence");
+  const f = await fixture(prisma, "https://cdn.test/oxygen.png");
+  const env = { GOOGLE_API_KEY: "synthetic-key-never-sent", JOON_NANO_BANANA_ENABLED: "true" };
+  const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+  const originalFetch = globalThis.fetch;
+  let restoreAdapter = () => {};
+  try {
+    Object.assign(process.env, env);
+    await withStorage(async () => {
+      const decision = routeModel({ workload: "product_reference_edit", hasReference: true });
+      assert.ok(decision.ok && decision.model.adapter.kind === "visual");
+      const adapter = decision.model.adapter.impl;
+      const originalGenerate = adapter.generate;
+      restoreAdapter = () => { adapter.generate = originalGenerate; };
+      const observed: Array<{ prompt: string; reference: string }> = [];
+      adapter.generate = async (request) => {
+        observed.push({ prompt: request.prompt, reference: Buffer.from(request.references![0]!.bytes).toString() });
+        throw new Error("Synthetic provider stops before persistence");
+      };
+      globalThis.fetch = async (request) => {
+        const url = String(request);
+        if (url === "https://cdn.test/oxygen.png") return new Response(Buffer.from("exact-oxygen-reference"), { headers: { "content-type": "image/png" } });
+        if (url === "https://cdn.test/sb.jpg") return new Response(Buffer.from("exact-upload-reference"), { headers: { "content-type": "image/jpeg" } });
+        throw new Error("No external host is allowed in this test");
+      };
+      const api = emailsRouter.createCaller(caller(prisma, f.workspace.id, f.clerkId) as any);
+      const productResult = await api.generateVisuals({ storeId: f.store.id, productId: f.product.id, mode: "creative_concept", slots: [slot("scene", "Snowboard on a mountain")] });
+      assert.equal(productResult.referenceGrounded, true);
+      assert.equal(observed[0]?.reference, "exact-oxygen-reference");
+      const asset = await prisma.brandAsset.create({ data: { workspaceId: f.workspace.id, storeId: f.store.id, type: "reference_image", fileName: "sb.jpg", url: "https://cdn.test/sb.jpg", status: "ready" } });
+      const uploadResult = await api.generateVisuals({ storeId: f.store.id, sourceAssetIds: [asset.id], mode: "creative_concept", slots: [slot("scene", "On a mountain")] });
+      assert.equal(uploadResult.referenceGrounded, true);
+      assert.equal(observed[1]?.reference, "exact-upload-reference");
+      assert.match(observed[1]!.prompt, /product in the reference image/);
+      assert.equal(await prisma.generatedImage.count({ where: { workspaceId: f.workspace.id } }), 0, "the fake adapter never makes a paid request");
+    });
+  } finally {
+    restoreAdapter();
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    await cleanup(prisma, f.workspace.id, f.store.id, f.user.id);
+  }
+});
